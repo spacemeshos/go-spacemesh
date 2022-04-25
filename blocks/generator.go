@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -21,6 +22,7 @@ type Generator struct {
 	cfg    RewardConfig
 	atxDB  atxProvider
 	meshDB meshProvider
+	txs    txProvider
 }
 
 func defaultConfig() RewardConfig {
@@ -47,12 +49,13 @@ func WithGeneratorLogger(logger log.Log) GeneratorOpt {
 }
 
 // NewGenerator creates new block generator.
-func NewGenerator(atxDB atxProvider, meshDB meshProvider, opts ...GeneratorOpt) *Generator {
+func NewGenerator(atxDB atxProvider, meshDB meshProvider, txs txProvider, opts ...GeneratorOpt) *Generator {
 	g := &Generator{
 		logger: log.NewNop(),
 		cfg:    defaultConfig(),
 		atxDB:  atxDB,
 		meshDB: meshDB,
+		txs:    txs,
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -97,16 +100,24 @@ func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*
 		}
 	}
 	types.SortTransactionIDs(txIDs)
-	txs, missing := g.meshDB.GetTransactions(txIDs)
+	mtxs, missing := g.txs.GetMeshTransactions(txIDs)
 	if len(missing) > 0 {
 		g.logger.Error("could not find transactions %v from layer %v", missing, layerID)
 		return nil, nil, errTXNotFound
+	}
+	txs := make([]*types.Transaction, 0, len(mtxs))
+	for _, mtx := range mtxs {
+		txs = append(txs, &mtx.Transaction)
 	}
 	return txIDs, txs, nil
 }
 
 func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerID, proposals []*types.Proposal, txs []*types.Transaction) ([]types.AnyReward, error) {
-	rInfo := calculateRewardPerProposal(layerID, g.cfg, txs, len(proposals))
+	eligibilities := 0
+	for _, proposal := range proposals {
+		eligibilities += len(proposal.EligibilityProofs)
+	}
+	rInfo := calculateRewardPerEligibility(layerID, g.cfg, txs, eligibilities)
 	logger.With().Info("reward calculated", log.Inline(rInfo))
 	rewards := make([]types.AnyReward, 0, len(proposals))
 	for _, p := range proposals {
@@ -123,9 +134,10 @@ func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerI
 		rewards = append(rewards, types.AnyReward{
 			Address:     atx.Coinbase,
 			SmesherID:   atx.NodeID,
-			Amount:      rInfo.totalRewardPer,
-			LayerReward: rInfo.layerRewardPer,
+			Amount:      rInfo.totalRewardPer * uint64(len(p.EligibilityProofs)),
+			LayerReward: rInfo.layerRewardPer * uint64(len(p.EligibilityProofs)),
 		})
+		events.ReportProposal(events.ProposalIncluded, p)
 	}
 	return rewards, nil
 }

@@ -24,7 +24,7 @@ func TestRecoverState(t *testing.T) {
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
-		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)
 
@@ -37,7 +37,7 @@ func TestRecoverState(t *testing.T) {
 		// test that it won't block on multiple attempts
 		require.NoError(t, tortoise2.WaitReady(initctx))
 	}
-	_, verified, _ = tortoise2.HandleIncomingLayer(ctx, last)
+	verified = tortoise2.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified)
 
 	cfg.MeshVerified = last.Sub(1)
@@ -46,8 +46,7 @@ func TestRecoverState(t *testing.T) {
 	initctx, cancel = context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	require.NoError(t, tortoise3.WaitReady(initctx))
-	old, verified, _ := tortoise2.HandleIncomingLayer(ctx, last)
-	require.Equal(t, cfg.MeshVerified, old)
+	verified = tortoise2.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified)
 }
 
@@ -70,15 +69,43 @@ func TestRerunStaysInVerifyingMode(t *testing.T) {
 	var last, verified types.LayerID
 	for i := 0; i < layers; i++ {
 		last = s.Next()
-		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)
 
 	require.NoError(t, tortoise.rerun(ctx))
-	_, verified, _ = tortoise.HandleIncomingLayer(ctx, s.Next())
+	verified = tortoise.HandleIncomingLayer(ctx, s.Next())
 	require.Equal(t, last, verified)
 
 	require.Equal(t, types.GetEffectiveGenesis(), tortoise.trtl.full.counted)
+}
+
+func TestRerunRevertNonverifiedLayers(t *testing.T) {
+	ctx := context.Background()
+	const (
+		size = 10
+		good = 10
+	)
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(good),
+		sim.WithSequence(5, sim.WithVoteGenerator(splitVoting(size))),
+	) {
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	expected := types.GetEffectiveGenesis().Add(good - 1)
+	require.Equal(t, expected, verified)
+
+	require.NoError(t, tortoise.rerun(ctx))
+	verified = tortoise.HandleIncomingLayer(ctx, s.Next())
+	require.True(t, verified.Before(expected))
 }
 
 func TestRerunDistanceVoteCounting(t *testing.T) {
@@ -118,7 +145,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput()),
 		sim.WithSequence(10, sim.WithEmptyHareOutput()),
 	) {
-		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(tb, last.Sub(1), verified)
 

@@ -71,6 +71,64 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (rst types.BlockID, err e
 	return rst, err
 }
 
+// SetApplied for the layer to a block id.
+func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error {
+	if _, err := db.Exec(`insert into layers (id, applied_block) values (?1, ?2) 
+					on conflict(id) do update set applied_block=?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBytes(2, applied[:])
+		}, nil); err != nil {
+		return fmt.Errorf("set applied %s: %w", lid, err)
+	}
+	return nil
+}
+
+// UnsetAppliedFrom updates the applied block to nil for layer >= `lid`.
+func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
+	if _, err := db.Exec("update layers set applied_block = null where id >= ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		}, nil); err != nil {
+		return fmt.Errorf("unset applied %s: %w", lid, err)
+	}
+	return nil
+}
+
+// GetApplied for the applied block for layer.
+func GetApplied(db sql.Executor, lid types.LayerID) (rst types.BlockID, err error) {
+	if rows, err := db.Exec("select applied_block from layers where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		},
+		func(stmt *sql.Statement) bool {
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w applied for %s is null", sql.ErrNotFound, lid)
+				return false
+			}
+			stmt.ColumnBytes(0, rst[:])
+			return true
+		}); err != nil {
+		return rst, fmt.Errorf("is empty %s: %w", lid, err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w applied is not set for %s", sql.ErrNotFound, lid)
+	}
+	return rst, err
+}
+
+// GetLastApplied for the applied block for layer.
+func GetLastApplied(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	if _, err := db.Exec("select max(id) from layers where applied_block is not null", nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return lid, fmt.Errorf("last applied: %w", err)
+	}
+	return lid, nil
+}
+
 // SetStatus updates status of the layer.
 func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
 	if _, err := db.Exec(`insert into mesh_status (layer, status) values (?1, ?2) 

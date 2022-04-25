@@ -5,9 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
-	"os"
-	"path"
-	"sort"
 	"testing"
 	"time"
 
@@ -20,17 +17,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
-	dbPath          = "../tmp/mdb"
 	unitReward      = 10000
 	unitLayerReward = 3000
 )
-
-func teardown() {
-	_ = os.RemoveAll(dbPath)
-}
 
 func getMeshDB(tb testing.TB) *DB {
 	tb.Helper()
@@ -50,7 +43,7 @@ func TestMeshDB_New(t *testing.T) {
 }
 
 func TestMeshDB_AddBallot(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(t.TempDir(), 1, logtest.New(t))
+	mdb, err := NewPersistentMeshDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, err)
 	defer mdb.Close()
 
@@ -67,7 +60,6 @@ func TestMeshDB_AddBallot(t *testing.T) {
 
 func TestMeshDB_AddBlock(t *testing.T) {
 	mdb := NewMemMeshDB(logtest.New(t))
-	mdb.blockCache = newBlockCache(1)
 	defer mdb.Close()
 
 	block := types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(100))
@@ -130,10 +122,9 @@ func createLayerWithRandVoting(layerID types.LayerID, prev []*types.Layer, ballo
 func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	const batchSize = 50
 
-	mdb, err := NewPersistentMeshDB(path.Join(dbPath, "mesh_db"), 5, logtest.New(b))
+	mdb, err := NewPersistentMeshDB(sql.InMemory(), logtest.New(b))
 	require.NoError(b, err)
 	defer mdb.Close()
-	defer teardown()
 
 	l := types.GenesisLayer()
 	gen := l.Blocks()[0]
@@ -167,33 +158,6 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 }
 
-const (
-	initialNonce   = 0
-	initialBalance = 100
-)
-
-func address() types.Address {
-	var addr [20]byte
-	copy(addr[:], "12345678901234567890")
-	return addr
-}
-
-func newTx(t *testing.T, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
-	t.Helper()
-	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
-	require.NoError(t, err)
-	return tx
-}
-
-func newTxWithDest(t *testing.T, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
-	t.Helper()
-	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
-	require.NoError(t, err)
-	return tx
-}
-
 func newSignerAndAddress(t *testing.T, seedStr string) (*signing.EdSigner, types.Address) {
 	t.Helper()
 	seed := make([]byte, 32)
@@ -202,193 +166,7 @@ func newSignerAndAddress(t *testing.T, seedStr string) (*signing.EdSigner, types
 	require.NoError(t, err)
 	signer, err := signing.NewEdSignerFromBuffer(privKey)
 	require.NoError(t, err)
-	var addr types.Address
-	addr.SetBytes(signer.PublicKey().Bytes())
-	return signer, addr
-}
-
-func TestMeshDB_GetStateProjection(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newTx(t, signer, 0, 10),
-		newTx(t, signer, 1, 20),
-	)
-	require.NoError(t, err)
-
-	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, initialNonce+2, int(nonce))
-	require.Equal(t, initialBalance-30, int(balance))
-}
-
-func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newTx(t, signer, 1, 10),
-		newTx(t, signer, 2, 20),
-	)
-	require.NoError(t, err)
-
-	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, initialNonce, int(nonce))
-	require.Equal(t, initialBalance, int(balance))
-}
-
-func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newTx(t, signer, 0, 10),
-		newTx(t, signer, 1, 95),
-	)
-	require.NoError(t, err)
-
-	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, 1, int(nonce))
-	require.Equal(t, initialBalance-10, int(balance))
-}
-
-func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, uint64(initialNonce), nonce)
-	require.Equal(t, uint64(initialBalance), balance)
-}
-
-func TestMeshDB_UnappliedTxs(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, origin1 := newSignerAndAddress(t, "thc")
-	signer2, origin2 := newSignerAndAddress(t, "cbd")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newTx(t, signer1, 420, 240),
-		newTx(t, signer1, 421, 241),
-		newTx(t, signer2, 0, 100),
-		newTx(t, signer2, 1, 101),
-	)
-	require.NoError(t, err)
-
-	txns1 := getTxns(t, mdb, origin1)
-	require.Len(t, txns1, 2)
-	require.Equal(t, 420, int(txns1[0].Nonce))
-	require.Equal(t, 421, int(txns1[1].Nonce))
-	require.Equal(t, 240, int(txns1[0].TotalAmount))
-	require.Equal(t, 241, int(txns1[1].TotalAmount))
-
-	txns2 := getTxns(t, mdb, origin2)
-	require.Len(t, txns2, 2)
-	require.Equal(t, 0, int(txns2[0].Nonce))
-	require.Equal(t, 1, int(txns2[1].Nonce))
-	require.Equal(t, 100, int(txns2[0].TotalAmount))
-	require.Equal(t, 101, int(txns2[1].TotalAmount))
-
-	require.NoError(t, mdb.markTransactionsDeleted(newTx(t, signer2, 0, 100)))
-
-	txns1 = getTxns(t, mdb, origin1)
-	require.Len(t, txns1, 2)
-	require.Equal(t, 420, int(txns1[0].Nonce))
-	require.Equal(t, 421, int(txns1[1].Nonce))
-	require.Equal(t, 240, int(txns1[0].TotalAmount))
-	require.Equal(t, 241, int(txns1[1].TotalAmount))
-
-	txns2 = getTxns(t, mdb, origin2)
-	require.Len(t, txns2, 1)
-	require.Equal(t, 1, int(txns2[0].Nonce))
-	require.Equal(t, 101, int(txns2[0].TotalAmount))
-}
-
-func TestMeshDB_testGetTransactions(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, addr1 := newSignerAndAddress(t, "thc")
-	signer2, _ := newSignerAndAddress(t, "cbd")
-	_, addr3 := newSignerAndAddress(t, "cbe")
-	require.NoError(t, mdb.writeTransactions(types.NewLayerID(1), types.EmptyBlockID,
-		newTx(t, signer1, 420, 240),
-		newTx(t, signer1, 421, 241),
-		newTxWithDest(t, signer2, addr1, 0, 100),
-		newTxWithDest(t, signer2, addr1, 1, 101),
-	))
-
-	lid := types.NewLayerID(1)
-	txs, err := mdb.GetTransactionsByOrigin(lid, lid, addr1)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(txs))
-
-	txs, err = mdb.GetTransactionsByDestination(lid, lid, addr1)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(txs))
-
-	// test negative case
-	txs, err = mdb.GetTransactionsByOrigin(lid, lid, addr3)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(txs))
-
-	txs, err = mdb.GetTransactionsByDestination(lid, lid, addr3)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(txs))
-}
-
-func TestMeshDB_updateTransaction(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, _ := newSignerAndAddress(t, "thc")
-	tx := newTx(t, signer1, 420, 240)
-	layerID := types.NewLayerID(10)
-	require.NoError(t, mdb.writeTransactions(layerID, types.EmptyBlockID, tx))
-
-	got, err := mdb.GetMeshTransaction(tx.ID())
-	require.NoError(t, err)
-	assert.Equal(t, layerID, got.LayerID)
-	assert.Equal(t, types.EmptyBlockID, got.BlockID)
-	assert.Equal(t, tx.ID(), got.Transaction.ID()) // this cause got.Transaction() to populate id
-	assert.Equal(t, *tx, got.Transaction)
-
-	block := types.GenLayerBlock(layerID, nil)
-	require.NoError(t, mdb.updateDBTXWithBlockID(block, tx))
-	got, err = mdb.GetMeshTransaction(tx.ID())
-	require.NoError(t, err)
-	assert.Equal(t, layerID, got.LayerID)
-	assert.Equal(t, block.ID(), got.BlockID)
-	assert.Equal(t, tx.ID(), got.Transaction.ID()) // this cause got.Transaction() to populate id
-	assert.Equal(t, *tx, got.Transaction)
-}
-
-type tinyTX struct {
-	ID          types.TransactionID
-	Nonce       uint64
-	TotalAmount uint64
-}
-
-func getTxns(t *testing.T, mdb *DB, origin types.Address) []tinyTX {
-	t.Helper()
-	txns, err := mdb.getAccountPendingTxs(origin)
-	require.NoError(t, err)
-	var ret []tinyTX
-	for nonce, nonceTxs := range txns.PendingTxs {
-		for id, tx := range nonceTxs {
-			ret = append(ret, tinyTX{ID: id, Nonce: nonce, TotalAmount: tx.Amount + tx.Fee})
-		}
-	}
-	sort.Slice(ret, func(i, j int) bool {
-		return ret[i].Nonce < ret[j].Nonce
-	})
-	return ret
+	return signer, types.GenerateAddress(signer.PublicKey().Bytes())
 }
 
 func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {
@@ -570,72 +348,10 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	mdb1 := NewMemMeshDB(logtest.New(t))
 	defer mdb1.Close()
 	testCoinflip(mdb1)
-	mdb2, err := NewPersistentMeshDB(t.TempDir(), 5, logtest.New(t))
+	mdb2, err := NewPersistentMeshDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, err)
 	defer mdb2.Close()
-	defer teardown()
 	testCoinflip(mdb2)
-}
-
-func TestMeshDB_GetMeshTransactions(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, _ := newSignerAndAddress(t, "thc")
-
-	var (
-		nonce  uint64
-		ids    []types.TransactionID
-		layers = 10
-	)
-	for i := 1; i <= layers; i++ {
-		nonce++
-		tx := newTx(t, signer1, nonce, 240)
-		ids = append(ids, tx.ID())
-		require.NoError(t, mdb.writeTransactions(types.NewLayerID(uint32(i)), types.EmptyBlockID, tx))
-	}
-	txs, missing := mdb.GetMeshTransactions(ids)
-	require.Len(t, missing, 0)
-	for i := 1; i < layers; i++ {
-		require.Equal(t, ids[i-1], txs[i-1].ID())
-		require.EqualValues(t, types.NewLayerID(uint32(i)), txs[i-1].LayerID)
-	}
-}
-
-func TestMesh_FindOnce(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, addr1 := newSignerAndAddress(t, "thc")
-	signer2, _ := newSignerAndAddress(t, "cbd")
-
-	layers := []uint32{1, 10, 100}
-	nonce := uint64(0)
-	for _, layer := range layers {
-		nonce++
-		err := mdb.writeTransactions(types.NewLayerID(layer), types.EmptyBlockID,
-			newTx(t, signer1, nonce, 100),
-			newTxWithDest(t, signer2, addr1, nonce, 100),
-		)
-		require.NoError(t, err)
-	}
-	t.Run("ByDestination", func(t *testing.T) {
-		for _, layer := range layers {
-			lid := types.NewLayerID(layer)
-			txs, err := mdb.GetTransactionsByDestination(lid, lid, addr1)
-			require.NoError(t, err)
-			assert.Len(t, txs, 1)
-		}
-	})
-
-	t.Run("ByOrigin", func(t *testing.T) {
-		for _, layer := range layers {
-			lid := types.NewLayerID(layer)
-			txs, err := mdb.GetTransactionsByOrigin(lid, lid, addr1)
-			require.NoError(t, err)
-			assert.Len(t, txs, 1)
-		}
-	})
 }
 
 func TestBlocksBallotsOverlap(t *testing.T) {
@@ -655,11 +371,30 @@ func TestBlocksBallotsOverlap(t *testing.T) {
 	require.Empty(t, ids)
 }
 
+func TestMaliciousBallots(t *testing.T) {
+	mdb := NewMemMeshDB(logtest.New(t))
+	defer mdb.Close()
+
+	lid := types.NewLayerID(1)
+	pub := []byte{1, 1, 1}
+
+	ballots := []types.Ballot{
+		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+	}
+	require.NoError(t, mdb.AddBallot(&ballots[0]))
+	require.False(t, ballots[0].IsMalicious())
+	for _, ballot := range ballots[1:] {
+		require.NoError(t, mdb.AddBallot(&ballot))
+		require.True(t, ballot.IsMalicious())
+	}
+}
+
 func BenchmarkGetBlock(b *testing.B) {
 	// cache is set to be twice as large as cache to avoid hitting the cache
-	blocks := make([]*types.Block, layerSize*2)
-	db, err := NewPersistentMeshDB(b.TempDir(),
-		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
+	blocks := make([]*types.Block, 200*2)
+	db, err := NewPersistentMeshDB(sql.InMemory(),
 		logtest.New(b))
 	require.NoError(b, err)
 	defer db.Close()

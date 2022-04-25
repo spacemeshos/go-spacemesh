@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -113,8 +114,8 @@ func (mv *mockValidator) OnBlock(*types.Block) {}
 
 func (mv *mockValidator) OnBallot(*types.Ballot) {}
 
-func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
-	return layerID, layerID.Sub(1), false
+func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) types.LayerID {
+	return layerID.Sub(1)
 }
 
 func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
@@ -129,14 +130,16 @@ func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
 
 func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxStore := database.NewMemDatabase()
+	atxStore := sql.InMemory()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil,
 		activation.NewIdentityStore(database.NewMemDatabase()),
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	svmstate := mmocks.NewMockstate(gomock.NewController(t))
-	svmstate.EXPECT().GetStateRoot().AnyTimes()
-	return mesh.NewMesh(memdb, atxdb, &mockValidator{}, nil, svmstate, lg.WithName("mesh"))
+	conState := mmocks.NewMockconservativeState(gomock.NewController(t))
+	conState.EXPECT().GetStateRoot().AnyTimes()
+	conState.EXPECT().LinkTXsWithBlock(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	conState.EXPECT().ApplyLayer(gomock.Any()).Return(nil, nil).AnyTimes()
+	return mesh.NewMesh(memdb, atxdb, &mockValidator{}, conState, lg.WithName("mesh"))
 }
 
 var conf = Configuration{
@@ -1138,17 +1141,16 @@ func TestSyncMissingLayer(t *testing.T) {
 	failed := last.Sub(1)
 
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxStore := database.NewMemDatabase()
+	atxStore := sql.InMemory()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil,
 		activation.NewIdentityStore(database.NewMemDatabase()),
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	svmstate := mmocks.NewMockstate(gomock.NewController(t))
-	svmstate.EXPECT().GetStateRoot().AnyTimes()
 
+	conState := mmocks.NewMockconservativeState(gomock.NewController(t))
+	conState.EXPECT().GetStateRoot().AnyTimes()
 	tortoise := mmocks.NewMocktortoise(ctrl)
-
-	m := mesh.NewMesh(memdb, atxdb, tortoise, nil, svmstate, lg.WithName("mesh"))
+	m := mesh.NewMesh(memdb, atxdb, tortoise, conState, lg.WithName("mesh"))
 
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, m, fetcher, lg.WithName("syncer"))
 
@@ -1163,16 +1165,18 @@ func TestSyncMissingLayer(t *testing.T) {
 
 	rst := make(chan layerfetcher.LayerPromiseResult)
 	close(rst)
+	errMissingTXs := errors.New("missing TXs")
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		fetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(rst)
-		m.SetZeroBlockLayer(lid)
-
-		tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
-			Return(lid.Sub(1), lid, false)
+		tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).Return(lid)
+		conState.EXPECT().ApplyLayer(gomock.Any()).DoAndReturn(
+			func(got *types.Block) ([]*types.Transaction, error) {
+				require.Equal(t, block.ID(), got.ID())
+				return nil, errMissingTXs
+			})
 	}
 
-	tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
-		Return(last.Sub(1), last.Sub(1), false).Times(maxAttemptWithinRun - 1)
+	tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).Return(last.Sub(1)).Times(maxAttemptWithinRun - 1)
 	fetcher.EXPECT().PollLayerContent(gomock.Any(), failed).Return(rst).Times(maxAttemptWithinRun - 1)
 
 	require.True(t, syncer.synchronize(context.TODO()))

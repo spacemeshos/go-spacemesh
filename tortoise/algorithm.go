@@ -9,9 +9,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
 )
 
 // Config for protocol parameters.
@@ -65,12 +65,11 @@ type Tortoise struct {
 		err error
 	}
 
-	mu  sync.Mutex
-	org *organizer.Organizer
+	mu sync.Mutex
 
 	// update will be set to non-nil after rerun completes, and must be set to nil once
 	// used to replace trtl.
-	update *rerunResult
+	update *turtle
 	trtl   *turtle
 }
 
@@ -99,7 +98,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
+func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, updater blockValidityUpdater, opts ...Opt) *Tortoise {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -127,6 +126,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		mdb,
 		atxdb,
 		beacons,
+		updater,
 		t.cfg,
 	)
 	t.trtl.init(t.ctx, types.GenesisLayer())
@@ -151,11 +151,6 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		close(t.ready)
 	}
 
-	t.org = organizer.New(
-		organizer.WithLogger(t.logger),
-		organizer.WithLastLayer(t.trtl.processed),
-	)
-
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
 	if t.cfg.RerunInterval != 0 {
@@ -175,16 +170,39 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 	return t.trtl.verified
 }
 
-// BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (t *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
+type encodeConf struct {
+	current *types.LayerID
+}
+
+// EncodeVotesOpts is for configuring EncodeVotes options.
+type EncodeVotesOpts func(*encodeConf)
+
+// EncodeVotesWithCurrent changes last known layer that will be used for encoding votes.
+//
+// NOTE(dshulyak) why do we need this?
+// tortoise computes threshold from last non-verified till the last known layer,
+// since we dont download atxs before starting tortoise we won't be able to compute threshold
+// based on the last clock layer (see https://github.com/spacemeshos/go-spacemesh/issues/3003)
+func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
+	return func(conf *encodeConf) {
+		conf.current = &current
+	}
+}
+
+// EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
+func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Votes, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.trtl.BaseBallot(ctx)
+	conf := &encodeConf{}
+	for _, opt := range opts {
+		opt(conf)
+	}
+	return t.trtl.EncodeVotes(ctx, conf)
 }
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
-func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) types.LayerID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -193,20 +211,20 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerI
 		logger = t.logger.WithContext(ctx).With()
 	)
 
-	reverted, observed := t.updateFromRerun(ctx)
-	if reverted {
-		// make sure state is reapplied from far enough back if there was a state reversion.
-		// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
-		// pBase, since we never reapply the state of oldPbase.
-		old = observed.Sub(1)
+	t.updateFromRerun(ctx)
+	if err := t.trtl.onLayerTerminated(ctx, lid); err != nil {
+		logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
+		return t.trtl.verified
 	}
-	t.org.Iterate(ctx, layerID, func(lid types.LayerID) {
-		if err := t.trtl.HandleIncomingLayer(ctx, lid); err != nil {
-			logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
-		}
-	})
 
-	return old, t.trtl.verified, reverted
+	for lid := old.Add(1); !lid.After(t.trtl.verified); lid = lid.Add(1) {
+		events.ReportLayerUpdate(events.LayerUpdate{
+			LayerID: lid,
+			Status:  events.LayerStatusTypeConfirmed,
+		})
+	}
+
+	return t.trtl.verified
 }
 
 // OnBlock should be called every time new block is received.
@@ -222,7 +240,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
-		t.logger.Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Warning("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 }
 

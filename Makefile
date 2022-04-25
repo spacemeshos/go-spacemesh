@@ -55,22 +55,6 @@ ifdef dump
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
 endif
 
-
-# This prevents "the input device is not a TTY" error from docker in CI
-DOCKERRUNARGS := --rm \
-	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
- 	-e CLUSTER_NAME=$(CLUSTER_NAME) \
-	-e CLUSTER_ZONE=$(CLUSTER_ZONE) \
-	-e PROJECT_NAME=$(PROJECT_NAME) \
-	-e ES_USER=$(ES_USER) \
-	-e ES_PASS=$(ES_PASS) \
-	-e ES_PASSWD=$(ES_PASSWD) \
-	-e MAIN_ES_IP=$(MAIN_ES_IP) \
-	-e TD_QUEUE_NAME=$(TD_QUEUE_NAME) \
-	-e TD_QUEUE_ZONE=$(TD_QUEUE_ZONE) \
-	-e DUMP_QUEUE_NAME=$(DUMP_QUEUE_NAME) \
-	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE)
-
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
 # We use a docker image corresponding to the commithash for staging and trying, to be safe
@@ -79,13 +63,6 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
-DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE=$(DOCKER_HUB)/$(DOCKER_IMAGE)
-
-ifdef INTERACTIVE
-  DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
-else
-  DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
-endif
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 17
@@ -141,17 +118,11 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
-test test-all: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
+test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
+
+test: get-libs
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: test
-
-test-no-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
-.PHONY: test-no-app-test
-
-test-only-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
-.PHONY: test-only-app-test
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
@@ -215,15 +186,6 @@ dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
-dockerbuild-test:
-	docker build -f DockerFileTests \
-	             --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
-	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
-	             -t go-spacemesh-python:$(BRANCH) .
-.PHONY: dockerbuild-test
-
 dockerpush: dockerbuild-go dockerpush-only
 .PHONY: dockerpush
 
@@ -243,130 +205,3 @@ endif
 
 docker-local-push: docker-local-build dockerpush-only
 .PHONY: docker-local-push
-
-ifdef TEST
-DELIM=::
-endif
-
-dockerrun-p2p:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-p2p
-
-dockertest-p2p: dockerbuild-test dockerrun-p2p
-.PHONY: dockertest-p2p
-
-dockerrun-mining:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-mining
-
-dockertest-mining: dockerbuild-test dockerrun-mining
-.PHONY: dockertest-mining
-
-dockerrun-hare:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-hare
-
-dockertest-hare: dockerbuild-test dockerrun-hare
-.PHONY: dockertest-hare
-
-dockerrun-late-nodes:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-late-nodes
-
-dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
-.PHONY: dockertest-late-nodes
-
-dockerrun-blocks-add-node:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-blocks-add-node
-
-dockertest-blocks-add-node: dockerbuild-test dockerrun-blocks-add-node
-.PHONY: dockertest-blocks-add-node
-
-dockerrun-blocks-remove-node:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-blocks-remove-node
-
-dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
-.PHONY: dockertest-blocks-remove-node
-
-dockerrun-beacon:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v beacon/test_beacon.py --tc-file=beacon/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-beacon
-
-dockertest-beacon: dockerbuild-test dockerrun-beacon
-.PHONY: dockertest-beacon
-
-dockerrun-blocks-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-blocks-stress
-
-dockertest-blocks-stress: dockerbuild-test dockerrun-blocks-stress
-.PHONY: dockertest-blocks-stress
-
-dockerrun-grpc-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-grpc-stress
-
-dockertest-grpc-stress: dockerbuild-test dockerrun-grpc-stress
-.PHONY: dockertest-grpc-stress
-
-dockerrun-sync-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-sync-stress
-
-dockertest-sync-stress: dockerbuild-test dockerrun-sync-stress
-.PHONY: dockertest-sync-stress
-
-dockerrun-tx-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-tx-stress
-
-dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
-.PHONY: dockertest-tx-stress
-
-# The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node dockerrun-beacon
-.PHONY: dockerrun-test
-
-dockerrun-all: dockerpush dockerrun-test
-.PHONY: dockerrun-all
-
-dockerrun-stress: dockerbuild-test dockerrun-blocks-stress dockerrun-grpc-stress dockerrun-sync-stress dockerrun-tx-stress
-.PHONY: dockerrun-stress
-
-dockertest-stress: dockerpush dockerrun-stress
-.PHONY: dockertest-stress

@@ -1,62 +1,56 @@
 package beacon
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (pd *ProtocolDriver) calcVotes(ctx context.Context, epoch types.EpochID, round types.RoundID) (allVotes, []string, error) {
-	logger := pd.logger.WithContext(ctx).WithFields(epoch, round)
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
+func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, []string) {
+	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(s.votesMargin)))
 
-	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(pd.votesMargin)))
-
-	ownCurrentRoundVotes, undecided, err := pd.calcOwnCurrentRoundVotes()
-	if err != nil {
-		return allVotes{}, nil, fmt.Errorf("calc own current round votes: %w", err)
-	}
-
-	logger.With().Debug("calculated votes for one round",
-		log.String("for_votes", fmt.Sprint(ownCurrentRoundVotes.valid)),
-		log.String("against_votes", fmt.Sprint(ownCurrentRoundVotes.invalid)))
-
-	return ownCurrentRoundVotes, undecided, nil
-}
-
-func (pd *ProtocolDriver) calcOwnCurrentRoundVotes() (allVotes, []string, error) {
 	ownCurrentRoundVotes := allVotes{
-		valid:   make(proposalSet),
-		invalid: make(proposalSet),
+		support: make(proposalSet),
+		against: make(proposalSet),
 	}
 
-	positiveVotingThreshold := pd.votingThreshold(pd.epochWeight)
+	positiveVotingThreshold := votingThreshold(theta, s.epochWeight)
 	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
 	var undecided []string
-	for vote, weightCount := range pd.votesMargin {
+	for vote, weightCount := range s.votesMargin {
 		switch {
 		case weightCount.Cmp(positiveVotingThreshold) >= 0:
-			ownCurrentRoundVotes.valid[vote] = struct{}{}
+			ownCurrentRoundVotes.support[vote] = struct{}{}
 		case weightCount.Cmp(negativeThreshold) <= 0:
-			ownCurrentRoundVotes.invalid[vote] = struct{}{}
+			ownCurrentRoundVotes.against[vote] = struct{}{}
 		default:
 			undecided = append(undecided, vote)
 		}
 	}
-	return ownCurrentRoundVotes, undecided, nil
+	logger.With().Debug("calculated votes for one round",
+		log.String("for_votes", fmt.Sprint(ownCurrentRoundVotes.support)),
+		log.String("against_votes", fmt.Sprint(ownCurrentRoundVotes.against)))
+
+	return ownCurrentRoundVotes, undecided
+}
+
+func votingThreshold(theta *big.Float, epochWeight uint64) *big.Int {
+	v, _ := new(big.Float).Mul(
+		theta,
+		new(big.Float).SetUint64(epochWeight),
+	).Int(nil)
+
+	return v
 }
 
 func tallyUndecided(votes *allVotes, undecided []string, coinFlip bool) {
 	for _, vote := range undecided {
 		if coinFlip {
-			votes.valid[vote] = struct{}{}
+			votes.support[vote] = struct{}{}
 		} else {
-			votes.invalid[vote] = struct{}{}
+			votes.against[vote] = struct{}{}
 		}
 	}
 }

@@ -1,1 +1,0 @@
-kibana_deployment.yaml, service.yaml, kibana_conf.yaml

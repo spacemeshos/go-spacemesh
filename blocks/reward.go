@@ -46,7 +46,7 @@ func calculateLayerReward(cfg RewardConfig) uint64 {
 	return cfg.BaseReward
 }
 
-func calculateRewardPerProposal(layerID types.LayerID, cfg RewardConfig, txs []*types.Transaction, numProposals int) *layerRewardsInfo {
+func calculateRewardPerEligibility(layerID types.LayerID, cfg RewardConfig, txs []*types.Transaction, numProposals int) *layerRewardsInfo {
 	info := &layerRewardsInfo{layerID: layerID}
 	for _, tx := range txs {
 		info.feesReward += tx.Fee

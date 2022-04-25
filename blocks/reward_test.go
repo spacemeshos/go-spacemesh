@@ -22,8 +22,15 @@ func Test_calculateRewardPerProposal(t *testing.T) {
 		base         = uint64(50000)
 		numProposals = uint64(13)
 	)
-	totalFee, _, txs := createTransactions(t, numTXs)
-	rewardInfo := calculateRewardPerProposal(types.NewLayerID(210), RewardConfig{BaseReward: base}, txs, int(numProposals))
+	totalFee, _, mtxs := createTransactions(t, numTXs)
+	txs := func(mtxs []*types.MeshTransaction) []*types.Transaction {
+		txs := make([]*types.Transaction, 0, len(mtxs))
+		for _, mtx := range mtxs {
+			txs = append(txs, &mtx.Transaction)
+		}
+		return txs
+	}(mtxs)
+	rewardInfo := calculateRewardPerEligibility(types.NewLayerID(210), RewardConfig{BaseReward: base}, txs, int(numProposals))
 	expectedTotalRewardsPer := (totalFee + base) / numProposals
 	expectedLayerRewardPer := base / numProposals
 	assert.Equal(t, numProposals, rewardInfo.numProposals)

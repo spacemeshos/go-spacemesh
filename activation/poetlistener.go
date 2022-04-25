@@ -2,21 +2,17 @@ package activation
 
 import (
 	"context"
-
-	"github.com/libp2p/go-libp2p-core/peer"
+	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // PoetProofProtocol is the name of the PoetProof gossip protocol.
 const PoetProofProtocol = "PoetProof"
-
-type poetValidatorPersistor interface {
-	Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error
-	storeProof(proofMessage *types.PoetProofMessage) error
-}
 
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
@@ -25,7 +21,7 @@ type PoetListener struct {
 }
 
 // HandlePoetProofMessage is a receiver for broadcast messages.
-func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
@@ -42,7 +38,11 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, ms
 		return pubsub.ValidationIgnore
 	}
 
-	if err := l.poetDb.storeProof(&proofMessage); err != nil {
+	if err := l.poetDb.StoreProof(&proofMessage); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			// don't spam the network
+			return pubsub.ValidationIgnore
+		}
 		l.Log.Error("failed to store poet proof: %v", err)
 	}
 	return pubsub.ValidationAccept

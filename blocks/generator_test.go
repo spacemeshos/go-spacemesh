@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -32,6 +33,7 @@ type testGenerator struct {
 	ctrl      *gomock.Controller
 	mockMesh  *mocks.MockmeshProvider
 	mockATXDB *mocks.MockatxProvider
+	mockTXs   *mocks.MocktxProvider
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
@@ -40,34 +42,31 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		ctrl:      ctrl,
 		mockMesh:  mocks.NewMockmeshProvider(ctrl),
 		mockATXDB: mocks.NewMockatxProvider(ctrl),
+		mockTXs:   mocks.NewMocktxProvider(ctrl),
 	}
-	tg.Generator = NewGenerator(tg.mockATXDB, tg.mockMesh, WithGeneratorLogger(logtest.New(t)), WithConfig(testConfig()))
+	tg.Generator = NewGenerator(tg.mockATXDB, tg.mockMesh, tg.mockTXs, WithGeneratorLogger(logtest.New(t)), WithConfig(testConfig()))
 	return tg
 }
 
-func createTransactions(t testing.TB, numOfTxs int) (uint64, []types.TransactionID, []*types.Transaction) {
+func createTransactions(t testing.TB, numOfTxs int) (uint64, []types.TransactionID, []*types.MeshTransaction) {
 	t.Helper()
 	var totalFee uint64
-	txs := make([]*types.Transaction, 0, numOfTxs)
+	txs := make([]*types.MeshTransaction, 0, numOfTxs)
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
 		fee := uint64(rand.Intn(maxFee))
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, fee, signing.NewEdSigner())
+		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, fee)
 		require.NoError(t, err)
 		totalFee += fee
-		txs = append(txs, tx)
+		txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 		txIDs = append(txIDs, tx.ID())
 	}
 	return totalFee, txIDs, txs
 }
 
-type smesher struct {
-	addr   types.Address
-	nodeID types.NodeID
-}
-
 func createProposalsWithOverlappingTXs(t *testing.T, layerID types.LayerID, numProposals int, txIDs []types.TransactionID) (
-	map[types.ATXID]*types.ActivationTx, []*types.Proposal) {
+	map[types.ATXID]*types.ActivationTx, []*types.Proposal,
+) {
 	t.Helper()
 	require.Zero(t, len(txIDs)%numProposals)
 	pieSize := len(txIDs) / numProposals
@@ -109,8 +108,9 @@ func createProposalATXWithCoinbase(t *testing.T, layerID types.LayerID, txIDs []
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: types.InnerBallot{
-					AtxID:      atx.ID(),
-					LayerIndex: layerID,
+					AtxID:             atx.ID(),
+					LayerIndex:        layerID,
+					EligibilityProofs: []types.VotingEligibilityProof{{}},
 				},
 			},
 			TxIDs: txIDs,
@@ -130,8 +130,8 @@ func Test_GenerateBlock(t *testing.T) {
 	numProposals := 10
 	totalFees, txIDs, txs := createTransactions(t, numTXs)
 	atxs, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
-		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).DoAndReturn(
+		func(got []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
 		}).Times(1)
@@ -171,8 +171,8 @@ func Test_GenerateBlockStableBlockID(t *testing.T) {
 	numProposals := 10
 	_, txIDs, txs := createTransactions(t, numTXs)
 	atxs, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
-		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).DoAndReturn(
+		func(got []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
 		}).Times(2)
@@ -206,8 +206,8 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 	atx2, proposal2 := createProposalATXWithCoinbase(t, layerID, txIDs[400:], signer)
 	require.Equal(t, atx1, atx2)
 
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
-		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).DoAndReturn(
+		func(got []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
 		}).Times(1)
@@ -247,8 +247,8 @@ func Test_GenerateBlock_EmptyATXID(t *testing.T) {
 	types.SortProposals(proposals)
 	proposals[numProposals-1].AtxID = *types.EmptyATXID
 
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
-		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).DoAndReturn(
+		func(got []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
 		}).Times(1)
@@ -269,8 +269,8 @@ func Test_GenerateBlock_ATXNotFound(t *testing.T) {
 	numProposals := 10
 	_, txIDs, txs := createTransactions(t, numTXs)
 	atxs, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
-		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).DoAndReturn(
+		func(got []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
 		}).Times(1)
@@ -295,12 +295,51 @@ func Test_GenerateBlock_TXNotFound(t *testing.T) {
 	numProposals := 10
 	_, txIDs, txs := createTransactions(t, numTXs)
 	_, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
-		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).DoAndReturn(
+		func(got []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs[1:], map[types.TransactionID]struct{}{txs[0].ID(): {}}
 		}).Times(1)
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	assert.ErrorIs(t, err, errTXNotFound)
 	assert.Nil(t, block)
+}
+
+func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
+	tg := createTestGenerator(t)
+	fee, ids, txs := createTransactions(t, 1000)
+	tg.mockTXs.EXPECT().GetMeshTransactions(gomock.Any()).Return(txs, nil).Times(1)
+	header := &types.ActivationTxHeader{}
+	header.SetID(&types.ATXID{1, 1, 1})
+
+	genProposal := func(proofs int) *types.Proposal {
+		return &types.Proposal{
+			InnerProposal: types.InnerProposal{
+				Ballot: types.Ballot{
+					InnerBallot: types.InnerBallot{
+						EligibilityProofs: make([]types.VotingEligibilityProof, proofs),
+						AtxID:             header.ID(),
+					},
+				},
+				TxIDs: ids,
+			},
+		}
+	}
+	proposals := []*types.Proposal{
+		genProposal(2), genProposal(1), genProposal(5),
+	}
+	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).Return(header, nil).Times(len(proposals))
+	total := uint64(0)
+	for _, p := range proposals {
+		total += uint64(len(p.EligibilityProofs))
+	}
+
+	block, err := tg.GenerateBlock(context.TODO(), types.NewLayerID(10), proposals)
+	require.NoError(t, err)
+	require.Len(t, block.Rewards, len(proposals))
+
+	expected := (fee + tg.cfg.BaseReward) / total
+	for i, p := range proposals {
+		require.Equal(t, int(expected)*len(p.EligibilityProofs), int(block.Rewards[i].Amount))
+	}
 }

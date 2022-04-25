@@ -138,13 +138,12 @@ func WithSetupUnitsRange(low, high int) SetupOpt {
 type setupConf struct {
 	Miners [2]int
 	Units  [2]int
-	Beacon []byte
 }
 
 func defaultSetupConf() setupConf {
 	return setupConf{
 		Miners: [2]int{30, 30},
-		Units:  [2]int{1, 10},
+		Units:  [2]int{10, 10},
 	}
 }
 

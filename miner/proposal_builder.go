@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -20,14 +19,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 const (
-	// ATXsPerBallotLimit indicates the maximum number of ATXs a Ballot can reference.
-	ATXsPerBallotLimit = 100
-
 	buildDurationErrorThreshold = 10 * time.Second
 )
 
@@ -39,9 +38,9 @@ var (
 
 // ProposalBuilder builds Proposals for a miner.
 type ProposalBuilder struct {
-	logger      log.Log
-	cfg         config
-	refBallotDB database.Database
+	logger log.Log
+	cfg    config
+	sqlDB  *sql.Database
 
 	startOnce  sync.Once
 	ctx        context.Context
@@ -51,20 +50,17 @@ type ProposalBuilder struct {
 
 	publisher          pubsub.Publisher
 	signer             *signing.EdSigner
-	txPool             txPool
-	proposalDB         proposalDB
-	baseBallotProvider baseBallotProvider
+	conState           conservativeState
+	baseBallotProvider votesEncoder
 	proposalOracle     proposalOracle
 	beaconProvider     system.BeaconGetter
 	syncer             system.SyncStateProvider
-	projector          projector
 }
 
 // config defines configuration for the ProposalBuilder.
 type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
-	dbPath         string
 	minerID        types.NodeID
 	txsPerProposal int
 }
@@ -93,13 +89,6 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// WithDBPath defines the path to create miner's database.
-func WithDBPath(path string) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.dbPath = path
-	}
-}
-
 // WithMinerID defines the miner's NodeID.
 func WithMinerID(id types.NodeID) Opt {
 	return func(pb *ProposalBuilder) {
@@ -121,12 +110,6 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
-func withRefDatabase(db database.Database) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.refBallotDB = db
-	}
-}
-
 func withOracle(o proposalOracle) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.proposalOracle = o
@@ -139,14 +122,13 @@ func NewProposalBuilder(
 	layerTimer timesync.LayerTimer,
 	signer *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
+	sqlDB *sql.Database,
 	atxDB activationDB,
 	publisher pubsub.Publisher,
-	pdb proposalDB,
-	bbp baseBallotProvider,
+	bbp votesEncoder,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
-	projector projector,
-	txPool txPool,
+	conState conservativeState,
 	opts ...Opt,
 ) *ProposalBuilder {
 	sctx, cancel := context.WithCancel(ctx)
@@ -158,36 +140,19 @@ func NewProposalBuilder(
 		signer:             signer,
 		layerTimer:         layerTimer,
 		publisher:          publisher,
-		proposalDB:         pdb,
+		sqlDB:              sqlDB,
 		baseBallotProvider: bbp,
 		beaconProvider:     beaconProvider,
 		syncer:             syncer,
-		projector:          projector,
-		txPool:             txPool,
+		conState:           conState,
 	}
 
 	for _, opt := range opts {
 		opt(pb)
 	}
 
-	if pb.projector == nil {
-		pb.logger.Panic("nil projector")
-	}
-
 	if pb.proposalOracle == nil {
 		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, atxDB, vrfSigner, pb.cfg.minerID, pb.logger)
-	}
-
-	if pb.refBallotDB == nil {
-		if len(pb.cfg.dbPath) == 0 {
-			pb.refBallotDB = database.NewMemDatabase()
-		} else {
-			var err error
-			pb.refBallotDB, err = database.NewLDBDatabase(filepath.Join(pb.cfg.dbPath, "miner"), 16, 16, pb.logger)
-			if err != nil {
-				pb.logger.With().Panic("cannot create miner database", log.Err(err))
-			}
-		}
 	}
 
 	return pb
@@ -208,27 +173,14 @@ func (pb *ProposalBuilder) Start(ctx context.Context) error {
 func (pb *ProposalBuilder) Close() {
 	pb.cancel()
 	_ = pb.eg.Wait()
-	pb.refBallotDB.Close()
-}
-
-func getEpochKey(ID types.EpochID) []byte {
-	return []byte(fmt.Sprintf("e_%v", ID))
-}
-
-func (pb *ProposalBuilder) storeRefBallot(epoch types.EpochID, ballotID types.BallotID) error {
-	if err := pb.refBallotDB.Put(getEpochKey(epoch), ballotID.Bytes()); err != nil {
-		return fmt.Errorf("put in refDB: %w", err)
-	}
-	return nil
 }
 
 func (pb *ProposalBuilder) getRefBallot(epoch types.EpochID) (types.BallotID, error) {
-	var ballotID types.BallotID
-	bts, err := pb.refBallotDB.Get(getEpochKey(epoch))
+	ballotID, err := ballots.GetRefBallot(pb.sqlDB, epoch, pb.signer.PublicKey().Bytes())
 	if err != nil {
 		return types.EmptyBallotID, fmt.Errorf("get from refDB: %w", err)
 	}
-	copy(ballotID[:], bts)
+
 	return ballotID, nil
 }
 
@@ -245,7 +197,7 @@ func (pb *ProposalBuilder) stopped() bool {
 func (pb *ProposalBuilder) createProposal(
 	ctx context.Context,
 	layerID types.LayerID,
-	proofs types.VotingEligibilityProof,
+	proofs []types.VotingEligibilityProof,
 	atxID types.ATXID,
 	activeSet []types.ATXID,
 	beacon types.Beacon,
@@ -259,10 +211,10 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	ib := &types.InnerBallot{
-		AtxID:            atxID,
-		EligibilityProof: proofs,
-		Votes:            votes,
-		LayerIndex:       layerID,
+		AtxID:             atxID,
+		EligibilityProofs: proofs,
+		Votes:             votes,
+		LayerIndex:        layerID,
 	}
 
 	epoch := layerID.GetEpoch()
@@ -299,8 +251,10 @@ func (pb *ProposalBuilder) createProposal(
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
-
-	logger.Event().Info("proposal created", p.Fields()...)
+	logger.Event().Info("proposal created", log.Inline(p))
+	for range p.EligibilityProofs {
+		logger.Event().Info("eligibility claimed by proposal", log.Inline(p))
+	}
 	return p, nil
 }
 
@@ -333,79 +287,55 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch. not eligible for proposals")
-			events.ReportDoneCreatingProposal(false, layerID.Uint32(), "not eligible to produce proposals")
 			return fmt.Errorf("miner no ATX: %w", err)
 		}
-		events.ReportDoneCreatingProposal(false, layerID.Uint32(), "failed to check for proposal eligibility")
 		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
 	if len(proofs) == 0 {
-		events.ReportDoneCreatingProposal(false, layerID.Uint32(), "")
 		logger.Info("not eligible for proposal in layer")
 		return nil
 	}
 
-	votes, err := pb.baseBallotProvider.BaseBallot(ctx)
+	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
 	}
 
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
-	var publish []*types.Proposal
-	for _, eligibilityProof := range proofs {
-		txList, _, err := pb.txPool.SelectTopNTransactions(pb.cfg.txsPerProposal, pb.projector.GetProjection)
-		if err != nil {
-			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to get txs for proposal")
-			logger.With().Error("failed to get txs for proposal", log.Err(err))
-			return fmt.Errorf("select TXs: %w", err)
-		}
-		p, err := pb.createProposal(ctx, layerID, eligibilityProof, atxID, activeSet, beacon, txList, *votes)
-		if err != nil {
-			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to create new proposal")
-			logger.With().Error("failed to create new proposal", log.Err(err))
-			return err
-		}
 
-		pb.saveMetrics(ctx, started, layerID)
-
-		if pb.stopped() {
-			return nil
-		}
-
-		if p.RefBallot == types.EmptyBallotID {
-			ballotID := p.Ballot.ID()
-			logger.With().Debug("storing ref ballot", epoch, ballotID)
-			if err := pb.storeRefBallot(epoch, ballotID); err != nil {
-				logger.With().Error("failed to store ref ballot", ballotID, log.Err(err))
-				return err
-			}
-		}
-
-		publish = append(publish, p)
+	txList, err := pb.conState.SelectTXsForProposal(pb.cfg.txsPerProposal * len(proofs))
+	if err != nil {
+		logger.With().Error("failed to get txs for proposal", log.Err(err))
+		return fmt.Errorf("select TXs: %w", err)
 	}
-	if len(publish) > 0 {
-		pb.eg.Go(func() error {
-			// all proposals publish in the same goroutine in order to ensure
-			// that proposal with ref ballot is published sooner than the proposal
-			// which references base ballot.
-			for _, p := range publish {
-				// generate a new requestID for the new block message
-				newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
-				// validation handler, where proposal is persisted, is applied synchronously before
-				// proposal is sent over the network
-				data, err := codec.Encode(p)
-				if err != nil {
-					logger.With().Panic("failed to serialize proposal", log.Err(err))
-				}
-				if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
-					logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
-				}
-				events.ReportDoneCreatingProposal(true, layerID.Uint32(), "")
-			}
-			return nil
-		})
+	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)
+	if err != nil {
+		logger.With().Error("failed to create new proposal", log.Err(err))
+		return err
 	}
+
+	pb.saveMetrics(ctx, started, layerID)
+
+	if pb.stopped() {
+		return nil
+	}
+
+	pb.eg.Go(func() error {
+		// generate a new requestID for the new proposal message
+		newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
+		// validation handler, where proposal is persisted, is applied synchronously before
+		// proposal is sent over the network
+		data, err := codec.Encode(p)
+		if err != nil {
+			logger.With().Panic("failed to serialize proposal", log.Err(err))
+		}
+		if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
+			logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+		}
+		events.ReportProposal(events.ProposalCreated, p)
+		return nil
+	})
 	return nil
 }
 

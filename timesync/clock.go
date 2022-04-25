@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -28,6 +30,7 @@ type TimeClock struct {
 	stop         chan struct{}
 	once         sync.Once
 	log          log.Log
+	eg           errgroup.Group
 }
 
 // NewClock return TimeClock struct that notifies tickInterval has passed.
@@ -44,11 +47,12 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 		once:         sync.Once{},
 		log:          logger,
 	}
-	go t.startClock()
+
+	t.eg.Go(t.startClock)
 	return t
 }
 
-func (t *TimeClock) startClock() {
+func (t *TimeClock) startClock() error {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.startEpoch, t)
 
 	for {
@@ -78,7 +82,7 @@ func (t *TimeClock) startClock() {
 		case <-t.stop:
 			tmr.Stop()
 			t.log.Info("stopping global clock %p", t)
-			return
+			return nil
 		}
 	}
 }
@@ -99,5 +103,8 @@ func (t *TimeClock) Close() {
 	t.once.Do(func() {
 		t.log.Info("closed clock %p", t)
 		close(t.stop)
+		if err := t.eg.Wait(); err != nil {
+			t.log.Error("errgroup: %v", err)
+		}
 	})
 }

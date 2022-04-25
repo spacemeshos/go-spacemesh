@@ -86,14 +86,20 @@ func (p *Proposal) ID() ProposalID {
 	return p.proposalID
 }
 
-// Fields returns an array of LoggableFields for logging.
-func (p *Proposal) Fields() []log.LoggableField {
-	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
+// SetID set the ProposalID.
+func (p *Proposal) SetID(pid ProposalID) {
+	p.proposalID = pid
 }
 
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
+	encoder.AddArray("transactions", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, id := range p.TxIDs {
+			encoder.AppendString(id.String())
+		}
+		return nil
+	}))
 	p.Ballot.MarshalLogObject(encoder)
 	return nil
 }
@@ -151,27 +157,4 @@ func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
 		hashes = append(hashes, id.AsHash32())
 	}
 	return hashes
-}
-
-// DBProposal is a Proposal structure stored in DB to skip signature verification.
-type DBProposal struct {
-	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
-	// to break if in future key for database will be changed
-	ID         ProposalID
-	BallotID   BallotID
-	LayerIndex LayerID
-	TxIDs      []TransactionID
-	Signature  []byte
-}
-
-// ToProposal creates a Proposal from data that is stored locally.
-func (b *DBProposal) ToProposal(ballot *Ballot) *Proposal {
-	return &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: *ballot,
-			TxIDs:  b.TxIDs,
-		},
-		Signature:  b.Signature,
-		proposalID: b.ID,
-	}
 }

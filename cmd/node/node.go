@@ -42,15 +42,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/errcode"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -59,6 +58,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const edKeyFileName = "key.bin"
@@ -69,11 +69,7 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
-	AtxDbStoreLogger       = "atxDbStore"
-	BeaconDbStoreLogger    = "beaconDbStore"
 	BeaconLogger           = "beacon"
-	WeakCoinLogger         = "weakCoin"
-	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
 	PoetDbLogger           = "poetDb"
 	MeshDBLogger           = "meshDb"
@@ -85,6 +81,7 @@ const (
 	HareLogger             = "hare"
 	BlockGenLogger         = "blockGenerator"
 	BlockHandlerLogger     = "blockHandler"
+	TxHandlerLogger        = "txHandler"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	ProposalDBLogger       = "proposalStore"
@@ -93,6 +90,7 @@ const (
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
 	SVMLogger              = "SVM"
+	ConStateLogger         = "conState"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it.
@@ -162,6 +160,7 @@ type Service interface {
 // HareService is basic definition of hare algorithm service, providing consensus results for a layer.
 type HareService interface {
 	Service
+	GetHareMsgHandler() pubsub.GossipHandler
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -190,9 +189,9 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
 	fileLocation := viper.GetString("config")
-	vip := viper.New()
+
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, vip); err != nil {
+	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
@@ -214,7 +213,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
+	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
 		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
 	return &conf, nil
@@ -280,8 +279,8 @@ type App struct {
 	beaconProtocol   *beacon.ProtocolDriver
 	closers          []interface{ Close() }
 	log              log.Log
-	txPool           *mempool.TxMempool
 	svm              *svm.SVM
+	conState         *txs.ConservativeState
 	layerFetch       *layerfetcher.Logic
 	ptimesync        *peersync.Sync
 	tortoise         *tortoise.Tortoise
@@ -370,32 +369,13 @@ func (app *App) Initialize() (err error) {
 
 	app.introduction()
 
-	drift, err := timesync.CheckSystemClockDrift()
-	if err != nil {
-		return &clockError{
-			err: err,
-			details: clockErrorDetails{
-				Drift: drift,
-			},
-		}
-	}
-
-	log.Info("System clock synchronized with ntp. drift: %s", drift)
 	return nil
 }
 
 // setupLogging configured the app logging system.
 func (app *App) setupLogging() {
 	log.Info("%s", app.getAppInfo())
-
-	msg := "initializing event reporter"
-	if app.Config.PublishEventsURL != "" {
-		msg += fmt.Sprintf(" with pubsub URL: %s", app.Config.PublishEventsURL)
-	}
-	log.Info(msg)
-	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
-		log.With().Error("unable to initialize event reporter", log.Err(err))
-	}
+	events.InitializeReporter()
 }
 
 func (app *App) getAppInfo() string {
@@ -467,7 +447,8 @@ func (app *App) initServices(ctx context.Context,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	layersPerEpoch uint32, clock TickProvider) error {
+	layersPerEpoch uint32, clock TickProvider,
+) error {
 	app.nodeID = nodeID
 
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
@@ -475,35 +456,17 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
+	stateDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create state DB: %w", err)
 	}
-	app.closers = append(app.closers, db)
+	app.closers = append(app.closers, stateDBStore)
 
-	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create ATX DB: %w", err)
-	}
-	app.closers = append(app.closers, atxdbstore)
-
-	beaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "beacons"), 0, 0, app.addLogger(BeaconDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create beacon DB: %w", err)
-	}
-	app.closers = append(app.closers, beaconDBStore)
-
-	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create PoET DB: %w", err)
-	}
-	app.closers = append(app.closers, poetDbStore)
-
-	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
+	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create IDs DB: %w", err)
 	}
-	app.closers = append(app.closers, iddbstore)
+	app.closers = append(app.closers, idDBStore)
 
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
@@ -511,23 +474,32 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, store)
 
-	idStore := activation.NewIdentityStore(iddbstore)
-	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
+	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+
+	idStore := activation.NewIdentityStore(idDBStore)
+	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
-	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
+
+	if err := os.MkdirAll(dbStorepath, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
+	}
+
+	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
-
-	app.txPool = mempool.NewTxMemPool()
-	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
 		return fmt.Errorf("create applied txs DB: %w", err)
 	}
 	app.closers = append(app.closers, appliedTxs)
-	state := svm.New(db, appliedTxs, meshAndPoolProjector, app.txPool, app.addLogger(SVMLogger, lg))
+	state := svm.New(stateDBStore, appliedTxs, app.addLogger(SVMLogger, lg))
+
+	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
@@ -535,33 +507,12 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(sqlDB, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
-	edVerifier := signing.NewEDVerifier()
-	vrfVerifier := signing.VRFVerifier{}
-
-	wc := weakcoin.New(app.host,
-		vrfSigner, vrfVerifier,
-		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
-		weakcoin.WithMaxRound(app.Config.Beacon.RoundsNumber),
-	)
-
-	beaconProtocol := beacon.New(
-		app.Config.Beacon,
-		nodeID,
-		app.host,
-		atxDB,
-		sgn,
-		edVerifier,
-		vrfSigner,
-		vrfVerifier,
-		wc,
-		beaconDBStore,
-		clock,
-		app.addLogger(BeaconLogger, lg))
-
-	var msh *mesh.Mesh
-	var trtl *tortoise.Tortoise
+	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
+		beacon.WithContext(ctx),
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
 	processed, err := mdb.GetProcessedLayer()
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
@@ -572,29 +523,30 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
 
-	trtlCfg := app.Config.Tortoise
-	trtlCfg.LayerSize = layerSize
-	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtlCfg.MeshProcessed = processed
-	trtlCfg.MeshVerified = verified
-
-	trtl = tortoise.New(mdb, atxDB, beaconProtocol,
-		tortoise.WithContext(ctx),
-		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
-		tortoise.WithConfig(trtlCfg),
-	)
-
+	var verifier blockValidityVerifier
+	var msh *mesh.Mesh
 	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
-		go msh.CacheWarmUp(app.Config.LayerAvgSize)
+		msh = mesh.NewRecoveredMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	} else {
-		msh = mesh.NewMesh(mdb, atxDB, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
 
-	proposalDB, err := proposals.NewProposalDB(dbStorepath, msh, app.addLogger(ProposalDBLogger, lg))
+	trtlCfg := app.Config.Tortoise
+	trtlCfg.LayerSize = layerSize
+	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	trtlCfg.MeshProcessed = processed
+	trtlCfg.MeshVerified = verified
+	trtl := tortoise.New(mdb, atxDB, beaconProtocol, msh,
+		tortoise.WithContext(ctx),
+		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
+		tortoise.WithConfig(trtlCfg),
+	)
+	verifier.Tortoise = trtl
+
+	proposalDB, err := proposals.NewProposalDB(sqlDB, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create proposal DB: %w", err)
 	}
@@ -617,20 +569,22 @@ func (app *App) initServices(ctx context.Context,
 	blockHandller := blocks.NewHandler(fetcherWrapped, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
+	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
+
 	dbStores := fetch.LocalDataSource{
-		fetch.BallotDB:   mdb.Ballots(),
-		fetch.BlockDB:    mdb.Blocks(),
+		fetch.BallotDB:   msh.Ballots(),
+		fetch.BlockDB:    msh.Blocks(),
 		fetch.ProposalDB: proposalDB,
-		fetch.ATXDB:      atxdbstore,
-		fetch.TXDB:       mdb.Transactions(),
-		fetch.POETDB:     poetDbStore,
+		fetch.ATXDB:      atxDB.ATXs(),
+		fetch.TXDB:       app.conState.Transactions(),
+		fetch.POETDB:     poetDb.PoETs(),
 	}
 	dataHanders := layerfetcher.DataHandlers{
 		ATX:      atxDB,
 		Block:    blockHandller,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
-		TX:       state,
+		TX:       txHandler,
 	}
 	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, poetDb, atxDB, msh, app.host, dataHanders, dbStores, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
@@ -655,24 +609,21 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	blockGen := blocks.NewGenerator(atxDB, msh, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
 	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(state, msh)
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		clock.Subscribe(),
 		sgn,
 		vrfSigner,
+		sqlDB,
 		atxDB,
 		app.host,
-		proposalDB,
 		trtl,
 		beaconProtocol,
 		newSyncer,
-		stateAndMeshProjector,
-		app.txPool,
-		miner.WithDBPath(dbStorepath),
+		app.conState,
 		miner.WithMinerID(nodeID),
 		miner.WithTxsPerProposal(app.Config.TxsPerBlock),
 		miner.WithLayerSize(layerSize),
@@ -711,17 +662,22 @@ func (app *App) initServices(ctx context.Context,
 		return pubsub.ValidationIgnore
 	}
 
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
+	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
 	app.host.Register(beacon.ProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedProposalMessage))
-	app.host.Register(beacon.FirstVoteProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFirstVotingMessage))
-	app.host.Register(beacon.FollowingVotingProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFollowingVotingMessage))
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(beacon.FirstVotesProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(beacon.FollowingVotesProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
-	app.host.Register(svm.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, state.HandleGossipTransaction))
+	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
+	hareGossipHandler := rabbit.GetHareMsgHandler()
+	if hareGossipHandler == nil {
+		app.log.Panic("hare message handler missing")
+	}
+	app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -747,29 +703,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	return nil
-}
-
-// periodically checks that our clock is sync.
-func (app *App) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
-	defer checkTimeSync.Stop() // close ticker
-
-	for {
-		select {
-		case <-app.term:
-			return
-
-		case <-checkTimeSync.C:
-			_, err := timesync.CheckSystemClockDrift()
-			if err != nil {
-				app.log.With().Error("unable to synchronize system time", log.Err(err))
-
-				cmdp.Cancel()()
-
-				return
-			}
-		}
-	}
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
@@ -819,10 +752,8 @@ func (app *App) HareFactory(
 func (app *App) startServices(ctx context.Context) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
+	app.beaconProtocol.Start(ctx)
 
-	if err := app.beaconProtocol.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start beacon: %w", err)
-	}
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -845,7 +776,6 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
-	go app.checkTimeDrifts()
 	return nil
 }
 
@@ -871,16 +801,16 @@ func (app *App) startAPIServices(ctx context.Context) {
 
 	// Register the requested services one by one
 	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.mesh, app.host))
+		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
 		registerService(grpcserver.NewGatewayService(app.host))
 	}
 	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
+		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
@@ -891,7 +821,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.txPool, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
@@ -965,7 +895,6 @@ func (app *App) stopServices() {
 
 	if app.proposalDB != nil {
 		app.log.Info("closing proposal db")
-		app.proposalDB.Close()
 	}
 
 	if app.mesh != nil {
@@ -989,7 +918,6 @@ func (app *App) stopServices() {
 	}
 
 	events.CloseEventReporter()
-	events.CloseEventPubSub()
 
 	// Close all databases.
 	for _, closer := range app.closers {
@@ -1235,6 +1163,10 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
+}
+
+type blockValidityVerifier struct {
+	*tortoise.Tortoise
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {

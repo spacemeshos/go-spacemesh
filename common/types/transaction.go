@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -105,10 +105,7 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
-	addr := Address{}
-	addr.SetBytes(pubKey)
-
-	t.SetOrigin(addr)
+	t.SetOrigin(GenerateAddress(pubKey))
 
 	return nil
 }
@@ -133,6 +130,11 @@ func (t *Transaction) ID() TransactionID {
 // GetFee returns the fee of the transaction.
 func (t *Transaction) GetFee() uint64 {
 	return t.Fee
+}
+
+// Spending returns the total amount spent on by this transaction.
+func (t *Transaction) Spending() uint64 {
+	return t.Fee + t.Amount
 }
 
 // GetRecipient returns the transaction recipient.
@@ -172,11 +174,32 @@ func SortTransactionIDs(ids []TransactionID) []TransactionID {
 	return ids
 }
 
+// TXState describes the state of a transaction.
+type TXState int
+
+const (
+	// PENDING represents the state when a transaction is syntactically valid, but its nonce and
+	// the principal's ability to cover gas have not been verified yet.
+	PENDING TXState = iota
+	// MEMPOOL represents the state when a transaction is in mempool.
+	MEMPOOL
+	// PROPOSAL represents the state when a transaction is in a proposal.
+	PROPOSAL
+	// BLOCK represents the state when a transaction is in a not-applied block.
+	BLOCK
+	// APPLIED represents the state when a transaction is applied to the state.
+	APPLIED
+	// DISCARDED represents the state when a transaction is rejected due to bad nonce or insufficient balance.
+	DISCARDED
+)
+
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
 	Transaction
-	LayerID LayerID
-	BlockID BlockID
+	LayerID  LayerID
+	BlockID  BlockID
+	State    TXState
+	Received time.Time
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
@@ -195,32 +218,4 @@ type Reward struct {
 	LayerRewardEstimate uint64
 	SmesherID           NodeID
 	Coinbase            Address
-}
-
-// NewSignedTx is used in TESTS ONLY to generate signed txs.
-func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
-	inner := InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
-	}
-
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		return nil, err
-	}
-
-	sst := &Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	addr := Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	sst.SetOrigin(addr)
-
-	return sst, nil
 }

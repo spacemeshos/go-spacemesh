@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -88,21 +89,96 @@ func TestLayerFilter(t *testing.T) {
 			types.InnerBlock{LayerIndex: start},
 		),
 		types.NewExistingBlock(
-			types.BlockID{2, 2},
-			types.InnerBlock{LayerIndex: start},
-		),
-		types.NewExistingBlock(
 			types.BlockID{3, 3},
 			types.InnerBlock{LayerIndex: start.Add(1)},
+		),
+		types.NewExistingBlock(
+			types.BlockID{2, 2},
+			types.InnerBlock{LayerIndex: start},
 		),
 	}
 	for _, block := range blocks {
 		require.NoError(t, Add(db, block))
 	}
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].ID().Compare(blocks[j].ID())
+	})
 	bids, err := IDsInLayer(db, start)
 	require.NoError(t, err)
 	require.Len(t, bids, 2)
 	for i, bid := range bids {
 		require.Equal(t, bid, blocks[i].ID())
+	}
+}
+
+func TestLayerOrdered(t *testing.T) {
+	db := sql.InMemory()
+	start := types.NewLayerID(1)
+	blocks := []*types.Block{
+		types.NewExistingBlock(
+			types.BlockID{1, 1},
+			types.InnerBlock{LayerIndex: start},
+		),
+		types.NewExistingBlock(
+			types.BlockID{3, 3},
+			types.InnerBlock{LayerIndex: start},
+		),
+		types.NewExistingBlock(
+			types.BlockID{2, 2},
+			types.InnerBlock{LayerIndex: start},
+		),
+	}
+	for _, block := range blocks {
+		require.NoError(t, Add(db, block))
+	}
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].ID().Compare(blocks[j].ID())
+	})
+	bids, err := IDsInLayer(db, start)
+	require.NoError(t, err)
+	require.Len(t, bids, 3)
+	for i, bid := range bids {
+		require.Equal(t, bid, blocks[i].ID())
+	}
+}
+
+func TestContextualValidity(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.NewLayerID(1)
+	blocks := []*types.Block{
+		types.NewExistingBlock(
+			types.BlockID{1},
+			types.InnerBlock{LayerIndex: lid},
+		),
+		types.NewExistingBlock(
+			types.BlockID{2},
+			types.InnerBlock{LayerIndex: lid},
+		),
+		types.NewExistingBlock(
+			types.BlockID{3},
+			types.InnerBlock{LayerIndex: lid},
+		),
+		types.NewExistingBlock(
+			types.BlockID{4},
+			types.InnerBlock{LayerIndex: lid.Add(1)},
+		),
+	}
+	for _, block := range blocks {
+		require.NoError(t, Add(db, block))
+	}
+	validities, err := ContextualValidity(db, lid)
+	require.NoError(t, err)
+	require.Len(t, validities, 3)
+	for i, validity := range validities {
+		require.Equal(t, blocks[i].ID(), validity.ID)
+		require.False(t, validity.Validity)
+		require.NoError(t, SetValid(db, validity.ID))
+	}
+
+	validities, err = ContextualValidity(db, lid)
+	require.NoError(t, err)
+	require.Len(t, validities, 3)
+	for _, validity := range validities {
+		require.True(t, validity.Validity)
 	}
 }

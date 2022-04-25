@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -30,7 +31,7 @@ type StateSuite struct {
 	state *DB
 }
 
-var toAddr = types.BytesToAddress
+var toAddr = types.GenerateAddress
 
 func TestDump(t *testing.T) {
 	s := &StateSuite{}
@@ -68,9 +69,7 @@ func TestDump(t *testing.T) {
 		}
 	}
 }`
-	if got != want {
-		t.Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(t, want, got)
 }
 
 func TestLookupPastState(t *testing.T) {

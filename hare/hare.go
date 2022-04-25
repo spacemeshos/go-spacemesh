@@ -8,14 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -29,7 +28,6 @@ type Consensus interface {
 	ID() types.LayerID
 	Close()
 	CloseChannel() chan struct{}
-
 	Start(ctx context.Context) error
 	SetInbox(chan *Msg)
 }
@@ -63,49 +61,38 @@ type LayerClock interface {
 type Hare struct {
 	util.Closer
 	log.Log
-	config config.Config
-
-	publisher  pubsub.Publisher
-	layerClock LayerClock
-
+	config        config.Config
+	publisher     pubsub.Publisher
+	layerClock    LayerClock
+	broker        *Broker
+	sign          Signer
+	blockGen      blockGenerator
+	mesh          meshProvider
+	pdb           proposalProvider
+	beacons       system.BeaconGetter
+	fetcher       system.ProposalFetcher
+	rolacle       Rolacle
+	patrol        layerPatrol
+	factory       consensusFactory
 	newRoundClock func(LayerID types.LayerID) RoundClock
-
-	broker *Broker
-
-	sign     Signer
-	blockGen blockGenerator
-
-	mesh    meshProvider
-	pdb     proposalProvider
-	beacons system.BeaconGetter
-	fetcher system.ProposalFetcher
-	rolacle Rolacle
-	patrol  layerPatrol
-
-	networkDelta time.Duration
-
-	layerLock sync.RWMutex
-	lastLayer types.LayerID
-
-	bufferSize uint32
-
-	outputChan chan TerminationOutput
-	mu         sync.RWMutex
-	outputs    map[types.LayerID][]types.ProposalID
-	certChan   chan types.LayerID
-	certified  map[types.LayerID]struct{}
-
-	factory consensusFactory
-
-	nid types.NodeID
-
-	totalCPs int32
+	networkDelta  time.Duration
+	nid           types.NodeID
+	totalCPs      int32
+	bufferSize    uint32
+	outputChan    chan TerminationOutput
+	mu            sync.RWMutex
+	outputs       map[types.LayerID][]types.ProposalID
+	certChan      chan types.LayerID
+	certified     map[types.LayerID]struct{}
+	layerLock     sync.RWMutex
+	lastLayer     types.LayerID
+	wg            sync.WaitGroup
 }
 
 // New returns a new Hare struct.
 func New(
 	conf config.Config,
-	pid peer.ID,
+	peer p2p.Peer,
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
@@ -143,8 +130,7 @@ func New(
 	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(pid, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
-	publisher.Register(protoName, h.broker.HandleMessage)
+	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
 	h.sign = sign
 	h.blockGen = blockGen
 
@@ -168,6 +154,11 @@ func New(
 	h.nid = nid
 
 	return h
+}
+
+// GetHareMsgHandler returns the gossip handler for hare protocol message.
+func (h *Hare) GetHareMsgHandler() pubsub.GossipHandler {
+	return h.broker.HandleMessage
 }
 
 func (h *Hare) getLastLayer() types.LayerID {
@@ -371,8 +362,10 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.ProposalID {
 	proposals, err := h.pdb.LayerProposals(lyrID)
 	if err != nil {
-		if err != database.ErrNotFound {
-			logger.With().Error("no proposals found for hare, using empty set", log.Err(err))
+		if !errors.Is(err, sql.ErrNotFound) {
+			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
+		} else {
+			logger.With().Error("failed to get proposals for hare", log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
@@ -431,6 +424,8 @@ func (h *Hare) getResult(lid types.LayerID) ([]types.ProposalID, error) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
+	defer h.wg.Done()
+
 	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
@@ -459,6 +454,8 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) certificationLoop(ctx context.Context) {
+	defer h.wg.Done()
+
 	h.WithContext(ctx).With().Info("starting certification collection loop")
 	for {
 		select {
@@ -473,6 +470,8 @@ func (h *Hare) certificationLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
+	defer h.wg.Done()
+
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
@@ -496,21 +495,28 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start(ctx context.Context) error {
-	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", protoName))
+	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", ProtoName))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
-	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_broker"))
-	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_tickloop"))
-	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_outputloop"))
-	ctxCertLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_certloop"))
+	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_broker"))
+	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_tickloop"))
+	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_outputloop"))
+	ctxCertLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_certloop"))
 
 	if err := h.broker.Start(ctxBroker); err != nil {
 		return fmt.Errorf("start broker: %w", err)
 	}
 
+	h.wg.Add(3)
 	go h.tickLoop(ctxTickLoop)
 	go h.outputCollectionLoop(ctxOutputLoop)
 	go h.certificationLoop(ctxCertLoop)
 
 	return nil
+}
+
+// Close sends a termination signal to hare goroutines and waits for their termination.
+func (h *Hare) Close() {
+	h.Closer.Close()
+	h.wg.Wait()
 }

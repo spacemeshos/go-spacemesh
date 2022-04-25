@@ -46,14 +46,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
-	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "tortoise-hdist",
-		config.Tortoise.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
-	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
-		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&config.ProfilerURL, "profiler-url",
@@ -91,17 +87,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== TIME Flags ========================== **/
 
-	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
-		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
-	cmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
-		config.TIME.NtpQueries, "Number of ntp queries to do")
-	cmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",
-		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
-	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
-		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
-	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
-		"ntp-servers", config.TIME.NTPServers, "A list of NTP servers to query (e.g., 'time.google.com'). Overrides the list in config. Must contain more servers than the number of ntp-queries.")
-	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "disable", config.TIME.Peersync.Disable,
+	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "peersync-disable", config.TIME.Peersync.Disable,
 		"disable verification that local time is in sync with peers")
 	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundRetryInterval, "peersync-round-retry-interval",
 		config.TIME.Peersync.RoundRetryInterval, "when to retry a sync round after a failure")
@@ -183,12 +169,16 @@ func AddCommands(cmd *cobra.Command) {
 		config.Beacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
 	cmd.PersistentFlags().Var((*types.RatVar)(config.Beacon.Theta), "beacon-theta",
 		"Ratio of votes for reaching consensus")
-	cmd.PersistentFlags().Uint64Var(&config.Beacon.VotesLimit, "beacon-votes-limit",
+	cmd.PersistentFlags().Uint32Var(&config.Beacon.VotesLimit, "beacon-votes-limit",
 		config.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
 	cmd.PersistentFlags().Uint32Var(&config.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
 		config.Beacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
 
-	/**======================== Post Flags ========================== **/
+	/**======================== Tortoise Flags ========================== **/
+	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "tortoise-hdist",
+		config.Tortoise.Hdist, "hdist")
+	cmd.PersistentFlags().DurationVar(&config.Tortoise.RerunInterval, "tortoise-rerun-interval",
+		config.Tortoise.RerunInterval, "Tortoise will verify layers from scratch every interval.")
 
 	// TODO(moshababo): add usage desc
 

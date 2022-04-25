@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -34,6 +35,8 @@ type Ballot struct {
 	ballotID BallotID
 	// the public key of the smesher used
 	smesherID *signing.PublicKey
+	// malicious is set to true if smesher that produced this ballot is known to be malicious.
+	malicious bool
 }
 
 // InnerBallot contains all info about a smesher's votes on the mesh history. this structure is
@@ -42,8 +45,9 @@ type InnerBallot struct {
 	// the smesher's ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
-	EligibilityProof VotingEligibilityProof
-	Votes            Votes
+	// Eligibilities must be produced in the ascending order.
+	EligibilityProofs []VotingEligibilityProof
+	Votes             Votes
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
@@ -97,6 +101,30 @@ type Votes struct {
 	Abstain []LayerID
 }
 
+// MarshalLogObject implements logging interface.
+func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("base", v.Base.String())
+	encoder.AddArray("support", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, bid := range v.Support {
+			encoder.AppendString(bid.String())
+		}
+		return nil
+	}))
+	encoder.AddArray("against", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, bid := range v.Against {
+			encoder.AppendString(bid.String())
+		}
+		return nil
+	}))
+	encoder.AddArray("abstain", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, lid := range v.Abstain {
+			encoder.AppendString(lid.String())
+		}
+		return nil
+	}))
+	return nil
+}
+
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
@@ -114,6 +142,13 @@ type VotingEligibilityProof struct {
 	J uint32
 	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
 	Sig []byte
+}
+
+// MarshalLogObject implements logging interface.
+func (v *VotingEligibilityProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("j", v.J)
+	encoder.AddString("sig", util.Bytes2Hex(v.Sig))
+	return nil
 }
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.
@@ -152,31 +187,14 @@ func (b *Ballot) SmesherID() *signing.PublicKey {
 	return b.smesherID
 }
 
-// Fields returns an array of LoggableFields for logging.
-func (b *Ballot) Fields() []log.LoggableField {
-	var (
-		activeSetSize = 0
-		beacon        Beacon
-	)
-	if b.EpochData != nil {
-		activeSetSize = len(b.EpochData.ActiveSet)
-		beacon = b.EpochData.Beacon
-	}
-	return []log.LoggableField{
-		b.ID(),
-		b.LayerIndex,
-		b.LayerIndex.GetEpoch(),
-		log.FieldNamed("smesher_id", b.SmesherID()),
-		log.FieldNamed("base_ballot", b.Votes.Base),
-		log.Int("supports", len(b.Votes.Support)),
-		log.Int("againsts", len(b.Votes.Against)),
-		log.Int("abstains", len(b.Votes.Abstain)),
-		b.AtxID,
-		log.Uint32("eligibility_counter", b.EligibilityProof.J),
-		log.FieldNamed("ref_ballot", b.RefBallot),
-		log.Int("active_set_size", activeSetSize),
-		beacon,
-	}
+// SetMalicious sets ballot as malicious.
+func (b *Ballot) SetMalicious() {
+	b.malicious = true
+}
+
+// IsMalicious returns true if ballot is malicious.
+func (b *Ballot) IsMalicious() bool {
+	return b.malicious
 }
 
 // MarshalLogObject implements logging encoder for Ballot.
@@ -200,10 +218,16 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddInt("againsts", len(b.Votes.Against))
 	encoder.AddInt("abstains", len(b.Votes.Abstain))
 	encoder.AddString("atx_id", b.AtxID.String())
-	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
+	encoder.AddArray("eligibilities", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, proof := range b.EligibilityProofs {
+			encoder.AppendObject(&proof)
+		}
+		return nil
+	}))
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)
 	encoder.AddString("beacon", beacon.ShortString())
+	encoder.AddObject("votes", &b.Votes)
 	return nil
 }
 

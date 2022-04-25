@@ -16,7 +16,7 @@ const (
 	AddressLength = 20
 )
 
-// Address represents the 20 byte address of an spacemesh account.
+// Address represents the address of a spacemesh account with AddressLength length.
 type Address [AddressLength]byte
 
 // BytesToAddress returns Address with value b.
@@ -34,25 +34,6 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 // HexToAddress returns Address with byte values of s.
 // If s is larger than len(h), s will be cropped from the left.
 func HexToAddress(s string) Address { return BytesToAddress(util.FromHex(s)) }
-
-// StringToAddress returns Address with byte values of s.
-// If s is larger than len(h), s will be cropped from the left.
-// It is identical to HexToAddress, except decoding errors are returned instead of swallowed.
-func StringToAddress(s string) (Address, error) {
-	if len(s) > 1 {
-		if s[0:2] == "0x" || s[0:2] == "0X" {
-			s = s[2:]
-		}
-	}
-	if len(s)%2 == 1 {
-		s = "0" + s
-	}
-	bt, err := hex.DecodeString(s)
-	if err != nil {
-		return Address{}, fmt.Errorf("decode hex string: %w", err)
-	}
-	return BytesToAddress(bt), nil
-}
 
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
@@ -112,4 +93,12 @@ func (a *Address) SetBytes(b []byte) {
 		b = b[len(b)-AddressLength:]
 	}
 	copy(a[AddressLength-len(b):], b)
+}
+
+// GenerateAddress generates an address from a public key.
+func GenerateAddress(publicKey []byte) Address {
+	var addr Address
+	addr.SetBytes(publicKey)
+
+	return addr
 }

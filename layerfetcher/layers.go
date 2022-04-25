@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./layers.go
@@ -41,7 +42,7 @@ type proposalHandler interface {
 
 // txHandler is an interface for handling TX data received in sync.
 type txHandler interface {
-	HandleSyncTransaction(data []byte) error
+	HandleSyncTransaction(context.Context, []byte) error
 }
 
 // layerDB is an interface that returns layer data and blocks.
@@ -62,8 +63,6 @@ type atxIDsDB interface {
 
 // poetDB is an interface to reading and storing poet proofs.
 type poetDB interface {
-	HasProof(proofRef []byte) bool
-	ValidateAndStore(proofMessage *types.PoetProofMessage) error
 	ValidateAndStoreMsg(data []byte) error
 }
 
@@ -154,7 +153,8 @@ type DataHandlers struct {
 
 // NewLogic creates a new instance of layer fetching logic.
 func NewLogic(ctx context.Context, cfg Config, poet poetDB, atxIDs atxIDsDB, layers layerDB,
-	host *p2p.Host, handlers DataHandlers, dbStores fetch.LocalDataSource, log log.Log) *Logic {
+	host *p2p.Host, handlers DataHandlers, dbStores fetch.LocalDataSource, log log.Log,
+) *Logic {
 	l := &Logic{
 		log:             log,
 		fetcher:         fetch.NewFetch(ctx, cfg.Config, host, dbStores, log.WithName("fetch")),
@@ -322,7 +322,7 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 	}
 	if lyrResult.hareOutput == types.EmptyBlockID {
 		if blocks.HareOutput != types.EmptyBlockID {
-			logger.Info("adopting hare output", blocks.HareOutput)
+			logger.With().Info("adopting hare output", blocks.HareOutput)
 			lyrResult.hareOutput = blocks.HareOutput
 		}
 	} else if blocks.HareOutput != types.EmptyBlockID && lyrResult.hareOutput != blocks.HareOutput {
@@ -503,7 +503,7 @@ func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte)
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.txHandler.HandleSyncTransaction(data); err != nil {
+	if err := l.txHandler.HandleSyncTransaction(ctx, data); err != nil {
 		return fmt.Errorf("handle tx sync data: %w", err)
 	}
 
@@ -516,23 +516,11 @@ func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byt
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.poetProofs.ValidateAndStoreMsg(data); err != nil {
+	if err := l.poetProofs.ValidateAndStoreMsg(data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		return fmt.Errorf("validate and store message: %w", err)
 	}
 
 	return nil
-}
-
-// IsSynced indicates if this node is synced.
-func (l *Logic) IsSynced(context.Context) bool {
-	// todo: add this logic
-	return true
-}
-
-// ListenToGossip indicates if node is currently accepting packets from gossip.
-func (l *Logic) ListenToGossip() bool {
-	// todo: add this logic
-	return true
 }
 
 // Future is a preparation for using actual futures in the code, this will allow to truly execute

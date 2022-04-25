@@ -100,27 +100,8 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: setup env
         run: make
-      - name: unit tests (except app test)
-        run: make test-no-app-test
-        env: 
-          TEST_LOG_LEVEL: debug
-  apptests:
-    runs-on: ubuntu-latest
-    needs: filter-changes
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should take around 7-9 mins
-    timeout-minutes: 15
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: set up go
-        uses: actions/setup-go@v2
-        with:
-          go-version: ${{ env.go-version }}
-      - name: setup env
-        run: make
-      - name: app test
-        run: make test-only-app-test
+      - name: unit tests
+        run: make test
         env: 
           TEST_LOG_LEVEL: debug
   # checkpoint and print a single, clean status message to slack
@@ -132,11 +113,10 @@ jobs:
       - quicktests
       - golangci-lint
       - unittests
-      - apptests
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
@@ -158,6 +138,7 @@ jobs:
   ## so we can safely assume that all secrets are accessible here below
 
   ## stage 2: next run docker push, as system tests rely on this
+
   dockerpush:
     # only run on push, not on pull_request
     # note that this does NOT run on pushes to branch develop, see separate workflow file for that
@@ -174,123 +155,78 @@ jobs:
         run: make dockerpush
 
   ## stage 3: finally run system tests in parallel if everything else passes
-  systemtest-latenodes:
+  ## Run new system tests
+  systest:
     runs-on: ubuntu-latest
-    # only run on push, not on pull_request
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 80
+    timeout-minutes: 50
+    concurrency: cloud-limits
     steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes
-  systemtest-mining:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 30 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '30s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: mining system test
-        run: make dockertest-mining
-  systemtest-blocks-remove-node:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 90 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '90s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: remove node test
-        run: make dockertest-blocks-remove-node
-  systemtest-blocks-add-node:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 150 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '150s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: blocks add node test
-        run: make dockertest-blocks-add-node
-  systemtest-p2p:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 210 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '210s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: p2p system test
-        run: make dockertest-p2p
-  systemtest-hare:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 330 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '330s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: hare system test
-        run: make dockertest-hare
-  systemtest-beacon:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 330 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '330s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: beacon system test
-        run: make dockertest-beacon
+    - uses: actions/checkout@master
 
+    - id: 'auth'
+      uses: 'google-github-actions/auth@v0'
+      with:
+        # GCP_CREDENTIALS is minified JSON of service account
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
+    - name: Configure gcloud
+      uses: 'google-github-actions/setup-gcloud@v0'
+
+    - name: Configure kubectl
+      run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Push go-spacemesh build to dockerhub
+      run: make dockerpush
+
+    - name: Get branch and commit hash
+      id: vars
+      shell: bash
+      run: |
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+    - name: Build tests docker image
+      run: cd systest && make docker
+
+    - name: Push tests docker images
+      run: cd systest && make push
+
+    - name: Run tests
+      run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
+
+    - name: Systemtest result
+      run: |
+        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }}  -ojson | jq .status.containerStatuses[].state.terminated.exitCode)
+        SUCCESS="${SUCCESS//'%'/'%25'}"
+        SUCCESS="${SUCCESS//$'\n'/'%0A'}"
+        SUCCESS="${SUCCESS//$'\r'/'%0D'}"
+        echo "::set-output name=content::$SUCCESS"
+      id: tests_logs
+    
+    - name: Delete pod
+      run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
+
+    - name: Tests Passed or Failed
+      run: |
+        SUCCESS='${{ steps.tests_logs.outputs.content }}'
+        ISTRUE='0'
+        if [[ "$SUCCESS" == "$ISTRUE" ]]; then
+          exit 0
+        else
+          exit 1
+        fi
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
   ci-stage2:
@@ -298,17 +234,11 @@ jobs:
     needs:
       - filter-changes
       - ci-stage1
-      - systemtest-latenodes
-      - systemtest-blocks-add-node
-      - systemtest-blocks-remove-node
-      - systemtest-mining
-      - systemtest-p2p
-      - systemtest-hare
-      - systemtest-beacon
+      - systest
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1

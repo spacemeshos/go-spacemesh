@@ -5,41 +5,21 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spacemeshos/ed25519"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
-
-// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
-const IncomingTxProtocol = "TxGossip"
-
-// PreImages is a struct that contains a root hash and the transactions that are in store of this root hash.
-type PreImages struct {
-	rootHash  types.Hash32
-	preImages []*types.Transaction
-}
-
-// Projector interface defines the interface for a struct that can project the state of an account by applying txs from
-// mem pool.
-type Projector interface {
-	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
-}
 
 // TransactionProcessor is the struct containing state db and is responsible for applying transactions into it.
 type TransactionProcessor struct {
 	log.Log
 	*DB
-	pool         *mempool.TxMempool
 	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
 	stateQueue   list.List
-	projector    Projector
 	trie         *trie.Database
 	mu           sync.Mutex
 	rootMu       sync.RWMutex
@@ -48,7 +28,7 @@ type TransactionProcessor struct {
 const newRootKey = "root"
 
 // NewTransactionProcessor returns a new state processor.
-func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *mempool.TxMempool, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.With().Panic("cannot load state db", log.Err(err))
@@ -61,19 +41,10 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 		processorDb: processorDb,
 		rootHash:    root,
 		stateQueue:  list.List{},
-		projector:   projector,
 		trie:        stateDb.TrieDB(),
-		pool:        txPool,
 		mu:          sync.Mutex{}, // sync between reset and apply mesh.Transactions
 		rootMu:      sync.RWMutex{},
 	}
-}
-
-// PublicKeyToAccountAddress converts ed25519 public key to account address.
-func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
-	var addr types.Address
-	addr.SetBytes(pub)
-	return addr
 }
 
 // AddressExists checks if an account address exists in this node's global state.
@@ -89,24 +60,6 @@ func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionID) *types
 	}
 	layerID := types.BytesToLayerID(layerIDBytes)
 	return &layerID
-}
-
-// ValidateNonceAndBalance validates that the tx origin account has enough balance to apply the tx,
-// also, it checks that nonce in tx is correct, returns error otherwise.
-func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
-	origin := tx.Origin()
-	nonce, balance, err := tp.projector.GetProjection(origin, tp.GetNonce(origin), tp.GetBalance(origin))
-	if err != nil {
-		return fmt.Errorf("failed to project state for account %v: %v", origin.Short(), err)
-	}
-	if tx.AccountNonce != nonce {
-		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
-	}
-	if (tx.Amount + tx.GetFee()) > balance { // TODO: Fee represents the absolute fee here, as a temporarily hack
-		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
-			balance, tx.Amount, tx.GetFee(), tx.Amount+tx.GetFee())
-	}
-	return nil
 }
 
 // ApplyTransactions receives a batch of transactions to apply to state. Returns the number of transactions that we
@@ -238,7 +191,6 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
 		}
-		events.ReportValidTx(tx, err == nil)
 		events.ReportNewTx(layerID, tx)
 		events.ReportAccountUpdate(tx.Origin())
 		events.ReportAccountUpdate(tx.GetRecipient())
@@ -305,9 +257,4 @@ func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 func transfer(db *TransactionProcessor, sender, recipient types.Address, amount uint64) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-}
-
-// AddTxToPool exports mempool functionality for adding tx to the pool.
-func (tp *TransactionProcessor) AddTxToPool(tx *types.Transaction) {
-	tp.pool.Put(tx.ID(), tx)
 }

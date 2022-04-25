@@ -90,7 +90,7 @@ func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tor
 	n := 0
 	for _, ballot := range ballots {
 		if v.checkCanBeGood(ballot.base) && v.checkCanBeGood(ballot.id) {
-			logger.With().Info("marking ballots that can be good as good",
+			logger.With().Debug("marking ballots that can be good as good",
 				log.Stringer("ballot_layer", lid),
 				log.Stringer("ballot", ballot.id),
 				log.Stringer("base_ballot", ballot.base),
@@ -111,9 +111,9 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 	v.goodWeight[lid] = goodWeight
 	v.totalGoodWeight = v.totalGoodWeight.add(goodWeight)
 
-	logger.With().Info("counted weight from good ballots",
+	logger.With().Debug("counted weight from good ballots",
 		log.Stringer("good_weight", goodWeight),
-		log.Stringer("total", v.totalGoodWeight),
+		log.Stringer("total_good_weight", v.totalGoodWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
 		log.Int("good_ballots_count", goodBallotsCount),
@@ -180,6 +180,9 @@ func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (
 	sum := weightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
+		if ballot.weight.isNil() {
+			continue
+		}
 		rst := v.determineGoodness(logger, ballot)
 		if rst == bad {
 			continue
@@ -200,8 +203,6 @@ func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (
 }
 
 func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goodness {
-	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
-
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
 		logger.With().Debug("ballot is not good. ballot has a bad beacon")
 		return bad
@@ -217,6 +218,8 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 				log.Stringer("base_layer", baselid),
 				log.Stringer("vote_layer", blocklid),
 				log.Bool("vote_exists", exists),
+				ballot.id,
+				log.Stringer("base", ballot.base),
 			)
 			return bad
 		}
@@ -229,6 +232,8 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 				log.Stringer("block_layer", blocklid),
 				log.Stringer("base_layer", baselid),
 				log.Stringer("block", block),
+				ballot.id,
+				log.Stringer("base", ballot.base),
 			)
 			return bad
 		}
@@ -237,7 +242,10 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 	base := v.goodBallots[ballot.base]
 
 	if len(ballot.abstain) > 0 {
-		logger.With().Debug("ballot has abstained on some layers", log.Stringer("base_goodness", base))
+		logger.With().Debug("ballot has abstained on some layers",
+			ballot.id,
+			log.Stringer("base", ballot.base),
+			log.Stringer("base_goodness", base))
 		switch base {
 		case good:
 			return abstained
@@ -247,10 +255,15 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 	}
 
 	if base != good {
-		logger.With().Debug("ballot can be good. only base is not good")
+		logger.With().Debug("ballot can be good. only base is not good",
+			ballot.id,
+			log.Stringer("base", ballot.base))
 		return canBeGood
 	}
 
-	logger.With().Debug("ballot is good")
+	logger.With().Debug("ballot is good",
+		ballot.id,
+		log.Stringer("base", ballot.base),
+	)
 	return good
 }
