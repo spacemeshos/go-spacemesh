@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-tcp-transport"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 // Peer is an alias to libp2p's peer.ID.
@@ -36,11 +37,12 @@ func DefaultConfig() Config {
 
 // Config for all things related to p2p layer.
 type Config struct {
-	DataDir            string
-	LogLevel           log.Level
-	GracePeersShutdown time.Duration
-	BootstrapTimeout   time.Duration
-	MaxMessageSize     int
+	DataDir              string
+	LogLevel             log.Level
+	GracePeersShutdown   time.Duration
+	BootstrapTimeout     time.Duration
+	NodeMetricsCollector *p2pmetrics.P2PMetricsCollector
+	MaxMessageSize       int
 
 	DisableNatPort bool     `mapstructure:"disable-natport"`
 	Flood          bool     `mapstructure:"flood"`
@@ -86,6 +88,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(pstoremem.NewPeerstore()),
+		libp2p.BandwidthReporter(cfg.NodeMetricsCollector.BandwidthReporter),
 	}
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
@@ -94,12 +97,13 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
+	h.Network().Notify(cfg.NodeMetricsCollector.ConnectionsMeeter)
 
 	logger.With().Info("local node identity",
 		log.String("identity", h.ID().String()),
 	)
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
-	opts = append(opts, WithConfig(cfg), WithLog(logger))
+	opts = append(opts, WithConfig(cfg), WithLog(logger), WithMetricsCollector(cfg.NodeMetricsCollector))
 	return Upgrade(h, opts...)
 }
