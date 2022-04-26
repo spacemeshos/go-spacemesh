@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -20,20 +21,25 @@ const (
 )
 
 func newCore(rng *rand.Rand, id string, logger log.Log) *core {
+	db := sql.InMemory()
+	mdb, err := mesh.NewPersistentMeshDB(db, logger)
+	if err != nil {
+		panic(err)
+	}
 	c := &core{
 		id:      id,
 		logger:  logger,
 		rng:     rng,
-		meshdb:  newMeshDB(logger),
-		atxdb:   newAtxDB(logger, types.GetLayersPerEpoch()),
+		meshdb:  mdb,
+		atxdb:   activation.NewDB(db, nil, nil, types.GetLayersPerEpoch(), types.ATXID{1}, nil, logger),
 		beacons: newBeaconStore(),
 		units:   units,
 		signer:  signing.NewEdSignerFromRand(rng),
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise = tortoise.New(c.meshdb, c.atxdb, c.beacons,
-		tortoise.WithLogger(logger),
+	c.tortoise = tortoise.New(c.meshdb, c.atxdb, c.beacons, updater{c.meshdb},
+		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
 	return c
@@ -80,47 +86,47 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			}
 			c.eligibilities = max(uint32(c.weight*50/total), 1)
 		}
+		votes, err := c.tortoise.EncodeVotes(context.TODO())
+		if err != nil {
+			panic(err)
+		}
+		ballot := &types.Ballot{}
+		ballot.LayerIndex = ev.LayerID
+		ballot.Votes = *votes
+		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
-			votes, err := c.tortoise.BaseBallot(context.TODO())
+			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})
+		}
+		if c.refBallot != nil {
+			ballot.RefBallot = *c.refBallot
+		} else {
+			_, activeset, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
 			if err != nil {
 				panic(err)
 			}
-			ballot := &types.Ballot{}
-			ballot.LayerIndex = ev.LayerID
-			ballot.Votes = *votes
-			ballot.AtxID = c.atx
-			ballot.EligibilityProof.J = i
-
-			if c.refBallot != nil {
-				ballot.RefBallot = *c.refBallot
-			} else {
-				_, activeset, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
-				if err != nil {
-					panic(err)
-				}
-				beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
-				if err != nil {
-					beacon = types.Beacon{}
-					c.rng.Read(beacon[:])
-					c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
-				}
-				ballot.EpochData = &types.EpochData{
-					ActiveSet: activeset,
-					Beacon:    beacon,
-				}
+			beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
+			if err != nil {
+				beacon = types.Beacon{}
+				c.rng.Read(beacon[:])
+				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
 			}
-			ballot.Signature = c.signer.Sign(ballot.Bytes())
-			ballot.Initialize()
-
-			if c.refBallot == nil {
-				id := ballot.ID()
-				c.refBallot = &id
+			ballot.EpochData = &types.EpochData{
+				ActiveSet: activeset,
+				Beacon:    beacon,
 			}
-			m.Send(MessageBallot{Ballot: ballot})
 		}
+		ballot.Signature = c.signer.Sign(ballot.Bytes())
+		ballot.Initialize()
+		if c.refBallot == nil {
+			id := ballot.ID()
+			c.refBallot = &id
+		}
+		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
-		oldv, newv, revert := c.tortoise.HandleIncomingLayer(context.TODO(), ev.LayerID)
-		m.Notify(EventVerified{ID: c.id, Old: oldv, New: newv, Revert: revert, Layer: ev.LayerID})
+		if ev.LayerID.After(types.GetEffectiveGenesis()) {
+			verified := c.tortoise.HandleIncomingLayer(context.TODO(), ev.LayerID)
+			m.Notify(EventVerified{ID: c.id, Verified: verified, Layer: ev.LayerID})
+		}
 
 		if ev.LayerID.GetEpoch() == ev.LayerID.Add(1).GetEpoch() {
 			return
@@ -178,18 +184,17 @@ func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
 	b.beacons[eid] = beacon
 }
 
-func newAtxDB(logger log.Log, layersPerEpoch uint32) *activation.DB {
-	db := database.NewMemDatabase()
-	return activation.NewDB(db, nil, nil, layersPerEpoch, types.ATXID{1}, nil, logger)
-}
-
-func newMeshDB(logger log.Log) *mesh.DB {
-	return mesh.NewMemMeshDB(logger)
-}
-
 func max(i, j uint32) uint32 {
 	if i > j {
 		return i
 	}
 	return j
+}
+
+type updater struct {
+	*mesh.DB
+}
+
+func (u updater) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, rst bool) error {
+	return u.SaveContextualValidity(bid, lid, rst)
 }

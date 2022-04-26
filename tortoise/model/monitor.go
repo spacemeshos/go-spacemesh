@@ -21,7 +21,7 @@ type Event interface{}
 type EventVerified struct {
 	ID       string
 	Layer    types.LayerID
-	Old, New types.LayerID
+	Verified types.LayerID
 	Revert   bool
 }
 
@@ -43,7 +43,7 @@ type verifiedMonitor struct {
 func (m *verifiedMonitor) OnEvent(event Event) {
 	switch ev := event.(type) {
 	case EventVerified:
-		m.verified[ev.ID] = ev.New
+		m.verified[ev.ID] = ev.Verified
 		if ev.Layer.After(m.last) {
 			m.last = ev.Layer
 		}
