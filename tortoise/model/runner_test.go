@@ -10,11 +10,14 @@ import (
 
 func TestBasicModel(t *testing.T) {
 	types.SetLayersPerEpoch(4)
-	const total = 20
+	const (
+		numLayers   = 20
+		numSmeshers = 50
+	)
 
 	rng := rand.New(rand.NewSource(1001))
 	c := newCluster(logtest.New(t), rng)
-	for i := 0; i < 50; i++ {
+	for i := 0; i < numSmeshers; i++ {
 		c.addCore()
 	}
 	c.addHare().addBeacon()
@@ -24,7 +27,7 @@ func TestBasicModel(t *testing.T) {
 
 	r := newFailingRunner(c, &msgr, []Monitor{monitor}, rng, [2]int{5, 100}).
 		failable(MessageBallot{})
-	for i := 0; i < total; i++ {
+	for i := 0; i < numLayers; i++ {
 		r.next()
 		monitor.Test()
 	}

@@ -19,7 +19,7 @@ type beacon struct {
 func (b *beacon) OnMessage(m Messenger, event Message) {
 	switch ev := event.(type) {
 	case MessageLayerStart:
-		if ev.LayerID.GetEpoch() == ev.LayerID.Sub(1).GetEpoch() {
+		if ev.LayerID != ev.LayerID.GetEpoch().FirstLayer() {
 			return
 		}
 		// first layer of the epoch

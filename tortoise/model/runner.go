@@ -67,9 +67,10 @@ func newFailingRunner(c *cluster,
 }
 
 type failingRunner struct {
-	cluster     *cluster
-	messenger   Messenger
-	monitors    []Monitor
+	cluster   *cluster
+	messenger Messenger
+	monitors  []Monitor
+	// probability that messages in failables will fail by the model
 	probability [2]int
 	rng         *rand.Rand
 	lid         types.LayerID
