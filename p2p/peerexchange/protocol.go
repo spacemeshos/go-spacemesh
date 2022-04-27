@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -167,7 +166,7 @@ func parseAddrInfo(raw string) (*addrInfo, error) {
 	if len(pid) == 0 {
 		return nil, fmt.Errorf("address without peer id %v", raw)
 	}
-	if strings.HasPrefix(raw, "/dns") {
+	if IsDNSAddress(raw) {
 		return &addrInfo{ID: pid, RawAddr: raw, addr: addr}, nil
 	}
 	ip, err := manet.ToIP(addr)

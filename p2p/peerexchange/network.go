@@ -3,6 +3,7 @@ package peerexchange
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 var (
@@ -211,6 +212,11 @@ func IsValid(na net.IP) bool {
 	// RFC3849 need to be explicitly checked.
 	return na != nil && !(na.IsUnspecified() ||
 		na.Equal(net.IPv4bcast))
+}
+
+// IsDNSAddress returns whether or not the passed address is an intended DNS.
+func IsDNSAddress(rawAddr string) bool {
+	return strings.HasPrefix(rawAddr, "/dns")
 }
 
 // IsRoutable returns whether or not the passed address is routable over
