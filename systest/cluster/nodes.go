@@ -133,12 +133,18 @@ func nodeLabels(name string) map[string]string {
 }
 
 func labelSelector(labels map[string]string) string {
-	var buf strings.Builder
+	var (
+		buf   strings.Builder
+		first = true
+	)
 	for key, value := range labels {
+		if !first {
+			buf.WriteString(",")
+		}
+		first = false
 		buf.WriteString(key)
 		buf.WriteString("=")
 		buf.WriteString(value)
-		buf.WriteString(",")
 	}
 	return buf.String()
 }
