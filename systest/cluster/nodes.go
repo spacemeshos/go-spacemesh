@@ -58,7 +58,7 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 		"--duration=30s",
 		"--n=10",
 	)
-	labels := map[string]string{"app": "poet"}
+	labels := nodeLabels("poet")
 	pod := corev1.Pod("poet", ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
@@ -126,10 +126,25 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 	}
 }
 
-func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []DeploymentFlag) ([]*NodeClient, error) {
-	labels := map[string]string{
+func nodeLabels(name string) map[string]string {
+	return map[string]string{
 		"app": name,
 	}
+}
+
+func labelSelector(labels map[string]string) string {
+	var buf strings.Builder
+	for key, value := range labels {
+		buf.WriteString(key)
+		buf.WriteString("=")
+		buf.WriteString(value)
+		buf.WriteString(",")
+	}
+	return buf.String()
+}
+
+func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []DeploymentFlag) ([]*NodeClient, error) {
+	labels := nodeLabels(name)
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().

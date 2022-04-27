@@ -2,18 +2,24 @@ package cluster
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/spacemeshos/ed25519"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
+
+var notInitialized = errors.New("cluster: not initilized")
 
 const (
 	defaultNetID     = 777
 	poetSvc          = "poet"
 	bootnodesPrefix  = "boot"
+	smesherPrefix    = "smesher"
 	poetPort         = 80
 	defaultBootnodes = 2
 )
@@ -43,6 +49,19 @@ func WithKeys(n int) Opt {
 	}
 }
 
+// Reuse will try to recover cluster from the given namespace, if not found
+// it will create a new one.
+func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
+	cl := &Cluster{}
+	if err := cl.reuse(cctx); err != nil {
+		if errors.Is(err, notInitialized) {
+			return Default(cctx, opts...)
+		}
+		return nil, err
+	}
+	return cl, nil
+}
+
 // Default deployes bootnodes, one poet and the smeshers according to the cluster size.
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
@@ -53,6 +72,9 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		return nil, err
 	}
 	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-defaultBootnodes); err != nil {
+		return nil, err
+	}
+	if err := cl.accounts.Persist(cctx); err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -88,6 +110,30 @@ type Cluster struct {
 
 func (c *Cluster) addFlag(flag DeploymentFlag) {
 	c.smesherFlags[flag.Name] = flag
+}
+
+func (c *Cluster) reuse(cctx *testcontext.Context) error {
+	clients, err := discoverNodes(cctx, bootnodesPrefix)
+	if err != nil {
+		return err
+	}
+	if len(clients) == 0 {
+		return notInitialized
+	}
+	c.clients = append(c.clients, clients...)
+	c.bootnodes = len(clients)
+
+	clients, err = discoverNodes(cctx, smesherPrefix)
+	if err != nil {
+		return err
+	}
+	c.clients = append(clients, clients...)
+	c.smeshers = len(clients)
+
+	if err := c.accounts.Recover(cctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 // AddPoet ...
@@ -182,7 +228,8 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 }
 
 type accounts struct {
-	keys []*signer
+	keys      []*signer
+	persisted bool
 }
 
 func (a *accounts) Private(i int) ed25519.PrivateKey {
@@ -191,6 +238,35 @@ func (a *accounts) Private(i int) ed25519.PrivateKey {
 
 func (a *accounts) Address(i int) string {
 	return a.keys[i].Address()
+}
+
+func (a *accounts) Persist(ctx *testcontext.Context) error {
+	if a.persisted {
+		return nil
+	}
+	data := map[string][]byte{}
+	for _, key := range a.keys {
+		data[string(key.Pub)] = key.PK
+	}
+	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).WithBinaryData(data)
+	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to persist accounts %w", err)
+	}
+	a.persisted = true
+	return nil
+}
+
+func (a *accounts) Recover(ctx *testcontext.Context) error {
+	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "accounts", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to fetch accounts %w", err)
+	}
+	for pub, pk := range cfgmap.BinaryData {
+		a.keys = append(a.keys, &signer{PK: pk, Pub: []byte(pub)})
+	}
+	a.persisted = true
+	return nil
 }
 
 func genGenesis(signers []*signer) (rst map[string]uint64) {
