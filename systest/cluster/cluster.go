@@ -248,8 +248,9 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 	for _, key := range a.keys {
 		data[string(key.Pub)] = key.PK
 	}
-	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).WithBinaryData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{})
+	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).
+		WithBinaryData(data)
+	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %w", err)
 	}
