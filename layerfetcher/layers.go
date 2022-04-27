@@ -322,7 +322,7 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 	}
 	if lyrResult.hareOutput == types.EmptyBlockID {
 		if blocks.HareOutput != types.EmptyBlockID {
-			logger.Info("adopting hare output", blocks.HareOutput)
+			logger.With().Info("adopting hare output", blocks.HareOutput)
 			lyrResult.hareOutput = blocks.HareOutput
 		}
 	} else if blocks.HareOutput != types.EmptyBlockID && lyrResult.hareOutput != blocks.HareOutput {

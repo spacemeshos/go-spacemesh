@@ -313,7 +313,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	// TODO add proposal data as needed.
 
 	for _, b := range layer.Blocks() {
-		txs, missing := s.conState.GetTransactions(b.TxIDs)
+		mtxs, missing := s.conState.GetMeshTransactions(b.TxIDs)
 		// TODO: Do we ever expect txs to be missing here?
 		// E.g., if this node has not synced/received them yet.
 		if len(missing) != 0 {
@@ -322,9 +322,9 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		var pbTxs []*pb.Transaction
-		for _, t := range txs {
-			pbTxs = append(pbTxs, convertTransaction(t))
+		pbTxs := make([]*pb.Transaction, 0, len(mtxs))
+		for _, t := range mtxs {
+			pbTxs = append(pbTxs, convertTransaction(&t.Transaction))
 		}
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),

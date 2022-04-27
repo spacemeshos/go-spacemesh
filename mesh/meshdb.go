@@ -346,6 +346,11 @@ func (m *DB) LayerContextualValidity(lid types.LayerID) ([]types.BlockContextual
 	return blocks.ContextualValidity(m.db, lid)
 }
 
+// LastAppliedLayer returns the last applied layer.
+func (m *DB) LastAppliedLayer() (types.LayerID, error) {
+	return layers.GetLastApplied(m.db)
+}
+
 // newBlockFetcherDB returns reference to a BlockFetcherDB instance.
 func newBlockFetcherDB(mdb *DB) *BlockFetcherDB {
 	return &BlockFetcherDB{mdb: mdb}

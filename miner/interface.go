@@ -14,7 +14,7 @@ type proposalOracle interface {
 }
 
 type conservativeState interface {
-	SelectTXsForProposal(int) ([]types.TransactionID, []*types.Transaction, error)
+	SelectTXsForProposal(int) ([]types.TransactionID, error)
 }
 
 type votesEncoder interface {

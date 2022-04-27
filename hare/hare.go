@@ -131,7 +131,6 @@ func New(
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
-	publisher.Register(protoName, h.broker.HandleMessage)
 	h.sign = sign
 	h.blockGen = blockGen
 
@@ -155,6 +154,11 @@ func New(
 	h.nid = nid
 
 	return h
+}
+
+// GetHareMsgHandler returns the gossip handler for hare protocol message.
+func (h *Hare) GetHareMsgHandler() pubsub.GossipHandler {
+	return h.broker.HandleMessage
 }
 
 func (h *Hare) getLastLayer() types.LayerID {
@@ -491,13 +495,13 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start(ctx context.Context) error {
-	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", protoName))
+	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", ProtoName))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
-	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_broker"))
-	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_tickloop"))
-	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_outputloop"))
-	ctxCertLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_certloop"))
+	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_broker"))
+	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_tickloop"))
+	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_outputloop"))
+	ctxCertLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_certloop"))
 
 	if err := h.broker.Start(ctxBroker); err != nil {
 		return fmt.Errorf("start broker: %w", err)

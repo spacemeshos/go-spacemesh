@@ -9,11 +9,11 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
-	ApplyLayer(types.LayerID, types.BlockID, []types.TransactionID, map[types.Address]uint64) ([]*types.Transaction, error)
+	ApplyLayer(*types.Block) ([]*types.Transaction, error)
 	GetStateRoot() types.Hash32
-	Rewind(types.LayerID) (types.Hash32, error)
-	StoreTransactionsFromMemPool(types.LayerID, types.BlockID, []types.TransactionID) error
-	ReinsertTxsToMemPool([]types.TransactionID) error
+	RevertState(types.LayerID) (types.Hash32, error)
+	LinkTXsWithProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
+	LinkTXsWithBlock(types.LayerID, types.BlockID, []types.TransactionID) error
 }
 
 type tortoise interface {

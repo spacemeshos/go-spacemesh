@@ -206,6 +206,7 @@ func createTestHare(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.
 
 	hare := New(tcfg, pid, p2p, ed, nodeID, mockBlockGen, mockSyncS, mockMeshDB, mockProposalDB, mockBeacons, mockFetcher, mockRoracle, patrol, 10,
 		mockIDProvider, mockStateQ, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
+	p2p.Register(ProtoName, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{
 		Hare:           hare,
@@ -466,7 +467,7 @@ func Test_multipleCPs(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(ProtoName)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}
@@ -561,7 +562,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(ProtoName)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}

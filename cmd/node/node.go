@@ -164,6 +164,7 @@ type Service interface {
 // HareService is basic definition of hare algorithm service, providing consensus results for a layer.
 type HareService interface {
 	Service
+	GetHareMsgHandler() pubsub.GossipHandler
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -517,8 +518,6 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	var trtl *tortoise.Tortoise
-
 	processed, err := mdb.GetProcessedLayer()
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
@@ -528,29 +527,28 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
 
+	var verifier blockValidityVerifier
+	var msh *mesh.Mesh
+	if mdb.PersistentData() {
+		msh = mesh.NewRecoveredMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	} else {
+		msh = mesh.NewMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
+			return fmt.Errorf("setup genesis: %w", err)
+		}
+	}
+
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	trtlCfg.MeshProcessed = processed
 	trtlCfg.MeshVerified = verified
-
-	var updater blockValidityUpdater
-	trtl = tortoise.New(mdb, atxDB, beaconProtocol, &updater,
+	trtl := tortoise.New(mdb, atxDB, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
-
-	var msh *mesh.Mesh
-	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
-	} else {
-		msh = mesh.NewMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
-		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
-		}
-	}
-	updater.Mesh = msh
+	verifier.Tortoise = trtl
 
 	proposalDB, err := proposals.NewProposalDB(sqlDB, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
@@ -679,6 +677,11 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
 	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
+	hareGossipHandler := rabbit.GetHareMsgHandler()
+	if hareGossipHandler == nil {
+		app.log.Panic("hare message handler missing")
+	}
+	app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -1175,8 +1178,8 @@ type layerFetcher struct {
 	system.Fetcher
 }
 
-type blockValidityUpdater struct {
-	*mesh.Mesh
+type blockValidityVerifier struct {
+	*tortoise.Tortoise
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
