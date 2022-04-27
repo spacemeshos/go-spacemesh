@@ -15,7 +15,7 @@ import (
 
 func TestSmeshing(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Default(tctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	t.Run("Proposals", func(t *testing.T) {
@@ -29,7 +29,14 @@ func TestSmeshing(t *testing.T) {
 }
 
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+	first, err := currentLayer(tctx, cl.Client(0))
+	require.NoError(t, err)
 	const limit = 15
+	// start from the first layer in the epoch
+	if over := first % 4; over != 0 {
+		first += 4 - over
+	}
+	last := first + limit
 
 	createdch := make(chan *spacemeshv1.Proposal, cl.Total()*limit)
 	includedAll := make([]map[uint32][]*spacemeshv1.Proposal, cl.Total())
@@ -49,7 +56,10 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 				"eligibilities", len(proposal.Eligibilities),
 				"status", spacemeshv1.Proposal_Status_name[int32(proposal.Status)],
 			)
-			if proposal.Layer.Number > limit {
+			if proposal.Layer.Number < first {
+				return true, nil
+			}
+			if proposal.Layer.Number > last {
 				return false, nil
 			}
 			if proposal.Status == spacemeshv1.Proposal_Created {
