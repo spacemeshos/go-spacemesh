@@ -338,8 +338,9 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 	}
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
-		// fail sync for the entire layer
-		return err
+		logger.With().Error("failed fetching new blocks", log.Err(err))
+		// syntactically invalid blocks are expected from malicious peers
+		return nil
 	}
 	return nil
 }
