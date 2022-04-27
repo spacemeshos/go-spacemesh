@@ -304,7 +304,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
-	txList, _, err := pb.conState.SelectTXsForProposal(pb.cfg.txsPerProposal * len(proofs))
+	txList, err := pb.conState.SelectTXsForProposal(pb.cfg.txsPerProposal * len(proofs))
 	if err != nil {
 		logger.With().Error("failed to get txs for proposal", log.Err(err))
 		return fmt.Errorf("select TXs: %w", err)

@@ -18,5 +18,5 @@ type meshProvider interface {
 }
 
 type txProvider interface {
-	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
+	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
 }
