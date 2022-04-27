@@ -246,13 +246,13 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 	}
 	data := map[string][]byte{}
 	for _, key := range a.keys {
-		data[string(key.Pub)] = key.PK
+		data[hex.EncodeToString(key.Pub)] = key.PK
 	}
 	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).
 		WithBinaryData(data)
 	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return fmt.Errorf("failed to persist accounts %w", err)
+		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}
 	a.persisted = true
 	return nil
@@ -264,7 +264,11 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 		return fmt.Errorf("failed to fetch accounts %w", err)
 	}
 	for pub, pk := range cfgmap.BinaryData {
-		a.keys = append(a.keys, &signer{PK: pk, Pub: []byte(pub)})
+		decoded, err := hex.DecodeString(pub)
+		if err != nil {
+			return fmt.Errorf("failed to decode pub key %s %w", pub, err)
+		}
+		a.keys = append(a.keys, &signer{PK: pk, Pub: decoded})
 	}
 	a.persisted = true
 	return nil
