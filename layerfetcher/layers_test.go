@@ -332,7 +332,7 @@ func TestPollLayerBlocks_FetchLayerBallotsError(t *testing.T) {
 	assert.Equal(t, layerID, res.Layer)
 }
 
-func TestPollLayerBlocks_FetchLayerBlocksError(t *testing.T) {
+func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
