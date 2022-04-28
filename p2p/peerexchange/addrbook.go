@@ -112,7 +112,8 @@ type addrBook struct {
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(addr, src *addrInfo) {
-	if !IsRoutable(addr.IP) && IsRoutable(src.IP) {
+	routableAddr := IsRoutable(addr.IP) || IsDNSAddress(addr.RawAddr)
+	if !routableAddr && IsRoutable(src.IP) {
 		a.logger.Debug("skipped non routable address received from routable ip",
 			log.String("received", addr.IP.String()),
 			log.String("from", src.IP.String()),
