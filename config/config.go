@@ -95,8 +95,6 @@ type BaseConfig struct {
 	PublishEventsURL string `mapstructure:"events-url"`
 
 	TxsPerBlock int `mapstructure:"txs-per-block"`
-
-	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
