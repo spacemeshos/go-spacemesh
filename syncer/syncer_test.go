@@ -144,7 +144,6 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 
 var conf = Configuration{
 	SyncInterval: time.Second * 60 * 60 * 24, // long enough that it doesn't kick in during testing
-	AlwaysListen: false,
 }
 
 func newSyncer(ctx context.Context, t *testing.T, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {

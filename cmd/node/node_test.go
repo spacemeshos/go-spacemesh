@@ -717,11 +717,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1
 		app.Config.LayerDurationSec = 2
 
-		// Force gossip to always listen, even when not synced
-		app.Config.AlwaysListen = true
-
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-
 		app.Config.Genesis = apiConfig.DefaultTestGenesisConfig()
 
 		// This will block. We need to run the full app here to make sure that

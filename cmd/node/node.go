@@ -592,7 +592,6 @@ func (app *App) initServices(ctx context.Context,
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
-		AlwaysListen: app.Config.AlwaysListen,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
