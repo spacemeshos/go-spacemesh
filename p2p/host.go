@@ -55,7 +55,7 @@ type Config struct {
 // New initializes libp2p host configured for spacemesh.
 func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
-	key, err := ensureIdentity(cfg.DataDir)
+	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
