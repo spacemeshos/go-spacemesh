@@ -64,6 +64,10 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
 	}
 	root, err := calcRoot(proof.Members)
+	// we shouldn't care about poet proof with empty membership as it's not relevant.
+	if len(proof.Members) == 0 {
+		return nil
+	}
 	if err != nil {
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
 			poetID[:shortIDlth], roundID, err))
