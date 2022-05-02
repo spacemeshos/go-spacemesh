@@ -36,40 +36,41 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// AddTxToMemPool mocks base method.
-func (m *MockconservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity bool) error {
+// AddToCache mocks base method.
+func (m *MockconservativeState) AddToCache(arg0 *types.Transaction, arg1 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddTxToMemPool", tx, checkValidity)
+	ret := m.ctrl.Call(m, "AddToCache", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddTxToMemPool indicates an expected call of AddTxToMemPool.
-func (mr *MockconservativeStateMockRecorder) AddTxToMemPool(tx, checkValidity interface{}) *gomock.Call {
+// AddToCache indicates an expected call of AddToCache.
+func (mr *MockconservativeStateMockRecorder) AddToCache(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToMemPool", reflect.TypeOf((*MockconservativeState)(nil).AddTxToMemPool), tx, checkValidity)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0, arg1)
 }
 
 // AddressExists mocks base method.
-func (m *MockconservativeState) AddressExists(addr types.Address) bool {
+func (m *MockconservativeState) AddressExists(arg0 types.Address) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddressExists", addr)
+	ret := m.ctrl.Call(m, "AddressExists", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // AddressExists indicates an expected call of AddressExists.
-func (mr *MockconservativeStateMockRecorder) AddressExists(addr interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) AddressExists(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressExists", reflect.TypeOf((*MockconservativeState)(nil).AddressExists), addr)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressExists", reflect.TypeOf((*MockconservativeState)(nil).AddressExists), arg0)
 }
 
 // HasTx mocks base method.
-func (m *MockconservativeState) HasTx(arg0 types.TransactionID) bool {
+func (m *MockconservativeState) HasTx(arg0 types.TransactionID) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasTx", arg0)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HasTx indicates an expected call of HasTx.

@@ -514,8 +514,6 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	var trtl *tortoise.Tortoise
-
 	processed, err := mdb.GetProcessedLayer()
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
@@ -525,29 +523,28 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
 
+	var verifier blockValidityVerifier
+	var msh *mesh.Mesh
+	if mdb.PersistentData() {
+		msh = mesh.NewRecoveredMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	} else {
+		msh = mesh.NewMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
+			return fmt.Errorf("setup genesis: %w", err)
+		}
+	}
+
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	trtlCfg.MeshProcessed = processed
 	trtlCfg.MeshVerified = verified
-
-	var updater blockValidityUpdater
-	trtl = tortoise.New(mdb, atxDB, beaconProtocol, &updater,
+	trtl := tortoise.New(mdb, atxDB, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
-
-	var msh *mesh.Mesh
-	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
-	} else {
-		msh = mesh.NewMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
-		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
-		}
-	}
-	updater.Mesh = msh
+	verifier.Tortoise = trtl
 
 	proposalDB, err := proposals.NewProposalDB(sqlDB, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
@@ -595,7 +592,6 @@ func (app *App) initServices(ctx context.Context,
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
-		AlwaysListen: app.Config.AlwaysListen,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -1168,8 +1164,8 @@ type layerFetcher struct {
 	system.Fetcher
 }
 
-type blockValidityUpdater struct {
-	*mesh.Mesh
+type blockValidityVerifier struct {
+	*tortoise.Tortoise
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {

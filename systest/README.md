@@ -29,14 +29,16 @@ kubectl create clusterrolebinding serviceaccounts-cluster-admin \
 chaos-mesh is used for some tests. See https://chaos-mesh.org/docs/quick-start/ for more up-to-date instructions.
 
 ```bash
-curl -sSL https://mirrors.chaos-mesh.org/v2.1.2/install.sh | bash
+curl -sSL https://mirrors.chaos-mesh.org/v2.1.4/install.sh | bash
 ```
 
 4. Install `loki` to use grafana dashboard.
 
-Follow instructions https://grafana.com/docs/loki/latest/installation/helm/.
+Please follow instructions on https://grafana.com/docs/loki/latest/installation/microservices-helm/ :
 
 ```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
 helm upgrade --install loki grafana/loki-stack  --set grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false,loki.persistence.enabled=true,loki.persistence.storageClassName=standard,loki.persistence.size=20Gi
 ```
 
@@ -74,13 +76,72 @@ make docker
 
 4. Run tests.
 ```bash
-make run test_name=TestSmeshing smesher_image=go-spacemesh-dev:develop-dirty
+make run test_name=TestSmeshing smesher_image=<image built with `make dockerbuild-go`> e.g. `smesher_image=go-spacemesh-dev:develop-dirty`
 ```
 
 The command will create a pod inside your k8s cluster named `systest`. After test completes it will clean up after
 itself. If you want to interrupt the test run `make clean` - it will gracefully terminate the pod allowing it to clean up the test setup.
 
 If logs were interrupted it is always possible to re-attach to them with `make attach`.
+
+If you see the following output for a long time (5+ minutes):
+```
+➜  systest git:(systest-readme) make run test_name=TestSmeshing smesher_image=go-spacemesh-dev:systest-readme-dirty
+pod/systest-eef2da3d created
+pod/systest-eef2da3d condition met
+=== RUN   TestSmeshing
+=== PAUSE TestSmeshing
+=== CONT  TestSmeshing
+    logger.go:130: 2022-04-17T12:13:00.308Z	INFO	using	{"namespace": "test-adno"}
+```
+please make sure you don't have `Pending` pods:
+```bash
+➜  ~ kubectl get pods -n test-adno
+NAME         READY   STATUS    RESTARTS   AGE
+boot-0       1/1     Running   0          52s
+boot-1       1/1     Running   0          52s
+poet         1/1     Running   0          48s
+smesher-0    1/1     Running   0          40s
+smesher-1    1/1     Running   0          40s
+smesher-10   1/1     Running   0          39s
+smesher-11   1/1     Running   0          39s
+smesher-12   1/1     Running   0          38s
+smesher-13   1/1     Running   0          38s
+smesher-14   1/1     Running   0          38s
+smesher-15   1/1     Running   0          38s
+smesher-16   1/1     Running   0          38s
+smesher-17   1/1     Running   0          37s
+smesher-2    1/1     Running   0          40s
+smesher-3    1/1     Running   0          40s
+smesher-4    1/1     Running   0          39s
+smesher-5    1/1     Running   0          39s
+smesher-6    1/1     Running   0          39s
+smesher-7    1/1     Running   0          39s
+smesher-8    1/1     Running   0          39s
+smesher-9    1/1     Running   0          39s
+```
+and if you do:
+```
+➜  ~ kubectl get pods -n test-adno
+NAME     READY   STATUS    RESTARTS   AGE
+boot-0   1/1     Running   0          9m20s
+boot-1   1/1     Running   0          9m20s
+poet     0/1     Pending   0          9m13s
+```
+then please see more details with
+```
+➜  ~ kubectl describe pods poet -n test-adno
+Name:         poet
+Namespace:    test-adno
+...
+node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason            Age                 From               Message
+  ----     ------            ----                ----               -------
+  Warning  FailedScheduling  69s (x11 over 11m)  default-scheduler  0/1 nodes are available: 1 Insufficient cpu, 1 Insufficient memory.
+```
+Most likely you have insufficient CPU or memory and need to make `size` smaller in your `make run` command.
+This is related to minikube setup though and shouldn't be an issue for Kubernetes cluster running in the cloud.
 
 Note
 ---
