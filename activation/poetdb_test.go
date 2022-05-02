@@ -59,6 +59,29 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	assert.False(t, membership[types.BytesToHash([]byte("5"))])
 }
 
+func TestPoetDbPoetProofNoMembers(t *testing.T) {
+	r := require.New(t)
+
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+
+	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
+	r.NoError(err)
+
+	var poetProof types.PoetProof
+	_, err = codec.DecodeFrom(file, &poetProof)
+	r.NoError(err)
+	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
+	poetID := []byte("poet_id_123456")
+	roundID := "1337"
+	poetProof.Root = []byte("some other root")
+
+	poetProof.Members = nil
+
+	err = poetDb.Validate(poetProof, poetID, roundID, nil)
+	r.NoError(err)
+	r.False(types.IsProcessingError(err))
+}
+
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	msg := readPoetProofFromDisk(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
