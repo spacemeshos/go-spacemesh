@@ -713,8 +713,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Avoid waiting for new connections.
 		app.Config.P2P.TargetOutbound = 0
 
-		// Speed things up a little
-		app.Config.SyncInterval = 1
+		// syncer will cause the node to go out of sync (and not listen to gossip)
+		// since we are testing single-node transaction service, we don't need the syncer to run
+		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -813,8 +814,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Wait for the app to exit
 		wg.Wait()
 	}()
-
-	time.Sleep(4 * time.Second)
 
 	// Submit the txs
 	res1, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
