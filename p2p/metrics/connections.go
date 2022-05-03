@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type connectionsStat struct {
+type ConnectionsStat struct {
 	TotalConnections   int32
 	StreamsPerProtocol map[protocol.ID]int
 }
@@ -29,6 +29,7 @@ type ConnectionsMeeter struct {
 	}
 }
 
+// NewConnectionsMeeter returns a new ConnectionsMeeter.
 func NewConnectionsMeeter() *ConnectionsMeeter {
 	connMeeter := &ConnectionsMeeter{
 		streamsPerProtocol: struct {
@@ -49,10 +50,11 @@ func NewConnectionsMeeter() *ConnectionsMeeter {
 	return connMeeter
 }
 
-func (c *ConnectionsMeeter) GetStat() *connectionsStat {
+// GetStat returns the current ConnectionsStat.
+func (c *ConnectionsMeeter) GetStat() *ConnectionsStat {
 	c.streamsPerProtocol.RLock()
 	defer c.streamsPerProtocol.RUnlock()
-	return &connectionsStat{
+	return &ConnectionsStat{
 		TotalConnections:   atomic.LoadInt32(&c.connections),
 		StreamsPerProtocol: c.streamsPerProtocol.m,
 	}
@@ -85,7 +87,9 @@ func (c *ConnectionsMeeter) OpenedStream(_ network.Network, str network.Stream) 
 func (c *ConnectionsMeeter) ClosedStream(_ network.Network, str network.Stream) {
 	protocolID := str.Protocol()
 	c.streamsPerProtocol.Lock()
-	c.streamsPerProtocol.m[protocolID]--
+	if c.streamsPerProtocol.m[protocolID] > 0 {
+		c.streamsPerProtocol.m[protocolID]--
+	}
 	c.streamsPerProtocol.Unlock()
 
 	// log stream duration

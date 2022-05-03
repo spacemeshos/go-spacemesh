@@ -13,7 +13,7 @@ const (
 	outgoing = "outgoing"
 )
 
-type bandwidthStat struct {
+type BandwidthStat struct {
 	TotalIn             int64
 	TotalOut            int64
 	MessagesPerProtocol map[protocol.ID]map[string]int64
@@ -30,6 +30,7 @@ type BandwidthCollector struct {
 	}
 }
 
+// NewBandwidthCollector creates a new BandwidthCollector
 func NewBandwidthCollector() *BandwidthCollector {
 	return &BandwidthCollector{
 		metrics.NewBandwidthCounter(),
@@ -42,7 +43,8 @@ func NewBandwidthCollector() *BandwidthCollector {
 	}
 }
 
-func (b *BandwidthCollector) GetStat() *bandwidthStat {
+// GetStat returns the current bandwidth stats
+func (b *BandwidthCollector) GetStat() *BandwidthStat {
 	stat := b.GetBandwidthTotals()
 	bbb := b.GetBandwidthByProtocol()
 
@@ -56,7 +58,7 @@ func (b *BandwidthCollector) GetStat() *bandwidthStat {
 	}
 	b.messagesPerProtocol.RLock()
 	defer b.messagesPerProtocol.RUnlock()
-	return &bandwidthStat{
+	return &BandwidthStat{
 		TotalIn:             stat.TotalIn,
 		TotalOut:            stat.TotalOut,
 		TrafficPerProtocol:  trafficPerProtocol,
@@ -64,6 +66,7 @@ func (b *BandwidthCollector) GetStat() *bandwidthStat {
 	}
 }
 
+// LogSentMessageStream logs the message sent by the peer
 func (b *BandwidthCollector) LogSentMessageStream(size int64, proto protocol.ID, p peer.ID) {
 	b.messagesPerProtocol.Lock()
 	if _, ok := b.messagesPerProtocol.m[proto]; !ok {
@@ -74,6 +77,7 @@ func (b *BandwidthCollector) LogSentMessageStream(size int64, proto protocol.ID,
 	b.Reporter.LogSentMessageStream(size, proto, p)
 }
 
+// LogRecvMessageStream logs the message received by the peer
 func (b *BandwidthCollector) LogRecvMessageStream(size int64, proto protocol.ID, p peer.ID) {
 	b.messagesPerProtocol.Lock()
 	if _, ok := b.messagesPerProtocol.m[proto]; !ok {

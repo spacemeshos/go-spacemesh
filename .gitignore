@@ -31,3 +31,5 @@ database/data
 *.pyc
 /devtools
 .python-version
+
+vendor/*

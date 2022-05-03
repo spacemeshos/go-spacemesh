@@ -23,7 +23,6 @@ func BenchmarkOpenCloseStream(b *testing.B) {
 	conn := metrics.NewConnectionsMeeter()
 
 	ctrl := gomock.NewController(b)
-	defer ctrl.Finish()
 	opened := time.Now().Add(-1 * time.Minute)
 	mockConn := mocks.NewMockstream(ctrl)
 	mockConn.EXPECT().Protocol().Return(protocol.ID("test")).AnyTimes()

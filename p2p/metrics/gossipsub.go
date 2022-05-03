@@ -8,7 +8,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
-type gossipStat struct {
+type GossipStat struct {
 	TotalPeers       int                 // total number of peers
 	PeersPerProtocol map[protocol.ID]int // number of peers per each gossip protocol
 }
@@ -23,6 +23,7 @@ type GossipCollector struct {
 	}
 }
 
+// NewGoSIPCollector creates a new GossipCollector
 func NewGoSIPCollector() *GossipCollector {
 	return &GossipCollector{
 		peersPerProtocol: struct {
@@ -34,7 +35,8 @@ func NewGoSIPCollector() *GossipCollector {
 	}
 }
 
-func (g *GossipCollector) GetStat() *gossipStat {
+// GetStat returns the current stat
+func (g *GossipCollector) GetStat() *GossipStat {
 	g.peersPerProtocol.RLock()
 	peersMap := g.peersPerProtocol.m
 	g.peersPerProtocol.RUnlock()
@@ -48,7 +50,7 @@ func (g *GossipCollector) GetStat() *gossipStat {
 		}
 	}
 
-	return &gossipStat{
+	return &GossipStat{
 		TotalPeers:       len(totalPeersMap),
 		PeersPerProtocol: peersPerProtocol,
 	}

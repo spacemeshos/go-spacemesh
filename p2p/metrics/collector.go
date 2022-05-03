@@ -4,6 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// P2PMetricsCollector collects the metrics for the P2P network.
 type P2PMetricsCollector struct {
 	totalPeers          *prometheus.Desc
 	totalConnections    *prometheus.Desc
@@ -30,6 +31,7 @@ type P2PMetricsCollector struct {
 	GoSipMeeter *GossipCollector
 }
 
+// NewNodeMetricsCollector creates a new P2PMetricsCollector.
 func NewNodeMetricsCollector() *P2PMetricsCollector {
 	return &P2PMetricsCollector{
 		BandwidthReporter: NewBandwidthCollector(),
@@ -78,6 +80,7 @@ func (n *P2PMetricsCollector) Stop() {
 	prometheus.Unregister(n)
 }
 
+// Describe sends the super-set of all possible descriptors of metrics collected by this Collector.
 func (n *P2PMetricsCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- n.totalSend
 	descs <- n.totalRecv
@@ -89,6 +92,7 @@ func (n *P2PMetricsCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- n.messagesPerProtocol
 }
 
+// Collect is called by the Prometheus registry when collecting metrics.
 func (n *P2PMetricsCollector) Collect(metrics chan<- prometheus.Metric) {
 	gossip := n.GoSipMeeter.GetStat()
 	bandwidth := n.BandwidthReporter.GetStat()
