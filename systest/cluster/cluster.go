@@ -127,9 +127,10 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	if err != nil {
 		return err
 	}
-	c.clients = append(clients, clients...)
+	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
 
+	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers)
 	if err := c.accounts.Recover(cctx); err != nil {
 		return err
 	}
@@ -232,11 +233,15 @@ type accounts struct {
 	persisted bool
 }
 
+func (a *accounts) Accounts() int {
+	return len(a.keys)
+}
+
 func (a *accounts) Private(i int) ed25519.PrivateKey {
 	return a.keys[i].PK
 }
 
-func (a *accounts) Address(i int) string {
+func (a *accounts) Address(i int) []byte {
 	return a.keys[i].Address()
 }
 
@@ -277,7 +282,7 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 func genGenesis(signers []*signer) (rst map[string]uint64) {
 	rst = map[string]uint64{}
 	for _, sig := range signers {
-		rst[sig.Address()] = 100000000000000000
+		rst[sig.HexAddress()] = 100000000000000000
 	}
 	return
 }
@@ -287,9 +292,12 @@ type signer struct {
 	PK  ed25519.PrivateKey
 }
 
-func (s *signer) Address() string {
-	encoded := hex.EncodeToString(s.Pub[12:])
-	return "0x" + encoded
+func (s *signer) Address() []byte {
+	return s.Pub[12:]
+}
+
+func (s *signer) HexAddress() string {
+	return "0x" + hex.EncodeToString(s.Address())
 }
 
 func genSigners(n int) (rst []*signer) {

@@ -12,26 +12,38 @@ import (
 )
 
 func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
-	const (
-		keys        = 10
-		genesis     = 7
-		sendFor     = 8
-		stopSending = genesis + sendFor + 1
-		stopWaiting = stopSending + 4
-		batch       = 3
-		amount      = 100
+	var (
+		// start sending transactions after two layers or after genesis
+		first              = maxLayer(currentLayer(t, tctx, cl.Client(0))+2, 8)
+		sendFor     uint32 = 8
+		stopSending        = first + sendFor
+		stopWaiting        = stopSending + 4
+		batch              = 3
+		amount             = 100
+	)
+	tctx.Log.Debugw("running transactions test",
+		"from", first,
+		"stop sending", stopSending,
+		"stop waiting", stopWaiting,
 	)
 	receiver := [20]byte{11, 1, 1}
+	state := spacemeshv1.NewGlobalStateServiceClient(cl.Client(0))
+	response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver[:]}})
+	require.NoError(t, err)
+	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
-	for i := 0; i < keys; i++ {
+	for i := 0; i < cl.Accounts(); i++ {
 		client := cl.Client(i % cl.Total())
-		submitter := newTransactionSubmitter(cl.Private(i), receiver, amount, client)
+		nonce, err := getNonce(tctx, client, cl.Address(i))
+		require.NoError(t, err)
+		submitter := newTransactionSubmitter(cl.Private(i), receiver, uint64(amount), nonce, client)
 		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stopSending {
 				return false, nil
 			}
-			if layer.Layer.Status != spacemeshv1.Layer_LAYER_STATUS_APPROVED {
+			if layer.Layer.Status != spacemeshv1.Layer_LAYER_STATUS_APPROVED ||
+				layer.Layer.Number.Number < first {
 				return true, nil
 			}
 			tctx.Log.Debugw("submitting transactions",
@@ -81,12 +93,21 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 			require.Equal(t, reference[i], tested[i])
 		}
 	}
+
+	diff := batch * amount * int(sendFor) * cl.Accounts()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		state := spacemeshv1.NewGlobalStateServiceClient(client)
 		response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver[:]}})
 		require.NoError(t, err)
-		require.Equal(t, batch*amount*sendFor*keys,
+		after := response.AccountWrapper.StateCurrent.Balance
+		tctx.Log.Debugw("receiver state",
+			"before", before.Value,
+			"after", after.Value,
+			"expected-diff", diff,
+			"diff", after.Value-before.Value,
+		)
+		require.Equal(t, int(before.Value)+diff,
 			int(response.AccountWrapper.StateCurrent.Balance.Value), "client=%s", client.Name)
 	}
 }

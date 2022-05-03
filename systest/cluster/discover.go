@@ -28,6 +28,7 @@ func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error)
 				return err
 			}
 			clients[i] = client
+			ctx.Log.Debugw("discovered existing smesher", "name", pod.Name)
 			return nil
 		})
 	}

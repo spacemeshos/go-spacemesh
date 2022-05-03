@@ -29,16 +29,15 @@ func TestSmeshing(t *testing.T) {
 }
 
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
-	first, err := currentLayer(tctx, cl.Client(0))
-	require.NoError(t, err)
 	const limit = 15
-	// start from the first layer in the epoch
-	if over := first % 4; over != 0 {
-		first += 4 - over
-	}
-	last := first + limit
 
-	createdch := make(chan *spacemeshv1.Proposal, cl.Total()*limit)
+	first := currentLayer(t, tctx, cl.Client(0))
+	// TODO fetch epoch size from API
+	first = nextFirstLayer(first, 4)
+	last := first + limit
+	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
+
+	createdch := make(chan *spacemeshv1.Proposal, cl.Total()*(limit+1))
 	includedAll := make([]map[uint32][]*spacemeshv1.Proposal, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
 		includedAll[i] = map[uint32][]*spacemeshv1.Proposal{}
@@ -48,7 +47,11 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
+		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
 		watchProposals(ctx, eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
+			if proposal.Layer.Number < first {
+				return true, nil
+			}
 			tctx.Log.Debugw("received proposal event",
 				"client", client.Name,
 				"layer", proposal.Layer.Number,
@@ -56,9 +59,6 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 				"eligibilities", len(proposal.Eligibilities),
 				"status", spacemeshv1.Proposal_Status_name[int32(proposal.Status)],
 			)
-			if proposal.Layer.Number < first {
-				return true, nil
-			}
 			if proposal.Layer.Number > last {
 				return false, nil
 			}
