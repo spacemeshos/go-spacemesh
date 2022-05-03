@@ -31,7 +31,7 @@ func TestSmeshing(t *testing.T) {
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	const limit = 15
 
-	first := currentLayer(t, tctx, cl.Client(0))
+	first := currentLayer(tctx, t, cl.Client(0))
 	// TODO fetch epoch size from API
 	first = nextFirstLayer(first, 4)
 	last := first + limit

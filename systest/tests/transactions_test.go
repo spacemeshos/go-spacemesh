@@ -14,7 +14,7 @@ import (
 func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first              = maxLayer(currentLayer(t, tctx, cl.Client(0))+2, 8)
+		first              = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 8)
 		sendFor     uint32 = 8
 		stopSending        = first + sendFor
 		stopWaiting        = stopSending + 4

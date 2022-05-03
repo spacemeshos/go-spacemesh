@@ -143,7 +143,7 @@ func scheduleChaos(ctx context.Context, eg *errgroup.Group, client *cluster.Node
 	})
 }
 
-func currentLayer(tb testing.TB, ctx context.Context, client *cluster.NodeClient) uint32 {
+func currentLayer(ctx context.Context, tb testing.TB, client *cluster.NodeClient) uint32 {
 	tb.Helper()
 	response, err := spacemeshv1.NewMeshServiceClient(client).CurrentLayer(ctx, &spacemeshv1.CurrentLayerRequest{})
 	require.NoError(tb, err)

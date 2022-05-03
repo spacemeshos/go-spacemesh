@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-var notInitialized = errors.New("cluster: not initilized")
+var errNotInitialized = errors.New("cluster: not initilized")
 
 const (
 	defaultNetID     = 777
@@ -54,7 +54,7 @@ func WithKeys(n int) Opt {
 func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := &Cluster{}
 	if err := cl.reuse(cctx); err != nil {
-		if errors.Is(err, notInitialized) {
+		if errors.Is(err, errNotInitialized) {
 			return Default(cctx, opts...)
 		}
 		return nil, err
@@ -118,7 +118,7 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		return err
 	}
 	if len(clients) == 0 {
-		return notInitialized
+		return errNotInitialized
 	}
 	c.clients = append(c.clients, clients...)
 	c.bootnodes = len(clients)
