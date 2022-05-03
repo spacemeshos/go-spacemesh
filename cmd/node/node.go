@@ -1116,8 +1116,6 @@ func (app *App) Start() error {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 
-	app.Config.CollectMetrics = true
-	app.Config.MetricsPort = 8989
 	if app.Config.CollectMetrics {
 		metrics.StartMetricsServer(app.Config.MetricsPort)
 	}

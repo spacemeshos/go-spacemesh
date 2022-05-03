@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// ConnectionsStat is a snapshot of connections statistics.
 type ConnectionsStat struct {
 	TotalConnections   int32
 	StreamsPerProtocol map[protocol.ID]int

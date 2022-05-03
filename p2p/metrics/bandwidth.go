@@ -13,6 +13,7 @@ const (
 	outgoing = "outgoing"
 )
 
+// BandwidthStat is a struct that contains the information about the bandwidth
 type BandwidthStat struct {
 	TotalIn             int64
 	TotalOut            int64

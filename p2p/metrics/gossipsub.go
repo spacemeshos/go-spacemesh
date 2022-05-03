@@ -8,6 +8,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
+// GossipStat is a struct that contains the metrics for a gossip topic.
 type GossipStat struct {
 	TotalPeers       int                 // total number of peers
 	PeersPerProtocol map[protocol.ID]int // number of peers per each gossip protocol
