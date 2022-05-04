@@ -1,8 +1,13 @@
 package types
 
-// AccountState struct represents basic account data: nonce and balance
-// Todo: get rid of big.Int everywhere and replace with uint64
-// See https://github.com/spacemeshos/go-spacemesh/issues/2192
+// Account represents account state at a certain layer.
+type Account struct {
+	Layer   LayerID `json:"-"`
+	Address Address `json:"-"`
+	Balance uint64  `json:"balance"`
+}
+
+// AccountState struct represents basic account data nonce and balance.
 type AccountState struct {
 	Nonce   uint64 `json:"nonce"`
 	Balance uint64 `json:"balance"`

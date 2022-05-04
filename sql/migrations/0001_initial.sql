@@ -127,3 +127,14 @@ CREATE TABLE poets
 ) WITHOUT ROWID;
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
+
+
+CREATE TABLE accounts
+(
+    address        CHAR(20),
+    balance        UNSIGNED LONG INT,
+    layer_updated  UNSIGNED INT,
+    PRIMARY KEY (address, layer_updated DESC)
+);
+
+CREATE INDEX accounts_by_layer_udated ON accounts (layer_updated);
