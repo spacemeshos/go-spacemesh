@@ -6,94 +6,74 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
-// GossipStat is a struct that contains the metrics for a gossip topic.
-type GossipStat struct {
-	TotalPeers       int                 // total number of peers
-	PeersPerProtocol map[protocol.ID]int // number of peers per each gossip protocol
-}
+var (
+	totalPeers       = metrics.NewGauge("total_peers", subsystem, "Total number of peers", nil)
+	peersPerProtocol = metrics.NewGauge("peers_per_protocol", subsystem, "Number of peers per protocol", []string{"protocol"})
+)
 
 // GossipCollector pubsub.RawTracer implementation
 // total number of peers
-// number of peers per each gossip protocol
+// number of peers per each gossip protocol.
 type GossipCollector struct {
-	peersPerProtocol struct {
-		sync.RWMutex
-		m map[protocol.ID]map[peer.ID]struct{}
+	peers struct {
+		sync.Mutex
+		m map[peer.ID]protocol.ID
 	}
 }
 
-// NewGoSIPCollector creates a new GossipCollector
+// NewGoSIPCollector creates a new GossipCollector.
 func NewGoSIPCollector() *GossipCollector {
 	return &GossipCollector{
-		peersPerProtocol: struct {
-			sync.RWMutex
-			m map[protocol.ID]map[peer.ID]struct{}
+		peers: struct {
+			sync.Mutex
+			m map[peer.ID]protocol.ID
 		}{
-			m: make(map[protocol.ID]map[peer.ID]struct{}),
+			m: make(map[peer.ID]protocol.ID),
 		},
-	}
-}
-
-// GetStat returns the current stat
-func (g *GossipCollector) GetStat() *GossipStat {
-	g.peersPerProtocol.RLock()
-	peersMap := g.peersPerProtocol.m
-	g.peersPerProtocol.RUnlock()
-
-	peersPerProtocol := make(map[protocol.ID]int)
-	totalPeersMap := make(map[string]struct{})
-	for i := range peersMap {
-		peersPerProtocol[i] = len(peersMap[i])
-		for j := range peersMap[i] {
-			totalPeersMap[string(j)] = struct{}{}
-		}
-	}
-
-	return &GossipStat{
-		TotalPeers:       len(totalPeersMap),
-		PeersPerProtocol: peersPerProtocol,
 	}
 }
 
 // AddPeer is invoked when a new peer is added.
 func (g *GossipCollector) AddPeer(id peer.ID, proto protocol.ID) {
-	g.peersPerProtocol.Lock()
-	if _, ok := g.peersPerProtocol.m[proto]; !ok {
-		g.peersPerProtocol.m[proto] = make(map[peer.ID]struct{})
-	}
-	g.peersPerProtocol.m[proto][id] = struct{}{}
-	g.peersPerProtocol.Unlock()
+	g.peers.Lock()
+	g.peers.m[id] = proto
+	g.peers.Unlock()
+
+	peersPerProtocol.WithLabelValues(string(proto)).Inc()
+	totalPeers.WithLabelValues().Inc()
 }
 
 // RemovePeer is invoked when a peer is removed.
-func (g *GossipCollector) RemovePeer(p peer.ID) {
-	g.peersPerProtocol.Lock()
-	for i := range g.peersPerProtocol.m {
-		if _, ok := g.peersPerProtocol.m[i][p]; ok {
-			delete(g.peersPerProtocol.m[i], p)
-		}
-	}
-	g.peersPerProtocol.Unlock()
+func (g *GossipCollector) RemovePeer(id peer.ID) {
+	g.peers.Lock()
+	proto, _ := g.peers.m[id]
+	delete(g.peers.m, id)
+	g.peers.Unlock()
+
+	peersPerProtocol.WithLabelValues(string(proto)).Dec()
+	totalPeers.WithLabelValues().Dec()
 }
 
-// Join is invoked when a new topic is joined
+// Join is invoked when a new topic is joined.
 func (g *GossipCollector) Join(string) {}
 
-// Leave is invoked when a topic is abandoned
+// Leave is invoked when a topic is abandoned.
 func (g *GossipCollector) Leave(string) {}
 
-// Graft is invoked when a new peer is grafted on the mesh (gossipsub)
+// Graft is invoked when a new peer is grafted on the mesh (gossipsub).
 func (g *GossipCollector) Graft(peer.ID, string) {}
 
-// Prune is invoked when a peer is pruned from the message (gossipsub)
+// Prune is invoked when a peer is pruned from the message (gossipsub).
 func (g *GossipCollector) Prune(peer.ID, string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
 func (g *GossipCollector) ValidateMessage(*pubsub.Message) {}
 
-// DeliverMessage is invoked when a message is delivered
+// DeliverMessage is invoked when a message is delivered.
 func (g *GossipCollector) DeliverMessage(*pubsub.Message) {}
 
 // RejectMessage is invoked when a message is Rejected or Ignored.

@@ -46,7 +46,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -1093,11 +1092,9 @@ func (app *App) Start() error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	cfg.NodeMetricsCollector = p2pmetrics.NewNodeMetricsCollector()
 	app.host, err = p2p.New(ctx, p2plog, cfg,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
-	cfg.NodeMetricsCollector.Start()
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}

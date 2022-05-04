@@ -37,12 +37,11 @@ func DefaultConfig() Config {
 
 // Config for all things related to p2p layer.
 type Config struct {
-	DataDir              string
-	LogLevel             log.Level
-	GracePeersShutdown   time.Duration
-	BootstrapTimeout     time.Duration
-	NodeMetricsCollector *p2pmetrics.P2PMetricsCollector
-	MaxMessageSize       int
+	DataDir            string
+	LogLevel           log.Level
+	GracePeersShutdown time.Duration
+	BootstrapTimeout   time.Duration
+	MaxMessageSize     int
 
 	DisableNatPort bool     `mapstructure:"disable-natport"`
 	Flood          bool     `mapstructure:"flood"`
@@ -88,7 +87,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(pstoremem.NewPeerstore()),
-		libp2p.BandwidthReporter(cfg.NodeMetricsCollector.BandwidthReporter),
+		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 	}
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
@@ -97,13 +96,13 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
-	h.Network().Notify(cfg.NodeMetricsCollector.ConnectionsMeeter)
+	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 
 	logger.With().Info("local node identity",
 		log.String("identity", h.ID().String()),
 	)
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
-	opts = append(opts, WithConfig(cfg), WithLog(logger), WithMetricsCollector(cfg.NodeMetricsCollector))
+	opts = append(opts, WithConfig(cfg), WithLog(logger))
 	return Upgrade(h, opts...)
 }

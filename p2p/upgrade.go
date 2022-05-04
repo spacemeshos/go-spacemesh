@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
-	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -38,13 +37,6 @@ func WithContext(ctx context.Context) Opt {
 	}
 }
 
-// WithMetricsCollector set stats collector for Host.
-func WithMetricsCollector(m *p2pmetrics.P2PMetricsCollector) Opt {
-	return func(fh *Host) {
-		fh.metrics = m
-	}
-}
-
 // WithNodeReporter updates reporter that is notified every time when
 // node added or removed a peer.
 func WithNodeReporter(reporter func()) Opt {
@@ -69,17 +61,15 @@ type Host struct {
 	discovery *peerexchange.Discovery
 	hs        *handshake.Handshake
 	bootstrap *bootstrap.Bootstrap
-	metrics   *p2pmetrics.P2PMetricsCollector
 }
 
 // Upgrade creates Host instance from host.Host.
 func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	fh := &Host{
-		ctx:     context.Background(),
-		cfg:     DefaultConfig(),
-		logger:  log.NewNop(),
-		Host:    h,
-		metrics: p2pmetrics.NewNodeMetricsCollector(),
+		ctx:    context.Background(),
+		cfg:    DefaultConfig(),
+		logger: log.NewNop(),
+		Host:   h,
 	}
 	for _, opt := range opts {
 		opt(fh)
@@ -89,7 +79,6 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
 		MaxMessageSize: cfg.MaxMessageSize,
-		Tracer:         fh.metrics.GoSipMeeter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)

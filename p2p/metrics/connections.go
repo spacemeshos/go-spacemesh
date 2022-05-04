@@ -1,64 +1,39 @@
 package metrics
 
 import (
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
-// ConnectionsStat is a snapshot of connections statistics.
-type ConnectionsStat struct {
-	TotalConnections   int32
-	StreamsPerProtocol map[protocol.ID]int
-}
+var (
+	connections        = metrics.NewGauge("total_connections", subsystem, "Total number of connections", nil)
+	streamsPerProtocol = metrics.NewGauge(
+		"streams_per_protocol",
+		subsystem,
+		"Number of streams per protocol",
+		[]string{"protocol"},
+	)
+	durationHistogram = metrics.NewHistogram(
+		"requests_duration",
+		subsystem,
+		"Histogram of server request durations per protocol (seconds)",
+		[]string{"protocol"},
+	)
+)
 
 // ConnectionsMeeter stores the number of connections for node.
 // number of connections
 // number of streams per each protocol
-// histogram for server request durations for each protocol
-type ConnectionsMeeter struct {
-	connections        int32
-	durationHistogram  *prometheus.HistogramVec
-	streamsPerProtocol struct {
-		sync.RWMutex
-		m map[protocol.ID]int
-	}
-}
+// histogram for server request durations for each protocol.
+type ConnectionsMeeter struct{}
 
 // NewConnectionsMeeter returns a new ConnectionsMeeter.
 func NewConnectionsMeeter() *ConnectionsMeeter {
-	connMeeter := &ConnectionsMeeter{
-		streamsPerProtocol: struct {
-			sync.RWMutex
-			m map[protocol.ID]int
-		}{
-			m: make(map[protocol.ID]int),
-		},
-		durationHistogram: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name: "p2p_requests_duration",
-				Help: "Histogram of server request durations per protocol",
-			},
-			[]string{"protocol"},
-		),
-	}
-	_ = prometheus.Register(connMeeter.durationHistogram)
-	return connMeeter
-}
-
-// GetStat returns the current ConnectionsStat.
-func (c *ConnectionsMeeter) GetStat() *ConnectionsStat {
-	c.streamsPerProtocol.RLock()
-	defer c.streamsPerProtocol.RUnlock()
-	return &ConnectionsStat{
-		TotalConnections:   atomic.LoadInt32(&c.connections),
-		StreamsPerProtocol: c.streamsPerProtocol.m,
-	}
+	return &ConnectionsMeeter{}
 }
 
 // Listen called when network starts listening on an addr.
@@ -69,31 +44,25 @@ func (c *ConnectionsMeeter) ListenClose(network.Network, ma.Multiaddr) {}
 
 // Connected called when a connection opened.
 func (c *ConnectionsMeeter) Connected(network.Network, network.Conn) {
-	atomic.AddInt32(&c.connections, 1)
+	connections.WithLabelValues().Inc()
 }
 
 // Disconnected called when a connection closed.
 func (c *ConnectionsMeeter) Disconnected(network.Network, network.Conn) {
-	atomic.AddInt32(&c.connections, -1)
+	connections.WithLabelValues().Dec()
 }
 
 // OpenedStream called when a stream opened.
 func (c *ConnectionsMeeter) OpenedStream(_ network.Network, str network.Stream) {
-	c.streamsPerProtocol.Lock()
-	c.streamsPerProtocol.m[str.Protocol()]++
-	c.streamsPerProtocol.Unlock()
+	streamsPerProtocol.WithLabelValues(string(str.Protocol())).Inc()
 }
 
 // ClosedStream called when a stream closed.
 func (c *ConnectionsMeeter) ClosedStream(_ network.Network, str network.Stream) {
-	protocolID := str.Protocol()
-	c.streamsPerProtocol.Lock()
-	if c.streamsPerProtocol.m[protocolID] > 0 {
-		c.streamsPerProtocol.m[protocolID]--
-	}
-	c.streamsPerProtocol.Unlock()
+	protocolID := string(str.Protocol())
+	streamsPerProtocol.WithLabelValues(protocolID).Dec()
 
 	// log stream duration
 	duration := time.Since(str.Stat().Opened)
-	c.durationHistogram.WithLabelValues(string(str.Protocol())).Observe(duration.Seconds())
+	durationHistogram.WithLabelValues(protocolID).Observe(duration.Seconds())
 }

@@ -1,90 +1,87 @@
 package metrics
 
 import (
-	"sync"
-
 	"github.com/libp2p/go-libp2p-core/metrics"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
+
+	prometheusMetrics "github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 const (
 	incoming = "incoming"
 	outgoing = "outgoing"
+	// subsystem shared by all metrics exposed by this package.
+	subsystem = "p2p"
 )
 
-// BandwidthStat is a struct that contains the information about the bandwidth
-type BandwidthStat struct {
-	TotalIn             int64
-	TotalOut            int64
-	MessagesPerProtocol map[protocol.ID]map[string]int64
-	TrafficPerProtocol  map[protocol.ID]map[string]int64
-}
+var (
+	totalIn             = prometheusMetrics.NewCounter("total_send", subsystem, "Total bytes sent", nil)
+	totalOut            = prometheusMetrics.NewCounter("total_recv", subsystem, "Total bytes received", nil)
+	messagesPerProtocol = prometheusMetrics.NewCounter(
+		"messages_per_protocol",
+		subsystem,
+		"Number of messages sent per protocol",
+		[]string{"protocol", "direction"},
+	)
+	trafficPerProtocol = prometheusMetrics.NewCounter(
+		"traffic_per_protocol",
+		subsystem,
+		"Traffic sent per protocol",
+		[]string{"protocol", "direction"},
+	)
+)
 
-// BandwidthCollector wrapper over metrics.Reporter
+// BandwidthCollector implement metrics.Reporter
 // that keeps track of the number of messages sent and received per protocol.
-type BandwidthCollector struct {
-	metrics.Reporter
-	messagesPerProtocol struct {
-		sync.RWMutex
-		m map[protocol.ID]map[string]int64
-	}
-}
+type BandwidthCollector struct{}
 
-// NewBandwidthCollector creates a new BandwidthCollector
+// NewBandwidthCollector creates a new BandwidthCollector.
 func NewBandwidthCollector() *BandwidthCollector {
-	return &BandwidthCollector{
-		metrics.NewBandwidthCounter(),
-		struct {
-			sync.RWMutex
-			m map[protocol.ID]map[string]int64
-		}{
-			m: make(map[protocol.ID]map[string]int64),
-		},
-	}
+	return &BandwidthCollector{}
 }
 
-// GetStat returns the current bandwidth stats
-func (b *BandwidthCollector) GetStat() *BandwidthStat {
-	stat := b.GetBandwidthTotals()
-	bbb := b.GetBandwidthByProtocol()
-
-	trafficPerProtocol := make(map[protocol.ID]map[string]int64)
-	for proto, stats := range bbb {
-		if _, ok := trafficPerProtocol[proto]; !ok {
-			trafficPerProtocol[proto] = make(map[string]int64)
-		}
-		trafficPerProtocol[proto][incoming] += stats.TotalIn
-		trafficPerProtocol[proto][outgoing] += stats.TotalOut
-	}
-	b.messagesPerProtocol.RLock()
-	defer b.messagesPerProtocol.RUnlock()
-	return &BandwidthStat{
-		TotalIn:             stat.TotalIn,
-		TotalOut:            stat.TotalOut,
-		TrafficPerProtocol:  trafficPerProtocol,
-		MessagesPerProtocol: b.messagesPerProtocol.m,
-	}
-}
-
-// LogSentMessageStream logs the message sent by the peer
+// LogSentMessageStream logs the message sent by the peer.
 func (b *BandwidthCollector) LogSentMessageStream(size int64, proto protocol.ID, p peer.ID) {
-	b.messagesPerProtocol.Lock()
-	if _, ok := b.messagesPerProtocol.m[proto]; !ok {
-		b.messagesPerProtocol.m[proto] = make(map[string]int64)
-	}
-	b.messagesPerProtocol.m[proto][outgoing]++
-	b.messagesPerProtocol.Unlock()
-	b.Reporter.LogSentMessageStream(size, proto, p)
+	totalOut.WithLabelValues().Add(float64(size))
+	trafficPerProtocol.WithLabelValues(string(proto), outgoing).Add(float64(size))
+	messagesPerProtocol.WithLabelValues(string(proto), outgoing).Inc()
 }
 
-// LogRecvMessageStream logs the message received by the peer
+// LogRecvMessageStream logs the message received by the peer.
 func (b *BandwidthCollector) LogRecvMessageStream(size int64, proto protocol.ID, p peer.ID) {
-	b.messagesPerProtocol.Lock()
-	if _, ok := b.messagesPerProtocol.m[proto]; !ok {
-		b.messagesPerProtocol.m[proto] = make(map[string]int64)
-	}
-	b.messagesPerProtocol.m[proto][incoming]++
-	b.messagesPerProtocol.Unlock()
-	b.Reporter.LogRecvMessageStream(size, proto, p)
+	totalIn.WithLabelValues().Add(float64(size))
+	trafficPerProtocol.WithLabelValues(string(proto), incoming).Add(float64(size))
+	messagesPerProtocol.WithLabelValues(string(proto), incoming).Inc()
+}
+
+// LogSentMessage  logs the message sent by the peer.
+func (b *BandwidthCollector) LogSentMessage(int64) {}
+
+// LogRecvMessage logs the message received by the peer.
+func (b *BandwidthCollector) LogRecvMessage(int64) {}
+
+// GetBandwidthForPeer mock returns the bandwidth for a given peer.
+func (b *BandwidthCollector) GetBandwidthForPeer(peer.ID) metrics.Stats {
+	return metrics.Stats{}
+}
+
+// GetBandwidthForProtocol mock returns the bandwidth for a given protocol.
+func (b *BandwidthCollector) GetBandwidthForProtocol(protocol.ID) metrics.Stats {
+	return metrics.Stats{}
+}
+
+// GetBandwidthTotals returns mock the total bandwidth used by the node.
+func (b *BandwidthCollector) GetBandwidthTotals() metrics.Stats {
+	return metrics.Stats{}
+}
+
+// GetBandwidthByPeer mock returns the bandwidth for a given peer.
+func (b *BandwidthCollector) GetBandwidthByPeer() map[peer.ID]metrics.Stats {
+	return nil
+}
+
+// GetBandwidthByProtocol mock returns the bandwidth for a given protocol.
+func (b *BandwidthCollector) GetBandwidthByProtocol() map[protocol.ID]metrics.Stats {
+	return nil
 }

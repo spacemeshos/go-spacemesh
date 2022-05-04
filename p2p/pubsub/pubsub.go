@@ -11,6 +11,7 @@ import (
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 // DefaultConfig for PubSub.
@@ -23,7 +24,6 @@ type Config struct {
 	// TODO(dshulyak) change it to NoFlood
 	Flood          bool
 	MaxMessageSize int
-	Tracer         pubsub.RawTracer
 }
 
 // New creates PubSub instance.
@@ -36,9 +36,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithPeerOutboundQueueSize(8192),
 		pubsub.WithValidateQueueSize(8192),
-	}
-	if cfg.Tracer != nil {
-		opts = append(opts, pubsub.WithRawTracer(cfg.Tracer))
+		pubsub.WithRawTracer(p2pmetrics.NewGoSIPCollector()),
 	}
 	if cfg.MaxMessageSize != 0 {
 		opts = append(opts, pubsub.WithMaxMessageSize(cfg.MaxMessageSize))
