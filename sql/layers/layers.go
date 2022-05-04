@@ -86,13 +86,62 @@ func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error
 
 // UnsetAppliedFrom updates the applied block to nil for layer >= `lid`.
 func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
-	if _, err := db.Exec("update layers set applied_block = null where id >= ?1;",
+	if _, err := db.Exec("update layers set applied_block = null, state_hash = null where id >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 		}, nil); err != nil {
 		return fmt.Errorf("unset applied %s: %w", lid, err)
 	}
 	return nil
+}
+
+// UpdateStateRoot for the layer.
+func UpdateStateRoot(db sql.Executor, lid types.LayerID, root types.Hash32) error {
+	if _, err := db.Exec(`insert into layers (id, state_hash) values (?1, ?2) 
+	on conflict(id) do update set state_hash=?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBytes(2, root[:])
+		}, nil); err != nil {
+		return fmt.Errorf("set applied %s: %w", lid, err)
+	}
+	return nil
+}
+
+// GetLatestStateRoot loads latest state root.
+func GetLatestStateRoot(db sql.Executor) (rst types.Hash32, err error) {
+	if rows, err := db.Exec("select state_hash from layers where state_hash is not null;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, rst[:])
+			return false
+		}); err != nil {
+		return rst, fmt.Errorf("failed to load latest state root %w", err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w: state root doesnt exist", sql.ErrNotFound)
+	}
+	return rst, err
+}
+
+// GetStateRoot loads state root for the layer.
+func GetStateRoot(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
+	if rows, err := db.Exec("select state_hash from layers where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		},
+		func(stmt *sql.Statement) bool {
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w: state_hash for %s is not set", sql.ErrNotFound, lid)
+				return false
+			}
+			stmt.ColumnBytes(0, rst[:])
+			return false
+		}); err != nil {
+		return rst, fmt.Errorf("failed to load state root for %v: %w", lid, err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w: %s doesnt exist", sql.ErrNotFound, lid)
+	}
+	return rst, err
 }
 
 // GetApplied for the applied block for layer.

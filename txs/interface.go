@@ -23,8 +23,8 @@ type svmState interface {
 	AddressExists(types.Address) bool
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
-	Rewind(types.LayerID) (types.Hash32, error)
-	ApplyLayer(types.LayerID, []*types.Transaction, map[types.Address]uint64) ([]*types.Transaction, error)
+	Revert(types.LayerID) (types.Hash32, error)
+	ApplyLayer(types.LayerID, []*types.Transaction, []types.AnyReward) ([]*types.Transaction, error)
 }
 
 type conStateCache interface {

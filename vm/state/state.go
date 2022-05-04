@@ -28,6 +28,16 @@ func New(logger *log.Log, db *sql.Database) *State {
 	}
 }
 
+// GetStateRoot returns latest state root.
+func (st *State) GetStateRoot() (types.Hash32, error) {
+	return layers.GetLatestStateRoot(st.db)
+}
+
+// GetLayerStateRoot returns state root for the layer.
+func (st *State) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
+	return layers.GetStateRoot(st.db, lid)
+}
+
 // Account returns latest valid account data.
 func (st *State) Account(address types.Address) (types.Account, error) {
 	return accounts.Latest(st.db, address)
@@ -40,11 +50,6 @@ func (st *State) AddressExists(address types.Address) (bool, error) {
 		return false, err
 	}
 	return latest.Layer.Value != 0, nil
-}
-
-// GetLayerApplied gets the layer id at which this tx was applied.
-func (st *State) GetLayerApplied(txID types.TransactionID) (types.LayerID, error) {
-	return layers.GetLastApplied(st.db)
 }
 
 // Revert state after the layer.
@@ -71,20 +76,20 @@ func (st *State) ApplyGenesis(genesis *config.GenesisConfig) error {
 			log.Uint64("balance", balance))
 	}
 
-	if err := ss.commit(); err != nil {
+	if _, err := ss.commit(); err != nil {
 		return fmt.Errorf("cannot commit genesis state: %w", err)
 	}
 	return nil
 }
 
 // Apply layer with rewards and transactions.
-func (st *State) Apply(lid types.LayerID, rewards []*types.Reward, txs []*types.Transaction) (types.Hash32, []*types.Transaction, error) {
+func (st *State) Apply(lid types.LayerID, rewards []types.AnyReward, txs []*types.Transaction) (types.Hash32, []*types.Transaction, error) {
 	ss := newStagedState(st.db, lid)
 	for _, reward := range rewards {
-		if err := ss.addBalance(reward.Coinbase, reward.TotalReward); err != nil {
+		if err := ss.addBalance(reward.Address, reward.Amount); err != nil {
 			return types.Hash32{}, nil, err
 		}
-		events.ReportAccountUpdate(reward.Coinbase)
+		events.ReportAccountUpdate(reward.Address)
 	}
 	var failed []*types.Transaction
 	for _, tx := range txs {
@@ -99,8 +104,9 @@ func (st *State) Apply(lid types.LayerID, rewards []*types.Reward, txs []*types.
 		events.ReportAccountUpdate(tx.Origin())
 		events.ReportAccountUpdate(tx.GetRecipient())
 	}
-	if err := ss.commit(); err != nil {
+	hash, err := ss.commit()
+	if err != nil {
 		return types.Hash32{}, nil, err
 	}
-	return types.Hash32{}, failed, nil
+	return hash, failed, nil
 }

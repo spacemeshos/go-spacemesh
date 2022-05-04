@@ -1,37 +1,43 @@
 package state
 
 import (
+	"container/list"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 func newStagedState(db *sql.Database, layer types.LayerID) *stagedState {
 	return &stagedState{
-		db:    db,
-		state: map[types.Address]*types.Account{},
-		layer: layer,
+		db:      db,
+		changed: map[types.Address]*types.Account{},
+		layer:   layer,
 	}
 }
 
 type stagedState struct {
 	db *sql.Database
 
-	layer types.LayerID
-	state map[types.Address]*types.Account
+	layer   types.LayerID
+	order   list.List
+	changed map[types.Address]*types.Account
 }
 
 func (s *stagedState) loadAccount(address types.Address) (*types.Account, error) {
-	if acc, exist := s.state[address]; exist {
+	if acc, exist := s.changed[address]; exist {
 		return acc, nil
 	}
 	acc, err := accounts.Latest(s.db, address)
 	if err != nil {
 		return nil, err
 	}
-	s.state[address] = &acc
+	s.order.PushBack(address)
+	s.changed[address] = &acc
 	return &acc, nil
 }
 
@@ -80,16 +86,31 @@ func (s *stagedState) subBalance(address types.Address, value uint64) error {
 	return nil
 }
 
-func (s *stagedState) commit() error {
+func (s *stagedState) commit() (types.Hash32, error) {
 	tx, err := s.db.Tx(context.Background())
 	if err != nil {
-		return err
+		return types.Hash32{}, err
 	}
 	defer tx.Release()
-	for _, account := range s.state {
+	hasher := sha256.New()
+	buf := [8]byte{}
+	for elem := s.order.Front(); elem != nil; elem = elem.Next() {
+		account := s.changed[elem.Value.(types.Address)]
 		if err := accounts.Update(tx, account); err != nil {
-			return err
+			return types.Hash32{}, err
 		}
+		binary.LittleEndian.PutUint64(buf[:], account.Balance)
+		hasher.Write(buf[:])
 	}
-	return tx.Commit()
+	var hash types.Hash32
+	hasher.Sum(hash[:0])
+	if err := layers.UpdateStateRoot(tx, s.layer, hash); err != nil {
+		return types.Hash32{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return types.Hash32{}, err
+	}
+
+	return hash, nil
 }

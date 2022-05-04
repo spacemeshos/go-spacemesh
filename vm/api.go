@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/state"
 )
 
-// VM is an entry point for all SVM operations.
+// VM is an entry point for all VM operations.
 type VM struct {
 	state *state.State
 	log   log.Logger
@@ -33,29 +33,24 @@ func (svm *VM) SetupGenesis(conf *config.GenesisConfig) error {
 // ApplyLayer applies the given rewards to some miners as well as a vector of
 // transactions for the given layer. to miners vector for layer. It returns an
 // error on failure, as well as a vector of failed transactions.
-func (svm *VM) ApplyLayer(lid types.LayerID, transactions []*types.Transaction, rewards []*types.Reward) ([]*types.Transaction, error) {
+func (svm *VM) ApplyLayer(lid types.LayerID, transactions []*types.Transaction, rewards []types.AnyReward) ([]*types.Transaction, error) {
 	_, failed, err := svm.state.Apply(lid, rewards, transactions)
 	return failed, err
 }
 
-// GetLayerApplied gets the layer id at which this tx was applied.
-func (svm *VM) GetLayerApplied(txID types.TransactionID) (types.LayerID, error) {
-	return svm.state.GetLayerApplied(txID)
-}
-
 // GetLayerStateRoot returns the state root at a given layer.
-func (svm *VM) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
-	return types.Hash32{}, nil
+func (svm *VM) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
+	return svm.state.GetLayerStateRoot(lid)
 }
 
 // GetStateRoot gets the current state root hash.
 func (svm *VM) GetStateRoot() (types.Hash32, error) {
-	return types.Hash32{}, nil
+	return svm.state.GetStateRoot()
 }
 
-// Rewind loads the given layer state from persistent storage. On success, it
+// Revert loads the given layer state from persistent storage. On success, it
 // also returns the current state root hash *after* rewinding.
-func (svm *VM) Rewind(lid types.LayerID) (types.Hash32, error) {
+func (svm *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 	err := svm.state.Revert(lid)
 	if err != nil {
 		return types.Hash32{}, err

@@ -25,9 +25,10 @@ CREATE TABLE identities
 
 CREATE TABLE layers
 (
-    id              INT PRIMARY KEY,
+    id              INT PRIMARY KEY DESC,
     hare_output     VARCHAR,
     applied_block   VARCHAR,
+    state_hash      CHAR(32),
     hash            CHAR(32),
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
