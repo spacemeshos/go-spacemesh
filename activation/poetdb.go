@@ -34,18 +34,27 @@ func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
 func (db *PoetDb) HasProof(proofRef []byte) bool {
-	_, err := db.GetProofMessage(proofRef)
-	return err == nil
+	has, err := poets.Has(db.sqlDB, proofRef)
+	return err == nil && has
 }
 
 // ValidateAndStore validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
+	ref, err := proofMessage.Ref()
+	if err != nil {
+		return err
+	}
+
+	if db.HasProof(ref) {
+		return nil
+	}
+
 	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
 		return err
 	}
 
-	return db.StoreProof(proofMessage)
+	return db.StoreProof(ref, proofMessage)
 }
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
@@ -64,12 +73,16 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
 	}
 	root, err := calcRoot(proof.Members)
+	// we shouldn't care about poet proof with empty membership as it's not relevant.
+	if len(proof.Members) == 0 {
+		return nil
+	}
 	if err != nil {
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
 			poetID[:shortIDlth], roundID, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
+		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w",
 			poetID[:shortIDlth], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
@@ -78,19 +91,14 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 }
 
 // StoreProof saves the poet proof in local db.
-func (db *PoetDb) StoreProof(proofMessage *types.PoetProofMessage) error {
-	ref, err := proofMessage.Ref()
-	if err != nil {
-		return fmt.Errorf("failed to get poet proof message reference: %v", err)
-	}
-
+func (db *PoetDb) StoreProof(ref []byte, proofMessage *types.PoetProofMessage) error {
 	messageBytes, err := types.InterfaceToBytes(proofMessage)
 	if err != nil {
-		return fmt.Errorf("could not marshal proof message: %v", err)
+		return fmt.Errorf("could not marshal proof message: %w", err)
 	}
 
 	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
+		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %w",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 
@@ -138,7 +146,7 @@ func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 func (db *PoetDb) getProofRef(poetID []byte, roundID string) ([]byte, error) {
 	proofRef, err := poets.GetRef(db.sqlDB, poetID, roundID)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %v", poetID[:5], roundID, err)
+		return nil, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %w", poetID[:5], roundID, err)
 	}
 	return proofRef, nil
 }
@@ -167,11 +175,11 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:5], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %v", proofRef[:5], err)
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef[:5], err)
 	}
 	return membershipSliceToMap(proofMessage.Members), nil
 }
@@ -192,12 +200,12 @@ func membershipSliceToMap(membership [][]byte) map[types.Hash32]bool {
 func calcRoot(leaves [][]byte) ([]byte, error) {
 	tree, err := merkle.NewTree()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate tree: %v", err)
+		return nil, fmt.Errorf("failed to generate tree: %w", err)
 	}
 	for _, member := range leaves {
 		err := tree.AddLeaf(member)
 		if err != nil {
-			return nil, fmt.Errorf("failed to add leaf: %v", err)
+			return nil, fmt.Errorf("failed to add leaf: %w", err)
 		}
 	}
 	return tree.Root(), nil
