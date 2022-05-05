@@ -73,6 +73,9 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		log.Stringer("origin", tx.Origin()))
 
 	if exists, err := th.state.AddressExists(tx.Origin()); err != nil {
+		th.logger.WithContext(ctx).With().Error("failed to check if address exists",
+			log.Stringer("origin", tx.Origin()),
+		)
 		return fmt.Errorf("failed to load address %v: %w", tx.Origin(), err)
 	} else if !exists {
 		th.logger.WithContext(ctx).With().Error("tx origin does not exist",

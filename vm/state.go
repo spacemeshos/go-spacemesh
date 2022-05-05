@@ -47,7 +47,7 @@ func (st *state) AddressExists(address types.Address) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return latest.Layer.Value != 0, nil
+	return latest.Balance != 0, nil
 }
 
 // Revert state after the layer.
