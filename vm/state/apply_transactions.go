@@ -17,8 +17,8 @@ var (
 // applyTransaction applies provided transaction to the current state, but does not commit it to persistent
 // storage. It returns an error if the transaction is invalid, i.e., if there is not enough balance in the source
 // account to perform the transaction and pay the fee or if the nonce is incorrect.
-func applyTransaction(logger log.Log, ss *stagedState, tx *types.Transaction) error {
-	balance, err := ss.balance(tx.Origin())
+func applyTransaction(logger log.Log, ch *changes, tx *types.Transaction) error {
+	balance, err := ch.balance(tx.Origin())
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func applyTransaction(logger log.Log, ss *stagedState, tx *types.Transaction) er
 			log.Uint64("balance_need", total))
 		return errFunds
 	}
-	nonce, err := ss.nonce(tx.Origin())
+	nonce, err := ch.nonce(tx.Origin())
 	if err != nil {
 		return err
 	}
@@ -38,16 +38,16 @@ func applyTransaction(logger log.Log, ss *stagedState, tx *types.Transaction) er
 			log.Uint64("nonce_actual", tx.AccountNonce))
 		return errNonce
 	}
-	if err := ss.setNonce(tx.Origin(), tx.AccountNonce); err != nil {
+	if err := ch.setNonce(tx.Origin(), tx.AccountNonce); err != nil {
 		return err
 	}
-	if err := ss.addBalance(tx.GetRecipient(), tx.Amount); err != nil {
+	if err := ch.addBalance(tx.GetRecipient(), tx.Amount); err != nil {
 		return err
 	}
-	if err := ss.subBalance(tx.Origin(), tx.Amount); err != nil {
+	if err := ch.subBalance(tx.Origin(), tx.Amount); err != nil {
 		return err
 	}
-	if err := ss.subBalance(tx.Origin(), tx.GetFee()); err != nil {
+	if err := ch.subBalance(tx.Origin(), tx.GetFee()); err != nil {
 		return err
 	}
 	logger.With().Info("transaction processed", log.Stringer("transaction", tx))
