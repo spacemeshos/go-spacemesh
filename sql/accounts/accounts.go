@@ -10,11 +10,12 @@ import (
 // Latest latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	var account types.Account
-	_, err := db.Exec("select balance, layer_updated from accounts where address = ?1;", func(stmt *sql.Statement) {
+	_, err := db.Exec("select balance, nonce, layer_updated from accounts where address = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
 	}, func(stmt *sql.Statement) bool {
 		account.Balance = uint64(stmt.ColumnInt64(0))
-		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(1)))
+		account.Nonce = uint64(stmt.ColumnInt64(1))
+		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(2)))
 		return false
 	})
 	if err != nil {
@@ -27,11 +28,12 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 // All returns all latest accounts.
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
-	_, err := db.Exec("select address, balance, max(layer_updated) from accounts group by address;", nil, func(stmt *sql.Statement) bool {
+	_, err := db.Exec("select address, nonce, balance, max(layer_updated) from accounts group by address;", nil, func(stmt *sql.Statement) bool {
 		var account types.Account
 		stmt.ColumnBytes(0, account.Address[:])
 		account.Balance = uint64(stmt.ColumnInt64(1))
-		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(2)))
+		account.Nonce = uint64(stmt.ColumnInt64(2))
+		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
 		rst = append(rst, &account)
 		return true
 	})
@@ -45,12 +47,13 @@ func All(db sql.Executor) ([]*types.Account, error) {
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	// TODO dry it
 	var account types.Account
-	_, err := db.Exec("select balance, layer_updated from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
+	_, err := db.Exec("select balance, nonce, layer_updated from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
 		stmt.BindInt64(2, int64(layer.Value))
 	}, func(stmt *sql.Statement) bool {
 		account.Balance = uint64(stmt.ColumnInt64(0))
-		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(1)))
+		account.Nonce = uint64(stmt.ColumnInt64(1))
+		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(2)))
 		return false
 	})
 	if err != nil {
@@ -63,11 +66,12 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 // Update account state at a certain layer.
 func Update(db sql.Executor, to *types.Account) error {
 	_, err := db.Exec(`insert into 
-	accounts (address, balance, layer_updated) 
+	accounts (address, balance, nonce, layer_updated) 
 	values (?1, ?2, ?3);`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, to.Address.Bytes())
 		stmt.BindInt64(2, int64(to.Balance))
-		stmt.BindInt64(3, int64(to.Layer.Value))
+		stmt.BindInt64(3, int64(to.Nonce))
+		stmt.BindInt64(4, int64(to.Layer.Value))
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to insert account %s for layer %v: %w", to.Address, to.Layer, err)
