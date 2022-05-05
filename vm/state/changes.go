@@ -12,15 +12,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func newStagedState(db *sql.Database, layer types.LayerID) *stagedState {
-	return &stagedState{
+func newChanges(db *sql.Database, layer types.LayerID) *changes {
+	return &changes{
 		db:      db,
 		changed: map[types.Address]*types.Account{},
 		layer:   layer,
 	}
 }
 
-type stagedState struct {
+type changes struct {
 	db *sql.Database
 
 	layer   types.LayerID
@@ -28,7 +28,7 @@ type stagedState struct {
 	changed map[types.Address]*types.Account
 }
 
-func (s *stagedState) loadAccount(address types.Address) (*types.Account, error) {
+func (s *changes) loadAccount(address types.Address) (*types.Account, error) {
 	if acc, exist := s.changed[address]; exist {
 		return acc, nil
 	}
@@ -37,11 +37,12 @@ func (s *stagedState) loadAccount(address types.Address) (*types.Account, error)
 		return nil, err
 	}
 	s.order.PushBack(address)
+	acc.Layer = s.layer
 	s.changed[address] = &acc
 	return &acc, nil
 }
 
-func (s *stagedState) nonce(address types.Address) (uint64, error) {
+func (s *changes) nonce(address types.Address) (uint64, error) {
 	acc, err := s.loadAccount(address)
 	if err != nil {
 		return 0, err
@@ -49,7 +50,7 @@ func (s *stagedState) nonce(address types.Address) (uint64, error) {
 	return acc.Nonce, nil
 }
 
-func (s *stagedState) setNonce(address types.Address, nonce uint64) error {
+func (s *changes) setNonce(address types.Address, nonce uint64) error {
 	acc, err := s.loadAccount(address)
 	if err != nil {
 		return err
@@ -58,7 +59,7 @@ func (s *stagedState) setNonce(address types.Address, nonce uint64) error {
 	return nil
 }
 
-func (s *stagedState) balance(address types.Address) (uint64, error) {
+func (s *changes) balance(address types.Address) (uint64, error) {
 	acc, err := s.loadAccount(address)
 	if err != nil {
 		return 0, err
@@ -66,27 +67,25 @@ func (s *stagedState) balance(address types.Address) (uint64, error) {
 	return acc.Balance, nil
 }
 
-func (s *stagedState) addBalance(address types.Address, value uint64) error {
+func (s *changes) addBalance(address types.Address, value uint64) error {
 	acc, err := s.loadAccount(address)
 	if err != nil {
 		return err
 	}
 	acc.Balance += value
-	acc.Layer = s.layer
 	return nil
 }
 
-func (s *stagedState) subBalance(address types.Address, value uint64) error {
+func (s *changes) subBalance(address types.Address, value uint64) error {
 	acc, err := s.loadAccount(address)
 	if err != nil {
 		return err
 	}
 	acc.Balance -= value
-	acc.Layer = s.layer
 	return nil
 }
 
-func (s *stagedState) commit() (types.Hash32, error) {
+func (s *changes) commit() (types.Hash32, error) {
 	tx, err := s.db.Tx(context.Background())
 	if err != nil {
 		return types.Hash32{}, err
@@ -102,6 +101,7 @@ func (s *stagedState) commit() (types.Hash32, error) {
 		binary.LittleEndian.PutUint64(buf[:], account.Balance)
 		hasher.Write(buf[:])
 	}
+
 	var hash types.Hash32
 	hasher.Sum(hash[:0])
 	if err := layers.UpdateStateRoot(tx, s.layer, hash); err != nil {
@@ -111,6 +111,5 @@ func (s *stagedState) commit() (types.Hash32, error) {
 	if err := tx.Commit(); err != nil {
 		return types.Hash32{}, err
 	}
-
 	return hash, nil
 }

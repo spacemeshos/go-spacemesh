@@ -15,7 +15,7 @@ type VM struct {
 }
 
 // New creates a new `SVM` instance from the given `state` and `logger`.
-func New(logger *log.Log, db *sql.Database) *VM {
+func New(logger log.Log, db *sql.Database) *VM {
 	return &VM{
 		state: state.New(logger, db),
 		log:   logger,
@@ -49,13 +49,13 @@ func (svm *VM) GetStateRoot() (types.Hash32, error) {
 }
 
 // Revert loads the given layer state from persistent storage. On success, it
-// also returns the current state root hash *after* rewinding.
+// also returns the current state root hash *after* revert.
 func (svm *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 	err := svm.state.Revert(lid)
 	if err != nil {
 		return types.Hash32{}, err
 	}
-	return types.Hash32{}, err
+	return svm.GetStateRoot()
 }
 
 // AddressExists checks if an account address exists in this node's global state.
@@ -84,5 +84,5 @@ func (svm *VM) GetNonce(addr types.Address) (uint64, error) {
 
 // GetAllAccounts returns a dump of all accounts in global state.
 func (svm *VM) GetAllAccounts() ([]*types.Account, error) {
-	return nil, nil
+	return svm.state.GetAllAccounts()
 }

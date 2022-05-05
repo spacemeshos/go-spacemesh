@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, gas, fee uint64) *types.Transaction {

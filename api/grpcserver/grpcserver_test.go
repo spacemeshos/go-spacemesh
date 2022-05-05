@@ -46,9 +46,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/svm"
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 const (
@@ -3083,7 +3083,7 @@ func TestEventsReceived(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	lg := logtest.New(t).WithName("svm")
-	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, lg)
+	svm := vm.New(lg, sql.InMemory())
 	conState := txs.NewConservativeState(svm, sql.InMemory(), logtest.New(t).WithName("conState"))
 	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)

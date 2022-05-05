@@ -112,15 +112,15 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, trtl tortoise, state conservativeStat
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	_, err = state.RevertState(msh.LatestLayerInState())
+	root, err := state.RevertState(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
 
 	msh.With().Info("recovered mesh from disk",
-		log.FieldNamed("latest", msh.LatestLayer()),
-		log.FieldNamed("processed", msh.ProcessedLayer()),
-		log.String("root_hash", state.GetStateRoot().String()))
+		log.Stringer("latest", msh.LatestLayer()),
+		log.Stringer("processed", msh.ProcessedLayer()),
+		log.Stringer("root_hash", root))
 
 	return msh
 }
@@ -521,9 +521,14 @@ func (msh *Mesh) pushLayer(ctx context.Context, layerID, latestVerified types.La
 		return fmt.Errorf("failed to update state %s: %w", layerID, err)
 	}
 
+	root, err := msh.conState.GetStateRoot()
+	if err != nil {
+		return fmt.Errorf("failed to oad state root after update: %w", err)
+	}
+
 	msh.Event().Info("end of layer state root",
 		layerID,
-		log.Stringer("state_root", msh.conState.GetStateRoot()),
+		log.Stringer("state_root", root),
 	)
 
 	if err = msh.persistLayerHashes(ctx, layerID, types.ToBlockIDs(valids)); err != nil {

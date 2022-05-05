@@ -10,7 +10,6 @@ import (
 
 var (
 	errInvalid = errors.New("invalid tx")
-	errOrigin  = fmt.Errorf("%w: origin account doesnt exist", errInvalid)
 	errFunds   = fmt.Errorf("%w: insufficient funds", errInvalid)
 	errNonce   = fmt.Errorf("%w: incorrect nonce", errInvalid)
 )
@@ -18,19 +17,15 @@ var (
 // applyTransaction applies provided transaction to the current state, but does not commit it to persistent
 // storage. It returns an error if the transaction is invalid, i.e., if there is not enough balance in the source
 // account to perform the transaction and pay the fee or if the nonce is incorrect.
-func applyTransaction(logger *log.Log, ss *stagedState, tx *types.Transaction) error {
+func applyTransaction(logger log.Log, ss *stagedState, tx *types.Transaction) error {
 	balance, err := ss.balance(tx.Origin())
 	if err != nil {
 		return err
 	}
-
-	amountWithFee := tx.GetFee() + tx.Amount
-
-	// todo: should we allow to spend all accounts balance?
-	if balance <= amountWithFee {
+	if total := tx.GetFee() + tx.Amount; balance <= total {
 		logger.With().Error("not enough funds",
 			log.Uint64("balance_have", balance),
-			log.Uint64("balance_need", amountWithFee))
+			log.Uint64("balance_need", total))
 		return errFunds
 	}
 	nonce, err := ss.nonce(tx.Origin())
@@ -43,7 +38,6 @@ func applyTransaction(logger *log.Log, ss *stagedState, tx *types.Transaction) e
 			log.Uint64("nonce_actual", tx.AccountNonce))
 		return errNonce
 	}
-
 	if err := ss.setNonce(tx.Origin(), tx.AccountNonce); err != nil {
 		return err
 	}
@@ -56,6 +50,6 @@ func applyTransaction(logger *log.Log, ss *stagedState, tx *types.Transaction) e
 	if err := ss.subBalance(tx.Origin(), tx.GetFee()); err != nil {
 		return err
 	}
-	logger.With().Info("transaction processed", log.String("transaction", tx.String()))
+	logger.With().Info("transaction processed", log.Stringer("transaction", tx))
 	return nil
 }

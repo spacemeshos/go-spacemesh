@@ -24,6 +24,23 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	return account, nil
 }
 
+// All returns all latest accounts.
+func All(db sql.Executor) ([]*types.Account, error) {
+	var rst []*types.Account
+	_, err := db.Exec("select address, balance, max(layer_updated) from accounts group by address;", nil, func(stmt *sql.Statement) bool {
+		var account types.Account
+		stmt.ColumnBytes(0, account.Address[:])
+		account.Balance = uint64(stmt.ColumnInt64(1))
+		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(2)))
+		rst = append(rst, &account)
+		return true
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load all accounts %w", err)
+	}
+	return rst, nil
+}
+
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	// TODO dry it

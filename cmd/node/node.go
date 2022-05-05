@@ -50,7 +50,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -59,6 +58,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 const edKeyFileName = "key.bin"
@@ -279,7 +279,7 @@ type App struct {
 	beaconProtocol   *beacon.ProtocolDriver
 	closers          []interface{ Close() }
 	log              log.Log
-	svm              *svm.SVM
+	svm              *vm.VM
 	conState         *txs.ConservativeState
 	layerFetch       *layerfetcher.Logic
 	ptimesync        *peersync.Sync
@@ -456,12 +456,6 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	stateDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create state DB: %w", err)
-	}
-	app.closers = append(app.closers, stateDBStore)
-
 	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create IDs DB: %w", err)
@@ -492,13 +486,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
-	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
-	if err != nil {
-		return fmt.Errorf("create applied txs DB: %w", err)
-	}
-	app.closers = append(app.closers, appliedTxs)
-	state := svm.New(stateDBStore, appliedTxs, app.addLogger(SVMLogger, lg))
-
+	state := vm.New(app.addLogger(SVMLogger, lg), sqlDB)
 	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))

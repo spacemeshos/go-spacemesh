@@ -31,7 +31,15 @@ func NewConservativeState(state svmState, db *sql.Database, logger log.Log) *Con
 }
 
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
-	return cs.svmState.GetNonce(addr), cs.svmState.GetBalance(addr)
+	nonce, err := cs.svmState.GetNonce(addr)
+	if err != nil {
+		cs.logger.Fatal("failed to get nonce", log.Err(err))
+	}
+	balance, err := cs.svmState.GetBalance(addr)
+	if err != nil {
+		cs.logger.Fatal("failed to get balance", log.Err(err))
+	}
+	return nonce, balance
 }
 
 // SelectTXsForProposal picks a specific number of random txs for miner to pack in a proposal.

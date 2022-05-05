@@ -51,11 +51,12 @@ func (mr *MockconservativeStateMockRecorder) AddToCache(arg0, arg1 interface{}) 
 }
 
 // AddressExists mocks base method.
-func (m *MockconservativeState) AddressExists(arg0 types.Address) bool {
+func (m *MockconservativeState) AddressExists(arg0 types.Address) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddressExists", arg0)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // AddressExists indicates an expected call of AddressExists.
@@ -103,11 +104,12 @@ func (m *MocksvmState) EXPECT() *MocksvmStateMockRecorder {
 }
 
 // AddressExists mocks base method.
-func (m *MocksvmState) AddressExists(arg0 types.Address) bool {
+func (m *MocksvmState) AddressExists(arg0 types.Address) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddressExists", arg0)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // AddressExists indicates an expected call of AddressExists.
@@ -117,7 +119,7 @@ func (mr *MocksvmStateMockRecorder) AddressExists(arg0 interface{}) *gomock.Call
 }
 
 // ApplyLayer mocks base method.
-func (m *MocksvmState) ApplyLayer(arg0 types.LayerID, arg1 []*types.Transaction, arg2 map[types.Address]uint64) ([]*types.Transaction, error) {
+func (m *MocksvmState) ApplyLayer(arg0 types.LayerID, arg1 []*types.Transaction, arg2 []types.AnyReward) ([]*types.Transaction, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*types.Transaction)
@@ -132,10 +134,10 @@ func (mr *MocksvmStateMockRecorder) ApplyLayer(arg0, arg1, arg2 interface{}) *go
 }
 
 // GetAllAccounts mocks base method.
-func (m *MocksvmState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+func (m *MocksvmState) GetAllAccounts() ([]*types.Account, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAllAccounts")
-	ret0, _ := ret[0].(*types.MultipleAccountsState)
+	ret0, _ := ret[0].([]*types.Account)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -147,11 +149,12 @@ func (mr *MocksvmStateMockRecorder) GetAllAccounts() *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MocksvmState) GetBalance(arg0 types.Address) uint64 {
+func (m *MocksvmState) GetBalance(arg0 types.Address) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetBalance indicates an expected call of GetBalance.
@@ -161,11 +164,12 @@ func (mr *MocksvmStateMockRecorder) GetBalance(arg0 interface{}) *gomock.Call {
 }
 
 // GetLayerApplied mocks base method.
-func (m *MocksvmState) GetLayerApplied(arg0 types.TransactionID) *types.LayerID {
+func (m *MocksvmState) GetLayerApplied(arg0 types.TransactionID) (types.LayerID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerApplied", arg0)
-	ret0, _ := ret[0].(*types.LayerID)
-	return ret0
+	ret0, _ := ret[0].(types.LayerID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerApplied indicates an expected call of GetLayerApplied.
@@ -190,11 +194,12 @@ func (mr *MocksvmStateMockRecorder) GetLayerStateRoot(arg0 interface{}) *gomock.
 }
 
 // GetNonce mocks base method.
-func (m *MocksvmState) GetNonce(arg0 types.Address) uint64 {
+func (m *MocksvmState) GetNonce(arg0 types.Address) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNonce", arg0)
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetNonce indicates an expected call of GetNonce.
@@ -204,11 +209,12 @@ func (mr *MocksvmStateMockRecorder) GetNonce(arg0 interface{}) *gomock.Call {
 }
 
 // GetStateRoot mocks base method.
-func (m *MocksvmState) GetStateRoot() types.Hash32 {
+func (m *MocksvmState) GetStateRoot() (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStateRoot")
 	ret0, _ := ret[0].(types.Hash32)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetStateRoot indicates an expected call of GetStateRoot.
@@ -217,19 +223,19 @@ func (mr *MocksvmStateMockRecorder) GetStateRoot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MocksvmState)(nil).GetStateRoot))
 }
 
-// Rewind mocks base method.
-func (m *MocksvmState) Rewind(arg0 types.LayerID) (types.Hash32, error) {
+// Revert mocks base method.
+func (m *MocksvmState) Revert(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Rewind", arg0)
+	ret := m.ctrl.Call(m, "Revert", arg0)
 	ret0, _ := ret[0].(types.Hash32)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Rewind indicates an expected call of Rewind.
-func (mr *MocksvmStateMockRecorder) Rewind(arg0 interface{}) *gomock.Call {
+// Revert indicates an expected call of Revert.
+func (mr *MocksvmStateMockRecorder) Revert(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rewind", reflect.TypeOf((*MocksvmState)(nil).Rewind), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revert", reflect.TypeOf((*MocksvmState)(nil).Revert), arg0)
 }
 
 // MockconStateCache is a mock of conStateCache interface.

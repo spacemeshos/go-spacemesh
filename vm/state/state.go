@@ -16,12 +16,12 @@ import (
 
 // State is the struct containing state db and is responsible for applying changes to the state.
 type State struct {
-	logger *log.Log
+	logger log.Log
 	db     *sql.Database
 }
 
 // New returns a new state processor.
-func New(logger *log.Log, db *sql.Database) *State {
+func New(logger log.Log, db *sql.Database) *State {
 	return &State{
 		logger: logger,
 		db:     db,
@@ -59,7 +59,7 @@ func (st *State) Revert(lid types.LayerID) error {
 
 // ApplyGenesis applies genesis config.
 func (st *State) ApplyGenesis(genesis *config.GenesisConfig) error {
-	ss := newStagedState(st.db, types.LayerID{})
+	ss := newChanges(st.db, types.LayerID{})
 	for id, balance := range genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
@@ -82,9 +82,13 @@ func (st *State) ApplyGenesis(genesis *config.GenesisConfig) error {
 	return nil
 }
 
+func (st *State) GetAllAccounts() ([]*types.Account, error) {
+	return accounts.All(st.db)
+}
+
 // Apply layer with rewards and transactions.
 func (st *State) Apply(lid types.LayerID, rewards []types.AnyReward, txs []*types.Transaction) (types.Hash32, []*types.Transaction, error) {
-	ss := newStagedState(st.db, lid)
+	ss := newChanges(st.db, lid)
 	for _, reward := range rewards {
 		if err := ss.addBalance(reward.Address, reward.Amount); err != nil {
 			return types.Hash32{}, nil, err

@@ -42,3 +42,22 @@ func TestRevert(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, seq[3], &latest)
 }
+
+func TestAll(t *testing.T) {
+	db := sql.InMemory()
+	addresses := []types.Address{{1, 1}, {2, 2}, {3, 3}}
+	n := []int{10, 7, 20}
+	for i, address := range addresses {
+		for _, update := range genSeq(address, n[i]) {
+			require.NoError(t, Update(db, update))
+		}
+	}
+
+	accounts, err := All(db)
+	require.NoError(t, err)
+	require.Len(t, accounts, len(addresses))
+	for i, address := range addresses {
+		require.Equal(t, address, accounts[i].Address)
+		require.EqualValues(t, n[i], accounts[i].Layer.Value)
+	}
+}
