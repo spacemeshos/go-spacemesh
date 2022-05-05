@@ -569,3 +569,33 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 		require.Len(t, got, numTXs-i)
 	}
 }
+
+func TestAppliedLayer(t *testing.T) {
+	db := sql.InMemory()
+	rng := rand.New(rand.NewSource(1001))
+	signer := signing.NewEdSignerFromRand(rng)
+	txs := []*types.Transaction{
+		createTX(t, signer, types.Address{1}, 1, 191, 1, 1),
+		createTX(t, signer, types.Address{1}, 2, 191, 1, 1),
+	}
+	lid := types.NewLayerID(10)
+
+	for _, tx := range txs {
+		require.NoError(t, Add(db, tx, time.Now()))
+	}
+	_, err := Apply(db, txs[0].ID(), lid, types.BlockID{1, 1})
+	require.NoError(t, err)
+	applied, err := GetAppliedLayer(db, txs[0].ID())
+	require.NoError(t, err)
+	require.Equal(t, lid, applied)
+
+	_, err = GetAppliedLayer(db, txs[1].ID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	undone, err := UndoLayers(db, lid)
+	require.NoError(t, err)
+	require.Len(t, undone, 1)
+	require.Equal(t, txs[0].ID(), undone[0])
+	_, err = GetAppliedLayer(db, txs[0].ID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}

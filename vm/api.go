@@ -55,8 +55,7 @@ func (svm *VM) GetStateRoot() (types.Hash32, error) {
 	return svm.state.GetStateRoot()
 }
 
-// Revert loads the given layer state from persistent storage. On success, it
-// also returns the current state root hash *after* revert.
+// Revert all changes that we made after the layer. Returns state hash of the layer.
 func (svm *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 	err := svm.state.Revert(lid)
 	if err != nil {
