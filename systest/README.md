@@ -1,25 +1,32 @@
 Systest
 ===
 
-Installation
+Setup
 ---
 
-This testing setup can run on top of any k8s installation. For local i recommend minikube. See intrusctions below how to set it up.
+This testing setup can run on top of any k8s installation. For local we recommend minikube. See intrusctions below how to set it up.
 
-1. Install minikube
+N.B. We pipe curl output into bash for brevity's sake. Always check scripts before executing.
 
-https://minikube.sigs.k8s.io/docs/start/
+1. Install kubectl, minikube, and helm
+
+https://kubernetes.io/docs/tasks/tools/ \
+https://minikube.sigs.k8s.io/docs/start/ \
+https://helm.sh/docs/intro/install/
 
 On linux x86:
 
 ```bash
 curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
-2. Grant permissions for default serviceaccount so that it will be allowed to create namespaces by client that runs in-cluster.
+2. Start minikube, and grant permissions for default serviceaccount so that it will be allowed to create namespaces by client that runs in-cluster.
 
 ```bash
+minikube start
 kubectl create clusterrolebinding serviceaccounts-cluster-admin \
   --clusterrole=cluster-admin --group=system:serviceaccounts
 ```
@@ -32,11 +39,15 @@ https://chaos-mesh.org/docs/quick-start/
 curl -sSL https://mirrors.chaos-mesh.org/v2.1.2/install.sh | bash
 ```
 
-4. Install logging infra
+4. Install logging infra on minkube cluster
 
-Follow instructions https://grafana.com/docs/loki/latest/installation/helm/.
+Follow instructions https://grafana.com/docs/loki/latest/installation/microservices-helm/.
 
 ```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+
+helm repo update
+
 helm upgrade --install loki grafana/loki-stack  --set grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false,loki.persistence.enabled=true,loki.persistence.storageClassName=standard,loki.persistence.size=20Gi
 ```
 
@@ -49,17 +60,26 @@ kubectl get secret loki-grafana -o jsonpath="{.data.admin-password}" | base64 --
 Make dashboard available on `0.0.0.0:9000`:
 
 ```bash
-kubectl port-forward service/loki-grafana 9000:80
+kubectl port-forward service/loki-grafana 9000:80 > /dev/null 2>&1 & 
 ```
+
+Run Tests
+---
+From the `systest` directory:
 
 1. Build test image for `tests` module with `make docker` .
 
-2. `make run test_name=TestSmeshing`
+2. `make run test_name=TestSmeshing node_selector=minikube.k8s.io/name=minikube`
+
+If your minikube node runs out of CPU, you can decrease the number of spacemesh nodes by setting the `size` parameter to something less than the default in the [Makefile](./Makefile)
+
+`make run test_name=TestSmeshing node_selector=minikube.k8s.io/name=minikube size=4`
+
 
 The command will create a pod inside your k8s cluster named `systest`. After test completes it will cleanup after
 itself. If you want to interrupt the test run `make clean` - it will gracefully terminate the pod allowing it to cleanup the test setup.
 
-If logs were interrupted it is always possible to re-attach to them with `make attach`.
+If logs were interrupted it is always possible to continue watching them with `make watch`.
 
 Testing approach
 ---
