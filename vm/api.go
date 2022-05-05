@@ -5,20 +5,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/vm/state"
 )
 
 // VM is an entry point for all VM operations.
 type VM struct {
-	state *state.State
+	state *state
 	log   log.Logger
 }
 
 // New creates a new `SVM` instance from the given `state` and `logger`.
 func New(logger log.Log, db *sql.Database) *VM {
 	return &VM{
-		state: state.New(logger, db),
-		log:   logger,
+		state: &state{
+			logger: logger,
+			db:     db,
+		},
+		log: logger,
 	}
 }
 

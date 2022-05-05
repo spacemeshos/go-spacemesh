@@ -1,4 +1,4 @@
-package state
+package vm
 
 import (
 	"errors"
@@ -15,42 +15,34 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
-// State is the struct containing state db and is responsible for applying changes to the state.
-type State struct {
+// state is the struct containing state db and is responsible for applying changes to the state.
+type state struct {
 	logger log.Log
 	db     *sql.Database
 }
 
-// New returns a new state processor.
-func New(logger log.Log, db *sql.Database) *State {
-	return &State{
-		logger: logger,
-		db:     db,
-	}
-}
-
 // GetAppliedLayer returns layer of the applied transaction.
-func (st *State) GetAppliedLayer(tid types.TransactionID) (types.LayerID, error) {
+func (st *state) GetAppliedLayer(tid types.TransactionID) (types.LayerID, error) {
 	return transactions.GetAppliedLayer(st.db, tid)
 }
 
 // GetStateRoot returns latest state root.
-func (st *State) GetStateRoot() (types.Hash32, error) {
+func (st *state) GetStateRoot() (types.Hash32, error) {
 	return layers.GetLatestStateRoot(st.db)
 }
 
 // GetLayerStateRoot returns state root for the layer.
-func (st *State) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
+func (st *state) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
 	return layers.GetStateRoot(st.db, lid)
 }
 
 // Account returns latest valid account data.
-func (st *State) Account(address types.Address) (types.Account, error) {
+func (st *state) Account(address types.Address) (types.Account, error) {
 	return accounts.Latest(st.db, address)
 }
 
 // AddressExists checks if an account address exists in this node's global state.
-func (st *State) AddressExists(address types.Address) (bool, error) {
+func (st *state) AddressExists(address types.Address) (bool, error) {
 	latest, err := accounts.Latest(st.db, address)
 	if err != nil {
 		return false, err
@@ -59,12 +51,12 @@ func (st *State) AddressExists(address types.Address) (bool, error) {
 }
 
 // Revert state after the layer.
-func (st *State) Revert(lid types.LayerID) error {
+func (st *state) Revert(lid types.LayerID) error {
 	return accounts.Revert(st.db, lid)
 }
 
 // ApplyGenesis applies genesis config.
-func (st *State) ApplyGenesis(genesis *config.GenesisConfig) error {
+func (st *state) ApplyGenesis(genesis *config.GenesisConfig) error {
 	ss := newChanges(st.db, types.LayerID{})
 	for id, balance := range genesis.Accounts {
 		bytes := util.FromHex(id)
@@ -88,12 +80,12 @@ func (st *State) ApplyGenesis(genesis *config.GenesisConfig) error {
 	return nil
 }
 
-func (st *State) GetAllAccounts() ([]*types.Account, error) {
+func (st *state) GetAllAccounts() ([]*types.Account, error) {
 	return accounts.All(st.db)
 }
 
 // Apply layer with rewards and transactions.
-func (st *State) Apply(lid types.LayerID, rewards []types.AnyReward, txs []*types.Transaction) (types.Hash32, []*types.Transaction, error) {
+func (st *state) Apply(lid types.LayerID, rewards []types.AnyReward, txs []*types.Transaction) (types.Hash32, []*types.Transaction, error) {
 	ch := newChanges(st.db, lid)
 	for _, reward := range rewards {
 		if err := ch.addBalance(reward.Address, reward.Amount); err != nil {
