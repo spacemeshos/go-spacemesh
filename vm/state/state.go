@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 // State is the struct containing state db and is responsible for applying changes to the state.
@@ -26,6 +27,11 @@ func New(logger log.Log, db *sql.Database) *State {
 		logger: logger,
 		db:     db,
 	}
+}
+
+// GetAppliedLayer returns layer of the applied transaction.
+func (st *State) GetAppliedLayer(tid types.TransactionID) (types.LayerID, error) {
+	return transactions.GetAppliedLayer(st.db, tid)
 }
 
 // GetStateRoot returns latest state root.
@@ -88,16 +94,16 @@ func (st *State) GetAllAccounts() ([]*types.Account, error) {
 
 // Apply layer with rewards and transactions.
 func (st *State) Apply(lid types.LayerID, rewards []types.AnyReward, txs []*types.Transaction) (types.Hash32, []*types.Transaction, error) {
-	ss := newChanges(st.db, lid)
+	ch := newChanges(st.db, lid)
 	for _, reward := range rewards {
-		if err := ss.addBalance(reward.Address, reward.Amount); err != nil {
+		if err := ch.addBalance(reward.Address, reward.Amount); err != nil {
 			return types.Hash32{}, nil, err
 		}
 		events.ReportAccountUpdate(reward.Address)
 	}
 	var failed []*types.Transaction
 	for _, tx := range txs {
-		if err := applyTransaction(st.logger, ss, tx); err != nil {
+		if err := applyTransaction(st.logger, ch, tx); err != nil {
 			if errors.Is(err, errInvalid) {
 				failed = append(failed, tx)
 			} else {
@@ -108,7 +114,7 @@ func (st *State) Apply(lid types.LayerID, rewards []types.AnyReward, txs []*type
 		events.ReportAccountUpdate(tx.Origin())
 		events.ReportAccountUpdate(tx.GetRecipient())
 	}
-	hash, err := ss.commit()
+	hash, err := ch.commit()
 	if err != nil {
 		return types.Hash32{}, nil, err
 	}

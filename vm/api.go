@@ -43,6 +43,11 @@ func (svm *VM) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
 	return svm.state.GetLayerStateRoot(lid)
 }
 
+// GetAppliedLayer returns layer of the applied transaction.
+func (svm *VM) GetLayerApplied(tid types.TransactionID) (types.LayerID, error) {
+	return svm.state.GetAppliedLayer(tid)
+}
+
 // GetStateRoot gets the current state root hash.
 func (svm *VM) GetStateRoot() (types.Hash32, error) {
 	return svm.state.GetStateRoot()

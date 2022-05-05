@@ -249,27 +249,23 @@ func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64) {
 	return accountCounter + 1, accountBalance + 1
 }
 
-func (t *ConStateAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err error) {
-	accounts := make(map[string]types.AccountState)
+func (t *ConStateAPIMock) GetAllAccounts() (res []*types.Account, err error) {
 	for address, balance := range t.balances {
-		accounts[address.String()] = types.AccountState{
+		res = append(res, &types.Account{
+			Address: address,
 			Balance: balance.Uint64(),
 			Nonce:   t.nonces[address],
-		}
+		})
 	}
-	res = &types.MultipleAccountsState{
-		Root:     "", // DebugService.Accounts does not return a state root
-		Accounts: accounts,
-	}
-	return
+	return res, nil
 }
 
-func (t *ConStateAPIMock) GetStateRoot() types.Hash32 {
-	return stateRoot
+func (t *ConStateAPIMock) GetStateRoot() (types.Hash32, error) {
+	return stateRoot, nil
 }
 
-func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
-	return t.layerApplied[txID]
+func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) (types.LayerID, error) {
+	return *t.layerApplied[txID], nil
 }
 
 func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
@@ -315,12 +311,12 @@ func (t *ConStateAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	return stateRoot, nil
 }
 
-func (t *ConStateAPIMock) GetBalance(addr types.Address) uint64 {
-	return t.balances[addr].Uint64()
+func (t *ConStateAPIMock) GetBalance(addr types.Address) (uint64, error) {
+	return t.balances[addr].Uint64(), nil
 }
 
-func (t *ConStateAPIMock) GetNonce(addr types.Address) uint64 {
-	return t.nonces[addr]
+func (t *ConStateAPIMock) GetNonce(addr types.Address) (uint64, error) {
+	return t.nonces[addr], nil
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -3088,9 +3084,7 @@ func TestEventsReceived(t *testing.T) {
 	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 
-	rewards := map[types.Address]uint64{
-		addr1: 1,
-	}
+	rewards := []types.AnyReward{{Address: addr1, Amount: 1}}
 	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
 
 	time.Sleep(100 * time.Millisecond)

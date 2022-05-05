@@ -111,6 +111,25 @@ func UpdateIfBetter(db sql.Executor, tid types.TransactionID, lid types.LayerID,
 	return rows, nil
 }
 
+// GetAppliedLayer returns layer when transaction was applied.
+func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, error) {
+	var rst types.LayerID
+	rows, err := db.Exec("select layer from transactions where id = ?1 and applied = ?2", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, tid[:])
+		stmt.BindInt64(2, stateApplied)
+	}, func(stmt *sql.Statement) bool {
+		rst = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		return false
+	})
+	if err != nil {
+		return types.LayerID{}, fmt.Errorf("failed to load applied layer for tx %s: %w", tid, err)
+	}
+	if rows == 0 {
+		return types.LayerID{}, fmt.Errorf("%w: tx %s is not applied", sql.ErrNotFound, tid)
+	}
+	return rst, nil
+}
+
 // Apply updates the applied field to `applied` for a transaction, along with the layer and block it is applied with.
 func Apply(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid types.BlockID) (int, error) {
 	rows, err := db.Exec(`update transactions set applied = ?2, layer = ?3, block = ?4 where id = ?1 and applied != ?2 returning id`,
