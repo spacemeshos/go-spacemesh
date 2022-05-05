@@ -104,7 +104,7 @@ func (s *changes) commit() (types.Hash32, error) {
 
 	var hash types.Hash32
 	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateRoot(tx, s.layer, hash); err != nil {
+	if err := layers.UpdateStateHash(tx, s.layer, hash); err != nil {
 		return types.Hash32{}, err
 	}
 

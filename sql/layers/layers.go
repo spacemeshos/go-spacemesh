@@ -95,21 +95,21 @@ func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
 	return nil
 }
 
-// UpdateStateRoot for the layer.
-func UpdateStateRoot(db sql.Executor, lid types.LayerID, root types.Hash32) error {
+// UpdateStateHash for the layer.
+func UpdateStateHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
 	if _, err := db.Exec(`insert into layers (id, state_hash) values (?1, ?2) 
 	on conflict(id) do update set state_hash=?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
-			stmt.BindBytes(2, root[:])
+			stmt.BindBytes(2, hash[:])
 		}, nil); err != nil {
 		return fmt.Errorf("set applied %s: %w", lid, err)
 	}
 	return nil
 }
 
-// GetLatestStateRoot loads latest state root.
-func GetLatestStateRoot(db sql.Executor) (rst types.Hash32, err error) {
+// GetLatestStateHash loads latest state hash.
+func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
 	if rows, err := db.Exec("select state_hash from layers where state_hash is not null;",
 		nil,
 		func(stmt *sql.Statement) bool {
@@ -123,8 +123,8 @@ func GetLatestStateRoot(db sql.Executor) (rst types.Hash32, err error) {
 	return rst, err
 }
 
-// GetStateRoot loads state root for the layer.
-func GetStateRoot(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
+// GetStateHash loads state hash for the layer.
+func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
 	if rows, err := db.Exec("select state_hash from layers where id = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))

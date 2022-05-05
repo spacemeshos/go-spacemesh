@@ -28,12 +28,12 @@ func (st *state) GetAppliedLayer(tid types.TransactionID) (types.LayerID, error)
 
 // GetStateRoot returns latest state root.
 func (st *state) GetStateRoot() (types.Hash32, error) {
-	return layers.GetLatestStateRoot(st.db)
+	return layers.GetLatestStateHash(st.db)
 }
 
 // GetLayerStateRoot returns state root for the layer.
 func (st *state) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
-	return layers.GetStateRoot(st.db, lid)
+	return layers.GetStateHash(st.db, lid)
 }
 
 // Account returns latest valid account data.
