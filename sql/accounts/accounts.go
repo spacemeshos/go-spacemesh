@@ -67,7 +67,7 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 func Update(db sql.Executor, to *types.Account) error {
 	_, err := db.Exec(`insert into 
 	accounts (address, balance, nonce, layer_updated) 
-	values (?1, ?2, ?3);`, func(stmt *sql.Statement) {
+	values (?1, ?2, ?3, ?4);`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, to.Address.Bytes())
 		stmt.BindInt64(2, int64(to.Balance))
 		stmt.BindInt64(3, int64(to.Nonce))
