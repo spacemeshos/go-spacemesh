@@ -86,7 +86,6 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 		return nil, err
 	}
 	return failed, nil
-
 }
 
 // GetLayerStateRoot returns the state root at a given layer.
