@@ -7,28 +7,48 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// Latest latest account data for an address.
-func Latest(db sql.Executor, address types.Address) (types.Account, error) {
+func load(db sql.Executor, address types.Address, query string, enc sql.Encoder) (types.Account, error) {
 	var account types.Account
-	_, err := db.Exec("select balance, nonce, layer_updated from accounts where address = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address.Bytes())
-	}, func(stmt *sql.Statement) bool {
+	_, err := db.Exec(query, enc, func(stmt *sql.Statement) bool {
 		account.Balance = uint64(stmt.ColumnInt64(0))
 		account.Nonce = uint64(stmt.ColumnInt64(1))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(2)))
 		return false
 	})
 	if err != nil {
-		return account, fmt.Errorf("failed to load %v: %w", address, err)
+		return types.Account{}, err
 	}
 	account.Address = address
+	return account, nil
+}
+
+// Latest latest account data for an address.
+func Latest(db sql.Executor, address types.Address) (types.Account, error) {
+	account, err := load(db, address, "select balance, nonce, layer_updated from accounts where address = ?1;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, address.Bytes())
+	})
+	if err != nil {
+		return types.Account{}, fmt.Errorf("failed to load %v: %w", address, err)
+	}
+	return account, nil
+}
+
+// Get account data that was valid at the specified layer.
+func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
+	account, err := load(db, address, "select balance, nonce, layer_updated from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, address.Bytes())
+		stmt.BindInt64(2, int64(layer.Value))
+	})
+	if err != nil {
+		return types.Account{}, fmt.Errorf("failed to load %v for layer %v: %w", address, layer, err)
+	}
 	return account, nil
 }
 
 // All returns all latest accounts.
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
-	_, err := db.Exec("select address, nonce, balance, max(layer_updated) from accounts group by address;", nil, func(stmt *sql.Statement) bool {
+	_, err := db.Exec("select address, balance, nonce, max(layer_updated) from accounts group by address;", nil, func(stmt *sql.Statement) bool {
 		var account types.Account
 		stmt.ColumnBytes(0, account.Address[:])
 		account.Balance = uint64(stmt.ColumnInt64(1))
@@ -41,26 +61,6 @@ func All(db sql.Executor) ([]*types.Account, error) {
 		return nil, fmt.Errorf("failed to load all accounts %w", err)
 	}
 	return rst, nil
-}
-
-// Get account data that was valid at the specified layer.
-func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
-	// TODO dry it
-	var account types.Account
-	_, err := db.Exec("select balance, nonce, layer_updated from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address.Bytes())
-		stmt.BindInt64(2, int64(layer.Value))
-	}, func(stmt *sql.Statement) bool {
-		account.Balance = uint64(stmt.ColumnInt64(0))
-		account.Nonce = uint64(stmt.ColumnInt64(1))
-		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(2)))
-		return false
-	})
-	if err != nil {
-		return account, fmt.Errorf("failed to load %v for layer %v: %w", address, layer, err)
-	}
-	account.Address = address
-	return account, nil
 }
 
 // Update account state at a certain layer.

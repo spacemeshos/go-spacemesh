@@ -12,10 +12,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
+type changedAccount struct {
+	types.Account
+	dirty bool
+}
+
 func newChanges(db *sql.Database, layer types.LayerID) *changes {
 	return &changes{
 		db:      db,
-		changed: map[types.Address]*types.Account{},
+		changed: map[types.Address]*changedAccount{},
 		layer:   layer,
 	}
 }
@@ -25,12 +30,12 @@ type changes struct {
 
 	layer   types.LayerID
 	order   list.List
-	changed map[types.Address]*types.Account
+	changed map[types.Address]*changedAccount
 }
 
-func (s *changes) loadAccount(address types.Address) (*types.Account, error) {
-	if acc, exist := s.changed[address]; exist {
-		return acc, nil
+func (s *changes) loadAccount(address types.Address) (*changedAccount, error) {
+	if chacc, exist := s.changed[address]; exist {
+		return chacc, nil
 	}
 	acc, err := accounts.Latest(s.db, address)
 	if err != nil {
@@ -38,8 +43,9 @@ func (s *changes) loadAccount(address types.Address) (*types.Account, error) {
 	}
 	s.order.PushBack(address)
 	acc.Layer = s.layer
-	s.changed[address] = &acc
-	return &acc, nil
+	chacc := &changedAccount{Account: acc}
+	s.changed[address] = chacc
+	return chacc, nil
 }
 
 func (s *changes) nonce(address types.Address) (uint64, error) {
@@ -55,6 +61,7 @@ func (s *changes) setNonce(address types.Address, nonce uint64) error {
 	if err != nil {
 		return err
 	}
+	acc.dirty = true
 	acc.Nonce = nonce
 	return nil
 }
@@ -72,6 +79,7 @@ func (s *changes) addBalance(address types.Address, value uint64) error {
 	if err != nil {
 		return err
 	}
+	acc.dirty = true
 	acc.Balance += value
 	return nil
 }
@@ -81,6 +89,7 @@ func (s *changes) subBalance(address types.Address, value uint64) error {
 	if err != nil {
 		return err
 	}
+	acc.dirty = true
 	acc.Balance -= value
 	return nil
 }
@@ -95,7 +104,10 @@ func (s *changes) commit() (types.Hash32, error) {
 	buf := [8]byte{}
 	for elem := s.order.Front(); elem != nil; elem = elem.Next() {
 		account := s.changed[elem.Value.(types.Address)]
-		if err := accounts.Update(tx, account); err != nil {
+		if !account.dirty {
+			continue
+		}
+		if err := accounts.Update(tx, &account.Account); err != nil {
 			return types.Hash32{}, err
 		}
 		binary.LittleEndian.PutUint64(buf[:], account.Balance)
