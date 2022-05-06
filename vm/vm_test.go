@@ -33,6 +33,7 @@ type step struct {
 }
 
 func TestLayers(t *testing.T) {
+	types.SetLayersPerEpoch(4)
 	rng := rand.New(rand.NewSource(101))
 	signers := make([]*signing.EdSigner, 10)
 	addresses := make([]types.Address, len(signers))
@@ -62,13 +63,36 @@ func TestLayers(t *testing.T) {
 				},
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[0], addresses[2], 1, 50, 10),
-						genTx(t, signers[1], addresses[2], 1, 50, 10),
+						genTx(t, signers[0], addresses[2], 0, 50, 10),
+						genTx(t, signers[1], addresses[2], 0, 50, 10),
 					},
 					state: map[types.Address]uint64{
 						addresses[0]: 40,
 						addresses[1]: 140,
 						addresses[2]: 100,
+					},
+				},
+			},
+		},
+		{
+			desc: "RewardsSameCoinbase",
+			steps: []step{
+				{
+					rewards: []types.AnyReward{
+						{Address: addresses[0], Amount: 100},
+						{Address: addresses[0], Amount: 100},
+					},
+					state: map[types.Address]uint64{
+						addresses[0]: 200,
+					},
+				},
+				{
+					rewards: []types.AnyReward{
+						{Address: addresses[0], Amount: 100},
+						{Address: addresses[0], Amount: 100},
+					},
+					state: map[types.Address]uint64{
+						addresses[0]: 400,
 					},
 				},
 			},
@@ -88,7 +112,7 @@ func TestLayers(t *testing.T) {
 				},
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[1], addresses[0], 1, 90, 10),
+						genTx(t, signers[1], addresses[0], 0, 90, 10),
 					},
 					state: map[types.Address]uint64{
 						addresses[0]: 190,
@@ -106,7 +130,7 @@ func TestLayers(t *testing.T) {
 			steps: []step{
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[1], addresses[2], 1, 80, 10),
+						genTx(t, signers[1], addresses[2], 0, 80, 10),
 					},
 					state: map[types.Address]uint64{
 						addresses[0]: 100,
@@ -145,9 +169,9 @@ func TestLayers(t *testing.T) {
 			steps: []step{
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[0], addresses[3], 1, 100, 0),
+						genTx(t, signers[0], addresses[3], 0, 100, 0),
 						genTx(t, signers[0], addresses[1], 3, 100, 0),
-						genTx(t, signers[2], addresses[3], 1, 100, 0),
+						genTx(t, signers[2], addresses[3], 0, 100, 0),
 					},
 					failed: []int{1, 2},
 					state: map[types.Address]uint64{
@@ -166,9 +190,9 @@ func TestLayers(t *testing.T) {
 			steps: []step{
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[0], addresses[1], 1, 100, 0),
-						genTx(t, signers[0], addresses[2], 2, 100, 0),
-						genTx(t, signers[0], addresses[3], 3, 100, 0),
+						genTx(t, signers[0], addresses[1], 0, 100, 0),
+						genTx(t, signers[0], addresses[2], 1, 100, 0),
+						genTx(t, signers[0], addresses[3], 2, 100, 0),
 					},
 					state: map[types.Address]uint64{
 						addresses[0]: 700,
@@ -184,8 +208,10 @@ func TestLayers(t *testing.T) {
 			db := sql.InMemory()
 			vm := New(logtest.New(t), db)
 			require.NoError(t, vm.SetupGenesis(&config.GenesisConfig{Accounts: tc.genesis}))
-			base := types.NewLayerID(1)
+			base := types.GetEffectiveGenesis()
 			for _, s := range tc.steps {
+				base = base.Add(1)
+
 				if s.revert == 0 {
 					failed, err := vm.ApplyLayer(base, s.txs, s.rewards)
 					require.NoError(t, err)
@@ -194,7 +220,7 @@ func TestLayers(t *testing.T) {
 						require.Equal(t, s.txs[pos], failed[i])
 					}
 				} else {
-					base = types.NewLayerID(s.revert)
+					base = types.GetEffectiveGenesis().Add(s.revert)
 					_, err := vm.Revert(base)
 					require.NoError(t, err)
 				}
@@ -205,7 +231,6 @@ func TestLayers(t *testing.T) {
 				for _, account := range accounts {
 					require.Equal(t, int(s.state[account.Address]), int(account.Balance))
 				}
-				base = base.Add(1)
 			}
 		})
 	}
@@ -253,8 +278,8 @@ func TestLayerHash(t *testing.T) {
 	require.Equal(t, expectedHash(t, 100, 1000), root)
 
 	txs := []*types.Transaction{
-		genTx(t, signers[0], addresses[2], 1, 50, 0),
-		genTx(t, signers[0], addresses[3], 2, 50, 0),
+		genTx(t, signers[0], addresses[2], 0, 50, 0),
+		genTx(t, signers[0], addresses[3], 1, 50, 0),
 	}
 
 	_, err = vm.ApplyLayer(types.NewLayerID(2), txs, rewards)

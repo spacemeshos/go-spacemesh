@@ -34,7 +34,7 @@ func (vm *VM) SetupGenesis(genesis *config.GenesisConfig) error {
 	if genesis == nil {
 		genesis = config.DefaultGenesisConfig()
 	}
-	ss := newChanges(vm.db, types.LayerID{})
+	ss := newChanges(vm.log, vm.db, types.GetEffectiveGenesis())
 	for id, balance := range genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
@@ -61,7 +61,12 @@ func (vm *VM) SetupGenesis(genesis *config.GenesisConfig) error {
 // transactions for the given layer. to miners vector for layer. It returns an
 // error on failure, as well as a vector of failed transactions.
 func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []types.AnyReward) ([]*types.Transaction, error) {
-	ch := newChanges(vm.db, lid)
+	vm.log.With().Info("apply layer to vm",
+		lid,
+		log.Int("rewards", len(rewards)),
+		log.Int("transactions", len(txs)),
+	)
+	ch := newChanges(vm.log, vm.db, lid)
 	for _, reward := range rewards {
 		if err := ch.addBalance(reward.Address, reward.Amount); err != nil {
 			return nil, err
@@ -122,7 +127,7 @@ func (vm *VM) AddressExists(addr types.Address) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return acc.Balance != 0, nil
+	return acc.Layer.Value > 0, nil
 }
 
 // GetBalance Retrieve the balance from the given address or 0 if object not found.
@@ -141,7 +146,10 @@ func (vm *VM) GetNonce(addr types.Address) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return acc.Nonce, nil
+	if !acc.Initialized {
+		return 0, nil
+	}
+	return acc.Nonce + 1, nil
 }
 
 // GetAllAccounts returns a dump of all accounts in global state.
@@ -169,13 +177,13 @@ func applyTransaction(logger log.Log, ch *changes, tx *types.Transaction) error 
 			log.Uint64("balance_need", total))
 		return errFunds
 	}
-	nonce, err := ch.nonce(tx.Origin())
+	nonce, err := ch.nextNonce(tx.Origin())
 	if err != nil {
 		return err
 	}
-	if correct := nonce + 1; correct != tx.AccountNonce {
+	if nonce != tx.AccountNonce {
 		logger.With().Warning("invalid nonce",
-			log.Uint64("nonce_correct", correct),
+			log.Uint64("nonce_correct", nonce),
 			log.Uint64("nonce_actual", tx.AccountNonce))
 		return errNonce
 	}

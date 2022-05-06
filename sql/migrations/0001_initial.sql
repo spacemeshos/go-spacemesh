@@ -134,6 +134,7 @@ CREATE TABLE accounts
 (
     address        CHAR(20),
     balance        UNSIGNED LONG INT,
+    initialized    BOOL,
     nonce          UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
     PRIMARY KEY (address, layer_updated DESC)
