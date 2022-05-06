@@ -22,20 +22,31 @@ func TestNewPoetListener(t *testing.T) {
 	lg := logtest.New(t)
 	listener := NewPoetListener(poetDb, lg)
 
-	msg, err := types.InterfaceToBytes(&types.PoetProofMessage{})
+	msg := readPoetProofFromDisk(t)
+	data, err := types.InterfaceToBytes(&msg)
 	require.NoError(t, err)
-	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	poetDb.EXPECT().StoreProof(gomock.Any()).Return(nil)
-	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", msg))
+	ref, err := msg.Ref()
+	require.NoError(t, err)
 
+	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	poetDb.EXPECT().StoreProof(gomock.Any()).Return(errors.New("unknown"))
-	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", msg))
+	poetDb.EXPECT().StoreProof(ref, gomock.Any()).Return(nil)
+	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", data))
 
+	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	poetDb.EXPECT().StoreProof(gomock.Any()).Return(sql.ErrObjectExists)
-	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", msg))
+	poetDb.EXPECT().StoreProof(ref, gomock.Any()).Return(errors.New("unknown"))
+	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", data))
 
+	poetDb.EXPECT().HasProof(ref).Return(false)
+	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	poetDb.EXPECT().StoreProof(ref, gomock.Any()).Return(sql.ErrObjectExists)
+	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+
+	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("bad poet message"))
-	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", msg))
+	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+
+	poetDb.EXPECT().HasProof(ref).Return(true)
+	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
 }
