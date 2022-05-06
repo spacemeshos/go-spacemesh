@@ -73,18 +73,26 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 		}
 		events.ReportAccountUpdate(reward.Address)
 	}
+
 	var failed []*types.Transaction
-	for _, tx := range txs {
-		if err := applyTransaction(vm.log, ch, tx); err != nil {
-			if errors.Is(err, errInvalid) {
-				failed = append(failed, tx)
-			} else {
-				return nil, err
+	for {
+		for _, tx := range txs {
+			if err := applyTransaction(vm.log, ch, tx); err != nil {
+				if errors.Is(err, errInvalid) {
+					failed = append(failed, tx)
+				} else {
+					return nil, err
+				}
 			}
+			events.ReportNewTx(lid, tx)
+			events.ReportAccountUpdate(tx.Origin())
+			events.ReportAccountUpdate(tx.GetRecipient())
 		}
-		events.ReportNewTx(lid, tx)
-		events.ReportAccountUpdate(tx.Origin())
-		events.ReportAccountUpdate(tx.GetRecipient())
+		if len(failed) == len(txs) {
+			break
+		}
+		txs = failed
+		failed = nil
 	}
 	_, err := ch.commit()
 	if err != nil {

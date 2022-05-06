@@ -203,6 +203,27 @@ func TestLayers(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "OutOfOrder",
+			genesis: map[string]uint64{
+				addresses[0].Hex(): 1000,
+			},
+			steps: []step{
+				{
+					txs: []*types.Transaction{
+						genTx(t, signers[0], addresses[1], 2, 100, 0),
+						genTx(t, signers[0], addresses[2], 0, 100, 0),
+						genTx(t, signers[0], addresses[3], 1, 100, 0),
+					},
+					state: map[types.Address]uint64{
+						addresses[0]: 700,
+						addresses[1]: 100,
+						addresses[2]: 100,
+						addresses[3]: 100,
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
