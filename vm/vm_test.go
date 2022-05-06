@@ -6,13 +6,14 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/vm/transaction"
-	"github.com/stretchr/testify/require"
 )
 
 func genTx(tb testing.TB, signer *signing.EdSigner, receiver types.Address, nonce, amount, fee uint64) *types.Transaction {
