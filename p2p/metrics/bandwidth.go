@@ -41,24 +41,24 @@ func NewBandwidthCollector() *BandwidthCollector {
 	return &BandwidthCollector{}
 }
 
-// LogSentMessageStream logs the message sent by the peer.
+// LogSentMessageStream logs the message node sent to the peer.
 func (b *BandwidthCollector) LogSentMessageStream(size int64, proto protocol.ID, p peer.ID) {
 	totalOut.WithLabelValues().Add(float64(size))
 	trafficPerProtocol.WithLabelValues(string(proto), outgoing).Add(float64(size))
 	messagesPerProtocol.WithLabelValues(string(proto), outgoing).Inc()
 }
 
-// LogRecvMessageStream logs the message received by the peer.
+// LogRecvMessageStream logs the message that node received from the peer.
 func (b *BandwidthCollector) LogRecvMessageStream(size int64, proto protocol.ID, p peer.ID) {
 	totalIn.WithLabelValues().Add(float64(size))
 	trafficPerProtocol.WithLabelValues(string(proto), incoming).Add(float64(size))
 	messagesPerProtocol.WithLabelValues(string(proto), incoming).Inc()
 }
 
-// LogSentMessage  logs the message sent by the peer.
+// LogSentMessage  logs the message sent to the peer.
 func (b *BandwidthCollector) LogSentMessage(int64) {}
 
-// LogRecvMessage logs the message received by the peer.
+// LogRecvMessage logs the message received from the peer.
 func (b *BandwidthCollector) LogRecvMessage(int64) {}
 
 // GetBandwidthForPeer mock returns the bandwidth for a given peer.
