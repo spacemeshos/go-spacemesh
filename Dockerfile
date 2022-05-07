@@ -35,6 +35,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM linux as golang
+ARG TARGETPLATFORM
 ENV GOLANG_MAJOR_VERSION 1
 ENV GOLANG_MINOR_VERSION 17
 ENV GOLANG_PATCH_VERSION 6
@@ -54,7 +55,8 @@ RUN set -ex \
     curl \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
- && curl -L https://golang.org/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar zx -C /usr/local \
+ && if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then export ARCHITECTURE=arm64; else export ARCHITECTURE=amd64; fi \
+ && curl -L https://golang.org/dl/go${GOLANG_VERSION}.linux-${ARCHITECTURE}.tar.gz | tar zx -C /usr/local \
  && go version \
  && mkdir -p "$GOPATH/src" "$GOPATH/bin" \
  && chmod -R 777 "$GOPATH"
