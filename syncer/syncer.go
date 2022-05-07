@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
+	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -95,14 +94,11 @@ type Syncer struct {
 	fetcher   layerFetcher
 	patrol    layerPatrol
 	syncOnce  sync.Once
-	// access via atomic.[Load|Store]Uint32
-	syncState syncState
-	// access via atomic.[Load|Store]Uint32
-	isBusy    uint32
+	syncState atomic.Value
+	isBusy    atomic.Value
 	syncTimer *time.Ticker
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
-	// TODO(nkryuchkov): Consider getting rid of unsafe.
-	targetSyncedLayer unsafe.Pointer
+	targetSyncedLayer atomic.Value
 
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
@@ -121,23 +117,25 @@ type Syncer struct {
 // NewSyncer creates a new Syncer instance.
 func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons system.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
-	return &Syncer{
-		logger:            logger,
-		conf:              conf,
-		ticker:            ticker,
-		beacons:           beacons,
-		mesh:              mesh,
-		validator:         mesh,
-		fetcher:           fetcher,
-		patrol:            patrol,
-		syncState:         notSynced,
-		syncTimer:         time.NewTicker(conf.SyncInterval),
-		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
-		awaitSyncedCh:     make([]chan struct{}, 0),
-		forceSyncCh:       make(chan struct{}, 1),
-		shutdownCtx:       shutdownCtx,
-		cancelFunc:        cancel,
+	s := &Syncer{
+		logger:        logger,
+		conf:          conf,
+		ticker:        ticker,
+		beacons:       beacons,
+		mesh:          mesh,
+		validator:     mesh,
+		fetcher:       fetcher,
+		patrol:        patrol,
+		syncTimer:     time.NewTicker(conf.SyncInterval),
+		awaitSyncedCh: make([]chan struct{}, 0),
+		forceSyncCh:   make(chan struct{}, 1),
+		shutdownCtx:   shutdownCtx,
+		cancelFunc:    cancel,
 	}
+	s.syncState.Store(notSynced)
+	s.isBusy.Store(0)
+	s.targetSyncedLayer.Store(types.LayerID{})
+	return s
 }
 
 // Close stops the syncing process and the goroutines syncer spawns.
@@ -228,11 +226,11 @@ func (s *Syncer) isClosed() bool {
 }
 
 func (s *Syncer) getSyncState() syncState {
-	return (syncState)(atomic.LoadUint32((*uint32)(&s.syncState)))
+	return s.syncState.Load().(syncState)
 }
 
 func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
-	oldState := syncState(atomic.SwapUint32((*uint32)(&s.syncState), uint32(newState)))
+	oldState := s.syncState.Swap(newState).(syncState)
 	if oldState != newState {
 		s.logger.WithContext(ctx).With().Info("sync state change",
 			log.String("from_state", oldState.String()),
@@ -257,16 +255,16 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 // setSyncerBusy returns false if the syncer is already running a sync process.
 // otherwise it sets syncer to be busy and returns true.
 func (s *Syncer) setSyncerBusy() bool {
-	return atomic.CompareAndSwapUint32(&s.isBusy, 0, 1)
+	return s.isBusy.CompareAndSwap(0, 1)
 }
 
 func (s *Syncer) setSyncerIdle() {
-	atomic.StoreUint32(&s.isBusy, 0)
+	s.isBusy.Store(0)
 }
 
 // targetSyncedLayer is used to signal at which layer we can set this node to synced state.
 func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID) {
-	oldSyncLayer := *(*types.LayerID)(atomic.SwapPointer(&s.targetSyncedLayer, unsafe.Pointer(&layerID)))
+	oldSyncLayer := s.targetSyncedLayer.Swap(layerID).(types.LayerID)
 	s.logger.WithContext(ctx).With().Info("target synced layer changed",
 		log.Uint32("from_layer", oldSyncLayer.Uint32()),
 		log.Uint32("to_layer", layerID.Uint32()),
@@ -276,7 +274,7 @@ func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID
 }
 
 func (s *Syncer) getTargetSyncedLayer() types.LayerID {
-	return *(*types.LayerID)(atomic.LoadPointer(&s.targetSyncedLayer))
+	return s.targetSyncedLayer.Load().(types.LayerID)
 }
 
 // synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
@@ -496,6 +494,12 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 // however, hare can fail for various reasons, one of which is failure to fetch blocks for the hare output.
 // maxHareDelayLayers is used to safeguard such scenario and make sure layer data is synced and validated.
 func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
+	epoch := layerID.GetEpoch()
+	if _, err := s.beacons.GetBeacon(epoch); err != nil {
+		s.logger.With().Info("skip validating layer: beacon not available", layerID, epoch)
+		return false
+	}
+
 	var (
 		latest = s.mesh.LatestLayer()
 		lag    types.LayerID
@@ -505,12 +509,6 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 	}
 	if s.patrol.IsHareInCharge(layerID) && lag.Value < maxHareDelayLayers {
 		s.logger.With().Info("skip validating layer: hare still working", layerID)
-		return false
-	}
-
-	epoch := layerID.GetEpoch()
-	if _, err := s.beacons.GetBeacon(epoch); err != nil {
-		s.logger.With().Info("skip validating layer: beacon not available", layerID, epoch)
 		return false
 	}
 
