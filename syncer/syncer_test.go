@@ -433,7 +433,6 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 				return nil
 			}).Times(1)
 	}
-	patrol.EXPECT().IsHareInCharge(lyr).Return(false).Times(maxAttemptWithinRun)
 	beacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, database.ErrNotFound).Times(maxAttemptWithinRun)
 
 	ticker.advanceToLayer(lyr.Add(1))
