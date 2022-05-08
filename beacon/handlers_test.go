@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -355,7 +356,8 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 	tpd.mAtxDB.EXPECT().GetEpochWeight(nextEpoch).Return(epochWeight, nil, nil).Times(1)
 
-	signer := signing.NewEdSigner()
+	rng := rand.New(rand.NewSource(1))
+	signer := signing.NewEdSignerFromRand(rng)
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
@@ -460,7 +462,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSignerFromRand(rand.New(rand.NewSource(101)))
 	vrfSigner := signer.VRFSigner()
 
 	msg1 := createProposal(t, signer, vrfSigner, epoch, false)
@@ -481,7 +483,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 
 	// the same vrf key will not cause double-proposal
-	msg2 := createProposal(t, signing.NewEdSigner(), vrfSigner, epoch, false)
+	msg2 := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes2, err := types.InterfaceToBytes(msg2)
 	require.NoError(t, err)
 
