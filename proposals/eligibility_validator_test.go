@@ -93,8 +93,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, vrfSigner *signing.V
 func TestCheckEligibility_FailedToGetRefBallot(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := ballots[0]
 	errUnknown := errors.New("unknown")
@@ -107,8 +106,7 @@ func TestCheckEligibility_FailedToGetRefBallot(t *testing.T) {
 func TestCheckEligibility_RefBallotMissingEpochData(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := ballots[0]
 	rb.EpochData = nil
@@ -121,8 +119,7 @@ func TestCheckEligibility_RefBallotMissingEpochData(t *testing.T) {
 func TestCheckEligibility_RefBallotMissingBeacon(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := ballots[0]
 	rb.EpochData.Beacon = types.EmptyBeacon
@@ -135,8 +132,7 @@ func TestCheckEligibility_RefBallotMissingBeacon(t *testing.T) {
 func TestCheckEligibility_RefBallotEmptyActiveSet(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := ballots[0]
 	rb.EpochData.ActiveSet = nil
@@ -149,8 +145,7 @@ func TestCheckEligibility_RefBallotEmptyActiveSet(t *testing.T) {
 func TestCheckEligibility_FailToGetActiveSetATXHeader(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := ballots[0]
 	tv.mm.EXPECT().GetBallot(rb.ID()).Return(rb, nil).Times(1)
@@ -165,8 +160,7 @@ func TestCheckEligibility_FailToGetActiveSetATXHeader(t *testing.T) {
 func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := ballots[0]
 	tv.mm.EXPECT().GetBallot(rb.ID()).Return(rb, nil).Times(1)
@@ -345,7 +339,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 
 func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
-	signer := genSigner()
+	signer := signing.NewEdSignerFromRand(rand.New(rand.NewSource(2222)))
 	ballots := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), types.Beacon{7, 7, 7})
 	rb := ballots[0]
 	require.Len(t, rb.EligibilityProofs, 2)
@@ -383,7 +377,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibilityProof{J: 2})
 	eligible, err = tv.CheckEligibility(context.TODO(), rb)
-	assert.ErrorIs(t, err, errInvalidProofsOrder)
+	assert.ErrorIs(t, err, errIncorrectVRFSig)
 	assert.False(t, eligible)
 }
 

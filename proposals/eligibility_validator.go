@@ -97,6 +97,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		last    uint32
 		isFirst = true
 	)
+
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
