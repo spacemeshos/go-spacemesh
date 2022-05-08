@@ -308,5 +308,5 @@ func TestLayerHash(t *testing.T) {
 	root, err = vm.GetStateRoot()
 	require.NoError(t, err)
 	require.NotEqual(t, root, types.Hash32{})
-	require.Equal(t, expectedHash(t, 100, 2000, 50, 50), root)
+	require.Equal(t, expectedHash(t, 100, 50, 50, 2000), root)
 }

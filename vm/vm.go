@@ -67,12 +67,6 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 		log.Int("transactions", len(txs)),
 	)
 	ch := newChanges(vm.log, vm.db, lid)
-	for _, reward := range rewards {
-		if err := ch.addBalance(reward.Address, reward.Amount); err != nil {
-			return nil, err
-		}
-		events.ReportAccountUpdate(reward.Address)
-	}
 
 	var failed []*types.Transaction
 	for {
@@ -93,6 +87,12 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 		}
 		txs = failed
 		failed = nil
+	}
+	for _, reward := range rewards {
+		if err := ch.addBalance(reward.Address, reward.Amount); err != nil {
+			return nil, err
+		}
+		events.ReportAccountUpdate(reward.Address)
 	}
 	_, err := ch.commit()
 	if err != nil {
