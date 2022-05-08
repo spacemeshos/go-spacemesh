@@ -46,7 +46,7 @@ func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 	r := require.New(t)
 
 	atxdb := getAtxDb(t, "t6")
-	id1 := types.NodeID{Key: uuid.New().String()}
+	id1 := types.NodeID{1}
 	coinbase1 := types.HexToAddress("aaaa")
 	epoch1 := types.EpochID(2)
 	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer()), coinbase1, &types.NIPost{}, 0, nil)
@@ -67,16 +67,16 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
 	atxdb := getAtxDb(t, "t6")
 
-	id1 := types.NodeID{Key: uuid.New().String()}
-	id2 := types.NodeID{Key: uuid.New().String()}
-	id3 := types.NodeID{Key: uuid.New().String()}
+	id1 := types.NodeID{1}
+	id2 := types.NodeID{2}
+	id3 := types.NodeID{3}
 	coinbase1 := types.HexToAddress("aaaa")
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	npst := NewNIPostWithChallenge(&chlng, poetRef)
-	posATX := newActivationTx(types.NodeID{Key: "aaaaaa"}, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, 100, coinbase1, 100, npst)
+	posATX := newActivationTx(types.NodeID{3, 3}, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, 100, coinbase1, 100, npst)
 	err := atxdb.StoreAtx(context.TODO(), 0, posATX)
 	assert.NoError(t, err)
 	atxList := []*types.ActivationTx{
@@ -122,11 +122,11 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	atxdb := getAtxDb(t, "t8")
 
 	signer := signing.NewEdSigner()
-	idx1 := types.NodeID{Key: signer.PublicKey().String()}
+	idx1 := types.BytesToNodeID(signer.PublicKey().Bytes())
 
-	id1 := types.NodeID{Key: uuid.New().String()}
-	id2 := types.NodeID{Key: uuid.New().String()}
-	id3 := types.NodeID{Key: uuid.New().String()}
+	id1 := types.NodeID{1}
+	id2 := types.NodeID{2}
+	id3 := types.NodeID{3}
 	coinbase1 := types.HexToAddress("aaaa")
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")

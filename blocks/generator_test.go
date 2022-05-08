@@ -94,9 +94,7 @@ func createProposalATXWithCoinbase(t *testing.T, layerID types.LayerID, txIDs []
 	t.Helper()
 	address := types.BytesToAddress(signer.PublicKey().Bytes())
 	nipostChallenge := types.NIPostChallenge{
-		NodeID: types.NodeID{
-			Key: signer.PublicKey().String(),
-		},
+		NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 		StartTick:  1,
 		EndTick:    2,
 		PubLayerID: layerID,
@@ -154,7 +152,7 @@ func Test_GenerateBlock(t *testing.T) {
 		assert.Equal(t, unitReward, r.Amount)
 		assert.Equal(t, unitLayerReward, r.LayerReward)
 		assert.Equal(t, types.BytesToAddress(proposals[i].SmesherID().Bytes()), r.Address)
-		assert.Equal(t, proposals[i].SmesherID().String(), r.SmesherID.Key)
+		assert.Equal(t, proposals[i].SmesherID().Bytes(), r.SmesherID[:])
 	}
 
 	// make sure the rewards remainder, tho ignored, is correct
@@ -226,7 +224,7 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 		assert.Equal(t, unitReward, r.Amount)
 		assert.Equal(t, unitLayerReward, r.LayerReward)
 		assert.Equal(t, types.BytesToAddress(signer.PublicKey().Bytes()), r.Address)
-		assert.Equal(t, signer.PublicKey().String(), r.SmesherID.Key)
+		assert.Equal(t, signer.PublicKey().Bytes(), r.SmesherID[:])
 	}
 
 	// make sure the rewards remainder, tho ignored, is correct

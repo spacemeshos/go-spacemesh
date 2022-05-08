@@ -33,8 +33,8 @@ func init() {
 
 var (
 	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub)}
-	otherNodeID = types.NodeID{Key: "00000"}
+	nodeID      = types.BytesToNodeID(pub)
+	otherNodeID = types.BytesToNodeID([]byte("00000"))
 	coinbase    = types.HexToAddress("33333")
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
@@ -614,7 +614,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	}
 
 	ed := signing.NewEdSigner()
-	nodeID := types.NodeID{Key: ed.PublicKey().String()}
+	nodeID := types.BytesToNodeID(ed.PublicKey().Bytes())
 	activationDb := NewDB(sql.InMemory(), nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, nodeID, ed, activationDb, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 
@@ -629,12 +629,12 @@ func TestBuilder_SignAtx(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ed.PublicKey().Bytes(), []byte(pubkey))
 
-	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key)), atxBytes, atx.Sig)
+	ok := signing.Verify(signing.NewPublicKey(atx.NodeID[:]), atxBytes, atx.Sig)
 	assert.True(t, ok)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
-	id := types.NodeID{Key: "aaaaaa"}
+	id := types.BytesToNodeID([]byte("aaaaaa"))
 	coinbase := types.HexToAddress("0xaaa")
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
@@ -658,7 +658,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	nipostBuilder.poetRef = poetRef
 	npst := NewNIPostWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: "aaaaaa"}, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
+	atx := newActivationTx(types.BytesToNodeID([]byte("aaaaaa")), 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
 	err := activationDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)

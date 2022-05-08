@@ -29,7 +29,6 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -630,12 +629,12 @@ func (app *App) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
+	postSetupMgr, err := activation.NewPostSetupManager(nodeID[:], app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
 
 	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 	if app.Config.SMESHING.Start {
@@ -1064,7 +1063,7 @@ func (app *App) Start() error {
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner := app.edSgn.VRFSigner()
 
-	nodeID := types.NodeID{Key: edPubkey.String()}
+	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 
 	lg := logger.Named(nodeID.ShortString()).WithFields(nodeID)
 

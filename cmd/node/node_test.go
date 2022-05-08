@@ -1066,7 +1066,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	pub := edSgn.PublicKey()
 	vrfSigner := edSgn.VRFSigner()
 
-	nodeID := types.NodeID{Key: pub.String()}
+	nodeID := types.BytesToNodeID(pub.Bytes())
 
 	dbStorepath := storePath
 

@@ -37,7 +37,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -84,7 +83,7 @@ var (
 	addr1       = types.HexToAddress("33333")
 	addr2       = types.HexToAddress("44444")
 	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub)}
+	nodeID      = types.BytesToNodeID(pub)
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
@@ -1127,7 +1126,7 @@ func TestSmesherService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			require.Equal(t, util.Hex2Bytes(nodeID.Key), res.AccountId.Address)
+			require.Equal(t, nodeID[:], res.AccountId.Address)
 		}},
 		{"SetCoinbaseMissingArgs", func(t *testing.T) {
 			logtest.SetupGlobal(t)
