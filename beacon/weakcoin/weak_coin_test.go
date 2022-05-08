@@ -2,7 +2,6 @@ package weakcoin_test
 
 import (
 	"context"
-	"crypto/ed25519"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -357,11 +356,9 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		sig = msg.Signature
 		return nil
 	}).AnyTimes()
-	seed := make([]byte, ed25519.SeedSize)
 	r := rand.New(rand.NewSource(999))
-	r.Read(seed)
-	signer, _, err := signing.NewVRFSigner(seed)
-	require.NoError(t, err)
+
+	signer := signing.NewEdSignerFromRand(r).VRFSigner()
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
 	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
@@ -399,11 +396,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 				return nil
 			}).AnyTimes()
-		seed := make([]byte, ed25519.SeedSize)
-
-		r.Read(seed)
-		signer, _, err := signing.NewVRFSigner(seed)
-		require.NoError(t, err)
+		signer := signing.NewEdSignerFromRand(r).VRFSigner()
 		allowances[string(signer.PublicKey().Bytes())] = 1
 		instances[i] = weakcoin.New(broadcaster, signer,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),

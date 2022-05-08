@@ -115,7 +115,7 @@ func TestHare_New(t *testing.T) {
 	logger := logtest.New(t).WithName(t.Name())
 	h := New(cfg, "", noopPubSub(t), signing.NewEdSigner(), types.NodeID{}, mocks.NewMockblockGenerator(ctrl), smocks.NewMockSyncStateProvider(ctrl),
 		mocks.NewMockmeshProvider(ctrl), mocks.NewMockproposalProvider(ctrl), smocks.NewMockBeaconGetter(ctrl), smocks.NewMockProposalFetcher(ctrl),
-		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10, mocks.NewMockidentityProvider(ctrl), mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
+		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10, mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
 	assert.NotNil(t, h)
 }
 

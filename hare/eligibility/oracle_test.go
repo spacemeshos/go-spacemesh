@@ -372,7 +372,12 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 }
 
 func Test_VrfSignVerify(t *testing.T) {
+	// eligibility of the proof depends on the identity
+	rng := rand.New(rand.NewSource(2))
+
 	o := defaultOracle(t)
+	o.vrfSigner = signing.NewEdSignerFromRand(rng).VRFSigner()
+	nid := types.NodeID{Key: o.vrfSigner.PublicKey().String()}
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
@@ -398,7 +403,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	}
 	atx1 := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: "my_key"},
+			NodeID:    nid,
 			StartTick: 0,
 			EndTick:   1,
 		},
@@ -406,7 +411,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	}
 	atx2 := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: "abc"},
+			NodeID:    types.NodeID{Key: "111"},
 			StartTick: 0,
 			EndTick:   1,
 		},
@@ -416,23 +421,15 @@ func Test_VrfSignVerify(t *testing.T) {
 	o.mAtxDB.EXPECT().GetAtxHeader(activeSet[1]).Return(atx2, nil).Times(1)
 
 	o.vrfVerifier = signing.VRFVerify
-	seed := make([]byte, 32)
-	// eligibility of the proof depends on the identity (private key is generated from seed)
-	// all zeroes doesn't pass the test
-	seed[0] = 1
-	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
-	require.NoError(t, err)
 
-	o.vrfSigner = vrfSigner
-	id := types.NodeID{Key: "my_key", VRFPublicKey: vrfPubkey}
 	proof, err := o.Proof(context.TODO(), layer, 1)
 	assert.NoError(t, err)
 
-	res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, id, proof)
+	res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, nid, proof)
 	assert.NoError(t, err)
-	assert.Equal(t, uint16(1), res)
+	assert.Equal(t, int(1), int(res))
 
-	valid, err := o.Validate(context.TODO(), layer, 1, 10, id, proof, 1)
+	valid, err := o.Validate(context.TODO(), layer, 1, 10, nid, proof, 1)
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -458,9 +455,7 @@ func Test_Proof(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
 	signer := signing.NewEdSigner()
-	edPubkey := signer.PublicKey()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(edPubkey.Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	o.vrfSigner = vrfSigner
 	sig, err := o.Proof(context.TODO(), layer, 3)

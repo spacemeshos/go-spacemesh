@@ -23,7 +23,7 @@ func TestGetATXByID(t *testing.T) {
 	atxs := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		strIdx := strconv.Itoa(i)
-		nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
+		nodeID := types.NodeID{Key: strIdx}
 		atxs = append(atxs, newAtx(nodeID, types.NewLayerID(uint32(i))))
 	}
 
@@ -49,7 +49,7 @@ func TestHasID(t *testing.T) {
 	atxs := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		strIdx := strconv.Itoa(i)
-		nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
+		nodeID := types.NodeID{Key: strIdx}
 		atxs = append(atxs, newAtx(nodeID, types.NewLayerID(uint32(i))))
 	}
 
@@ -73,7 +73,7 @@ func TestGetTimestampByID(t *testing.T) {
 
 	db := sql.InMemory()
 
-	nodeID := types.NodeID{Key: "0", VRFPublicKey: []byte("0")}
+	nodeID := types.NodeID{Key: "0"}
 	atx := newAtx(nodeID, types.NewLayerID(uint32(0)))
 
 	ts := time.Now()
@@ -92,9 +92,9 @@ func TestGetLastIDByNodeID(t *testing.T) {
 
 	db := sql.InMemory()
 
-	nodeID0 := types.NodeID{Key: "0", VRFPublicKey: []byte("0")}
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
+	nodeID0 := types.NodeID{Key: "0"}
+	nodeID1 := types.NodeID{Key: "1"}
+	nodeID2 := types.NodeID{Key: "1"}
 	atx1 := newAtx(nodeID1, types.NewLayerID(uint32(1*layersPerEpoch)))
 	atx2 := newAtx(nodeID1, types.NewLayerID(uint32(2*layersPerEpoch)))
 	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
@@ -123,8 +123,8 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 
 	db := sql.InMemory()
 
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
+	nodeID1 := types.NodeID{Key: "1"}
+	nodeID2 := types.NodeID{Key: "1"}
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
@@ -167,8 +167,8 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	db := sql.InMemory()
 
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
+	nodeID1 := types.NodeID{Key: "1"}
+	nodeID2 := types.NodeID{Key: "1"}
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
@@ -201,8 +201,8 @@ func TestGetTop(t *testing.T) {
 
 	db := sql.InMemory()
 
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
+	nodeID1 := types.NodeID{Key: "1"}
+	nodeID2 := types.NodeID{Key: "1"}
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
@@ -223,7 +223,7 @@ func TestGetTop(t *testing.T) {
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
 
-	nodeID := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
+	nodeID := types.NodeID{Key: "1"}
 
 	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
 
@@ -245,7 +245,7 @@ func TestAdd(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	strIdx := strconv.Itoa(1)
-	nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
+	nodeID := types.NodeID{Key: strIdx}
 	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
 
 	require.NoError(t, Add(db, atx, time.Now()))

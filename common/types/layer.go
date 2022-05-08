@@ -180,15 +180,12 @@ func (l LayerID) String() string {
 type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
-
-	// VRFPublicKey is the miner's public key used for VRF.
-	VRFPublicKey []byte
 }
 
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + string(id.VRFPublicKey)
+	return id.Key
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
@@ -206,18 +203,11 @@ func (id NodeID) ShortString() string {
 // TODO: length of the input will be made exact when the NodeID is compressed into
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func BytesToNodeID(b []byte) (*NodeID, error) {
-	if len(b) < 32 {
+	if len(b) != 32 {
 		return nil, fmt.Errorf("invalid input length, input too short")
 	}
-	if len(b) > 64 {
-		return nil, fmt.Errorf("invalid input length, input too long")
-	}
-
-	pubKey := b[0:32]
-	vrfKey := b[32:]
 	return &NodeID{
-		Key:          util.Bytes2Hex(pubKey),
-		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
+		Key: util.Bytes2Hex(b),
 	}, nil
 }
 
@@ -226,18 +216,13 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func StringToNodeID(s string) (*NodeID, error) {
 	strLen := len(s)
-	if strLen < 64 {
+	if strLen != 64 {
 		return nil, fmt.Errorf("invalid length, input too short")
-	}
-	if strLen > 128 {
-		return nil, fmt.Errorf("invalid length, input too long")
 	}
 	// portion of the string corresponding to the Edwards public key
 	pubKey := s[:64]
-	vrfKey := s[64:]
 	return &NodeID{
-		Key:          pubKey,
-		VRFPublicKey: []byte(vrfKey),
+		Key: pubKey,
 	}, nil
 }
 

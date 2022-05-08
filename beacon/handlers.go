@@ -189,7 +189,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	vrfPK := signing.NewPublicKey(m.NodeID.VRFPublicKey)
+	vrfPK := signing.NewPublicKey(m.NodeID.ToBytes())
 	currentEpochProposal := buildProposal(m.EpochID, logger)
 	if !pd.vrfVerifier.Verify(vrfPK, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry

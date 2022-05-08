@@ -17,16 +17,15 @@ type messageValidator interface {
 }
 
 type eligibilityValidator struct {
-	oracle           Rolacle
-	layersPerEpoch   uint16
-	identityProvider identityProvider
-	maxExpActives    int // the maximal expected committee size
-	expLeaders       int // the expected number of leaders
+	oracle         Rolacle
+	layersPerEpoch uint16
+	maxExpActives  int // the maximal expected committee size
+	expLeaders     int // the expected number of leaders
 	log.Log
 }
 
-func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider identityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, layersPerEpoch, idProvider, maxExpActives, expLeaders, logger}
+func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, layersPerEpoch, maxExpActives, expLeaders, logger}
 }
 
 // check eligibility of the provided message by the oracle.
@@ -49,13 +48,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
 
-	nID, err := ev.identityProvider.GetIdentity(pub.String())
-	if err != nil {
-		logger.With().Error("eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)",
-			log.Err(err),
-			log.String("sender_id", pub.ShortString()))
-		return false, fmt.Errorf("get identity: %w", err)
-	}
+	nID := types.NodeID{Key: pub.String()}
 
 	// validate role
 	res, err := ev.oracle.Validate(ctx, layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)

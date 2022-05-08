@@ -182,9 +182,7 @@ func createTestHare(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.
 	t.Helper()
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
-	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
-	require.NoError(t, err)
-	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.NodeID{Key: pub.String()}
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
@@ -205,7 +203,7 @@ func createTestHare(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.
 	mockFetcher := smocks.NewMockProposalFetcher(ctrl)
 
 	hare := New(tcfg, pid, p2p, ed, nodeID, mockBlockGen, mockSyncS, mockMeshDB, mockProposalDB, mockBeacons, mockFetcher, mockRoracle, patrol, 10,
-		mockIDProvider, mockStateQ, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
+		mockStateQ, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
 	p2p.Register(ProtoName, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{

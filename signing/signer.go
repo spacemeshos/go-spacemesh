@@ -120,6 +120,13 @@ func (es *EdSigner) LittleEndian() bool {
 	return true
 }
 
+func (es *EdSigner) VRFSigner() *VRFSigner {
+	return &VRFSigner{
+		privateKey: es.privKey,
+		pub:        es.PublicKey(),
+	}
+}
+
 // ToBuffer returns the private key as a byte buffer.
 func (es *EdSigner) ToBuffer() []byte {
 	buff := make([]byte, len(es.privKey))

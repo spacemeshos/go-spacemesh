@@ -77,7 +77,7 @@ func createLayerBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID, valid bool
 	t.Helper()
 	blocks := make([]*types.Block, 0, numBlocks)
 	for i := 0; i < numBlocks; i++ {
-		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
+		nodeID := types.NodeID{Key: strconv.Itoa(i)}
 		blk := createBlock(t, mesh, lyrID, nodeID, valid)
 		blocks = append(blocks, blk)
 	}

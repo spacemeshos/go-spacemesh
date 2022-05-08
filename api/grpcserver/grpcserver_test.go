@@ -84,7 +84,7 @@ var (
 	addr1       = types.HexToAddress("33333")
 	addr2       = types.HexToAddress("44444")
 	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
+	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub)}
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")

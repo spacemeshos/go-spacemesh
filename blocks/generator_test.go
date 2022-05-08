@@ -95,8 +95,7 @@ func createProposalATXWithCoinbase(t *testing.T, layerID types.LayerID, txIDs []
 	address := types.BytesToAddress(signer.PublicKey().Bytes())
 	nipostChallenge := types.NIPostChallenge{
 		NodeID: types.NodeID{
-			Key:          signer.PublicKey().String(),
-			VRFPublicKey: signer.PublicKey().Bytes(),
+			Key: signer.PublicKey().String(),
 		},
 		StartTick:  1,
 		EndTick:    2,

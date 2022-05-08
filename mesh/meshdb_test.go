@@ -321,8 +321,7 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 
 	signer4, _ := newSignerAndAddress(t, "999")
 	smesher4 := types.NodeID{
-		Key:          signer4.PublicKey().String(),
-		VRFPublicKey: signer4.PublicKey().Bytes(),
+		Key: signer4.PublicKey().String(),
 	}
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	require.NoError(t, err)

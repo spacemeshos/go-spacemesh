@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -79,9 +78,8 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	}
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	require.NoError(t, err)
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	vrfSigner := edSgn.VRFSigner()
+	minerID := types.NodeID{Key: edPubkey.String()}
 	tpd.ProtocolDriver = New(minerID, newPublisher(t), tpd.mAtxDB, edSgn, vrfSigner, sql.InMemory(), tpd.mClock,
 		WithConfig(UnitTestConfig()),
 		WithLogger(logtest.New(t).WithName("Beacon")),
@@ -760,10 +758,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	r := require.New(t)
 
 	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
-
-	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	r.NoError(err)
+	vrfSigner := edSgn.VRFSigner()
 
 	tt := []struct {
 		name   string
@@ -814,8 +809,7 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 func TestBeacon_signAndVerifyVRF(t *testing.T) {
 	r := require.New(t)
 
-	signer, _, err := signing.NewVRFSigner(bytes.Repeat([]byte{0x01}, 32))
-	r.NoError(err)
+	signer := signing.NewEdSigner().VRFSigner()
 
 	verifier := signing.VRFVerifier{}
 

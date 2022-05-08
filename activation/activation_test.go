@@ -33,8 +33,8 @@ func init() {
 
 var (
 	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
-	otherNodeID = types.NodeID{Key: "00000", VRFPublicKey: []byte("00000")}
+	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub)}
+	otherNodeID = types.NodeID{Key: "00000"}
 	coinbase    = types.HexToAddress("33333")
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
@@ -113,16 +113,6 @@ func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan
 	return nil, fmt.Errorf("NIPost builder error")
 }
 
-type MockIDStore struct{}
-
-func (*MockIDStore) StoreNodeIdentity(types.NodeID) error {
-	return nil
-}
-
-func (*MockIDStore) GetIdentity(string) (types.NodeID, error) {
-	return types.NodeID{}, nil
-}
-
 type ValidatorMock struct{}
 
 // A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
@@ -177,7 +167,7 @@ func (n *FaultyNetMock) Publish(_ context.Context, _ string, d []byte) error {
 // ========== Helper functions ==========
 
 func newActivationDb(tb testing.TB) *DB {
-	return NewDB(sql.InMemory(), nil, &MockIDStore{}, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxDB"))
+	return NewDB(sql.InMemory(), nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxDB"))
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
@@ -624,8 +614,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 	}
 
 	ed := signing.NewEdSigner()
-	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
-	activationDb := NewDB(sql.InMemory(), nil, &MockIDStore{}, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	nodeID := types.NodeID{Key: ed.PublicKey().String()}
+	activationDb := NewDB(sql.InMemory(), nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, nodeID, ed, activationDb, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
@@ -644,14 +634,14 @@ func TestBuilder_SignAtx(t *testing.T) {
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
-	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
+	id := types.NodeID{Key: "aaaaaa"}
 	coinbase := types.HexToAddress("0xaaa")
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
 	db := NewMockDB()
 	sig := &MockSigning{}
-	activationDb := NewDB(sql.InMemory(), nil, &MockIDStore{}, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	activationDb := NewDB(sql.InMemory(), nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	net.atxDb = activationDb
 
 	cfg := Config{
@@ -668,7 +658,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	nipostBuilder.poetRef = poetRef
 	npst := NewNIPostWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
+	atx := newActivationTx(types.NodeID{Key: "aaaaaa"}, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
 	err := activationDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
@@ -887,7 +877,7 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	defer ctrl.Finish()
 	mockFetch := mocks.NewMockFetcher(ctrl)
 
-	activationDb := NewDB(sql.InMemory(), mockFetch, &MockIDStore{}, layersPerEpoch,
+	activationDb := NewDB(sql.InMemory(), mockFetch, layersPerEpoch,
 		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB"))
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 

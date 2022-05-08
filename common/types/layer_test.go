@@ -19,8 +19,7 @@ func genByte32() [32]byte {
 func TestStringToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
-		Key:          util.Bytes2Hex(pubkey[:]),
-		VRFPublicKey: []byte("22222"),
+		Key: util.Bytes2Hex(pubkey[:]),
 	}
 	nodeIDStr := nodeID1.String()
 	reversed, err := StringToNodeID(nodeIDStr)
@@ -28,7 +27,6 @@ func TestStringToNodeID(t *testing.T) {
 	r := require.New(t)
 	r.NoError(err, "Error converting string to NodeID")
 	r.Equal(nodeID1.Key, reversed.Key, "Node ID deserialization Key does not match")
-	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "Node ID deserialization VRF Key does not match")
 
 	// Test too short
 	_, err = StringToNodeID(string(pubkey[:10]))
@@ -44,8 +42,7 @@ func TestStringToNodeID(t *testing.T) {
 func TestBytesToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
-		Key:          util.Bytes2Hex(pubkey[:]),
-		VRFPublicKey: []byte("222222"),
+		Key: util.Bytes2Hex(pubkey[:]),
 	}
 
 	// Test correct length
@@ -55,7 +52,6 @@ func TestBytesToNodeID(t *testing.T) {
 	r := require.New(t)
 	r.NoError(err, "Error converting bytes to NodeID")
 	r.Equal(nodeID1.Key, reversed.Key, "NodeID Key does not match")
-	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "NodeID VRF Key does not match")
 
 	// Test too short
 	var x [31]byte

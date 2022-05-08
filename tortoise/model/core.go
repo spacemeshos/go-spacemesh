@@ -31,7 +31,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 		logger:  logger,
 		rng:     rng,
 		meshdb:  mdb,
-		atxdb:   activation.NewDB(db, nil, nil, types.GetLayersPerEpoch(), types.ATXID{1}, nil, logger),
+		atxdb:   activation.NewDB(db, nil, types.GetLayersPerEpoch(), types.ATXID{1}, nil, logger),
 		beacons: newBeaconStore(),
 		units:   units,
 		signer:  signing.NewEdSignerFromRand(rng),

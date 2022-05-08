@@ -105,7 +105,6 @@ func New(
 	rolacle Rolacle,
 	patrol layerPatrol,
 	layersPerEpoch uint16,
-	idProvider identityProvider,
 	stateQ stateQuerier,
 	layerClock LayerClock,
 	logger log.Log,
@@ -129,7 +128,7 @@ func New(
 		return NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
 	}
 
-	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
+	ev := newEligibilityValidator(rolacle, layersPerEpoch, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
 	h.sign = sign
 	h.blockGen = blockGen

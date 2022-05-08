@@ -37,8 +37,6 @@ type atxChan struct {
 // it also stores identifications for all nodes e.g the coupling between ed id and bls id.
 type DB struct {
 	sync.RWMutex
-	// todo: think about whether we need one db or several(#1922)
-	idStore
 	sqlDB           *sql.Database
 	atxHeaderCache  AtxCache
 	LayersPerEpoch  uint32
@@ -54,9 +52,8 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity.
-func NewDB(sqlDB *sql.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(sqlDB *sql.Database, fetcher system.Fetcher, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:         idStore,
 		sqlDB:           sqlDB,
 		atxHeaderCache:  NewAtxCache(600),
 		LayersPerEpoch:  layersPerEpoch,
@@ -139,12 +136,6 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 	}
 	if err := db.StoreAtx(ctx, epoch, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
-	}
-	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
-		db.log.WithContext(ctx).With().Error("cannot store node identity",
-			log.FieldNamed("atx_node_id", atx.NodeID),
-			atx.ID(),
-			log.Err(err))
 	}
 	return nil
 }
@@ -464,12 +455,6 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
 	if signedAtx.PrevATXID == *types.EmptyATXID {
 		return nil
-	}
-
-	pubString := pubKey.String()
-	_, err := db.GetIdentity(pubString)
-	if err != nil { // means there is no such identity
-		return errInvalidSig
 	}
 	return nil
 }

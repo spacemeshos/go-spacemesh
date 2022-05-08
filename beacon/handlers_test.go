@@ -103,8 +103,7 @@ func mockAlwaysFalseProposalChecker(t *testing.T, pd *ProtocolDriver, epoch type
 
 func createProposal(t *testing.T, signer, vrfSigner signing.Signer, epoch types.EpochID, corruptSignature bool) *ProposalMessage {
 	nodeID := types.NodeID{
-		Key:          signer.PublicKey().String(),
-		VRFPublicKey: vrfSigner.PublicKey().Bytes(),
+		Key: signer.PublicKey().String(),
 	}
 	sig := buildSignedProposal(context.TODO(), vrfSigner, epoch, logtest.New(t))
 	msg := &ProposalMessage{
@@ -218,8 +217,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer1 := signing.NewEdSigner()
-	vrfSigner1, _, err := signing.NewVRFSigner(signer1.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner1 := signer1.VRFSigner()
 
 	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
 	msgBytes1, err := types.InterfaceToBytes(msg1)
@@ -234,8 +232,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	tpd.markProposalPhaseFinished(epoch, time.Now())
 
 	signer2 := signing.NewEdSigner()
-	vrfSigner2, _, err := signing.NewVRFSigner(signer2.PublicKey().Bytes())
-	require.NoError(t, err)
+	vrfSigner2 := signer2.VRFSigner()
 
 	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
 	msgBytes2, err := types.InterfaceToBytes(msg2)
@@ -266,8 +263,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	tpd.Close()
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -287,8 +283,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -318,8 +313,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -339,8 +333,7 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch-1, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -363,8 +356,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	tpd.mAtxDB.EXPECT().GetEpochWeight(nextEpoch).Return(epochWeight, nil, nil).Times(1)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -398,8 +390,7 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -427,8 +418,7 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch+2, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -449,8 +439,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, true)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -472,8 +461,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg1 := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes1, err := types.InterfaceToBytes(msg1)
@@ -514,10 +502,8 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 	mockAlwaysFalseProposalChecker(t, tpd.ProtocolDriver, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
+	msg := createProposal(t, signer, signer.VRFSigner(), epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
@@ -526,7 +512,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 	got := tpd.handleProposal(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errProposalDoesntPassThreshold)
 
-	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), true)
+	checkProposed(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), true)
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 }
 
@@ -537,8 +523,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -560,8 +545,7 @@ func Test_handleProposal_ATXLookupError(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -584,8 +568,7 @@ func Test_handleProposal_ATXHeaderLookupError(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
