@@ -332,7 +332,7 @@ func TestPollLayerBlocks_FetchLayerBallotsError(t *testing.T) {
 	assert.Equal(t, layerID, res.Layer)
 }
 
-func TestPollLayerBlocks_FetchLayerBlocksError(t *testing.T) {
+func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
@@ -352,9 +352,14 @@ func TestPollLayerBlocks_FetchLayerBlocksError(t *testing.T) {
 			}
 			return map[types.Hash32]chan fetch.HashDataPromiseResult{types.RandomHash(): ch}
 		}).Times(numPeers)
+	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
+			assert.NotEqual(t, blockID, types.EmptyBlockID)
+			return nil
+		}).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
-	assert.Equal(t, ErrLayerDataNotFetched, res.Err)
+	assert.Nil(t, res.Err)
 	assert.Equal(t, layerID, res.Layer)
 }
 
@@ -466,8 +471,14 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 			return nil
 		},
 	).AnyTimes()
+	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), requested, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
+			assert.Equal(t, blockID, types.EmptyBlockID)
+			return nil
+		}).Times(1)
+
 	res := <-tl.PollLayerContent(context.TODO(), requested)
-	require.ErrorIs(t, res.Err, ErrLayerDataNotFetched)
+	assert.Nil(t, res.Err)
 }
 
 func TestPollLayerBlocks_DifferentHareOutputIgnored(t *testing.T) {

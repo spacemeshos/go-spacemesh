@@ -84,6 +84,7 @@ COPY . .
 # And compile the project
 RUN make build
 RUN make harness
+RUN make gen-p2p-identity
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh
@@ -94,6 +95,7 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
 # TODO(nkryuchkov): uncomment when go-svm is imported
 #COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libsvm.so /bin/
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/gen-p2p-identity /bin/
 
 ENTRYPOINT ["/bin/go-harness"]
 EXPOSE 7513

@@ -42,7 +42,6 @@ type layerValidator interface {
 // Configuration is the config params for syncer.
 type Configuration struct {
 	SyncInterval time.Duration
-	AlwaysListen bool
 }
 
 const (
@@ -163,7 +162,7 @@ func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data.
 func (s *Syncer) ListenToGossip() bool {
-	return s.conf.AlwaysListen || s.getSyncState() >= gossipSync
+	return s.getSyncState() >= gossipSync
 }
 
 // IsSynced returns true if the node is in synced state.

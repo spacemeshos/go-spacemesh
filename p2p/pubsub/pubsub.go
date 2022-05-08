@@ -11,6 +11,7 @@ import (
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 // DefaultConfig for PubSub.
@@ -35,6 +36,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithPeerOutboundQueueSize(8192),
 		pubsub.WithValidateQueueSize(8192),
+		pubsub.WithRawTracer(p2pmetrics.NewGoSIPCollector()),
 	}
 	if cfg.MaxMessageSize != 0 {
 		opts = append(opts, pubsub.WithMaxMessageSize(cfg.MaxMessageSize))
