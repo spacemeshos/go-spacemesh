@@ -600,7 +600,7 @@ func (c *cache) MoreInDB(addr types.Address) bool {
 
 func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	for addr := range accounts {
-		if c.pending[addr].shouldEvict() {
+		if _, ok := c.pending[addr]; ok && c.pending[addr].shouldEvict() {
 			delete(c.pending, addr)
 		}
 	}
