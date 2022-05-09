@@ -91,19 +91,6 @@ func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
 	assert.True(t, res)
 }
 
-func TestEligibilityValidator_validateRole_FailedToGetIdentity(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
-	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	myErr := errors.New("my error")
-
-	res, err := ev.validateRole(context.TODO(), m)
-	assert.NotNil(t, err)
-	assert.ErrorIs(t, err, myErr)
-	assert.False(t, res)
-}
-
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
