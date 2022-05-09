@@ -41,7 +41,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/errcode"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -294,34 +293,6 @@ type App struct {
 
 func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
-}
-
-type clockErrorDetails struct {
-	Drift time.Duration
-}
-
-func (c *clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddDuration("drift", c.Drift)
-	return nil
-}
-
-type clockError struct {
-	err     error
-	details clockErrorDetails
-}
-
-func (c *clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("code", errcode.ErrClockDrift)
-	encoder.AddString("errmsg", c.err.Error())
-	if err := encoder.AddObject("details", &c.details); err != nil {
-		return fmt.Errorf("add object: %w", err)
-	}
-
-	return nil
-}
-
-func (c *clockError) Error() string {
-	return c.err.Error()
 }
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
