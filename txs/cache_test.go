@@ -134,14 +134,18 @@ func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcc
 	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
 	for principal, ta := range accounts {
 		if mtxs, ok := accountTXs[principal]; ok {
-			newNextNonce := ta.nonce + uint64(len(mtxs))
+			num := len(mtxs)
+			if num > maxTXsPerAcct {
+				num = maxTXsPerAcct
+			}
+			newNextNonce := ta.nonce + uint64(num)
 			newBalance := ta.balance
-			for _, mtx := range mtxs {
+			for _, mtx := range mtxs[:num] {
 				checkTX(t, tc.cache, mtx)
 				newBalance -= mtx.Spending()
 			}
 			checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-			expectedMempool[principal] = toNanoTXs(mtxs)
+			expectedMempool[principal] = toNanoTXs(mtxs[:num])
 		}
 	}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -331,7 +335,8 @@ func TestCache_Account_TooManyNonce(t *testing.T) {
 
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+maxTXsPerAcct)
 	tc.mockTP.EXPECT().GetAllPending().Return(mtxs, nil)
-	require.ErrorIs(t, tc.BuildFromScratch(), errTooManyNonce)
+	require.NoError(t, tc.BuildFromScratch())
+	require.True(t, tc.MoreInDB(ta.principal))
 	last := len(mtxs) - 1
 	for _, mtx := range mtxs[:last] {
 		checkTX(t, tc.cache, mtx)
@@ -409,7 +414,7 @@ func TestCache_Account_InsufficientBalance_AllPendingTXs(t *testing.T) {
 	require.True(t, tc.MoreInDB(ta.principal))
 }
 
-func TestCache_Account_Add_TooManyNonce(t *testing.T) {
+func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	ta.balance = uint64(1000000)
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+maxTXsPerAcct-1)
@@ -419,7 +424,8 @@ func TestCache_Account_Add_TooManyNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, amount, fee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.ErrorIs(t, tc.Add(&oneTooMany.Transaction, oneTooMany.Received), errTooManyNonce)
+	require.NoError(t, tc.Add(&oneTooMany.Transaction, oneTooMany.Received))
+	require.True(t, tc.MoreInDB(ta.principal))
 	checkNoTX(t, tc.cache, oneTooMany.ID())
 
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
@@ -601,6 +607,41 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 	checkMempool(t, tc.cache, nil)
 }
 
+func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	ta.balance = uint64(1000000)
+	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+maxTXsPerAcct+1)
+	// build the cache with just one tx
+	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs[:1])
+
+	// apply the tx
+	applied := []*types.Transaction{&mtxs[0].Transaction}
+	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].AccountNonce: mtxs[0].ID()}
+	ta.nonce = newNextNonce
+	ta.balance = newBalance
+	lid := types.NewLayerID(97)
+	bid := types.BlockID{1, 2, 3}
+	pending := mtxs[1:]
+	for _, p := range pending {
+		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
+	}
+	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
+	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
+	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+
+	// cache can only accommodate maxTXsPerAcct nonce
+	for i := 0; i < maxTXsPerAcct; i++ {
+		newNextNonce++
+		newBalance -= pending[i].Spending()
+	}
+	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
+	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(pending[:maxTXsPerAcct])}
+	checkMempool(t, tc.cache, expectedMempool)
+	require.True(t, tc.MoreInDB(ta.principal))
+}
+
 func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
@@ -777,23 +818,24 @@ func TestCache_BuildFromScratch(t *testing.T) {
 	buildCache(t, tc, accounts, mtxs, totalNumTXs)
 }
 
-func TestCache_BuildFromScratch_AllHaveTooManyNonce(t *testing.T) {
+func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 	numAccounts := 10
 	tc, accounts := createCache(t, 10)
 	// create too many nonce for each account
 	numTXsEach := maxTXsPerAcct + 1
 	totalNumTXs := numAccounts * numTXsEach
-	allPending := make([]*types.MeshTransaction, 0, totalNumTXs)
-	for _, ta := range accounts {
+	byAddrAndNonce := make(map[types.Address][]*types.MeshTransaction)
+	for principal, ta := range accounts {
 		minBalance := uint64(numTXsEach) * (amount + fee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
-		mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+uint64(numTXsEach)-1)
-		allPending = append(allPending, mtxs...)
+		byAddrAndNonce[principal] = generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+uint64(numTXsEach)-1)
 	}
-	tc.mockTP.EXPECT().GetAllPending().Return(allPending, nil)
-	require.ErrorIs(t, errTooManyNonce, tc.BuildFromScratch())
+	buildCache(t, tc, accounts, byAddrAndNonce, totalNumTXs)
+	for principal := range accounts {
+		require.True(t, tc.MoreInDB(principal))
+	}
 }
 
 func TestCache_Add(t *testing.T) {

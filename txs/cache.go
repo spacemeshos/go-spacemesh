@@ -199,7 +199,7 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 
 		best := findBest(nonce2TXs[nextNonce], balance)
 		if best == nil {
-			logger.With().Debug("no feasible transactions at nonce", ac.addr, log.Uint64("nonce", nextNonce))
+			logger.With().Warning("no feasible transactions at nonce", ac.addr, log.Uint64("nonce", nextNonce))
 			break
 		} else {
 			logger.With().Debug("found best in nonce txs",
@@ -209,7 +209,13 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 				log.Uint64("fee", best.Fee))
 		}
 		if err := ac.accept(logger, best, balance); err != nil {
-			return err
+			logger.With().Warning("failed to add tx to account cache",
+				ac.addr,
+				best.Tid,
+				log.Uint64("nonce", best.Nonce),
+				log.Uint64("amount", best.Amount),
+				log.Err(err))
+			break
 		}
 		delete(nonce2TXs, nextNonce)
 		nextNonce++
@@ -316,6 +322,10 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 
 	// transaction uses the next nonce
 	if err := ac.accept(logger, ntx, ac.availBalance()); err != nil {
+		if errors.Is(err, errTooManyNonce) {
+			ac.moreInDB = true
+			return nil
+		}
 		return err
 	}
 
