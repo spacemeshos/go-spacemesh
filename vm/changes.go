@@ -26,7 +26,8 @@ type changes struct {
 	log log.Log
 	db  *sql.Database
 
-	layer   types.LayerID
+	layer types.LayerID
+	// order of changed accounts is necessary for the state consistency.
 	order   list.List
 	changed map[types.Address]*types.Account
 }
