@@ -407,7 +407,52 @@ func TestApplyLayer_OutOfOrder(t *testing.T) {
 	require.ErrorIs(t, err, errLayerNotInOrder)
 }
 
-func TestApplyLayer_Failed(t *testing.T) {
+func TestApplyLayer_TXsFailedVM(t *testing.T) {
+	const numFailed = 2
+	tcs := createConservativeState(t)
+	lid := types.NewLayerID(1)
+	ids, txs := addBatch(t, tcs, numTXs)
+	for _, tx := range txs[numFailed:] {
+		principal := tx.Origin()
+		tcs.mSVM.EXPECT().GetBalance(principal).Return(defaultBalance - (tx.Amount + tx.Fee)).Times(1)
+		tcs.mSVM.EXPECT().GetNonce(principal).Return(nonce + 1).Times(1)
+	}
+	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	reward := uint64(200)
+	block := types.NewExistingBlock(types.BlockID{1},
+		types.InnerBlock{
+			LayerIndex: lid,
+			Rewards: []types.AnyReward{
+				{Address: coinbase, Amount: reward},
+			},
+			TxIDs: ids,
+		})
+	rewards := map[types.Address]uint64{coinbase: reward}
+	tcs.mSVM.EXPECT().ApplyLayer(lid, gomock.Any(), rewards).DoAndReturn(
+		func(_ types.LayerID, got []*types.Transaction, _ map[types.Address]uint64) ([]*types.Transaction, error) {
+			require.ElementsMatch(t, got, txs)
+			return got[:numFailed], nil
+		}).Times(1)
+	failed, err := tcs.ApplyLayer(block)
+	assert.NoError(t, err)
+	assert.Len(t, failed, numFailed)
+
+	for i, id := range ids {
+		mtx, err := tcs.GetMeshTransaction(id)
+		require.NoError(t, err)
+		if i < numFailed {
+			assert.Equal(t, types.MEMPOOL, mtx.State)
+			assert.Equal(t, types.EmptyBlockID, mtx.BlockID)
+			assert.Equal(t, types.LayerID{}, mtx.LayerID)
+		} else {
+			assert.Equal(t, types.APPLIED, mtx.State)
+			assert.Equal(t, block.ID(), mtx.BlockID)
+			assert.Equal(t, lid, mtx.LayerID)
+		}
+	}
+}
+
+func TestApplyLayer_VMError(t *testing.T) {
 	const numFailed = 2
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)

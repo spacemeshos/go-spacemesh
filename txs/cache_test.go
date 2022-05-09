@@ -241,7 +241,9 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	for _, mtx := range mtxs[2:] {
 		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(mtx.LayerID, mtx.BlockID, nil)
 	}
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	for _, mtx := range mtxs[:2] {
 		checkNoTX(t, tc.cache, mtx.ID())
 	}
@@ -317,7 +319,9 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	for _, mtx := range mtxs[2:] {
 		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
-	require.NoError(t, tc.ApplyLayer(lid, bid0, applied))
+	warns, errs := tc.ApplyLayer(lid, bid0, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	checkNoTX(t, tc.cache, mtxs[0].ID())
 	for _, mtx := range mtxs[1:] {
 		checkTX(t, tc.cache, mtx)
@@ -602,7 +606,9 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
 }
@@ -629,7 +635,9 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 
 	// cache can only accommodate maxTXsPerAcct nonce
 	for i := 0; i < maxTXsPerAcct; i++ {
@@ -678,7 +686,9 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	for _, p := range pending {
 		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	// all pending txs are added to cache now
 	newNextNonce = ta.nonce + uint64(len(pending))
 	newBalance = ta.balance
@@ -726,7 +736,9 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	for _, p := range pending {
 		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, 0)
 	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -750,7 +762,9 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.AccountNonce)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	checkMempool(t, tc.cache, nil)
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -778,7 +792,9 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 	for _, p := range pendingWithGap {
 		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
-	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	checkMempool(t, tc.cache, nil)
 	require.True(t, tc.MoreInDB(ta.principal))
@@ -793,7 +809,14 @@ func TestCache_Account_TXsAppliedOutOfOrder(t *testing.T) {
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	require.ErrorIs(t, tc.ApplyLayer(lid, bid, applied), errNonceNotInOrder)
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs, nil)
+	for _, mtx := range mtxs {
+		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(mtx.LayerID, mtx.BlockID, nil)
+	}
+	warns, errs := tc.ApplyLayer(lid, bid, applied)
+	require.NotEmpty(t, warns)
+	require.ErrorIs(t, warns[0], errNonceNotInOrder)
+	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -1073,7 +1096,9 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 		}
 	}
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	require.NoError(t, tc.ApplyLayer(lid, bid, allApplied))
+	warns, errs := tc.ApplyLayer(lid, bid, allApplied)
+	require.Empty(t, warns)
+	require.Empty(t, errs)
 
 	// now revert
 	allPending := make([]*types.MeshTransaction, 0, 10*len(mtxsByAccount))
@@ -1101,7 +1126,10 @@ func TestCache_ApplyLayer_OutOfOrder(t *testing.T) {
 	buildSmallCache(t, tc, accounts, 10)
 	lid := types.NewLayerID(97)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(2), nil).Times(1)
-	require.ErrorIs(t, tc.ApplyLayer(lid, types.BlockID{1, 2, 3}, nil), errLayerNotInOrder)
+	warns, errs := tc.ApplyLayer(lid, types.BlockID{1, 2, 3}, nil)
+	require.Empty(t, warns)
+	require.NotEmpty(t, errs)
+	require.ErrorIs(t, errs[0], errLayerNotInOrder)
 }
 
 func TestCache_GetMempool(t *testing.T) {

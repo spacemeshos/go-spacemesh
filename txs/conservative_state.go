@@ -101,8 +101,25 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transact
 		return failedTxs, fmt.Errorf("apply layer: %w", err)
 	}
 
-	if err := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), txs); err != nil {
-		return failedTxs, err
+	finalList := txs
+	if len(failedTxs) > 0 {
+		finalList = make([]*types.Transaction, 0, len(txs))
+		failed := make(map[types.TransactionID]struct{})
+		for _, tx := range failedTxs {
+			failed[tx.ID()] = struct{}{}
+		}
+		for _, tx := range txs {
+			if _, ok := failed[tx.ID()]; !ok {
+				finalList = append(finalList, tx)
+			}
+		}
+	}
+
+	logger.With().Info("applying layer to cache",
+		log.Int("num_txs_failed", len(failedTxs)),
+		log.Int("num_txs_final", len(finalList)))
+	if _, errs := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), finalList); len(errs) > 0 {
+		return failedTxs, errs[0]
 	}
 	return failedTxs, nil
 }

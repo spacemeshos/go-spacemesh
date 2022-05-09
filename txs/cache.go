@@ -473,10 +473,6 @@ func (ac *accountCache) applyLayer(
 		return err
 	}
 
-	if err := ac.resetAfterApply(logger, tp, newNonce, newBalance, lid); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -697,9 +693,9 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Transaction) error {
+func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Transaction) ([]error, []error) {
 	if err := c.CheckApplyOrder(lid); err != nil {
-		return err
+		return nil, []error{err}
 	}
 
 	c.mu.Lock()
@@ -718,23 +714,31 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Tr
 			byPrincipal[principal] = make(map[uint64]types.TransactionID)
 		}
 		if _, ok := byPrincipal[principal][tx.AccountNonce]; ok {
-			return errDupNonceApplied
+			return nil, []error{errDupNonceApplied}
 		}
 		byPrincipal[principal][tx.AccountNonce] = tx.ID()
 	}
 
+	errsApply := make([]error, 0, len(byPrincipal))
+	errsReset := make([]error, 0, len(byPrincipal))
+	logger := c.logger.WithFields(lid, bid)
 	for principal, appliedByNonce := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
 		nextNonce, balance := c.stateF(principal)
-		c.logger.With().Debug("after apply, get account state with nonce/balance",
+		logger.With().Debug("new account nonce/balance",
 			principal,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
-		if err := c.pending[principal].applyLayer(c.logger, nextNonce, balance, c.tp, lid, bid, appliedByNonce); err != nil {
-			return err
+		if err := c.pending[principal].applyLayer(logger, nextNonce, balance, c.tp, lid, bid, appliedByNonce); err != nil {
+			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
+			errsApply = append(errsApply, err)
+		}
+		if err := c.pending[principal].resetAfterApply(logger, c.tp, nextNonce, balance, lid); err != nil {
+			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
+			errsReset = append(errsReset, err)
 		}
 	}
-	return nil
+	return errsApply, errsReset
 }
 
 func (c *cache) RevertToLayer(revertTo types.LayerID) error {
