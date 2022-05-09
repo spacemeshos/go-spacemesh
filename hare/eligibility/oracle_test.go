@@ -54,7 +54,7 @@ func defaultOracle(t testing.TB) *testOracle {
 
 func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon types.Beacon, numMiners int) {
 	tb.Helper()
-	require.LessOrEqual(tb, numMiners, 255)
+
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
@@ -73,7 +73,7 @@ func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon
 	for i, id := range activeSet {
 		to.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{byte(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -86,12 +86,11 @@ func beaconWithValOne() types.Beacon {
 	return types.Beacon{1, 0, 0, 0}
 }
 
-func createMapWithSize(n int) map[string]uint64 {
-	m := make(map[string]uint64)
+func createMapWithSize(n int) map[types.NodeID]uint64 {
+	m := make(map[types.NodeID]uint64)
 	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = uint64(i + 1)
+		m[types.BytesToNodeID([]byte(strconv.Itoa(i)))] = uint64(i + 1)
 	}
-
 	return m
 }
 
@@ -199,7 +198,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	}
 	for hex, exp := range sigs {
 		sig := util.Hex2Bytes(hex)
-		nid := types.NodeID{1}
+		nid := types.BytesToNodeID([]byte("0"))
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, nid, sig)
 		require.NoError(t, err, hex)
 		require.Equal(t, exp, res, hex)
@@ -233,7 +232,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{byte(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -242,7 +241,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	}
 	for hex, exp := range sigs {
 		sig := util.Hex2Bytes(hex)
-		nid := types.NodeID{1}
+		nid := types.BytesToNodeID([]byte("0"))
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, nid, sig)
 		require.NoError(t, err, hex)
 		require.Equal(t, exp, res, hex)
@@ -265,12 +264,10 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
 	var eligibilityCount uint16
-	sig := make([]byte, 64)
-	for pubkey := range createMapWithSize(numOfMiners) {
-		n, err := rand.Read(sig)
+	sig := make([]byte, 80)
+	for nodeID := range createMapWithSize(numOfMiners) {
+		_, err := rand.Read(sig)
 		r.NoError(err)
-		r.Equal(64, n)
-		nodeID := types.BytesToNodeID([]byte(pubkey))
 
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, committeeSize, nodeID, sig)
 		r.NoError(err)
@@ -356,7 +353,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 
 	var nodeIDs []types.NodeID
 	for pubkey := range createMapWithSize(b.N) {
-		nodeIDs = append(nodeIDs, types.BytesToNodeID([]byte(pubkey)))
+		nodeIDs = append(nodeIDs, pubkey)
 	}
 	b.ResetTimer()
 	for _, nodeID := range nodeIDs {
