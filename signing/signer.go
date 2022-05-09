@@ -120,6 +120,7 @@ func (es *EdSigner) LittleEndian() bool {
 	return true
 }
 
+// VRFSigner wraps same ed25519 key to provide ecvrf.
 func (es *EdSigner) VRFSigner() *VRFSigner {
 	return &VRFSigner{
 		privateKey: es.privKey,

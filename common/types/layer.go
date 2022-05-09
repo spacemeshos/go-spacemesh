@@ -185,14 +185,14 @@ func BytesToNodeID(buf []byte) (id NodeID) {
 // NodeID contains a miner's two public keys.
 type NodeID [32]byte
 
-func (id NodeID) Hex() string {
+func (id NodeID) hex() string {
 	return util.Bytes2Hex(id[:])
 }
 
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Hex()
+	return id.hex()
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
