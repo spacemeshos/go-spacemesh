@@ -130,7 +130,7 @@ func Test_handleTransaction_AddressNotFound(t *testing.T) {
 	assert.ErrorIs(t, got, errAddrNotFound)
 }
 
-func Test_handleTransaction_FailedMemPool(t *testing.T) {
+func Test_handleTransaction_FailedMemPoolIgnored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
@@ -151,8 +151,7 @@ func Test_handleTransaction_FailedMemPool(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.handleTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errRejectedByCache)
+	require.NoError(t, th.handleTransaction(context.TODO(), msg))
 }
 
 func Test_HandleSyncTransaction_Success(t *testing.T) {
@@ -208,7 +207,7 @@ func Test_HandleSyncTransaction_HasTXError(t *testing.T) {
 	assert.ErrorIs(t, got, errUnknown)
 }
 
-func Test_HandleSyncTransaction_FailedMemPool(t *testing.T) {
+func Test_HandleSyncTransaction_FailedMemPoolIgnored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
@@ -227,6 +226,5 @@ func Test_HandleSyncTransaction_FailedMemPool(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errRejectedByCache)
+	require.NoError(t, th.HandleSyncTransaction(context.TODO(), msg))
 }
