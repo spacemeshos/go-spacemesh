@@ -559,45 +559,6 @@ func TestActivationDb_TopAtx(t *testing.T) {
 	r.NotEqual(atx.ID(), id)
 }
 
-func createAndValidateSignedATX(r *require.Assertions, atxdb *DB, ed *signing.EdSigner, atx *types.ActivationTx) (*types.ActivationTx, error) {
-	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
-	r.NoError(err)
-	sig := ed.Sign(atxBytes)
-
-	signedAtx := &types.ActivationTx{InnerActivationTx: atx.InnerActivationTx, Sig: sig}
-	return signedAtx, atxdb.ValidateSignedAtx(*ed.PublicKey(), signedAtx)
-}
-
-func TestActivationDb_ValidateSignedAtx(t *testing.T) {
-	r := require.New(t)
-	lg := logtest.New(t).WithName("sigValidation")
-	atxdb := NewDB(sql.InMemory(), nil, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
-
-	ed := signing.NewEdSigner()
-	nodeID := types.BytesToNodeID(ed.PublicKey().Bytes())
-
-	// test happy flow of first ATX
-	emptyAtx := types.EmptyATXID
-	atx := newActivationTx(nodeID, 1, *emptyAtx, *emptyAtx, types.LayerID{}.Add(15), 1, 100, coinbase, 100, nipost)
-	_, err := createAndValidateSignedATX(r, atxdb, ed, atx)
-	r.NoError(err)
-
-	// test negative flow no atx found in idstore
-	prevAtx := types.ATXID(types.HexToHash32("0x111"))
-	atx = newActivationTx(nodeID, 1, prevAtx, prevAtx, types.LayerID{}.Add(15), 1, 100, coinbase, 100, nipost)
-	signedAtx, err := createAndValidateSignedATX(r, atxdb, ed, atx)
-	r.Equal(errInvalidSig, err)
-
-	// test happy flow not first ATX
-	_, err = createAndValidateSignedATX(r, atxdb, ed, atx)
-	r.NoError(err)
-
-	// test negative flow not first ATX, invalid sig
-	signedAtx.Sig = []byte("anton")
-	_, err = ExtractPublicKey(signedAtx)
-	r.Error(err)
-}
-
 func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, error) {
 	id := types.NodeID{1, 1}
 	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, layer, 0, 100, coinbase, 100, &types.NIPost{})

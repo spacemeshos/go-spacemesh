@@ -165,10 +165,6 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		err = db.ValidateSignedAtx(*pub, atx)
-		if err != nil { // means there is no such identity
-			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
-		}
 		prevATX, err := db.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
@@ -444,17 +440,6 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
 
 	return atx, nil
-}
-
-// ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
-func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
-	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
-	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
-	if signedAtx.PrevATXID == *types.EmptyATXID {
-		return nil
-	}
-	return nil
 }
 
 // HandleGossipAtx handles the atx gossip data channel.
