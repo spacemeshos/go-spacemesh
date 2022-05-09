@@ -82,6 +82,10 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 			}
 		}
 	})
+	d.eg.Go(func() error {
+		d.CheckBook(ctx)
+		return ctx.Err()
+	})
 	return d, nil
 }
 
