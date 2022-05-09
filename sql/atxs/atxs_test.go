@@ -91,7 +91,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 
 	nodeID0 := types.NodeID{1}
 	nodeID1 := types.NodeID{2}
-	nodeID2 := types.NodeID{2}
+	nodeID2 := types.NodeID{3}
 	atx1 := newAtx(nodeID1, types.NewLayerID(uint32(1*layersPerEpoch)))
 	atx2 := newAtx(nodeID1, types.NewLayerID(uint32(2*layersPerEpoch)))
 	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
@@ -121,7 +121,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	db := sql.InMemory()
 
 	nodeID1 := types.NodeID{1}
-	nodeID2 := types.NodeID{1}
+	nodeID2 := types.NodeID{2}
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
@@ -165,7 +165,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 	db := sql.InMemory()
 
 	nodeID1 := types.NodeID{1}
-	nodeID2 := types.NodeID{1}
+	nodeID2 := types.NodeID{2}
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
