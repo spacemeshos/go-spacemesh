@@ -312,7 +312,8 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	oracle := eligibility.New(logger)
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
-	oracle.Register(true, edPubkey.String())
+	nid := types.BytesToNodeID(edPubkey.Bytes())
+	oracle.Register(true, nid)
 	output := make(chan TerminationOutput, 1)
 	certs := make(chan CertificationOutput, 1)
 

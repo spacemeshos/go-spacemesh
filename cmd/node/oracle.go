@@ -20,7 +20,7 @@ func (bo *localOracle) IsIdentityActiveOnConsensusView(context.Context, types.No
 	return true, nil
 }
 
-func (bo *localOracle) Register(isHonest bool, pubkey string) {
+func (bo *localOracle) Register(isHonest bool, pubkey types.NodeID) {
 	bo.oc.Register(isHonest, pubkey)
 }
 
