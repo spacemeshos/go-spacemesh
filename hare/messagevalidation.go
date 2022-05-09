@@ -48,7 +48,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
 
-	nID := types.NodeID{Key: pub.String()}
+	nID := types.BytesToNodeID(pub.Bytes())
 
 	// validate role
 	res, err := ev.oracle.Validate(ctx, layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)

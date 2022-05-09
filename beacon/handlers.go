@@ -255,7 +255,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 		return err
 	}
 
-	minerID := types.NodeID{Key: minerPK.String()}.ShortString()
+	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound, log.String("miner_id", minerID))
 	atx, err := pd.atxDB.GetAtxHeader(atxID)
 	if err != nil {
@@ -281,7 +281,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", types.FirstRound, m.Signature, err)
 	}
 
-	nodeID := types.NodeID{Key: minerPK.String()}
+	nodeID := types.BytesToNodeID(minerPK.Bytes())
 	minerID := nodeID.ShortString()
 	logger = logger.WithFields(log.String("miner_id", minerID))
 
@@ -380,7 +380,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return err
 	}
 
-	minerID := types.NodeID{Key: minerPK.String()}.ShortString()
+	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, m.RoundID, log.String("miner_id", minerID))
 
 	atx, err := pd.atxDB.GetAtxHeader(atxID)
@@ -412,7 +412,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
-	nodeID := types.NodeID{Key: minerPK.String()}
+	nodeID := types.BytesToNodeID(minerPK.Bytes())
 	minerID := nodeID.ShortString()
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.String("miner_id", minerID))
 

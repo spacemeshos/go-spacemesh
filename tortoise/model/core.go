@@ -133,7 +133,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.NodeID{Key: c.signer.PublicKey().String()},
+			NodeID:     types.BytesToNodeID(c.signer.PublicKey().Bytes()),
 			StartTick:  1,
 			EndTick:    2,
 			PubLayerID: ev.LayerID,

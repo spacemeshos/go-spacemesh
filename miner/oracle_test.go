@@ -37,9 +37,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 	tb.Helper()
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
-	nodeID := types.NodeID{
-		Key: edPubkey.String(),
-	}
+	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 	return nodeID, edSigner, edSigner.VRFSigner()
 }
 
@@ -58,9 +56,7 @@ func genATXHeader(id types.ATXID) *types.ActivationTxHeader {
 func genMinerATXHeader(id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.ActivationTxHeader {
 	atxHeader := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: nodeID.Key,
-			},
+			NodeID:     nodeID,
 			PubLayerID: publishLayer,
 			StartTick:  0,
 			EndTick:    1,

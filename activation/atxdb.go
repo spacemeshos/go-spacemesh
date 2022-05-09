@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -157,8 +156,7 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
-
-	if atx.NodeID.Key != pub.String() {
+	if bytes.Compare(atx.NodeID[:], pub.Bytes()) != 0 {
 		return fmt.Errorf("node ids don't match")
 	}
 
@@ -176,9 +174,9 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
 
-		if prevATX.NodeID.Key != atx.NodeID.Key {
+		if prevATX.NodeID != atx.NodeID {
 			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
-				atx.ShortString(), atx.NodeID.Key, prevATX.NodeID.Key)
+				atx.ShortString(), atx.NodeID, prevATX.NodeID)
 		}
 
 		prevEp := prevATX.PubLayerID.GetEpoch()
@@ -253,7 +251,7 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 
 	db.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
+	pubKey := signing.NewPublicKey(atx.NodeID[:])
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid nipost: %v", err)
 	}

@@ -320,7 +320,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
-		10, edSigner, types.NodeID{Key: edPubkey.String()},
+		10, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, certs, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
 }

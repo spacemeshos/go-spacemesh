@@ -14,33 +14,29 @@ func TestFilter(t *testing.T) {
 	db := sql.InMemory()
 
 	var part uint64 = math.MaxUint64 / 2
-	key1 := [64]byte{1}
-	key2 := [64]byte{2}
-	node1, err := types.BytesToNodeID(key1[:])
-	require.NoError(t, err)
-	node2, err := types.BytesToNodeID(key2[:])
-	require.NoError(t, err)
+	node1 := types.NodeID{1}
+	node2 := types.NodeID{2}
 	coinbase := types.Address{1}
 	lid := types.NewLayerID(1)
 
 	rewards := []types.AnyReward{
 		{
-			SmesherID: *node1,
+			SmesherID: node1,
 			Address:   coinbase,
 			Amount:    part,
 		},
 		{
-			SmesherID: *node2,
+			SmesherID: node2,
 			Address:   coinbase,
 			Amount:    part,
 		},
 		{
-			SmesherID: *node2,
+			SmesherID: node2,
 			Address:   coinbase,
 			Amount:    part,
 		},
 		{
-			SmesherID: *node1,
+			SmesherID: node1,
 			Address:   coinbase,
 			Amount:    part,
 		},
@@ -50,7 +46,7 @@ func TestFilter(t *testing.T) {
 		require.NoError(t, Add(db, lid.Add(1), &reward))
 	}
 
-	for _, node := range []*types.NodeID{node1, node2} {
+	for _, node := range []types.NodeID{node1, node2} {
 		rst, err := FilterBySmesher(db, node.ToBytes())
 		require.NoError(t, err)
 		require.Len(t, rst, 2)

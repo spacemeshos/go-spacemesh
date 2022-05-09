@@ -42,8 +42,8 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 	v := genStr()
 	oracle.Register(true, v)
 
-	res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.NodeID{Key: v}, nil)
-	res2, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.NodeID{Key: v}, nil)
+	res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.BytesToNodeID([]byte(v)), nil)
+	res2, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.BytesToNodeID([]byte(v)), nil)
 	assert.True(t, res == res2)
 }
 
@@ -58,7 +58,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.BytesToNodeID([]byte(p)), nil)
 		if res {
 			count++
 		}
@@ -68,7 +68,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 20, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 20, types.BytesToNodeID([]byte(p)), nil)
 		if res {
 			count++
 		}
@@ -88,7 +88,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, numOfClients, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, numOfClients, types.BytesToNodeID([]byte(p)), nil)
 		if res {
 			count++
 		}
@@ -99,7 +99,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(2), 1, 0, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(2), 1, 0, types.BytesToNodeID([]byte(p)), nil)
 		if res {
 			count++
 		}
@@ -122,13 +122,13 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 	}
 
 	exp := numOfClients / 2
-	ok, err := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{Key: ""}, nil)
+	ok, err := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{1}, nil)
 	require.NoError(t, err)
 	require.False(t, ok)
 
 	hc := 0
 	for k := range oracle.honest {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{Key: k}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.BytesToNodeID([]byte(k)), nil)
 		if res {
 			hc++
 		}
@@ -136,7 +136,7 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 
 	dc := 0
 	for k := range oracle.faulty {
-		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{Key: k}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.BytesToNodeID([]byte(k)), nil)
 		if res {
 			dc++
 		}
@@ -175,7 +175,7 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	// when requesting a bigger committee size everyone should be eligible
 
 	for _, s := range ids {
-		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, numOfClients, types.NodeID{Key: s}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, numOfClients, types.BytesToNodeID([]byte(s)), nil)
 		assert.True(t, res)
 	}
 }

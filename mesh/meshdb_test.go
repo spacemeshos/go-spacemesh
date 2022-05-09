@@ -175,35 +175,32 @@ func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {
 	signer2, addr2 := newSignerAndAddress(t, "456")
 	signer3, addr3 := newSignerAndAddress(t, "789")
 
-	smesher1, err := types.BytesToNodeID(signer1.PublicKey().Bytes())
-	require.NoError(t, err)
-	smesher2, err := types.BytesToNodeID(signer2.PublicKey().Bytes())
-	require.NoError(t, err)
-	smesher3, err := types.BytesToNodeID(signer3.PublicKey().Bytes())
-	require.NoError(t, err)
+	smesher1 := types.BytesToNodeID(signer1.PublicKey().Bytes())
+	smesher2 := types.BytesToNodeID(signer2.PublicKey().Bytes())
+	smesher3 := types.BytesToNodeID(signer3.PublicKey().Bytes())
 
 	rewards1 := []types.AnyReward{
 		{
 			Address:     addr1,
-			SmesherID:   *smesher1,
+			SmesherID:   smesher1,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr1,
-			SmesherID:   *smesher1,
+			SmesherID:   smesher1,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr2,
-			SmesherID:   *smesher2,
+			SmesherID:   smesher2,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr3,
-			SmesherID:   *smesher3,
+			SmesherID:   smesher3,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
@@ -212,19 +209,19 @@ func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {
 	rewards2 := []types.AnyReward{
 		{
 			Address:     addr2,
-			SmesherID:   *smesher2,
+			SmesherID:   smesher2,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr2,
-			SmesherID:   *smesher2,
+			SmesherID:   smesher2,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr3,
-			SmesherID:   *smesher3,
+			SmesherID:   smesher3,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
@@ -233,19 +230,19 @@ func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {
 	rewards3 := []types.AnyReward{
 		{
 			Address:     addr3,
-			SmesherID:   *smesher3,
+			SmesherID:   smesher3,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr3,
-			SmesherID:   *smesher3,
+			SmesherID:   smesher3,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
 		{
 			Address:     addr1,
-			SmesherID:   *smesher1,
+			SmesherID:   smesher1,
 			Amount:      unitReward,
 			LayerReward: unitLayerReward,
 		},
@@ -255,7 +252,7 @@ func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {
 	require.NoError(t, mdb.writeTransactionRewards(types.NewLayerID(2), rewards2))
 	require.NoError(t, mdb.writeTransactionRewards(types.NewLayerID(3), rewards3))
 
-	return []types.Address{addr1, addr2, addr3}, []types.NodeID{*smesher1, *smesher2, *smesher3}
+	return []types.Address{addr1, addr2, addr3}, []types.NodeID{smesher1, smesher2, smesher3}
 }
 
 func TestMeshDB_testGetRewards(t *testing.T) {
@@ -320,9 +317,7 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	}, rewards)
 
 	signer4, _ := newSignerAndAddress(t, "999")
-	smesher4 := types.NodeID{
-		Key: signer4.PublicKey().String(),
-	}
+	smesher4 := types.BytesToNodeID(signer4.PublicKey().Bytes())
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	require.NoError(t, err)
 	require.Nil(t, rewards)

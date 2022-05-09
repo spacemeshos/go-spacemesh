@@ -33,7 +33,7 @@ func New(logger log.Log) *FixedRolacle {
 }
 
 // IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types.NodeID, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -216,7 +216,7 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 		fo.emaps[instID] = fo.generateEligibility(ctx, size)
 	}
 	// get eligibility result
-	_, exist := fo.emaps[instID][id.Key]
+	_, exist := fo.emaps[instID][id.String()]
 	fo.mapRW.Unlock()
 
 	return exist, nil

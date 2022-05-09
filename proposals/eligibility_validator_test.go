@@ -206,9 +206,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	b := ballots[1]
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: signer.PublicKey().String(),
-			},
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer(),
 			StartTick:  0,
 			EndTick:    1,
@@ -244,9 +242,7 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 	b := ballots[1]
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: "bad key",
-			},
+			NodeID:     types.NodeID{1},
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
@@ -282,9 +278,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 	b := ballots[1]
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: signer.PublicKey().String(),
-			},
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
@@ -320,9 +314,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 	b := ballots[1]
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: signer.PublicKey().String(),
-			},
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
@@ -357,9 +349,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	}
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: signer.PublicKey().String(),
-			},
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
@@ -403,9 +393,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	b := ballots[1]
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: signer.PublicKey().String(),
-			},
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
@@ -428,9 +416,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	for _, id := range rb.EpochData.ActiveSet {
 		h := &types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID: types.NodeID{
-					Key: signer.PublicKey().String(),
-				},
+				NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				StartTick:  0,
 				EndTick:    1,
@@ -445,9 +431,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	b := ballots[1]
 	h := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key: signer.PublicKey().String(),
-			},
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
@@ -484,9 +468,7 @@ func TestCheckEligibility(t *testing.T) {
 	for _, b := range ballots {
 		h := &types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID: types.NodeID{
-					Key: signer.PublicKey().String(),
-				},
+				NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				StartTick:  0,
 				EndTick:    1,

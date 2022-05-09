@@ -182,7 +182,7 @@ func createTestHare(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.
 	t.Helper()
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
-	nodeID := types.NodeID{Key: pub.String()}
+	nodeID := types.BytesToNodeID(pub.Bytes())
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()

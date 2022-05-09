@@ -79,7 +79,7 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 	vrfSigner := edSgn.VRFSigner()
-	minerID := types.NodeID{Key: edPubkey.String()}
+	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	tpd.ProtocolDriver = New(minerID, newPublisher(t), tpd.mAtxDB, edSgn, vrfSigner, sql.InMemory(), tpd.mClock,
 		WithConfig(UnitTestConfig()),
 		WithLogger(logtest.New(t).WithName("Beacon")),
