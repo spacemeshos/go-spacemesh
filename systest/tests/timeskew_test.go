@@ -15,8 +15,8 @@ import (
 
 func TestShortTimeskew(t *testing.T) {
 	const (
-		enableSkew = 10
-		stopSkew   = enableSkew + 3
+		enableSkew = 9
+		stopSkew   = enableSkew + 2
 		stopTest   = stopSkew + 5
 		skewOffset = "-3s" // hare round is 2s
 	)
