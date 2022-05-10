@@ -11,20 +11,20 @@ import (
 
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
-	AddressExists(types.Address) bool
+	AddressExists(types.Address) (bool, error)
 	AddToCache(*types.Transaction, bool) error
 }
 
 type svmState interface {
-	GetStateRoot() types.Hash32
+	GetStateRoot() (types.Hash32, error)
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
-	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetAllAccounts() (*types.MultipleAccountsState, error)
-	AddressExists(types.Address) bool
-	GetBalance(types.Address) uint64
-	GetNonce(types.Address) uint64
-	Rewind(types.LayerID) (types.Hash32, error)
-	ApplyLayer(types.LayerID, []*types.Transaction, map[types.Address]uint64) ([]*types.Transaction, error)
+	GetLayerApplied(types.TransactionID) (types.LayerID, error)
+	GetAllAccounts() ([]*types.Account, error)
+	AddressExists(types.Address) (bool, error)
+	GetBalance(types.Address) (uint64, error)
+	GetNonce(types.Address) (uint64, error)
+	Revert(types.LayerID) (types.Hash32, error)
+	ApplyLayer(types.LayerID, []*types.Transaction, []types.AnyReward) ([]*types.Transaction, error)
 }
 
 type conStateCache interface {
