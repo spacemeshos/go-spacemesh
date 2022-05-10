@@ -55,11 +55,14 @@ func (d *Discovery) checkPeers() {
 
 // getRandomPeers get random N peers from provided peers list.
 func getRandomPeers(peers []*addrInfo, n int) []*addrInfo {
+	if len(peers) <= n {
+		return peers
+	}
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	data := make(map[peer.ID]*addrInfo, n) // use map in case of duplicates.
-	for i := 0; i < n; i++ {
+	data := make(map[peer.ID]*addrInfo) // use map in case of duplicates.
+	for len(data) < n {                 // as it pseudorandom - loop until we get exact number of peers.
 		index := r.Intn(len(peers))
-		data[peers[r.Intn(len(peers))].ID] = peers[index]
+		data[peers[index].ID] = peers[index]
 	}
 
 	result := make([]*addrInfo, 0, len(data))

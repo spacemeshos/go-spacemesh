@@ -14,14 +14,57 @@ import (
 )
 
 func TestDiscovery_CheckBook(t *testing.T) {
+	t.Run("with big number of nodes", func(t *testing.T) {
+		mesh, instances := setup(t, 20)
+
+		totalAddressesBefore := 0
+		for _, instance := range instances {
+			list := instance.book.getAddresses()
+			totalAddressesBefore += len(list)
+		}
+
+		brokeMesh(t, mesh)
+		checkBooks(instances)
+
+		totalAddressesAfter := 0
+		for _, instance := range instances {
+			list := instance.book.getAddresses()
+			totalAddressesAfter += len(list)
+		}
+
+		require.NotEqual(t, totalAddressesBefore, totalAddressesAfter, "total addresses should be different")
+		require.True(t, totalAddressesBefore > totalAddressesAfter, "total addresses after break should be smaller")
+	})
+	t.Run("with small number of nodes", func(t *testing.T) {
+		mesh, instances := setup(t, 5)
+
+		totalAddressesBefore := 0
+		for _, instance := range instances {
+			list := instance.book.getAddresses()
+			totalAddressesBefore += len(list)
+		}
+		require.True(t, totalAddressesBefore > 0, "total addresses before break should be greater than 0")
+
+		brokeMesh(t, mesh)
+		checkBooks(instances)
+
+		totalAddressesAfter := 0
+		for _, instance := range instances {
+			list := instance.book.getAddresses()
+			totalAddressesAfter += len(list)
+		}
+		require.Equal(t, 0, totalAddressesAfter, "total addresses after break should be zero")
+	})
+}
+
+func setup(t *testing.T, nodesCount int) (mocknet.Mocknet, []*Discovery) {
+	mesh, err := mocknet.FullMeshConnected(context.TODO(), nodesCount)
+	require.NoError(t, err)
 	var (
 		instances = []*Discovery{}
 		bootnode  *addrInfo
-		n         = 20
 		rounds    = 5
 	)
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), n)
-	require.NoError(t, err)
 
 	for _, h := range mesh.Hosts() {
 		logger := logtest.New(t).Named(h.ID().Pretty())
@@ -57,14 +100,11 @@ func TestDiscovery_CheckBook(t *testing.T) {
 		}(instance)
 	}
 	wg.Wait()
+	return mesh, instances
+}
 
-	totalAddressesBefore := 0
-	for _, instance := range instances {
-		list := instance.book.getAddresses()
-		totalAddressesBefore += len(list)
-	}
-
-	// disconnect all peers
+// brokeMesh simulate that all peers are disconnected and the mesh is broken.
+func brokeMesh(t *testing.T, mesh mocknet.Mocknet) {
 	for _, h := range mesh.Hosts() {
 		for _, hh := range mesh.Hosts() {
 			if h.ID() == hh.ID() {
@@ -76,7 +116,11 @@ func TestDiscovery_CheckBook(t *testing.T) {
 			// require.NoError(t, mesh.DisconnectNets(h.Network(), hh.Network()))
 		}
 	}
+}
 
+// checkBook trigger book check in all instances.
+func checkBooks(instances []*Discovery) {
+	var wg sync.WaitGroup
 	// run checkbook
 	for _, instance := range instances {
 		wg.Add(1)
@@ -86,13 +130,4 @@ func TestDiscovery_CheckBook(t *testing.T) {
 		}(instance)
 	}
 	wg.Wait()
-
-	totalAddressesAfter := 0
-	for _, instance := range instances {
-		list := instance.book.getAddresses()
-		totalAddressesAfter += len(list)
-	}
-
-	require.NotEqual(t, totalAddressesBefore, totalAddressesAfter, "total addresses should be different")
-	require.True(t, totalAddressesBefore > totalAddressesAfter, "total addresses after disconect should be smaller")
 }
