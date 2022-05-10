@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/spacemeshos/ed25519"
@@ -74,9 +75,6 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-defaultBootnodes); err != nil {
 		return nil, err
 	}
-	if err := cl.accounts.Persist(cctx); err != nil {
-		return nil, err
-	}
 	return cl, nil
 }
 
@@ -98,7 +96,8 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 
 // Cluster for managing state of the spacemesh cluster.
 type Cluster struct {
-	smesherFlags map[string]DeploymentFlag
+	persistedFlags bool
+	smesherFlags   map[string]DeploymentFlag
 
 	accounts
 
@@ -106,6 +105,38 @@ type Cluster struct {
 	smeshers  int
 	clients   []*NodeClient
 	poets     []string
+}
+
+func (c *Cluster) persist(ctx *testcontext.Context) error {
+	if err := c.accounts.Persist(ctx); err != nil {
+		return err
+	}
+	return c.persistFlags(ctx)
+}
+
+func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
+	if c.persisted {
+		return nil
+	}
+	if err := persistConfig(ctx, c.smesherFlags); err != nil {
+		return err
+	}
+	c.persisted = true
+	return nil
+}
+
+func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
+	flags, err := recoverConfig(ctx)
+	if err != nil {
+		return err
+	}
+	genesis := flags[genesisTimeFlag]
+	c.smesherFlags[genesisTimeFlag] = genesis
+	if !reflect.DeepEqual(c.smesherFlags, flags) {
+		return fmt.Errorf("configuration doesn't match %+v != %+v", c.smesherFlags, flags)
+	}
+	c.persisted = true
+	return nil
 }
 
 func (c *Cluster) addFlag(flag DeploymentFlag) {
@@ -132,6 +163,9 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 
 	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers)
 	if err := c.accounts.Recover(cctx); err != nil {
+		return err
+	}
+	if err := c.recoverFlags(cctx); err != nil {
 		return err
 	}
 	return nil
@@ -170,6 +204,9 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	if err := c.resourceControl(cctx, n); err != nil {
 		return err
 	}
+	if err := c.persist(cctx); err != nil {
+		return err
+	}
 	flags := []DeploymentFlag{}
 	for _, flag := range c.smesherFlags {
 		flags = append(flags, flag)
@@ -189,6 +226,9 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 // AddSmeshers ...
 func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	if err := c.resourceControl(cctx, n); err != nil {
+		return err
+	}
+	if err := c.persist(cctx); err != nil {
 		return err
 	}
 	flags := []DeploymentFlag{}
@@ -336,4 +376,30 @@ func defaultTargetOutbound(size int) int {
 		return 3
 	}
 	return int(0.3 * float64(size))
+}
+
+func persistConfig(ctx *testcontext.Context, config map[string]DeploymentFlag) error {
+	data := map[string]string{}
+	for _, flag := range config {
+		data[flag.Name] = flag.Value
+	}
+	cfgmap := corev1.ConfigMap("flags", ctx.Namespace).
+		WithData(data)
+	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
+	}
+	return nil
+}
+
+func recoverConfig(ctx *testcontext.Context) (map[string]DeploymentFlag, error) {
+	flags := map[string]DeploymentFlag{}
+	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "flags", metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch flags %w", err)
+	}
+	for name, value := range cfgmap.Data {
+		flags[name] = DeploymentFlag{Name: name, Value: value}
+	}
+	return flags, nil
 }

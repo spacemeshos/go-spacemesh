@@ -325,9 +325,11 @@ func TargetOutbound(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--target-outbound", Value: strconv.Itoa(target)}
 }
 
+const genesisTimeFlag = "--genesis-time"
+
 // GenesisTime flag.
 func GenesisTime(t time.Time) DeploymentFlag {
-	return DeploymentFlag{Name: "--genesis-time", Value: t.Format(time.RFC3339)}
+	return DeploymentFlag{Name: genesisTimeFlag, Value: t.Format(time.RFC3339)}
 }
 
 // Bootnodes flag.
