@@ -53,7 +53,7 @@ func WithKeys(n int) Opt {
 // Reuse will try to recover cluster from the given namespace, if not found
 // it will create a new one.
 func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
-	cl := &Cluster{}
+	cl := &Cluster{smesherFlags: map[string]DeploymentFlag{}}
 	if err := cl.reuse(cctx); err != nil {
 		if errors.Is(err, errNotInitialized) {
 			return Default(cctx, opts...)
