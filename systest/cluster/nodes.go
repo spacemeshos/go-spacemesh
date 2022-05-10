@@ -325,7 +325,10 @@ func TargetOutbound(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--target-outbound", Value: strconv.Itoa(target)}
 }
 
-const genesisTimeFlag = "--genesis-time"
+const (
+	genesisTimeFlag = "--genesis-time"
+	accountsFlag    = "--accounts"
+)
 
 // GenesisTime flag.
 func GenesisTime(t time.Time) DeploymentFlag {

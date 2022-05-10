@@ -53,7 +53,7 @@ func WithKeys(n int) Opt {
 // Reuse will try to recover cluster from the given namespace, if not found
 // it will create a new one.
 func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
-	cl := &Cluster{smesherFlags: map[string]DeploymentFlag{}}
+	cl := New(cctx, opts...)
 	if err := cl.reuse(cctx); err != nil {
 		if errors.Is(err, errNotInitialized) {
 			return Default(cctx, opts...)
@@ -131,8 +131,8 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if err != nil {
 		return err
 	}
-	genesis := flags[genesisTimeFlag]
-	c.smesherFlags[genesisTimeFlag] = genesis
+	c.smesherFlags[genesisTimeFlag] = flags[genesisTimeFlag]
+	c.smesherFlags[accountsFlag] = flags[accountsFlag]
 	if !reflect.DeepEqual(c.smesherFlags, flags) {
 		return fmt.Errorf("configuration doesn't match %+v != %+v", c.smesherFlags, flags)
 	}
