@@ -63,7 +63,7 @@ func getRandomPeers(peers []*addrInfo, n int) []*addrInfo {
 	}
 
 	result := make([]*addrInfo, 0, len(data))
-	for i, _ := range data {
+	for i := range data {
 		result = append(result, data[i])
 	}
 	return result
