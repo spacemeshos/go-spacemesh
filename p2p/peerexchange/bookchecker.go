@@ -32,8 +32,8 @@ func (d *Discovery) CheckBook(ctx context.Context) {
 }
 
 func (d *Discovery) checkPeers() {
-	peers := getRandomPeers(d.book.AddressCache(), peersNumber)
 	now := time.Now()
+	peers := getRandomPeers(d.book.getAddresses(), peersNumber)
 	qCtx, cancel := context.WithTimeout(context.Background(), checkTimeout)
 	defer cancel()
 	if _, err := d.crawl.query(qCtx, peers); err != nil {
@@ -43,6 +43,9 @@ func (d *Discovery) checkPeers() {
 	// check peers are updated in book.
 	for _, p := range peers {
 		bPeer := d.book.lookup(p.ID)
+		if bPeer == nil {
+			continue // already removed from book.
+		}
 		if bPeer.LastSuccess.After(now) {
 			continue // peer marked as good, it's alive
 		}
