@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"testing"
@@ -25,6 +26,7 @@ import (
 )
 
 var (
+	testid    = flag.String("testid", "", "Name of the pod that runs tests.")
 	imageFlag = flag.String("image", "spacemeshos/go-spacemesh-dev:proposal-events",
 		"go-spacemesh image")
 	poetImage     = flag.String("poet-image", "spacemeshos/poet:ef8f28a", "poet server image")
@@ -65,6 +67,8 @@ type Context struct {
 	BootstrapDuration time.Duration
 	ClusterSize       int
 	Generic           client.Client
+	TestID            string
+	Keep              bool
 	Namespace         string
 	Image             string
 	PoetImage         string
@@ -92,7 +96,10 @@ func deleteNamespace(ctx *Context) error {
 }
 
 func deployNamespace(ctx *Context) error {
-	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx, corev1.Namespace(ctx.Namespace),
+	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx, corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
+		"testid": ctx.TestID,
+		"keep":   strconv.FormatBool(ctx.Keep),
+	}),
 		apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("create namespace %s: %w", ctx.Namespace, err)
@@ -165,6 +172,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 		BootstrapDuration: *bootstrapDuration,
 		Client:            clientset,
 		Generic:           generic,
+		TestID:            *testid,
+		Keep:              *keep,
 		ClusterSize:       *clusterSize,
 		Image:             *imageFlag,
 		PoetImage:         *poetImage,
