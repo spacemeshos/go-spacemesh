@@ -115,13 +115,14 @@ func (c *Cluster) persist(ctx *testcontext.Context) error {
 }
 
 func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
-	if c.persisted {
+	if c.persistedFlags {
 		return nil
 	}
+	ctx.Log.Debugw("persisting flags")
 	if err := persistFlags(ctx, c.smesherFlags); err != nil {
 		return err
 	}
-	c.persisted = true
+	c.persistedFlags = true
 	return nil
 }
 
@@ -135,7 +136,7 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if !reflect.DeepEqual(c.smesherFlags, flags) {
 		return fmt.Errorf("configuration doesn't match %+v != %+v", c.smesherFlags, flags)
 	}
-	c.persisted = true
+	c.persistedFlags = true
 	return nil
 }
 
