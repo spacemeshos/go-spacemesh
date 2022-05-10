@@ -68,7 +68,7 @@ install:
 	go run scripts/check-go-version.go --major 1 --minor 17
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.45.2
 .PHONY: install
 
 build: go-spacemesh

@@ -99,3 +99,27 @@ func TestStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, lid, applied)
 }
+
+func TestStateHash(t *testing.T) {
+	db := sql.InMemory()
+	layers := []uint32{9, 10, 8, 7}
+	hashes := []types.Hash32{{1}, {2}, {3}, {4}}
+	for i := range layers {
+		require.NoError(t, UpdateStateHash(db, types.NewLayerID(layers[i]), hashes[i]))
+	}
+
+	for i, lid := range layers {
+		hash, err := GetStateHash(db, types.NewLayerID(lid))
+		require.NoError(t, err)
+		require.Equal(t, hashes[i], hash)
+	}
+
+	latest, err := GetLatestStateHash(db)
+	require.NoError(t, err)
+	require.Equal(t, hashes[1], latest)
+
+	require.NoError(t, UnsetAppliedFrom(db, types.NewLayerID(layers[1])))
+	latest, err = GetLatestStateHash(db)
+	require.NoError(t, err)
+	require.Equal(t, hashes[0], latest)
+}

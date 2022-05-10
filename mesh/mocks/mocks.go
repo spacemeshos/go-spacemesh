@@ -51,11 +51,12 @@ func (mr *MockconservativeStateMockRecorder) ApplyLayer(arg0 interface{}) *gomoc
 }
 
 // GetStateRoot mocks base method.
-func (m *MockconservativeState) GetStateRoot() types.Hash32 {
+func (m *MockconservativeState) GetStateRoot() (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStateRoot")
 	ret0, _ := ret[0].(types.Hash32)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetStateRoot indicates an expected call of GetStateRoot.
