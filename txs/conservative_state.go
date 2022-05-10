@@ -11,31 +11,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// ConservativeState provides the conservative version of the SVM state by taking into accounts of
+// ConservativeState provides the conservative version of the VM state by taking into accounts of
 // nonce and balances for pending transactions in un-applied blocks and mempool.
 type ConservativeState struct {
-	svmState
+	vmState
 	*cache
 
 	logger log.Log
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state svmState, db *sql.Database, logger log.Log) *ConservativeState {
+func NewConservativeState(state vmState, db *sql.Database, logger log.Log) *ConservativeState {
 	cs := &ConservativeState{
-		svmState: state,
-		logger:   logger,
+		vmState: state,
+		logger:  logger,
 	}
 	cs.cache = newCache(newStore(db), cs.getState, logger)
 	return cs
 }
 
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
-	nonce, err := cs.svmState.GetNonce(addr)
+	nonce, err := cs.vmState.GetNonce(addr)
 	if err != nil {
 		cs.logger.Fatal("failed to get nonce", log.Err(err))
 	}
-	balance, err := cs.svmState.GetBalance(addr)
+	balance, err := cs.vmState.GetBalance(addr)
 	if err != nil {
 		cs.logger.Fatal("failed to get balance", log.Err(err))
 	}
@@ -66,11 +66,11 @@ func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error
 	return cs.cache.Add(tx, received)
 }
 
-// RevertState reverts the SVM state and database to the given layer.
+// RevertState reverts the VM state and database to the given layer.
 func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, error) {
-	root, err := cs.svmState.Revert(revertTo)
+	root, err := cs.vmState.Revert(revertTo)
 	if err != nil {
-		return root, fmt.Errorf("svm rewind to %v: %w", revertTo, err)
+		return root, fmt.Errorf("vm revert %v: %w", revertTo, err)
 	}
 
 	return root, cs.cache.RevertToLayer(revertTo)
@@ -90,7 +90,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transact
 		return nil, err
 	}
 
-	failedTxs, err := cs.svmState.ApplyLayer(toApply.LayerIndex, txs, toApply.Rewards)
+	failedTxs, err := cs.vmState.ApplyLayer(toApply.LayerIndex, txs, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,
