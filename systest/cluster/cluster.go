@@ -118,7 +118,7 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 	if c.persisted {
 		return nil
 	}
-	if err := persistConfig(ctx, c.smesherFlags); err != nil {
+	if err := persistFlags(ctx, c.smesherFlags); err != nil {
 		return err
 	}
 	c.persisted = true
@@ -126,7 +126,7 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 }
 
 func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
-	flags, err := recoverConfig(ctx)
+	flags, err := recoverFlags(ctx)
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func defaultTargetOutbound(size int) int {
 	return int(0.3 * float64(size))
 }
 
-func persistConfig(ctx *testcontext.Context, config map[string]DeploymentFlag) error {
+func persistFlags(ctx *testcontext.Context, config map[string]DeploymentFlag) error {
 	data := map[string]string{}
 	for _, flag := range config {
 		data[flag.Name] = flag.Value
@@ -392,7 +392,7 @@ func persistConfig(ctx *testcontext.Context, config map[string]DeploymentFlag) e
 	return nil
 }
 
-func recoverConfig(ctx *testcontext.Context) (map[string]DeploymentFlag, error) {
+func recoverFlags(ctx *testcontext.Context) (map[string]DeploymentFlag, error) {
 	flags := map[string]DeploymentFlag{}
 	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "flags", metav1.GetOptions{})
 	if err != nil {
