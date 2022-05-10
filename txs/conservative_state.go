@@ -31,7 +31,15 @@ func NewConservativeState(state svmState, db *sql.Database, logger log.Log) *Con
 }
 
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
-	return cs.svmState.GetNonce(addr), cs.svmState.GetBalance(addr)
+	nonce, err := cs.svmState.GetNonce(addr)
+	if err != nil {
+		cs.logger.Fatal("failed to get nonce", log.Err(err))
+	}
+	balance, err := cs.svmState.GetBalance(addr)
+	if err != nil {
+		cs.logger.Fatal("failed to get balance", log.Err(err))
+	}
+	return nonce, balance
 }
 
 // SelectTXsForProposal picks a specific number of random txs for miner to pack in a proposal.
@@ -60,7 +68,7 @@ func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error
 
 // RevertState reverts the SVM state and database to the given layer.
 func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, error) {
-	root, err := cs.svmState.Rewind(revertTo)
+	root, err := cs.svmState.Revert(revertTo)
 	if err != nil {
 		return root, fmt.Errorf("svm rewind to %v: %w", revertTo, err)
 	}
@@ -82,24 +90,18 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transact
 		return nil, err
 	}
 
-	rewardByMiner := map[types.Address]uint64{}
-	for _, r := range toApply.Rewards {
-		rewardByMiner[r.Address] += r.Amount
-	}
-
-	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
-	failedTxs, svmErr := cs.svmState.ApplyLayer(toApply.LayerIndex, txs, rewardByMiner)
-	if svmErr != nil {
+	failedTxs, err := cs.svmState.ApplyLayer(toApply.LayerIndex, txs, toApply.Rewards)
+	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,
 			log.Int("num_failed_txs", len(failedTxs)),
-			log.Err(svmErr))
+			log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldVerified`
-		return failedTxs, fmt.Errorf("apply layer: %w", svmErr)
+		return failedTxs, fmt.Errorf("apply layer: %w", err)
 	}
 
-	if err = cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), txs); err != nil {
+	if err := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), txs); err != nil {
 		return failedTxs, err
 	}
 	return failedTxs, nil
