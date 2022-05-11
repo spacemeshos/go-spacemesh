@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"time"
 
+	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	grpcctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -90,6 +93,7 @@ const (
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
 	SVMLogger              = "SVM"
+	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
 
@@ -780,7 +784,16 @@ func (app *App) startAPIServices(ctx context.Context) {
 	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
+			logger := app.addLogger(GRPCLogger, app.log).Zap()
+			grpczap.ReplaceGrpcLoggerV2(logger)
+			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
+				grpcmiddleware.WithStreamServerChain(
+					grpcctxtags.StreamServerInterceptor(),
+					grpczap.StreamServerInterceptor(logger)),
+				grpcmiddleware.WithUnaryServerChain(
+					grpcctxtags.UnaryServerInterceptor(),
+					grpczap.UnaryServerInterceptor(logger)),
+			)
 		}
 		services = append(services, svc)
 		svc.RegisterService(app.grpcAPIService)
