@@ -156,9 +156,9 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	res := s.getSyncState() == synced
 	s.logger.WithContext(ctx).With().Info("node sync state",
 		log.Bool("synced", res),
-		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
-		log.FieldNamed("latest", s.mesh.LatestLayer()),
-		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("latest", s.mesh.LatestLayer()),
+		log.Stringer("processed", s.mesh.ProcessedLayer()))
 	return res
 }
 
@@ -233,9 +233,9 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 		s.logger.WithContext(ctx).With().Info("sync state change",
 			log.String("from_state", oldState.String()),
 			log.String("to_state", newState.String()),
-			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
-			log.FieldNamed("latest", s.mesh.LatestLayer()),
-			log.FieldNamed("processed", s.mesh.ProcessedLayer()))
+			log.Stringer("current", s.ticker.GetCurrentLayer()),
+			log.Stringer("latest", s.mesh.LatestLayer()),
+			log.Stringer("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
 		if newState != synced {
 			return
@@ -266,9 +266,9 @@ func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID
 	s.logger.WithContext(ctx).With().Info("target synced layer changed",
 		log.Uint32("from_layer", oldSyncLayer.Uint32()),
 		log.Uint32("to_layer", layerID.Uint32()),
-		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
-		log.FieldNamed("latest", s.mesh.LatestLayer()),
-		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("latest", s.mesh.LatestLayer()),
+		log.Stringer("processed", s.mesh.ProcessedLayer()))
 }
 
 func (s *Syncer) getTargetSyncedLayer() types.LayerID {
@@ -331,8 +331,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			s.setLastSyncedLayer(layerID)
 		}
 		logger.With().Debug("data is synced",
-			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
-			log.FieldNamed("latest", s.mesh.LatestLayer()),
+			log.Stringer("current", s.ticker.GetCurrentLayer()),
+			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("last_synced", s.getLastSyncedLayer()))
 		return true
 	}
@@ -342,10 +342,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
 		log.Bool("success", success),
 		log.String("sync_state", s.getSyncState().String()),
-		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
-		log.FieldNamed("latest", s.mesh.LatestLayer()),
+		log.Stringer("current", s.ticker.GetCurrentLayer()),
+		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()))
 	s.setSyncerIdle()
 	return success
 }
@@ -353,8 +353,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 func isTooFarBehind(current, latest types.LayerID, logger log.Logger) bool {
 	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
 		logger.With().Info("node is too far behind",
-			log.FieldNamed("current", current),
-			log.FieldNamed("latest", latest),
+			log.Stringer("current", current),
+			log.Stringer("latest", latest),
 			log.Uint32("behind_threshold", outOfSyncThreshold))
 		return true
 	}
@@ -501,8 +501,9 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			return fmt.Errorf("process layer: %w", err)
 		}
 	}
-	s.logger.With().Info("state synced",
+	s.logger.With().Info("end of state sync",
+		log.Bool("state_synced", s.stateSynced()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
+		log.Stringer("processed", s.mesh.ProcessedLayer()))
 	return nil
 }
