@@ -174,6 +174,15 @@ func SortTransactionIDs(ids []TransactionID) []TransactionID {
 	return ids
 }
 
+// TransactionIDsToHashes turns a list of TransactionID into their Hash32 representation.
+func TransactionIDsToHashes(ids []TransactionID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.Hash32())
+	}
+	return hashes
+}
+
 // TXState describes the state of a transaction.
 type TXState int
 
