@@ -19,7 +19,6 @@ var (
 	errDuplicateTX      = errors.New("tx already exists")
 	errAddrNotExtracted = errors.New("address not extracted")
 	errAddrNotFound     = errors.New("address not found")
-	errRejectedByCache  = errors.New("rejected by conservative cache")
 )
 
 // TxHandler handles the transactions received via gossip or sync.
@@ -90,7 +89,6 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 			tx.Origin(),
 			tx.ID(),
 			log.Err(err))
-		return errRejectedByCache
 	}
 
 	return nil
@@ -119,7 +117,6 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	}
 	if err = th.state.AddToCache(&tx, !exists); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add sync tx to conservative cache", tx.ID(), log.Err(err))
-		return errRejectedByCache
 	}
 	return nil
 }

@@ -171,13 +171,14 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 
 // DiscardNonceBelow sets the applied field to `stateDiscarded` for transactions with nonce lower than specified.
 func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) error {
-	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where origin = ?1 and nonce < ?2`,
+	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where origin = ?1 and nonce < ?2 and applied != ?6`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindInt64(2, int64(nonce))
 			stmt.BindInt64(3, stateDiscarded)
 			stmt.BindInt64(4, int64(types.LayerID{}.Value))
 			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
+			stmt.BindInt64(6, stateApplied)
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("discard nonce below %s/%d: %w", address, nonce, err)
