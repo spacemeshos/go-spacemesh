@@ -289,12 +289,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	ctx = log.WithNewSessionID(ctx)
 	logger := s.logger.WithContext(ctx)
 
-	// at most one synchronize process can run at any time
-	if !s.setSyncerBusy() {
-		logger.Info("sync is already running, giving up")
-		return false
-	}
-
 	if s.isClosed() {
 		logger.Warning("attempting to sync while shutting down")
 		return false
@@ -303,6 +297,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	if s.ticker.GetCurrentLayer().Uint32() == 0 {
 		return false
 	}
+
+	// at most one synchronize process can run at any time
+	if !s.setSyncerBusy() {
+		logger.Info("sync is already running, giving up")
+		return false
+	}
+	defer s.setSyncerIdle()
 
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
@@ -346,7 +347,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("latest", s.mesh.LatestLayer()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
-	s.setSyncerIdle()
 	return success
 }
 
