@@ -87,7 +87,7 @@ func TestAddNodes(t *testing.T) {
 		}
 	}
 	for epoch := uint64(4); epoch <= epochBeforeJoin; epoch++ {
-		require.Len(t, unique[epoch], cl.Total()-addedLater, "epoch=%d", epoch)
+		require.GreaterOrEqual(t, cl.Total()-addedLater, len(unique[epoch]), "epoch=%d", epoch)
 	}
 	for epoch := uint64(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
 		require.Len(t, unique[epoch], cl.Total(), "epoch=%d", epoch)

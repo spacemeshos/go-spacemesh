@@ -374,11 +374,13 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 }
 
 func (s *Syncer) dataSynced() bool {
-	return !s.getLastSyncedLayer().Before(s.ticker.GetCurrentLayer().Sub(1))
+	current := s.ticker.GetCurrentLayer()
+	return current.Uint32() <= 1 || !s.getLastSyncedLayer().Before(current.Sub(1))
 }
 
 func (s *Syncer) stateSynced() bool {
-	return !s.mesh.ProcessedLayer().Before(s.ticker.GetCurrentLayer().Sub(1))
+	current := s.ticker.GetCurrentLayer()
+	return current.Uint32() <= 1 || !s.mesh.ProcessedLayer().Before(current.Sub(1))
 }
 
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
