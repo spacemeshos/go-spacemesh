@@ -424,6 +424,8 @@ func notifyLayerDataResult(ctx context.Context, layerID types.LayerID, layerDB l
 	}
 
 	if result.Err == nil {
+		// FIXME should not blindly save hare output from peer, potentially overwriting local hare's
+		// consensus result. see https://github.com/spacemeshos/go-spacemesh/issues/3200
 		if err := layerDB.SaveHareConsensusOutput(ctx, layerID, lyrResult.hareOutput); err != nil {
 			logger.With().Error("failed to save hare output from peers", log.Err(err))
 			result.Err = err
@@ -498,18 +500,6 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 	return nil
 }
 
-func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).With().Debug("got response for TX",
-		log.String("hash", hash.ShortString()),
-		log.Int("dataSize", len(data)))
-
-	if err := l.txHandler.HandleSyncTransaction(ctx, data); err != nil {
-		return fmt.Errorf("handle tx sync data: %w", err)
-	}
-
-	return nil
-}
-
 // getPoetResult is handler function to poet proof fetch result.
 func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byte) error {
 	l.log.WithContext(ctx).Debug("got poet ref",
@@ -552,27 +542,14 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 }
 
 // GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched.
-func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
-	hashes := make([]types.Hash32, 0, len(IDs))
-	for _, atxID := range IDs {
-		hashes = append(hashes, atxID.Hash32())
+func (l *Logic) GetAtxs(ctx context.Context, ids []types.ATXID) error {
+	if len(ids) == 0 {
+		return nil
 	}
-	// TODO: atx Id is currently only the header bytes - should we change it?
-	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
-	for hash, resC := range results {
-		res := <-resC
-		if res.Err != nil {
-			l.log.WithContext(ctx).With().Error("cannot fetch atx",
-				log.String("hash", hash.ShortString()),
-				log.Err(res.Err))
-			return res.Err
-		}
-		if !res.IsLocal {
-			err := l.getAtxResults(ctx, res.Hash, res.Data)
-			if err != nil {
-				return err
-			}
-		}
+	l.log.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
+	hashes := types.ATXIDsToHashes(ids)
+	if errs := l.getHashes(ctx, hashes, fetch.ATXDB, l.atxHandler.HandleAtxData); len(errs) > 0 {
+		return errs[0]
 	}
 	return nil
 }
@@ -643,10 +620,7 @@ func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
-	hashes := make([]types.Hash32, 0, len(ids))
-	for _, bid := range ids {
-		hashes = append(hashes, bid.AsHash32())
-	}
+	hashes := types.BlockIDsToHashes(ids)
 	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, l.blockHandler.HandleBlockData); len(errs) > 0 {
 		return errs[0]
 	}
@@ -654,24 +628,14 @@ func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 }
 
 // GetTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
-func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
-	hashes := make([]types.Hash32, 0, len(IDs))
-	for _, atxID := range IDs {
-		hashes = append(hashes, atxID.Hash32())
+func (l *Logic) GetTxs(ctx context.Context, ids []types.TransactionID) error {
+	if len(ids) == 0 {
+		return nil
 	}
-	results := l.fetcher.GetHashes(hashes, fetch.TXDB, false)
-	for hash, resC := range results {
-		res := <-resC
-		if res.Err != nil {
-			l.log.WithContext(ctx).With().Error("cannot find tx", log.String("hash", hash.String()), log.Err(res.Err))
-			continue
-		}
-		if !res.IsLocal {
-			err := l.getTxResult(ctx, hash, res.Data)
-			if err != nil {
-				return err
-			}
-		}
+	l.log.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
+	hashes := types.TransactionIDsToHashes(ids)
+	if errs := l.getHashes(ctx, hashes, fetch.TXDB, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
+		return errs[0]
 	}
 	return nil
 }
