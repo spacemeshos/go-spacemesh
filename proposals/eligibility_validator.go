@@ -1,6 +1,7 @@
 package proposals
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -87,7 +88,6 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, err
 	}
 	weight = atx.GetWeight()
-	vrfPubkey := atx.NodeID.VRFPublicKey
 
 	numEligibleSlots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
@@ -98,6 +98,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		last    uint32
 		isFirst = true
 	)
+
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
@@ -118,7 +119,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !signing.VRFVerify(vrfPubkey, message, vrfSig) {
+		if !signing.VRFVerify(atx.NodeID.ToBytes(), message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
@@ -155,8 +156,8 @@ func (v Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*typ
 		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pubString := ballot.SmesherID().String(); atx.NodeID.Key != pubString {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pubString, atx.NodeID.Key)
+	if pub := ballot.SmesherID(); bytes.Compare(atx.NodeID[:], pub.Bytes()) != 0 {
+		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
 	}
 	return atx, nil
 }

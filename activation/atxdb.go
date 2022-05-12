@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -37,8 +36,6 @@ type atxChan struct {
 // it also stores identifications for all nodes e.g the coupling between ed id and bls id.
 type DB struct {
 	sync.RWMutex
-	// todo: think about whether we need one db or several(#1922)
-	idStore
 	sqlDB           *sql.Database
 	atxHeaderCache  AtxCache
 	LayersPerEpoch  uint32
@@ -54,9 +51,8 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity.
-func NewDB(sqlDB *sql.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(sqlDB *sql.Database, fetcher system.Fetcher, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:         idStore,
 		sqlDB:           sqlDB,
 		atxHeaderCache:  NewAtxCache(600),
 		LayersPerEpoch:  layersPerEpoch,
@@ -140,12 +136,6 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 	if err := db.StoreAtx(ctx, epoch, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
-	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
-		db.log.WithContext(ctx).With().Error("cannot store node identity",
-			log.FieldNamed("atx_node_id", atx.NodeID),
-			atx.ID(),
-			log.Err(err))
-	}
 	return nil
 }
 
@@ -166,8 +156,7 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
-
-	if atx.NodeID.Key != pub.String() {
+	if bytes.Compare(atx.NodeID[:], pub.Bytes()) != 0 {
 		return fmt.Errorf("node ids don't match")
 	}
 
@@ -176,18 +165,14 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		err = db.ValidateSignedAtx(*pub, atx)
-		if err != nil { // means there is no such identity
-			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
-		}
 		prevATX, err := db.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
 
-		if prevATX.NodeID.Key != atx.NodeID.Key {
+		if prevATX.NodeID != atx.NodeID {
 			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
-				atx.ShortString(), atx.NodeID.Key, prevATX.NodeID.Key)
+				atx.ShortString(), atx.NodeID, prevATX.NodeID)
 		}
 
 		prevEp := prevATX.PubLayerID.GetEpoch()
@@ -262,7 +247,7 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 
 	db.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
+	pubKey := signing.NewPublicKey(atx.NodeID[:])
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid nipost: %v", err)
 	}
@@ -455,23 +440,6 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
 
 	return atx, nil
-}
-
-// ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
-func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
-	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
-	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
-	if signedAtx.PrevATXID == *types.EmptyATXID {
-		return nil
-	}
-
-	pubString := pubKey.String()
-	_, err := db.GetIdentity(pubString)
-	if err != nil { // means there is no such identity
-		return errInvalidSig
-	}
-	return nil
 }
 
 // HandleGossipAtx handles the atx gossip data channel.

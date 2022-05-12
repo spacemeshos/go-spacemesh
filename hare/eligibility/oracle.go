@@ -220,12 +220,12 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 		return 0, err
 	}
 
-	w, ok := actives[id.Key]
+	w, ok := actives[id]
 	if !ok {
 		o.With().Debug("miner is not active in specified layer",
 			log.Int("active_set_size", len(actives)),
 			log.String("actives", fmt.Sprintf("%v", actives)),
-			layer, log.String("id.Key", id.Key),
+			layer, log.Stringer("id.Key", id),
 		)
 		return 0, errors.New("miner is not active in specified layer")
 	}
@@ -257,7 +257,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier(id.VRFPublicKey, msg, vrfSig) {
+	if !o.vrfVerifier(id.ToBytes(), msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)
@@ -402,7 +402,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 }
 
 // Returns a map of all active node IDs in the specified layer id.
-func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[string]uint64, error) {
+func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[types.NodeID]uint64, error) {
 	logger := o.WithContext(ctx).WithFields(
 		log.FieldNamed("target_layer", targetLayer),
 		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()))
@@ -432,7 +432,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	// epochs.
 	if safeLayerStart.GetEpoch() == safeLayerEnd.GetEpoch() {
 		if val, exist := o.activesCache.Get(safeLayerStart.GetEpoch()); exist {
-			activeMap := val.(map[string]uint64)
+			activeMap := val.(map[types.NodeID]uint64)
 			logger.With().Debug("found value in cache for safe layer start epoch",
 				log.FieldNamed("safe_layer_start", safeLayerStart),
 				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
@@ -484,7 +484,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 
 	// now read the set of ATXs referenced by these blocks
 	// TODO: can the set of blocks ever span multiple epochs?
-	hareActiveSet := make(map[string]uint64)
+	hareActiveSet := make(map[types.NodeID]uint64)
 	badBeaconATXIDs := make(map[types.ATXID]struct{})
 	seenATXIDs := make(map[types.ATXID]struct{})
 	seenBallots := make(map[types.BallotID]struct{})
@@ -517,7 +517,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
-			hareActiveSet[atx.NodeID.Key] = atx.GetWeight()
+			hareActiveSet[atx.NodeID] = atx.GetWeight()
 		}
 	}
 
@@ -527,8 +527,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
-		delete(hareActiveSet, atx.NodeID.Key)
-		logger.With().Error("smesher removed from hare active set", log.String("node_key", atx.NodeID.Key))
+		delete(hareActiveSet, atx.NodeID)
+		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID))
 	}
 
 	if len(hareActiveSet) > 0 {
@@ -557,13 +557,13 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	}
 
 	// extract the nodeIDs and weights
-	activeMap := make(map[string]uint64, len(atxs))
+	activeMap := make(map[types.NodeID]uint64, len(atxs))
 	for _, atxid := range atxs {
 		atxHeader, err := o.atxdb.GetAtxHeader(atxid)
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
-		activeMap[atxHeader.NodeID.Key] = atxHeader.GetWeight()
+		activeMap[atxHeader.NodeID] = atxHeader.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
 
@@ -574,7 +574,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
-func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types.NodeID, layer types.LayerID) (bool, error) {
 	o.WithContext(ctx).With().Debug("hare oracle checking for active identity")
 	defer func() {
 		o.WithContext(ctx).With().Debug("hare oracle active identity check complete")

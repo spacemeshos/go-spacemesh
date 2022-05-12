@@ -123,7 +123,8 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier state
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, pub.String(), hareMsg.InnerMsg.InstanceID)
+	nid := types.BytesToNodeID(pub.Bytes())
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nid, hareMsg.InnerMsg.InstanceID)
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
 			log.String("sender_id", pub.ShortString()),
@@ -917,7 +918,8 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		proc.instanceID)
 
 	// query if identity is active
-	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signing.PublicKey().String(), proc.instanceID)
+	nid := types.BytesToNodeID(proc.signing.PublicKey().Bytes())
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, nid, proc.instanceID)
 	if err != nil {
 		logger.With().Error("should not participate: error checking our identity for activeness", log.Err(err))
 		return false

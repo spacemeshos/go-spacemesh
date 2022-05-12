@@ -12,8 +12,8 @@ import (
 )
 
 type registrable interface {
-	Register(isHonest bool, id string)
-	Unregister(isHonest bool, id string)
+	Register(isHonest bool, id types.NodeID)
+	Unregister(isHonest bool, id types.NodeID)
 }
 
 type hasherU32 struct{}

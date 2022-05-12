@@ -158,7 +158,7 @@ func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
 func (challenge *NIPostChallenge) String() string {
 	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posATX: %v>",
-		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
+		challenge.NodeID.ShortString(),
 		challenge.NodeID.ShortString(),
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),

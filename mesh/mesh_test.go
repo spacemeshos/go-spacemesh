@@ -3,7 +3,6 @@ package mesh
 import (
 	"context"
 	"errors"
-	"strconv"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -46,8 +45,8 @@ func createTestMesh(t *testing.T) *testMesh {
 
 func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.NodeID, valid bool) *types.Block {
 	t.Helper()
-	coinbase := types.HexToAddress(nodeID.Key)
 	txIDs := types.RandomTXSet(numTXs)
+	coinbase := types.BytesToAddress(nodeID[:])
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
@@ -77,7 +76,7 @@ func createLayerBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID, valid bool
 	t.Helper()
 	blocks := make([]*types.Block, 0, numBlocks)
 	for i := 0; i < numBlocks; i++ {
-		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
+		nodeID := types.NodeID{byte(i)}
 		blk := createBlock(t, mesh, lyrID, nodeID, valid)
 		blocks = append(blocks, blk)
 	}

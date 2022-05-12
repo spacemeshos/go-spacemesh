@@ -741,7 +741,7 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
-		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
+		ua[string(header.NodeID[:])] += uint64(header.NumUnits)
 	}
 
 	pd.weakCoin.StartEpoch(ctx, epoch, ua)
@@ -898,11 +898,14 @@ func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Flo
 
 // TODO(nkryuchkov): Consider having a generic function for probabilities.
 func atxThreshold(kappa uint64, q *big.Rat, epochWeight uint64) *big.Int {
-	const signatureLength = 64 * 8
+	const (
+		sigLengthBytes = 80
+		sigLengthBits  = sigLengthBytes * 8
+	)
 
 	fraction := atxThresholdFraction(kappa, q, epochWeight)
 	two := big.NewInt(2)
-	signatureLengthBigInt := big.NewInt(signatureLength)
+	signatureLengthBigInt := big.NewInt(sigLengthBits)
 
 	maxPossibleNumberBigInt := new(big.Int).Exp(two, signatureLengthBigInt, nil)
 	maxPossibleNumberBigFloat := new(big.Float).SetInt(maxPossibleNumberBigInt)

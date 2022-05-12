@@ -1064,19 +1064,16 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("create VRF signer: %w", err)
-	}
+	vrfSigner := edSgn.VRFSigner()
 
-	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.BytesToNodeID(pub.Bytes())
 
 	dbStorepath := storePath
 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
-	hareOracle.Register(true, pub.String())
+	hareOracle.Register(true, nodeID)
 
-	err = smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn, false, hareOracle,
+	err := smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn, false, hareOracle,
 		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
