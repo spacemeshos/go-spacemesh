@@ -28,7 +28,6 @@ launch:
 	--restart=Never \
 	--image-pull-policy=IfNotPresent -- \
 	tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_pod_name)
-	@kubectl delete ns --selector=testid=$(test_pod_name),keep=false
 
 .PHONY: watch
 watch:
