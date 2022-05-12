@@ -300,7 +300,7 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 }
 
 // fetchLayerData fetches the all content referenced in layerData.
-func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *layerData) error {
+func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Peer, layerID types.LayerID, blocks *layerData) error {
 	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
 	l.mutex.Lock()
 	lyrResult := l.layerBlocksRes[layerID]
@@ -332,12 +332,12 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 	l.mutex.Unlock()
 
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
-	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
+	if err := l.GetBallots(ctx, peer, ballotsToFetch); err != nil {
 		// fail sync for the entire layer
 		return err
 	}
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
-	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
+	if err := l.GetBlocks(ctx, peer, blocksToFetch); err != nil {
 		logger.With().Warning("failed fetching new blocks", log.Err(err))
 		// syntactically invalid blocks are expected from malicious peers
 	}
@@ -370,7 +370,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	logger.Debug("received layer content from peer")
 	peerRes := extractPeerResult(logger, layerID, data, peerErr)
 	if peerRes.err == nil {
-		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
+		if err := l.fetchLayerData(ctx, logger, peer, layerID, peerRes.data); err != nil {
 			peerRes.err = ErrLayerDataNotFetched
 		}
 	}
@@ -450,7 +450,7 @@ type epochAtxRes struct {
 }
 
 // GetEpochATXs fetches all atxs received by peer for given layer.
-func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
+func (l *Logic) GetEpochATXs(ctx context.Context, peer p2p.Peer, id types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
 
 	// build receiver function
@@ -480,7 +480,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 		return res.Error
 	}
 
-	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
+	if err := l.GetAtxs(ctx, peer, res.Atxs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
 	}
 
@@ -530,8 +530,8 @@ func (f *Future) Result() fetch.HashDataPromiseResult {
 }
 
 // FetchAtx returns error if ATX was not found.
-func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.ATXDB, false), nil}
+func (l *Logic) FetchAtx(ctx context.Context, peer p2p.Peer, id types.ATXID) error {
+	f := Future{l.fetcher.GetHash(peer, id.Hash32(), fetch.ATXDB, false), nil}
 	if f.Result().Err != nil {
 		return f.Result().Err
 	}
@@ -542,23 +542,23 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 }
 
 // GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched.
-func (l *Logic) GetAtxs(ctx context.Context, ids []types.ATXID) error {
+func (l *Logic) GetAtxs(ctx context.Context, peer p2p.Peer, ids []types.ATXID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.ATXDB, l.atxHandler.HandleAtxData); len(errs) > 0 {
-		return errs[0]
+	if errs := l.getHashes(ctx, peer, hashes, fetch.ATXDB, l.atxHandler.HandleAtxData); len(errs) > 0 {
+		return errs[0
 	}
 	return nil
 }
 
 type dataReceiver func(context.Context, []byte) error
 
-func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch.Hint, receiver dataReceiver) []error {
+func (l *Logic) getHashes(ctx context.Context, peer p2p.Peer, hashes []types.Hash32, hint fetch.Hint, receiver dataReceiver) []error {
 	errs := make([]error, 0, len(hashes))
-	results := l.fetcher.GetHashes(hashes, hint, false)
+	results := l.fetcher.GetHashes(peer, hashes, hint, false)
 	for hash, resC := range results {
 		res, open := <-resC
 		if !open {
@@ -589,61 +589,61 @@ func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
-func (l *Logic) GetBallots(ctx context.Context, ids []types.BallotID) error {
+func (l *Logic) GetBallots(ctx context.Context, peer p2p.Peer, ids []types.BallotID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.BallotDB, l.ballotHandler.HandleBallotData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, peer, hashes, fetch.BallotDB, l.ballotHandler.HandleBallotData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
 }
 
 // GetProposals gets the data for given proposal IDs from peers.
-func (l *Logic) GetProposals(ctx context.Context, ids []types.ProposalID) error {
+func (l *Logic) GetProposals(ctx context.Context, peer p2p.Peer, ids []types.ProposalID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.ProposalDB, l.proposalHandler.HandleProposalData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, peer, hashes, fetch.ProposalDB, l.proposalHandler.HandleProposalData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
 }
 
 // GetBlocks gets the data for given block IDs from peers.
-func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
+func (l *Logic) GetBlocks(ctx context.Context, peer p2p.Peer, ids []types.BlockID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, l.blockHandler.HandleBlockData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, peer, hashes, fetch.BlockDB, l.blockHandler.HandleBlockData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
 }
 
 // GetTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
-func (l *Logic) GetTxs(ctx context.Context, ids []types.TransactionID) error {
+func (l *Logic) GetTxs(ctx context.Context, peer p2p.Peer, ids []types.TransactionID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.TXDB, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
+	if errs := l.getHashes(ctx, peer, hashes, fetch.TXDB, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
 }
 
 // GetPoetProof gets poet proof from remote peer.
-func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
+func (l *Logic) GetPoetProof(ctx context.Context, peer p2p.Peer, id types.Hash32) error {
 	l.log.WithContext(ctx).With().Debug("getting poet proof", log.String("hash", id.ShortString()))
-	res := <-l.fetcher.GetHash(id, fetch.POETDB, false)
+	res := <-l.fetcher.GetHash(peer, id, fetch.POETDB, false)
 	if res.Err != nil {
 		return res.Err
 	}

@@ -62,14 +62,15 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
 // from other remote peers.
 type Fetcher interface {
-	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
-	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
+	GetHash(peer p2p.Peer, hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
+	GetHashes(peer p2p.Peer, hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
 	Stop()
 	Start()
 }
 
 /// request contains all relevant Data for a single request for a specified hash.
 type request struct {
+	peer                 p2p.Peer                   // optional peer to send request to (picked random if empty)
 	hash                 types.Hash32               // hash is the hash of the Data requested
 	priority             priority                   // priority is for QoS
 	validateResponseHash bool                       // if true perform hash validation on received Data
@@ -281,7 +282,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	rLen := len(f.activeRequests)
 	f.activeReqM.Unlock()
 	if sendNow {
-		f.sendBatch([]requestMessage{{req.hint, req.hash}})
+		f.sendBatch(req.peer, []requestMessage{{req.hint, req.hash}})
 		f.log.With().Debug("high priority request sent", log.String("hash", req.hash.ShortString()))
 		return true
 	}
@@ -467,12 +468,12 @@ func (f *Fetch) receiveResponse(data []byte) {
 
 // this is the main function that sends the hash request to the peer.
 func (f *Fetch) requestHashBatchFromPeers() {
-	var requestList []requestMessage
+	requestList := map[p2p.Peer][]requestMessage{}
 	f.activeReqM.Lock()
 	// only send one request per hash
 	for hash, reqs := range f.activeRequests {
 		f.log.With().Debug("batching hash request", log.String("hash", hash.ShortString()))
-		requestList = append(requestList, requestMessage{Hash: hash, Hint: reqs[0].hint})
+		requestList[reqs[0].peer] = append(requestList[reqs[0].peer], requestMessage{Hash: hash, Hint: reqs[0].hint})
 		// move the processed requests to pending
 		f.pendingRequests[hash] = append(f.pendingRequests[hash], reqs...)
 		delete(f.activeRequests, hash)
@@ -480,17 +481,19 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	f.activeReqM.Unlock()
 
 	// send in batches
-	for i := 0; i < len(requestList); i += f.cfg.BatchSize {
-		j := i + f.cfg.BatchSize
-		if j > len(requestList) {
-			j = len(requestList)
+	for peer, requests := range requestList {
+		for i := 0; i < len(requests); i += f.cfg.BatchSize {
+			j := i + f.cfg.BatchSize
+			if j > len(requests) {
+				j = len(requests)
+			}
+			f.sendBatch(peer, requests[i:j])
 		}
-		f.sendBatch(requestList[i:j])
 	}
 }
 
 // sendBatch dispatches batched request messages.
-func (f *Fetch) sendBatch(requests []requestMessage) {
+func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
@@ -525,17 +528,19 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 			return
 		}
 
-		// get random peer
-		p := GetRandomPeer(f.net.GetPeers())
+		// if peer is not provided - send to random one
+		if peer == "" {
+			peer = GetRandomPeer(f.net.GetPeers())
+		}
 		f.log.With().Debug("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Int("num_requests", len(batch.Requests)),
-			log.String("peer", p.String()))
-		batch.peer = p
+			log.String("peer", peer.String()))
+		batch.peer = peer
 		f.activeBatchM.Lock()
 		f.activeBatches[batch.ID] = batch
 		f.activeBatchM.Unlock()
-		err := f.net.Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
+		err := f.net.Request(context.TODO(), peer, bytes, f.receiveResponse, errorFunc)
 
 		// if call succeeded, continue to other requests
 		if err != nil {
@@ -546,7 +551,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 			}
 			// todo: mark number of fails per peer to make it low priority
 			f.log.With().Warning("could not send message to peer",
-				log.String("peer", p.String()),
+				log.String("peer", peer.String()),
 				log.Int("retries", retries))
 		} else {
 			break
@@ -599,10 +604,10 @@ type HashDataPromiseResult struct {
 }
 
 // GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels.
-func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
+func (f *Fetch) GetHashes(peer p2p.Peer, hashes []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
 	hashWaiting := make(map[types.Hash32]chan HashDataPromiseResult)
 	for _, id := range hashes {
-		resChan := f.GetHash(id, hint, validateHash)
+		resChan := f.GetHash(peer, id, hint, validateHash)
 		hashWaiting[id] = resChan
 	}
 
@@ -611,7 +616,7 @@ func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) m
 
 // GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
 // know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error.
-func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult {
+func (f *Fetch) GetHash(peer p2p.Peer, hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult {
 	resChan := make(chan HashDataPromiseResult, 1)
 
 	if f.stopped() {
@@ -638,6 +643,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 
 	// if not present in db, call fetching of the item
 	req := request{
+		peer,
 		hash,
 		Low,
 		validateHash,
