@@ -15,8 +15,11 @@ import (
 
 func TestShortTimeskew(t *testing.T) {
 	const (
-		enableSkew = 10
-		stopSkew   = enableSkew + 3
+		enableSkew = 9
+		// the chaos needs to end before the first layer
+		// of the next epoch. otherwise it may cause beacon protocol
+		// to fail. and it will take longer time to recover from that
+		stopSkew   = enableSkew + 2
 		stopTest   = stopSkew + 5
 		skewOffset = "-3s" // hare round is 2s
 	)

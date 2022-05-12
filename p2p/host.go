@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-tcp-transport"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 // Peer is an alias to libp2p's peer.ID.
@@ -86,6 +87,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(pstoremem.NewPeerstore()),
+		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 	}
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
@@ -94,6 +96,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
+	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 
 	logger.With().Info("local node identity",
 		log.String("identity", h.ID().String()),

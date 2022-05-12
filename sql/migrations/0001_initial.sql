@@ -25,9 +25,10 @@ CREATE TABLE identities
 
 CREATE TABLE layers
 (
-    id              INT PRIMARY KEY,
+    id              INT PRIMARY KEY DESC,
     hare_output     VARCHAR,
     applied_block   VARCHAR,
+    state_hash      CHAR(32),
     hash            CHAR(32),
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
@@ -127,3 +128,16 @@ CREATE TABLE poets
 ) WITHOUT ROWID;
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
+
+
+CREATE TABLE accounts
+(
+    address        CHAR(20),
+    balance        UNSIGNED LONG INT,
+    initialized    BOOL,
+    nonce          UNSIGNED LONG INT,
+    layer_updated  UNSIGNED LONG INT,
+    PRIMARY KEY (address, layer_updated DESC)
+);
+
+CREATE INDEX accounts_by_layer_udated ON accounts (layer_updated);

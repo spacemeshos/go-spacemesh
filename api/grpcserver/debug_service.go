@@ -12,7 +12,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -48,14 +47,14 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 
 	res := &pb.AccountsResponse{}
 
-	for address, accountData := range accounts.Accounts {
+	for _, account := range accounts {
 		state := &pb.AccountState{
-			Counter: accountData.Nonce,
-			Balance: &pb.Amount{Value: accountData.Balance},
+			Counter: account.Nonce,
+			Balance: &pb.Amount{Value: account.Balance},
 		}
 
 		account := &pb.Account{
-			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // Address is raw account bytes, not a 0x hex string
+			AccountId:    &pb.AccountId{Address: account.Address[:]}, // Address is raw account bytes, not a 0x hex string
 			StateCurrent: state,
 		}
 
