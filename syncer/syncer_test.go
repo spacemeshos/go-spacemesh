@@ -618,6 +618,25 @@ func TestSyncMissingLayer(t *testing.T) {
 	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())
 }
 
+func TestSync_SkipProcessedLayer(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	lyr := types.GetEffectiveGenesis().Add(1)
+	current := lyr.Add(1)
+	ts.mTicker.advanceToLayer(current)
+
+	// simulate hare advancing the mesh forward
+	ts.msh.SetZeroBlockLayer(lyr)
+	require.NoError(t, ts.msh.ProcessLayer(context.TODO(), lyr))
+	require.Equal(t, lyr, ts.msh.ProcessedLayer())
+
+	// no data sync should happen
+	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
+	require.True(t, ts.syncer.synchronize(context.TODO()))
+	// but last synced is updated
+	require.Equal(t, lyr, ts.syncer.getLastSyncedLayer())
+}
+
 func TestProcessLayers_AllGood(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	glayer := types.GetEffectiveGenesis()

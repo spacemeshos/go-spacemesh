@@ -323,6 +323,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 				return false
 			}
 		}
+		// no need to sync a layer that's already processed (advanced by the hare)
+		processed := s.mesh.ProcessedLayer()
+		if s.getLastSyncedLayer().Before(processed) {
+			s.setLastSyncedLayer(processed)
+		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
@@ -470,6 +475,9 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 }
 
 func (s *Syncer) processLayers(ctx context.Context) error {
+	if s.mesh.LatestLayerInState() == s.getLastSyncedLayer() {
+		return nil
+	}
 	s.logger.WithContext(ctx).With().Info("processing synced layers",
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()))
