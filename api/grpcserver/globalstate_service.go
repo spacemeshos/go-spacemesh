@@ -196,13 +196,8 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	}
 
 	smesherIDBytes := in.SmesherId.Id
-	smesherID, err := types.BytesToNodeID(smesherIDBytes)
-	if err != nil {
-		log.With().Error("unable to convert bytes to nodeID", log.Err(err))
-		return nil, status.Errorf(codes.Internal, "error deserializing NodeID")
-	}
-
-	dbRewards, err := s.mesh.GetRewardsBySmesherID(*smesherID)
+	smesherID := types.BytesToNodeID(smesherIDBytes)
+	dbRewards, err := s.mesh.GetRewardsBySmesherID(smesherID)
 	if err != nil {
 		log.With().Error("unable to fetch projected reward state for smesher",
 			log.FieldNamed("smesher_id", smesherID),

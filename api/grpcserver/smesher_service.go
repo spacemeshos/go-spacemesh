@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -111,8 +110,8 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
-	addr := util.Hex2Bytes(s.smeshingProvider.SmesherID().Key)
-	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr}}, nil
+	addr := s.smeshingProvider.SmesherID()
+	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr[:]}}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node.

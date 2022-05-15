@@ -315,12 +315,22 @@ func TestDiscardNonceBelow(t *testing.T) {
 		txs = append(txs, tx)
 	}
 
+	// apply nonce 0
+	lid := types.NewLayerID(71)
+	bid := types.RandomBlockID()
+	updated, err := Apply(db, txs[0].ID(), lid, bid)
+	require.NoError(t, err)
+	require.Equal(t, 1, updated)
 	cutoff := uint64(numTXs) / 2
 	require.NoError(t, DiscardNonceBelow(db, principal, cutoff))
 	for _, tx := range txs {
 		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-		if tx.Origin() == principal && tx.AccountNonce < cutoff {
-			expected.State = types.DISCARDED
+		if tx.Origin() == principal {
+			if tx.AccountNonce == 0 {
+				expected = makeMeshTX(tx, lid, bid, received, types.APPLIED)
+			} else if tx.AccountNonce < cutoff {
+				expected.State = types.DISCARDED
+			}
 		}
 		getAndCheckMeshTX(t, db, tx.ID(), expected)
 	}

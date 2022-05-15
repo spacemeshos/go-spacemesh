@@ -192,7 +192,7 @@ func (g *Generator) generateAtxs() {
 		_, _ = g.rng.Read(address[:])
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.NodeID{Key: address.Hex()},
+			NodeID:     types.BytesToNodeID(address.Bytes()),
 			StartTick:  1,
 			EndTick:    2,
 			PubLayerID: g.nextLayer.Sub(1),

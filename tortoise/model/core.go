@@ -31,7 +31,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 		logger:  logger,
 		rng:     rng,
 		meshdb:  mdb,
-		atxdb:   activation.NewDB(db, nil, nil, types.GetLayersPerEpoch(), types.ATXID{1}, nil, logger),
+		atxdb:   activation.NewDB(db, nil, types.GetLayersPerEpoch(), types.ATXID{1}, nil, logger),
 		beacons: newBeaconStore(),
 		units:   units,
 		signer:  signing.NewEdSignerFromRand(rng),
@@ -133,7 +133,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.NodeID{Key: c.signer.PublicKey().String()},
+			NodeID:     types.BytesToNodeID(c.signer.PublicKey().Bytes()),
 			StartTick:  1,
 			EndTick:    2,
 			PubLayerID: ev.LayerID,

@@ -15,7 +15,7 @@ type conservativeState interface {
 	AddToCache(*types.Transaction, bool) error
 }
 
-type svmState interface {
+type vmState interface {
 	GetStateRoot() (types.Hash32, error)
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetLayerApplied(types.TransactionID) (types.LayerID, error)

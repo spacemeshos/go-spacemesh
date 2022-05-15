@@ -32,7 +32,6 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -477,7 +476,6 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 
-	idStore := activation.NewIdentityStore(idDBStore)
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 
@@ -499,7 +497,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(sqlDB, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(sqlDB, fetcherWrapped, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
 		beacon.WithContext(ctx),
@@ -601,7 +599,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -623,12 +621,12 @@ func (app *App) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
+	postSetupMgr, err := activation.NewPostSetupManager(nodeID[:], app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
 
 	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 	if app.Config.SMESHING.Start {
@@ -709,7 +707,6 @@ func (app *App) HareFactory(
 	beacons system.BeaconGetter,
 	pFetcher system.ProposalFetcher,
 	hOracle hare.Rolacle,
-	idStore *activation.IdentityStore,
 	clock TickProvider,
 	lg log.Log,
 ) HareService {
@@ -733,7 +730,6 @@ func (app *App) HareFactory(
 		hOracle,
 		patrol,
 		uint16(app.Config.LayersPerEpoch),
-		idStore,
 		hOracle,
 		clock,
 		app.addLogger(HareLogger, lg))
@@ -1066,12 +1062,9 @@ func (app *App) Start() error {
 	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
-	if err != nil {
-		return fmt.Errorf("failed to create vrf signer: %w", err)
-	}
+	vrfSigner := app.edSgn.VRFSigner()
 
-	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 
 	lg := logger.Named(nodeID.ShortString()).WithFields(nodeID)
 

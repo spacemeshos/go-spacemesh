@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -79,9 +78,8 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	}
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	require.NoError(t, err)
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	vrfSigner := edSgn.VRFSigner()
+	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	tpd.ProtocolDriver = New(minerID, newPublisher(t), tpd.mAtxDB, edSgn, vrfSigner, sql.InMemory(), tpd.mClock,
 		WithConfig(UnitTestConfig()),
 		WithLogger(logtest.New(t).WithName("Beacon")),
@@ -614,7 +612,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 func TestBeacon_atxThreshold(t *testing.T) {
 	t.Parallel()
 
-	r := require.New(t)
 	tt := []struct {
 		name      string
 		kappa     uint64
@@ -627,21 +624,21 @@ func TestBeacon_atxThreshold(t *testing.T) {
 			kappa:     40,
 			q:         big.NewRat(1, 3),
 			w:         60,
-			threshold: "0x80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			threshold: "0x8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name:      "Case 2",
 			kappa:     400000,
 			q:         big.NewRat(1, 3),
 			w:         31744,
-			threshold: "0xffffddbb63fcd30f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			threshold: "0xffffddbb63fcd30f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name:      "Case 3",
 			kappa:     40,
 			q:         new(big.Rat).SetFloat64(0.33),
 			w:         60,
-			threshold: "0x7f8ece00fe541f9f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			threshold: "0x7f8ece00fe541f9f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 
@@ -651,7 +648,7 @@ func TestBeacon_atxThreshold(t *testing.T) {
 			t.Parallel()
 
 			threshold := atxThreshold(tc.kappa, tc.q, tc.w)
-			r.EqualValues(tc.threshold, fmt.Sprintf("%#x", threshold))
+			require.Equal(t, tc.threshold, fmt.Sprintf("%#x", threshold))
 		})
 	}
 }
@@ -760,10 +757,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	r := require.New(t)
 
 	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
-
-	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	r.NoError(err)
+	vrfSigner := edSgn.VRFSigner()
 
 	tt := []struct {
 		name   string
@@ -814,8 +808,7 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 func TestBeacon_signAndVerifyVRF(t *testing.T) {
 	r := require.New(t)
 
-	signer, _, err := signing.NewVRFSigner(bytes.Repeat([]byte{0x01}, 32))
-	r.NoError(err)
+	signer := signing.NewEdSigner().VRFSigner()
 
 	verifier := signing.VRFVerifier{}
 

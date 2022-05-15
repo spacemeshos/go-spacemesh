@@ -312,9 +312,8 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	oracle := eligibility.New(logger)
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
-	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
-	assert.NoError(tb, err)
-	oracle.Register(true, edPubkey.String())
+	nid := types.BytesToNodeID(edPubkey.Bytes())
+	oracle.Register(true, nid)
 	output := make(chan TerminationOutput, 1)
 	certs := make(chan CertificationOutput, 1)
 
@@ -322,7 +321,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
-		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
+		10, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, certs, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
 }
