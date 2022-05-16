@@ -27,6 +27,7 @@ type Config struct {
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
 type Discovery struct {
 	logger log.Log
+	host   host.Host
 
 	cancel context.CancelFunc
 	eg     errgroup.Group
@@ -40,6 +41,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Discovery{
 		logger: logger,
+		host:   h,
 		cancel: cancel,
 		book:   newAddrBook(config, logger),
 	}

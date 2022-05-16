@@ -23,7 +23,7 @@ func (d *Discovery) CheckBook(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			d.logger.Debug("checking book")
-			d.checkPeers()
+			d.CheckPeers()
 			d.logger.Debug("checking book done")
 		case <-ctx.Done():
 			return
@@ -31,9 +31,9 @@ func (d *Discovery) CheckBook(ctx context.Context) {
 	}
 }
 
-func (d *Discovery) checkPeers() {
+func (d *Discovery) CheckPeers() {
 	now := time.Now()
-	peers := getRandomPeers(d.book.getAddresses(), peersNumber)
+	peers := d.getRandomPeers(peersNumber)
 	qCtx, cancel := context.WithTimeout(context.Background(), checkTimeout)
 	defer cancel()
 	if _, err := d.crawl.query(qCtx, peers); err != nil {
@@ -53,20 +53,36 @@ func (d *Discovery) checkPeers() {
 	}
 }
 
+func (d *Discovery) GetAddresses() []*addrInfo {
+	return d.book.getAddresses()
+}
+
 // getRandomPeers get random N peers from provided peers list.
-func getRandomPeers(peers []*addrInfo, n int) []*addrInfo {
-	if len(peers) <= n {
-		return peers
-	}
+func (d *Discovery) getRandomPeers(n int) []*addrInfo {
+	peers := d.book.getAddresses()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	data := make(map[peer.ID]*addrInfo) // use map in case of duplicates.
-	for len(data) < n {                 // as it pseudorandom - loop until we get exact number of peers.
+	data := make(map[peer.ID]*addrInfo)           // use map in case of duplicates.
+	for len(data) < n && len(data) < len(peers) { // as it random - loop until we get exact number of peers.
 		index := r.Intn(len(peers))
 		data[peers[index].ID] = peers[index]
 	}
 
 	result := make([]*addrInfo, 0, len(data))
 	for i := range data {
+		addresses := d.host.Peerstore().Addrs(data[i].ID)
+		for _, addr := range addresses {
+			bookAddr := addr.String() + "/p2p/" + data[i].ID.String()
+			if bookAddr == data[i].addr.String() {
+				continue
+			}
+			pa, err := parseAddrInfo(bookAddr)
+			if err != nil {
+				d.logger.Debug("failed to parse address: %s", err)
+				continue
+			}
+			result = append(result, pa)
+		}
+
 		result = append(result, data[i])
 	}
 	return result

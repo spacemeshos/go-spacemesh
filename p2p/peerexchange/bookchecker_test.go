@@ -14,46 +14,38 @@ import (
 )
 
 func TestDiscovery_CheckBook(t *testing.T) {
-	t.Run("with big number of nodes", func(t *testing.T) {
+	t.Run("network broken with big number of nodes", func(t *testing.T) {
 		mesh, instances := setup(t, 20)
 
-		totalAddressesBefore := 0
-		for _, instance := range instances {
-			list := instance.book.getAddresses()
-			totalAddressesBefore += len(list)
-		}
+		totalAddressesBefore := calcTotalAddresses(instances)
+		totalPeerAddressesBefore := calcTotalAddressesPeerStore(instances)
 
 		brokeMesh(t, mesh)
 		checkBooks(instances)
 
-		totalAddressesAfter := 0
-		for _, instance := range instances {
-			list := instance.book.getAddresses()
-			totalAddressesAfter += len(list)
-		}
+		totalAddressesAfter := calcTotalAddresses(instances)
+		totalPeerAddressesAfter := calcTotalAddressesPeerStore(instances)
 
 		require.NotEqual(t, totalAddressesBefore, totalAddressesAfter, "total addresses should be different")
+		require.NotEqual(t, totalPeerAddressesBefore, totalPeerAddressesAfter, "total addresses should be different")
 		require.True(t, totalAddressesBefore > totalAddressesAfter, "total addresses after break should be smaller")
+		require.True(t, totalPeerAddressesBefore > totalPeerAddressesAfter, "total addresses after break should be smaller")
 	})
 	t.Run("with small number of nodes", func(t *testing.T) {
 		mesh, instances := setup(t, 5)
 
-		totalAddressesBefore := 0
-		for _, instance := range instances {
-			list := instance.book.getAddresses()
-			totalAddressesBefore += len(list)
-		}
+		totalAddressesBefore := calcTotalAddresses(instances)
+		totalPeerAddressesBefore := calcTotalAddressesPeerStore(instances)
 		require.True(t, totalAddressesBefore > 0, "total addresses before break should be greater than 0")
+		require.True(t, totalPeerAddressesBefore > 0, "total addresses before break should be greater than 0")
 
 		brokeMesh(t, mesh)
 		checkBooks(instances)
 
-		totalAddressesAfter := 0
-		for _, instance := range instances {
-			list := instance.book.getAddresses()
-			totalAddressesAfter += len(list)
-		}
+		totalAddressesAfter := calcTotalAddresses(instances)
+		totalPeerAddressesAfter := calcTotalAddressesPeerStore(instances)
 		require.Equal(t, 0, totalAddressesAfter, "total addresses after break should be zero")
+		require.Equal(t, 0, totalPeerAddressesAfter, "total addresses after break should be zero")
 	})
 }
 
@@ -126,8 +118,29 @@ func checkBooks(instances []*Discovery) {
 		wg.Add(1)
 		go func(inst *Discovery) {
 			defer wg.Done()
-			inst.checkPeers()
+			inst.CheckPeers()
 		}(instance)
 	}
 	wg.Wait()
+}
+
+func calcTotalAddresses(instances []*Discovery) int {
+	totalAddresses := 0
+	for _, instance := range instances {
+		totalAddresses += len(instance.book.getAddresses())
+	}
+	return totalAddresses
+}
+
+func calcTotalAddressesPeerStore(instances []*Discovery) int {
+	totalAddresses := 0
+	for _, instance := range instances {
+		for _, p := range instance.host.Peerstore().Peers() {
+			if p.String() == instance.host.ID().String() {
+				continue
+			}
+			totalAddresses += len(instance.host.Peerstore().Addrs(p))
+		}
+	}
+	return totalAddresses
 }
