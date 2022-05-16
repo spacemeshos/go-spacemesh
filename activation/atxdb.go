@@ -511,14 +511,14 @@ func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) e
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		if err := db.fetcher.FetchAtx(ctx, atx.PositioningATX); err != nil {
+		if err := db.fetcher.FetchAtx(ctx, p2p.AnyPeer(), atx.PositioningATX); err != nil {
 			return fmt.Errorf("fetch positioning ATX: %w", err)
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if err := db.fetcher.FetchAtx(ctx, atx.PrevATXID); err != nil {
+		if err := db.fetcher.FetchAtx(ctx, p2p.AnyPeer(), atx.PrevATXID); err != nil {
 			return fmt.Errorf("fetch previous ATX ID: %w", err)
 		}
 	}

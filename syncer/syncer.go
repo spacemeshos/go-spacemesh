@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -462,7 +463,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	if atCurrentEpoch || atLastLayerOfEpoch {
 		s.logger.WithContext(ctx).With().Debug("getting atxs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
+		if err := s.fetcher.GetEpochATXs(ctx, p2p.AnyPeer(), epoch); err != nil {
 			// don't fail sync if we cannot fetch atxs for the current epoch before the last layer
 			if !atCurrentEpoch || atLastLayerOfEpoch {
 				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))

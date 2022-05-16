@@ -18,9 +18,6 @@ import (
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
-// Peer is an alias to libp2p's peer.ID.
-type Peer = peer.ID
-
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
