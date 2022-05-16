@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
@@ -15,7 +16,7 @@ type layerTicker interface {
 
 type layerFetcher interface {
 	PollLayerContent(context.Context, types.LayerID) chan layerfetcher.LayerPromiseResult
-	GetEpochATXs(context.Context, types.EpochID) error
+	GetEpochATXs(context.Context, p2p.Peer, types.EpochID) error
 }
 
 type layerPatrol interface {

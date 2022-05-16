@@ -75,17 +75,17 @@ func (m *MocklayerFetcher) EXPECT() *MocklayerFetcherMockRecorder {
 }
 
 // GetEpochATXs mocks base method.
-func (m *MocklayerFetcher) GetEpochATXs(ctx context.Context, peer p2p.Peer, id types.EpochID) error {
+func (m *MocklayerFetcher) GetEpochATXs(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEpochATXs", ctx, peer, id)
+	ret := m.ctrl.Call(m, "GetEpochATXs", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetEpochATXs indicates an expected call of GetEpochATXs.
-func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(ctx, peer, id interface{}) *gomock.Call {
+func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MocklayerFetcher)(nil).GetEpochATXs), ctx, peer, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MocklayerFetcher)(nil).GetEpochATXs), arg0, arg1, arg2)
 }
 
 // PollLayerContent mocks base method.
