@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MockFetcher is a mock of Fetcher interface.
@@ -36,17 +37,17 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 }
 
 // FetchAtx mocks base method.
-func (m *MockFetcher) FetchAtx(arg0 context.Context, arg1 types.ATXID) error {
+func (m *MockFetcher) FetchAtx(arg0 context.Context, arg1 p2p.Peer, arg2 types.ATXID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchAtx", arg0, arg1)
+	ret := m.ctrl.Call(m, "FetchAtx", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // FetchAtx indicates an expected call of FetchAtx.
-func (mr *MockFetcherMockRecorder) FetchAtx(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) FetchAtx(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAtx", reflect.TypeOf((*MockFetcher)(nil).FetchAtx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAtx", reflect.TypeOf((*MockFetcher)(nil).FetchAtx), arg0, arg1, arg2)
 }
 
 // GetAtxs mocks base method.
@@ -194,17 +195,17 @@ func (m *MockAtxFetcher) EXPECT() *MockAtxFetcherMockRecorder {
 }
 
 // FetchAtx mocks base method.
-func (m *MockAtxFetcher) FetchAtx(arg0 context.Context, arg1 types.ATXID) error {
+func (m *MockAtxFetcher) FetchAtx(arg0 context.Context, arg1 p2p.Peer, arg2 types.ATXID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchAtx", arg0, arg1)
+	ret := m.ctrl.Call(m, "FetchAtx", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // FetchAtx indicates an expected call of FetchAtx.
-func (mr *MockAtxFetcherMockRecorder) FetchAtx(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockAtxFetcherMockRecorder) FetchAtx(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAtx", reflect.TypeOf((*MockAtxFetcher)(nil).FetchAtx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAtx", reflect.TypeOf((*MockAtxFetcher)(nil).FetchAtx), arg0, arg1, arg2)
 }
 
 // GetAtxs mocks base method.

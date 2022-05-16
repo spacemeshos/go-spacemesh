@@ -399,34 +399,6 @@ func (m *MockpoetDB) EXPECT() *MockpoetDBMockRecorder {
 	return m.recorder
 }
 
-// HasProof mocks base method.
-func (m *MockpoetDB) HasProof(proofRef []byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasProof", proofRef)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// HasProof indicates an expected call of HasProof.
-func (mr *MockpoetDBMockRecorder) HasProof(proofRef interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasProof", reflect.TypeOf((*MockpoetDB)(nil).HasProof), proofRef)
-}
-
-// ValidateAndStore mocks base method.
-func (m *MockpoetDB) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStore", proofMessage)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ValidateAndStore indicates an expected call of ValidateAndStore.
-func (mr *MockpoetDBMockRecorder) ValidateAndStore(proofMessage interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStore", reflect.TypeOf((*MockpoetDB)(nil).ValidateAndStore), proofMessage)
-}
-
 // ValidateAndStoreMsg mocks base method.
 func (m *MockpoetDB) ValidateAndStoreMsg(data []byte) error {
 	m.ctrl.T.Helper()

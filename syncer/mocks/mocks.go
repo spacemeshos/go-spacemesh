@@ -12,6 +12,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	layerfetcher "github.com/spacemeshos/go-spacemesh/layerfetcher"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MocklayerTicker is a mock of layerTicker interface.
@@ -89,17 +90,17 @@ func (m *MocklayerFetcher) EXPECT() *MocklayerFetcherMockRecorder {
 }
 
 // GetEpochATXs mocks base method.
-func (m *MocklayerFetcher) GetEpochATXs(ctx context.Context, id types.EpochID) error {
+func (m *MocklayerFetcher) GetEpochATXs(ctx context.Context, peer p2p.Peer, id types.EpochID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEpochATXs", ctx, id)
+	ret := m.ctrl.Call(m, "GetEpochATXs", ctx, peer, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetEpochATXs indicates an expected call of GetEpochATXs.
-func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(ctx, id interface{}) *gomock.Call {
+func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(ctx, peer, id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MocklayerFetcher)(nil).GetEpochATXs), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MocklayerFetcher)(nil).GetEpochATXs), ctx, peer, id)
 }
 
 // PollLayerContent mocks base method.

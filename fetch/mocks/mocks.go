@@ -38,31 +38,31 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 }
 
 // GetHash mocks base method.
-func (m *MockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
+func (m *MockFetcher) GetHash(peer p2p.Peer, hash types.Hash32, h fetch.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHash", hash, h, validateHash)
+	ret := m.ctrl.Call(m, "GetHash", peer, hash, h, validateHash)
 	ret0, _ := ret[0].(chan fetch.HashDataPromiseResult)
 	return ret0
 }
 
 // GetHash indicates an expected call of GetHash.
-func (mr *MockFetcherMockRecorder) GetHash(hash, h, validateHash interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetHash(peer, hash, h, validateHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockFetcher)(nil).GetHash), hash, h, validateHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockFetcher)(nil).GetHash), peer, hash, h, validateHash)
 }
 
 // GetHashes mocks base method.
-func (m *MockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateHash bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+func (m *MockFetcher) GetHashes(peer p2p.Peer, hash []types.Hash32, hint fetch.Hint, validateHash bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHashes", hash, hint, validateHash)
+	ret := m.ctrl.Call(m, "GetHashes", peer, hash, hint, validateHash)
 	ret0, _ := ret[0].(map[types.Hash32]chan fetch.HashDataPromiseResult)
 	return ret0
 }
 
 // GetHashes indicates an expected call of GetHashes.
-func (mr *MockFetcherMockRecorder) GetHashes(hash, hint, validateHash interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetHashes(peer, hash, hint, validateHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashes", reflect.TypeOf((*MockFetcher)(nil).GetHashes), hash, hint, validateHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashes", reflect.TypeOf((*MockFetcher)(nil).GetHashes), peer, hash, hint, validateHash)
 }
 
 // Start mocks base method.
