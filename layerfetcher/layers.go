@@ -549,7 +549,7 @@ func (l *Logic) GetAtxs(ctx context.Context, peer p2p.Peer, ids []types.ATXID) e
 	l.log.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
 	if errs := l.getHashes(ctx, peer, hashes, fetch.ATXDB, l.atxHandler.HandleAtxData); len(errs) > 0 {
-		return errs[0
+		return errs[0]
 	}
 	return nil
 }

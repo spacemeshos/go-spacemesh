@@ -142,12 +142,14 @@ func TestFetch_GetHash(t *testing.T) {
 	hint := Hint("db")
 	hint2 := Hint("db2")
 
+	const testPeer = "test_peer"
+
 	// test hash aggregation
-	f.GetHash(h1, hint, false)
-	f.GetHash(h1, hint, false)
+	f.GetHash(testPeer, h1, hint, false)
+	f.GetHash(testPeer, h1, hint, false)
 
 	h2 := randomHash()
-	f.GetHash(h2, hint2, false)
+	f.GetHash(testPeer, h2, hint2, false)
 
 	// test aggregation by hint
 	f.activeReqM.RLock()
@@ -319,9 +321,10 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	defer f.Stop()
 	f.Start()
 	// test hash aggregation
-	r1 := f.GetHash(h1, hint, false)
-	r2 := f.GetHash(h2, hint, false)
-	r3 := f.GetHash(h3, hint, false)
+	const testPeer = "test_peer"
+	r1 := f.GetHash(testPeer, h1, hint, false)
+	r2 := f.GetHash(testPeer, h2, hint, false)
+	r3 := f.GetHash(testPeer, h3, hint, false)
 
 	// since we have a batch of 2 we should call send twice - of not we should fail
 	net.Mu.RLock()
