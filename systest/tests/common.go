@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
@@ -54,8 +56,7 @@ func submitTransacition(ctx context.Context, pk ed25519.PrivateKey, tx transacti
 	return nil
 }
 
-func newTransactionSubmitter(pk ed25519.PrivateKey, receiver [20]byte, amount uint64, client *cluster.NodeClient) func(context.Context) error {
-	var nonce uint64
+func newTransactionSubmitter(pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if err := submitTransacition(ctx, pk, transaction{
 			GasLimit:  100,
@@ -142,12 +143,11 @@ func scheduleChaos(ctx context.Context, eg *errgroup.Group, client *cluster.Node
 	})
 }
 
-func currentLayer(ctx context.Context, client *cluster.NodeClient) (uint32, error) {
+func currentLayer(ctx context.Context, tb testing.TB, client *cluster.NodeClient) uint32 {
+	tb.Helper()
 	response, err := spacemeshv1.NewMeshServiceClient(client).CurrentLayer(ctx, &spacemeshv1.CurrentLayerRequest{})
-	if err != nil {
-		return 0, err
-	}
-	return response.Layernum.Number, nil
+	require.NoError(tb, err)
+	return response.Layernum.Number
 }
 
 func waitAll(tctx *testcontext.Context, cl *cluster.Cluster) error {
@@ -166,4 +166,27 @@ func min(i, j int) int {
 		return i
 	}
 	return j
+}
+
+func maxLayer(i, j uint32) uint32 {
+	if i > j {
+		return i
+	}
+	return j
+}
+
+func nextFirstLayer(current uint32, size uint32) uint32 {
+	if over := current % size; over != 0 {
+		current += size - over
+	}
+	return current
+}
+
+func getNonce(ctx context.Context, client *cluster.NodeClient, address []byte) (uint64, error) {
+	gstate := spacemeshv1.NewGlobalStateServiceClient(client)
+	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateProjected.Counter, nil
 }
