@@ -32,7 +32,6 @@ func (d *Discovery) CheckBook(ctx context.Context) {
 }
 
 func (d *Discovery) CheckPeers() {
-	now := time.Now()
 	peers := d.getRandomPeers(peersNumber)
 	qCtx, cancel := context.WithTimeout(context.Background(), checkTimeout)
 	defer cancel()
@@ -40,15 +39,16 @@ func (d *Discovery) CheckPeers() {
 		d.logger.Error("failed to query bootstrap node: %s", err)
 		return
 	}
-	// check peers are updated in book.
+	// check peers are updated in host peerBook.
+PEER:
 	for _, p := range peers {
-		bPeer := d.book.lookup(p.ID)
-		if bPeer == nil {
-			continue // already removed from book.
+		for _, peerAddress := range d.host.Peerstore().Addrs(p.ID) {
+			peerStoreAddress := peerAddress.String() + "/p2p/" + p.ID.String()
+			if peerStoreAddress == p.String() {
+				continue PEER // peer is alive, skip nested loop.
+			}
 		}
-		if bPeer.LastSuccess.After(now) {
-			continue // peer marked as good, it's alive
-		}
+		// peerStoreBook not contain this address, remove from addressBook.
 		d.book.RemoveAddress(p.ID)
 	}
 }

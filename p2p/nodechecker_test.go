@@ -113,25 +113,25 @@ func TestHost_LocalAddressChange(t *testing.T) {
 				}
 			}
 
-			//nodeB.host.discovery.CheckPeers()
+			nodeB.host.discovery.CheckPeers()
 
-			resultAddresses := nodeB.host.discovery.GetAddresses()
+			addressBookAddresses := nodeB.host.discovery.GetAddresses()
 			if len(testCase.expected) == 2 {
-				require.True(t, len(resultAddresses) > 0, "nodeB should have at least 1 address")
+				require.True(t, len(addressBookAddresses) > 0, "nodeB should have at least 1 address")
 			} else {
 				require.Equal(t, len(testCase.expected), len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())), "nodeB should have %d addresses", len(testCase.expected))
+				require.Equal(t, len(testCase.expected), len(addressBookAddresses), "nodeB should have %d addresses", len(testCase.expected))
 				for _, addr := range testCase.expected {
+					peerStoreAddressList := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
+					var expectAddress string
 					switch addr {
 					case oldAddr:
-						addrL := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
-						require.Equal(t, addrAOld.String(), addrL[0].String(), "nodeB should have new address of nodeA")
-						require.Equal(t, len(testCase.expected), len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())), "nodeB should have %d addresses", len(testCase.expected))
-
+						expectAddress = addrAOld.String()
 					case newAddr:
-						addrL := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
-						require.Equal(t, addrANew.String(), addrL[0].String(), "nodeB should have new address of nodeA")
-						require.Equal(t, len(testCase.expected), len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())), "nodeB should have %d addresses", len(testCase.expected))
+						expectAddress = addrANew.String()
 					}
+					require.Equal(t, expectAddress, peerStoreAddressList[0].String(), "nodeB should have correct address of nodeA")
+					require.Equal(t, expectAddress, addressBookAddresses[0].String(), "nodeB should have correct address of nodeA")
 				}
 			}
 		})
