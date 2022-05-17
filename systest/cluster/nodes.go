@@ -114,7 +114,10 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case ev := <-watcher.ResultChan():
+		case ev, open := <-watcher.ResultChan():
+			if !open {
+				return nil, fmt.Errorf("watcher is terminated wile waiting for pod %v", name)
+			}
 			pod = ev.Object.(*v1.Pod)
 		}
 		switch pod.Status.Phase {

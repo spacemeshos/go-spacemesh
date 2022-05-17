@@ -133,7 +133,6 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	atxStore := sql.InMemory()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil,
-		activation.NewIdentityStore(database.NewMemDatabase()),
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	conState := mmocks.NewMockconservativeState(gomock.NewController(t))
 	conState.EXPECT().GetStateRoot().AnyTimes()
@@ -144,7 +143,6 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 
 var conf = Configuration{
 	SyncInterval: time.Second * 60 * 60 * 24, // long enough that it doesn't kick in during testing
-	AlwaysListen: false,
 }
 
 func newSyncer(ctx context.Context, t *testing.T, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
@@ -1144,7 +1142,6 @@ func TestSyncMissingLayer(t *testing.T) {
 	atxStore := sql.InMemory()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil,
-		activation.NewIdentityStore(database.NewMemDatabase()),
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 
 	conState := mmocks.NewMockconservativeState(gomock.NewController(t))

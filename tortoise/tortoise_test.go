@@ -54,7 +54,7 @@ func (madp *mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.Activat
 	}
 
 	// return a mocked value
-	return &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+	return &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}}}, nil
 }
 
 func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.ActivationTx) error {
@@ -250,7 +250,7 @@ func generateBallots(t *testing.T, l types.LayerID, natxs, nballots int, bbp bas
 		atxHeader := makeAtxHeaderWithWeight(weight)
 		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 		atx.PubLayerID = l
-		atx.NodeID.Key = fmt.Sprintf("%d", i)
+		atx.NodeID = types.NodeID{byte(i)}
 		atx.CalcAndSetID()
 		require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
 		atxs = append(atxs, atx.ID())
@@ -540,7 +540,7 @@ func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 
 func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
 	header := &types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "key"}},
+		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
 	}
 	header.StartTick = 0
 	header.EndTick = 1

@@ -111,6 +111,25 @@ func UpdateIfBetter(db sql.Executor, tid types.TransactionID, lid types.LayerID,
 	return rows, nil
 }
 
+// GetAppliedLayer returns layer when transaction was applied.
+func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, error) {
+	var rst types.LayerID
+	rows, err := db.Exec("select layer from transactions where id = ?1 and applied = ?2", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, tid[:])
+		stmt.BindInt64(2, stateApplied)
+	}, func(stmt *sql.Statement) bool {
+		rst = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		return false
+	})
+	if err != nil {
+		return types.LayerID{}, fmt.Errorf("failed to load applied layer for tx %s: %w", tid, err)
+	}
+	if rows == 0 {
+		return types.LayerID{}, fmt.Errorf("%w: tx %s is not applied", sql.ErrNotFound, tid)
+	}
+	return rst, nil
+}
+
 // Apply updates the applied field to `applied` for a transaction, along with the layer and block it is applied with.
 func Apply(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid types.BlockID) (int, error) {
 	rows, err := db.Exec(`update transactions set applied = ?2, layer = ?3, block = ?4 where id = ?1 and applied != ?2 returning id`,
@@ -152,13 +171,14 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 
 // DiscardNonceBelow sets the applied field to `stateDiscarded` for transactions with nonce lower than specified.
 func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) error {
-	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where origin = ?1 and nonce < ?2`,
+	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where origin = ?1 and nonce < ?2 and applied != ?6`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindInt64(2, int64(nonce))
 			stmt.BindInt64(3, stateDiscarded)
 			stmt.BindInt64(4, int64(types.LayerID{}.Value))
 			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
+			stmt.BindInt64(6, stateApplied)
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("discard nonce below %s/%d: %w", address, nonce, err)

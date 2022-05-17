@@ -47,8 +47,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -713,15 +713,12 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Avoid waiting for new connections.
 		app.Config.P2P.TargetOutbound = 0
 
-		// Speed things up a little
-		app.Config.SyncInterval = 1
+		// syncer will cause the node to go out of sync (and not listen to gossip)
+		// since we are testing single-node transaction service, we don't need the syncer to run
+		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		// Force gossip to always listen, even when not synced
-		app.Config.AlwaysListen = true
-
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-
 		app.Config.Genesis = apiConfig.DefaultTestGenesisConfig()
 
 		// This will block. We need to run the full app here to make sure that
@@ -817,8 +814,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Wait for the app to exit
 		wg.Wait()
 	}()
-
-	time.Sleep(4 * time.Second)
 
 	// Submit the txs
 	res1, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
@@ -1069,19 +1064,16 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("create VRF signer: %w", err)
-	}
+	vrfSigner := edSgn.VRFSigner()
 
-	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.BytesToNodeID(pub.Bytes())
 
 	dbStorepath := storePath
 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
-	hareOracle.Register(true, pub.String())
+	hareOracle.Register(true, nodeID)
 
-	err = smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn, false, hareOracle,
+	err := smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn, false, hareOracle,
 		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err

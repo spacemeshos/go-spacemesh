@@ -1,10 +1,8 @@
 package signing
 
 import (
-	"bytes"
-	"fmt"
-
-	"github.com/spacemeshos/ed25519"
+	oed25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
 )
 
 var _ Signer = VRFSigner{}
@@ -17,7 +15,7 @@ type VRFSigner struct {
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) []byte {
-	return ed25519.Sign(s.privateKey, msg)
+	return ecvrf.Prove(oed25519.PrivateKey(s.privateKey), msg)
 }
 
 // PublicKey of the signer.
@@ -30,22 +28,10 @@ func (s VRFSigner) LittleEndian() bool {
 	return true
 }
 
-// NewVRFSigner creates a new VRFSigner from a 32-byte seed.
-func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
-	if len(seed) < ed25519.SeedSize {
-		return nil, nil, fmt.Errorf("seed must be >=%d bytes (len(seed)=%d)", ed25519.SeedSize, len(seed))
-	}
-	vrfPub, vrfPriv, err := ed25519.GenerateKey(bytes.NewReader(seed))
-	if err != nil {
-		return nil, nil, fmt.Errorf("generate ed25519 key: %w", err)
-	}
-
-	return &VRFSigner{privateKey: vrfPriv, pub: &PublicKey{pub: vrfPub}}, vrfPub, nil
-}
-
 // VRFVerify verifies a message and signature, given a public key.
 func VRFVerify(pub, msg, sig []byte) bool {
-	return ed25519.Verify(pub, msg, sig)
+	valid, _ := ecvrf.Verify(oed25519.PublicKey(pub), sig, msg)
+	return valid
 }
 
 var _ Verifier = VRFVerifier{}

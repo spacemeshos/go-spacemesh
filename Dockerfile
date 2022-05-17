@@ -35,6 +35,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM linux as golang
+ARG TARGETPLATFORM
 ENV GOLANG_MAJOR_VERSION 1
 ENV GOLANG_MINOR_VERSION 17
 ENV GOLANG_PATCH_VERSION 6
@@ -54,7 +55,8 @@ RUN set -ex \
     curl \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
- && curl -L https://golang.org/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar zx -C /usr/local \
+ && if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then export ARCHITECTURE=arm64; else export ARCHITECTURE=amd64; fi \
+ && curl -L https://golang.org/dl/go${GOLANG_VERSION}.linux-${ARCHITECTURE}.tar.gz | tar zx -C /usr/local \
  && go version \
  && mkdir -p "$GOPATH/src" "$GOPATH/bin" \
  && chmod -R 777 "$GOPATH"
@@ -84,6 +86,7 @@ COPY . .
 # And compile the project
 RUN make build
 RUN make harness
+RUN make gen-p2p-identity
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh
@@ -94,6 +97,7 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
 # TODO(nkryuchkov): uncomment when go-svm is imported
 #COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libsvm.so /bin/
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/gen-p2p-identity /bin/
 
 ENTRYPOINT ["/bin/go-harness"]
 EXPOSE 7513

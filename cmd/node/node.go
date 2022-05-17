@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"time"
 
+	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	grpcctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -29,7 +32,6 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -50,7 +52,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -59,6 +60,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 const edKeyFileName = "key.bin"
@@ -90,6 +92,7 @@ const (
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
 	SVMLogger              = "SVM"
+	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
 
@@ -279,7 +282,7 @@ type App struct {
 	beaconProtocol   *beacon.ProtocolDriver
 	closers          []interface{ Close() }
 	log              log.Log
-	svm              *svm.SVM
+	svm              *vm.VM
 	conState         *txs.ConservativeState
 	layerFetch       *layerfetcher.Logic
 	ptimesync        *peersync.Sync
@@ -456,12 +459,6 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	stateDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create state DB: %w", err)
-	}
-	app.closers = append(app.closers, stateDBStore)
-
 	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create IDs DB: %w", err)
@@ -479,7 +476,6 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 
-	idStore := activation.NewIdentityStore(idDBStore)
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 
@@ -492,13 +488,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
-	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
-	if err != nil {
-		return fmt.Errorf("create applied txs DB: %w", err)
-	}
-	app.closers = append(app.closers, appliedTxs)
-	state := svm.New(stateDBStore, appliedTxs, app.addLogger(SVMLogger, lg))
-
+	state := vm.New(app.addLogger(SVMLogger, lg), sqlDB)
 	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
@@ -507,7 +497,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(sqlDB, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(sqlDB, fetcherWrapped, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
 		beacon.WithContext(ctx),
@@ -592,7 +582,6 @@ func (app *App) initServices(ctx context.Context,
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
-		AlwaysListen: app.Config.AlwaysListen,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -610,7 +599,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -632,12 +621,12 @@ func (app *App) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
+	postSetupMgr, err := activation.NewPostSetupManager(nodeID[:], app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
 
 	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 	if app.Config.SMESHING.Start {
@@ -718,7 +707,6 @@ func (app *App) HareFactory(
 	beacons system.BeaconGetter,
 	pFetcher system.ProposalFetcher,
 	hOracle hare.Rolacle,
-	idStore *activation.IdentityStore,
 	clock TickProvider,
 	lg log.Log,
 ) HareService {
@@ -742,7 +730,6 @@ func (app *App) HareFactory(
 		hOracle,
 		patrol,
 		uint16(app.Config.LayersPerEpoch),
-		idStore,
 		hOracle,
 		clock,
 		app.addLogger(HareLogger, lg))
@@ -793,7 +780,16 @@ func (app *App) startAPIServices(ctx context.Context) {
 	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
+			logger := app.addLogger(GRPCLogger, app.log).Zap()
+			grpczap.ReplaceGrpcLoggerV2(logger)
+			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
+				grpcmiddleware.WithStreamServerChain(
+					grpcctxtags.StreamServerInterceptor(),
+					grpczap.StreamServerInterceptor(logger)),
+				grpcmiddleware.WithUnaryServerChain(
+					grpcctxtags.UnaryServerInterceptor(),
+					grpczap.UnaryServerInterceptor(logger)),
+			)
 		}
 		services = append(services, svc)
 		svc.RegisterService(app.grpcAPIService)
@@ -1066,12 +1062,9 @@ func (app *App) Start() error {
 	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
-	if err != nil {
-		return fmt.Errorf("failed to create vrf signer: %w", err)
-	}
+	vrfSigner := app.edSgn.VRFSigner()
 
-	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 
 	lg := logger.Named(nodeID.ShortString()).WithFields(nodeID)
 
