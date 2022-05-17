@@ -148,7 +148,7 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 	block := types.GenLayerBlock(lyrID, nil)
 
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, proposalIDs, pids)
 			return nil
 		}).Times(1)
@@ -193,7 +193,7 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 	block := types.GenLayerBlock(lyrID, nil)
 
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, proposalIDs, pids)
 			return nil
 		}).Times(1)
@@ -270,7 +270,7 @@ func TestHare_onTick(t *testing.T) {
 	h.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), lyrID, false).Times(1)
 	h.mockProposalDB.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return nil
 		}).Times(1)
@@ -358,7 +358,7 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 	h.mockProposalDB.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
 	h.mockMeshDB.EXPECT().GetBallot(refBallot.ID()).Return(refBallot, nil).Times(1)
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return nil
 		}).Times(1)
@@ -427,7 +427,7 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 	h.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), lyrID, false).Times(1)
 	h.mockProposalDB.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, types.ToProposalIDs(goodProposals), pids)
 			return nil
 		}).Times(1)
@@ -661,7 +661,7 @@ func TestHare_WeakCoin(t *testing.T) {
 	// complete + coin flip true
 	h.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), layerID, true).Times(1)
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return nil
 		}).Times(1)
@@ -693,7 +693,7 @@ func TestHare_WeakCoin(t *testing.T) {
 	// complete + coin flip false
 	h.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), layerID, false).Times(1)
 	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), p2p.AnyPeer(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
+		func(ctx context.Context, peer p2p.Peer, pids []types.ProposalID) error {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return nil
 		}).Times(1)
