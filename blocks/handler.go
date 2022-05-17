@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -92,7 +94,7 @@ func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetTxs(ctx, b.TxIDs); err != nil {
+	if err := h.fetcher.GetTxs(ctx, p2p.AnyPeer(), b.TxIDs); err != nil {
 		return fmt.Errorf("block get TXs: %w", err)
 	}
 	return nil

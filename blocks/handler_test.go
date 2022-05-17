@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,7 +78,7 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
 	errUnknown := errors.New("unknown")
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
+	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), p2p.AnyPeer(), txIDs).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
 }
 
@@ -87,7 +89,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
+	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), p2p.AnyPeer(), txIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
@@ -100,7 +102,7 @@ func Test_HandleBlockData(t *testing.T) {
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
+	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), p2p.AnyPeer(), txIDs).Return(nil).Times(1)
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
 }

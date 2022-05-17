@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
@@ -903,7 +905,7 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 
 	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
 
-	mockFetch.EXPECT().FetchAtx(gomock.Any(), prevAtxID).Return(nil).Times(5)
+	mockFetch.EXPECT().FetchAtx(gomock.Any(), p2p.AnyPeer(), prevAtxID).Return(nil).Times(5)
 	for _, atx := range atxList {
 		r.NoError(activationDb.FetchAtxReferences(context.TODO(), atx))
 	}

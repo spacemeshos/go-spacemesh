@@ -481,7 +481,7 @@ func (db *DB) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	if err := db.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
+	if err := db.fetcher.GetPoetProof(ctx, p2p.AnyPeer(), atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}

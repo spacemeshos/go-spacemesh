@@ -336,7 +336,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if b.RefBallot != types.EmptyBallotID {
 		ballots = append(ballots, b.RefBallot)
 	}
-	if err := h.fetcher.GetBallots(ctx, ballots); err != nil {
+	if err := h.fetcher.GetBallots(ctx, p2p.AnyPeer(), ballots); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
 
@@ -344,7 +344,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 		return fmt.Errorf("fetch referenced ATXs: %w", err)
 	}
 
-	if err := h.fetcher.GetBlocks(ctx, ballotBlockView(b)); err != nil {
+	if err := h.fetcher.GetBlocks(ctx, p2p.AnyPeer(), ballotBlockView(b)); err != nil {
 		return fmt.Errorf("fetch blocks: %w", err)
 	}
 
@@ -356,7 +356,7 @@ func (h *Handler) fetchReferencedATXs(ctx context.Context, b *types.Ballot) erro
 	if b.EpochData != nil {
 		atxs = append(atxs, b.EpochData.ActiveSet...)
 	}
-	if err := h.fetcher.GetAtxs(ctx, atxs); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, p2p.AnyPeer(), atxs); err != nil {
 		return fmt.Errorf("proposal get ATXs: %w", err)
 	}
 	return nil
@@ -374,7 +374,7 @@ func (h *Handler) checkTransactions(ctx context.Context, p *types.Proposal) erro
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetTxs(ctx, p.TxIDs); err != nil {
+	if err := h.fetcher.GetTxs(ctx, p2p.AnyPeer(), p.TxIDs); err != nil {
 		return fmt.Errorf("proposal get TXs: %w", err)
 	}
 	return nil

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
@@ -149,7 +151,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ts.syncer.Start(context.TODO())
 
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	gLayer := types.GetEffectiveGenesis()
 
 	ch := make(chan layerfetcher.LayerPromiseResult)
@@ -187,7 +189,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 	gLayer := types.GetEffectiveGenesis()
 	current := gLayer.Add(10)
 	ts.mTicker.advanceToLayer(current)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	for lid := gLayer.Add(1); lid.Before(current); lid = lid.Add(1) {
 		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(okCh())
 	}
@@ -204,7 +206,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	current := gLayer.Add(2)
 	ts.mTicker.advanceToLayer(current)
 	lyr := current.Sub(1)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), lyr.GetEpoch()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), lyr.GetEpoch()).Return(nil).AnyTimes()
 	ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lyr).Return(failedCh())
 
 	require.False(t, ts.syncer.synchronize(context.TODO()))
@@ -218,7 +220,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 	current := types.NewLayerID(layersPerEpoch * 4)
 	ts.mTicker.advanceToLayer(current)
 	failedEpoch := types.EpochID(2)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), failedEpoch).Return(errors.New("no ATXs. should fail sync"))
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), failedEpoch).Return(errors.New("no ATXs. should fail sync"))
 	gLayer := types.GetEffectiveGenesis()
 	// should fail when syncing the last layer of the epoch
 	failedLayer := failedEpoch.FirstLayer().Add(layersPerEpoch - 1)
@@ -250,7 +252,7 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
 			return okCh()
 		})
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), lyr.GetEpoch()).Return(nil)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), lyr.GetEpoch()).Return(nil)
 
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	require.True(t, ts.syncer.ListenToGossip())
@@ -268,7 +270,7 @@ func TestSynchronize_getATXsFailedCurrentEpoch_OKUntilLastLayer(t *testing.T) {
 			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
 			return okCh()
 		})
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), lyr.GetEpoch()).Return(errors.New("no ATXs. still ok"))
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), lyr.GetEpoch()).Return(errors.New("no ATXs. still ok"))
 
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	require.True(t, ts.syncer.dataSynced())
@@ -283,7 +285,7 @@ func TestSynchronize_getATXsFailedCurrentEpoch_OKUntilLastLayer(t *testing.T) {
 			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
 			return okCh()
 		})
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), lyr.GetEpoch()).Return(errors.New("no ATXs. should fail sync"))
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), lyr.GetEpoch()).Return(errors.New("no ATXs. should fail sync"))
 
 	require.False(t, ts.syncer.synchronize(context.TODO()))
 	require.False(t, ts.syncer.dataSynced())
@@ -321,7 +323,7 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 // test the case where the node originally starts from notSynced and eventually becomes synced.
 func TestFromNotSyncedToSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(5)
 	ts.mTicker.advanceToLayer(current)
@@ -352,7 +354,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 // to notSynced.
 func TestFromGossipSyncToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(1)
 	ts.mTicker.advanceToLayer(current)
@@ -397,7 +399,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 // eventually become synced again.
 func TestFromSyncedToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	syncedCh := make(chan struct{})
 	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
@@ -517,14 +519,14 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 
 	// epoch 1. expect error at last layer
 	ts.mTicker.advanceToLayer(types.NewLayerID(5))
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), types.EpochID(1)).Return(errors.New("unknown")).Times(layersPerEpoch)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), types.EpochID(1)).Return(errors.New("unknown")).Times(layersPerEpoch)
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(3)))
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(4)))
 	require.Error(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(5)))
 
 	// epoch 2
 	ts.mTicker.advanceToLayer(types.NewLayerID(8))
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), types.EpochID(2)).Return(nil).Times(layersPerEpoch)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), types.EpochID(2)).Return(nil).Times(layersPerEpoch)
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(6)))
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(7)))
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(8)))
@@ -543,11 +545,11 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(3)))
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(4)))
 	// will be requested at layer 5
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), types.EpochID(1)).Return(errors.New("unknown")).Times(1)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), types.EpochID(1)).Return(errors.New("unknown")).Times(1)
 	require.Error(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(5)))
 
 	// epoch 2 is the current epoch. ATXs will be requested at every layer
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), types.EpochID(2)).Return(nil).Times(layersPerEpoch)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), types.EpochID(2)).Return(nil).Times(layersPerEpoch)
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(6)))
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(7)))
 	require.NoError(t, ts.syncer.getATXs(context.TODO(), types.NewLayerID(8)))
@@ -560,7 +562,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	last := genesis.Add(4)
 	ts.mTicker.advanceToLayer(last)
 
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	ts.mConState.EXPECT().GetStateRoot().AnyTimes()
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
@@ -620,7 +622,7 @@ func TestSyncMissingLayer(t *testing.T) {
 
 func TestSync_SkipProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
-	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), p2p.AnyPeer(), gomock.Any()).Return(nil).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(1)
 	ts.mTicker.advanceToLayer(current)

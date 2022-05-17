@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/p2p"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,31 +22,31 @@ type Fetcher interface {
 
 // BlockFetcher defines an interface for fetching blocks from remote peers.
 type BlockFetcher interface {
-	GetBlocks(context.Context, []types.BlockID) error
+	GetBlocks(context.Context, p2p.Peer, []types.BlockID) error
 }
 
 // AtxFetcher defines an interface for fetching ATXs from remote peers.
 type AtxFetcher interface {
-	GetAtxs(context.Context, []types.ATXID) error
+	GetAtxs(context.Context, p2p.Peer, []types.ATXID) error
 	FetchAtx(context.Context, p2p.Peer, types.ATXID) error
 }
 
 // TxFetcher defines an interface for fetching transactions from remote peers.
 type TxFetcher interface {
-	GetTxs(context.Context, []types.TransactionID) error
+	GetTxs(context.Context, p2p.Peer, []types.TransactionID) error
 }
 
 // PoetProofFetcher defines an interface for fetching PoET proofs from remote peers.
 type PoetProofFetcher interface {
-	GetPoetProof(context.Context, types.Hash32) error
+	GetPoetProof(context.Context, p2p.Peer, types.Hash32) error
 }
 
 // BallotFetcher defines an interface for fetching Ballot from remote peers.
 type BallotFetcher interface {
-	GetBallots(context.Context, []types.BallotID) error
+	GetBallots(context.Context, p2p.Peer, []types.BallotID) error
 }
 
 // ProposalFetcher defines an interface for fetching Proposal from remote peers.
 type ProposalFetcher interface {
-	GetProposals(context.Context, []types.ProposalID) error
+	GetProposals(context.Context, p2p.Peer, []types.ProposalID) error
 }
