@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,10 +25,21 @@ type hostWrapper struct {
 
 // addressFactory is a mock implementation of the addressFactory interface. In real app autorelaly manage it.
 type addressFactory struct {
-	blockAddresses []string
+	blockAddressesMu *sync.RWMutex
+	blockAddresses   []string
+	closed           bool
+	mark             chan struct{}
+}
+
+func (t *addressFactory) addBlockList(blockAddress string) {
+	t.blockAddressesMu.Lock()
+	t.blockAddresses = append(t.blockAddresses, blockAddress)
+	t.blockAddressesMu.Unlock()
 }
 
 func (t *addressFactory) addressFactory(addrs []ma.Multiaddr) []ma.Multiaddr {
+	t.blockAddressesMu.RLock()
+	defer t.blockAddressesMu.RUnlock()
 	result := make([]ma.Multiaddr, 0)
 	var ts []string
 	for _, addr := range addrs {
@@ -42,10 +54,17 @@ func (t *addressFactory) addressFactory(addrs []ma.Multiaddr) []ma.Multiaddr {
 			ts = append(ts, addr.String())
 		}
 	}
+	if len(t.blockAddresses) > 0 {
+		if !t.closed {
+			close(t.mark)
+			t.closed = true
+		}
+	}
 	return result
 }
 
 func TestHost_LocalAddressChange(t *testing.T) {
+	t.Parallel()
 	const (
 		oldAddr = iota
 		newAddr
@@ -76,7 +95,8 @@ func TestHost_LocalAddressChange(t *testing.T) {
 			block:    []int{},
 		},
 	}
-	for _, testCase := range table {
+	for _, tc := range table {
+		testCase := tc
 		t.Run(testCase.title, func(t *testing.T) {
 			t.Parallel()
 			addrAOld := generateAddressV4(t)
@@ -105,24 +125,30 @@ func TestHost_LocalAddressChange(t *testing.T) {
 			for _, addr := range testCase.block {
 				switch addr {
 				case oldAddr:
-					nodeB.transport.blockAddresses = append(nodeB.transport.blockAddresses, addrAOld.String())
-					nodeA.transport.blockAddresses = append(nodeA.transport.blockAddresses, addrAOld.String())
+					nodeA.transport.addBlockList(addrAOld.String())
 				case newAddr:
-					nodeA.transport.blockAddresses = append(nodeA.transport.blockAddresses, addrANew.String())
-					nodeB.transport.blockAddresses = append(nodeB.transport.blockAddresses, addrANew.String())
+					nodeA.transport.addBlockList(addrANew.String())
 				}
 			}
 
-			nodeB.host.discovery.CheckPeers()
+			if len(testCase.block) > 0 {
+				<-nodeA.transport.mark // wait until nodes internal ticker update addresses.
+			}
+			require.NoError(t, nodeA.host.Network().ClosePeer(nodeB.host.ID()), "nodeA should be able to close nodeB")
+			require.NoError(t, nodeB.host.Network().ClosePeer(nodeA.host.ID()), "nodeB should be able to close nodeA")
+			time.Sleep(100 * time.Millisecond)
+
+			nodeB.host.discovery.CheckPeers(context.Background())
+			time.Sleep(100 * time.Millisecond)
 
 			addressBookAddresses := nodeB.host.discovery.GetAddresses()
 			if len(testCase.expected) == 2 {
 				require.True(t, len(addressBookAddresses) > 0, "nodeB should have at least 1 address")
 			} else {
-				require.Equal(t, len(testCase.expected), len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())), "nodeB should have %d addresses", len(testCase.expected))
+				peerStoreAddressList := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
+				require.Equal(t, len(testCase.expected), len(peerStoreAddressList), "nodeB should have %d addresses", len(testCase.expected))
 				require.Equal(t, len(testCase.expected), len(addressBookAddresses), "nodeB should have %d addresses", len(testCase.expected))
 				for _, addr := range testCase.expected {
-					peerStoreAddressList := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
 					var expectAddress string
 					switch addr {
 					case oldAddr:
@@ -131,7 +157,7 @@ func TestHost_LocalAddressChange(t *testing.T) {
 						expectAddress = addrANew.String()
 					}
 					require.Equal(t, expectAddress, peerStoreAddressList[0].String(), "nodeB should have correct address of nodeA")
-					require.Equal(t, expectAddress, addressBookAddresses[0].String(), "nodeB should have correct address of nodeA")
+					require.Equal(t, expectAddress+"/p2p/"+nodeA.host.ID().String(), addressBookAddresses[0].String(), "nodeB should have correct address of nodeA")
 				}
 			}
 		})
@@ -175,7 +201,11 @@ func getFreePort() (int, error) {
 }
 
 func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper {
-	tstTcp := &addressFactory{blockAddresses: []string{}}
+	tstTcp := &addressFactory{
+		blockAddressesMu: &sync.RWMutex{},
+		blockAddresses:   []string{},
+		mark:             make(chan struct{}),
+	}
 
 	node, err := libp2p.New(context.Background(),
 		libp2p.ListenAddrs(addr),
@@ -189,6 +219,7 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 		require.NoError(t, node.Close())
 	})
 	cnf := DefaultConfig()
+	cnf.CheckPeersUsedBefore = time.Millisecond * 1
 	if bootNode != "" {
 		cnf.Bootnodes = append(cnf.Bootnodes, bootNode)
 	}

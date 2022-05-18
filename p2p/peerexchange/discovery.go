@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/libp2p/go-eventbus"
 	"github.com/libp2p/go-libp2p-core/event"
@@ -18,16 +19,26 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+const (
+	// BootNodeTag is the tag used to identify boot nodes in connectionManager.
+	BootNodeTag = "bootnode"
+)
+
 // Config for Discovery.
 type Config struct {
-	Bootnodes []string
-	DataDir   string
+	Bootnodes            []string
+	DataDir              string
+	CheckInterval        time.Duration // Interval to check for dead|alive peers in the book.
+	CheckTimeout         time.Duration // Timeout to connect while node check for dead|alive peers in the book.
+	CheckPeersNumber     int           // Number of peers to check for dead|alive peers in the book.
+	CheckPeersUsedBefore time.Duration // Time to wait before checking for dead|alive peers in the book.
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
 type Discovery struct {
 	logger log.Log
 	host   host.Host
+	cfg    Config
 
 	cancel context.CancelFunc
 	eg     errgroup.Group
@@ -40,6 +51,7 @@ type Discovery struct {
 func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Discovery{
+		cfg:    config,
 		logger: logger,
 		host:   h,
 		cancel: cancel,
