@@ -58,7 +58,7 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 		"--duration=30s",
 		"--n=10",
 	)
-	labels := map[string]string{"app": "poet"}
+	labels := nodeLabels("poet")
 	pod := corev1.Pod("poet", ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
@@ -129,10 +129,31 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 	}
 }
 
-func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []DeploymentFlag) ([]*NodeClient, error) {
-	labels := map[string]string{
+func nodeLabels(name string) map[string]string {
+	return map[string]string{
 		"app": name,
 	}
+}
+
+func labelSelector(labels map[string]string) string {
+	var (
+		buf   strings.Builder
+		first = true
+	)
+	for key, value := range labels {
+		if !first {
+			buf.WriteString(",")
+		}
+		first = false
+		buf.WriteString(key)
+		buf.WriteString("=")
+		buf.WriteString(value)
+	}
+	return buf.String()
+}
+
+func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []DeploymentFlag) ([]*NodeClient, error) {
+	labels := nodeLabels(name)
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -307,9 +328,14 @@ func TargetOutbound(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--target-outbound", Value: strconv.Itoa(target)}
 }
 
+const (
+	genesisTimeFlag = "--genesis-time"
+	accountsFlag    = "--accounts"
+)
+
 // GenesisTime flag.
 func GenesisTime(t time.Time) DeploymentFlag {
-	return DeploymentFlag{Name: "--genesis-time", Value: t.Format(time.RFC3339)}
+	return DeploymentFlag{Name: genesisTimeFlag, Value: t.Format(time.RFC3339)}
 }
 
 // Bootnodes flag.
