@@ -1,4 +1,5 @@
 test_name ?= TestSmeshing
+cron_name ?= 
 version_info ?= $(shell git rev-parse --short HEAD)
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
@@ -11,6 +12,7 @@ level ?= debug
 bootstrap ?= 5m
 node_selector ?=
 namespace ?=
+schedule ?=
 
 .PHONY: docker
 docker:
@@ -39,3 +41,13 @@ watch:
 clean:
 	@kubectl delete pod/$(test_pod_name)
 	@kubectl delete ns --selector=testid=$(test_pod_name),keep=false
+
+.PHONY: cleanlong
+cleanlong:
+	@kubectl delete pod/$(test_pod_name)
+	@kubectl delete ns --selector=testid=$(test_pod_name)
+	@kubectl delete cronjob --selector=testid=$(test_pod_name)
+
+.PHONY: cron
+cron:
+	@test_name=$(test_name) namespace=$(namespace) size=$(size) smesher_image=$(smesher_image) level=$(level) node_selector=$(node_selector) keep=true testid=$(test_pod_name) cron_name=$(cron_name) image_name=$(image_name) schedule=$(schedule) envsubst < ./templates/cronjob.yaml | kubectl create -f -
