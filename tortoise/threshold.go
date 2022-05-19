@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
@@ -12,19 +13,19 @@ import (
 func computeBallotWeight(
 	atxdb atxDataProvider,
 	bdp blockDataProvider,
-	referenceWeights, weights map[types.BallotID]weight,
+	referenceWeights, weights map[types.BallotID]util.Weight,
 	ballot *types.Ballot,
 	layerSize,
 	layersPerEpoch uint32,
-) (weight, error) {
-	var reference weight
+) (util.Weight, error) {
+	var reference util.Weight
 	if ballot.EpochData != nil {
 		var total, targetWeight uint64
 
 		for _, atxid := range ballot.EpochData.ActiveSet {
 			atx, err := atxdb.GetAtxHeader(atxid)
 			if err != nil {
-				return weight{}, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
+				return util.Weight{}, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
 			}
 			atxweight := atx.GetWeight()
 			total += atxweight
@@ -34,71 +35,71 @@ func computeBallotWeight(
 		}
 		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
 		if err != nil {
-			return weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
+			return util.Weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
-		reference = weightFromUint64(targetWeight)
-		reference = reference.div(weightFromUint64(uint64(expected)))
+		reference = util.WeightFromUint64(targetWeight)
+		reference = reference.Div(util.WeightFromUint64(uint64(expected)))
 		referenceWeights[ballot.ID()] = reference
 	} else {
 		if ballot.RefBallot == types.EmptyBallotID {
-			return weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
+			return util.Weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 		}
 		var exist bool
 		reference, exist = referenceWeights[ballot.RefBallot]
 		if !exist {
 			refballot, err := bdp.GetBallot(ballot.RefBallot)
 			if err != nil {
-				return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
+				return util.Weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
 			}
 			_, err = computeBallotWeight(atxdb, bdp, referenceWeights, weights, refballot, layerSize, layersPerEpoch)
 			if err != nil {
-				return weight{}, err
+				return util.Weight{}, err
 			}
 			reference = referenceWeights[ballot.RefBallot]
 		}
 	}
-	real := reference.copy().
-		mul(weightFromInt64(int64(len(ballot.EligibilityProofs))))
+	real := reference.Copy().
+		Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs))))
 	weights[ballot.ID()] = real
 	return real, nil
 }
 
-func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]weight, eid types.EpochID) (weight, error) {
+func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {
 	layerWeight, exist := epochWeights[eid]
 	if exist {
 		return layerWeight, nil
 	}
 	epochWeight, _, err := atxdb.GetEpochWeight(eid)
 	if err != nil {
-		return weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
+		return util.Weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
 	}
-	layerWeight = weightFromUint64(epochWeight)
-	layerWeight = layerWeight.div(weightFromUint64(uint64(types.GetLayersPerEpoch())))
+	layerWeight = util.WeightFromUint64(epochWeight)
+	layerWeight = layerWeight.Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	epochWeights[eid] = layerWeight
 	return layerWeight, nil
 }
 
 // computes weight for (from, to] layers.
-func computeExpectedWeight(weights map[types.EpochID]weight, from, to types.LayerID) weight {
-	total := weightFromUint64(0)
+func computeExpectedWeight(weights map[types.EpochID]util.Weight, from, to types.LayerID) util.Weight {
+	total := util.WeightFromUint64(0)
 	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
-		total = total.add(weights[lid.GetEpoch()])
+		total = total.Add(weights[lid.GetEpoch()])
 	}
 	return total
 }
 
-func computeLocalThreshold(config Config, epochWeight map[types.EpochID]weight, lid types.LayerID) weight {
-	threshold := weightFromUint64(0)
-	threshold = threshold.add(epochWeight[lid.GetEpoch()])
-	threshold = threshold.fraction(config.LocalThreshold)
+func computeLocalThreshold(config Config, epochWeight map[types.EpochID]util.Weight, lid types.LayerID) util.Weight {
+	threshold := util.WeightFromUint64(0)
+	threshold = threshold.Add(epochWeight[lid.GetEpoch()])
+	threshold = threshold.Fraction(config.LocalThreshold)
 	return threshold
 }
 
-func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weight, target, last types.LayerID) weight {
+func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]util.Weight, target, last types.LayerID) util.Weight {
 	expected := computeExpectedWeight(epochWeight, target, last)
-	threshold := weightFromUint64(0)
-	threshold = threshold.add(expected)
-	threshold = threshold.fraction(config.GlobalThreshold)
+	threshold := util.WeightFromUint64(0)
+	threshold = threshold.Add(expected)
+	threshold = threshold.Fraction(config.GlobalThreshold)
 	return threshold
 }
 
@@ -113,12 +114,12 @@ func getVerificationWindow(config Config, tmode mode, target, last types.LayerID
 
 func computeThresholds(logger log.Log, config Config, tmode mode,
 	target, last, processed types.LayerID,
-	epochWeight map[types.EpochID]weight,
-) (local, global weight) {
+	epochWeight map[types.EpochID]util.Weight,
+) (local, global util.Weight) {
 	localThreshold := computeLocalThreshold(config, epochWeight, last)
 	globalThreshold := computeThresholdForLayers(config, epochWeight,
 		target,
 		maxLayer(getVerificationWindow(config, tmode, target, last), processed),
 	)
-	return localThreshold, globalThreshold.add(localThreshold)
+	return localThreshold, globalThreshold.Add(localThreshold)
 }
