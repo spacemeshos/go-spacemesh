@@ -497,6 +497,9 @@ func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
+	//if !p2p.IsAnyPeer(peer) {
+	//	batch.peer = peer
+	//}
 	batch.SetID()
 
 	f.activeBatchM.Lock()
@@ -514,8 +517,9 @@ func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 	if err != nil {
 		f.handleHashError(batch.ID, err)
 	}
-	// try sending batch to some random peer
+	// try sending batch to provided or some random peer
 	retries := 0
+	seenPeers := make(map[p2p.Peer]struct{})
 	for {
 		if f.stopped() {
 			return
@@ -528,18 +532,38 @@ func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 			return
 		}
 
+		peerChanged := false
+
 		// if peer is not provided - send to random one
-		if peer == "" {
+		if p2p.IsAnyPeer(peer) {
 			peer = GetRandomPeer(f.net.GetPeers())
+			peerChanged = true
 		}
-		f.log.With().Debug("sending request batch to peer",
+
+		// if we've tried peer already - try another one
+		if _, exists := seenPeers[peer]; exists {
+			oldPear := peer
+			peer = GetRandomPeer(f.net.GetPeers())
+			peerChanged = true
+
+			f.log.With().Warning("change peer as tried already",
+				log.String("old_peer", oldPear.String()),
+				log.String("new_peer", peer.String()),
+				log.Int("retries", retries))
+		}
+
+		seenPeers[peer] = struct{}{}
+
+		if peerChanged {
+			batch.peer = peer
+			f.activeBatchM.Lock()
+			f.activeBatches[batch.ID] = batch
+			f.activeBatchM.Unlock()
+		}
+		f.log.With().Warning("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Int("num_requests", len(batch.Requests)),
 			log.String("peer", peer.String()))
-		batch.peer = peer
-		f.activeBatchM.Lock()
-		f.activeBatches[batch.ID] = batch
-		f.activeBatchM.Unlock()
 		err := f.net.Request(context.TODO(), peer, bytes, f.receiveResponse, errorFunc)
 
 		// if call succeeded, continue to other requests
