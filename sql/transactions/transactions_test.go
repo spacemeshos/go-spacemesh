@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, gas, fee uint64) *types.Transaction {
@@ -315,12 +315,22 @@ func TestDiscardNonceBelow(t *testing.T) {
 		txs = append(txs, tx)
 	}
 
+	// apply nonce 0
+	lid := types.NewLayerID(71)
+	bid := types.RandomBlockID()
+	updated, err := Apply(db, txs[0].ID(), lid, bid)
+	require.NoError(t, err)
+	require.Equal(t, 1, updated)
 	cutoff := uint64(numTXs) / 2
 	require.NoError(t, DiscardNonceBelow(db, principal, cutoff))
 	for _, tx := range txs {
 		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-		if tx.Origin() == principal && tx.AccountNonce < cutoff {
-			expected.State = types.DISCARDED
+		if tx.Origin() == principal {
+			if tx.AccountNonce == 0 {
+				expected = makeMeshTX(tx, lid, bid, received, types.APPLIED)
+			} else if tx.AccountNonce < cutoff {
+				expected.State = types.DISCARDED
+			}
 		}
 		getAndCheckMeshTX(t, db, tx.ID(), expected)
 	}
@@ -568,4 +578,34 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, got, numTXs-i)
 	}
+}
+
+func TestAppliedLayer(t *testing.T) {
+	db := sql.InMemory()
+	rng := rand.New(rand.NewSource(1001))
+	signer := signing.NewEdSignerFromRand(rng)
+	txs := []*types.Transaction{
+		createTX(t, signer, types.Address{1}, 1, 191, 1, 1),
+		createTX(t, signer, types.Address{1}, 2, 191, 1, 1),
+	}
+	lid := types.NewLayerID(10)
+
+	for _, tx := range txs {
+		require.NoError(t, Add(db, tx, time.Now()))
+	}
+	_, err := Apply(db, txs[0].ID(), lid, types.BlockID{1, 1})
+	require.NoError(t, err)
+	applied, err := GetAppliedLayer(db, txs[0].ID())
+	require.NoError(t, err)
+	require.Equal(t, lid, applied)
+
+	_, err = GetAppliedLayer(db, txs[1].ID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	undone, err := UndoLayers(db, lid)
+	require.NoError(t, err)
+	require.Len(t, undone, 1)
+	require.Equal(t, txs[0].ID(), undone[0])
+	_, err = GetAppliedLayer(db, txs[0].ID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }

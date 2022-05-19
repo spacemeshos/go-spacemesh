@@ -37,15 +37,25 @@ func NewGlobalStateService(msh api.MeshAPI, conState api.ConservativeState) *Glo
 // GlobalStateHash returns the latest layer and its computed global state hash.
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
+	root, err := s.conState.GetStateRoot()
+	if err != nil {
+		return nil, err
+	}
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
-		RootHash: s.conState.GetStateRoot().Bytes(),
+		RootHash: root.Bytes(),
 		Layer:    &pb.LayerNumber{Number: s.mesh.LatestLayerInState().Uint32()},
 	}}, nil
 }
 
 func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, err error) {
-	balanceActual := s.conState.GetBalance(addr)
-	counterActual := s.conState.GetNonce(addr)
+	balanceActual, err := s.conState.GetBalance(addr)
+	if err != nil {
+		return nil, err
+	}
+	counterActual, err := s.conState.GetNonce(addr)
+	if err != nil {
+		return nil, err
+	}
 	counterProjected, balanceProjected := s.conState.GetProjection(addr)
 	return &pb.Account{
 		AccountId: &pb.AccountId{Address: addr.Bytes()},
@@ -186,13 +196,8 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	}
 
 	smesherIDBytes := in.SmesherId.Id
-	smesherID, err := types.BytesToNodeID(smesherIDBytes)
-	if err != nil {
-		log.With().Error("unable to convert bytes to nodeID", log.Err(err))
-		return nil, status.Errorf(codes.Internal, "error deserializing NodeID")
-	}
-
-	dbRewards, err := s.mesh.GetRewardsBySmesherID(*smesherID)
+	smesherID := types.BytesToNodeID(smesherIDBytes)
+	dbRewards, err := s.mesh.GetRewardsBySmesherID(smesherID)
 	if err != nil {
 		log.With().Error("unable to fetch projected reward state for smesher",
 			log.FieldNamed("smesher_id", smesherID),

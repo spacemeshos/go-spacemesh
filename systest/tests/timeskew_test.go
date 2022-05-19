@@ -14,15 +14,21 @@ import (
 )
 
 func TestShortTimeskew(t *testing.T) {
-	const (
-		enableSkew = 10
-		stopSkew   = enableSkew + 3
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	var (
+		enableSkew = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
+		stopSkew   = enableSkew + 2
 		stopTest   = stopSkew + 5
 		skewOffset = "-3s" // hare round is 2s
 	)
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Default(tctx, cluster.WithKeys(10))
-	require.NoError(t, err)
+	tctx.Log.Debugw("running timeskew test",
+		"enable", enableSkew,
+		"stop skew", stopSkew,
+		"stop test", stopTest,
+	)
 
 	failed := int(0.2 * float64(tctx.ClusterSize))
 	eg, ctx := errgroup.WithContext(tctx)
@@ -60,5 +66,5 @@ func TestShortTimeskew(t *testing.T) {
 		return true, nil
 	})
 	require.NoError(t, eg.Wait())
-	require.LessOrEqual(t, stopSkew, int(confirmed))
+	require.LessOrEqual(t, int(stopSkew), int(confirmed))
 }

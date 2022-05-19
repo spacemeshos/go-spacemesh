@@ -19,7 +19,6 @@ var (
 	errDuplicateTX      = errors.New("tx already exists")
 	errAddrNotExtracted = errors.New("address not extracted")
 	errAddrNotFound     = errors.New("address not found")
-	errRejectedByCache  = errors.New("rejected by conservative cache")
 )
 
 // TxHandler handles the transactions received via gossip or sync.
@@ -69,10 +68,15 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		log.Uint64("amount", tx.Amount),
 		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.GetRecipient().String()),
-		log.String("origin", tx.Origin().String()))
+		log.Stringer("recipient", tx.GetRecipient()),
+		log.Stringer("origin", tx.Origin()))
 
-	if !th.state.AddressExists(tx.Origin()) {
+	if exists, err := th.state.AddressExists(tx.Origin()); err != nil {
+		th.logger.WithContext(ctx).With().Error("failed to check if address exists",
+			log.Stringer("origin", tx.Origin()),
+		)
+		return fmt.Errorf("failed to load address %v: %w", tx.Origin(), err)
+	} else if !exists {
 		th.logger.WithContext(ctx).With().Error("tx origin does not exist",
 			log.String("transaction", tx.String()),
 			tx.ID(),
@@ -85,7 +89,6 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 			tx.Origin(),
 			tx.ID(),
 			log.Err(err))
-		return errRejectedByCache
 	}
 
 	return nil
@@ -114,7 +117,6 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	}
 	if err = th.state.AddToCache(&tx, !exists); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add sync tx to conservative cache", tx.ID(), log.Err(err))
-		return errRejectedByCache
 	}
 	return nil
 }

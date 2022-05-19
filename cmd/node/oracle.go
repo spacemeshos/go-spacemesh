@@ -16,11 +16,11 @@ type localOracle struct {
 	nodeID        types.NodeID
 }
 
-func (bo *localOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
+func (bo *localOracle) IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error) {
 	return true, nil
 }
 
-func (bo *localOracle) Register(isHonest bool, pubkey string) {
+func (bo *localOracle) Register(isHonest bool, pubkey types.NodeID) {
 	bo.oc.Register(isHonest, pubkey)
 }
 

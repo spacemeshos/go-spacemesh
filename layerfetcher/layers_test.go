@@ -20,7 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	srvmocks "github.com/spacemeshos/go-spacemesh/p2p/server/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func randPeer(tb testing.TB) p2p.Peer {
@@ -70,9 +72,11 @@ type testLogic struct {
 	*Logic
 	ctrl       *gomock.Controller
 	mLayerDB   *mocks.MocklayerDB
+	mAtxH      *mocks.MockatxHandler
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
 	mProposalH *mocks.MockproposalHandler
+	mTxH       *mocks.MocktxHandler
 	mPoetH     *mocks.MockpoetDB
 	mFetcher   *fmocks.MockFetcher
 }
@@ -82,9 +86,11 @@ func createTestLogic(t *testing.T) *testLogic {
 	tl := &testLogic{
 		ctrl:       ctrl,
 		mLayerDB:   mocks.NewMocklayerDB(ctrl),
+		mAtxH:      mocks.NewMockatxHandler(ctrl),
 		mBallotH:   mocks.NewMockballotHandler(ctrl),
 		mBlocksH:   mocks.NewMockblockHandler(ctrl),
 		mProposalH: mocks.NewMockproposalHandler(ctrl),
+		mTxH:       mocks.NewMocktxHandler(ctrl),
 		mPoetH:     mocks.NewMockpoetDB(ctrl),
 		mFetcher:   fmocks.NewMockFetcher(ctrl),
 	}
@@ -93,9 +99,11 @@ func createTestLogic(t *testing.T) *testLogic {
 		layerBlocksRes:  make(map[types.LayerID]*layerResult),
 		layerBlocksChs:  make(map[types.LayerID][]chan LayerPromiseResult),
 		layerDB:         tl.mLayerDB,
+		atxHandler:      tl.mAtxH,
 		ballotHandler:   tl.mBallotH,
 		blockHandler:    tl.mBlocksH,
 		proposalHandler: tl.mProposalH,
+		txHandler:       tl.mTxH,
 		poetProofs:      tl.mPoetH,
 		fetcher:         tl.mFetcher,
 	}
@@ -878,6 +886,183 @@ func TestGetProposals(t *testing.T) {
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
 	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs))
+}
+
+func genTransactions(t *testing.T, num int) []*types.Transaction {
+	t.Helper()
+	txs := make([]*types.Transaction, 0, num)
+	for i := 0; i < num; i++ {
+		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.Address{1, 2, 3}, 197, 991, 1, 10)
+		require.NoError(t, err)
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
+func TestGetTxs_FetchSomeError(t *testing.T) {
+	l := createTestLogic(t)
+	txs := genTransactions(t, 19)
+	tids := types.ToTransactionIDs(txs)
+	hashes := types.TransactionIDsToHashes(tids)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		if i == 0 {
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Err:  errUnknown,
+			}
+		} else {
+			data, err := codec.Encode(tids[i])
+			require.NoError(t, err)
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Data: data,
+			}
+			l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
+		}
+		results[h] = ch
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.TXDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetTxs(context.TODO(), tids), errUnknown)
+}
+
+func TestGetTxs_HandlerError(t *testing.T) {
+	l := createTestLogic(t)
+	txs := genTransactions(t, 19)
+	tids := types.ToTransactionIDs(txs)
+	hashes := types.TransactionIDsToHashes(tids)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := codec.Encode(tids[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(errUnknown).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.TXDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetTxs(context.TODO(), tids), errUnknown)
+}
+
+func TestGetTxs(t *testing.T) {
+	l := createTestLogic(t)
+	txs := genTransactions(t, 19)
+	tids := types.ToTransactionIDs(txs)
+	hashes := types.TransactionIDsToHashes(tids)
+
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := codec.Encode(tids[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.TXDB, false).Return(results).Times(1)
+	assert.NoError(t, l.GetTxs(context.TODO(), tids))
+}
+
+func genATXs(t *testing.T, num int) []*types.ActivationTx {
+	t.Helper()
+	atxs := make([]*types.ActivationTx, 0, num)
+	for i := 0; i < num; i++ {
+		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
+		atxs = append(atxs, atx)
+	}
+	return atxs
+}
+
+func TestGetAtxs_FetchSomeError(t *testing.T) {
+	l := createTestLogic(t)
+	atxs := genATXs(t, 19)
+	atxIDs := types.ToATXIDs(atxs)
+	hashes := types.ATXIDsToHashes(atxIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		if i == 0 {
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Err:  errUnknown,
+			}
+		} else {
+			data, err := codec.Encode(atxIDs[i])
+			require.NoError(t, err)
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Data: data,
+			}
+			l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(nil).Times(1)
+		}
+		results[h] = ch
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ATXDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetAtxs(context.TODO(), atxIDs), errUnknown)
+}
+
+func TestGetAtxs_HandlerError(t *testing.T) {
+	l := createTestLogic(t)
+	atxs := genATXs(t, 19)
+	atxIDs := types.ToATXIDs(atxs)
+	hashes := types.ATXIDsToHashes(atxIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := codec.Encode(atxs[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(errUnknown).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ATXDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetAtxs(context.TODO(), atxIDs), errUnknown)
+}
+
+func TestGetAtxs(t *testing.T) {
+	l := createTestLogic(t)
+	atxs := genATXs(t, 19)
+	atxIDs := types.ToATXIDs(atxs)
+	hashes := types.ATXIDsToHashes(atxIDs)
+
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := codec.Encode(atxIDs[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(nil).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ATXDB, false).Return(results).Times(1)
+	assert.NoError(t, l.GetAtxs(context.TODO(), atxIDs))
 }
 
 func TestGetPoetProof(t *testing.T) {

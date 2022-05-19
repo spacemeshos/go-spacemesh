@@ -158,7 +158,7 @@ func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
 func (challenge *NIPostChallenge) String() string {
 	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posATX: %v>",
-		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
+		challenge.NodeID.ShortString(),
 		challenge.NodeID.ShortString(),
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
@@ -350,8 +350,26 @@ func IsProcessingError(err error) bool {
 	return ok
 }
 
+// ToATXIDs returns a slice of ATXID corresponding to the given activation tx.
+func ToATXIDs(atxs []*ActivationTx) []ATXID {
+	ids := make([]ATXID, 0, len(atxs))
+	for _, atx := range atxs {
+		ids = append(ids, atx.ID())
+	}
+	return ids
+}
+
 // SortAtxIDs sorts a list of atx IDs in lexicographic order, in-place.
 func SortAtxIDs(ids []ATXID) []ATXID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
+}
+
+// ATXIDsToHashes turns a list of ATXID into their Hash32 representation.
+func ATXIDsToHashes(ids []ATXID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.Hash32())
+	}
+	return hashes
 }

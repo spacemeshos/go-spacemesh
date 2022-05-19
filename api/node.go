@@ -38,12 +38,12 @@ type Syncer interface {
 
 // ConservativeState is an API for reading state and transaction/mempool data.
 type ConservativeState interface {
-	GetStateRoot() types.Hash32
+	GetStateRoot() (types.Hash32, error)
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
-	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetAllAccounts() (*types.MultipleAccountsState, error)
-	GetBalance(types.Address) uint64
-	GetNonce(types.Address) uint64
+	GetLayerApplied(types.TransactionID) (types.LayerID, error)
+	GetAllAccounts() ([]*types.Account, error)
+	GetBalance(types.Address) (uint64, error)
+	GetNonce(types.Address) (uint64, error)
 	GetProjection(types.Address) (uint64, uint64)
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})

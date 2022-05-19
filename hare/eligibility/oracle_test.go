@@ -54,6 +54,7 @@ func defaultOracle(t testing.TB) *testOracle {
 
 func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon types.Beacon, numMiners int) {
 	tb.Helper()
+
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	for lyr := start; !lyr.After(end); lyr = lyr.Add(1) {
@@ -72,7 +73,7 @@ func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon
 	for i, id := range activeSet {
 		to.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -85,12 +86,11 @@ func beaconWithValOne() types.Beacon {
 	return types.Beacon{1, 0, 0, 0}
 }
 
-func createMapWithSize(n int) map[string]uint64 {
-	m := make(map[string]uint64)
+func createMapWithSize(n int) map[types.NodeID]uint64 {
+	m := make(map[types.NodeID]uint64)
 	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = uint64(i + 1)
+		m[types.BytesToNodeID([]byte(strconv.Itoa(i)))] = uint64(i + 1)
 	}
-
 	return m
 }
 
@@ -104,7 +104,7 @@ func TestCalcEligibility_ZeroCommittee(t *testing.T) {
 	o := defaultOracle(t)
 	defer o.ctrl.Finish()
 
-	nid := types.NodeID{Key: "fake_node_id"}
+	nid := types.NodeID{1, 1}
 	res, err := o.CalcEligibility(context.TODO(), types.NewLayerID(50), 1, 0, nid, []byte{})
 	require.ErrorIs(t, err, errZeroCommitteeSize)
 	require.Equal(t, 0, int(res))
@@ -114,7 +114,7 @@ func TestCalcEligibility_BeaconFailure(t *testing.T) {
 	o := defaultOracle(t)
 	defer o.ctrl.Finish()
 
-	nid := types.NodeID{Key: "fake_node_id"}
+	nid := types.NodeID{1, 1}
 	layer := types.NewLayerID(50)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
@@ -128,7 +128,7 @@ func TestCalcEligibility_VerifyFailure(t *testing.T) {
 	o := defaultOracle(t)
 	defer o.ctrl.Finish()
 
-	nid := types.NodeID{Key: "fake_node_id"}
+	nid := types.NodeID{1, 1}
 	layer := types.NewLayerID(50)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 
@@ -142,7 +142,7 @@ func TestCalcEligibility_ZeroTotalWeight(t *testing.T) {
 	o := defaultOracle(t)
 	defer o.ctrl.Finish()
 
-	nid := types.NodeID{Key: "fake_node_id"}
+	nid := types.NodeID{1, 1}
 	layer := types.NewLayerID(40)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
@@ -165,7 +165,7 @@ func TestCalcEligibility_ZeroTotalWeight(t *testing.T) {
 	for i, id := range activeSet {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.NodeID{byte(i)},
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -198,7 +198,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	}
 	for hex, exp := range sigs {
 		sig := util.Hex2Bytes(hex)
-		nid := types.NodeID{Key: "0"}
+		nid := types.BytesToNodeID([]byte("0"))
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, nid, sig)
 		require.NoError(t, err, hex)
 		require.Equal(t, exp, res, hex)
@@ -232,7 +232,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -241,7 +241,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	}
 	for hex, exp := range sigs {
 		sig := util.Hex2Bytes(hex)
-		nid := types.NodeID{Key: "0"}
+		nid := types.BytesToNodeID([]byte("0"))
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, nid, sig)
 		require.NoError(t, err, hex)
 		require.Equal(t, exp, res, hex)
@@ -264,12 +264,10 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
 	var eligibilityCount uint16
-	sig := make([]byte, 64)
-	for pubkey := range createMapWithSize(numOfMiners) {
-		n, err := rand.Read(sig)
+	sig := make([]byte, 80)
+	for nodeID := range createMapWithSize(numOfMiners) {
+		_, err := rand.Read(sig)
 		r.NoError(err)
-		r.Equal(64, n)
-		nodeID := types.NodeID{Key: pubkey}
 
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, committeeSize, nodeID, sig)
 		r.NoError(err)
@@ -313,7 +311,7 @@ func Test_CalcEligibility_MainnetParams(t *testing.T) {
 		n, err := rng.Read(sig)
 		r.NoError(err)
 		r.Equal(64, n)
-		nodeID := types.NodeID{Key: strconv.Itoa(i)}
+		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
 
 		res, err := o.CalcEligibility(context.TODO(), layer, 1, committeeSize, nodeID, sig)
 		r.NoError(err)
@@ -355,7 +353,7 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 
 	var nodeIDs []types.NodeID
 	for pubkey := range createMapWithSize(b.N) {
-		nodeIDs = append(nodeIDs, types.NodeID{Key: pubkey})
+		nodeIDs = append(nodeIDs, pubkey)
 	}
 	b.ResetTimer()
 	for _, nodeID := range nodeIDs {
@@ -372,7 +370,12 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 }
 
 func Test_VrfSignVerify(t *testing.T) {
+	// eligibility of the proof depends on the identity
+	rng := rand.New(rand.NewSource(2))
+
 	o := defaultOracle(t)
+	o.vrfSigner = signing.NewEdSignerFromRand(rng).VRFSigner()
+	nid := types.BytesToNodeID(o.vrfSigner.PublicKey().Bytes())
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
@@ -398,7 +401,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	}
 	atx1 := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: "my_key"},
+			NodeID:    nid,
 			StartTick: 0,
 			EndTick:   1,
 		},
@@ -406,7 +409,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	}
 	atx2 := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: "abc"},
+			NodeID:    types.NodeID{1},
 			StartTick: 0,
 			EndTick:   1,
 		},
@@ -416,23 +419,15 @@ func Test_VrfSignVerify(t *testing.T) {
 	o.mAtxDB.EXPECT().GetAtxHeader(activeSet[1]).Return(atx2, nil).Times(1)
 
 	o.vrfVerifier = signing.VRFVerify
-	seed := make([]byte, 32)
-	// eligibility of the proof depends on the identity (private key is generated from seed)
-	// all zeroes doesn't pass the test
-	seed[0] = 1
-	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
-	require.NoError(t, err)
 
-	o.vrfSigner = vrfSigner
-	id := types.NodeID{Key: "my_key", VRFPublicKey: vrfPubkey}
 	proof, err := o.Proof(context.TODO(), layer, 1)
 	assert.NoError(t, err)
 
-	res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, id, proof)
+	res, err := o.CalcEligibility(context.TODO(), layer, 1, 10, nid, proof)
 	assert.NoError(t, err)
-	assert.Equal(t, uint16(1), res)
+	assert.Equal(t, int(1), int(res))
 
-	valid, err := o.Validate(context.TODO(), layer, 1, 10, id, proof, 1)
+	valid, err := o.Validate(context.TODO(), layer, 1, 10, nid, proof, 1)
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -458,9 +453,7 @@ func Test_Proof(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
 	signer := signing.NewEdSigner()
-	edPubkey := signer.PublicKey()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(edPubkey.Bytes()))
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	o.vrfSigner = vrfSigner
 	sig, err := o.Proof(context.TODO(), layer, 3)
@@ -494,7 +487,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	o.mMesh.EXPECT().LayerBallots(start).Return(ballots, nil).Times(1)
 	atx1 := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: "11111"},
+			NodeID:    types.NodeID{1},
 			StartTick: 0,
 			EndTick:   1,
 		},
@@ -502,7 +495,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}
 	atx2 := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: "22222"},
+			NodeID:    types.NodeID{2},
 			StartTick: 0,
 			EndTick:   1,
 		},
@@ -511,12 +504,12 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	o.mAtxDB.EXPECT().GetAtxHeader(activeSet[0]).Return(atx1, nil).Times(1)
 	o.mAtxDB.EXPECT().GetAtxHeader(activeSet[1]).Return(atx2, nil).Times(1)
 
-	for _, edID := range []string{"11111", "22222"} {
+	for _, edID := range []types.NodeID{atx1.NodeID, atx2.NodeID} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), edID, layer)
 		require.NoError(t, err)
 		assert.True(t, v)
 	}
-	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "smesher", layer)
+	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), types.NodeID{7, 7, 7}, layer)
 	require.NoError(t, err)
 	assert.False(t, v)
 }
@@ -700,7 +693,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 	for i, id := range atxIDs {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -743,7 +736,7 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 	for i, id := range atxIDs {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -837,7 +830,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},
@@ -855,7 +848,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		o.mAtxDB.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:    types.NodeID{Key: strconv.Itoa(i)},
+				NodeID:    types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				StartTick: 0,
 				EndTick:   1,
 			},

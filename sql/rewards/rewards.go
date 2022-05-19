@@ -35,18 +35,12 @@ func Add(db sql.Executor, lid types.LayerID, reward *types.AnyReward) error {
 
 // order of fields - smesher, coinbase, layer, total_reward, layer_reward .
 func decodeReward(stmt *sql.Statement) (types.Reward, error) {
-	key := make([]byte, stmt.ColumnLen(0))
-	stmt.ColumnBytes(0, key)
-	nodeid, err := types.BytesToNodeID(key)
-	if err != nil {
-		return types.Reward{}, fmt.Errorf("invalid nodeid %x: %w", key, err)
-	}
 	reward := types.Reward{
 		Layer:               types.NewLayerID(uint32(stmt.ColumnInt64(2))),
 		TotalReward:         uint64(stmt.ColumnInt64(3)),
 		LayerRewardEstimate: uint64(stmt.ColumnInt64(4)),
-		SmesherID:           *nodeid,
 	}
+	stmt.ColumnBytes(0, reward.SmesherID[:])
 	stmt.ColumnBytes(1, reward.Coinbase[:])
 	return reward, nil
 }
@@ -77,8 +71,7 @@ func FilterBySmesher(db sql.Executor, address []byte) (rst []types.Reward, err e
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
 		}, func(stmt *sql.Statement) bool {
-			var reward types.Reward
-			reward, err = decodeReward(stmt)
+			reward, err := decodeReward(stmt)
 			if err != nil {
 				return false
 			}

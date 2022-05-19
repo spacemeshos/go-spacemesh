@@ -98,7 +98,7 @@ func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4,
 }
 
 // IsIdentityActiveOnConsensusView mocks base method.
-func (m *MockRolacle) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 string, arg2 types.LayerID) (bool, error) {
+func (m *MockRolacle) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 types.NodeID, arg2 types.LayerID) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsIdentityActiveOnConsensusView", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
@@ -373,7 +373,7 @@ func (m *MockstateQuerier) EXPECT() *MockstateQuerierMockRecorder {
 }
 
 // IsIdentityActiveOnConsensusView mocks base method.
-func (m *MockstateQuerier) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 string, arg2 types.LayerID) (bool, error) {
+func (m *MockstateQuerier) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 types.NodeID, arg2 types.LayerID) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsIdentityActiveOnConsensusView", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)

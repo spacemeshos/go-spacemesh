@@ -11,27 +11,35 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// ConservativeState provides the conservative version of the SVM state by taking into accounts of
+// ConservativeState provides the conservative version of the VM state by taking into accounts of
 // nonce and balances for pending transactions in un-applied blocks and mempool.
 type ConservativeState struct {
-	svmState
+	vmState
 	*cache
 
 	logger log.Log
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state svmState, db *sql.Database, logger log.Log) *ConservativeState {
+func NewConservativeState(state vmState, db *sql.Database, logger log.Log) *ConservativeState {
 	cs := &ConservativeState{
-		svmState: state,
-		logger:   logger,
+		vmState: state,
+		logger:  logger,
 	}
 	cs.cache = newCache(newStore(db), cs.getState, logger)
 	return cs
 }
 
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
-	return cs.svmState.GetNonce(addr), cs.svmState.GetBalance(addr)
+	nonce, err := cs.vmState.GetNonce(addr)
+	if err != nil {
+		cs.logger.Fatal("failed to get nonce", log.Err(err))
+	}
+	balance, err := cs.vmState.GetBalance(addr)
+	if err != nil {
+		cs.logger.Fatal("failed to get balance", log.Err(err))
+	}
+	return nonce, balance
 }
 
 // SelectTXsForProposal picks a specific number of random txs for miner to pack in a proposal.
@@ -58,11 +66,11 @@ func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error
 	return cs.cache.Add(tx, received)
 }
 
-// RevertState reverts the SVM state and database to the given layer.
+// RevertState reverts the VM state and database to the given layer.
 func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, error) {
-	root, err := cs.svmState.Rewind(revertTo)
+	root, err := cs.vmState.Revert(revertTo)
 	if err != nil {
-		return root, fmt.Errorf("svm rewind to %v: %w", revertTo, err)
+		return root, fmt.Errorf("vm revert %v: %w", revertTo, err)
 	}
 
 	return root, cs.cache.RevertToLayer(revertTo)
@@ -82,25 +90,36 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transact
 		return nil, err
 	}
 
-	rewardByMiner := map[types.Address]uint64{}
-	for _, r := range toApply.Rewards {
-		rewardByMiner[r.Address] += r.Amount
-	}
-
-	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
-	failedTxs, svmErr := cs.svmState.ApplyLayer(toApply.LayerIndex, txs, rewardByMiner)
-	if svmErr != nil {
+	failedTxs, err := cs.vmState.ApplyLayer(toApply.LayerIndex, txs, toApply.Rewards)
+	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,
 			log.Int("num_failed_txs", len(failedTxs)),
-			log.Err(svmErr))
+			log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldVerified`
-		return failedTxs, fmt.Errorf("apply layer: %w", svmErr)
+		return failedTxs, fmt.Errorf("apply layer: %w", err)
 	}
 
-	if err = cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), txs); err != nil {
-		return failedTxs, err
+	finalList := txs
+	if len(failedTxs) > 0 {
+		finalList = make([]*types.Transaction, 0, len(txs))
+		failed := make(map[types.TransactionID]struct{})
+		for _, tx := range failedTxs {
+			failed[tx.ID()] = struct{}{}
+		}
+		for _, tx := range txs {
+			if _, ok := failed[tx.ID()]; !ok {
+				finalList = append(finalList, tx)
+			}
+		}
+	}
+
+	logger.With().Info("applying layer to cache",
+		log.Int("num_txs_failed", len(failedTxs)),
+		log.Int("num_txs_final", len(finalList)))
+	if _, errs := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), finalList); len(errs) > 0 {
+		return failedTxs, errs[0]
 	}
 	return failedTxs, nil
 }

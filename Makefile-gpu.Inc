@@ -39,7 +39,11 @@ else
     CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
     ULIMIT := ulimit -n 9999;
   else
-    platform := linux
+    ifeq ($(GOARCH),arm64)
+    	platform := linux-arm64
+    else
+    	platform := linux
+    endif
     CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
   endif
 endif

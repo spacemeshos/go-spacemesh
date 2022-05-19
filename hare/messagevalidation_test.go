@@ -64,7 +64,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
 	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, nil, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
 	res, err := ev.validateRole(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.False(t, res)
@@ -72,7 +72,7 @@ func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
 
 func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, nil, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg = nil
 	res, err := ev.validateRole(context.TODO(), m)
@@ -82,7 +82,7 @@ func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 
 func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
 	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, nil, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
@@ -91,35 +91,15 @@ func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
 	assert.True(t, res)
 }
 
-func TestEligibilityValidator_validateRole_FailedToGetIdentity(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ctrl := gomock.NewController(t)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(nil, 10, mockIDProvider, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
-	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	myErr := errors.New("my error")
-
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).Return(types.NodeID{}, myErr)
-	res, err := ev.validateRole(context.TODO(), m)
-	assert.NotNil(t, err)
-	assert.ErrorIs(t, err, myErr)
-	assert.False(t, res)
-}
-
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(mo, 10, mockIDProvider, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 10, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	myErr := errors.New("my error")
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).DoAndReturn(
-		func(edID string) (types.NodeID, error) {
-			return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
-		}).Times(1)
+
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
@@ -131,14 +111,10 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(mo, 10, mockIDProvider, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 10, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).DoAndReturn(
-		func(edID string) (types.NodeID, error) {
-			return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
-		}).Times(1)
+
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
@@ -149,14 +125,10 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(mo, 10, mockIDProvider, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 10, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).DoAndReturn(
-		func(edID string) (types.NodeID, error) {
-			return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
-		}).Times(1)
+
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)

@@ -216,7 +216,7 @@ jobs:
       id: tests_logs
     
     - name: Delete pod
-      run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
+      run: cd systest && make clean
 
     - name: Tests Passed or Failed
       run: |
