@@ -41,7 +41,6 @@ func (t *addressFactory) addressFactory(addrs []ma.Multiaddr) []ma.Multiaddr {
 	t.blockAddressesMu.RLock()
 	defer t.blockAddressesMu.RUnlock()
 	result := make([]ma.Multiaddr, 0)
-	var ts []string
 	for _, addr := range addrs {
 		blocked := false
 		for _, blockAddr := range t.blockAddresses {
@@ -51,7 +50,6 @@ func (t *addressFactory) addressFactory(addrs []ma.Multiaddr) []ma.Multiaddr {
 		}
 		if !blocked {
 			result = append(result, addr)
-			ts = append(ts, addr.String())
 		}
 	}
 	if len(t.blockAddresses) > 0 {
@@ -165,7 +163,7 @@ func TestHost_LocalAddressChange(t *testing.T) {
 }
 
 func generateAddressV4(t *testing.T) ma.Multiaddr {
-	var blackholeIP6 = net.ParseIP("100::")
+	blackholeIP6 := net.ParseIP("100::")
 	sk, err := p2putil.RandTestBogusPrivateKey()
 	require.NoError(t, err)
 
@@ -201,7 +199,7 @@ func getFreePort() (int, error) {
 }
 
 func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper {
-	tstTcp := &addressFactory{
+	addrFactory := &addressFactory{
 		blockAddressesMu: &sync.RWMutex{},
 		blockAddresses:   []string{},
 		mark:             make(chan struct{}),
@@ -211,7 +209,7 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 		libp2p.ListenAddrs(addr),
 		libp2p.DisableRelay(),
 		libp2p.NATPortMap(),
-		libp2p.AddrsFactory(tstTcp.addressFactory),
+		libp2p.AddrsFactory(addrFactory.addressFactory),
 	)
 	require.NoError(t, err)
 
@@ -227,7 +225,7 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 	require.NoError(t, err)
 	return &hostWrapper{
 		host:      host,
-		transport: tstTcp,
+		transport: addrFactory,
 	}
 }
 

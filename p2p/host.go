@@ -57,7 +57,7 @@ type Config struct {
 	LowPeers       int      `mapstructure:"low-peers"`
 	HighPeers      int      `mapstructure:"high-peers"`
 
-	// Discovery book check section
+	// Discovery book check section.
 	CheckInterval        time.Duration
 	CheckTimeout         time.Duration
 	CheckPeersNumber     int

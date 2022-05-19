@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/network"
-
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -31,6 +30,7 @@ func (d *Discovery) CheckBook(ctx context.Context) {
 	}
 }
 
+// CheckPeers periodically checks the book for dead|alive peers.
 func (d *Discovery) CheckPeers(ctx context.Context) {
 	peers := d.GetRandomPeers(d.cfg.CheckPeersNumber)
 	if len(peers) == 0 {
@@ -64,7 +64,8 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 	}
 }
 
-func (d *Discovery) GetAddresses() []*addrInfo {
+// GetAddresses returns all addresses of the node.
+func (d *Discovery) GetAddresses() []*addrInfo { // nolint: golint // will fixed after refactor.
 	return d.book.getAddresses()
 }
 
@@ -72,8 +73,8 @@ func (d *Discovery) GetAddresses() []*addrInfo {
 // peer should satisfy the following conditions:
 // - peer is not a bootnode
 // - peer is not a connected one
-// - peer was attempted to connect X time in ago (defined in config)
-func (d *Discovery) GetRandomPeers(n int) []*addrInfo {
+// - peer was attempted to connect X time in ago (defined in config).
+func (d *Discovery) GetRandomPeers(n int) []*addrInfo { // nolint: golint // will fixed after refactor.
 	lastUsageDate := time.Now().Add(-1 * d.cfg.CheckPeersUsedBefore)
 	allPeers := d.book.GetAllAddressesUsedBefore(lastUsageDate)
 	peers := d.filterPeers(allPeers)
