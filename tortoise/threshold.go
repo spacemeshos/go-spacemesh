@@ -18,50 +18,28 @@ func computeBallotWeight(
 	layerSize,
 	layersPerEpoch uint32,
 ) (util.Weight, error) {
-	var reference util.Weight
-	if ballot.EpochData != nil {
-		var total, targetWeight uint64
-
-		for _, atxid := range ballot.EpochData.ActiveSet {
-			atx, err := atxdb.GetAtxHeader(atxid)
-			if err != nil {
-				return util.Weight{}, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
-			}
-			atxweight := atx.GetWeight()
-			total += atxweight
-			if atxid == ballot.AtxID {
-				targetWeight = atxweight
-			}
-		}
-		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
-		if err != nil {
-			return util.Weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
-		}
-		reference = util.WeightFromUint64(targetWeight)
-		reference = reference.Div(util.WeightFromUint64(uint64(expected)))
-		referenceWeights[ballot.ID()] = reference
-	} else {
+	var (
+		reference, actual util.Weight
+		err               error
+		exist             bool
+	)
+	refBallotID := ballot.ID()
+	if ballot.EpochData == nil {
 		if ballot.RefBallot == types.EmptyBallotID {
 			return util.Weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 		}
-		var exist bool
-		reference, exist = referenceWeights[ballot.RefBallot]
-		if !exist {
-			refballot, err := bdp.GetBallot(ballot.RefBallot)
-			if err != nil {
-				return util.Weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
-			}
-			_, err = computeBallotWeight(atxdb, bdp, referenceWeights, weights, refballot, layerSize, layersPerEpoch)
-			if err != nil {
-				return util.Weight{}, err
-			}
-			reference = referenceWeights[ballot.RefBallot]
-		}
+		refBallotID = ballot.RefBallot
 	}
-	real := reference.Copy().
-		Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs))))
-	weights[ballot.ID()] = real
-	return real, nil
+	if reference, exist = referenceWeights[refBallotID]; !exist {
+		reference, err = proposals.ComputeWeightPerEligibility(atxdb, bdp, ballot, layerSize, layersPerEpoch)
+		if err != nil {
+			return util.Weight{}, fmt.Errorf("get ballot weight %w", err)
+		}
+		referenceWeights[refBallotID] = reference
+	}
+	actual = reference.Copy().Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs))))
+	weights[ballot.ID()] = actual
+	return actual, nil
 }
 
 func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {

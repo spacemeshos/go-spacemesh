@@ -620,7 +620,7 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			require.Equal(t, tc.expect,
+			require.EqualValues(t, tc.expect,
 				tc.vote.Cmp(tc.weight.Fraction(tc.threshold)))
 		})
 	}
