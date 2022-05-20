@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -186,59 +185,8 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 
 // SmesherDataQuery returns historical info on smesher rewards.
 func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
-	log.Info("GRPC GlobalStateService.SmesherDataQuery")
-
-	if in.SmesherId == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
-	}
-	if in.SmesherId.Id == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`Id.Id` must be provided")
-	}
-
-	smesherIDBytes := in.SmesherId.Id
-	smesherID := types.BytesToNodeID(smesherIDBytes)
-	dbRewards, err := s.mesh.GetRewardsBySmesherID(smesherID)
-	if err != nil {
-		log.With().Error("unable to fetch projected reward state for smesher",
-			log.FieldNamed("smesher_id", smesherID),
-			log.Err(err))
-		return nil, status.Errorf(codes.Internal, "error getting rewards data")
-	}
-
-	res := &pb.SmesherDataQueryResponse{}
-	for _, r := range dbRewards {
-		res.Rewards = append(res.Rewards, &pb.Reward{
-			Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
-			Total:       &pb.Amount{Value: r.TotalReward},
-			LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
-			// Leave this out for now as this is changing
-			// LayerComputed: 0,
-			Coinbase: &pb.AccountId{Address: r.Coinbase.Bytes()},
-			Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
-		})
-	}
-
-	// MAX RESULTS, OFFSET
-	// There is some code duplication here as this is implemented in other Query endpoints,
-	// but without generics, there's no clean way to do this for different types.
-
-	// Adjust for max results, offset
-	res.TotalResults = uint32(len(res.Rewards))
-	offset := in.Offset
-
-	if offset > uint32(len(res.Rewards)) {
-		return &pb.SmesherDataQueryResponse{}, nil
-	}
-
-	// If the max results is too high, trim it. If MaxResults is zero, that means unlimited
-	// (since we have no way to distinguish between zero and its not being provided).
-	maxResults := in.MaxResults
-	if maxResults == 0 || offset+maxResults > uint32(len(res.Rewards)) {
-		maxResults = uint32(len(res.Rewards)) - offset
-	}
-	res.Rewards = res.Rewards[offset : offset+maxResults]
-
-	return res, nil
+	log.Info("DEPRECATED GRPC GlobalStateService.SmesherDataQuery")
+	return nil, status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
 // STREAMS
@@ -371,62 +319,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 // SmesherRewardStream exposes a stream of smesher rewards.
 func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
-	log.Info("GRPC GlobalStateService.SmesherRewardStream")
-
-	if in.Id == nil {
-		return status.Errorf(codes.InvalidArgument, "`Id` must be provided")
-	}
-	if in.Id.Id == nil {
-		return status.Errorf(codes.InvalidArgument, "`Id.Id` must be provided")
-	}
-	smesherIDBytes := in.Id.Id
-
-	var (
-		rewardsCh      <-chan interface{}
-		rewardsBufFull <-chan struct{}
-	)
-
-	// subscribe to the rewards channel
-	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-		rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
-	}
-
-	for {
-		select {
-		case <-rewardsBufFull:
-			log.Info("rewards buffer is full, shutting down")
-			return status.Error(codes.Canceled, errRewardsBufferFull)
-		case rewardEvent, ok := <-rewardsCh:
-			if !ok {
-				// shut down the reward channel
-				log.Info("Reward channel closed, shutting down")
-				return nil
-			}
-
-			reward := rewardEvent.(events.Reward)
-
-			// filter on the smesherID
-			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
-				resp := &pb.SmesherRewardStreamResponse{
-					Reward: &pb.Reward{
-						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
-						Total:       &pb.Amount{Value: reward.Total},
-						LayerReward: &pb.Amount{Value: reward.LayerReward},
-						// Leave this out for now as this is changing
-						// LayerComputed: 0,
-						Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
-						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
-					},
-				}
-				if err := stream.Send(resp); err != nil {
-					return fmt.Errorf("send to stream: %w", err)
-				}
-			}
-		case <-stream.Context().Done():
-			log.Info("SmesherRewardStream closing stream, client disconnected")
-			return nil
-		}
-	}
+	log.Info("DEPRECATED GRPC GlobalStateService.SmesherRewardStream")
+	return status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
 // AppEventStream exposes a stream of emitted app events.
