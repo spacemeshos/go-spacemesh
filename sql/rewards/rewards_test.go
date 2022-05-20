@@ -10,53 +10,82 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func TestFilter(t *testing.T) {
+func TestRewards(t *testing.T) {
 	db := sql.InMemory()
 
 	var part uint64 = math.MaxUint64 / 2
-	node1 := types.NodeID{1}
-	node2 := types.NodeID{2}
-	coinbase := types.Address{1}
-	lid := types.NewLayerID(1)
+	lyrReward := part / 2
+	coinbase1 := types.Address{1}
+	coinbase2 := types.Address{2}
 
-	rewards := []types.AnyReward{
+	lid1 := types.NewLayerID(1)
+	rewards1 := []types.Reward{
 		{
-			SmesherID: node1,
-			Address:   coinbase,
-			Amount:    part,
+			Layer:       lid1,
+			Coinbase:    coinbase1,
+			TotalReward: part,
+			LayerReward: lyrReward,
 		},
 		{
-			SmesherID: node2,
-			Address:   coinbase,
-			Amount:    part,
-		},
-		{
-			SmesherID: node2,
-			Address:   coinbase,
-			Amount:    part,
-		},
-		{
-			SmesherID: node1,
-			Address:   coinbase,
-			Amount:    part,
+			Layer:       lid1,
+			Coinbase:    coinbase2,
+			TotalReward: part,
+			LayerReward: lyrReward,
 		},
 	}
-	for _, reward := range rewards {
-		require.NoError(t, Add(db, lid, &reward))
-		require.NoError(t, Add(db, lid.Add(1), &reward))
+	lid2 := lid1.Add(1)
+	rewards2 := []types.Reward{
+		{
+			Layer:       lid2,
+			Coinbase:    coinbase2,
+			TotalReward: part,
+			LayerReward: lyrReward,
+		},
+	}
+	for _, reward := range append(rewards1, rewards2...) {
+		require.NoError(t, Add(db, &reward))
+		require.ErrorIs(t, Add(db, &reward), sql.ErrObjectExists)
 	}
 
-	for _, node := range []types.NodeID{node1, node2} {
-		rst, err := FilterBySmesher(db, node.ToBytes())
-		require.NoError(t, err)
-		require.Len(t, rst, 2)
-		require.Equal(t, part*2, rst[0].TotalReward)
-	}
-
-	rst, err := FilterByCoinbase(db, coinbase)
+	got, err := GetRewards(db, coinbase1)
 	require.NoError(t, err)
-	require.Len(t, rst, 4)
-	for _, reward := range rst {
-		require.Equal(t, part*2, reward.TotalReward)
-	}
+	require.Len(t, got, 1)
+	require.Equal(t, coinbase1, got[0].Coinbase)
+	require.Equal(t, lid1, got[0].Layer)
+	require.Equal(t, part, got[0].TotalReward)
+	require.Equal(t, lyrReward, got[0].LayerReward)
+
+	got, err = GetRewards(db, coinbase2)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, coinbase2, got[0].Coinbase)
+	require.Equal(t, lid1, got[0].Layer)
+	require.Equal(t, part, got[0].TotalReward)
+	require.Equal(t, lyrReward, got[0].LayerReward)
+	require.Equal(t, coinbase2, got[1].Coinbase)
+	require.Equal(t, lid2, got[1].Layer)
+	require.Equal(t, part, got[1].TotalReward)
+	require.Equal(t, lyrReward, got[1].LayerReward)
+
+	unknownAddr := types.Address{1, 2, 3}
+	got, err = GetRewards(db, unknownAddr)
+	require.NoError(t, err)
+	require.Len(t, got, 0)
+
+	require.NoError(t, RevertToLayer(db, lid1))
+	got, err = GetRewards(db, coinbase1)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, coinbase1, got[0].Coinbase)
+	require.Equal(t, lid1, got[0].Layer)
+	require.Equal(t, part, got[0].TotalReward)
+	require.Equal(t, lyrReward, got[0].LayerReward)
+
+	got, err = GetRewards(db, coinbase2)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, coinbase2, got[0].Coinbase)
+	require.Equal(t, lid1, got[0].Layer)
+	require.Equal(t, part, got[0].TotalReward)
+	require.Equal(t, lyrReward, got[0].LayerReward)
 }

@@ -41,14 +41,14 @@ CREATE TABLE mesh_status
 
 CREATE TABLE rewards
 (
-    smesher      CHAR(64),
     coinbase     CHAR(20),
     layer        INT NOT NULL,
     total_reward UNSIGNED LONG INT,
-    layer_reward UNSIGNED LONG INT,
-    PRIMARY KEY (smesher, layer)
+    lyr_reward   UNSIGNED LONG INT,
+    PRIMARY KEY (coinbase, layer)
 ) WITHOUT ROWID;
 CREATE INDEX rewards_by_coinbase ON rewards (coinbase, layer);
+CREATE INDEX rewards_by_layer ON rewards (layer asc);
 
 CREATE TABLE transactions
 (
