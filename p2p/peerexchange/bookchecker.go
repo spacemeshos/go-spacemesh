@@ -60,7 +60,7 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 			continue
 		}
 		// update node address in book.
-		d.book.AddAddress(newAddr, addresses[1])
+		d.book.AddAddress(newAddr, addresses[0])
 	}
 }
 

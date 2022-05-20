@@ -230,10 +230,8 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 }
 
 func discoveryBootstrap(disc *peerexchange.Discovery) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	for i := 0; i < 5; i++ {
-		if err := disc.Bootstrap(ctx); errors.Is(err, context.Canceled) {
+		if err := disc.Bootstrap(context.Background()); errors.Is(err, context.Canceled) {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
