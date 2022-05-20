@@ -42,11 +42,8 @@ type InnerBlock struct {
 
 // AnyReward contains the rewards inforamtion.
 type AnyReward struct {
-	Address   Address
-	SmesherID NodeID
-	// Amount == LayerReward + fee
-	Amount      uint64
-	LayerReward uint64
+	Coinbase Address
+	Weight   []byte
 }
 
 // Initialize calculates and sets the Block's cached blockID.
@@ -56,11 +53,11 @@ func (b *Block) Initialize() {
 
 // Bytes returns the serialization of the InnerBlock.
 func (b *Block) Bytes() []byte {
-	bytes, err := codec.Encode(b.InnerBlock)
+	data, err := codec.Encode(b.InnerBlock)
 	if err != nil {
 		log.Panic("failed to serialize block: %v", err)
 	}
-	return bytes
+	return data
 }
 
 // ID returns the BlockID.
