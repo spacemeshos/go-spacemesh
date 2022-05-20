@@ -492,14 +492,26 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	}
 }
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 // sendBatch dispatches batched request messages.
-func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
+func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) {
+	id := randSeq(10)
+
+	f.log.With().Info(fmt.Sprintf("sendBatch: peer=%s, total_peers=%d, requests=%d", p.String(), f.net.PeerCount(), len(requests)),
+		log.String("id", id))
+
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
-	//if !p2p.IsAnyPeer(peer) {
-	//	batch.peer = peer
-	//}
 	batch.SetID()
 
 	f.activeBatchM.Lock()
@@ -509,6 +521,7 @@ func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 	errorFunc := func(err error) {
 		f.log.With().Warning("error occurred for sendbatch",
 			log.String("batch_hash", batch.ID.ShortString()),
+			log.String("id", id),
 			log.Err(err))
 		f.handleHashError(batch.ID, err)
 	}
@@ -520,6 +533,8 @@ func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 	// try sending batch to provided or some random peer
 	retries := 0
 	seenPeers := make(map[p2p.Peer]struct{})
+	peer := p
+
 	for {
 		if f.stopped() {
 			return
@@ -528,59 +543,78 @@ func (f *Fetch) sendBatch(peer p2p.Peer, requests []requestMessage) {
 		if f.net.PeerCount() == 0 {
 			f.log.With().Error("no peers found, unable to send request batch",
 				batch.ID,
+				log.String("id", id),
 				log.Int("items", len(batch.Requests)))
 			return
 		}
 
-		peerChanged := false
+		peerUpdated := false
 
 		// if peer is not provided - send to random one
 		if p2p.IsAnyPeer(peer) {
 			peer = GetRandomPeer(f.net.GetPeers())
-			peerChanged = true
+			peerUpdated = true
 		}
 
-		// if we've tried peer already - try another one
+		// if we've tried peer already - try to change (just once to avoid infinite loop if only 1 peer available)
 		if _, exists := seenPeers[peer]; exists {
 			oldPear := peer
 			peer = GetRandomPeer(f.net.GetPeers())
-			peerChanged = true
+			peerUpdated = true
 
 			f.log.With().Warning("change peer as tried already",
 				log.String("old_peer", oldPear.String()),
 				log.String("new_peer", peer.String()),
+				log.String("id", id),
 				log.Int("retries", retries))
 		}
 
+		// track peer tried
 		seenPeers[peer] = struct{}{}
 
-		if peerChanged {
+		if peerUpdated {
 			batch.peer = peer
 			f.activeBatchM.Lock()
 			f.activeBatches[batch.ID] = batch
 			f.activeBatchM.Unlock()
 		}
+
 		f.log.With().Warning("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Int("num_requests", len(batch.Requests)),
+			log.String("id", id),
 			log.String("peer", peer.String()))
+
 		err := f.net.Request(context.TODO(), peer, bytes, f.receiveResponse, errorFunc)
 
 		// if call succeeded, continue to other requests
-		if err != nil {
-			retries++
-			if retries > f.cfg.MaxRetriesForPeer {
-				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
-				break
-			}
-			// todo: mark number of fails per peer to make it low priority
-			f.log.With().Warning("could not send message to peer",
-				log.String("peer", peer.String()),
-				log.Int("retries", retries))
-		} else {
+		if err == nil {
 			break
 		}
+
+		f.log.With().Warning("error from peer",
+			log.Err(err),
+			log.Int("retries", retries),
+			log.String("id", id),
+			log.String("peer", peer.String()))
+
+		// if call failed - break if too many attempts passed
+		retries++
+		if retries > f.cfg.MaxRetriesForPeer {
+			f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
+			break
+		}
+
+		// todo: mark number of fails per peer to make it low priority
+		f.log.With().Warning("could not send message to peer",
+			log.String("peer", peer.String()),
+			log.String("id", id),
+			log.Int("retries", retries))
+
 	}
+
+	f.log.With().Info(fmt.Sprintf("sendBatch: peer=%s, retries=%d", peer.String(), retries),
+		log.String("id", id))
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
