@@ -132,12 +132,11 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 				Reward: &pb.Reward{
 					Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
 					Total:       &pb.Amount{Value: r.TotalReward},
-					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
+					LayerReward: &pb.Amount{Value: r.LayerReward},
 					// Leave this out for now as this is changing
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: addr.Bytes()},
-					Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
 				},
 			}})
 		}
@@ -279,7 +278,6 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 						// LayerComputed: 0,
 						Coinbase: &pb.AccountId{Address: addr.Bytes()},
-						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
 				}}}
 				if err := stream.Send(resp); err != nil {
@@ -422,7 +420,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
-					Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 				},
 			}}}
 			if err := stream.Send(resp); err != nil {

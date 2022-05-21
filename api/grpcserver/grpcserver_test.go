@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -176,26 +177,13 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
-	return []types.Reward{
+func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
+	return []*types.Reward{
 		{
-			Layer:               layerFirst,
-			TotalReward:         rewardAmount,
-			LayerRewardEstimate: rewardAmount,
-			SmesherID:           nodeID,
-			Coinbase:            addr1,
-		},
-	}, nil
-}
-
-func (m *MeshAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward, err error) {
-	return []types.Reward{
-		{
-			Layer:               layerFirst,
-			TotalReward:         rewardAmount,
-			LayerRewardEstimate: rewardAmount,
-			SmesherID:           nodeID,
-			Coinbase:            addr1,
+			Layer:       layerFirst,
+			TotalReward: rewardAmount,
+			LayerReward: rewardAmount,
+			Coinbase:    addr1,
 		},
 	}, nil
 }
@@ -2557,7 +2545,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
-		require.Equal(t, nodeID.ToBytes(), x.Reward.Smesher.Id)
+		require.Nil(t, x.Reward.Smesher)
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
 	}
@@ -2991,7 +2979,10 @@ func TestEventsReceived(t *testing.T) {
 	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 
-	rewards := []types.AnyReward{{Address: addr1, Amount: 1}}
+	weight := util.WeightFromFloat64(18.7)
+	wb, err := weight.GobEncode()
+	require.NoError(t, err)
+	rewards := []types.AnyReward{{Coinbase: addr1, Weight: wb}}
 	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
 
 	time.Sleep(100 * time.Millisecond)

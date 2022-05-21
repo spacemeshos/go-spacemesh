@@ -54,12 +54,10 @@ type ConservativeState interface {
 type MeshAPI interface {
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
-	GetRewards(types.Address) ([]types.Reward, error)
+	GetRewards(types.Address) ([]*types.Reward, error)
 	LatestLayer() types.LayerID
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
-	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
-	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.

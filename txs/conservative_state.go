@@ -77,20 +77,20 @@ func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, 
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
-func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transaction, error) {
+func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transaction, []*types.Reward, error) {
 	logger := cs.logger.WithFields(toApply.LayerIndex, toApply.ID())
 	logger.Info("applying layer to conservative state")
 
 	if err := cs.cache.CheckApplyOrder(toApply.LayerIndex); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	txs, err := cs.getTXsToApply(toApply)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	failedTxs, err := cs.vmState.ApplyLayer(toApply.LayerIndex, txs, toApply.Rewards)
+	failedTxs, rewards, err := cs.vmState.ApplyLayer(toApply.LayerIndex, txs, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,
@@ -98,7 +98,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transact
 			log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldVerified`
-		return failedTxs, fmt.Errorf("apply layer: %w", err)
+		return nil, nil, fmt.Errorf("apply layer: %w", err)
 	}
 
 	finalList := txs
@@ -119,9 +119,9 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]*types.Transact
 		log.Int("num_txs_failed", len(failedTxs)),
 		log.Int("num_txs_final", len(finalList)))
 	if _, errs := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), finalList); len(errs) > 0 {
-		return failedTxs, errs[0]
+		return nil, nil, errs[0]
 	}
-	return failedTxs, nil
+	return failedTxs, rewards, nil
 }
 
 func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, error) {
