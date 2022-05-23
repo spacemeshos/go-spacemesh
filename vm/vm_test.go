@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
@@ -195,6 +196,9 @@ func TestLayers(t *testing.T) {
 				},
 				{
 					revert: 1,
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000010, LayerReward: 50000000000000},
+					},
 					state: map[types.Address]uint64{
 						addresses[0]: 100,
 						addresses[1]: 10,
@@ -300,21 +304,12 @@ func TestLayers(t *testing.T) {
 					_, err := vm.Revert(base)
 					require.NoError(t, err)
 				} else if len(s.rewards) > 0 {
-					failed, rewards, err := vm.ApplyLayer(base, s.txs, s.rewards)
+					failed, err := vm.ApplyLayer(base, s.txs, s.rewards)
 					require.NoError(t, err)
 					require.Len(t, failed, len(s.failed))
 					for i, pos := range s.failed {
 						require.Equal(t, s.txs[pos], failed[i])
 					}
-					var totalLayerRewards uint64
-					for i, r := range rewards {
-						require.Equal(t, base, r.Layer)
-						require.Equal(t, s.finalRewards[i].Coinbase, r.Coinbase)
-						require.Equal(t, s.finalRewards[i].TotalReward, r.TotalReward)
-						require.Equal(t, s.finalRewards[i].LayerReward, r.LayerReward)
-						totalLayerRewards += r.LayerReward
-					}
-					require.LessOrEqual(t, totalLayerRewards, calculateLayerReward(vm.cfg))
 				}
 
 				accounts, err := vm.GetAllAccounts()
@@ -323,6 +318,18 @@ func TestLayers(t *testing.T) {
 				for _, account := range accounts {
 					require.Equal(t, int(s.state[account.Address]), int(account.Balance))
 				}
+				var totalLayerRewards uint64
+				for _, r := range s.finalRewards {
+					got, err := rewards.Get(db, r.Coinbase)
+					require.NoError(t, err)
+					require.NotEmpty(t, got)
+					// the last one should be the latest layer
+					last := got[len(got)-1]
+					expected := r
+					expected.Layer = base
+					require.Equal(t, expected, last)
+				}
+				require.LessOrEqual(t, totalLayerRewards, calculateLayerReward(vm.cfg))
 			}
 		})
 	}
@@ -366,7 +373,7 @@ func TestLayerHash(t *testing.T) {
 		{Coinbase: addresses[1], Weight: weightBytes[1]},
 	}
 
-	_, _, err := vm.ApplyLayer(types.NewLayerID(1), nil, rewards)
+	_, err := vm.ApplyLayer(types.NewLayerID(1), nil, rewards)
 	require.NoError(t, err)
 	root, err := vm.GetStateRoot()
 	require.NoError(t, err)
@@ -378,7 +385,7 @@ func TestLayerHash(t *testing.T) {
 		genTx(t, signers[0], addresses[3], 1, 50, 0),
 	}
 
-	_, _, err = vm.ApplyLayer(types.NewLayerID(2), txs, rewards)
+	_, err = vm.ApplyLayer(types.NewLayerID(2), txs, rewards)
 	require.NoError(t, err)
 	root, err = vm.GetStateRoot()
 	require.NoError(t, err)

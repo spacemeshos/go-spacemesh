@@ -377,16 +377,14 @@ func TestApplyLayer(t *testing.T) {
 		tcs.mvm.EXPECT().GetBalance(tx.Origin()).Return(defaultBalance-(amount+fee), nil)
 		tcs.mvm.EXPECT().GetNonce(tx.Origin()).Return(nonce+1, nil)
 	}
-	rwd := []*types.Reward{{Layer: lid, Coinbase: coinbase, TotalReward: 10000, LayerReward: 1000}}
 	tcs.mvm.EXPECT().ApplyLayer(lid, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, []*types.Reward, error) {
+		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, error) {
 			require.ElementsMatch(t, got, txs)
-			return nil, rwd, nil
+			return nil, nil
 		}).Times(1)
-	failed, rewards, err := tcs.ApplyLayer(block)
+	failed, err := tcs.ApplyLayer(block)
 	require.NoError(t, err)
 	require.Empty(t, failed)
-	require.Equal(t, rwd, rewards)
 
 	for _, id := range ids {
 		mtx, err := tcs.GetMeshTransaction(id)
@@ -406,7 +404,7 @@ func TestApplyLayer_OutOfOrder(t *testing.T) {
 			LayerIndex: lid,
 			TxIDs:      ids,
 		})
-	_, _, err := tcs.ApplyLayer(block)
+	_, err := tcs.ApplyLayer(block)
 	require.ErrorIs(t, err, errLayerNotInOrder)
 }
 
@@ -432,16 +430,14 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			},
 			TxIDs: ids,
 		})
-	rwd := []*types.Reward{{Layer: lid, Coinbase: coinbase, TotalReward: 10000, LayerReward: 1000}}
 	tcs.mvm.EXPECT().ApplyLayer(lid, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, []*types.Reward, error) {
+		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, error) {
 			require.ElementsMatch(t, got, txs)
-			return got[:numFailed], rwd, nil
+			return got[:numFailed], nil
 		}).Times(1)
-	failed, rewards, err := tcs.ApplyLayer(block)
+	failed, err := tcs.ApplyLayer(block)
 	require.NoError(t, err)
 	require.Len(t, failed, numFailed)
-	require.Equal(t, rwd, rewards)
 
 	for i, id := range ids {
 		mtx, err := tcs.GetMeshTransaction(id)
@@ -477,14 +473,13 @@ func TestApplyLayer_VMError(t *testing.T) {
 		})
 	errVM := errors.New("vm error")
 	tcs.mvm.EXPECT().ApplyLayer(lid, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, []*types.Reward, error) {
+		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, error) {
 			require.ElementsMatch(t, got, txs)
-			return got[:numFailed], nil, errVM
+			return got[:numFailed], errVM
 		}).Times(1)
-	failed, rewards, err := tcs.ApplyLayer(block)
+	failed, err := tcs.ApplyLayer(block)
 	require.ErrorIs(t, err, errVM)
 	require.Nil(t, failed)
-	require.Nil(t, rewards)
 
 	for _, id := range ids {
 		mtx, err := tcs.GetMeshTransaction(id)

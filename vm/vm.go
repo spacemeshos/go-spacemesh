@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -13,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -80,7 +82,7 @@ func (vm *VM) SetupGenesis(genesis *config.GenesisConfig) error {
 // ApplyLayer applies the given rewards to some miners as well as a vector of
 // transactions for the given layer. to miners vector for layer. It returns an
 // error on failure, as well as a vector of failed transactions.
-func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []types.AnyReward) ([]*types.Transaction, []*types.Reward, error) {
+func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []types.AnyReward) ([]*types.Transaction, error) {
 	vm.log.With().Info("apply layer to vm",
 		lid,
 		log.Int("rewards", len(rewards)),
@@ -98,7 +100,7 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 				if errors.Is(err, errInvalid) {
 					failed = append(failed, tx)
 				} else {
-					return nil, nil, err
+					return nil, err
 				}
 			} else {
 				totalFees += tx.GetFee()
@@ -116,21 +118,25 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 
 	finalRewards, err := calculateRewards(vm.log, vm.cfg, lid, totalFees, rewards)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	for _, reward := range finalRewards {
-		if err = ch.addBalance(reward.Coinbase, reward.TotalReward); err != nil {
-			return nil, nil, err
+
+	for _, r := range finalRewards {
+		if err = ch.addBalance(r.Coinbase, r.TotalReward); err != nil {
+			return nil, err
 		}
-		vm.log.With().Info("coinbase rewarded",
-			log.Stringer("coinbase", reward.Coinbase),
-			log.Uint64("reward", reward.TotalReward))
-		events.ReportAccountUpdate(reward.Coinbase)
+		ch.addReward(r)
+		events.ReportAccountUpdate(r.Coinbase)
+		events.ReportRewardReceived(events.Reward{
+			Layer:    r.Layer,
+			Coinbase: r.Coinbase,
+			Total:    r.TotalReward,
+		})
 	}
 	if _, err = ch.commit(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return failed, finalRewards, nil
+	return failed, nil
 }
 
 func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
@@ -209,10 +215,30 @@ func (vm *VM) GetStateRoot() (types.Hash32, error) {
 	return layers.GetLatestStateHash(vm.db)
 }
 
+func (vm *VM) revertInDbTX(lid types.LayerID) error {
+	tx, err := vm.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Release()
+
+	err = accounts.Revert(tx, lid)
+	if err != nil {
+		return err
+	}
+	err = rewards.Revert(tx, lid)
+	if err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Revert all changes that we made after the layer. Returns state hash of the layer.
 func (vm *VM) Revert(lid types.LayerID) (types.Hash32, error) {
-	err := accounts.Revert(vm.db, lid)
-	if err != nil {
+	if err := vm.revertInDbTX(lid); err != nil {
 		return types.Hash32{}, err
 	}
 	return vm.GetStateRoot()

@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -547,19 +546,16 @@ func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
 	}
 	logger.With().Info("successfully reverted state", log.Stringer("state_root", root))
 
-	if err = rewards.RevertToLayer(msh.db, revertTo); err != nil {
-		return fmt.Errorf("revert db rewards: %v: %w", revertTo, err)
-	}
-
 	if err = layers.UnsetAppliedFrom(msh.db, revertTo.Add(1)); err != nil {
 		logger.With().Error("failed to unset applied layer", log.Err(err))
 		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
+	logger.Info("successfully unset applied layer")
 	return nil
 }
 
 func (msh *Mesh) applyState(block *types.Block) error {
-	failedTxs, rewards, err := msh.conState.ApplyLayer(block)
+	failedTxs, err := msh.conState.ApplyLayer(block)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
 			block.LayerIndex,
@@ -571,12 +567,6 @@ func (msh *Mesh) applyState(block *types.Block) error {
 	if err := layers.SetApplied(msh.db, block.LayerIndex, block.ID()); err != nil {
 		return fmt.Errorf("set applied block: %w", err)
 	}
-
-	if err := msh.DB.writeTransactionRewards(rewards); err != nil {
-		msh.With().Error("cannot write reward to db", log.Err(err))
-		return err
-	}
-	reportRewards(rewards)
 
 	msh.With().Info("applied transactions",
 		block.LayerIndex,
@@ -723,19 +713,6 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 	}
 	msh.trtl.OnBlock(block)
 	return nil
-}
-
-func reportRewards(rewards []*types.Reward) {
-	// Report the rewards for each coinbase and each smesherID within each coinbase.
-	// This can be thought of as a partition of the reward amongst all the smesherIDs
-	// that added the coinbase into the block.
-	for _, r := range rewards {
-		events.ReportRewardReceived(events.Reward{
-			Layer:    r.Layer,
-			Coinbase: r.Coinbase,
-			Total:    r.TotalReward,
-		})
-	}
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.

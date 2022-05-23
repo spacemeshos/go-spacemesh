@@ -44,7 +44,7 @@ CREATE TABLE rewards
     coinbase     CHAR(20),
     layer        INT NOT NULL,
     total_reward UNSIGNED LONG INT,
-    lyr_reward   UNSIGNED LONG INT,
+    layer_reward UNSIGNED LONG INT,
     PRIMARY KEY (coinbase, layer)
 ) WITHOUT ROWID;
 CREATE INDEX rewards_by_coinbase ON rewards (coinbase, layer);

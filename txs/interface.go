@@ -24,7 +24,7 @@ type vmState interface {
 	GetBalance(types.Address) (uint64, error)
 	GetNonce(types.Address) (uint64, error)
 	Revert(types.LayerID) (types.Hash32, error)
-	ApplyLayer(types.LayerID, []*types.Transaction, []types.AnyReward) ([]*types.Transaction, []*types.Reward, error)
+	ApplyLayer(types.LayerID, []*types.Transaction, []types.AnyReward) ([]*types.Transaction, error)
 }
 
 type conStateCache interface {

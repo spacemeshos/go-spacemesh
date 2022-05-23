@@ -119,13 +119,12 @@ func (mr *MockvmStateMockRecorder) AddressExists(arg0 interface{}) *gomock.Call 
 }
 
 // ApplyLayer mocks base method.
-func (m *MockvmState) ApplyLayer(arg0 types.LayerID, arg1 []*types.Transaction, arg2 []types.AnyReward) ([]*types.Transaction, []*types.Reward, error) {
+func (m *MockvmState) ApplyLayer(arg0 types.LayerID, arg1 []*types.Transaction, arg2 []types.AnyReward) ([]*types.Transaction, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*types.Transaction)
-	ret1, _ := ret[1].([]*types.Reward)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // ApplyLayer indicates an expected call of ApplyLayer.

@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
 const (
@@ -229,10 +230,11 @@ func writeRewards(t *testing.T, mdb *DB) []types.Address {
 		},
 	}
 
-	require.NoError(t, mdb.writeTransactionRewards(rewards1))
-	require.NoError(t, mdb.writeTransactionRewards(rewards2))
-	require.NoError(t, mdb.writeTransactionRewards(rewards3))
-
+	for _, rewardList := range [][]*types.Reward{rewards1, rewards2, rewards3} {
+		for _, r := range rewardList {
+			require.NoError(t, rewards.Add(mdb.db, r))
+		}
+	}
 	return []types.Address{addr1, addr2, addr3}
 }
 
