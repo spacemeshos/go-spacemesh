@@ -49,6 +49,7 @@ const (
 const (
 	fetchProtocol = "/sync/2.0/"
 	batchMaxSize  = 20
+	maxHashPeers  = 10
 )
 
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers.
@@ -59,11 +60,12 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./fetch.go
 
-// Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
+// Fetcher is the general interface of the fetching unit, capable of requesting bytes that correspond to a hash
 // from other remote peers.
 type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
+	MapPeerToHash(hash types.Hash32, peer p2p.Peer)
 	Stop()
 	Start()
 }
@@ -189,6 +191,10 @@ type Fetch struct {
 	onlyOnce             sync.Once
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
+	// FIFO cache of hash->[peer set] to keep track of peers to pull blocks/ballots/txs from
+	hashToPeers     map[types.Hash32][]p2p.Peer
+	hashToSeenPeers map[types.Hash32]map[p2p.Peer]struct{}
+	hashToPeersM    sync.RWMutex
 }
 
 // NewFetch creates a new Fetch struct.
@@ -649,4 +655,27 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	f.requestReceiver <- req
 
 	return resChan
+}
+
+func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
+	f.hashToPeersM.Lock()
+	defer f.hashToPeersM.Unlock()
+
+	_, exists := f.hashToSeenPeers[hash]
+	if !exists {
+		f.hashToSeenPeers[hash] = map[p2p.Peer]struct{}{
+			peer: struct{}{},
+		}
+		f.hashToPeers[hash] = []p2p.Peer{peer}
+		return
+	}
+
+	f.hashToSeenPeers[hash][peer] = struct{}{}
+	f.hashToPeers[hash] = append(f.hashToPeers[hash], peer)
+
+	if len(f.hashToPeers[hash]) > maxHashPeers {
+		f.hashToPeers[hash] = f.hashToPeers[hash][1:]
+	}
+
+	return
 }

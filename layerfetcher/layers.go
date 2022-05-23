@@ -300,7 +300,7 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 }
 
 // fetchLayerData fetches the all content referenced in layerData.
-func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *layerData) error {
+func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Peer, layerID types.LayerID, blocks *layerData) error {
 	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
 	l.mutex.Lock()
 	lyrResult := l.layerBlocksRes[layerID]
@@ -331,11 +331,18 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 	}
 	l.mutex.Unlock()
 
+	logger.With().Debug("tracking peers for new ballots", log.Int("to_fetch", len(ballotsToFetch)), log.String("peer", peer.String()))
+	l.trackBallotPeers(ctx, peer, ballotsToFetch)
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
 		// fail sync for the entire layer
 		return err
 	}
+
+	logger.With().Debug("tracking peers for new blocks",
+		log.Int("to_fetch", len(blocksToFetch)),
+		log.String("peer", peer.String()))
+	l.trackBlockPeers(ctx, peer, blocksToFetch)
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
 		logger.With().Warning("failed fetching new blocks", log.Err(err))
@@ -370,7 +377,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	logger.Debug("received layer content from peer")
 	peerRes := extractPeerResult(logger, layerID, data, peerErr)
 	if peerRes.err == nil {
-		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
+		if err := l.fetchLayerData(ctx, logger, peer, layerID, peerRes.data); err != nil {
 			peerRes.err = ErrLayerDataNotFetched
 		}
 	}
@@ -586,6 +593,29 @@ func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch
 		}
 	}
 	return errs
+}
+
+func (l *Logic) trackBallotPeers(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
+	if len(ids) == 0 {
+		return
+	}
+	hashes := types.BallotIDsToHashes(ids)
+	for _, hash := range hashes {
+		l.fetcher.MapPeerToHash(hash, peer)
+	}
+	return
+}
+
+func (l *Logic) trackBlockPeers(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
+	if len(ids) == 0 {
+		return
+	}
+	hashes := types.BlockIDsToHashes(ids)
+	for _, hash := range hashes {
+		l.fetcher.MapPeerToHash(hash, peer)
+	}
+
+	return
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
