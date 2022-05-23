@@ -49,15 +49,13 @@ func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.N
 	txIDs := types.RandomTXSet(numTXs)
 	coinbase := types.BytesToAddress(nodeID[:])
 	weight := util.WeightFromFloat64(312.13)
-	wb, err := weight.GobEncode()
-	require.NoError(t, err)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
 			Rewards: []types.AnyReward{
 				{
 					Coinbase: coinbase,
-					Weight:   wb,
+					Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 				},
 			},
 			TxIDs: txIDs,

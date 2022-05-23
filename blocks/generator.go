@@ -162,14 +162,12 @@ func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Propo
 		if !ok {
 			g.logger.With().Fatal("coinbase missing", coinbase)
 		}
-		wb, err := weight.GobEncode()
-		if err != nil {
-			g.logger.With().Error("failed to encode weight", log.Err(err))
-			return nil, err
-		}
 		rewards = append(rewards, types.AnyReward{
 			Coinbase: coinbase,
-			Weight:   wb,
+			Weight: types.RatNum{
+				Num:   weight.Num().Uint64(),
+				Denom: weight.Denom().Uint64(),
+			},
 		})
 		logger.With().Debug("adding coinbase weight",
 			log.Stringer("coinbase", coinbase),

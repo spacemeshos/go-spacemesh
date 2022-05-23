@@ -160,8 +160,7 @@ func Test_GenerateBlock(t *testing.T) {
 	})
 	for i, r := range block.Rewards {
 		require.Equal(t, types.BytesToAddress(proposals[i].SmesherID().Bytes()), r.Coinbase)
-		got := util.WeightFromUint64(0)
-		require.NoError(t, got.GobDecode(r.Weight))
+		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 		// the expected weight for each eligibility is `numUnit` * 1/3
 		require.Equal(t, util.WeightFromInt64(numUint*1/3), got)
@@ -237,8 +236,7 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 	require.Len(t, block.Rewards, 1)
 	r := block.Rewards[0]
 	require.Equal(t, atxs[0].Coinbase, r.Coinbase)
-	got := util.WeightFromUint64(0)
-	require.NoError(t, got.GobDecode(r.Weight))
+	got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
 	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	// since there are two proposals for the same coinbase, the final weight is `numUnit` * 1/3 * 2
@@ -354,8 +352,7 @@ func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
 	totalWeight := util.WeightFromUint64(0)
 	for i, r := range block.Rewards {
 		require.Equal(t, types.BytesToAddress(proposals[i].SmesherID().Bytes()), r.Coinbase)
-		got := util.WeightFromUint64(0)
-		require.NoError(t, got.GobDecode(r.Weight))
+		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3
 		require.Equal(t, util.WeightFromInt64(numUint*1/3*int64(len(proposals[i].EligibilityProofs))), got)

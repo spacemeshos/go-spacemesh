@@ -18,11 +18,9 @@ func TestBlock_IDSize(t *testing.T) {
 func TestReward(t *testing.T) {
 	addr := BytesToAddress(RandomBytes(AddressLength))
 	weight := util.WeightFromUint64(1234).Div(util.WeightFromUint64(7))
-	weightB, err := weight.GobEncode()
-	require.NoError(t, err)
 	r := AnyReward{
 		Coinbase: addr,
-		Weight:   weightB,
+		Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
 	data, err := codec.Encode(r)
 	require.NoError(t, err)
@@ -30,8 +28,4 @@ func TestReward(t *testing.T) {
 	var got AnyReward
 	require.NoError(t, codec.Decode(data, &got))
 	require.Equal(t, r, got)
-
-	decodedW := util.WeightFromUint64(0)
-	require.NoError(t, decodedW.GobDecode(got.Weight))
-	require.Equal(t, 0, weight.Cmp(decodedW))
 }

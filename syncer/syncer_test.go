@@ -584,9 +584,9 @@ func TestSyncMissingLayer(t *testing.T) {
 			ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 			errMissingTXs := errors.New("missing TXs")
 			ts.mConState.EXPECT().ApplyLayer(block).DoAndReturn(
-				func(got *types.Block) ([]*types.Transaction, []*types.Reward, error) {
+				func(got *types.Block) ([]*types.Transaction, error) {
 					require.Equal(t, block.ID(), got.ID())
-					return nil, nil, errMissingTXs
+					return nil, errMissingTXs
 				})
 		}
 	}

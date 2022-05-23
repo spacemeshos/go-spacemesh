@@ -144,11 +144,7 @@ func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, total
 	totalWeight := util.WeightFromUint64(0)
 	byCoinbase := make(map[types.Address]util.Weight)
 	for _, reward := range rewards {
-		weight := util.WeightFromUint64(0)
-		if err := weight.GobDecode(reward.Weight); err != nil {
-			logger.With().Error("failed to decode weight", log.Stringer("coinbase", reward.Coinbase))
-			return nil, err
-		}
+		weight := util.WeightFromNumDenom(reward.Weight.Num, reward.Weight.Denom)
 		logger.With().Debug("coinbase weight", reward.Coinbase, log.Stringer("weight", weight))
 		if weight.Sign() == -1 {
 			logger.With().Error("invalid weight value",

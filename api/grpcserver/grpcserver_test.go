@@ -2980,9 +2980,8 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	weight := util.WeightFromFloat64(18.7)
-	wb, err := weight.GobEncode()
 	require.NoError(t, err)
-	rewards := []types.AnyReward{{Coinbase: addr1, Weight: wb}}
+	rewards := []types.AnyReward{{Coinbase: addr1, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
 
 	time.Sleep(100 * time.Millisecond)

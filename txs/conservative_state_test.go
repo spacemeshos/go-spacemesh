@@ -363,13 +363,11 @@ func TestApplyLayer(t *testing.T) {
 	ids, txs := addBatch(t, tcs, numTXs)
 	coinbase := types.GenerateAddress(types.RandomBytes(20))
 	weight := util.WeightFromFloat64(200.56)
-	wb, err := weight.GobEncode()
-	require.NoError(t, err)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
 			Rewards: []types.AnyReward{
-				{Coinbase: coinbase, Weight: wb},
+				{Coinbase: coinbase, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
 			},
 			TxIDs: ids,
 		})
@@ -420,13 +418,11 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 	}
 	coinbase := types.GenerateAddress(types.RandomBytes(20))
 	weight := util.WeightFromFloat64(200.56)
-	wb, err := weight.GobEncode()
-	require.NoError(t, err)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
 			Rewards: []types.AnyReward{
-				{Coinbase: coinbase, Weight: wb},
+				{Coinbase: coinbase, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
 			},
 			TxIDs: ids,
 		})
@@ -461,13 +457,11 @@ func TestApplyLayer_VMError(t *testing.T) {
 	ids, txs := addBatch(t, tcs, numTXs)
 	coinbase := types.GenerateAddress(types.RandomBytes(20))
 	weight := util.WeightFromFloat64(200.56)
-	wb, err := weight.GobEncode()
-	require.NoError(t, err)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
 			Rewards: []types.AnyReward{
-				{Coinbase: coinbase, Weight: wb},
+				{Coinbase: coinbase, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
 			},
 			TxIDs: ids,
 		})

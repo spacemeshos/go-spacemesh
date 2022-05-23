@@ -40,10 +40,15 @@ type InnerBlock struct {
 	TxIDs      []TransactionID
 }
 
+// RatNum represents a rational number with the numerator and denominator.
+type RatNum struct {
+	Num, Denom uint64
+}
+
 // AnyReward contains the rewards inforamtion.
 type AnyReward struct {
 	Coinbase Address
-	Weight   []byte
+	Weight   RatNum
 }
 
 // Initialize calculates and sets the Block's cached blockID.

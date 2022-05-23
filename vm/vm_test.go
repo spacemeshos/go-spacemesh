@@ -40,17 +40,13 @@ func TestLayers(t *testing.T) {
 	rng := rand.New(rand.NewSource(101))
 	signers := make([]*signing.EdSigner, 10)
 	addresses := make([]types.Address, len(signers))
-	weights := make([]util.Weight, len(signers))
-	weightBytes := make([][]byte, len(signers))
+	weights := make([]types.RatNum, len(signers))
 	for i := range signers {
 		signer := signing.NewEdSignerFromRand(rng)
 		signers[i] = signer
 		addresses[i] = types.BytesToAddress(signer.PublicKey().Bytes())
 		weight := util.WeightFromFloat64(13.37).Add(util.WeightFromInt64(int64(i)))
-		weights[i] = weight
-		wb, err := weight.GobEncode()
-		require.NoError(t, err)
-		weightBytes[i] = wb
+		weights[i] = types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}
 	}
 
 	for _, tc := range []struct {
@@ -64,8 +60,8 @@ func TestLayers(t *testing.T) {
 				{
 					// no transactions are applied
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[0], Weight: weightBytes[0]},
-						{Coinbase: addresses[1], Weight: weightBytes[1]},
+						{Coinbase: addresses[0], Weight: weights[0]},
+						{Coinbase: addresses[1], Weight: weights[1]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[0], TotalReward: 24098774333093, LayerReward: 24098774333093},
@@ -82,7 +78,7 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[1], addresses[2], 0, 50, 10),
 					},
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[1], Weight: weightBytes[1]},
+						{Coinbase: addresses[1], Weight: weights[1]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[1], TotalReward: 50000000000020, LayerReward: 50000000000000},
@@ -101,8 +97,8 @@ func TestLayers(t *testing.T) {
 				{
 					// no transactions are applied
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[0], Weight: weightBytes[0]},
-						{Coinbase: addresses[0], Weight: weightBytes[0]},
+						{Coinbase: addresses[0], Weight: weights[0]},
+						{Coinbase: addresses[0], Weight: weights[0]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[0], TotalReward: 50000000000000, LayerReward: 50000000000000},
@@ -114,8 +110,8 @@ func TestLayers(t *testing.T) {
 				{
 					// no transactions are applied
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[0], Weight: weightBytes[0]},
-						{Coinbase: addresses[0], Weight: weightBytes[0]},
+						{Coinbase: addresses[0], Weight: weights[0]},
+						{Coinbase: addresses[0], Weight: weights[0]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[0], TotalReward: 50000000000000, LayerReward: 50000000000000},
@@ -144,7 +140,7 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[1], addresses[0], 0, 90, 10),
 					},
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[2], Weight: weightBytes[2]},
+						{Coinbase: addresses[2], Weight: weights[2]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[2], TotalReward: 50000000000010, LayerReward: 50000000000000},
@@ -169,7 +165,7 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[1], addresses[2], 0, 80, 10),
 					},
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[2], Weight: weightBytes[2]},
+						{Coinbase: addresses[2], Weight: weights[2]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[2], TotalReward: 50000000000010, LayerReward: 50000000000000},
@@ -182,7 +178,7 @@ func TestLayers(t *testing.T) {
 				},
 				{
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[3], Weight: weightBytes[3]},
+						{Coinbase: addresses[3], Weight: weights[3]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[3], TotalReward: 50000000000000, LayerReward: 50000000000000},
@@ -221,7 +217,7 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[2], addresses[3], 0, 100, 100),
 					},
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[2], Weight: weightBytes[2]},
+						{Coinbase: addresses[2], Weight: weights[2]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[2], TotalReward: 50000000000100, LayerReward: 50000000000000},
@@ -249,7 +245,7 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[0], addresses[3], 2, 100, 1),
 					},
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[2], Weight: weightBytes[2]},
+						{Coinbase: addresses[2], Weight: weights[2]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[2], TotalReward: 50000000000003, LayerReward: 50000000000000},
@@ -276,7 +272,7 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[0], addresses[3], 1, 100, 1),
 					},
 					rewards: []types.AnyReward{
-						{Coinbase: addresses[2], Weight: weightBytes[2]},
+						{Coinbase: addresses[2], Weight: weights[2]},
 					},
 					finalRewards: []*types.Reward{
 						{Coinbase: addresses[2], TotalReward: 50000000000003, LayerReward: 50000000000000},
@@ -355,25 +351,21 @@ func TestLayerHash(t *testing.T) {
 	rng := rand.New(rand.NewSource(101))
 	signers := make([]*signing.EdSigner, 4)
 	addresses := make([]types.Address, len(signers))
-	weights := make([]util.Weight, len(signers))
-	weightBytes := make([][]byte, len(signers))
+	weights := make([]types.RatNum, len(signers))
 	for i := range signers {
 		signer := signing.NewEdSignerFromRand(rng)
 		signers[i] = signer
 		addresses[i] = types.BytesToAddress(signer.PublicKey().Bytes())
 		weight := util.WeightFromFloat64(13.37).Add(util.WeightFromInt64(int64(i)))
-		weights[i] = weight
-		wb, err := weight.GobEncode()
-		require.NoError(t, err)
-		weightBytes[i] = wb
+		weights[i] = types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}
 	}
 
-	rewards := []types.AnyReward{
-		{Coinbase: addresses[0], Weight: weightBytes[0]},
-		{Coinbase: addresses[1], Weight: weightBytes[1]},
+	blkRewards := []types.AnyReward{
+		{Coinbase: addresses[0], Weight: weights[0]},
+		{Coinbase: addresses[1], Weight: weights[1]},
 	}
 
-	_, err := vm.ApplyLayer(types.NewLayerID(1), nil, rewards)
+	_, err := vm.ApplyLayer(types.NewLayerID(1), nil, blkRewards)
 	require.NoError(t, err)
 	root, err := vm.GetStateRoot()
 	require.NoError(t, err)
@@ -385,7 +377,7 @@ func TestLayerHash(t *testing.T) {
 		genTx(t, signers[0], addresses[3], 1, 50, 0),
 	}
 
-	_, err = vm.ApplyLayer(types.NewLayerID(2), txs, rewards)
+	_, err = vm.ApplyLayer(types.NewLayerID(2), txs, blkRewards)
 	require.NoError(t, err)
 	root, err = vm.GetStateRoot()
 	require.NoError(t, err)

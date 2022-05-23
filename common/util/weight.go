@@ -14,9 +14,14 @@ func WeightFromUint64(value uint64) Weight {
 	return Weight{Rat: new(big.Rat).SetUint64(value)}
 }
 
-// WeightFromFloat64 converts an float64 to Weight.
+// WeightFromFloat64 converts a float64 to Weight.
 func WeightFromFloat64(value float64) Weight {
 	return Weight{Rat: new(big.Rat).SetFloat64(value)}
+}
+
+// WeightFromNumDenom converts an uint64 tuple (numerator, denominator) to Weight.
+func WeightFromNumDenom(num, denom uint64) Weight {
+	return Weight{Rat: new(big.Rat).SetFrac(new(big.Int).SetUint64(num), new(big.Int).SetUint64(denom))}
 }
 
 // Weight represents weight for any ATX/ballot.
