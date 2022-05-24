@@ -55,3 +55,13 @@ func TestStepChaos(t *testing.T) {
 		return chaos.Timeskew(tctx, "skew", skewOffset, names...)
 	})
 }
+
+// func TestStepTransactions(t *testing.T) {
+// 	tctx := testcontext.New(t, longevity)
+// 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+// 	require.NoError(t, err)
+
+// 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+// 	n := rng.Intn(10)
+
+// }
