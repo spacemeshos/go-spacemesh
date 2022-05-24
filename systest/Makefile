@@ -12,7 +12,10 @@ level ?= debug
 bootstrap ?= 5m
 node_selector ?=
 namespace ?=
+<<<<<<< HEAD
 schedule ?= "* * * * *"
+=======
+>>>>>>> develop
 
 .PHONY: docker
 docker:

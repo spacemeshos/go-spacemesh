@@ -331,7 +331,6 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to decode pub key %s %w", pub, err)
 		}
-		ctx.Log.Debugw("recovered account", "pub", pub, "address", hex.EncodeToString(decoded[12:]))
 		a.keys = append(a.keys, &signer{PK: pk, Pub: decoded})
 	}
 	a.persisted = true
