@@ -45,12 +45,16 @@ clean:
 	@echo "deleting namespaces without keep with testid=$(test_pod_name)"
 	@kubectl delete ns --selector=testid=$(test_pod_name),keep=false
 
-.PHONY: cleanall
-cleanall: clean
-	@echo "deleting all namespaces with testid=$(test_pod_name)"
-	@kubectl delete ns --selector=testid=$(test_pod_name)
+.PHONY: cleancron
+cleancron:
 	@echo "deleting cronjobs with testid=$(test_pod_name)"
 	@kubectl delete cronjob --selector=testid=$(test_pod_name)
+
+
+.PHONY: cleanall
+cleanall: clean cleancron
+	@echo "deleting all namespaces with testid=$(test_pod_name)"
+	@kubectl delete ns --selector=testid=$(test_pod_name)
 
 .PHONY: cron
 cron:

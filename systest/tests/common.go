@@ -190,3 +190,12 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address []byte) (
 	}
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
+
+func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address []byte) (uint64, error) {
+	gstate := spacemeshv1.NewGlobalStateServiceClient(client)
+	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
+}

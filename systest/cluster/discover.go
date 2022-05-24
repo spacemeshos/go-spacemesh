@@ -2,6 +2,9 @@ package cluster
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,5 +38,20 @@ func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error)
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
+	sort.Slice(clients, func(i, j int) bool {
+		return decodeOrdinal(clients[i].Name) < decodeOrdinal(clients[j].Name)
+	})
 	return clients, nil
+}
+
+func decodeOrdinal(name string) int {
+	parts := strings.Split(name, "-")
+	if len(parts) != 2 {
+		panic(fmt.Sprintf("unexpected name format %s", name))
+	}
+	ord, err := strconv.Atoi(parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return ord
 }

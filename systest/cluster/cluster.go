@@ -229,6 +229,10 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	if err := c.resourceControl(cctx, n); err != nil {
 		return err
 	}
+	return c.manageSmeshers(cctx, c.smeshers+n)
+}
+
+func (c *Cluster) manageSmeshers(cctx *testcontext.Context, replicas int) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
@@ -237,7 +241,7 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 		flags = append(flags, flag)
 	}
 	flags = append(flags, Bootnodes(extractP2PEndpoints(c.clients[:c.bootnodes])...))
-	clients, err := deployNodes(cctx, "smesher", c.smeshers+n, flags)
+	clients, err := deployNodes(cctx, "smesher", replicas, flags)
 	if err != nil {
 		return err
 	}
@@ -247,6 +251,18 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
 	return nil
+}
+
+// DeleteSmeshers will remove n smeshers from the end.
+//
+// TODO in the current deployment model smeshers are managed by a single StatefulSet object.
+// therefore we can't support API to remove any specific smesher. such API would be useful
+// for tests that add/remove nodes periodically.
+func (c *Cluster) DeleteSmeshers(cctx *testcontext.Context, n int) error {
+	if n > c.smeshers {
+		return fmt.Errorf("can't remove bootnodes. max number of removable smeshers is %d", c.smeshers)
+	}
+	return c.manageSmeshers(cctx, c.smeshers-n)
 }
 
 // Total returns total number of clients.
@@ -305,6 +321,7 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 }
 
 func (a *accounts) Recover(ctx *testcontext.Context) error {
+	a.keys = nil
 	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "accounts", metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to fetch accounts %w", err)
@@ -314,6 +331,7 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to decode pub key %s %w", pub, err)
 		}
+		ctx.Log.Debugw("recovered account", "pub", pub, "address", hex.EncodeToString(decoded[12:]))
 		a.keys = append(a.keys, &signer{PK: pk, Pub: decoded})
 	}
 	a.persisted = true
