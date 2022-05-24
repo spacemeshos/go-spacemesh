@@ -331,18 +331,20 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 	}
 	l.mutex.Unlock()
 
-	logger.With().Debug("tracking peers for new ballots", log.Int("to_fetch", len(ballotsToFetch)), log.String("peer", peer.String()))
+	logger.With().Debug("tracking peer for new ballots", log.Int("to_fetch", len(ballotsToFetch)), log.String("peer", peer.String()))
 	l.trackBallotPeers(ctx, peer, ballotsToFetch)
+
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
 		// fail sync for the entire layer
 		return err
 	}
 
-	logger.With().Debug("tracking peers for new blocks",
+	logger.With().Debug("tracking peer for new blocks",
 		log.Int("to_fetch", len(blocksToFetch)),
 		log.String("peer", peer.String()))
 	l.trackBlockPeers(ctx, peer, blocksToFetch)
+
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
 		logger.With().Warning("failed fetching new blocks", log.Err(err))

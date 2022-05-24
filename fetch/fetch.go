@@ -493,9 +493,19 @@ func (f *Fetch) requestHashBatchFromPeers() {
 		}
 		f.sendBatch(requestList[i:j])
 	}
+
 }
 
-// sendBatch dispatches batched request messages.
+func (f *Fetch) getHashRandomPeer(hash types.Hash32) p2p.Peer {
+	hashPeers, exists := f.hashToPeers[hash]
+	if !exists {
+		return GetRandomPeer(f.net.GetPeers())
+	}
+
+	return GetRandomPeer(hashPeers)
+}
+
+// sendBatch dispatches batched request messages (all with the same hash
 func (f *Fetch) sendBatch(requests []requestMessage) {
 	// build list of batch messages
 	var batch batchInfo
@@ -531,8 +541,9 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 			return
 		}
 
-		// get random peer
-		p := GetRandomPeer(f.net.GetPeers())
+		// get random peer from a list of available ones for a hash or just random peer generally
+		p := f.getHashRandomPeer(requests[0].Hash)
+
 		f.log.With().Debug("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Int("num_requests", len(batch.Requests)),
@@ -658,6 +669,8 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 }
 
 func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
+	f.log.Info("map hash to peer", log.String("hash", hash.String()), log.String("peer", peer.String()))
+
 	f.hashToPeersM.Lock()
 	defer f.hashToPeersM.Unlock()
 
