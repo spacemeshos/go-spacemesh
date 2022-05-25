@@ -242,7 +242,7 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 			return nil
 		})
 	}
-	if eg.Wait(); err != nil {
+	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -260,7 +260,7 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 			P2P:  7513,
 			GRPC: 9092,
 		}
-		rctx, cancel := context.WithTimeout(tctx, 5*time.Second)
+		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
 		defer cancel()
 		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
 			grpc.WithInsecure(),
@@ -270,7 +270,7 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 			return nil, err
 		}
 		dbg := spacemeshv1.NewDebugServiceClient(conn)
-		info, err := dbg.NetworkInfo(tctx, &emptypb.Empty{})
+		info, err := dbg.NetworkInfo(rctx, &emptypb.Empty{})
 		if err != nil {
 			return nil, err
 		}
