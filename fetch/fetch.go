@@ -192,9 +192,14 @@ type Fetch struct {
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
 	// FIFO cache of hash->[peer set] to keep track of peers to pull blocks/ballots/txs from
-	hashToPeers     map[types.Hash32][]p2p.Peer
-	hashToSeenPeers map[types.Hash32]map[p2p.Peer]struct{}
-	hashToPeersM    sync.RWMutex
+	hashToPeers  map[types.Hash32]*hashPeers
+	hashToPeersM sync.RWMutex
+}
+
+type hashPeers struct {
+	peersSeen map[p2p.Peer]struct{}
+	peers     []p2p.Peer // hold up to maxPeers peers only
+	timestamp time.Time
 }
 
 // NewFetch creates a new Fetch struct.
@@ -496,13 +501,28 @@ func (f *Fetch) requestHashBatchFromPeers() {
 
 }
 
-func (f *Fetch) getHashRandomPeer(hash types.Hash32) p2p.Peer {
-	hashPeers, exists := f.hashToPeers[hash]
-	if !exists {
+func (f *Fetch) getHashesRandomPeer(requests []requestMessage) p2p.Peer {
+	f.hashToPeersM.RLock()
+	defer f.hashToPeersM.RUnlock()
+
+	// peers holds a list of all peers provided hashes have been sent from.
+	// If peer P is mapped to 3 hashes then it's included 3 times.
+	// Then we simply take random peer from this list.
+	// The more often peer is included - the more probably it's picked.
+	peers := make([]p2p.Peer, 0, len(requests))
+	for _, req := range requests {
+		hashPeers, exists := f.hashToPeers[req.Hash]
+		if !exists {
+			continue
+		}
+		peers = append(peers, hashPeers.peers...)
+	}
+
+	if len(peers) == 0 {
 		return GetRandomPeer(f.net.GetPeers())
 	}
 
-	return GetRandomPeer(hashPeers)
+	return GetRandomPeer(peers)
 }
 
 // sendBatch dispatches batched request messages (all with the same hash
@@ -541,8 +561,8 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 			return
 		}
 
-		// get random peer from a list of available ones for a hash or just random peer generally
-		p := f.getHashRandomPeer(requests[0].Hash)
+		// get random peer for a list of requests with different hashes
+		p := f.getHashesRandomPeer(requests)
 
 		f.log.With().Debug("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
@@ -674,20 +694,25 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	f.hashToPeersM.Lock()
 	defer f.hashToPeersM.Unlock()
 
-	_, exists := f.hashToSeenPeers[hash]
+	_, exists := f.hashToPeers[hash]
 	if !exists {
-		f.hashToSeenPeers[hash] = map[p2p.Peer]struct{}{
-			peer: struct{}{},
+		f.hashToPeers[hash] = &hashPeers{
+			peersSeen: map[p2p.Peer]struct{}{
+				peer: struct{}{},
+			},
+			peers:     []p2p.Peer{},
+			timestamp: time.Now().UTC(),
 		}
-		f.hashToPeers[hash] = []p2p.Peer{peer}
+
 		return
 	}
 
-	f.hashToSeenPeers[hash][peer] = struct{}{}
-	f.hashToPeers[hash] = append(f.hashToPeers[hash], peer)
+	f.hashToPeers[hash].peersSeen[peer] = struct{}{}
+	f.hashToPeers[hash].peers = append(f.hashToPeers[hash].peers, peer)
 
-	if len(f.hashToPeers[hash]) > maxHashPeers {
-		f.hashToPeers[hash] = f.hashToPeers[hash][1:]
+	if len(f.hashToPeers[hash].peers) > maxHashPeers {
+		f.hashToPeers[hash].peers = f.hashToPeers[hash].peers[1:]
+		delete(f.hashToPeers[hash].peersSeen, peer)
 	}
 
 	return
