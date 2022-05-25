@@ -103,7 +103,7 @@ func TestStepManageNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	delta := min(rng.Intn(cl.Total()*2/10), cctx.ClusterSize-cl.Total())
+	delta := rng.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
 
 	log := cctx.Log.With(
 		"current", cl.Total(),

@@ -35,7 +35,7 @@ launch:
 
 .PHONY: watch
 watch:
-	@kubectl wait --for=condition=ready pod/$(test_pod_name)
+	-@kubectl wait --timeout=5s --for=condition=ready pod/$(test_pod_name)
 	@kubectl logs $(test_pod_name) -f
 
 .PHONY: clean
