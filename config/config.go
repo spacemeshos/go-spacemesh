@@ -94,7 +94,7 @@ type BaseConfig struct {
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
-	TxsPerBlock int `mapstructure:"txs-per-block"`
+	TxsPerProposal int `mapstructure:"txs-per-proposal"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -153,7 +153,7 @@ func defaultBaseConfig() BaseConfig {
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		TxsPerBlock:         100,
+		TxsPerProposal:      100,
 	}
 }
 
