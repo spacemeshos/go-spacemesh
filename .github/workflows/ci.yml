@@ -65,7 +65,6 @@ jobs:
           make
           make tidy
           make test-fmt
-          make lint
 
   golangci-lint:
     runs-on: ubuntu-latest

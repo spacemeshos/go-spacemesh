@@ -89,8 +89,12 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		bootstrap.WithNodeReporter(fh.nodeReporter),
 	)
 	fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-		DataDir:   cfg.DataDir,
-		Bootnodes: cfg.Bootnodes,
+		DataDir:              cfg.DataDir,
+		Bootnodes:            cfg.Bootnodes,
+		CheckPeersNumber:     cfg.CheckPeersNumber,
+		CheckTimeout:         cfg.CheckTimeout,
+		CheckInterval:        cfg.CheckInterval,
+		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)

@@ -33,3 +33,4 @@ database/data
 .python-version
 
 vendor/*
+systest/vendor/*

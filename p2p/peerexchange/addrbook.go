@@ -130,6 +130,14 @@ func (a *addrBook) updateAddress(addr, src *addrInfo) {
 		// new copy so that we don't have to copy every na for getaddr.
 		ka.LastSeen = time.Now()
 
+		if ka.Addr.RawAddr != addr.RawAddr {
+			a.logger.Debug("Update address",
+				log.String("old", ka.Addr.RawAddr),
+				log.String("new", addr.RawAddr),
+			)
+			ka.Addr = addr
+		}
+
 		// If already in tried, we have nothing to do here.
 		if ka.tried {
 			return
@@ -328,6 +336,24 @@ func (a *addrBook) getAddresses() []*addrInfo {
 		addrs = append(addrs, v.Addr)
 	}
 
+	return addrs
+}
+
+func (a *addrBook) GetAllAddressesUsedBefore(date time.Time) []*addrInfo {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	addrIndexLen := len(a.addrIndex)
+	if addrIndexLen == 0 {
+		return nil
+	}
+
+	addrs := make([]*addrInfo, 0, addrIndexLen)
+	for _, v := range a.addrIndex {
+		if v.LastSeen.Before(date) {
+			addrs = append(addrs, v.Addr)
+		}
+	}
 	return addrs
 }
 
