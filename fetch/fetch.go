@@ -49,7 +49,6 @@ const (
 const (
 	fetchProtocol = "/sync/2.0/"
 	batchMaxSize  = 20
-	maxHashPeers  = 10
 )
 
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers.
@@ -198,7 +197,6 @@ type Fetch struct {
 
 type hashPeers struct {
 	peersSeen map[p2p.Peer]struct{}
-	peers     []p2p.Peer // hold up to maxPeers peers only
 	timestamp time.Time
 }
 
@@ -700,7 +698,6 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 			peersSeen: map[p2p.Peer]struct{}{
 				peer: struct{}{},
 			},
-			peers:     []p2p.Peer{},
 			timestamp: time.Now().UTC(),
 		}
 
@@ -708,12 +705,6 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	}
 
 	f.hashToPeers[hash].peersSeen[peer] = struct{}{}
-	f.hashToPeers[hash].peers = append(f.hashToPeers[hash].peers, peer)
-
-	if len(f.hashToPeers[hash].peers) > maxHashPeers {
-		f.hashToPeers[hash].peers = f.hashToPeers[hash].peers[1:]
-		delete(f.hashToPeers[hash].peersSeen, peer)
-	}
 
 	return
 }
