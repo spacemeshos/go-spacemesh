@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -131,6 +132,7 @@ type responseBatch struct {
 type Config struct {
 	BatchTimeout         int // in milliseconds
 	MaxRetriesForPeer    int
+	MaxRetriesForBatch   int
 	BatchSize            int
 	RequestTimeout       int // in seconds
 	MaxRetriesForRequest int
@@ -141,6 +143,7 @@ func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         50,
 		MaxRetriesForPeer:    2,
+		MaxRetriesForBatch:   2,
 		BatchSize:            20,
 		RequestTimeout:       10,
 		MaxRetriesForRequest: 100,
@@ -196,7 +199,7 @@ type Fetch struct {
 }
 
 type hashPeers struct {
-	peersSeen map[p2p.Peer]struct{}
+	peers     map[p2p.Peer]struct{}
 	timestamp time.Time
 }
 
@@ -290,7 +293,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	rLen := len(f.activeRequests)
 	f.activeReqM.Unlock()
 	if sendNow {
-		f.sendBatch([]requestMessage{{req.hint, req.hash}})
+		f.send([]requestMessage{{req.hint, req.hash}})
 		f.log.With().Debug("high priority request sent", log.String("hash", req.hash.ShortString()))
 		return true
 	}
@@ -494,45 +497,84 @@ func (f *Fetch) requestHashBatchFromPeers() {
 		if j > len(requestList) {
 			j = len(requestList)
 		}
-		f.sendBatch(requestList[i:j])
+		f.send(requestList[i:j])
 	}
 
 }
 
-func (f *Fetch) getHashesRandomPeer(requests []requestMessage) p2p.Peer {
-	f.hashToPeersM.RLock()
-	defer f.hashToPeersM.RUnlock()
+func (f *Fetch) send(requests []requestMessage) {
+	if len(requests) == 0 {
+		return
+	}
+	if f.stopped() {
+		return
+	}
 
-	// peers holds a list of all peers provided hashes have been sent from.
-	// If peer P is mapped to 3 hashes then it's included 3 times.
-	// Then we simply take random peer from this list.
-	// The more often peer is included - the more probably it's picked.
-	peers := make([]p2p.Peer, 0, len(requests))
-	for _, req := range requests {
-		hashPeers, exists := f.hashToPeers[req.Hash]
-		if !exists {
-			continue
+	retries := 0
+	for {
+		peer2requests := f.organizeRequests(requests)
+		requests = requests[:0]
+
+		for peer, peerReqs := range peer2requests {
+			err := f.sendBatch(peer, peerReqs)
+			if err != nil {
+				requests = append(requests, peerReqs...)
+			}
 		}
-		peers = append(peers, hashPeers.peers...)
-	}
 
-	if len(peers) == 0 {
-		return GetRandomPeer(f.net.GetPeers())
-	}
+		if len(requests) == 0 {
+			break
+		}
 
-	return GetRandomPeer(peers)
+		retries++
+		if retries > f.cfg.MaxRetriesForBatch {
+			break
+		}
+	}
 }
 
-// sendBatch dispatches batched request messages (all with the same hash
-func (f *Fetch) sendBatch(requests []requestMessage) {
+func peerMapToList(m map[p2p.Peer]struct{}) []p2p.Peer {
+	result := make([]p2p.Peer, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+	return result
+}
+
+func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]requestMessage {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	result := make(map[p2p.Peer][]requestMessage)
+	for _, req := range requests {
+		hashPeersMap, exists := f.hashToPeers[req.Hash]
+		var p p2p.Peer
+		if exists {
+			hashPeers := peerMapToList(hashPeersMap.peers)
+			p = hashPeers[rng.Intn(len(hashPeers))]
+		} else {
+			p = GetRandomPeer(f.net.GetPeers())
+		}
+
+		if _, ok := result[p]; ok {
+			result[p] = append(result[p], req)
+		} else {
+			result[p] = []requestMessage{req}
+		}
+	}
+	return result
+}
+
+// sendBatch dispatches batched request messages to provided peer
+func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
+	batch.peer = p
 	batch.SetID()
 
 	f.activeBatchM.Lock()
 	f.activeBatches[batch.ID] = batch
 	f.activeBatchM.Unlock()
+
 	// timeout function will be called if no response was received for the hashes sent
 	errorFunc := func(err error) {
 		f.log.With().Warning("error occurred for sendbatch",
@@ -545,48 +587,35 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	if err != nil {
 		f.handleHashError(batch.ID, err)
 	}
+
 	// try sending batch to some random peer
 	retries := 0
 	for {
 		if f.stopped() {
-			return
+			return nil
 		}
-
-		if f.net.PeerCount() == 0 {
-			f.log.With().Error("no peers found, unable to send request batch",
-				batch.ID,
-				log.Int("items", len(batch.Requests)))
-			return
-		}
-
-		// get random peer for a list of requests with different hashes
-		p := f.getHashesRandomPeer(requests)
 
 		f.log.With().Debug("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Int("num_requests", len(batch.Requests)),
 			log.String("peer", p.String()))
-		batch.peer = p
-		f.activeBatchM.Lock()
-		f.activeBatches[batch.ID] = batch
-		f.activeBatchM.Unlock()
-		err := f.net.Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
 
-		// if call succeeded, continue to other requests
-		if err != nil {
-			retries++
-			if retries > f.cfg.MaxRetriesForPeer {
-				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
-				break
-			}
-			// todo: mark number of fails per peer to make it low priority
-			f.log.With().Warning("could not send message to peer",
-				log.String("peer", p.String()),
-				log.Int("retries", retries))
-		} else {
+		err = f.net.Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
+		if err == nil {
 			break
 		}
+
+		retries++
+		if retries > f.cfg.MaxRetriesForPeer {
+			break
+		}
+		// todo: mark number of fails per peer to make it low priority
+		f.log.With().Warning("could not send message to peer",
+			log.String("peer", p.String()),
+			log.Int("retries", retries))
 	}
+
+	return err
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
@@ -695,7 +724,7 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	_, exists := f.hashToPeers[hash]
 	if !exists {
 		f.hashToPeers[hash] = &hashPeers{
-			peersSeen: map[p2p.Peer]struct{}{
+			peers: map[p2p.Peer]struct{}{
 				peer: struct{}{},
 			},
 			timestamp: time.Now().UTC(),
@@ -704,7 +733,7 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 		return
 	}
 
-	f.hashToPeers[hash].peersSeen[peer] = struct{}{}
+	f.hashToPeers[hash].peers[peer] = struct{}{}
 
 	return
 }
