@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
@@ -197,7 +198,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	var (
 		goodbase, badbase = types.BallotID{0}, types.BallotID{0, 1}
 		ballots           = []types.BallotID{{1}, {2}, {3}, {4}}
-		ballotWeight      = weightFromUint64(10)
+		ballotWeight      = util.WeightFromUint64(10)
 		blocks            = []types.BlockID{{11}, {22}, {33}}
 		start             = types.GetEffectiveGenesis()
 	)
@@ -219,7 +220,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			ballots[2]: start.Add(2),
 			ballots[3]: start.Add(2),
 		}
-		state.ballotWeight = map[types.BallotID]weight{
+		state.ballotWeight = map[types.BallotID]util.Weight{
 			ballots[0]: ballotWeight,
 			ballots[1]: ballotWeight,
 			ballots[2]: ballotWeight,
@@ -231,9 +232,9 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	for _, tc := range []struct {
 		desc            string
 		ballots         [][]tortoiseBallot
-		layerWeights    []weight
-		total           []weight
-		abstainedWeight []map[types.LayerID]weight
+		layerWeights    []util.Weight
+		total           []util.Weight
+		abstainedWeight []map[types.LayerID]util.Weight
 	}{
 		{
 			desc: "AllGood",
@@ -255,8 +256,8 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(20), weightFromUint64(10)},
-			total:        []weight{weightFromUint64(20), weightFromUint64(30)},
+			layerWeights: []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(10)},
+			total:        []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(30)},
 		},
 		{
 			desc: "AllBad",
@@ -278,8 +279,8 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(0), weightFromUint64(0)},
-			total:        []weight{weightFromUint64(0), weightFromUint64(0)},
+			layerWeights: []util.Weight{util.WeightFromUint64(0), util.WeightFromUint64(0)},
+			total:        []util.Weight{util.WeightFromUint64(0), util.WeightFromUint64(0)},
 		},
 		{
 			desc: "GoodInFirstLayer",
@@ -301,8 +302,8 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(20), weightFromUint64(0)},
-			total:        []weight{weightFromUint64(20), weightFromUint64(20)},
+			layerWeights: []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(0)},
+			total:        []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(20)},
 		},
 		{
 			desc: "AbstainedWeight",
@@ -333,15 +334,15 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(20), weightFromUint64(10)},
-			total:        []weight{weightFromUint64(20), weightFromUint64(30)},
-			abstainedWeight: []map[types.LayerID]weight{
+			layerWeights: []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(10)},
+			total:        []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(30)},
+			abstainedWeight: []map[types.LayerID]util.Weight{
 				{
-					start: weightFromFloat64(20),
+					start: util.WeightFromFloat64(20),
 				},
 				{
-					start:        weightFromFloat64(20),
-					start.Add(1): weightFromFloat64(10),
+					start:        util.WeightFromFloat64(20),
+					start.Add(1): util.WeightFromFloat64(10),
 				},
 			},
 		},
@@ -372,32 +373,32 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 	start := types.NewLayerID(0)
 	for _, tc := range []struct {
 		desc                string
-		epochWeight         map[types.EpochID]weight
-		layersWeight        map[types.LayerID]weight
-		abstainedWeight     map[types.LayerID]weight
-		totalWeight         weight
+		epochWeight         map[types.EpochID]util.Weight
+		layersWeight        map[types.LayerID]util.Weight
+		abstainedWeight     map[types.LayerID]util.Weight
+		totalWeight         util.Weight
 		verified, processed types.LayerID
 		blocks              map[types.LayerID][]types.BlockID
 		localOpinion        votes
 		config              Config
 
 		expected            types.LayerID
-		expectedTotalWeight weight
+		expectedTotalWeight util.Weight
 	}{
 		{
 			desc: "All",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				0: util.WeightFromUint64(10),
+				1: util.WeightFromUint64(10),
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(8),
-				start.Add(2): weightFromUint64(8),
-				start.Add(3): weightFromUint64(6),
-				start.Add(4): weightFromUint64(10),
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(8),
+				start.Add(2): util.WeightFromUint64(8),
+				start.Add(3): util.WeightFromUint64(6),
+				start.Add(4): util.WeightFromUint64(10),
 			},
-			abstainedWeight: map[types.LayerID]weight{},
-			totalWeight:     weightFromUint64(32),
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(32),
 			verified:        start,
 			processed:       start.Add(4),
 			blocks:          map[types.LayerID][]types.BlockID{},
@@ -408,25 +409,25 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(3),
-			expectedTotalWeight: weightFromUint64(10),
+			expectedTotalWeight: util.WeightFromUint64(10),
 		},
 		{
 			desc: "Abstained",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				0: util.WeightFromUint64(10),
+				1: util.WeightFromUint64(10),
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(8),
-				start.Add(2): weightFromUint64(8),
-				start.Add(3): weightFromUint64(6),
-				start.Add(4): weightFromUint64(10),
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(8),
+				start.Add(2): util.WeightFromUint64(8),
+				start.Add(3): util.WeightFromUint64(6),
+				start.Add(4): util.WeightFromUint64(10),
 			},
-			abstainedWeight: map[types.LayerID]weight{
-				start.Add(2): weightFromUint64(2),
-				start.Add(3): weightFromUint64(4),
+			abstainedWeight: map[types.LayerID]util.Weight{
+				start.Add(2): util.WeightFromUint64(2),
+				start.Add(3): util.WeightFromUint64(4),
 			},
-			totalWeight:  weightFromUint64(34),
+			totalWeight:  util.WeightFromUint64(34),
 			verified:     start,
 			processed:    start.Add(4),
 			blocks:       map[types.LayerID][]types.BlockID{},
@@ -437,22 +438,22 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(2),
-			expectedTotalWeight: weightFromUint64(18),
+			expectedTotalWeight: util.WeightFromUint64(18),
 		},
 		{
 			desc: "Some",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				0: util.WeightFromUint64(10),
+				1: util.WeightFromUint64(10),
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(12),
-				start.Add(2): weightFromUint64(14),
-				start.Add(3): weightFromUint64(2),
-				start.Add(4): weightFromUint64(8),
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(12),
+				start.Add(2): util.WeightFromUint64(14),
+				start.Add(3): util.WeightFromUint64(2),
+				start.Add(4): util.WeightFromUint64(8),
 			},
-			abstainedWeight: map[types.LayerID]weight{},
-			totalWeight:     weightFromUint64(36),
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(36),
 			verified:        start,
 			processed:       start.Add(4),
 			config: Config{
@@ -461,22 +462,22 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(1),
-			expectedTotalWeight: weightFromUint64(24),
+			expectedTotalWeight: util.WeightFromUint64(24),
 		},
 		{
 			desc: "Undecided",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				0: util.WeightFromUint64(10),
+				1: util.WeightFromUint64(10),
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(10),
-				start.Add(2): weightFromUint64(10),
-				start.Add(3): weightFromUint64(10),
-				start.Add(4): weightFromUint64(10),
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
 			},
-			abstainedWeight: map[types.LayerID]weight{},
-			totalWeight:     weightFromUint64(40),
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(40),
 			verified:        start,
 			processed:       start.Add(4),
 			blocks: map[types.LayerID][]types.BlockID{
@@ -489,7 +490,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(2),
-			expectedTotalWeight: weightFromUint64(20),
+			expectedTotalWeight: util.WeightFromUint64(20),
 		},
 	} {
 		tc := tc

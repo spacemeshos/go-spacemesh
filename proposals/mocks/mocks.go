@@ -50,6 +50,44 @@ func (mr *MockatxDBMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxDB)(nil).GetAtxHeader), arg0)
 }
 
+// MockballotDB is a mock of ballotDB interface.
+type MockballotDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockballotDBMockRecorder
+}
+
+// MockballotDBMockRecorder is the mock recorder for MockballotDB.
+type MockballotDBMockRecorder struct {
+	mock *MockballotDB
+}
+
+// NewMockballotDB creates a new mock instance.
+func NewMockballotDB(ctrl *gomock.Controller) *MockballotDB {
+	mock := &MockballotDB{ctrl: ctrl}
+	mock.recorder = &MockballotDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockballotDB) EXPECT() *MockballotDBMockRecorder {
+	return m.recorder
+}
+
+// GetBallot mocks base method.
+func (m *MockballotDB) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*types.Ballot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockballotDBMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockballotDB)(nil).GetBallot), arg0)
+}
+
 // MockmeshDB is a mock of meshDB interface.
 type MockmeshDB struct {
 	ctrl     *gomock.Controller

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 )
@@ -47,15 +48,14 @@ func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.N
 	t.Helper()
 	txIDs := types.RandomTXSet(numTXs)
 	coinbase := types.BytesToAddress(nodeID[:])
+	weight := util.WeightFromFloat64(312.13)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
 			Rewards: []types.AnyReward{
 				{
-					Address:     coinbase,
-					SmesherID:   nodeID,
-					Amount:      unitReward,
-					LayerReward: unitLayerReward,
+					Coinbase: coinbase,
+					Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 				},
 			},
 			TxIDs: txIDs,
@@ -95,6 +95,7 @@ func createLayerBallots(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.
 }
 
 func checkLastApplied(t *testing.T, mesh *Mesh, expected types.LayerID) {
+	t.Helper()
 	lid, err := mesh.LastAppliedLayer()
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
@@ -367,6 +368,7 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus4, tm.ProcessedLayer())
 	require.Equal(t, gPlus4, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus4)
+
 	newHash := tm.GetAggregatedLayerHash(gPlus2)
 	require.NotEqual(t, types.EmptyLayerHash, newHash)
 	require.NotEqual(t, oldHash, newHash)

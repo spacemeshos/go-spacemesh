@@ -9,8 +9,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
-// ErrZeroTotalWeight is returned when zero total epoch weight is used when calculating eligible slots.
-var ErrZeroTotalWeight = errors.New("zero total weight not allowed")
+var (
+	// ErrZeroTotalWeight is returned when zero total epoch weight is used when calculating eligible slots.
+	ErrZeroTotalWeight = errors.New("zero total weight not allowed")
+
+	errBadBallotData = errors.New("bad ballot data")
+)
 
 // CalcEligibleLayer calculates the eligible layer from the VRF signature.
 func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
@@ -49,4 +53,45 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint3
 		return nil, fmt.Errorf("serialize vrf message: %w", err)
 	}
 	return serialized, nil
+}
+
+// ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
+func ComputeWeightPerEligibility(
+	atxdb atxDB,
+	mdb ballotDB,
+	ballot *types.Ballot,
+	layerSize,
+	layersPerEpoch uint32,
+) (util.Weight, error) {
+	var (
+		refBallot        = ballot
+		hdr              *types.ActivationTxHeader
+		err              error
+		total, atxWeight uint64
+	)
+	if ballot.EpochData == nil {
+		if ballot.RefBallot == types.EmptyBallotID {
+			return util.Weight{}, fmt.Errorf("%w: empty ref ballot but no epoch data %s", errBadBallotData, ballot.ID())
+		}
+		refBallot, err = mdb.GetBallot(ballot.RefBallot)
+		if err != nil {
+			return util.Weight{}, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
+		}
+	}
+	for _, atxID := range refBallot.EpochData.ActiveSet {
+		hdr, err = atxdb.GetAtxHeader(atxID)
+		if err != nil {
+			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %d)", err, atxID, ballot.RefBallot, ballot.ID())
+		}
+		weight := hdr.GetWeight()
+		total += weight
+		if atxID == ballot.AtxID {
+			atxWeight = weight
+		}
+	}
+	expNumSlots, err := GetNumEligibleSlots(atxWeight, total, layerSize, layersPerEpoch)
+	if err != nil {
+		return util.Weight{}, fmt.Errorf("failed to compute num eligibility for atx %s: %w", ballot.AtxID, err)
+	}
+	return util.WeightFromUint64(atxWeight).Div(util.WeightFromUint64(uint64(expNumSlots))), nil
 }

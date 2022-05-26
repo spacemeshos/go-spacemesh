@@ -545,10 +545,12 @@ func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
 	logger.With().Info("successfully reverted state", log.Stringer("state_root", root))
+
 	if err = layers.UnsetAppliedFrom(msh.db, revertTo.Add(1)); err != nil {
 		logger.With().Error("failed to unset applied layer", log.Err(err))
 		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
+	logger.Info("successfully unset applied layer")
 	return nil
 }
 
@@ -565,12 +567,6 @@ func (msh *Mesh) applyState(block *types.Block) error {
 	if err := layers.SetApplied(msh.db, block.LayerIndex, block.ID()); err != nil {
 		return fmt.Errorf("set applied block: %w", err)
 	}
-
-	if err := msh.DB.writeTransactionRewards(block.LayerIndex, block.Rewards); err != nil {
-		msh.With().Error("cannot write reward to db", log.Err(err))
-		return err
-	}
-	reportRewards(block)
 
 	msh.With().Info("applied transactions",
 		block.LayerIndex,
@@ -717,21 +713,6 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 	}
 	msh.trtl.OnBlock(block)
 	return nil
-}
-
-func reportRewards(block *types.Block) {
-	// Report the rewards for each coinbase and each smesherID within each coinbase.
-	// This can be thought of as a partition of the reward amongst all the smesherIDs
-	// that added the coinbase into the block.
-	for _, r := range block.Rewards {
-		events.ReportRewardReceived(events.Reward{
-			Layer:       block.LayerIndex,
-			Total:       r.Amount,
-			LayerReward: r.LayerReward,
-			Coinbase:    r.Address,
-			Smesher:     r.SmesherID,
-		})
-	}
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.

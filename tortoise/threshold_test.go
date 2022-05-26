@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
@@ -18,10 +19,10 @@ func TestComputeThreshold(t *testing.T) {
 		config                    Config
 		processed, last, verified types.LayerID
 		mode                      mode
-		epochWeight               map[types.EpochID]weight
+		epochWeight               map[types.EpochID]util.Weight
 
-		expectedLocal  weight
-		expectedGlobal weight
+		expectedLocal  util.Weight
+		expectedGlobal util.Weight
 	}{
 		{
 			desc: "WindowIsNotShorterThanProcessed",
@@ -33,11 +34,11 @@ func TestComputeThreshold(t *testing.T) {
 			processed: genesis.Add(4),
 			last:      genesis.Add(4),
 			verified:  genesis,
-			epochWeight: map[types.EpochID]weight{
-				2: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				2: util.WeightFromUint64(10),
 			},
-			expectedLocal:  weightFromUint64(5),
-			expectedGlobal: weightFromUint64(20),
+			expectedLocal:  util.WeightFromUint64(5),
+			expectedGlobal: util.WeightFromUint64(20),
 		},
 		{
 			desc: "VerifyingLimitIsUsed",
@@ -49,11 +50,11 @@ func TestComputeThreshold(t *testing.T) {
 			processed: genesis.Add(1),
 			last:      genesis.Add(4),
 			verified:  genesis,
-			epochWeight: map[types.EpochID]weight{
-				2: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				2: util.WeightFromUint64(10),
 			},
-			expectedLocal:  weightFromUint64(5),
-			expectedGlobal: weightFromUint64(15),
+			expectedLocal:  util.WeightFromUint64(5),
+			expectedGlobal: util.WeightFromUint64(15),
 		},
 		{
 			desc: "FullLimitIsUsed",
@@ -66,11 +67,11 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(4),
 			verified:  genesis,
 			mode:      mode{}.toggleMode(),
-			epochWeight: map[types.EpochID]weight{
-				2: weightFromUint64(10),
+			epochWeight: map[types.EpochID]util.Weight{
+				2: util.WeightFromUint64(10),
 			},
-			expectedLocal:  weightFromUint64(5),
-			expectedGlobal: weightFromUint64(20),
+			expectedLocal:  util.WeightFromUint64(5),
+			expectedGlobal: util.WeightFromUint64(20),
 		},
 	} {
 		tc := tc
