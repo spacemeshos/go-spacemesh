@@ -607,6 +607,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
 
 		retries++
 		if retries > f.cfg.MaxRetriesForPeer {
+			f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 			break
 		}
 		// todo: mark number of fails per peer to make it low priority
