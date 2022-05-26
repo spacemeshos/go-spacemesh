@@ -9,7 +9,12 @@ import (
 
 // Add reward to the database.
 func Add(db sql.Executor, reward *types.Reward) error {
-	if _, err := db.Exec(`insert into rewards (coinbase, layer, total_reward, layer_reward) values (?1, ?2, ?3, ?4);`,
+	if _, err := db.Exec(`
+		insert into rewards (coinbase, layer, total_reward, layer_reward) values (?1, ?2, ?3, ?4)
+		on conflict(coinbase, layer)
+			do update set
+				total_reward=add_uint64(total_reward, ?3),
+				layer_reward=add_uint64(layer_reward, ?4);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, reward.Coinbase[:])
 			stmt.BindInt64(2, int64(reward.Layer.Uint32()))
@@ -32,8 +37,8 @@ func Revert(db sql.Executor, revertTo types.LayerID) error {
 	return nil
 }
 
-// Get rewards from all layers for the coinbase address.
-func Get(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
+// List rewards from all layers for the coinbase address.
+func List(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
 	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where coinbase = ?1 order by layer;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, coinbase[:])

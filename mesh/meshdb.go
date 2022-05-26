@@ -319,7 +319,7 @@ func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32
 
 // GetRewards retrieves account's rewards by the coinbase address.
 func (m *DB) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
-	return rewards.Get(m.db, coinbase)
+	return rewards.List(m.db, coinbase)
 }
 
 // LayerContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.

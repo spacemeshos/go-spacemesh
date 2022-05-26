@@ -28,6 +28,12 @@ func TestRewards(t *testing.T) {
 		},
 		{
 			Layer:       lid1,
+			Coinbase:    coinbase1,
+			TotalReward: part,
+			LayerReward: lyrReward,
+		},
+		{
+			Layer:       lid1,
 			Coinbase:    coinbase2,
 			TotalReward: part,
 			LayerReward: lyrReward,
@@ -44,18 +50,17 @@ func TestRewards(t *testing.T) {
 	}
 	for _, reward := range append(rewards1, rewards2...) {
 		require.NoError(t, Add(db, &reward))
-		require.ErrorIs(t, Add(db, &reward), sql.ErrObjectExists)
 	}
 
-	got, err := Get(db, coinbase1)
+	got, err := List(db, coinbase1)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, coinbase1, got[0].Coinbase)
 	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
+	require.Equal(t, part*2, got[0].TotalReward)
+	require.Equal(t, lyrReward*2, got[0].LayerReward)
 
-	got, err = Get(db, coinbase2)
+	got, err = List(db, coinbase2)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	require.Equal(t, coinbase2, got[0].Coinbase)
@@ -68,20 +73,20 @@ func TestRewards(t *testing.T) {
 	require.Equal(t, lyrReward, got[1].LayerReward)
 
 	unknownAddr := types.Address{1, 2, 3}
-	got, err = Get(db, unknownAddr)
+	got, err = List(db, unknownAddr)
 	require.NoError(t, err)
 	require.Len(t, got, 0)
 
 	require.NoError(t, Revert(db, lid1))
-	got, err = Get(db, coinbase1)
+	got, err = List(db, coinbase1)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, coinbase1, got[0].Coinbase)
 	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
+	require.Equal(t, part*2, got[0].TotalReward)
+	require.Equal(t, lyrReward*2, got[0].LayerReward)
 
-	got, err = Get(db, coinbase2)
+	got, err = List(db, coinbase2)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, coinbase2, got[0].Coinbase)

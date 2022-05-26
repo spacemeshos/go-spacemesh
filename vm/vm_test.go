@@ -316,7 +316,7 @@ func TestLayers(t *testing.T) {
 				}
 				var totalLayerRewards uint64
 				for _, r := range s.finalRewards {
-					got, err := rewards.Get(db, r.Coinbase)
+					got, err := rewards.List(db, r.Coinbase)
 					require.NoError(t, err)
 					require.NotEmpty(t, got)
 					// the last one should be the latest layer
