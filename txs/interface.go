@@ -28,7 +28,7 @@ type vmState interface {
 }
 
 type conStateCache interface {
-	GetMempool() (map[types.Address][]*txtypes.NanoTX, error)
+	GetMempool() map[types.Address][]*txtypes.NanoTX
 }
 
 type txProvider interface {

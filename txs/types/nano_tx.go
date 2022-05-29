@@ -10,7 +10,8 @@ import (
 type NanoTX struct {
 	Tid       types.TransactionID
 	Principal types.Address
-	Fee       uint64
+	Fee       uint64 // TODO replace with gas price
+	MaxGas    uint64
 	Received  time.Time
 
 	Amount uint64
@@ -25,6 +26,7 @@ func NewNanoTX(mtx *types.MeshTransaction) *NanoTX {
 		Tid:       mtx.ID(),
 		Principal: mtx.Origin(),
 		Fee:       mtx.GetFee(),
+		MaxGas:    mtx.MaxGas(),
 		Amount:    mtx.Amount,
 		Nonce:     mtx.AccountNonce,
 		Received:  mtx.Received,

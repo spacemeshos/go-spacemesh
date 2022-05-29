@@ -14,7 +14,8 @@ type proposalOracle interface {
 }
 
 type conservativeState interface {
-	SelectTXsForProposal(int) ([]types.TransactionID, error)
+	GetStateRoot() (types.Hash32, error)
+	SelectProposalTXs(int) []types.TransactionID
 }
 
 type votesEncoder interface {
@@ -25,4 +26,8 @@ type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
+}
+
+type meshProvider interface {
+	GetAggregatedLayerHash(types.LayerID) (types.Hash32, error)
 }

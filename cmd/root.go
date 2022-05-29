@@ -61,6 +61,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&config.TxsPerProposal, "txs-per-proposal",
 		config.TxsPerProposal, "the number of transactions to select per proposal")
+	cmd.PersistentFlags().Uint64Var(&config.BlockGasLimit, "block-gas-limit",
+		config.BlockGasLimit, "max gas allowed per block")
 
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")

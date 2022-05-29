@@ -2975,7 +2975,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	lg := logtest.New(t).WithName("svm")
 	svm := vm.New(lg, sql.InMemory())
-	conState := txs.NewConservativeState(svm, sql.InMemory(), logtest.New(t).WithName("conState"))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 

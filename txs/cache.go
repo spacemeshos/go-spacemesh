@@ -199,7 +199,10 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 
 		best := findBest(nonce2TXs[nextNonce], balance)
 		if best == nil {
-			logger.With().Warning("no feasible transactions at nonce", ac.addr, log.Uint64("nonce", nextNonce))
+			logger.With().Warning("no feasible transactions at nonce",
+				ac.addr,
+				log.Uint64("nonce", nextNonce),
+				log.Uint64("balance", balance))
 			break
 		} else {
 			logger.With().Debug("found best in nonce txs",
@@ -388,15 +391,15 @@ func (ac *accountCache) getMempoolOffset() int {
 	return -1
 }
 
-func (ac *accountCache) getMempool(logger log.Log) ([]*txtypes.NanoTX, error) {
+func (ac *accountCache) getMempool(logger log.Log) []*txtypes.NanoTX {
 	bests := make([]*txtypes.NanoTX, 0, maxTXsPerAcct)
 	offset := ac.getMempoolOffset()
 	if offset < 0 {
-		return nil, nil
+		return nil
 	}
 	for _, nonceTXs := range ac.txsByNonce[offset:] {
 		if nonceTXs.layer() != (types.LayerID{}) {
-			logger.With().Error("some proposals/blocks packed txs out of order",
+			logger.With().Warning("some proposals/blocks packed txs out of order",
 				nonceTXs.id(),
 				nonceTXs.layer(),
 				nonceTXs.block(),
@@ -404,7 +407,7 @@ func (ac *accountCache) getMempool(logger log.Log) ([]*txtypes.NanoTX, error) {
 		}
 		bests = append(bests, nonceTXs.best)
 	}
-	return bests, nil
+	return bests
 }
 
 func (ac *accountCache) applyLayer(
@@ -766,22 +769,18 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that should be included in the next proposal.
-func (c *cache) GetMempool() (map[types.Address][]*txtypes.NanoTX, error) {
+func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*txtypes.NanoTX)
 	for addr, accCache := range c.pending {
-		txs, err := accCache.getMempool(c.logger)
-		if err != nil {
-			return nil, err
-		}
+		txs := accCache.getMempool(c.logger)
 		if len(txs) > 0 {
-			// account with nonce gap will be kept in memory but has no pending txs
 			all[addr] = txs
 		}
 	}
-	return all, nil
+	return all
 }
 
 // AddToDB adds a transaction to the database.

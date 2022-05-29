@@ -43,15 +43,20 @@ func createTestCache(t *testing.T, sf stateFunc) *testCache {
 	}
 }
 
+func newMeshTX(t *testing.T, nonce uint64, signer *signing.EdSigner, amt uint64, received time.Time) *types.MeshTransaction {
+	t.Helper()
+	return &types.MeshTransaction{
+		Transaction: *newTx(t, nonce, amt, defaultFee, signer),
+		Received:    received,
+	}
+}
+
 func generatePendingTXs(t *testing.T, signer *signing.EdSigner, from, to uint64) []*types.MeshTransaction {
 	t.Helper()
 	now := time.Now()
 	txs := make([]*types.MeshTransaction, 0, int(to-from+1))
 	for i := from; i <= to; i++ {
-		txs = append(txs, &types.MeshTransaction{
-			Transaction: *newTx(t, i, amount, fee, signer),
-			Received:    now.Add(time.Second * time.Duration(i)),
-		})
+		txs = append(txs, newMeshTX(t, i, signer, defaultAmount, now.Add(time.Second*time.Duration(i))))
 	}
 	return txs
 }
@@ -71,8 +76,7 @@ func checkNoTX(t *testing.T, c *cache, tid types.TransactionID) {
 
 func checkMempool(t *testing.T, c *cache, expected map[types.Address][]*txtypes.NanoTX) {
 	t.Helper()
-	mempool, err := c.GetMempool()
-	require.NoError(t, err)
+	mempool := c.GetMempool()
 	require.Len(t, mempool, len(expected))
 	for addr := range mempool {
 		require.EqualValues(t, expected[addr], mempool[addr])
@@ -223,7 +227,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 
 	// the block with tx0 and tx1 is applied.
 	// there is also an incoming fund of `income` to the principal's account
-	income := amount * 100
+	income := defaultAmount * 100
 	ta.nonce += 2
 	for _, mtx := range mtxs[:2] {
 		ta.balance -= mtx.Spending()
@@ -302,7 +306,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 
 	// block0 is applied.
 	// there is also an incoming fund of `income` to the principal's account
-	income := amount * 100
+	income := defaultAmount * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
 	applied := []*types.Transaction{&mtxs[0].Transaction}
@@ -366,7 +370,7 @@ func TestCache_Account_TooManySameNonceTXs(t *testing.T) {
 
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+maxTXsPerNonce)
 	for i, mtx := range mtxs {
-		mtx.Fee = fee + uint64(i)
+		mtx.Fee = defaultFee + uint64(i)
 		mtx.AccountNonce = ta.nonce
 	}
 	// the last one has the highest fee but not considered
@@ -425,7 +429,7 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
 	oneTooMany := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	require.NoError(t, tc.Add(&oneTooMany.Transaction, oneTooMany.Received))
@@ -440,15 +444,15 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 func TestCache_Account_Add_SuperiorReplacesInferior(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	oldOne := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{oldOne})
 
 	// now add a superior tx
-	higherFee := fee + 1
+	higherFee := defaultFee + 1
 	better := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, higherFee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
 	require.NoError(t, tc.Add(&better.Transaction, better.Received))
@@ -465,7 +469,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 	buildSingleAccountCache(t, tc, ta, mtxs)
 
 	// now add a tx at the next nonce that cause all later nonce transactions to be infeasible
-	higherFee := fee + 1
+	higherFee := defaultFee + 1
 	bigAmount := ta.balance - higherFee
 	better := &types.MeshTransaction{
 		Transaction: *newTx(t, ta.nonce, bigAmount, higherFee, ta.signer),
@@ -486,7 +490,7 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
 
-	tx := newTx(t, ta.nonce-1, amount, fee, ta.signer)
+	tx := newTx(t, ta.nonce-1, defaultAmount, defaultFee, ta.signer)
 	require.ErrorIs(t, tc.Add(tx, time.Now()), errBadNonce)
 	checkNoTX(t, tc.cache, tx.ID())
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
@@ -525,7 +529,7 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
 
-	tx := newTx(t, ta.nonce, defaultBalance, fee, ta.signer)
+	tx := newTx(t, ta.nonce, defaultBalance, defaultFee, ta.signer)
 	require.ErrorIs(t, tc.Add(tx, time.Now()), errInsufficientBalance)
 	checkNoTX(t, tc.cache, tx.ID())
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
@@ -536,13 +540,13 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
 
 	spender := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, ta.balance, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	require.ErrorIs(t, tc.Add(&spender.Transaction, spender.Received), errInsufficientBalance)
@@ -653,7 +657,7 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
@@ -705,7 +709,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+4)
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	higherFee := fee + 1
+	higherFee := defaultFee + 1
 	largeAmount := defaultBalance - higherFee
 	better := &types.MeshTransaction{
 		Transaction: *newTx(t, ta.nonce+1, largeAmount, higherFee, ta.signer),
@@ -747,7 +751,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 func TestCache_Account_EvictedAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
@@ -773,7 +777,7 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
@@ -831,7 +835,7 @@ func TestCache_BuildFromScratch(t *testing.T) {
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (amount + fee)
+		minBalance := numTXs * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -849,7 +853,7 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 	totalNumTXs := numAccounts * numTXsEach
 	byAddrAndNonce := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
-		minBalance := uint64(numTXsEach) * (amount + fee)
+		minBalance := uint64(numTXsEach) * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -871,7 +875,7 @@ func TestCache_Add(t *testing.T) {
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (amount + fee)
+		minBalance := numTXs * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -899,7 +903,7 @@ func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*te
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (amount + fee)
+		minBalance := numTXs * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -912,8 +916,7 @@ func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*te
 
 func checkMempoolSize(t *testing.T, c *cache, expected int) {
 	t.Helper()
-	mempool, err := c.GetMempool()
-	require.NoError(t, err)
+	mempool := c.GetMempool()
 	numTXs := 0
 	for _, ntxs := range mempool {
 		numTXs += len(ntxs)
