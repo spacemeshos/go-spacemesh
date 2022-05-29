@@ -14,14 +14,16 @@ import (
 
 // CSConfig is the config for the conservative state/cache.
 type CSConfig struct {
-	BlockGasLimit     uint64
-	NumTXsPerProposal int
+	BlockGasLimit      uint64
+	NumTXsPerProposal  int
+	OptFilterThreshold int
 }
 
 func defaultCSConfig() CSConfig {
 	return CSConfig{
-		BlockGasLimit:     math.MaxUint64,
-		NumTXsPerProposal: 100,
+		BlockGasLimit:      math.MaxUint64,
+		NumTXsPerProposal:  100,
+		OptFilterThreshold: 90,
 	}
 }
 
@@ -78,6 +80,37 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	return nonce, balance
 }
 
+// SelectBlockTXs combined the transactions in the proposals and put them in a stable order.
+// the steps are:
+// 0. do optimistic filtering if the proposals agree on the mesh hash and state root
+//    this mean the following transactions will be filtered out. transactions that
+//    - fail nonce check
+//    - fail balance check
+//    - are already applied in previous layer
+//    if the proposals don't agree on the mesh hash and state root, we keep all transactions
+// 1. put the output of step 0 in a stable order
+// 2. pick the transactions in step 1 until the gas limit runs out.
+func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+	myHash, err := cs.cache.GetMeshHash(lid.Sub(1))
+	if err != nil {
+		cs.logger.With().Error("failed to get mesh hash", lid, log.Err(err))
+		return nil, fmt.Errorf("get own mesh hash: %w", err)
+	}
+
+	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs.GetMeshTransaction)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(md.mtxs) == 0 {
+		return nil, nil
+	}
+
+	logger := cs.logger.WithName("block").WithFields(lid)
+	blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(proposals), nil).Bytes()
+	return getBlockTXs(logger, md, cs.getState, blockSeed, cs.cfg.BlockGasLimit)
+}
+
 // SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
 func (cs *ConservativeState) SelectProposalTXs(numEligibility int) []types.TransactionID {
 	mi := newMempoolIterator(cs.logger, cs.cache, cs.cfg.BlockGasLimit)
@@ -98,7 +131,7 @@ func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error
 		events.ReportAccountUpdate(tx.Origin())
 		events.ReportAccountUpdate(tx.GetRecipient())
 	}
-	return cs.cache.Add(tx, received)
+	return cs.cache.Add(tx, received, nil)
 }
 
 // RevertState reverts the VM state and database to the given layer.

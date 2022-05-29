@@ -46,4 +46,5 @@ type txProvider interface {
 	GetAllPending() ([]*types.MeshTransaction, error)
 	GetAcctPendingFromNonce(types.Address, uint64) ([]*types.MeshTransaction, error)
 	LastAppliedLayer() (types.LayerID, error)
+	GetMeshHash(types.LayerID) (types.Hash32, error)
 }

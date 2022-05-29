@@ -63,6 +63,17 @@ func TestUpdateMaybe(t *testing.T) {
 	require.Equal(t, ctypes.EmptyBlockID, ntx.Block)
 }
 
+func TestBetter_PanicOnInvalidArguments(t *testing.T) {
+	signer := signing.NewEdSigner()
+	ntx0 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
+	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), ctypes.LayerID{}))
+	require.Panics(t, func() { ntx0.Better(ntx1, nil) })
+
+	ntx2 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
+	ntx2.Nonce = ntx0.Nonce + 1
+	require.Panics(t, func() { ntx0.Better(ntx2, nil) })
+}
+
 func TestBetter(t *testing.T) {
 	signer := signing.NewEdSigner()
 	ntx0 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
@@ -70,9 +81,21 @@ func TestBetter(t *testing.T) {
 	require.Equal(t, ntx0.Principal, ntx1.Principal)
 	require.Equal(t, ntx0.Nonce, ntx1.Nonce)
 	// fees are equal, ntx0 is better due to earlier timestamp
-	require.True(t, ntx0.Better(ntx1))
+	require.True(t, ntx0.Better(ntx1, nil))
 
 	// ntx1 now has higher fee, so it's better than ntx0
 	ntx1.Fee = ntx0.Fee + 1
-	require.False(t, ntx0.Better(ntx1))
+	require.False(t, ntx0.Better(ntx1, nil))
+
+	ntx1.Fee = ntx0.Fee
+	require.NotEqual(t, ntx0.Tid, ntx1.Tid)
+	// transaction selection for block needs to be stable. test that
+	// the comparison the same
+	blockSeed := []byte{3, 2, 1}
+	better := ntx0.Better(ntx1, blockSeed)
+	// test that it's stable
+	repeat := 1000
+	for i := 0; i < repeat; i++ {
+		require.Equal(t, better, ntx0.Better(ntx1, blockSeed))
+	}
 }

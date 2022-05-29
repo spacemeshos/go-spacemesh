@@ -97,6 +97,9 @@ type BaseConfig struct {
 
 	TxsPerProposal int    `mapstructure:"txs-per-proposal"`
 	BlockGasLimit  uint64 `mapstructure:"block-gas-limit"`
+	// if the number of proposals with the same mesh state crosses this threshold (in percentage),
+	// then we optimistically filter out infeasible transactions before constructing the block.
+	OptFilterThreshold int `mapstructure:"optimistic-filtering-threshold"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -157,6 +160,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncInterval:        10,
 		TxsPerProposal:      100,
 		BlockGasLimit:       math.MaxUint64,
+		OptFilterThreshold:  90,
 	}
 }
 

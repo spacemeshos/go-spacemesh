@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
@@ -49,8 +50,9 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	mvm := mocks.NewMockvmState(ctrl)
 	db := sql.InMemory()
 	cfg := CSConfig{
-		BlockGasLimit:     gasLimit,
-		NumTXsPerProposal: numTXsInProposal,
+		BlockGasLimit:      gasLimit,
+		NumTXsPerProposal:  numTXsInProposal,
+		OptFilterThreshold: 90,
 	}
 
 	return &testConState{
@@ -81,6 +83,154 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 		txs = append(txs, tx)
 	}
 	return ids, txs
+}
+
+func createProposalsDupTXs(lid types.LayerID, hash, root types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
+	total := len(tids)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for offset := 0; offset < total; offset += step {
+		end := offset + numPer
+		if end >= total {
+			end = total
+		}
+		p := types.GenLayerProposal(lid, tids[offset:end])
+		p.MeshHash = hash
+		p.StateHash = root
+		proposals = append(proposals, p)
+	}
+	return proposals
+}
+
+func checkIsStable(t *testing.T, expected []types.TransactionID, proposals []*types.Proposal, cs *ConservativeState) {
+	t.Helper()
+	lid := proposals[0].LayerIndex
+	numProposals := len(proposals)
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	newProposals := make([]*types.Proposal, 0, numProposals)
+	for i := numProposals - 1; i >= 0; i-- {
+		newProposals = append(newProposals, proposals[i])
+	}
+	got, err := cs.SelectBlockTXs(lid, newProposals)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
+
+func TestSelectBlockTXs(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, txs := addBatch(t, tcs, totalNumTXs)
+	// optimistic filtering will query the real state again
+	for _, tx := range txs {
+		principal := tx.Origin()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+	}
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	meshHash := types.RandomHash()
+	stateRoot := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	proposals := createProposalsDupTXs(lid, meshHash, stateRoot, step, numPerProposal, numProposals, tids)
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
+	totalNumTXs := 100
+	expSize := totalNumTXs / 3
+	gasLimit := uint64(expSize) * defaultGas
+	tcs := createTestState(t, gasLimit)
+	tids, txs := addBatch(t, tcs, totalNumTXs)
+	// optimistic filtering will query the real state again
+	for _, tx := range txs {
+		principal := tx.Origin()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+	}
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	meshHash := types.RandomHash()
+	stateRoot := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	proposals := createProposalsDupTXs(lid, meshHash, stateRoot, step, numPerProposal, numProposals, tids)
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, expSize)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	meshHash := types.RandomHash()
+	stateRoot := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	proposals := createProposalsDupTXs(lid, meshHash, stateRoot, step, numPerProposal, numProposals, tids)
+	// change proposal's mesh hash
+	for _, p := range proposals {
+		p.MeshHash = types.RandomHash()
+	}
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
+	tcs := createConservativeState(t)
+	numProposals := 10
+	meshHash := types.RandomHash()
+	stateRoot := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for i := 0; i < numProposals; i++ {
+		p := types.GenLayerProposal(lid, nil)
+		p.MeshHash = meshHash
+		p.StateHash = stateRoot
+		proposals = append(proposals, p)
+	}
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), types.RandomHash()))
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.ErrorIs(t, err, errNodeHasBadMeshHash)
+	require.Nil(t, got)
+}
+
+func TestSelectBlockTXs_MeshHasMultipleStateRoots(t *testing.T) {
+	tcs := createConservativeState(t)
+	numProposals := 10
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for i := 0; i < numProposals; i++ {
+		p := types.GenLayerProposal(lid, nil)
+		p.MeshHash = meshHash
+		p.StateHash = types.RandomHash()
+		proposals = append(proposals, p)
+	}
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.ErrorIs(t, err, errMultipleStateRoots)
+	require.Nil(t, got)
 }
 
 func TestSelectProposalTXs(t *testing.T) {

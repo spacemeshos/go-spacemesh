@@ -491,8 +491,9 @@ func (app *App) initServices(ctx context.Context,
 	state := vm.New(app.addLogger(SVMLogger, lg), sqlDB)
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
-			BlockGasLimit:     app.Config.BlockGasLimit,
-			NumTXsPerProposal: app.Config.TxsPerProposal,
+			BlockGasLimit:      app.Config.BlockGasLimit,
+			NumTXsPerProposal:  app.Config.TxsPerProposal,
+			OptFilterThreshold: app.Config.OptFilterThreshold,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
