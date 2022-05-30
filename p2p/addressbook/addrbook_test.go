@@ -72,6 +72,162 @@ func TestGood(t *testing.T) {
 	}
 }
 
+func TestAddrBook_AddAddress(t *testing.T) {
+	t.Parallel()
+	t.Run("add address", func(t *testing.T) {
+		t.Parallel()
+		n := NewAddrBook(DefaultAddressBookConfigWithDataDir(""), logtest.New(t))
+		rng := rand.New(rand.NewSource(1001))
+		require.Equal(t, 0, len(n.GetAddresses()))
+
+		info := genRandomInfo(t, rng)
+		info2 := genRandomInfo(t, rng)
+		info3 := genRandomInfo(t, rng)
+
+		n.AddAddress(info, info)
+		require.Equal(t, 1, len(n.GetAddresses()))
+
+		n.AddAddress(info2, info2)
+		require.Equal(t, 2, len(n.GetAddresses()))
+
+		n.AddAddress(info3, info3)
+		require.Equal(t, 3, len(n.GetAddresses()))
+	})
+	t.Run("add address to full bucket", func(t *testing.T) {
+		t.Parallel()
+		conf := DefaultAddressBookConfigWithDataDir("")
+		conf.NewBucketCount = 1
+		conf.NewBucketSize = 10
+		n := NewAddrBook(conf, logtest.New(t))
+		rng := rand.New(rand.NewSource(1001))
+		require.Equal(t, 0, len(n.GetAddresses()))
+		for i := 0; i < conf.NewBucketSize; i++ {
+			info := genRandomInfo(t, rng)
+			n.AddAddress(info, info)
+		}
+		require.Equal(t, conf.NewBucketSize, len(n.GetAddresses()))
+
+		info := genRandomInfo(t, rng)
+		n.AddAddress(info, info)
+		addresses := n.GetAddresses()
+		require.Equal(t, conf.NewBucketSize, len(addresses))
+		require.Condition(t, func() bool {
+			for _, addr := range addresses {
+				if addr.ID == info.ID {
+					return true
+				}
+			}
+			return false
+		}, "address should be added")
+	})
+	t.Run("update address", func(t *testing.T) {
+		t.Parallel()
+		n := NewAddrBook(DefaultAddressBookConfigWithDataDir(""), logtest.New(t))
+		rng := rand.New(rand.NewSource(1001))
+		require.Equal(t, 0, len(n.GetAddresses()))
+
+		info := genRandomInfo(t, rng)
+		info2 := genRandomInfo(t, rng)
+
+		n.AddAddress(info, info)
+		require.Equal(t, 1, len(n.GetAddresses()))
+
+		n.AddAddress(info2, info2)
+		require.Equal(t, 2, len(n.GetAddresses()))
+
+		kaBefore := getKnownAddress(t, n, info2.ID)
+		time.Sleep(100 * time.Millisecond)
+
+		n.AddAddress(info2, info2)
+		require.Equal(t, 2, len(n.GetAddresses()))
+
+		kaAfter := getKnownAddress(t, n, info2.ID)
+		require.True(t, kaBefore.LastSeen.Before(kaAfter.LastSeen), "LastSeen of address should have increased")
+	})
+	t.Run("add address with different address", func(t *testing.T) {
+		t.Parallel()
+		n := NewAddrBook(DefaultAddressBookConfigWithDataDir(""), logtest.New(t))
+		rng := rand.New(rand.NewSource(1001))
+		require.Equal(t, 0, len(n.GetAddresses()))
+
+		info := genRandomInfo(t, rng)
+		info2 := genRandomInfo(t, rng)
+		info3 := genRandomInfo(t, rng)
+
+		n.AddAddress(info, info)
+		require.Equal(t, 1, len(n.GetAddresses()))
+
+		n.AddAddress(info2, info2)
+		require.Equal(t, 2, len(n.GetAddresses()))
+
+		info2Mod := *info2
+		info2Mod.RawAddr = info3.RawAddr
+		n.AddAddress(&info2Mod, info3)
+		require.Equal(t, 2, len(n.GetAddresses()))
+
+		kaUpdated := getKnownAddress(t, n, info2.ID)
+		require.Equal(t, info3.RawAddr, kaUpdated.Addr.RawAddr)
+	})
+}
+
+func getKnownAddress(t *testing.T, n *AddrBook, p peer.ID) knownAddress {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	ka, ok := n.addrIndex[p]
+	require.True(t, ok)
+	return *ka
+}
+
+func TestAddrBook_GetAllAddressesUsedBefore(t *testing.T) {
+	t.Parallel()
+	n := NewAddrBook(DefaultAddressBookConfigWithDataDir(""), logtest.New(t))
+	rng := rand.New(rand.NewSource(1001))
+
+	info := genRandomInfo(t, rng)
+	require.Equal(t, 0, len(n.GetAddresses()))
+	n.AddAddress(info, info)
+
+	require.Equal(t, 1, len(n.GetAllAddressesUsedBefore(time.Now())))
+	require.Equal(t, 0, len(n.GetAllAddressesUsedBefore(time.Now().Add(-1*time.Minute))))
+
+	time.Sleep(2 * time.Second)
+	require.Equal(t, 1, len(n.GetAllAddressesUsedBefore(time.Now().Add(-1*time.Second))))
+}
+
+func TestAddrBook_RemoveAddress(t *testing.T) {
+	n := NewAddrBook(DefaultAddressBookConfigWithDataDir(""), logtest.New(t))
+	rng := rand.New(rand.NewSource(1001))
+	require.Equal(t, 0, len(n.GetAddresses()))
+
+	info := genRandomInfo(t, rng)
+	n.AddAddress(info, info)
+	n.Good(info.ID)
+	n.Connected(info.ID)
+
+	require.NotNil(t, n.Lookup(info.ID))
+	require.Equal(t, info.ID, n.Lookup(info.ID).ID)
+
+	n.RemoveAddress(info.ID)
+	require.Nil(t, n.Lookup(info.ID))
+
+	n.RemoveAddress(info.ID)
+	require.Nil(t, n.Lookup(info.ID))
+}
+
+func TestAddrBook_Connected(t *testing.T) {
+	n := NewAddrBook(DefaultAddressBookConfigWithDataDir(""), logtest.New(t))
+	rng := rand.New(rand.NewSource(1001))
+
+	info := genRandomInfo(t, rng)
+	n.AddAddress(info, info)
+	n.Connected(info.ID)
+
+	require.Equal(t, 1, len(n.AddressCache()))
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	require.Equal(t, 1, len(n.anchorPeers))
+}
+
 func TestAddrBook_BootstrapAddressCache(t *testing.T) {
 	cnf := DefaultAddressBookConfigWithDataDir("")
 	cnf.GetAddrPercent = 100

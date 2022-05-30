@@ -116,7 +116,7 @@ func (a *AddrBook) updateAddress(addr, src *AddrInfo) {
 	}
 
 	// Enforce max addresses.
-	if len(a.addrNew[bucket]) > a.cfg.NewBucketSize {
+	if len(a.addrNew[bucket]) >= a.cfg.NewBucketSize {
 		a.logger.Debug("new bucket is full, expiring old")
 		a.expireNew(bucket)
 	}
