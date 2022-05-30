@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 )
 
 func TestDiscovery_CheckBook(t *testing.T) {
@@ -64,16 +65,17 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	hosts, instances := setupOverNodes(t, 2)
 	d := instances[0]
 
-	bootNodeAddress, err := parseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWGQrF3pHrR1W7P6nh8gypYxtFS93SnmvtN6qpyeSo7T2u")
+	bootNodeAddress, err := addressbook.ParseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWGQrF3pHrR1W7P6nh8gypYxtFS93SnmvtN6qpyeSo7T2u")
 	require.NoError(t, err)
-	sampleNode, err := parseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWBdbwmiMhLDzAbfY3Vy5RDGaumUEgHe2P1pL5G3dhhWMb")
+	sampleNode, err := addressbook.ParseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWBdbwmiMhLDzAbfY3Vy5RDGaumUEgHe2P1pL5G3dhhWMb")
 	require.NoError(t, err)
-	oldNode, err := parseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWJSLApvoWiX9q3oKkYQTXpxQC7qAKt6mTERCJuwCFT98d")
+	oldNode, err := addressbook.ParseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWJSLApvoWiX9q3oKkYQTXpxQC7qAKt6mTERCJuwCFT98d")
 	require.NoError(t, err)
 	hostConnected := hosts[1].Network().ListenAddresses()[0].String() + "/p2p/" + hosts[1].ID().String()
 	addr, err := ma.NewMultiaddr(hostConnected)
 	require.NoError(t, err)
-	connectedNodeAddress := &addrInfo{ID: hosts[1].ID(), RawAddr: hostConnected, addr: addr}
+	connectedNodeAddress := &addressbook.AddrInfo{ID: hosts[1].ID(), RawAddr: hostConnected}
+	connectedNodeAddress.SetAddr(addr)
 
 	t.Run("empty peers", func(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
@@ -160,7 +162,7 @@ func setupOverMockNet(t *testing.T, nodesCount int) (mocknet.Mocknet, []*Discove
 func setup(t *testing.T, hosts []host.Host) []*Discovery {
 	var (
 		instances []*Discovery
-		bootnode  *addrInfo
+		bootnode  *addressbook.AddrInfo
 	)
 
 	for _, h := range hosts {
@@ -240,7 +242,7 @@ func checkBooks(instances []*Discovery) {
 func calcTotalAddresses(instances []*Discovery) int {
 	totalAddresses := 0
 	for _, instance := range instances {
-		totalAddresses += len(instance.book.getAddresses())
+		totalAddresses += len(instance.book.GetAddresses())
 	}
 	return totalAddresses
 }

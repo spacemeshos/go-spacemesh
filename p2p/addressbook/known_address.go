@@ -1,15 +1,18 @@
-package peerexchange
+package addressbook
 
 import (
+	"encoding/json"
 	"math"
 	"time"
+
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // knownAddress tracks information about a known network address that is used
 // to determine how viable an address is.
 type knownAddress struct {
-	Addr        *addrInfo
-	SrcAddr     *addrInfo
+	Addr        *AddrInfo
+	SrcAddr     *AddrInfo
 	Attempts    int
 	LastSeen    time.Time
 	LastAttempt time.Time
@@ -39,8 +42,19 @@ func (ka *knownAddress) Chance() float64 {
 	c *= math.Pow(0.66, math.Min(float64(ka.Attempts), 8))
 
 	// TODO : do this without floats ?
-
 	return c
+}
+
+func (ka *knownAddress) UnmarshalJSON(in []byte) error {
+	type tmpKnownAddress knownAddress
+	var tmpKa tmpKnownAddress
+	if err := json.Unmarshal(in, &tmpKa); err != nil {
+		return err
+	}
+	*ka = knownAddress(tmpKa)
+	ka.Addr.addr = ma.StringCast(ka.Addr.RawAddr)
+	ka.SrcAddr.addr = ma.StringCast(ka.SrcAddr.RawAddr)
+	return nil
 }
 
 // isBad returns true if the address in question has not been tried in the last
@@ -51,7 +65,7 @@ func (ka *knownAddress) Chance() float64 {
 // 4) It has failed ten times in the last week
 // All addresses that meet these criteria are assumed to be worthless and not
 // worth keeping hold of.
-func (ka *knownAddress) isBad() bool {
+func (a *AddrBook) isBad(ka *knownAddress) bool {
 	if ka.LastAttempt.After(time.Now().Add(-1 * time.Minute)) {
 		return false
 	}
@@ -62,18 +76,18 @@ func (ka *knownAddress) isBad() bool {
 	}
 
 	// Over a month old?
-	if ka.LastSeen.Before(time.Now().Add(-1 * numMissingDays * time.Hour * 24)) {
+	if ka.LastSeen.Before(time.Now().Add(-1 * a.cfg.NumMissingDays * time.Hour * 24)) {
 		return true
 	}
 
 	// Never succeeded?
-	if ka.LastSuccess.IsZero() && ka.Attempts >= numRetries {
+	if ka.LastSuccess.IsZero() && ka.Attempts >= a.cfg.NumRetries {
 		return true
 	}
 
 	// Hasn't succeeded in too long?
-	if !ka.LastSuccess.After(time.Now().Add(-1*minBadDays*time.Hour*24)) &&
-		ka.Attempts >= maxFailures {
+	if !ka.LastSuccess.After(time.Now().Add(-1*a.cfg.MinBadDays*time.Hour*24)) &&
+		ka.Attempts >= a.cfg.MaxFailures {
 		return true
 	}
 

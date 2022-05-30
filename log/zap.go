@@ -36,6 +36,11 @@ func (l Log) Error(format string, args ...interface{}) {
 	l.logger.Sugar().Errorf(format, args...)
 }
 
+// LogError prints message with fields.
+func (l Log) LogError(msg string, err error, fields ...LoggableField) {
+	l.logger.Error(msg, unpack(append(fields, Err(err)))...)
+}
+
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
 	l.logger.Sugar().Warnf(format, args...)
@@ -276,6 +281,11 @@ func (fl FieldLogger) Debug(msg string, fields ...LoggableField) {
 // Error prints message with fields.
 func (fl FieldLogger) Error(msg string, fields ...LoggableField) {
 	fl.l.Error(msg, unpack(append(fields, String("name", fl.name)))...)
+}
+
+// LogError prints message with fields.
+func (fl FieldLogger) LogError(msg string, err error, fields ...LoggableField) {
+	fl.l.Error(msg, unpack(append(fields, Err(err), String("name", fl.name)))...)
 }
 
 // Warning prints message with fields.
