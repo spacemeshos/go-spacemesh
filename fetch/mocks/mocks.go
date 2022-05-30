@@ -65,6 +65,18 @@ func (mr *MockFetcherMockRecorder) GetHashes(hash, hint, validateHash interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashes", reflect.TypeOf((*MockFetcher)(nil).GetHashes), hash, hint, validateHash)
 }
 
+// MapPeerToHash mocks base method.
+func (m *MockFetcher) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MapPeerToHash", hash, peer)
+}
+
+// MapPeerToHash indicates an expected call of MapPeerToHash.
+func (mr *MockFetcherMockRecorder) MapPeerToHash(hash, peer interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MapPeerToHash", reflect.TypeOf((*MockFetcher)(nil).MapPeerToHash), hash, peer)
+}
+
 // Start mocks base method.
 func (m *MockFetcher) Start() {
 	m.ctrl.T.Helper()

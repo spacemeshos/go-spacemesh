@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // Hint marks which DB should be queried for a certain provided hash.
@@ -49,7 +48,7 @@ const (
 
 const (
 	fetchProtocol = "/sync/2.0/"
-	batchMaxSize  = 20
+	maxQueueSize  = 20
 )
 
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers.
@@ -298,7 +297,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 		return true
 	}
 	f.log.With().Debug("request added to queue", log.String("hash", req.hash.ShortString()))
-	if rLen > batchMaxSize {
+	if rLen > maxQueueSize {
 		go f.requestHashBatchFromPeers() // Process the batch.
 		return true
 	}
@@ -537,6 +536,9 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]reque
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	result := make(map[p2p.Peer][]requestMessage)
 
+	// max retries to find another peer with less requests attached
+	const maxRetries = 3
+
 	for _, req := range requests {
 		hashPeersMap, exists := f.hashToPeers[req.Hash]
 		var hashPeers []p2p.Peer
@@ -560,7 +562,7 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]reque
 			}
 
 			retries++
-			if len(result[p]) < batchMaxSize || retries > 3 {
+			if len(result[p]) < f.cfg.BatchSize || retries > maxRetries {
 				result[p] = append(result[p], req)
 				break
 			}
