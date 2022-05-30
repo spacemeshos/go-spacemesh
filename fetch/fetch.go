@@ -491,15 +491,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	}
 	f.activeReqM.Unlock()
 
-	// send in batches
-	for i := 0; i < len(requestList); i += f.cfg.BatchSize {
-		j := i + f.cfg.BatchSize
-		if j > len(requestList) {
-			j = len(requestList)
-		}
-		f.send(requestList[i:j])
-	}
-
+	f.send(requestList)
 }
 
 func (f *Fetch) send(requests []requestMessage) {
@@ -544,22 +536,37 @@ func peerMapToList(m map[p2p.Peer]struct{}) []p2p.Peer {
 func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]requestMessage {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	result := make(map[p2p.Peer][]requestMessage)
+
 	for _, req := range requests {
 		hashPeersMap, exists := f.hashToPeers[req.Hash]
-		var p p2p.Peer
+		var hashPeers []p2p.Peer
 		if exists {
-			hashPeers := peerMapToList(hashPeersMap.peers)
-			p = hashPeers[rng.Intn(len(hashPeers))]
-		} else {
-			p = GetRandomPeer(f.net.GetPeers())
+			hashPeers = peerMapToList(hashPeersMap.peers)
 		}
 
-		if _, ok := result[p]; ok {
-			result[p] = append(result[p], req)
-		} else {
-			result[p] = []requestMessage{req}
+		retries := 0
+		for {
+			var p p2p.Peer
+			if len(hashPeers) > 0 {
+				p = hashPeers[rng.Intn(len(hashPeers))]
+			} else {
+				p = GetRandomPeer(f.net.GetPeers())
+			}
+
+			_, ok := result[p]
+			if !ok {
+				result[p] = []requestMessage{req}
+				break
+			}
+
+			retries++
+			if len(result[p]) < batchMaxSize || retries > 3 {
+				result[p] = append(result[p], req)
+				break
+			}
 		}
 	}
+
 	return result
 }
 
