@@ -284,7 +284,9 @@ func TestPollLayerBlocks_AllHaveLayerData(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numPeers * (numBallots + numBlocks))
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).Times(numBallots + numBlocks)
+	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
 			assert.NotEqual(t, blockID, types.EmptyBlockID)
@@ -309,7 +311,9 @@ func TestPollLayerBlocks_AllHaveLayerData_EmptyHareOutput(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numPeers * (numBallots + numBlocks))
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).Times(numBallots + numBlocks)
+	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -328,7 +332,9 @@ func TestPollLayerBlocks_FetchLayerBallotsError(t *testing.T) {
 
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numPeers * numBallots)
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).Times(numBallots)
+	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).DoAndReturn(
 		func([]types.Hash32, fetch.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 			ch := make(chan fetch.HashDataPromiseResult, 1)
@@ -355,7 +361,9 @@ func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numPeers * (numBallots + numBlocks))
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).Times(numBallots + numBlocks)
+	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).DoAndReturn(
 		func([]types.Hash32, fetch.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 			ch := make(chan fetch.HashDataPromiseResult, 1)
@@ -378,10 +386,12 @@ func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 func TestPollLayerBlocks_OnlyOneHasLayerData(t *testing.T) {
 	net := newMockNet(t)
 	numPeers := 4
+	var withDataPeer p2p.Peer
 	for i := 0; i < numPeers; i++ {
 		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		if i == 2 {
+			withDataPeer = peer
 			net.layerData[peer] = generateLayerContent(false)
 		} else {
 			net.errors[peer] = errors.New("SendRequest error")
@@ -392,7 +402,7 @@ func TestPollLayerBlocks_OnlyOneHasLayerData(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(1)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(1)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numBallots + numBlocks)
+	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), withDataPeer).Times(numBallots + numBlocks)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
 			assert.NotEqual(t, blockID, types.EmptyBlockID)
@@ -466,7 +476,9 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).AnyTimes()
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).AnyTimes()
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).AnyTimes()
+	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).DoAndReturn(
 		func(hashes []types.Hash32, _ fetch.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 			rst := map[types.Hash32]chan fetch.HashDataPromiseResult{}
@@ -512,7 +524,9 @@ func TestPollLayerBlocks_DifferentHareOutputIgnored(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numPeers * (numBallots + numBlocks))
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).Times(numBallots + numBlocks)
+	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
 			assert.NotEqual(t, blockID, types.EmptyBlockID)
@@ -575,7 +589,9 @@ func TestPollLayerBlocks_FailedToSaveHareOutput(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
-	tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), gomock.Any()).Times(numPeers * (numBallots + numBlocks))
+	for _, peer := range net.peers {
+		tl.mFetcher.EXPECT().MapPeerToHash(gomock.Any(), peer).Times(numBallots + numBlocks)
+	}
 	errUnknown := errors.New("whatever")
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).Return(errUnknown).Times(1)
 
