@@ -60,13 +60,13 @@ func (a *AddrBook) persistPeers(path string) {
 
 	w, err := os.Create(path)
 	if err != nil {
-		a.logger.LogError("Error creating file", err)
+		a.logger.Error("Error creating file: %v", err)
 		return
 	}
 	enc := json.NewEncoder(w)
 	defer w.Close()
 	if err := enc.Encode(&sam); err != nil {
-		a.logger.LogError("Failed to encode file", err, log.String("path", path))
+		a.logger.Error("Failed to encode file %s: %v", path, err)
 		return
 	}
 }
@@ -82,7 +82,7 @@ func (a *AddrBook) loadPeers(path string) {
 
 	// we don't lock the mutex in decodeFrom because it might fail and we'll run reset
 	if err := a.decodeFrom(path); err != nil {
-		a.logger.With().LogError("failed to parse file", err, log.String("path", path))
+		a.logger.With().Error("failed to parse file", log.String("path", path), log.Err(err))
 		// if it is invalid we nuke the old one unconditionally.
 		if err = os.Remove(path); err != nil {
 			a.logger.With().Warning("failed to remove corrupt peers file", log.String("path", path), log.Err(err))

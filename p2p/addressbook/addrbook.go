@@ -255,11 +255,8 @@ func (a *AddrBook) getAddressFromBuckets(buckets []map[peer.ID]*knownAddress) *k
 	for {
 		// pick a random bucket.
 		bucket := nonEmptyBuckets[a.rand.Intn(len(nonEmptyBuckets))]
-		if len(buckets[bucket]) == 0 {
-			continue
-		}
 
-		// Pick a random entry in it.
+		// Pick a random entry in it. Structure is map[peer.ID]*knownAddress, so we need loop to gen rand index.
 		var ka *knownAddress
 		nth := a.rand.Intn(len(buckets[bucket]))
 		for _, value := range buckets[bucket] {
@@ -267,9 +264,6 @@ func (a *AddrBook) getAddressFromBuckets(buckets []map[peer.ID]*knownAddress) *k
 				ka = value
 			}
 			nth--
-		}
-		if ka == nil {
-			continue
 		}
 
 		randVal := a.rand.Intn(large)
@@ -294,6 +288,7 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 
 	result := make([]*AddrInfo, 0, numAddresses)
 	a.mu.RLock()
+	defer a.mu.RUnlock()
 	for i := 0; i < numAddresses; i++ {
 		var ka *knownAddress
 		// Use a 50% chance for choosing between tried and new table entries.
@@ -306,7 +301,6 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 			result = append(result, ka.Addr)
 		}
 	}
-	a.mu.RUnlock()
 	return result
 }
 
@@ -320,12 +314,13 @@ func (a *AddrBook) BootstrapAddressCache() []*AddrInfo {
 		return addresses
 	}
 
-	anchorPeers := make([]*knownAddress, len(a.lastAnchorPeers), len(a.lastAnchorPeers))
+	anchorPeers := make([]*knownAddress, len(a.lastAnchorPeers))
 	copy(anchorPeers, a.lastAnchorPeers)
-	for i := 0; i < a.cfg.AnchorPeersCount; i++ {
-		j := rand.Intn(len(anchorPeers)-i) + i // pick a number between current index and the end.
+
+	rand.Seed(int64(crypto.GetRandomUInt32(16384)))
+	rand.Shuffle(len(anchorPeers), func(i, j int) {
 		anchorPeers[i], anchorPeers[j] = anchorPeers[j], anchorPeers[i]
-	}
+	})
 
 	for _, ka := range anchorPeers[:a.cfg.AnchorPeersCount] {
 		addresses = append(addresses, ka.Addr)

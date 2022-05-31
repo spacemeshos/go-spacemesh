@@ -42,13 +42,13 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 	qCtx, cancel := context.WithTimeout(ctx, d.cfg.CheckTimeout)
 	defer cancel()
 	if _, err := d.crawl.query(qCtx, peers); err != nil {
-		d.logger.LogError("failed to check nodes", err)
+		d.logger.Error("failed to check nodes: %s", err)
 		return
 	}
 	// check peers are updated in host peerBook.
 	for peerID, addresses := range d.peersToMap(peers) {
 		if err := d.host.Network().ClosePeer(peerID); err != nil { // close connection, used only for check
-			d.logger.LogError("failed to close peer after check", err)
+			d.logger.Error("failed to close peer after check: %s", err)
 		}
 		peerStoreAddresses := d.host.Peerstore().Addrs(peerID)
 		if len(peerStoreAddresses) == 0 {
@@ -58,7 +58,7 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 		// in case if there are more than one address for peerID is available - for us this is not important, just take first one.
 		newAddr, err := addressbook.ParseAddrInfo(peerStoreAddresses[0].String() + "/p2p/" + peerID.Pretty())
 		if err != nil {
-			d.logger.LogError("failed to parse address", err)
+			d.logger.Error("failed to parse address: %s", err)
 			continue
 		}
 		// update node address in book.
