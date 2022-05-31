@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
 const (
@@ -169,156 +170,103 @@ func newSignerAndAddress(t *testing.T, seedStr string) (*signing.EdSigner, types
 	return signer, types.GenerateAddress(signer.PublicKey().Bytes())
 }
 
-func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {
+func writeRewards(t *testing.T, mdb *DB) []types.Address {
 	t.Helper()
-	signer1, addr1 := newSignerAndAddress(t, "123")
-	signer2, addr2 := newSignerAndAddress(t, "456")
-	signer3, addr3 := newSignerAndAddress(t, "789")
+	_, addr1 := newSignerAndAddress(t, "123")
+	_, addr2 := newSignerAndAddress(t, "456")
+	_, addr3 := newSignerAndAddress(t, "789")
 
-	smesher1 := types.BytesToNodeID(signer1.PublicKey().Bytes())
-	smesher2 := types.BytesToNodeID(signer2.PublicKey().Bytes())
-	smesher3 := types.BytesToNodeID(signer3.PublicKey().Bytes())
-
-	rewards1 := []types.AnyReward{
+	lid1 := types.NewLayerID(13)
+	rewards1 := []*types.Reward{
 		{
-			Address:     addr1,
-			SmesherID:   smesher1,
-			Amount:      unitReward,
+			Coinbase:    addr1,
+			TotalReward: unitReward * 2,
 			LayerReward: unitLayerReward,
+			Layer:       lid1,
 		},
 		{
-			Address:     addr1,
-			SmesherID:   smesher1,
-			Amount:      unitReward,
+			Coinbase:    addr2,
+			TotalReward: unitReward,
 			LayerReward: unitLayerReward,
+			Layer:       lid1,
 		},
 		{
-			Address:     addr2,
-			SmesherID:   smesher2,
-			Amount:      unitReward,
+			Coinbase:    addr3,
+			TotalReward: unitReward,
 			LayerReward: unitLayerReward,
-		},
-		{
-			Address:     addr3,
-			SmesherID:   smesher3,
-			Amount:      unitReward,
-			LayerReward: unitLayerReward,
+			Layer:       lid1,
 		},
 	}
 
-	rewards2 := []types.AnyReward{
+	lid2 := lid1.Add(1)
+	rewards2 := []*types.Reward{
 		{
-			Address:     addr2,
-			SmesherID:   smesher2,
-			Amount:      unitReward,
+			Coinbase:    addr2,
+			TotalReward: unitReward * 2,
 			LayerReward: unitLayerReward,
+			Layer:       lid2,
 		},
 		{
-			Address:     addr2,
-			SmesherID:   smesher2,
-			Amount:      unitReward,
+			Coinbase:    addr3,
+			TotalReward: unitReward,
 			LayerReward: unitLayerReward,
-		},
-		{
-			Address:     addr3,
-			SmesherID:   smesher3,
-			Amount:      unitReward,
-			LayerReward: unitLayerReward,
+			Layer:       lid2,
 		},
 	}
 
-	rewards3 := []types.AnyReward{
+	lid3 := lid2.Add(1)
+	rewards3 := []*types.Reward{
 		{
-			Address:     addr3,
-			SmesherID:   smesher3,
-			Amount:      unitReward,
+			Coinbase:    addr3,
+			TotalReward: unitReward * 2,
 			LayerReward: unitLayerReward,
+			Layer:       lid3,
 		},
 		{
-			Address:     addr3,
-			SmesherID:   smesher3,
-			Amount:      unitReward,
+			Coinbase:    addr1,
+			TotalReward: unitReward,
 			LayerReward: unitLayerReward,
-		},
-		{
-			Address:     addr1,
-			SmesherID:   smesher1,
-			Amount:      unitReward,
-			LayerReward: unitLayerReward,
+			Layer:       lid3,
 		},
 	}
 
-	require.NoError(t, mdb.writeTransactionRewards(types.NewLayerID(1), rewards1))
-	require.NoError(t, mdb.writeTransactionRewards(types.NewLayerID(2), rewards2))
-	require.NoError(t, mdb.writeTransactionRewards(types.NewLayerID(3), rewards3))
-
-	return []types.Address{addr1, addr2, addr3}, []types.NodeID{smesher1, smesher2, smesher3}
+	for _, rewardList := range [][]*types.Reward{rewards1, rewards2, rewards3} {
+		for _, r := range rewardList {
+			require.NoError(t, rewards.Add(mdb.db, r))
+		}
+	}
+	return []types.Address{addr1, addr2, addr3}
 }
 
-func TestMeshDB_testGetRewards(t *testing.T) {
+func TestMeshDB_GetRewards(t *testing.T) {
 	mdb := NewMemMeshDB(logtest.New(t))
 	defer mdb.Close()
 
-	addrs, smeshers := writeRewards(t, mdb)
+	addrs := writeRewards(t, mdb)
 	rewards, err := mdb.GetRewards(addrs[0])
 	require.NoError(t, err)
-	require.Equal(t, []types.Reward{
-		{Layer: types.NewLayerID(1), TotalReward: unitReward * 2, LayerRewardEstimate: unitLayerReward * 2, SmesherID: smeshers[0], Coinbase: addrs[0]},
-		{Layer: types.NewLayerID(3), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[0], Coinbase: addrs[0]},
+	require.Equal(t, []*types.Reward{
+		{Layer: types.NewLayerID(13), TotalReward: unitReward * 2, LayerReward: unitLayerReward, Coinbase: addrs[0]},
+		{Layer: types.NewLayerID(15), TotalReward: unitReward, LayerReward: unitLayerReward, Coinbase: addrs[0]},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addrs[1])
 	require.NoError(t, err)
-	require.Equal(t, []types.Reward{
-		{Layer: types.NewLayerID(1), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[1], Coinbase: addrs[1]},
-		{Layer: types.NewLayerID(2), TotalReward: unitReward * 2, LayerRewardEstimate: unitLayerReward * 2, SmesherID: smeshers[1], Coinbase: addrs[1]},
+	require.Equal(t, []*types.Reward{
+		{Layer: types.NewLayerID(13), TotalReward: unitReward, LayerReward: unitLayerReward, Coinbase: addrs[1]},
+		{Layer: types.NewLayerID(14), TotalReward: unitReward * 2, LayerReward: unitLayerReward, Coinbase: addrs[1]},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addrs[2])
 	require.NoError(t, err)
-	require.Equal(t, []types.Reward{
-		{Layer: types.NewLayerID(1), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[2], Coinbase: addrs[2]},
-		{Layer: types.NewLayerID(2), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[2], Coinbase: addrs[2]},
-		{Layer: types.NewLayerID(3), TotalReward: unitReward * 2, LayerRewardEstimate: unitLayerReward * 2, SmesherID: smeshers[2], Coinbase: addrs[2]},
+	require.Equal(t, []*types.Reward{
+		{Layer: types.NewLayerID(13), TotalReward: unitReward, LayerReward: unitLayerReward, Coinbase: addrs[2]},
+		{Layer: types.NewLayerID(14), TotalReward: unitReward, LayerReward: unitLayerReward, Coinbase: addrs[2]},
+		{Layer: types.NewLayerID(15), TotalReward: unitReward * 2, LayerReward: unitLayerReward, Coinbase: addrs[2]},
 	}, rewards)
 
 	_, addr4 := newSignerAndAddress(t, "999")
 	rewards, err = mdb.GetRewards(addr4)
-	require.NoError(t, err)
-	require.Nil(t, rewards)
-}
-
-func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	addrs, smeshers := writeRewards(t, mdb)
-
-	rewards, err := mdb.GetRewardsBySmesherID(smeshers[0])
-	require.NoError(t, err)
-	require.Equal(t, []types.Reward{
-		{Layer: types.NewLayerID(1), TotalReward: unitReward * 2, LayerRewardEstimate: unitLayerReward * 2, SmesherID: smeshers[0], Coinbase: addrs[0]},
-		{Layer: types.NewLayerID(3), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[0], Coinbase: addrs[0]},
-	}, rewards)
-
-	rewards, err = mdb.GetRewardsBySmesherID(smeshers[1])
-	require.NoError(t, err)
-	require.Equal(t, []types.Reward{
-		{Layer: types.NewLayerID(1), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[1], Coinbase: addrs[1]},
-		{Layer: types.NewLayerID(2), TotalReward: unitReward * 2, LayerRewardEstimate: unitLayerReward * 2, SmesherID: smeshers[1], Coinbase: addrs[1]},
-	}, rewards)
-
-	rewards, err = mdb.GetRewardsBySmesherID(smeshers[2])
-	require.NoError(t, err)
-	require.Equal(t, []types.Reward{
-		{Layer: types.NewLayerID(1), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[2], Coinbase: addrs[2]},
-		{Layer: types.NewLayerID(2), TotalReward: unitReward, LayerRewardEstimate: unitLayerReward, SmesherID: smeshers[2], Coinbase: addrs[2]},
-		{Layer: types.NewLayerID(3), TotalReward: unitReward * 2, LayerRewardEstimate: unitLayerReward * 2, SmesherID: smeshers[2], Coinbase: addrs[2]},
-	}, rewards)
-
-	signer4, _ := newSignerAndAddress(t, "999")
-	smesher4 := types.BytesToNodeID(signer4.PublicKey().Bytes())
-	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	require.NoError(t, err)
 	require.Nil(t, rewards)
 }

@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -176,26 +177,13 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
-	return []types.Reward{
+func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
+	return []*types.Reward{
 		{
-			Layer:               layerFirst,
-			TotalReward:         rewardAmount,
-			LayerRewardEstimate: rewardAmount,
-			SmesherID:           nodeID,
-			Coinbase:            addr1,
-		},
-	}, nil
-}
-
-func (m *MeshAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward, err error) {
-	return []types.Reward{
-		{
-			Layer:               layerFirst,
-			TotalReward:         rewardAmount,
-			LayerRewardEstimate: rewardAmount,
-			SmesherID:           nodeID,
-			Coinbase:            addr1,
+			Layer:       layerFirst,
+			TotalReward: rewardAmount,
+			LayerReward: rewardAmount,
+			Coinbase:    addr1,
 		},
 	}, nil
 }
@@ -799,98 +787,6 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, 2, len(res.AccountItem))
 			checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
 			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
-		}},
-		{"SmesherDataQuery", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
-				SmesherId: &pb.SmesherId{
-					Id: nodeID.ToBytes(),
-				},
-				MaxResults: uint32(10),
-				Offset:     uint32(0),
-			})
-			require.NoError(t, err)
-			require.Equal(t, uint32(1), res.TotalResults)
-			require.Equal(t, 1, len(res.Rewards))
-			require.Equal(t, layerFirst.Uint32(), res.Rewards[0].Layer.Number)
-			require.Equal(t, uint64(rewardAmount), res.Rewards[0].Total.Value)
-			require.Equal(t, uint64(rewardAmount), res.Rewards[0].LayerReward.Value)
-			require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
-			require.Equal(t, nodeID.ToBytes(), res.Rewards[0].Smesher.Id)
-		}},
-		{"SmesherDataQueryNullArgs", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "`Id` must be provided")
-		}},
-		{"SmesherDataQueryNoID", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
-				SmesherId:  &pb.SmesherId{},
-				MaxResults: uint32(10),
-				Offset:     uint32(0),
-			})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "`Id.Id` must be provided")
-		}},
-		{name: "SmesherRewardStream_Basic", run: func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			generateRunFn := func(req *pb.SmesherRewardStreamRequest) func(*testing.T) {
-				return func(*testing.T) {
-					// Just try opening and immediately closing the stream
-					stream, err := c.SmesherRewardStream(context.Background(), req)
-					require.NoError(t, err, "unexpected error opening stream")
-
-					// Do we need this? It doesn't seem to cause any harm
-					stream.Context().Done()
-				}
-			}
-			generateRunFnError := func(msg string, req *pb.SmesherRewardStreamRequest) func(*testing.T) {
-				return func(t *testing.T) {
-					logtest.SetupGlobal(t)
-					// there should be no error opening the stream
-					stream, err := c.SmesherRewardStream(context.Background(), req)
-					require.NoError(t, err, "unexpected error opening stream")
-
-					// sending a request should generate an error
-					_, err = stream.Recv()
-					require.Error(t, err, "expected an error")
-					require.Contains(t, err.Error(), msg, "received unexpected error")
-					statusCode := status.Code(err)
-					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
-
-					// Do we need this? It doesn't seem to cause any harm
-					stream.Context().Done()
-				}
-			}
-			subtests := []struct {
-				name string
-				run  func(*testing.T)
-			}{
-				{
-					name: "missing ID",
-					run:  generateRunFnError("`Id` must be provided", &pb.SmesherRewardStreamRequest{}),
-				},
-				{
-					name: "empty ID",
-					run: generateRunFnError("`Id.Id` must be provided", &pb.SmesherRewardStreamRequest{
-						Id: &pb.SmesherId{},
-					}),
-				},
-
-				// These tests should be successful
-				{
-					name: "valid address",
-					run: generateRunFn(&pb.SmesherRewardStreamRequest{
-						Id: &pb.SmesherId{Id: []byte("smesher1")},
-					}),
-				},
-			}
-			// Run sub-subtests
-			for _, r := range subtests {
-				t.Run(r.name, r.run)
-			}
 		}},
 		{"AppEventStream", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2649,7 +2545,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
-		require.Equal(t, nodeID.ToBytes(), x.Reward.Smesher.Id)
+		require.Nil(t, x.Reward.Smesher)
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
 	}
@@ -3083,7 +2979,9 @@ func TestEventsReceived(t *testing.T) {
 	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 
-	rewards := []types.AnyReward{{Address: addr1, Amount: 1}}
+	weight := util.WeightFromFloat64(18.7)
+	require.NoError(t, err)
+	rewards := []types.AnyReward{{Coinbase: addr1, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
 
 	time.Sleep(100 * time.Millisecond)

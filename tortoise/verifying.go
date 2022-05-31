@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -56,9 +57,9 @@ func newVerifying(config Config, common *commonState) *verifying {
 		Config:          config,
 		commonState:     common,
 		goodBallots:     map[types.BallotID]goodness{},
-		goodWeight:      map[types.LayerID]weight{},
-		abstainedWeight: map[types.LayerID]weight{},
-		totalGoodWeight: weightFromUint64(0),
+		goodWeight:      map[types.LayerID]util.Weight{},
+		abstainedWeight: map[types.LayerID]util.Weight{},
+		totalGoodWeight: util.WeightFromUint64(0),
 	}
 }
 
@@ -68,17 +69,17 @@ type verifying struct {
 
 	goodBallots map[types.BallotID]goodness
 	// weight of good ballots in the layer N
-	goodWeight map[types.LayerID]weight
+	goodWeight map[types.LayerID]util.Weight
 	// abstained weight from ballots in layers [N+1, LAST]
-	abstainedWeight map[types.LayerID]weight
+	abstainedWeight map[types.LayerID]util.Weight
 	// total weight of good ballots from verified + 1 up to last processed
-	totalGoodWeight weight
+	totalGoodWeight util.Weight
 }
 
 func (v *verifying) resetWeights() {
-	v.totalGoodWeight = weightFromUint64(0)
-	v.goodWeight = map[types.LayerID]weight{}
-	v.abstainedWeight = map[types.LayerID]weight{}
+	v.totalGoodWeight = util.WeightFromUint64(0)
+	v.goodWeight = map[types.LayerID]util.Weight{}
+	v.abstainedWeight = map[types.LayerID]util.Weight{}
 }
 
 func (v *verifying) checkCanBeGood(ballot types.BallotID) bool {
@@ -109,7 +110,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 	goodWeight, goodBallotsCount := v.countGoodBallots(logger, ballots)
 
 	v.goodWeight[lid] = goodWeight
-	v.totalGoodWeight = v.totalGoodWeight.add(goodWeight)
+	v.totalGoodWeight = v.totalGoodWeight.Add(goodWeight)
 
 	logger.With().Debug("counted weight from good ballots",
 		log.Stringer("good_weight", goodWeight),
@@ -133,11 +134,11 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	//                        expectedWeight - (totalGoodWeight - goodWeight[lid])
 	// margin               - this is pessimistic margin that is compared with global threshold
 	//                        totalGoodWeight - goodWeight[lid] - abstainedWeight[lid] - uncountedWeight
-	margin := weightFromUint64(0).
-		add(v.totalGoodWeight).
-		sub(v.goodWeight[lid])
+	margin := util.WeightFromUint64(0).
+		Add(v.totalGoodWeight).
+		Sub(v.goodWeight[lid])
 	if w, exist := v.abstainedWeight[lid]; exist {
-		margin.sub(w)
+		margin.Sub(w)
 	}
 
 	logger = logger.WithFields(
@@ -151,7 +152,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 
 	// 0 - there is not enough weight to cross threshold.
 	// 1 - layer is verified and contextual validity is according to our local opinion.
-	if margin.cmp(v.globalThreshold) == abstain {
+	if sign(margin.Cmp(v.globalThreshold)) == abstain {
 		logger.With().Info("candidate layer is not verified." +
 			" voting weight from good ballots is lower than the threshold")
 		return false
@@ -171,16 +172,16 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		v.validity[bid] = vote
 	}
 
-	v.totalGoodWeight.sub(v.goodWeight[lid])
+	v.totalGoodWeight.Sub(v.goodWeight[lid])
 	logger.With().Info("candidate layer is verified")
 	return true
 }
 
-func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (weight, int) {
-	sum := weightFromUint64(0)
+func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (util.Weight, int) {
+	sum := util.WeightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
-		if ballot.weight.isNil() {
+		if ballot.weight.IsNil() {
 			continue
 		}
 		rst := v.determineGoodness(logger, ballot)
@@ -189,12 +190,12 @@ func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (
 		}
 		v.goodBallots[ballot.id] = rst
 		if rst == good || rst == abstained {
-			sum = sum.add(ballot.weight)
+			sum = sum.Add(ballot.weight)
 			for lid := range ballot.abstain {
 				if _, exist := v.abstainedWeight[lid]; !exist {
-					v.abstainedWeight[lid] = weightFromFloat64(0)
+					v.abstainedWeight[lid] = util.WeightFromFloat64(0)
 				}
-				v.abstainedWeight[lid].add(ballot.weight)
+				v.abstainedWeight[lid].Add(ballot.weight)
 			}
 			n++
 		}

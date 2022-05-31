@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/tortoise/mocks"
@@ -96,7 +97,7 @@ func TestFullCountVotes(t *testing.T) {
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
-		expect       weight
+		expect       util.Weight
 	}{
 		{
 			desc:      "TwoLayersSupport",
@@ -119,7 +120,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(15),
+			expect: util.WeightFromFloat64(15),
 		},
 		{
 			desc:      "ConflictWithBase",
@@ -154,7 +155,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(0),
+			expect: util.WeightFromFloat64(0),
 		},
 		{
 			desc:      "UnequalWeights",
@@ -184,7 +185,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(140),
+			expect: util.WeightFromFloat64(140),
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
@@ -211,7 +212,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(100),
+			expect: util.WeightFromFloat64(100),
 		},
 		{
 			desc:      "OneLayerSupport",
@@ -227,7 +228,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(7.5),
+			expect: util.WeightFromFloat64(7.5),
 		},
 		{
 			desc:      "OneBlockAbstain",
@@ -244,7 +245,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(5),
+			expect: util.WeightFromFloat64(5),
 		},
 		{
 			desc:      "OneBlockAagaisnt",
@@ -261,7 +262,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(2.5),
+			expect: util.WeightFromFloat64(2.5),
 		},
 		{
 			desc:      "MajorityAgainst",
@@ -278,7 +279,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(-2.5),
+			expect: util.WeightFromFloat64(-2.5),
 		},
 		{
 			desc:      "NoVotes",
@@ -290,7 +291,7 @@ func TestFullCountVotes(t *testing.T) {
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(0),
+			expect: util.WeightFromFloat64(0),
 		},
 	} {
 		tc := tc

@@ -12,6 +12,10 @@ type atxDB interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 }
 
+type ballotDB interface {
+	GetBallot(types.BallotID) (*types.Ballot, error)
+}
+
 type meshDB interface {
 	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 	HasBallot(types.BallotID) bool

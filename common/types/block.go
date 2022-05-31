@@ -40,13 +40,15 @@ type InnerBlock struct {
 	TxIDs      []TransactionID
 }
 
+// RatNum represents a rational number with the numerator and denominator.
+type RatNum struct {
+	Num, Denom uint64
+}
+
 // AnyReward contains the rewards inforamtion.
 type AnyReward struct {
-	Address   Address
-	SmesherID NodeID
-	// Amount == LayerReward + fee
-	Amount      uint64
-	LayerReward uint64
+	Coinbase Address
+	Weight   RatNum
 }
 
 // Initialize calculates and sets the Block's cached blockID.
@@ -56,11 +58,11 @@ func (b *Block) Initialize() {
 
 // Bytes returns the serialization of the InnerBlock.
 func (b *Block) Bytes() []byte {
-	bytes, err := codec.Encode(b.InnerBlock)
+	data, err := codec.Encode(b.InnerBlock)
 	if err != nil {
 		log.Panic("failed to serialize block: %v", err)
 	}
-	return bytes
+	return data
 }
 
 // ID returns the BlockID.

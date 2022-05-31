@@ -317,28 +317,9 @@ func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32
 	return layers.SetAggregatedHash(m.db, layerID, hash)
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, applied []types.AnyReward) error {
-	tx, err := m.db.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-	defer tx.Release()
-	for i := range applied {
-		if err := rewards.Add(tx, l, &applied[i]); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
 // GetRewards retrieves account's rewards by the coinbase address.
-func (m *DB) GetRewards(coinbase types.Address) ([]types.Reward, error) {
-	return rewards.FilterByCoinbase(m.db, coinbase)
-}
-
-// GetRewardsBySmesherID retrieves rewards by smesherID.
-func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, error) {
-	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
+func (m *DB) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
+	return rewards.List(m.db, coinbase)
 }
 
 // LayerContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.

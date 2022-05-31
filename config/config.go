@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -20,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 const (
@@ -44,7 +44,7 @@ type Config struct {
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config            `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
-	REWARD          blocks.RewardConfig      `mapstructure:"reward"`
+	REWARD          vm.RewardConfig          `mapstructure:"reward"`
 	POST            activation.PostConfig    `mapstructure:"post"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
@@ -116,7 +116,7 @@ func DefaultConfig() Config {
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
-		REWARD:          blocks.DefaultRewardConfig(),
+		REWARD:          vm.DefaultRewardConfig(),
 		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           layerfetcher.DefaultConfig(),
