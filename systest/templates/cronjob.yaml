@@ -6,6 +6,7 @@ metadata:
     testid: $testid
 spec:
   schedule: "$schedule"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
