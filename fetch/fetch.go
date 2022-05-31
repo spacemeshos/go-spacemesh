@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -193,8 +194,17 @@ type Fetch struct {
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
 	// FIFO cache of hash->[peer set] to keep track of peers to pull blocks/ballots/txs from
-	hashToPeers  map[types.Hash32]*hashPeers
-	hashToPeersM sync.RWMutex
+	hashToPeers      map[types.Hash32]*hashPeers
+	hashToPeersM     sync.RWMutex
+	hashToPeersStats CacheStats
+}
+
+// CacheStats stores FIFO cache statistics
+type CacheStats struct {
+	// Hits is a number of successfully found hashes
+	Hits int64 `json:"hits"`
+	// Misses is a number of not found hashes
+	Misses int64 `json:"misses"`
 }
 
 type hashPeers struct {
@@ -536,15 +546,18 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]reque
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	result := make(map[p2p.Peer][]requestMessage)
 
-	// max retries to find another peer with less requests attached
+	// max retries to find another peer with fewer requests attached
 	const maxRetries = 3
 
 	for _, req := range requests {
 		hashPeersMap, exists := f.hashToPeers[req.Hash]
 		var hashPeers []p2p.Peer
 		if exists {
+			f.HashToPeersCacheHit()
 			hashPeers = peerMapToList(hashPeersMap.peers)
 		}
+
+		f.HashToPeersCacheMiss()
 
 		retries := 0
 		for {
@@ -746,4 +759,20 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	f.hashToPeers[hash].peers[peer] = struct{}{}
 
 	return
+}
+
+func (f *Fetch) HashToPeersCacheHit() {
+	atomic.AddInt64(&f.hashToPeersStats.Hits, 1)
+}
+
+func (f *Fetch) HashToPeersCacheMiss() {
+	atomic.AddInt64(&f.hashToPeersStats.Misses, 1)
+}
+
+func (f *Fetch) getHashToPeersCacheStats() CacheStats {
+	var stats = CacheStats{
+		Hits:   atomic.LoadInt64(&f.hashToPeersStats.Hits),
+		Misses: atomic.LoadInt64(&f.hashToPeersStats.Misses),
+	}
+	return stats
 }
