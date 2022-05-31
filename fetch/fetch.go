@@ -513,13 +513,15 @@ func (f *Fetch) send(requests []requestMessage) {
 
 	retries := 0
 	for {
-		peer2requests := f.organizeRequests(requests)
+		peer2batches := f.organizeRequests(requests)
 		requests = requests[:0]
 
-		for peer, peerReqs := range peer2requests {
-			err := f.sendBatch(peer, peerReqs)
-			if err != nil {
-				requests = append(requests, peerReqs...)
+		for peer, peerBatches := range peer2batches {
+			for _, reqs := range peerBatches {
+				err := f.sendBatch(peer, reqs)
+				if err != nil {
+					requests = append(requests, reqs...)
+				}
 			}
 		}
 
@@ -542,9 +544,9 @@ func peerMapToList(m map[p2p.Peer]struct{}) []p2p.Peer {
 	return result
 }
 
-func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]requestMessage {
+func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]requestMessage {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	result := make(map[p2p.Peer][]requestMessage)
+	peer2requests := make(map[p2p.Peer][]requestMessage)
 
 	// max retries to find another peer with fewer requests attached
 	const maxRetries = 3
@@ -559,26 +561,36 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][]reque
 
 		f.HashToPeersCacheMiss()
 
-		retries := 0
-		for {
-			var p p2p.Peer
-			if len(hashPeers) > 0 {
-				p = hashPeers[rng.Intn(len(hashPeers))]
-			} else {
-				p = GetRandomPeer(f.net.GetPeers())
-			}
+		var p p2p.Peer
+		if len(hashPeers) > 0 {
+			p = hashPeers[rng.Intn(len(hashPeers))]
+		} else {
+			p = GetRandomPeer(f.net.GetPeers())
+		}
 
-			_, ok := result[p]
-			if !ok {
-				result[p] = []requestMessage{req}
-				break
-			}
+		_, ok := peer2requests[p]
+		if !ok {
+			peer2requests[p] = []requestMessage{req}
+		} else {
+			peer2requests[p] = append(peer2requests[p], req)
+		}
+	}
 
-			retries++
-			if len(result[p]) < f.cfg.BatchSize || retries > maxRetries {
-				result[p] = append(result[p], req)
-				break
+	// split every peer's requests into batches of f.cfg.BatchSize each
+	result := make(map[p2p.Peer][][]requestMessage)
+	for peer, requests := range peer2requests {
+		if len(requests) < f.cfg.BatchSize {
+			result[peer] = [][]requestMessage{
+				requests,
 			}
+			continue
+		}
+		for i := 0; i < len(requests); i += f.cfg.BatchSize {
+			j := i + f.cfg.BatchSize
+			if j > len(requests) {
+				j = len(requests)
+			}
+			result[peer] = append(result[peer], requests[i:j])
 		}
 	}
 
