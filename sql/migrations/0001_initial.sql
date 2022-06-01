@@ -137,6 +137,8 @@ CREATE TABLE accounts
     initialized    BOOL,
     nonce          UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
+    template       CHAR(20),
+    state          BLOB,
     PRIMARY KEY (address, layer_updated DESC)
 );
 

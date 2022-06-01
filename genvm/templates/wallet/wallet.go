@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
-func New(args SpawnArguments) *Wallet {
+func New(args *SpawnArguments) *Wallet {
 	return &Wallet{PublicKey: args.PublicKey}
 }
 

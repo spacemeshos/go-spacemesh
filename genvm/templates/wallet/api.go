@@ -11,12 +11,14 @@ import (
 )
 
 func init() {
-	address := core.Address{}
-	address[len(address)-1] = 1
-	registry.Register(address, &api{})
+	TemplateAddress[len(TemplateAddress)-1] = 1
+	registry.Register(TemplateAddress, &api{})
 }
 
-var _ (core.Handler) = (*api)(nil)
+var (
+	_               (core.Handler) = (*api)(nil)
+	TemplateAddress core.Address
+)
 
 type api struct{}
 
@@ -46,7 +48,7 @@ func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (he
 
 func (a *api) Init(method uint8, args any, imu []byte) (core.Template, error) {
 	if method == 0 {
-		return New(args.(SpawnArguments)), nil
+		return New(args.(*SpawnArguments)), nil
 	}
 	// TODO i dont like that it needs to initialize decoder here
 	// what can be done about it?

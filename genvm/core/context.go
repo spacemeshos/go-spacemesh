@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 
 	"github.com/spacemeshos/go-scale"
 )
@@ -17,9 +18,8 @@ type Context struct {
 	Principal Address
 	Method    uint8
 
-	TemplateAddress Address
-	Header          Header
-	Args            scale.Encodable
+	Header Header
+	Args   scale.Encodable
 
 	order   []Address
 	changed map[Address]*Account
@@ -29,16 +29,15 @@ func (c *Context) Spawn() {
 	var principal Address
 	hasher := sha256.New()
 	encoder := scale.NewEncoder(hasher)
-	c.TemplateAddress.EncodeScale(encoder)
+	c.Account.Template.EncodeScale(encoder)
 	c.Header.Nonce.EncodeScale(encoder)
 	c.Args.EncodeScale(encoder)
-	hasher.Sum(principal[:])
+	r1 := hasher.Sum(nil)
+	copy(principal[:], r1)
 
 	if principal != c.Principal {
-		c.Fail(errors.New("only self spawn is supported"))
+		c.Fail(fmt.Errorf("only self spawn is supported: %x != %x", principal, c.Principal))
 	}
-
-	c.Account.Template = &c.TemplateAddress
 }
 
 func (c *Context) Transfer(to Address, amount uint64) {

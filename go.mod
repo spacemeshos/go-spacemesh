@@ -31,7 +31,7 @@ require (
 	github.com/spacemeshos/api/release/go v1.4.1-0.20220208052242-dd7698a0ca84
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
-	github.com/spacemeshos/go-scale v0.0.0-20220516081642-4fd30da8c216
+	github.com/spacemeshos/go-scale v0.0.0-20220601084515-ec1edc30b723
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68

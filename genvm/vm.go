@@ -1,4 +1,4 @@
-package genvm
+package vm
 
 import (
 	"bytes"
@@ -8,11 +8,13 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	_ "github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
 type Opt func(*VM)
@@ -49,7 +51,7 @@ func (vm *VM) Validation(raw []byte) *Request {
 }
 
 // Apply transactions.
-func (vm *VM) Apply(txs [][]byte) ([][]byte, error) {
+func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 	tx, err := vm.db.Tx(context.Background())
 	if err != nil {
 		return nil, err
@@ -59,23 +61,31 @@ func (vm *VM) Apply(txs [][]byte) ([][]byte, error) {
 		ss      = core.NewStagedState(tx)
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
-		failed  [][]byte
+		skipped [][]byte
 	)
 	for _, tx := range txs {
 		rd.Reset(tx)
 		_, ctx, args, err := parse(ss, decoder)
 		if err != nil {
-			failed = append(failed, tx)
+			skipped = append(skipped, tx)
 		}
 		ctx.Handler.Exec(ctx, ctx.Method, args)
 		if err := ctx.Apply(ss); err != nil {
 			return nil, err
 		}
 	}
+	ss.IterateChanged(func(account *core.Account) bool {
+		account.Layer = lid // TODO layer probably should be a part of context
+		err = accounts.Update(tx, account)
+		return err == nil
+	})
+	if err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return failed, nil
+	return skipped, nil
 }
 
 type Request struct {
@@ -107,7 +117,7 @@ func parse(loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *co
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if version != 1 {
+	if version != 0 {
 		return nil, nil, nil, fmt.Errorf("unsupported version %d", version)
 	}
 
