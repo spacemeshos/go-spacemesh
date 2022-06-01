@@ -7,15 +7,16 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 )
 
 func init() {
 	address := core.Address{}
 	address[len(address)-1] = 1
-	core.Register(address, &api{})
+	registry.Register(address, &api{})
 }
 
-var _ (core.TemplateAPI) = (*api)(nil)
+var _ (core.Handler) = (*api)(nil)
 
 type api struct{}
 
@@ -43,18 +44,18 @@ func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (he
 	return header, args
 }
 
-func (a *api) Load(ctx *core.Context, method uint8, args any) core.Template {
+func (a *api) Init(method uint8, args any, imu []byte) (core.Template, error) {
 	if method == 0 {
-		return New(args.(SpawnArguments))
+		return New(args.(SpawnArguments)), nil
 	}
 	// TODO i dont like that it needs to initialize decoder here
 	// what can be done about it?
-	decoder := scale.NewDecoder(bytes.NewReader(ctx.State.State))
+	decoder := scale.NewDecoder(bytes.NewReader(imu))
 	var wallet Wallet
 	if _, err := wallet.DecodeScale(decoder); err != nil {
-		ctx.Fail(fmt.Errorf("internal error %w", err))
+		return nil, fmt.Errorf("malformed state %w", err)
 	}
-	return &wallet
+	return &wallet, nil
 }
 
 func (a *api) Exec(ctx *core.Context, method uint8, args any) {

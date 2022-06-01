@@ -13,13 +13,21 @@ type (
 	Account = types.Account
 )
 
-type TemplateAPI interface {
+type Handler interface {
 	Parse(*Context, uint8, *scale.Decoder) (Header, scale.Encodable)
-	Load(*Context, uint8, any) Template
+	Init(uint8, any, []byte) (Template, error)
 	Exec(*Context, uint8, any)
 }
 
 type Template interface {
 	scale.Encodable
 	Verify(*Context, []byte) bool
+}
+
+type AccountLoader interface {
+	Get(Address) (Account, error)
+}
+
+type AccountUpdater interface {
+	Update(Account) error
 }

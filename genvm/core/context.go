@@ -9,56 +9,81 @@ import (
 )
 
 type Context struct {
-	Handler  TemplateAPI
+	Loader   AccountLoader
+	Handler  Handler
 	Template Template
 
-	State     *Account
+	Account   Account
 	Principal Address
 	Method    uint8
 
-	templateAddress Address
-	header          Header
-	args            scale.Encodable
-	spawned         struct {
-		address scale.Address
-		state   *Account
-	}
-	consumed uint64
-	price    uint64
-	funds    uint64
+	TemplateAddress Address
+	Header          Header
+	Args            scale.Encodable
+
+	order   []Address
+	changed map[Address]*Account
 }
 
 func (c *Context) Spawn() {
+	var principal Address
 	hasher := sha256.New()
 	encoder := scale.NewEncoder(hasher)
-	c.templateAddress.EncodeScale(encoder)
-	c.header.Nonce.EncodeScale(encoder)
-	c.args.EncodeScale(encoder)
-	hasher.Sum(c.spawned.address[:])
+	c.TemplateAddress.EncodeScale(encoder)
+	c.Header.Nonce.EncodeScale(encoder)
+	c.Args.EncodeScale(encoder)
+	hasher.Sum(principal[:])
 
-	if c.spawned.address != c.Principal {
+	if principal != c.Principal {
 		c.Fail(errors.New("only self spawn is supported"))
 	}
-	c.spawned.state = c.State
 
-	buf := bytes.NewBuffer(nil)
-	encoder = scale.NewEncoder(buf)
-	c.Template.EncodeScale(encoder)
-
-	c.spawned.state.Template = &c.templateAddress
-	c.spawned.state.State = buf.Bytes()
+	c.Account.Template = &c.TemplateAddress
 }
 
-func (c *Context) Transfer(to Address, value uint64) {}
-
-func (c *Context) Consume(gas uint64) {
-	c.consumed += gas
-	if c.consumed*c.price+c.funds > c.State.Balance {
+func (c *Context) Transfer(to Address, amount uint64) {
+	if amount > c.Account.Balance {
 		c.Fail(errors.New("out of funds"))
 	}
+	c.Account.Balance -= amount
+	if c.changed == nil {
+		c.changed = map[Address]*Account{}
+	}
+	account, exist := c.changed[to]
+	if !exist {
+		account, err := c.Loader.Get(to)
+		c.Fail(err)
+		c.changed[to] = &account
+	}
+	account.Balance += amount
+}
+
+func (c *Context) Consume(gas uint64) {
+	amount := gas * c.Header.GasPrice
+	if amount > c.Account.Balance {
+		c.Fail(errors.New("out of funds"))
+	}
+	c.Account.Balance -= amount
+}
+
+func (c *Context) Apply(updater AccountUpdater) error {
+	buf := bytes.NewBuffer(nil)
+	encoder := scale.NewEncoder(buf)
+	c.Template.EncodeScale(encoder)
+	c.Account.Nonce = c.Header.Nonce.Counter
+	c.Account.State = buf.Bytes()
+	if err := updater.Update(c.Account); err != nil {
+		return err
+	}
+	for _, address := range c.order {
+		account := c.changed[address]
+		if err := updater.Update(*account); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Context) Fail(err error) {
-	//
 	panic(err)
 }
