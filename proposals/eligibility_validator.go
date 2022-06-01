@@ -143,7 +143,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 }
 
 func (v Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
-	if ballot.AtxID == *types.EmptyATXID {
+	if ballot.AtxID.IsEmpty() {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
 

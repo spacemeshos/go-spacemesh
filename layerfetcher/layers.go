@@ -332,7 +332,7 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 	l.mutex.Unlock()
 
 	logger.With().Debug("tracking peer for new ballots", log.Int("to_fetch", len(ballotsToFetch)), log.String("peer", peer.String()))
-	l.trackBallotPeers(ctx, peer, ballotsToFetch)
+	l.trackBallotsPeer(ctx, peer, ballotsToFetch)
 
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
@@ -343,7 +343,7 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 	logger.With().Debug("tracking peer for new blocks",
 		log.Int("to_fetch", len(blocksToFetch)),
 		log.String("peer", peer.String()))
-	l.trackBlockPeers(ctx, peer, blocksToFetch)
+	l.trackBlocksPeer(ctx, peer, blocksToFetch)
 
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
@@ -493,7 +493,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	l.log.WithContext(ctx).With().Debug("tracking peer for atxs",
 		log.Int("to_fetch", len(res.Atxs)),
 		log.String("peer", peer.String()))
-	l.trackATXPeers(ctx, peer, res.Atxs)
+	l.TrackATXPeer(ctx, peer, res.Atxs)
 
 	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
@@ -603,7 +603,7 @@ func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch
 	return errs
 }
 
-func (l *Logic) trackBallotPeers(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
+func (l *Logic) trackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
 	if len(ids) == 0 {
 		return
 	}
@@ -614,7 +614,7 @@ func (l *Logic) trackBallotPeers(ctx context.Context, peer p2p.Peer, ids []types
 	return
 }
 
-func (l *Logic) trackBlockPeers(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
+func (l *Logic) trackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
 	if len(ids) == 0 {
 		return
 	}
@@ -626,11 +626,18 @@ func (l *Logic) trackBlockPeers(ctx context.Context, peer p2p.Peer, ids []types.
 	return
 }
 
-func (l *Logic) trackATXPeers(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
+func (l *Logic) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
 	if len(ids) == 0 {
 		return
 	}
-	hashes := types.ATXIDsToHashes(ids)
+	nonEmptyIDs := ids[:0]
+	for _, id := range ids {
+		if id.IsEmpty() {
+			continue
+		}
+		nonEmptyIDs = append(nonEmptyIDs, id)
+	}
+	hashes := types.ATXIDsToHashes(nonEmptyIDs)
 	for _, hash := range hashes {
 		l.fetcher.MapPeerToHash(hash, peer)
 	}

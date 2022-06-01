@@ -492,7 +492,7 @@ func (app *App) initServices(ctx context.Context,
 	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
-	if goldenATXID == *types.EmptyATXID {
+	if goldenATXID.IsEmpty() {
 		return errors.New("invalid golden atx id")
 	}
 

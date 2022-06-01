@@ -581,7 +581,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	}
 
 	var initialPost *types.Post
-	if b.challenge.PrevATXID == *types.EmptyATXID {
+	if b.challenge.PrevATXID.IsEmpty() {
 		initialPost = b.initialPost
 	}
 

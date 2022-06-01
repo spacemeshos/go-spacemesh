@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -27,6 +28,7 @@ type BlockFetcher interface {
 type AtxFetcher interface {
 	GetAtxs(context.Context, []types.ATXID) error
 	FetchAtx(context.Context, types.ATXID) error
+	TrackATXPeer(context.Context, p2p.Peer, []types.ATXID)
 }
 
 // TxFetcher defines an interface for fetching transactions from remote peers.

@@ -126,7 +126,7 @@ func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Propo
 	weights := make(map[types.Address]util.Weight)
 	coinbases := make([]types.Address, 0, len(props))
 	for _, p := range props {
-		if p.AtxID == *types.EmptyATXID {
+		if p.AtxID.IsEmpty() {
 			// this proposal would not have been validated
 			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
 			return nil, errInvalidATXID
