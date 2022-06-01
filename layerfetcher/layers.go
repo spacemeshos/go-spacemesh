@@ -480,7 +480,8 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if l.host.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
-	if err := l.atxsrv.Request(ctx, fetch.GetRandomPeer(l.host.GetPeers()), id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
+	peer := fetch.GetRandomPeer(l.host.GetPeers())
+	if err := l.atxsrv.Request(ctx, peer, id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
 		return fmt.Errorf("failed to send request to the peer: %w", err)
 	}
 	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
@@ -488,6 +489,11 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if res.Error != nil {
 		return res.Error
 	}
+
+	l.log.WithContext(ctx).With().Debug("tracking peer for atxs",
+		log.Int("to_fetch", len(res.Atxs)),
+		log.String("peer", peer.String()))
+	l.trackATXPeers(ctx, peer, res.Atxs)
 
 	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
@@ -617,6 +623,17 @@ func (l *Logic) trackBlockPeers(ctx context.Context, peer p2p.Peer, ids []types.
 		l.fetcher.MapPeerToHash(hash, peer)
 	}
 
+	return
+}
+
+func (l *Logic) trackATXPeers(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
+	if len(ids) == 0 {
+		return
+	}
+	hashes := types.ATXIDsToHashes(ids)
+	for _, hash := range hashes {
+		l.fetcher.MapPeerToHash(hash, peer)
+	}
 	return
 }
 
