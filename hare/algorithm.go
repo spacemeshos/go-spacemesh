@@ -184,7 +184,6 @@ type consensusProcess struct {
 	pending             map[string]*Msg // buffer for early messages that are pending process
 	notifySent          bool            // flag to set in case a notification had already been sent by this instance
 	mTracker            *msgsTracker    // tracks valid messages
-	terminating         bool
 	certified           bool
 	completed           bool
 	eligibilityCount    uint16
@@ -283,12 +282,12 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 		// check participation
 		if proc.shouldParticipate(ctx) {
 			// set pre-round InnerMsg and send
-			builder, err := proc.initDefaultBuilder(proc.s)
+			msgBuilder, err := proc.initDefaultBuilder(proc.s)
 			if err != nil {
 				logger.With().Error("init default builder failed", log.Err(err))
 				return
 			}
-			m := builder.SetType(pre).Sign(proc.signing).Build()
+			m := msgBuilder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(ctx, m)
 		} else {
 			logger.With().Info("should not participate",
@@ -329,11 +328,11 @@ PreRound:
 			log.Int("set_size", proc.s.Size()),
 			proc.instanceID)
 	}
-	proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
-
-	// start first iteration
-	proc.onRoundBegin(ctx)
-	endOfRound = proc.clock.AwaitEndOfRound(proc.getK())
+	_, err := proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
+	if err != nil {
+		logger.With().Error("consensusProcess: failed to advance to next round: ", log.Err(err))
+		return
+	}
 
 	defer func() {
 		if !proc.completed {
@@ -341,14 +340,18 @@ PreRound:
 		}
 	}()
 
+	// Start first iteration at round 0
+	proc.onRoundBegin(ctx)
+	endOfRound = proc.clock.AwaitEndOfRound(proc.getK())
+
+	// Continue with main loop
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
 
 			proc.handleMessage(ctx, msg)
 
-			if proc.terminating || (proc.completed && proc.certified) {
-				// TODO: possible error close closed channel
+			if proc.completed && proc.certified {
 				proc.Close()
 				return
 			}
@@ -357,21 +360,12 @@ PreRound:
 
 			proc.onRoundEnd(ctx)
 
-			if proc.terminating || (proc.completed && proc.certified) || proc.getK() == certifyRound {
-				// TODO: possible error close closed channel
+			if proc.completed && proc.certified {
 				proc.Close()
 				return
 			}
-
-			proc.advanceToNextRound(ctx)
-
-			// exit if we reached the limit on number of iterations
-			k := proc.getK()
-			if k >= uint32(proc.cfg.LimitIterations)*RoundsPerIteration {
-				logger.With().Warning("terminating: reached iterations limit",
-					log.Int("limit", proc.cfg.LimitIterations),
-					log.Uint32("current_k", k),
-					proc.instanceID)
+			k, err := proc.advanceToNextRound(ctx)
+			if err != nil {
 				proc.Close()
 				return
 			}
@@ -554,18 +548,47 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 	}
 }
 
-// advances the state to the next round.
-func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
+// advanceToNextRound advances the state to the next round.
+// Returns k, the new round number.
+// Will return an error if unable to advance to next round.
+// The consensuProcess should be stopped if an error is returned.
+func (proc *consensusProcess) advanceToNextRound(ctx context.Context) (uint32, error) {
+	k := proc.getK()
+	// Edge cases:
+	// 1. Preround -> just continue
+	if k == preRound {
+		k = proc.addToK(1)
+		return k, nil
+	}
+	// 2. Already in certify round -> error
+	if k == certifyRound {
+		proc.With().Error("consensus process trying to advance past certify round",
+			log.Uint32("current_k", k),
+			proc.instanceID)
+		return k, errors.New("already at certify round")
+	}
+	// 3. Notify round AND consensus has been reached -> goto certify round
 	if proc.completed && proc.currentRound() == notifyRound {
 		proc.setK(certifyRound)
-	} else {
-		k := proc.addToK(1)
-		if k >= 4 && k%4 == 0 {
-			proc.WithContext(ctx).Event().Warning("starting new iteration",
-				log.Uint32("current_k", k),
-				proc.instanceID)
-		}
+		return k, nil
 	}
+	// 4. Not Pre round and not Certify round, but k is greater than limit -> error
+	if k >= uint32(proc.cfg.LimitIterations)*RoundsPerIteration {
+		proc.With().Warning("terminating: reached iterations limit",
+			log.Int("limit", proc.cfg.LimitIterations),
+			log.Uint32("current_k", k),
+			proc.instanceID)
+		return k, errors.New("reached maximum iterations")
+	}
+
+	// Just advance to next round:
+	k = proc.addToK(1)
+	if k >= 4 && k%4 == 0 {
+		proc.WithContext(ctx).Event().Warning("starting new iteration",
+			log.Uint32("current_k", k),
+			proc.instanceID)
+	}
+	return k, nil
 }
 
 func (proc *consensusProcess) beginStatusRound(ctx context.Context) {

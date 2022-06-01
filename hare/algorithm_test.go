@@ -294,11 +294,23 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
-	proc.advanceToNextRound(context.TODO())
-	proc.advanceToNextRound(context.TODO())
+	proc.advanceToNextRound(context.TODO()) // advance to round 0 (from pre-round to status round)
+	proc.advanceToNextRound(context.TODO()) // advance to round 1 (from status round to proposal round)
 	assert.EqualValues(t, 1, proc.getK())
-	proc.advanceToNextRound(context.TODO())
+	proc.advanceToNextRound(context.TODO()) // advance to round 2 (from proposal round to commit round)
 	assert.EqualValues(t, 2, proc.getK())
+}
+
+func TestConsensusProcess_advanceToNextRound_doesntSkipCertifyRound(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	// Conditions for certify round:
+	proc.k = notifyRound
+	proc.completed = true
+
+	// Should advance to certify round from notify round
+	proc.advanceToNextRound(context.TODO())
+
+	assert.EqualValues(t, certifyRound, proc.getK())
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
