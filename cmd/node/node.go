@@ -598,7 +598,12 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+	blockGen := blocks.NewGenerator(atxDB, msh, app.conState,
+		blocks.WithConfig(blocks.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+		}),
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
 	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(

@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -85,7 +86,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
 		// needs to be not nil
-		t.ballotWeight[ballot.ID()] = weightFromFloat64(0)
+		t.ballotWeight[ballot.ID()] = util.WeightFromFloat64(0)
 		t.ballots[genesis] = []types.BallotID{ballot.ID()}
 		t.verifying.goodBallots[ballot.ID()] = good
 	}
@@ -204,7 +205,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.ballots[lid] {
 				weight := t.ballotWeight[ballotID]
-				if weight.isNil() {
+				if weight.IsNil() {
 					continue
 				}
 				dis, err := t.firstDisagreement(ctx, lid, ballotID, disagreements)
@@ -256,7 +257,7 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
 		for _, ballotID := range t.ballots[lid] {
-			if t.ballotWeight[ballotID].isNil() {
+			if t.ballotWeight[ballotID].IsNil() {
 				continue
 			}
 			if rst := t.verifying.goodBallots[ballotID]; rst == good {
@@ -398,7 +399,7 @@ func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, bid types.B
 		return vote, reason, nil
 	}
 	sum := t.full.weights[bid]
-	vote = sum.cmp(t.localThreshold)
+	vote = sign(sum.Cmp(t.localThreshold))
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
@@ -689,7 +690,7 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
 	}
 	window := getVerificationWindow(t.Config, t.mode, t.verified.Add(1), t.last)
-	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
+	if lastUpdated || window.Before(t.processed) || t.globalThreshold.IsNil() {
 		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
 			t.verified.Add(1), t.last, t.processed,
 			t.epochWeight,
@@ -760,7 +761,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		}
 	}
 
-	var ballotWeight weight
+	var ballotWeight util.Weight
 	if !ballot.IsMalicious() {
 		var err error
 		ballotWeight, err = computeBallotWeight(

@@ -746,8 +746,6 @@ func (c *cache) RevertToLayer(revertTo types.LayerID) error {
 		return err
 	}
 
-	// TODO revert the rewards also. https://github.com/spacemeshos/go-spacemesh/issues/3057
-
 	if err := c.BuildFromScratch(); err != nil {
 		c.logger.With().Error("failed to build from scratch after revert", log.Err(err))
 		return err

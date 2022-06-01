@@ -1,14 +1,17 @@
 package blocks
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"math"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
 var (
@@ -19,23 +22,30 @@ var (
 // Generator generates a block from proposals.
 type Generator struct {
 	logger log.Log
-	cfg    RewardConfig
+	cfg    Config
 	atxDB  atxProvider
 	meshDB meshProvider
 	txs    txProvider
 }
 
-func defaultConfig() RewardConfig {
-	return RewardConfig{
-		BaseReward: 50 * uint64(math.Pow10(12)),
+// Config is the config for Generator.
+type Config struct {
+	LayerSize      uint32
+	LayersPerEpoch uint32
+}
+
+func defaultConfig() Config {
+	return Config{
+		LayerSize:      50,
+		LayersPerEpoch: 3,
 	}
 }
 
-// GeneratorOpt for configuring BlockHandler.
+// GeneratorOpt for configuring Generator.
 type GeneratorOpt func(h *Generator)
 
 // WithConfig defines cfg for Generator.
-func WithConfig(cfg RewardConfig) GeneratorOpt {
+func WithConfig(cfg Config) GeneratorOpt {
 	return func(g *Generator) {
 		g.cfg = cfg
 	}
@@ -67,11 +77,11 @@ func NewGenerator(atxDB atxProvider, meshDB meshProvider, txs txProvider, opts .
 func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, proposals []*types.Proposal) (*types.Block, error) {
 	logger := g.logger.WithContext(ctx).WithFields(layerID, log.Int("num_proposals", len(proposals)))
 	types.SortProposals(proposals)
-	txIDs, txs, err := g.extractOrderedUniqueTXs(layerID, proposals)
+	txIDs, _, err := g.extractOrderedUniqueTXs(layerID, proposals)
 	if err != nil {
 		return nil, err
 	}
-	rewards, err := g.calculateSmesherRewards(logger, layerID, proposals, txs)
+	rewards, err := g.calculateCoinbaseWeight(logger, proposals)
 	if err != nil {
 		return nil, err
 	}
@@ -112,15 +122,10 @@ func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*
 	return txIDs, txs, nil
 }
 
-func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerID, proposals []*types.Proposal, txs []*types.Transaction) ([]types.AnyReward, error) {
-	eligibilities := 0
-	for _, proposal := range proposals {
-		eligibilities += len(proposal.EligibilityProofs)
-	}
-	rInfo := calculateRewardPerEligibility(layerID, g.cfg, txs, eligibilities)
-	logger.With().Info("reward calculated", log.Inline(rInfo))
-	rewards := make([]types.AnyReward, 0, len(proposals))
-	for _, p := range proposals {
+func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Proposal) ([]types.AnyReward, error) {
+	weights := make(map[types.Address]util.Weight)
+	coinbases := make([]types.Address, 0, len(props))
+	for _, p := range props {
 		if p.AtxID == *types.EmptyATXID {
 			// this proposal would not have been validated
 			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
@@ -131,13 +136,42 @@ func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerI
 			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
 			return nil, fmt.Errorf("block gen get ATX: %w", err)
 		}
-		rewards = append(rewards, types.AnyReward{
-			Address:     atx.Coinbase,
-			SmesherID:   atx.NodeID,
-			Amount:      rInfo.totalRewardPer * uint64(len(p.EligibilityProofs)),
-			LayerReward: rInfo.layerRewardPer * uint64(len(p.EligibilityProofs)),
-		})
+		ballot := &p.Ballot
+		weightPer, err := proposals.ComputeWeightPerEligibility(g.atxDB, g.meshDB, ballot, g.cfg.LayerSize, g.cfg.LayersPerEpoch)
+		if err != nil {
+			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
+			return nil, err
+		}
+		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
+		actual := weightPer.Mul(util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
+		if _, ok := weights[atx.Coinbase]; !ok {
+			weights[atx.Coinbase] = actual
+			coinbases = append(coinbases, atx.Coinbase)
+		} else {
+			weights[atx.Coinbase].Add(actual)
+		}
 		events.ReportProposal(events.ProposalIncluded, p)
+	}
+	// make sure we output coinbase in a stable order.
+	sort.Slice(coinbases, func(i, j int) bool {
+		return bytes.Compare(coinbases[i].Bytes(), coinbases[j].Bytes()) < 0
+	})
+	rewards := make([]types.AnyReward, 0, len(weights))
+	for _, coinbase := range coinbases {
+		weight, ok := weights[coinbase]
+		if !ok {
+			g.logger.With().Fatal("coinbase missing", coinbase)
+		}
+		rewards = append(rewards, types.AnyReward{
+			Coinbase: coinbase,
+			Weight: types.RatNum{
+				Num:   weight.Num().Uint64(),
+				Denom: weight.Denom().Uint64(),
+			},
+		})
+		logger.With().Debug("adding coinbase weight",
+			log.Stringer("coinbase", coinbase),
+			log.Stringer("weight", weight))
 	}
 	return rewards, nil
 }

@@ -4,6 +4,7 @@ import (
 	"container/list"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -14,7 +15,7 @@ func newFullTortoise(config Config, common *commonState) *full {
 		votes:        map[types.BallotID]votes{},
 		abstain:      map[types.BallotID]map[types.LayerID]struct{}{},
 		base:         map[types.BallotID]types.BallotID{},
-		weights:      map[types.BlockID]weight{},
+		weights:      map[types.BlockID]util.Weight{},
 		delayedQueue: list.New(),
 	}
 }
@@ -34,7 +35,7 @@ type full struct {
 	// storing them in current version is cheap.
 	counted types.LayerID
 	// counted weights of all blocks up to counted layer.
-	weights map[types.BlockID]weight
+	weights map[types.BlockID]util.Weight
 	// queue of the ballots with bad beacon
 	delayedQueue *list.List
 }
@@ -54,7 +55,7 @@ func (f *full) onBallot(ballot *tortoiseBallot) {
 }
 
 func (f *full) onBlock(block types.BlockID) {
-	f.weights[block] = weightFromUint64(0)
+	f.weights[block] = util.WeightFromUint64(0)
 }
 
 func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.LayerID, block types.BlockID) sign {
@@ -82,7 +83,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			continue
 		}
 		ballotWeight := f.ballotWeight[ballot]
-		if ballotWeight.isNil() {
+		if ballotWeight.IsNil() {
 			continue
 		}
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
@@ -91,9 +92,9 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 				current := f.weights[block]
 				switch vote {
 				case support:
-					current = current.add(ballotWeight)
+					current = current.Add(ballotWeight)
 				case against:
-					current = current.sub(ballotWeight)
+					current = current.Sub(ballotWeight)
 				}
 				f.weights[block] = current
 			}
@@ -154,7 +155,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 
 	for _, block := range blocks {
 		current := f.weights[block]
-		decision := current.cmp(f.globalThreshold)
+		decision := sign(current.Cmp(f.globalThreshold))
 		if decision == abstain {
 			logger.With().Info("candidate layer is not verified. not enough weight in votes",
 				log.Stringer("block", block),

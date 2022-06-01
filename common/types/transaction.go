@@ -222,9 +222,8 @@ type InnerTransaction struct {
 
 // Reward is a virtual reward transaction, which the node keeps track of for the gRPC api.
 type Reward struct {
-	Layer               LayerID
-	TotalReward         uint64
-	LayerRewardEstimate uint64
-	SmesherID           NodeID
-	Coinbase            Address
+	Layer       LayerID
+	TotalReward uint64
+	LayerReward uint64
+	Coinbase    Address
 }

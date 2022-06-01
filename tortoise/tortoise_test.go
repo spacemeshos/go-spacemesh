@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -556,71 +557,71 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		expect    sign
-		vote      weight
+		vote      util.Weight
 		threshold *big.Rat
-		weight    weight
+		weight    util.Weight
 	}{
 		{
 			desc:      "Support",
 			expect:    support,
-			vote:      weightFromInt64(6),
+			vote:      util.WeightFromInt64(6),
 			threshold: big.NewRat(1, 2),
-			weight:    weightFromInt64(10),
+			weight:    util.WeightFromInt64(10),
 		},
 		{
 			desc:      "Abstain",
 			expect:    abstain,
-			vote:      weightFromInt64(3),
+			vote:      util.WeightFromInt64(3),
 			threshold: big.NewRat(1, 2),
-			weight:    weightFromInt64(10),
+			weight:    util.WeightFromInt64(10),
 		},
 		{
 			desc:      "AbstainZero",
 			expect:    abstain,
-			vote:      weightFromInt64(0),
+			vote:      util.WeightFromInt64(0),
 			threshold: big.NewRat(1, 2),
-			weight:    weightFromInt64(10),
+			weight:    util.WeightFromInt64(10),
 		},
 		{
 			desc:      "Against",
 			expect:    against,
-			vote:      weightFromInt64(-6),
+			vote:      util.WeightFromInt64(-6),
 			threshold: big.NewRat(1, 2),
-			weight:    weightFromInt64(10),
+			weight:    util.WeightFromInt64(10),
 		},
 		{
 			desc:      "ComplexSupport",
 			expect:    support,
-			vote:      weightFromInt64(121),
+			vote:      util.WeightFromInt64(121),
 			threshold: big.NewRat(60, 100),
-			weight:    weightFromInt64(200),
+			weight:    util.WeightFromInt64(200),
 		},
 		{
 			desc:      "ComplexAbstain",
 			expect:    abstain,
-			vote:      weightFromInt64(120),
+			vote:      util.WeightFromInt64(120),
 			threshold: big.NewRat(60, 100),
-			weight:    weightFromInt64(200),
+			weight:    util.WeightFromInt64(200),
 		},
 		{
 			desc:      "ComplexAbstain2",
 			expect:    abstain,
-			vote:      weightFromInt64(-120),
+			vote:      util.WeightFromInt64(-120),
 			threshold: big.NewRat(60, 100),
-			weight:    weightFromInt64(200),
+			weight:    util.WeightFromInt64(200),
 		},
 		{
 			desc:      "ComplexAgainst",
 			expect:    against,
-			vote:      weightFromInt64(-121),
+			vote:      util.WeightFromInt64(-121),
 			threshold: big.NewRat(60, 100),
-			weight:    weightFromInt64(200),
+			weight:    util.WeightFromInt64(200),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			require.Equal(t, tc.expect,
-				tc.vote.cmp(tc.weight.fraction(tc.threshold)))
+			require.EqualValues(t, tc.expect,
+				tc.vote.Cmp(tc.weight.Fraction(tc.threshold)))
 		})
 	}
 }
@@ -1288,7 +1289,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 			var (
 				ctrl         = gomock.NewController(t)
 				atxdb        = mocks.NewMockatxDataProvider(ctrl)
-				epochWeights = map[types.EpochID]weight{}
+				epochWeights = map[types.EpochID]util.Weight{}
 				first        = tc.target.Add(1).GetEpoch()
 			)
 			atxdb.EXPECT().GetEpochWeight(gomock.Any()).DoAndReturn(func(eid types.EpochID) (uint64, []types.ATXID, error) {
@@ -2092,8 +2093,8 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballots []*types.Ballot
 				atxs    []*types.ActivationTxHeader
 
-				refWeights = map[types.BallotID]weight{}
-				weights    = map[types.BallotID]weight{}
+				refWeights = map[types.BallotID]util.Weight{}
+				weights    = map[types.BallotID]util.Weight{}
 
 				ctrl  = gomock.NewController(t)
 				mdb   = mocks.NewMockblockDataProvider(ctrl)

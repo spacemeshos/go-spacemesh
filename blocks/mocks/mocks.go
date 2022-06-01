@@ -87,6 +87,21 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
 }
 
+// GetBallot mocks base method.
+func (m *MockmeshProvider) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*types.Ballot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockmeshProviderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockmeshProvider)(nil).GetBallot), arg0)
+}
+
 // HasBlock mocks base method.
 func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
 	m.ctrl.T.Helper()

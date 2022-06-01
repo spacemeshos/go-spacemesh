@@ -10,9 +10,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
@@ -24,9 +26,10 @@ func genTx(tb testing.TB, signer *signing.EdSigner, receiver types.Address, nonc
 }
 
 type step struct {
-	txs     []*types.Transaction
-	failed  []int
-	rewards []types.AnyReward
+	txs          []*types.Transaction
+	failed       []int
+	rewards      []types.AnyReward
+	finalRewards []*types.Reward
 
 	revert uint32 // number of the layer
 	state  map[types.Address]uint64
@@ -37,10 +40,13 @@ func TestLayers(t *testing.T) {
 	rng := rand.New(rand.NewSource(101))
 	signers := make([]*signing.EdSigner, 10)
 	addresses := make([]types.Address, len(signers))
+	weights := make([]types.RatNum, len(signers))
 	for i := range signers {
 		signer := signing.NewEdSignerFromRand(rng)
 		signers[i] = signer
 		addresses[i] = types.BytesToAddress(signer.PublicKey().Bytes())
+		weight := util.WeightFromFloat64(13.37).Add(util.WeightFromInt64(int64(i)))
+		weights[i] = types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}
 	}
 
 	for _, tc := range []struct {
@@ -52,13 +58,18 @@ func TestLayers(t *testing.T) {
 			desc: "Rewards",
 			steps: []step{
 				{
+					// no transactions are applied
 					rewards: []types.AnyReward{
-						{Address: addresses[0], Amount: 100},
-						{Address: addresses[1], Amount: 200},
+						{Coinbase: addresses[0], Weight: weights[0]},
+						{Coinbase: addresses[1], Weight: weights[1]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[0], TotalReward: 24098774333093, LayerReward: 24098774333093},
+						{Coinbase: addresses[1], TotalReward: 25901225666906, LayerReward: 25901225666906},
 					},
 					state: map[types.Address]uint64{
-						addresses[0]: 100,
-						addresses[1]: 200,
+						addresses[0]: 24098774333093,
+						addresses[1]: 25901225666906,
 					},
 				},
 				{
@@ -66,9 +77,15 @@ func TestLayers(t *testing.T) {
 						genTx(t, signers[0], addresses[2], 0, 50, 10),
 						genTx(t, signers[1], addresses[2], 0, 50, 10),
 					},
+					rewards: []types.AnyReward{
+						{Coinbase: addresses[1], Weight: weights[1]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[1], TotalReward: 50000000000020, LayerReward: 50000000000000},
+					},
 					state: map[types.Address]uint64{
-						addresses[0]: 40,
-						addresses[1]: 140,
+						addresses[0]: 24098774333033,
+						addresses[1]: 75901225666866,
 						addresses[2]: 100,
 					},
 				},
@@ -78,21 +95,29 @@ func TestLayers(t *testing.T) {
 			desc: "RewardsSameCoinbase",
 			steps: []step{
 				{
+					// no transactions are applied
 					rewards: []types.AnyReward{
-						{Address: addresses[0], Amount: 100},
-						{Address: addresses[0], Amount: 100},
+						{Coinbase: addresses[0], Weight: weights[0]},
+						{Coinbase: addresses[0], Weight: weights[0]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[0], TotalReward: 50000000000000, LayerReward: 50000000000000},
 					},
 					state: map[types.Address]uint64{
-						addresses[0]: 200,
+						addresses[0]: 50000000000000,
 					},
 				},
 				{
+					// no transactions are applied
 					rewards: []types.AnyReward{
-						{Address: addresses[0], Amount: 100},
-						{Address: addresses[0], Amount: 100},
+						{Coinbase: addresses[0], Weight: weights[0]},
+						{Coinbase: addresses[0], Weight: weights[0]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[0], TotalReward: 50000000000000, LayerReward: 50000000000000},
 					},
 					state: map[types.Address]uint64{
-						addresses[0]: 400,
+						addresses[0]: 100000000000000,
 					},
 				},
 			},
@@ -114,9 +139,16 @@ func TestLayers(t *testing.T) {
 					txs: []*types.Transaction{
 						genTx(t, signers[1], addresses[0], 0, 90, 10),
 					},
+					rewards: []types.AnyReward{
+						{Coinbase: addresses[2], Weight: weights[2]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000010, LayerReward: 50000000000000},
+					},
 					state: map[types.Address]uint64{
 						addresses[0]: 190,
 						addresses[1]: 0,
+						addresses[2]: 50000000000010,
 					},
 				},
 			},
@@ -132,30 +164,41 @@ func TestLayers(t *testing.T) {
 					txs: []*types.Transaction{
 						genTx(t, signers[1], addresses[2], 0, 80, 10),
 					},
+					rewards: []types.AnyReward{
+						{Coinbase: addresses[2], Weight: weights[2]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000010, LayerReward: 50000000000000},
+					},
 					state: map[types.Address]uint64{
 						addresses[0]: 100,
 						addresses[1]: 10,
-						addresses[2]: 80,
+						addresses[2]: 50000000000090,
 					},
 				},
 				{
 					rewards: []types.AnyReward{
-						{Address: addresses[2], Amount: 100},
-						{Address: addresses[3], Amount: 100},
+						{Coinbase: addresses[3], Weight: weights[3]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[3], TotalReward: 50000000000000, LayerReward: 50000000000000},
 					},
 					state: map[types.Address]uint64{
 						addresses[0]: 100,
 						addresses[1]: 10,
-						addresses[2]: 180,
-						addresses[3]: 100,
+						addresses[2]: 50000000000090,
+						addresses[3]: 50000000000000,
 					},
 				},
 				{
 					revert: 1,
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000010, LayerReward: 50000000000000},
+					},
 					state: map[types.Address]uint64{
 						addresses[0]: 100,
 						addresses[1]: 10,
-						addresses[2]: 80,
+						addresses[2]: 50000000000090,
 					},
 				},
 			},
@@ -169,14 +212,21 @@ func TestLayers(t *testing.T) {
 			steps: []step{
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[0], addresses[3], 0, 100, 0),
-						genTx(t, signers[0], addresses[1], 3, 100, 0),
-						genTx(t, signers[2], addresses[3], 0, 100, 0),
+						genTx(t, signers[0], addresses[3], 0, 100, 100),
+						genTx(t, signers[0], addresses[1], 3, 100, 100),
+						genTx(t, signers[2], addresses[3], 0, 100, 100),
+					},
+					rewards: []types.AnyReward{
+						{Coinbase: addresses[2], Weight: weights[2]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000100, LayerReward: 50000000000000},
 					},
 					failed: []int{1, 2},
 					state: map[types.Address]uint64{
-						addresses[0]: 900,
+						addresses[0]: 800,
 						addresses[1]: 1000,
+						addresses[2]: 50000000000100,
 						addresses[3]: 100,
 					},
 				},
@@ -190,14 +240,20 @@ func TestLayers(t *testing.T) {
 			steps: []step{
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[0], addresses[1], 0, 100, 0),
-						genTx(t, signers[0], addresses[2], 1, 100, 0),
-						genTx(t, signers[0], addresses[3], 2, 100, 0),
+						genTx(t, signers[0], addresses[1], 0, 100, 1),
+						genTx(t, signers[0], addresses[2], 1, 100, 1),
+						genTx(t, signers[0], addresses[3], 2, 100, 1),
+					},
+					rewards: []types.AnyReward{
+						{Coinbase: addresses[2], Weight: weights[2]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000003, LayerReward: 50000000000000},
 					},
 					state: map[types.Address]uint64{
-						addresses[0]: 700,
+						addresses[0]: 697,
 						addresses[1]: 100,
-						addresses[2]: 100,
+						addresses[2]: 50000000000103,
 						addresses[3]: 100,
 					},
 				},
@@ -211,14 +267,20 @@ func TestLayers(t *testing.T) {
 			steps: []step{
 				{
 					txs: []*types.Transaction{
-						genTx(t, signers[0], addresses[1], 2, 100, 0),
-						genTx(t, signers[0], addresses[2], 0, 100, 0),
-						genTx(t, signers[0], addresses[3], 1, 100, 0),
+						genTx(t, signers[0], addresses[1], 2, 100, 1),
+						genTx(t, signers[0], addresses[2], 0, 100, 1),
+						genTx(t, signers[0], addresses[3], 1, 100, 1),
+					},
+					rewards: []types.AnyReward{
+						{Coinbase: addresses[2], Weight: weights[2]},
+					},
+					finalRewards: []*types.Reward{
+						{Coinbase: addresses[2], TotalReward: 50000000000003, LayerReward: 50000000000000},
 					},
 					state: map[types.Address]uint64{
-						addresses[0]: 700,
+						addresses[0]: 697,
 						addresses[1]: 100,
-						addresses[2]: 100,
+						addresses[2]: 50000000000103,
 						addresses[3]: 100,
 					},
 				},
@@ -233,17 +295,17 @@ func TestLayers(t *testing.T) {
 			for _, s := range tc.steps {
 				base = base.Add(1)
 
-				if s.revert == 0 {
+				if s.revert > 0 {
+					base = types.GetEffectiveGenesis().Add(s.revert)
+					_, err := vm.Revert(base)
+					require.NoError(t, err)
+				} else if len(s.rewards) > 0 {
 					failed, err := vm.ApplyLayer(base, s.txs, s.rewards)
 					require.NoError(t, err)
 					require.Len(t, failed, len(s.failed))
 					for i, pos := range s.failed {
 						require.Equal(t, s.txs[pos], failed[i])
 					}
-				} else {
-					base = types.GetEffectiveGenesis().Add(s.revert)
-					_, err := vm.Revert(base)
-					require.NoError(t, err)
 				}
 
 				accounts, err := vm.GetAllAccounts()
@@ -252,6 +314,18 @@ func TestLayers(t *testing.T) {
 				for _, account := range accounts {
 					require.Equal(t, int(s.state[account.Address]), int(account.Balance))
 				}
+				var totalLayerRewards uint64
+				for _, r := range s.finalRewards {
+					got, err := rewards.List(db, r.Coinbase)
+					require.NoError(t, err)
+					require.NotEmpty(t, got)
+					// the last one should be the latest layer
+					last := got[len(got)-1]
+					expected := r
+					expected.Layer = base
+					require.Equal(t, expected, last)
+				}
+				require.LessOrEqual(t, totalLayerRewards, calculateLayerReward(vm.cfg))
 			}
 		})
 	}
@@ -277,36 +351,36 @@ func TestLayerHash(t *testing.T) {
 	rng := rand.New(rand.NewSource(101))
 	signers := make([]*signing.EdSigner, 4)
 	addresses := make([]types.Address, len(signers))
+	weights := make([]types.RatNum, len(signers))
 	for i := range signers {
 		signer := signing.NewEdSignerFromRand(rng)
 		signers[i] = signer
 		addresses[i] = types.BytesToAddress(signer.PublicKey().Bytes())
+		weight := util.WeightFromFloat64(13.37).Add(util.WeightFromInt64(int64(i)))
+		weights[i] = types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}
 	}
 
-	rewards := []types.AnyReward{
-		{
-			Address: addresses[0], Amount: 100,
-		},
-		{
-			Address: addresses[1], Amount: 1000,
-		},
+	blkRewards := []types.AnyReward{
+		{Coinbase: addresses[0], Weight: weights[0]},
+		{Coinbase: addresses[1], Weight: weights[1]},
 	}
-	_, err := vm.ApplyLayer(types.NewLayerID(1), nil, rewards)
+
+	_, err := vm.ApplyLayer(types.NewLayerID(1), nil, blkRewards)
 	require.NoError(t, err)
 	root, err := vm.GetStateRoot()
 	require.NoError(t, err)
 	require.NotEqual(t, root, types.Hash32{})
-	require.Equal(t, expectedHash(t, 100, 1000), root)
+	require.Equal(t, expectedHash(t, 24098774333093, 25901225666906), root)
 
 	txs := []*types.Transaction{
 		genTx(t, signers[0], addresses[2], 0, 50, 0),
 		genTx(t, signers[0], addresses[3], 1, 50, 0),
 	}
 
-	_, err = vm.ApplyLayer(types.NewLayerID(2), txs, rewards)
+	_, err = vm.ApplyLayer(types.NewLayerID(2), txs, blkRewards)
 	require.NoError(t, err)
 	root, err = vm.GetStateRoot()
 	require.NoError(t, err)
 	require.NotEqual(t, root, types.Hash32{})
-	require.Equal(t, expectedHash(t, 100, 50, 50, 2000), root)
+	require.Equal(t, expectedHash(t, 48197548666086, 50, 50, 51802451333812), root)
 }
