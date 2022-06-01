@@ -11,7 +11,7 @@ TEST_LOG_LEVEL ?=
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD | sed 's/\//-/g')
 
 export GO111MODULE := on
 export CGO_ENABLED := 1
