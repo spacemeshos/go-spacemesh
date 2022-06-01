@@ -1,4 +1,4 @@
-package peerexchange
+package addressbook
 
 import (
 	"crypto/sha256"
@@ -9,80 +9,43 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const (
-	// needAddressThreshold is the number of addresses under which the
-	// address manager will claim to need more addresses.
-	needAddressThreshold = 1000
+// AddrBook provides a concurrency safe address manager for caching potential
+// peers on the network. based on bitcoin's AddrBook.
+type AddrBook struct {
+	host   host.Host
+	cfg    *Config
+	logger log.Log
+	path   string
 
-	// triedBucketSize is the maximum number of addresses in each
-	// tried address bucket.
-	triedBucketSize = 256
+	mu              sync.RWMutex
+	rand            *rand.Rand
+	key             [32]byte
+	addrIndex       map[peer.ID]*knownAddress
+	addrNew         []map[peer.ID]*knownAddress
+	addrTried       []map[peer.ID]*knownAddress
+	anchorPeers     []*knownAddress // Anchor peers. store active connections, and use some of them when node starts.
+	lastAnchorPeers []*knownAddress // Anchor peers from last node start. Used only for bootstrap. New connections come to anchorPeers
 
-	// triedBucketCount is the number of buckets we split tried
-	// addresses over.
-	triedBucketCount = 64
+	nTried int
+	nNew   int
+}
 
-	// newBucketSize is the maximum number of addresses in each new address
-	// bucket.
-	newBucketSize = 120
-
-	// newBucketCount is the number of buckets that we spread new addresses
-	// over.
-	newBucketCount = 1024
-
-	// triedBucketsPerGroup is the number of tried buckets over which an
-	// address group will be spread.
-	triedBucketsPerGroup = 8
-
-	// newBucketsPerGroup is the number of new buckets over which an
-	// source address group will be spread.
-	newBucketsPerGroup = 64
-
-	// newBucketsPerAddress is the number of buckets a frequently seen new
-	// address may end up in.
-	newBucketsPerAddress = 8
-
-	// numMissingDays is the number of days before which we assume an
-	// address has vanished if we have not seen it announced  in that long.
-	numMissingDays = 30
-
-	// numRetries is the number of tried without a single success before
-	// we assume an address is bad.
-	numRetries = 3
-
-	// maxFailures is the maximum number of failures we will accept without
-	// a success before considering an address bad.
-	maxFailures = 10
-
-	// minBadDays is the number of days since the last success before we
-	// will consider evicting an address.
-	minBadDays = 7
-
-	// getAddrMax is the most addresses that we will send in response
-	// to a getAddr (in practice the most addresses we will return from a
-	// call to AddressCache()).
-	getAddrMax = 300
-
-	// getAddrPercent is the percentage of total addresses known that we
-	// will share with a call to AddressCache.
-	getAddrPercent = 23
-)
-
-// newAddrBook returns a new address manager.
+// NewAddrBook returns a new address manager.
 // Use Start to begin processing asynchronous address updates.
-func newAddrBook(cfg Config, logger log.Log) *addrBook {
-	// TODO use config for const params.
+func NewAddrBook(cfg *Config, logger log.Log) *AddrBook {
 	path := ""
 	if len(cfg.DataDir) != 0 {
 		path = filepath.Join(cfg.DataDir, peersFileName)
 	}
-	am := addrBook{
+	am := AddrBook{
+		cfg:    cfg,
 		logger: logger,
 		path:   path,
 		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -92,26 +55,9 @@ func newAddrBook(cfg Config, logger log.Log) *addrBook {
 	return &am
 }
 
-// addrBook provides a concurrency safe address manager for caching potential
-// peers on the network. based on bitcoin's addrBook.
-type addrBook struct {
-	logger log.Log
-	path   string
-
-	mu        sync.RWMutex
-	rand      *rand.Rand
-	key       [32]byte
-	addrIndex map[peer.ID]*knownAddress
-	addrNew   [newBucketCount]map[peer.ID]*knownAddress
-	addrTried [triedBucketCount]map[peer.ID]*knownAddress
-
-	nTried int
-	nNew   int
-}
-
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
-func (a *addrBook) updateAddress(addr, src *addrInfo) {
+func (a *AddrBook) updateAddress(addr, src *AddrInfo) {
 	routableAddr := IsRoutable(addr.IP) || IsDNSAddress(addr.RawAddr)
 	if !routableAddr && IsRoutable(src.IP) {
 		a.logger.Debug("skipped non routable address received from routable ip",
@@ -122,7 +68,6 @@ func (a *addrBook) updateAddress(addr, src *addrInfo) {
 	}
 	ka := a.lookup(addr.ID)
 	if ka != nil {
-		// TODO: only update addresses periodically.
 		// Update the last seen time and services.
 		// note that to prevent causing excess garbage on getaddr
 		// messages the netaddresses in addrmaanger are *immutable*,
@@ -144,7 +89,7 @@ func (a *addrBook) updateAddress(addr, src *addrInfo) {
 		}
 
 		// Already at our max?
-		if ka.refs == newBucketsPerAddress {
+		if ka.refs == a.cfg.NewBucketsPerAddress {
 			return
 		}
 
@@ -171,7 +116,7 @@ func (a *addrBook) updateAddress(addr, src *addrInfo) {
 	}
 
 	// Enforce max addresses.
-	if len(a.addrNew[bucket]) > newBucketSize {
+	if len(a.addrNew[bucket]) >= a.cfg.NewBucketSize {
 		a.logger.Debug("new bucket is full, expiring old")
 		a.expireNew(bucket)
 	}
@@ -184,7 +129,7 @@ func (a *addrBook) updateAddress(addr, src *addrInfo) {
 }
 
 // Lookup searches for an address using a public key. returns *Info.
-func (a *addrBook) Lookup(addr peer.ID) *addrInfo {
+func (a *AddrBook) Lookup(addr peer.ID) *AddrInfo {
 	a.mu.Lock()
 	d := a.lookup(addr)
 	a.mu.Unlock()
@@ -194,12 +139,12 @@ func (a *addrBook) Lookup(addr peer.ID) *addrInfo {
 	return d.Addr
 }
 
-func (a *addrBook) lookup(addr peer.ID) *knownAddress {
+func (a *AddrBook) lookup(addr peer.ID) *knownAddress {
 	return a.addrIndex[addr]
 }
 
-// moves a knownaddress to a tried bucket.
-func (a *addrBook) toTried(ka *knownAddress) {
+// toTried moves a knownAddress to a tried bucket.
+func (a *AddrBook) toTried(ka *knownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
 		return
@@ -230,7 +175,7 @@ func (a *addrBook) toTried(ka *knownAddress) {
 	bucket := a.getTriedBucket(addr.IP)
 
 	// Room in this tried bucket?
-	if len(a.addrTried[bucket]) < triedBucketSize {
+	if len(a.addrTried[bucket]) < a.cfg.TriedBucketSize {
 		ka.tried = true
 		a.addrTried[bucket][addr.ID] = ka
 		a.nTried++
@@ -246,7 +191,7 @@ func (a *addrBook) toTried(ka *knownAddress) {
 
 	// If no room in the original bucket, we put it in a bucket we just
 	// freed up a space in.
-	if len(a.addrNew[newBucket]) >= newBucketSize {
+	if len(a.addrNew[newBucket]) >= a.cfg.NewBucketSize {
 		newBucket = oldBucket
 	}
 
@@ -271,8 +216,8 @@ func (a *addrBook) toTried(ka *knownAddress) {
 
 // pickTried selects an address from the tried bucket to be evicted.
 // We just choose the eldest. Bitcoind selects 4 random entries and throws away
-// the older of them.
-func (a *addrBook) pickTried(bucket int) *knownAddress {
+// the oldest of them.
+func (a *AddrBook) pickTried(bucket int) *knownAddress {
 	var oldest *knownAddress
 	for _, ka := range a.addrTried[bucket] {
 		if oldest == nil || oldest.LastSeen.After(ka.LastSeen) {
@@ -283,46 +228,108 @@ func (a *addrBook) pickTried(bucket int) *knownAddress {
 }
 
 // NumAddresses returns the number of addresses known to the address manager.
-func (a *addrBook) numAddresses() int {
+func (a *AddrBook) numAddresses() int {
 	return a.nTried + a.nNew
 }
 
 // NumAddresses returns the number of addresses known to the address manager.
-func (a *addrBook) NumAddresses() int {
+func (a *AddrBook) NumAddresses() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.numAddresses()
 }
 
+// getAddressFromBuckets selects an address from given slice of buckets.
+func (a *AddrBook) getAddressFromBuckets(buckets []map[peer.ID]*knownAddress) *knownAddress {
+	nonEmptyBuckets := make([]int, 0, len(buckets)) // get non-empty buckets ids for reduce extracting time.
+	for i := range buckets {
+		if len(buckets[i]) > 0 {
+			nonEmptyBuckets = append(nonEmptyBuckets, i)
+		}
+	}
+	if len(nonEmptyBuckets) == 0 {
+		return nil // no addresses to extract.
+	}
+	large := 1 << 30
+	factor := 1.0
+	for {
+		// pick a random bucket.
+		bucket := nonEmptyBuckets[a.rand.Intn(len(nonEmptyBuckets))]
+
+		// Pick a random entry in it. Structure is map[peer.ID]*knownAddress, so we need loop to gen rand index.
+		var ka *knownAddress
+		nth := a.rand.Intn(len(buckets[bucket]))
+		for _, value := range buckets[bucket] {
+			if nth == 0 {
+				ka = value
+			}
+			nth--
+		}
+
+		randVal := a.rand.Intn(large)
+		if float64(randVal) < (factor * ka.Chance() * float64(large)) {
+			return ka
+		}
+		factor *= 1.2
+	}
+}
+
 // AddressCache returns the current address cache.  It must be treated as
 // read-only (but since it is a copy now, this is not as dangerous).
-func (a *addrBook) AddressCache() []*addrInfo {
-	// TODO : take from buckets
+func (a *AddrBook) AddressCache() []*AddrInfo {
+	allAddr := a.GetAddresses()
 
-	allAddr := a.getAddresses()
-
-	numAddresses := len(allAddr) * getAddrPercent / 100
-	if numAddresses > getAddrMax {
-		numAddresses = getAddrMax
+	numAddresses := len(allAddr) * a.cfg.GetAddrPercent / 100
+	if numAddresses > a.cfg.GetAddrMax {
+		numAddresses = a.cfg.GetAddrMax
 	} else if numAddresses == 0 {
 		numAddresses = len(allAddr)
 	}
 
-	// Fisher-Yates shuffle the array. We only need to do the first
-	// `numAddresses' since we are throwing the rest.
+	result := make([]*AddrInfo, 0, numAddresses)
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	for i := 0; i < numAddresses; i++ {
-		// pick a number between current index and the end
-		j := rand.Intn(len(allAddr)-i) + i
-		allAddr[i], allAddr[j] = allAddr[j], allAddr[i]
+		var ka *knownAddress
+		// Use a 50% chance for choosing between tried and new table entries.
+		if a.nTried > 0 && (a.nNew == 0 || a.rand.Intn(2) == 0) {
+			ka = a.getAddressFromBuckets(a.addrTried)
+		} else {
+			ka = a.getAddressFromBuckets(a.addrNew)
+		}
+		if ka != nil {
+			result = append(result, ka.Addr)
+		}
 	}
-
-	// slice off the limit we are willing to share.
-	return allAddr[:numAddresses]
+	return result
 }
 
-// getAddresses returns all of the addresses currently found within the
-// manager's address cache.
-func (a *addrBook) getAddresses() []*addrInfo {
+// BootstrapAddressCache run AddressCache and add Config.AnchorPeersCount addresses from anchor peers.
+func (a *AddrBook) BootstrapAddressCache() []*AddrInfo {
+	addresses := a.AddressCache()
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if len(a.lastAnchorPeers) == 0 {
+		return addresses
+	}
+
+	anchorPeers := make([]*knownAddress, len(a.lastAnchorPeers))
+	copy(anchorPeers, a.lastAnchorPeers)
+
+	rand.Seed(int64(crypto.GetRandomUInt32(16384)))
+	rand.Shuffle(len(anchorPeers), func(i, j int) {
+		anchorPeers[i], anchorPeers[j] = anchorPeers[j], anchorPeers[i]
+	})
+
+	for _, ka := range anchorPeers[:a.cfg.AnchorPeersCount] {
+		addresses = append(addresses, ka.Addr)
+	}
+	return addresses
+}
+
+// GetAddresses returns all the addresses currently found within the manager's address cache.
+func (a *AddrBook) GetAddresses() []*AddrInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -331,7 +338,7 @@ func (a *addrBook) getAddresses() []*addrInfo {
 		return nil
 	}
 
-	addrs := make([]*addrInfo, 0, addrIndexLen)
+	addrs := make([]*AddrInfo, 0, addrIndexLen)
 	for _, v := range a.addrIndex {
 		addrs = append(addrs, v.Addr)
 	}
@@ -339,7 +346,8 @@ func (a *addrBook) getAddresses() []*addrInfo {
 	return addrs
 }
 
-func (a *addrBook) GetAllAddressesUsedBefore(date time.Time) []*addrInfo {
+// GetAllAddressesUsedBefore returns all the addresses used before the given time.
+func (a *AddrBook) GetAllAddressesUsedBefore(date time.Time) []*AddrInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -348,7 +356,7 @@ func (a *addrBook) GetAllAddressesUsedBefore(date time.Time) []*addrInfo {
 		return nil
 	}
 
-	addrs := make([]*addrInfo, 0, addrIndexLen)
+	addrs := make([]*AddrInfo, 0, addrIndexLen)
 	for _, v := range a.addrIndex {
 		if v.LastSeen.Before(date) {
 			addrs = append(addrs, v.Addr)
@@ -359,7 +367,7 @@ func (a *addrBook) GetAllAddressesUsedBefore(date time.Time) []*addrInfo {
 
 // expireNew makes space in the new buckets by expiring the really bad entries.
 // If no bad entries are available we look at a few and remove the oldest.
-func (a *addrBook) expireNew(bucket int) {
+func (a *AddrBook) expireNew(bucket int) {
 	// First see if there are any entries that are so bad we can just throw
 	// them away. otherwise we throw away the oldest entry in the cache.
 	// Bitcoind here chooses four random and just throws the oldest of
@@ -367,7 +375,7 @@ func (a *addrBook) expireNew(bucket int) {
 	// use that information instead.
 	var oldest *knownAddress
 	for k, v := range a.addrNew[bucket] {
-		if v.isBad() {
+		if a.isBad(v) {
 			a.logger.Debug("expiring bad address %v", k)
 			delete(a.addrNew[bucket], k)
 			v.refs--
@@ -401,7 +409,7 @@ func doubleHash(buf []byte) []byte {
 	return second[:]
 }
 
-func (a *addrBook) getNewBucket(netAddr, srcAddr net.IP) int {
+func (a *AddrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 	// bitcoind:
 	// doublesha256(key + sourcegroup + int64(doublesha256(key + group + sourcegroup))%bucket_per_source_group) % num_new_buckets
 
@@ -411,7 +419,7 @@ func (a *addrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 	data1 = append(data1, []byte(GroupKey(srcAddr))...)
 	hash1 := doubleHash(data1)
 	hash64 := binary.LittleEndian.Uint64(hash1)
-	hash64 %= newBucketsPerGroup
+	hash64 %= a.cfg.NewBucketsPerGroup
 	var hashbuf [8]byte
 	binary.LittleEndian.PutUint64(hashbuf[:], hash64)
 	var data2 []byte
@@ -420,10 +428,10 @@ func (a *addrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 	data2 = append(data2, hashbuf[:]...)
 
 	hash2 := doubleHash(data2)
-	return int(binary.LittleEndian.Uint64(hash2) % newBucketCount)
+	return int(binary.LittleEndian.Uint64(hash2) % a.cfg.NewBucketCount)
 }
 
-func (a *addrBook) getTriedBucket(netAddr net.IP) int {
+func (a *AddrBook) getTriedBucket(netAddr net.IP) int {
 	// bitcoind hashes this as:
 	// doublesha256(key + group + truncate_to_64bits(doublesha256(key)) % buckets_per_group) % num_buckets
 	var data1 []byte
@@ -431,7 +439,7 @@ func (a *addrBook) getTriedBucket(netAddr net.IP) int {
 	data1 = append(data1, []byte(netAddr)...)
 	hash1 := doubleHash(data1)
 	hash64 := binary.LittleEndian.Uint64(hash1)
-	hash64 %= triedBucketsPerGroup
+	hash64 %= a.cfg.TriedBucketsPerGroup
 	var hashbuf [8]byte
 	binary.LittleEndian.PutUint64(hashbuf[:], hash64)
 	var data2 []byte
@@ -440,13 +448,13 @@ func (a *addrBook) getTriedBucket(netAddr net.IP) int {
 	data2 = append(data2, hashbuf[:]...)
 
 	hash2 := doubleHash(data2)
-	return int(binary.LittleEndian.Uint64(hash2) % triedBucketCount)
+	return int(binary.LittleEndian.Uint64(hash2) % a.cfg.TriedBucketCount)
 }
 
 // AddAddresses adds new addresses to the address manager.  It enforces a max
 // number of addresses and silently ignores duplicate addresses.  It is
 // safe for concurrent access.
-func (a *addrBook) AddAddresses(addrs []*addrInfo, src *addrInfo) {
+func (a *AddrBook) AddAddresses(addrs []*AddrInfo, src *AddrInfo) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -458,15 +466,14 @@ func (a *addrBook) AddAddresses(addrs []*addrInfo, src *addrInfo) {
 // AddAddress adds a new address to the address manager.  It enforces a max
 // number of addresses and silently ignores duplicate addresses.  It is
 // safe for concurrent access.
-func (a *addrBook) AddAddress(addr, src *addrInfo) {
+func (a *AddrBook) AddAddress(addr, src *AddrInfo) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.updateAddress(addr, src)
 }
 
-// Attempt increases the given address' attempt counter and updates
-// the last attempt time.
-func (a *addrBook) Attempt(pid peer.ID) {
+// Attempt increases the given address' attempt counter and updates the last attempt time.
+func (a *AddrBook) Attempt(pid peer.ID) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	ka := a.lookup(pid)
@@ -482,7 +489,7 @@ func (a *addrBook) Attempt(pid peer.ID) {
 // Good marks the given address as good.  To be called after a successful
 // connection and version exchange.  If the address is unknown to the address
 // manager it will be ignored.
-func (a *addrBook) Good(pid peer.ID) {
+func (a *AddrBook) Good(pid peer.ID) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	ka := a.lookup(pid)
@@ -498,8 +505,18 @@ func (a *addrBook) Good(pid peer.ID) {
 	a.toTried(ka)
 }
 
-// RemoveAddress.
-func (a *addrBook) RemoveAddress(pid peer.ID) {
+// Connected adds the given address to anchor list. Will take some addresses this when node will start.
+func (a *AddrBook) Connected(peerID peer.ID) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	ka, ok := a.addrIndex[peerID]
+	if ok {
+		a.anchorPeers = append(a.anchorPeers, ka)
+	}
+}
+
+// RemoveAddress removes the address from the manager.
+func (a *AddrBook) RemoveAddress(pid peer.ID) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -521,17 +538,26 @@ func (a *addrBook) RemoveAddress(pid peer.ID) {
 		}
 	}
 
+	for i, ka := range a.anchorPeers {
+		if ka.Addr.ID == pid {
+			a.anchorPeers = append(a.anchorPeers[:i], a.anchorPeers[i+1:]...)
+			break
+		}
+	}
+
 	delete(a.addrIndex, pid)
 }
 
-// reset resets the address manager by reinitialising the random source
-// and allocating fresh empty bucket storage.
-func (a *addrBook) reset() {
+// reset resets the address manager by reinitialising the random source and allocating fresh empty bucket storage.
+func (a *AddrBook) reset() {
 	a.addrIndex = make(map[peer.ID]*knownAddress)
+	a.anchorPeers = make([]*knownAddress, 0)
+	a.lastAnchorPeers = make([]*knownAddress, 0)
+	a.addrNew = make([]map[peer.ID]*knownAddress, a.cfg.NewBucketCount)
+	a.addrTried = make([]map[peer.ID]*knownAddress, a.cfg.TriedBucketCount)
 
 	// fill key with bytes from a good random source.
-	err := crypto.GetRandomBytesToBuffer(32, a.key[:])
-	if err != nil {
+	if err := crypto.GetRandomBytesToBuffer(32, a.key[:]); err != nil {
 		a.logger.Panic("Error generating random bytes %v", err)
 	}
 

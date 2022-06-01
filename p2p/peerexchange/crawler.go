@@ -8,13 +8,14 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 )
 
 const maxConcurrentRequests = 3
 
 type queryResult struct {
-	Src    *addrInfo
-	Result []*addrInfo
+	Src    *addressbook.AddrInfo
+	Result []*addressbook.AddrInfo
 	Err    error
 }
 
@@ -23,11 +24,11 @@ type crawler struct {
 	logger log.Log
 	host   host.Host
 
-	book *addrBook
+	book *addressbook.AddrBook
 	disc *peerExchange
 }
 
-func newCrawler(h host.Host, book *addrBook, disc *peerExchange, logger log.Log) *crawler {
+func newCrawler(h host.Host, book *addressbook.AddrBook, disc *peerExchange, logger log.Log) *crawler {
 	return &crawler{
 		logger: logger,
 		host:   h,
@@ -39,7 +40,7 @@ func newCrawler(h host.Host, book *addrBook, disc *peerExchange, logger log.Log)
 // Bootstrap crawls the network until context is canceled or all reachable peers are crawled.
 func (r *crawler) Bootstrap(ctx context.Context) error {
 	seen := map[peer.ID]struct{}{r.host.ID(): {}}
-	servers := r.book.AddressCache()
+	servers := r.book.BootstrapAddressCache()
 	for _, srv := range servers {
 		seen[srv.ID] = struct{}{}
 	}
@@ -55,7 +56,7 @@ func (r *crawler) Bootstrap(ctx context.Context) error {
 			r.logger.Debug("crawl finished by timeout")
 			return err
 		}
-		var round []*addrInfo
+		var round []*addressbook.AddrInfo
 		for _, addr := range result {
 			if _, exist := seen[addr.ID]; !exist {
 				seen[addr.ID] = struct{}{}
@@ -66,9 +67,9 @@ func (r *crawler) Bootstrap(ctx context.Context) error {
 	}
 }
 
-func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, error) {
+func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([]*addressbook.AddrInfo, error) {
 	var (
-		out        []*addrInfo
+		out        []*addressbook.AddrInfo
 		seen       = map[peer.ID]struct{}{}
 		reschan    = make(chan queryResult)
 		pending, i int
@@ -89,7 +90,7 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 					// TODO(dshulyak) skip request if connection is inbound
 					err = r.host.Connect(ctx, *ainfo)
 				}
-				var res []*addrInfo
+				var res []*addressbook.AddrInfo
 				if err == nil {
 					res, err = r.disc.Request(gctx, addr.ID)
 				}
@@ -120,6 +121,7 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 			}
 			// TODO(dshulyak) will be correct to call after EventHandshakeComplete is received
 			r.book.Good(cr.Src.ID)
+			r.book.Connected(cr.Src.ID)
 			for _, a := range cr.Result {
 				if _, ok := seen[a.ID]; ok {
 					continue

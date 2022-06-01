@@ -1,4 +1,4 @@
-package peerexchange
+package addressbook
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 )
 
 // genRandomInfo generates addrInfo with valid multiaddr.
-func genRandomInfo(tb testing.TB, rng *rand.Rand) *addrInfo {
+func genRandomInfo(tb testing.TB, rng *rand.Rand) *AddrInfo {
 	tb.Helper()
 	pk, _, err := crypto.GenerateEd25519Key(rng)
 	require.NoError(tb, err)
@@ -33,18 +33,18 @@ func genRandomInfo(tb testing.TB, rng *rand.Rand) *addrInfo {
 	raw := fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ip, port, id)
 	addr, err := ma.NewMultiaddr(raw)
 	require.NoError(tb, err)
-	return &addrInfo{IP: ip, ID: id, RawAddr: raw, addr: addr}
+	return &AddrInfo{IP: ip, ID: id, RawAddr: raw, addr: addr}
 }
 
 func TestAddrBook_EncodeDecode(t *testing.T) {
 	var (
 		lg   = logtest.New(t)
 		cfg  = Config{DataDir: t.TempDir()}
-		book = newAddrBook(cfg, lg)
+		book = NewAddrBook(DefaultAddressBookConfigWithDataDir(cfg.DataDir), lg)
 		rng  = rand.New(rand.NewSource(time.Now().Unix()))
 	)
 
-	expected := map[peer.ID]*addrInfo{}
+	expected := map[peer.ID]*AddrInfo{}
 	for i := 0; i < 50; i++ {
 		info := genRandomInfo(t, rng)
 		expected[info.ID] = info
@@ -59,7 +59,7 @@ func TestAddrBook_EncodeDecode(t *testing.T) {
 	cancel()
 	book.Persist(ctx)
 
-	book = newAddrBook(cfg, lg)
+	book = NewAddrBook(DefaultAddressBookConfigWithDataDir(cfg.DataDir), lg)
 	for pid, info := range expected {
 		found := book.Lookup(pid)
 		require.Equal(t, info, found)

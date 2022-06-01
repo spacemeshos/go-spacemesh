@@ -1,4 +1,4 @@
-package peerexchange
+package addressbook
 
 import (
 	"fmt"
