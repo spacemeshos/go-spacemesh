@@ -17,8 +17,9 @@ type Context struct {
 	Principal Address
 	Method    uint8
 
-	Header Header
-	Args   scale.Encodable
+	ExpectedNonce Nonce
+	Header        Header
+	Args          scale.Encodable
 
 	consumed   uint64
 	transfered uint64
@@ -46,6 +47,11 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount > c.Account.Balance {
 		return ErrNoBalance
 	}
+	c.transfered += amount
+	if c.transfered > c.Header.MaxSpend {
+		return ErrMaxSpend
+	}
+
 	if c.changed == nil {
 		c.changed = map[Address]*Account{}
 	}
@@ -57,10 +63,6 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 		}
 		c.changed[to] = &loaded
 		account = &loaded
-	}
-	c.transfered += amount
-	if c.transfered > c.Header.MaxSpend {
-		return ErrMaxSpend
 	}
 
 	c.Account.Balance -= amount
@@ -77,6 +79,7 @@ func (c *Context) Consume(gas uint64) error {
 	if c.consumed > c.Header.MaxGas {
 		return ErrMaxGas
 	}
+
 	c.Account.Balance -= amount
 	return nil
 }

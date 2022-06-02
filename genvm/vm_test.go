@@ -218,6 +218,9 @@ func BenchmarkWallet(b *testing.B) {
 	b.Run("Accounts100k/Txs100k", func(b *testing.B) {
 		benchmarkWallet(b, 100_000, 100_000)
 	})
+	b.Run("Accounts100k/Txs1kk", func(b *testing.B) {
+		benchmarkWallet(b, 100_000, 1_000_000)
+	})
 }
 
 func benchmarkWallet(b *testing.B, accounts, n int) {

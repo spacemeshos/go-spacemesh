@@ -64,6 +64,7 @@ func (vm *VM) ApplyGenesis(genesis []types.Account) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Release()
 	for i := range genesis {
 		account := &genesis[i]
 		vm.logger.With().Info("genesis account", log.Inline(account))
@@ -71,7 +72,6 @@ func (vm *VM) ApplyGenesis(genesis []types.Account) error {
 			return fmt.Errorf("inserting genesis account %w", err)
 		}
 	}
-	defer tx.Release()
 	return tx.Commit()
 }
 
@@ -94,6 +94,10 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 		_, ctx, args, err := parse(vm.logger, ss, decoder)
 		if err != nil {
 			vm.logger.With().Warning("skipping transaction", log.Err(err))
+			skipped = append(skipped, tx)
+			continue
+		}
+		if ctx.ExpectedNonce != ctx.Header.Nonce {
 			skipped = append(skipped, tx)
 			continue
 		}
@@ -172,6 +176,7 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 		return nil, nil, nil, fmt.Errorf("failed to load state for principal %s: %w", principal, err)
 	}
 	logger.With().Debug("loaded account state", log.Inline(&account))
+	expected := core.Nonce{Counter: account.NextNonce()}
 
 	if method == 0 {
 		var template scale.Address
@@ -189,18 +194,16 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 		return nil, nil, nil, fmt.Errorf("unknown template %x", *account.Template)
 	}
 	ctx := &core.Context{
-		Loader:    loader,
-		Handler:   handler,
-		Account:   account,
-		Principal: principal,
-		Method:    method,
+		Loader:        loader,
+		Handler:       handler,
+		Account:       account,
+		Principal:     principal,
+		Method:        method,
+		ExpectedNonce: expected,
 	}
 	header, args, err := handler.Parse(ctx, method, decoder)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	if header.Nonce.Counter != account.NextNonce() {
-		return nil, nil, nil, core.ErrInvalidNonce
 	}
 	ctx.Template, err = handler.Init(method, args, account.State)
 	if err != nil {
