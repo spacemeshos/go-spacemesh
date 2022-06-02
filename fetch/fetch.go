@@ -225,6 +225,7 @@ func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, dbs map[Hint]databas
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		doneChan:        make(chan struct{}),
+		hashToPeers:     make(map[types.Hash32]*hashPeers),
 	}
 	// TODO(dshulyak) this is done for tests. needs to be mocked properly
 	if h != nil {
