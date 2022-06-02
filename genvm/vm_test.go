@@ -165,6 +165,46 @@ func TestSanity(t *testing.T) {
 	require.Empty(t, skipped)
 }
 
+func TestValidation(t *testing.T) {
+	tt := newTester(t).addAccounts(2).applyGenesis()
+	req := tt.Validation(tt.spawnWallet(0))
+	header, err := req.Parse()
+	require.NoError(t, err)
+	require.Empty(t, header.Nonce)
+	require.True(t, req.Verify())
+}
+
+func BenchmarkValidation(b *testing.B) {
+	tt := newTester(b).addAccounts(2).applyGenesis()
+	skipped, err := tt.Apply(types.NewLayerID(1), [][]byte{tt.spawnWallet(0)})
+	require.NoError(tt, err)
+	require.Empty(tt, skipped)
+
+	bench := func(b *testing.B, raw []byte) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			req := tt.Validation(raw)
+			_, err := req.Parse()
+			if err != nil {
+				b.Fatal(err)
+			}
+			if !req.Verify() {
+				b.Fatalf("expected Verify to return true")
+			}
+		}
+	}
+
+	b.Run("SpawnWallet", func(b *testing.B) {
+		bench(b, tt.spawnWallet(1))
+	})
+
+	b.Run("SpendWallet", func(b *testing.B) {
+		bench(b, tt.sendWallet(0, 1, 10))
+	})
+}
+
 func BenchmarkWallet(b *testing.B) {
 	b.Run("Accounts100k/Txs100k", func(b *testing.B) {
 		benchmarkWallet(b, 100_000, 100_000)
