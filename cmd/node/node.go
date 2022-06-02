@@ -551,10 +551,13 @@ func (app *App) initServices(ctx context.Context,
 
 	proposalListener := proposals.NewHandler(fetcherWrapped, beaconProtocol, atxDB, msh, proposalDB,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithLayerPerEpoch(layersPerEpoch),
-		proposals.WithLayerSize(layerSize),
-		proposals.WithGoldenATXID(goldenATXID),
-		proposals.WithMaxExceptions(trtlCfg.MaxExceptions))
+		proposals.WithConfig(proposals.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+			GoldenATXID:    goldenATXID,
+			MaxExceptions:  trtlCfg.MaxExceptions,
+			Hdist:          trtlCfg.Hdist,
+		}))
 
 	blockHandller := blocks.NewHandler(fetcherWrapped, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))

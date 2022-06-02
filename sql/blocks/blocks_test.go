@@ -182,3 +182,27 @@ func TestContextualValidity(t *testing.T) {
 		require.True(t, validity.Validity)
 	}
 }
+
+func TestLayer(t *testing.T) {
+	db := sql.InMemory()
+	lid1 := types.NewLayerID(11)
+	block1 := types.NewExistingBlock(
+		types.BlockID{1, 1},
+		types.InnerBlock{LayerIndex: lid1},
+	)
+	lid2 := lid1.Add(1)
+	block2 := types.NewExistingBlock(
+		types.BlockID{2, 2},
+		types.InnerBlock{LayerIndex: lid2},
+	)
+
+	for _, b := range []*types.Block{block1, block2} {
+		require.NoError(t, Add(db, b))
+	}
+
+	for _, b := range []*types.Block{block1, block2} {
+		lid, err := Layer(db, b.ID())
+		require.NoError(t, err)
+		require.Equal(t, b.LayerIndex, lid)
+	}
+}
