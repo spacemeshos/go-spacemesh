@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -50,6 +51,30 @@ func (vm *VM) Validation(raw []byte) *Request {
 	}
 }
 
+func (vm *VM) GetNonce(address core.Address) (core.Nonce, error) {
+	account, err := accounts.Latest(vm.db, types.Address(address))
+	if err != nil {
+		return core.Nonce{}, err
+	}
+	return core.Nonce{Counter: account.NextNonce()}, nil
+}
+
+func (vm *VM) ApplyGenesis(genesis []types.Account) error {
+	tx, err := vm.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	for i := range genesis {
+		account := &genesis[i]
+		vm.logger.With().Info("genesis account", log.Inline(account))
+		if err := accounts.Update(tx, account); err != nil {
+			return fmt.Errorf("inserting genesis account %w", err)
+		}
+	}
+	defer tx.Release()
+	return tx.Commit()
+}
+
 // Apply transactions.
 func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 	tx, err := vm.db.Tx(context.Background())
@@ -62,12 +87,15 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
 		skipped [][]byte
+		start   = time.Now()
 	)
 	for _, tx := range txs {
 		rd.Reset(tx)
-		_, ctx, args, err := parse(ss, decoder)
+		_, ctx, args, err := parse(vm.logger, ss, decoder)
 		if err != nil {
+			vm.logger.With().Warning("skipping transaction", log.Err(err))
 			skipped = append(skipped, tx)
+			continue
 		}
 		ctx.Handler.Exec(ctx, ctx.Method, args)
 		if err := ctx.Apply(ss); err != nil {
@@ -75,7 +103,8 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 		}
 	}
 	ss.IterateChanged(func(account *core.Account) bool {
-		account.Layer = lid // TODO layer probably should be a part of context
+		account.Layer = lid
+		vm.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
 		return err == nil
 	})
@@ -85,6 +114,10 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	vm.logger.With().Info("applied transactions", lid,
+		log.Int("count", len(txs)-len(skipped)),
+		log.Duration("duration", time.Since(start)),
+	)
 	return skipped, nil
 }
 
@@ -97,7 +130,7 @@ type Request struct {
 }
 
 func (r *Request) Parse() (*core.Header, error) {
-	header, ctx, _, err := parse(core.NewStagedState(r.vm.db), r.decoder)
+	header, ctx, _, err := parse(r.vm.logger, core.NewStagedState(r.vm.db), r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +145,7 @@ func (r *Request) Verify() bool {
 	return verify(r.ctx, r.raw)
 }
 
-func parse(loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, any, error) {
+func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, any, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, err
@@ -131,8 +164,9 @@ func parse(loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *co
 	}
 	account, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load stte for principal %s: %w", principal, err)
+		return nil, nil, nil, fmt.Errorf("failed to load state for principal %s: %w", principal, err)
 	}
+	logger.With().Debug("loaded account state", log.Inline(&account))
 
 	if method == 0 {
 		var template scale.Address
@@ -142,12 +176,12 @@ func parse(loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *co
 		account.Template = &template
 	}
 	if account.Template == nil {
-		return nil, nil, nil, errors.New("account should be spawned first")
+		return nil, nil, nil, errors.New("account is not spawned")
 	}
 
 	handler := registry.Get(*account.Template)
 	if handler == nil {
-		return nil, nil, nil, errors.New("unknown template")
+		return nil, nil, nil, fmt.Errorf("unknown template %x", *account.Template)
 	}
 	ctx := &core.Context{
 		Loader:    loader,
@@ -161,6 +195,7 @@ func parse(loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *co
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	header.Principal = principal
 	ctx.Args = args
 	ctx.Header = header
 	return &header, ctx, args, nil

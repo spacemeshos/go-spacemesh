@@ -10,6 +10,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 )
 
+const (
+	gasParse = 10
+	gasSpawn = 100
+	gasSpend = 50
+)
+
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 1
 	registry.Register(TemplateAddress, &api{})
@@ -24,7 +30,7 @@ type api struct{}
 
 func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable) {
 	// TODO rethink cost approach
-	ctx.Consume(10)
+	header.MaxGas += gasParse
 	switch method {
 	case 0:
 		var p SpawnPayload
@@ -33,6 +39,7 @@ func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (he
 		}
 		args = &p.Arguments
 		header.GasPrice = uint64(p.GasPrice)
+		header.MaxGas += gasSpawn
 	case 1:
 		var p SpendPayload
 		if _, err := p.DecodeScale(decoder); err != nil {
@@ -42,7 +49,11 @@ func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (he
 		header.GasPrice = uint64(p.GasPrice)
 		header.Nonce.Counter = p.Nonce.Counter
 		header.Nonce.Bitfield = p.Nonce.Bitfield
+		header.MaxGas += gasSpend
 	}
+	ctx.Header = header
+	ctx.Args = args
+	ctx.Consume(gasParse)
 	return header, args
 }
 
@@ -63,10 +74,10 @@ func (a *api) Init(method uint8, args any, imu []byte) (core.Template, error) {
 func (a *api) Exec(ctx *core.Context, method uint8, args any) {
 	switch method {
 	case 0:
-		ctx.Consume(100)
+		ctx.Consume(gasSpawn)
 		ctx.Spawn()
 	case 1:
-		ctx.Consume(50)
+		ctx.Consume(gasSpend)
 		ctx.Template.(*Wallet).Spend(ctx, args.(*Arguments))
 	default:
 		// TODO change it to propagate errors without throws

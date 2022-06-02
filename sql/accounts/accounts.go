@@ -16,11 +16,10 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 		account.Nonce = uint64(stmt.ColumnInt64(2))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
 		if stmt.ColumnLen(4) > 0 {
-			var template scale.Address
-			stmt.BindBytes(4, template[:])
-			account.Template = &template
+			account.Template = &scale.Address{}
+			stmt.ColumnBytes(4, account.Template[:])
 			account.State = make([]byte, stmt.ColumnLen(5))
-			stmt.BindBytes(5, account.State)
+			stmt.ColumnBytes(5, account.State)
 		}
 		return false
 	})
@@ -66,10 +65,10 @@ func All(db sql.Executor) ([]*types.Account, error) {
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(4)))
 		if stmt.ColumnLen(5) > 0 {
 			var template scale.Address
-			stmt.BindBytes(5, template[:])
+			stmt.ColumnBytes(5, template[:])
 			account.Template = &template
 			account.State = make([]byte, stmt.ColumnLen(6))
-			stmt.BindBytes(6, account.State)
+			stmt.ColumnBytes(6, account.State)
 		}
 		rst = append(rst, &account)
 		return true

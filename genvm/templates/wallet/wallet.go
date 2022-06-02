@@ -16,19 +16,17 @@ type Wallet struct {
 	PublicKey core.PublicKey
 }
 
-func (s *Wallet) MaxSpend(method uint8, header *core.Header, args any) uint64 {
+func (s *Wallet) MaxSpend(header *core.Header, method uint8, args any) {
 	switch method {
 	case 0:
-		return 0
 	case 1:
-		return args.(*Arguments).Amount
+		header.MaxSpend = args.(*Arguments).Amount
 	default:
 		panic("unreachable")
 	}
 }
 
 func (s *Wallet) Verify(ctx *core.Context, tx []byte) bool {
-	ctx.Consume(50)
 	if len(tx) < 64 {
 		return false
 	}

@@ -50,9 +50,12 @@ func (c *Context) Transfer(to Address, amount uint64) {
 	}
 	account, exist := c.changed[to]
 	if !exist {
-		account, err := c.Loader.Get(to)
-		c.Fail(err)
-		c.changed[to] = &account
+		loaded, err := c.Loader.Get(to)
+		if err != nil {
+			c.Fail(err)
+		}
+		c.changed[to] = &loaded
+		account = &loaded
 	}
 	account.Balance += amount
 }
