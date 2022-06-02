@@ -96,7 +96,9 @@ func HasBlockTX(db sql.Executor, bid types.BlockID, tid types.TransactionID) (bo
 func UpdateIfBetter(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid types.BlockID) (int, error) {
 	rows, err := db.Exec(`
 		update transactions set layer = ?5, block = ?6
-		where id = ?1 and applied = ?2 and (layer = ?3 or layer > ?5 or (layer = ?5 and block = ?4)) returning id`,
+		where id = ?1 and applied = ?2 and
+		(layer is null or layer = ?3 or layer > ?5 or (layer = ?5 and (block = ?4 or block is null)))
+		returning id`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, tid.Bytes())
 			stmt.BindInt64(2, statePending)
@@ -214,10 +216,11 @@ func SetNextLayer(db sql.Executor, id types.TransactionID, lid types.LayerID) (t
 		(select coalesce(min(layer), ?3) as layer, coalesce(bid, ?4) as block from
 		 (select tid, bid, null, layer from block_transactions where tid = ?1 and layer > ?2
           union all
-		  select tid, null, pid, layer from proposal_transactions where tid = ?1 and layer > ?2)
+		  select tid, null, pid, layer from proposal_transactions where tid = ?1 and layer > ?2
+          order by bid desc
+         )
 		 group by tid
-		 order by bid asc
-		 limit 1)
+        )
 		where id = ?1 returning layer, block`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())

@@ -423,25 +423,59 @@ func TestSetNextLayer(t *testing.T) {
 	expected = makeMeshTX(tx, lid10, b10, received, types.BLOCK)
 	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err = SetNextLayer(db, tx.ID(), types.NewLayerID(10))
+	next, bid, err = SetNextLayer(db, tx.ID(), lid10)
 	require.NoError(t, err)
 	require.Equal(t, lid11, next)
 	require.Equal(t, b11, bid)
 	expected = makeMeshTX(tx, lid11, b11, received, types.BLOCK)
 	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err = SetNextLayer(db, tx.ID(), types.NewLayerID(11))
+	next, bid, err = SetNextLayer(db, tx.ID(), lid11)
 	require.NoError(t, err)
 	require.Equal(t, lid12, next)
 	require.Equal(t, types.EmptyBlockID, bid)
 	expected = makeMeshTX(tx, lid12, types.EmptyBlockID, received, types.PROPOSAL)
 	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err = SetNextLayer(db, tx.ID(), types.NewLayerID(12))
+	next, bid, err = SetNextLayer(db, tx.ID(), lid12)
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID{}, next)
 	require.Equal(t, types.EmptyBlockID, bid)
 	expected = makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
+}
+
+func TestSetNextLayerAndUpdate(t *testing.T) {
+	db := sql.InMemory()
+
+	rng := rand.New(rand.NewSource(1001))
+	signer := signing.NewEdSignerFromRand(rng)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
+	received := time.Now()
+	require.NoError(t, Add(db, tx, received))
+	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
+
+	lid := types.NewLayerID(11)
+	pid := types.ProposalID{1, 2, 3}
+	packedInProposal(t, db, tx.ID(), lid, pid, 1)
+	expected = makeMeshTX(tx, lid, types.EmptyBlockID, received, types.PROPOSAL)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
+
+	// this tx is not applied as part of this layer. reset its layer in db
+	next, bid, err := SetNextLayer(db, tx.ID(), lid)
+	require.NoError(t, err)
+	require.Equal(t, types.LayerID{}, next)
+	require.Equal(t, types.EmptyBlockID, bid)
+	expected = makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
+
+	// because there is no more entries for this tx, both layer/block are set to null
+	// make sure we can update it
+	updated, err := UpdateIfBetter(db, tx.ID(), lid.Add(1), types.EmptyBlockID)
+	require.NoError(t, err)
+	require.Equal(t, 1, updated)
+	expected = makeMeshTX(tx, lid.Add(1), types.EmptyBlockID, received, types.PROPOSAL)
 	getAndCheckMeshTX(t, db, tx.ID(), expected)
 }
 

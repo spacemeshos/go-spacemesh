@@ -551,10 +551,13 @@ func (app *App) initServices(ctx context.Context,
 
 	proposalListener := proposals.NewHandler(fetcherWrapped, beaconProtocol, atxDB, msh, proposalDB,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithLayerPerEpoch(layersPerEpoch),
-		proposals.WithLayerSize(layerSize),
-		proposals.WithGoldenATXID(goldenATXID),
-		proposals.WithMaxExceptions(trtlCfg.MaxExceptions))
+		proposals.WithConfig(proposals.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+			GoldenATXID:    goldenATXID,
+			MaxExceptions:  trtlCfg.MaxExceptions,
+			Hdist:          trtlCfg.Hdist,
+		}))
 
 	blockHandller := blocks.NewHandler(fetcherWrapped, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
@@ -598,7 +601,12 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+	blockGen := blocks.NewGenerator(atxDB, msh, app.conState,
+		blocks.WithConfig(blocks.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+		}),
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
 	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(

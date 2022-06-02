@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 )
 
 // Peer is an alias to libp2p's peer.ID.
@@ -24,14 +25,18 @@ type Peer = peer.ID
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:             "/ip4/0.0.0.0/tcp/7513",
-		Flood:              true,
-		TargetOutbound:     5,
-		LowPeers:           40,
-		HighPeers:          100,
-		GracePeersShutdown: 30 * time.Second,
-		BootstrapTimeout:   10 * time.Second,
-		MaxMessageSize:     200 << 10,
+		Listen:               "/ip4/0.0.0.0/tcp/7513",
+		Flood:                true,
+		TargetOutbound:       5,
+		LowPeers:             40,
+		HighPeers:            100,
+		GracePeersShutdown:   30 * time.Second,
+		BootstrapTimeout:     10 * time.Second,
+		MaxMessageSize:       200 << 10,
+		CheckInterval:        3 * time.Minute,
+		CheckTimeout:         30 * time.Second,
+		CheckPeersNumber:     10,
+		CheckPeersUsedBefore: 30 * time.Minute,
 	}
 }
 
@@ -51,6 +56,12 @@ type Config struct {
 	TargetOutbound int      `mapstructure:"target-outbound"`
 	LowPeers       int      `mapstructure:"low-peers"`
 	HighPeers      int      `mapstructure:"high-peers"`
+
+	// Discovery book check section.
+	CheckInterval        time.Duration
+	CheckTimeout         time.Duration
+	CheckPeersNumber     int
+	CheckPeersUsedBefore time.Duration
 }
 
 // New initializes libp2p host configured for spacemesh.
@@ -72,7 +83,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		if err != nil {
 			return nil, fmt.Errorf("can't create peer addr from %s: %w", p, err)
 		}
-		cm.Protect(addr.ID, "bootstrap")
+		cm.Protect(addr.ID, peerexchange.BootNodeTag)
 	}
 	streamer := *yamux.DefaultTransport
 	lopts := []libp2p.Option{

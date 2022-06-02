@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockatxDB is a mock of atxDB interface.
@@ -48,6 +49,44 @@ func (m *MockatxDB) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, e
 func (mr *MockatxDBMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxDB)(nil).GetAtxHeader), arg0)
+}
+
+// MockballotDB is a mock of ballotDB interface.
+type MockballotDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockballotDBMockRecorder
+}
+
+// MockballotDBMockRecorder is the mock recorder for MockballotDB.
+type MockballotDBMockRecorder struct {
+	mock *MockballotDB
+}
+
+// NewMockballotDB creates a new mock instance.
+func NewMockballotDB(ctrl *gomock.Controller) *MockballotDB {
+	mock := &MockballotDB{ctrl: ctrl}
+	mock.recorder = &MockballotDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockballotDB) EXPECT() *MockballotDBMockRecorder {
+	return m.recorder
+}
+
+// GetBallot mocks base method.
+func (m *MockballotDB) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*types.Ballot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockballotDBMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockballotDB)(nil).GetBallot), arg0)
 }
 
 // MockmeshDB is a mock of meshDB interface.
@@ -116,6 +155,21 @@ func (mr *MockmeshDBMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockmeshDB)(nil).GetBallot), arg0)
 }
 
+// GetBlockLayer mocks base method.
+func (m *MockmeshDB) GetBlockLayer(arg0 types.BlockID) (types.LayerID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlockLayer", arg0)
+	ret0, _ := ret[0].(types.LayerID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlockLayer indicates an expected call of GetBlockLayer.
+func (mr *MockmeshDBMockRecorder) GetBlockLayer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockLayer", reflect.TypeOf((*MockmeshDB)(nil).GetBlockLayer), arg0)
+}
+
 // HasBallot mocks base method.
 func (m *MockmeshDB) HasBallot(arg0 types.BallotID) bool {
 	m.ctrl.T.Helper()
@@ -128,6 +182,20 @@ func (m *MockmeshDB) HasBallot(arg0 types.BallotID) bool {
 func (mr *MockmeshDBMockRecorder) HasBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBallot", reflect.TypeOf((*MockmeshDB)(nil).HasBallot), arg0)
+}
+
+// SetIdentityMalicious mocks base method.
+func (m *MockmeshDB) SetIdentityMalicious(arg0 *signing.PublicKey) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIdentityMalicious", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetIdentityMalicious indicates an expected call of SetIdentityMalicious.
+func (mr *MockmeshDBMockRecorder) SetIdentityMalicious(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIdentityMalicious", reflect.TypeOf((*MockmeshDB)(nil).SetIdentityMalicious), arg0)
 }
 
 // MockproposalDB is a mock of proposalDB interface.

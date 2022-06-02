@@ -16,13 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange/mocks"
 )
 
 func TestDiscovery_CrawlMesh(t *testing.T) {
 	var (
 		instances = []*Discovery{}
-		bootnode  *addrInfo
+		bootnode  *addressbook.AddrInfo
 		n         = 20
 		rounds    = 5
 	)

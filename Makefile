@@ -141,8 +141,9 @@ test-fmt:
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
-lint:
-	golint --set_exit_status ./...
+lint: golangci-lint
+	# Golint is deprecated and frozen. Using golangci-lint instead.
+	# golint --set_exit_status ./...
 	go vet ./...
 .PHONY: lint
 

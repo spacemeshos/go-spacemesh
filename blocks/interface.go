@@ -15,6 +15,7 @@ type atxProvider interface {
 type meshProvider interface {
 	HasBlock(types.BlockID) bool
 	AddBlockWithTXs(context.Context, *types.Block) error
+	GetBallot(types.BallotID) (*types.Ballot, error)
 }
 
 type txProvider interface {

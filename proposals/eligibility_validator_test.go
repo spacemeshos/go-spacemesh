@@ -16,15 +16,15 @@ import (
 )
 
 const (
-	defaultUnit = uint(5)
-	ballotUnit  = uint(1)
+	defaultATXUnit = uint(5)
+	testedATXUnit  = uint(2)
 	// eligibleSlots is calculated based on layerAvgSize, layersPerEpoch, epoch ATX weight and smesher's own weight.
 	eligibleSlots = uint32(3)
 	epoch         = types.EpochID(3)
 )
 
 func genActiveSet() types.ATXIDList {
-	return types.ATXIDList{types.RandomATXID(), types.RandomATXID()}
+	return types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
 }
 
 func genSigner() *signing.EdSigner {
@@ -46,11 +46,12 @@ func createTestValidator(tb testing.TB) *testValidator {
 }
 
 func createBallots(tb testing.TB, signer *signing.EdSigner, vrfSigner *signing.VRFSigner, activeSet types.ATXIDList, beacon types.Beacon) []*types.Ballot {
-	slots, err := GetNumEligibleSlots(uint64(ballotUnit), uint64(int(defaultUnit)*len(activeSet)), layerAvgSize, layersPerEpoch)
+	totalWeight := uint64(len(activeSet)-1)*uint64(defaultATXUnit) + uint64(testedATXUnit)
+	slots, err := GetNumEligibleSlots(uint64(testedATXUnit), totalWeight, layerAvgSize, layersPerEpoch)
 	require.NoError(tb, err)
 	require.Equal(tb, eligibleSlots, slots)
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibilityProof{}
-	order := []types.LayerID{}
+	order := make([]types.LayerID, 0, eligibleSlots)
 	for counter := uint32(0); counter < eligibleSlots; counter++ {
 		message, err := SerializeVRFMessage(beacon, epoch, counter)
 		require.NoError(tb, err)
@@ -72,6 +73,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, vrfSigner *signing.V
 		proofs := eligibilityProofs[lyr]
 		isRef := len(ballots) == 0
 		b := types.RandomBallot()
+		b.AtxID = activeSet[0]
 		b.LayerIndex = lyr
 		if isRef {
 			b.RefBallot = types.EmptyBallotID
@@ -171,7 +173,7 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(1)
@@ -196,7 +198,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(1)
@@ -211,7 +213,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
 	h.SetID(&b.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
@@ -232,7 +234,7 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(1)
@@ -247,7 +249,7 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
 	h.SetID(&b.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
@@ -283,7 +285,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
 	h.SetID(&b.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
@@ -304,7 +306,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(1)
@@ -319,7 +321,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
 	h.SetID(&b.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
@@ -335,29 +337,33 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	ballots := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), types.Beacon{7, 7, 7})
 	rb := ballots[0]
 	require.Len(t, rb.EligibilityProofs, 2)
-	for _, id := range rb.EpochData.ActiveSet {
-		h := &types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				StartTick:  0,
-				EndTick:    1,
-			},
-			NumUnits: defaultUnit,
-		}
-		h.SetID(&id)
-		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(2)
-	}
-	h := &types.ActivationTxHeader{
+	hdr := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
-	h.SetID(&rb.AtxID)
-	tv.mdb.EXPECT().GetAtxHeader(rb.AtxID).Return(h, nil).Times(2)
+	hdr.SetID(&rb.AtxID)
+	for _, id := range rb.EpochData.ActiveSet {
+		if id == rb.AtxID {
+			tv.mdb.EXPECT().GetAtxHeader(id).Return(hdr, nil).Times(2)
+			continue
+		}
+		h := &types.ActivationTxHeader{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+				StartTick:  0,
+				EndTick:    1,
+			},
+			NumUnits: defaultATXUnit,
+		}
+		h.SetID(&id)
+		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(2)
+	}
+	tv.mdb.EXPECT().GetAtxHeader(rb.AtxID).Return(hdr, nil).Times(2)
 
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 	eligible, err := tv.CheckEligibility(context.TODO(), rb)
@@ -383,7 +389,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(1)
@@ -398,7 +404,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
 	h.SetID(&b.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
@@ -421,7 +427,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(1)
@@ -436,7 +442,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 			StartTick:  0,
 			EndTick:    1,
 		},
-		NumUnits: ballotUnit,
+		NumUnits: testedATXUnit,
 	}
 	h.SetID(&b.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
@@ -452,32 +458,37 @@ func TestCheckEligibility(t *testing.T) {
 	beacon := types.Beacon{1, 1, 1}
 	ballots := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
 	rb := ballots[0]
+	hdr := &types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
+			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+			StartTick:  0,
+			EndTick:    1,
+		},
+		NumUnits: testedATXUnit,
+	}
+	hdr.SetID(&rb.AtxID)
+
 	for _, id := range rb.EpochData.ActiveSet {
+		if id == rb.AtxID {
+			tv.mdb.EXPECT().GetAtxHeader(id).Return(hdr, nil).Times(len(ballots))
+			continue
+		}
 		h := &types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				StartTick:  0,
 				EndTick:    1,
 			},
-			NumUnits: defaultUnit,
+			NumUnits: defaultATXUnit,
 		}
 		h.SetID(&id)
 		tv.mdb.EXPECT().GetAtxHeader(id).Return(h, nil).Times(len(ballots))
 	}
 	tv.mm.EXPECT().GetBallot(rb.ID()).Return(rb, nil).Times(len(ballots) - 1)
 	for _, b := range ballots {
-		h := &types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
-				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				StartTick:  0,
-				EndTick:    1,
-			},
-			NumUnits: ballotUnit,
-		}
-		h.SetID(&b.AtxID)
-		tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
-		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, h.GetWeight()).Times(1)
+		tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(hdr, nil).Times(1)
+		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, hdr.GetWeight()).Times(1)
 		eligible, err := tv.CheckEligibility(context.TODO(), b)
 		assert.NoError(t, err)
 		assert.True(t, eligible)

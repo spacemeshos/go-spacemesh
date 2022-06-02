@@ -111,6 +111,11 @@ func (m *DB) Blocks() database.Getter {
 	return newBlockFetcherDB(m)
 }
 
+// SetIdentityMalicious records an identity to be malicious.
+func (m *DB) SetIdentityMalicious(pubKey *signing.PublicKey) error {
+	return identities.SetMalicious(m.db, pubKey.Bytes())
+}
+
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
 	mal, err := identities.IsMalicious(m.db, b.SmesherID().Bytes())
@@ -196,11 +201,12 @@ func (m *DB) HasBlock(bid types.BlockID) bool {
 
 // GetBlock returns the block specified by the block ID.
 func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
-	b, err := m.getBlock(bid)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	return blocks.Get(m.db, bid)
+}
+
+// GetBlockLayer returns the layer of the block specified by the block ID.
+func (m *DB) GetBlockLayer(bid types.BlockID) (types.LayerID, error) {
+	return blocks.Layer(m.db, bid)
 }
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
@@ -223,10 +229,6 @@ func (m *DB) LayerBlocks(lid types.LayerID) ([]*types.Block, error) {
 		rst = append(rst, block)
 	}
 	return rst, nil
-}
-
-func (m *DB) getBlock(id types.BlockID) (*types.Block, error) {
-	return blocks.Get(m.db, id)
 }
 
 // AddZeroBlockLayer tags lyr as a layer without blocks.
@@ -317,28 +319,9 @@ func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32
 	return layers.SetAggregatedHash(m.db, layerID, hash)
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, applied []types.AnyReward) error {
-	tx, err := m.db.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-	defer tx.Release()
-	for i := range applied {
-		if err := rewards.Add(tx, l, &applied[i]); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
 // GetRewards retrieves account's rewards by the coinbase address.
-func (m *DB) GetRewards(coinbase types.Address) ([]types.Reward, error) {
-	return rewards.FilterByCoinbase(m.db, coinbase)
-}
-
-// GetRewardsBySmesherID retrieves rewards by smesherID.
-func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, error) {
-	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
+func (m *DB) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
+	return rewards.List(m.db, coinbase)
 }
 
 // LayerContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.

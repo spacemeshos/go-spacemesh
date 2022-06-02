@@ -1,8 +1,10 @@
 package vm
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -12,13 +14,32 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
+
+// RewardConfig defines the configuration options for Spacemesh rewards.
+type RewardConfig struct {
+	BaseReward uint64 `mapstructure:"base-reward"`
+}
+
+// DefaultRewardConfig returns the default RewardConfig.
+func DefaultRewardConfig() RewardConfig {
+	return RewardConfig{
+		BaseReward: 50 * uint64(math.Pow10(12)),
+	}
+}
+
+func calculateLayerReward(cfg RewardConfig) uint64 {
+	// todo: add inflation rules here
+	return cfg.BaseReward
+}
 
 // VM manages accounts state.
 type VM struct {
 	log log.Log
 	db  *sql.Database
+	cfg RewardConfig
 }
 
 // New creates a new `vm` instance from the given `state` and `logger`.
@@ -26,6 +47,7 @@ func New(logger log.Log, db *sql.Database) *VM {
 	return &VM{
 		db:  db,
 		log: logger,
+		cfg: DefaultRewardConfig(),
 	}
 }
 
@@ -68,7 +90,10 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 	)
 	ch := newChanges(vm.log, vm.db, lid)
 
-	var failed []*types.Transaction
+	var (
+		failed    []*types.Transaction
+		totalFees uint64
+	)
 	for {
 		for _, tx := range txs {
 			if err := applyTransaction(vm.log, ch, tx); err != nil {
@@ -77,6 +102,8 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 				} else {
 					return nil, err
 				}
+			} else {
+				totalFees += tx.GetFee()
 			}
 			events.ReportNewTx(lid, tx)
 			events.ReportAccountUpdate(tx.Origin())
@@ -88,17 +115,85 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 		txs = failed
 		failed = nil
 	}
-	for _, reward := range rewards {
-		if err := ch.addBalance(reward.Address, reward.Amount); err != nil {
-			return nil, err
-		}
-		events.ReportAccountUpdate(reward.Address)
-	}
-	_, err := ch.commit()
+
+	finalRewards, err := calculateRewards(vm.log, vm.cfg, lid, totalFees, rewards)
 	if err != nil {
 		return nil, err
 	}
+
+	for _, r := range finalRewards {
+		if err = ch.addBalance(r.Coinbase, r.TotalReward); err != nil {
+			return nil, err
+		}
+		ch.addReward(r)
+		events.ReportAccountUpdate(r.Coinbase)
+		events.ReportRewardReceived(events.Reward{
+			Layer:    r.Layer,
+			Coinbase: r.Coinbase,
+			Total:    r.TotalReward,
+		})
+	}
+	if _, err = ch.commit(); err != nil {
+		return nil, err
+	}
 	return failed, nil
+}
+
+func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
+	logger = logger.WithFields(lid)
+	totalWeight := util.WeightFromUint64(0)
+	byCoinbase := make(map[types.Address]util.Weight)
+	for _, reward := range rewards {
+		weight := util.WeightFromNumDenom(reward.Weight.Num, reward.Weight.Denom)
+		logger.With().Debug("coinbase weight", reward.Coinbase, log.Stringer("weight", weight))
+		if weight.Sign() == -1 {
+			logger.With().Error("invalid weight value",
+				log.Stringer("coinbase", reward.Coinbase),
+				log.Stringer("weight", weight))
+			return nil, fmt.Errorf("invalid weight value %v: %v", reward.Coinbase.String(), reward.Weight)
+		}
+		totalWeight.Add(weight)
+		if _, ok := byCoinbase[reward.Coinbase]; ok {
+			byCoinbase[reward.Coinbase].Add(weight)
+		} else {
+			byCoinbase[reward.Coinbase] = weight
+		}
+	}
+	if totalWeight.Cmp(util.WeightFromUint64(0)) == 0 {
+		logger.Error("zero total weight in block rewards")
+		return nil, fmt.Errorf("zero total weight")
+	}
+	finalRewards := make([]*types.Reward, 0, len(rewards))
+	layerRewards := calculateLayerReward(cfg)
+	totalRewards := layerRewards + totalFees
+	logger.With().Info("rewards info for layer",
+		log.Uint64("layer_rewards", layerRewards),
+		log.Uint64("fee", totalFees))
+	rewardPer := util.WeightFromUint64(totalRewards).Div(totalWeight)
+	lyrRewardPer := util.WeightFromUint64(layerRewards).Div(totalWeight)
+	seen := make(map[types.Address]struct{})
+	for _, reward := range rewards {
+		if _, ok := seen[reward.Coinbase]; ok {
+			continue
+		}
+
+		seen[reward.Coinbase] = struct{}{}
+		weight, ok := byCoinbase[reward.Coinbase]
+		if !ok {
+			logger.With().Fatal("missing weight for coinbase", log.Stringer("coinbase", reward.Coinbase))
+		}
+		fTotal, _ := rewardPer.Copy().Mul(weight).Float64()
+		totalReward := uint64(fTotal)
+		fLyr, _ := lyrRewardPer.Copy().Mul(weight).Float64()
+		finalRewards = append(finalRewards, &types.Reward{
+			Layer:       lid,
+			Coinbase:    reward.Coinbase,
+			TotalReward: totalReward,
+			LayerReward: uint64(fLyr),
+		})
+		events.ReportAccountUpdate(reward.Coinbase)
+	}
+	return finalRewards, nil
 }
 
 // GetLayerStateRoot returns the state root at a given layer.
@@ -116,10 +211,30 @@ func (vm *VM) GetStateRoot() (types.Hash32, error) {
 	return layers.GetLatestStateHash(vm.db)
 }
 
+func (vm *VM) revertInDbTX(lid types.LayerID) error {
+	tx, err := vm.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Release()
+
+	err = accounts.Revert(tx, lid)
+	if err != nil {
+		return err
+	}
+	err = rewards.Revert(tx, lid)
+	if err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Revert all changes that we made after the layer. Returns state hash of the layer.
 func (vm *VM) Revert(lid types.LayerID) (types.Hash32, error) {
-	err := accounts.Revert(vm.db, lid)
-	if err != nil {
+	if err := vm.revertInDbTX(lid); err != nil {
 		return types.Hash32{}, err
 	}
 	return vm.GetStateRoot()
