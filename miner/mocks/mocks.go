@@ -76,21 +76,6 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// GetStateRoot mocks base method.
-func (m *MockconservativeState) GetStateRoot() (types.Hash32, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStateRoot")
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetStateRoot indicates an expected call of GetStateRoot.
-func (mr *MockconservativeStateMockRecorder) GetStateRoot() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetStateRoot))
-}
-
 // SelectProposalTXs mocks base method.
 func (m *MockconservativeState) SelectProposalTXs(arg0 int) []types.TransactionID {
 	m.ctrl.T.Helper()

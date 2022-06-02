@@ -115,7 +115,6 @@ CREATE TABLE proposals
     layer      INT NOT NULL,
     tx_ids     BLOB,
     mesh_hash  CHAR(32),
-    state_hash CHAR(32),
     signature  VARCHAR,
     proposal   BLOB
 

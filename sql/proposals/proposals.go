@@ -22,7 +22,6 @@ func Get(db sql.Executor, id types.ProposalID) (proposal *types.Proposal, err er
 			proposals.ballot_id, 
 			proposals.tx_ids, 
 			proposals.mesh_hash,
-			proposals.state_hash,
 			proposals.signature
 		from proposals 
 		left join ballots on proposals.ballot_id = ballots.id 
@@ -88,7 +87,6 @@ func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Prop
 			proposals.ballot_id, 
 			proposals.tx_ids, 
 			proposals.mesh_hash,
-			proposals.state_hash,
 			proposals.signature 
 		from proposals 
 		left join ballots on proposals.ballot_id = ballots.id 
@@ -150,14 +148,13 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindInt64(3, int64(proposal.LayerIndex.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
-		stmt.BindBytes(6, proposal.StateHash.Bytes())
-		stmt.BindBytes(7, proposal.Signature)
-		stmt.BindBytes(8, encodedProposal)
+		stmt.BindBytes(6, proposal.Signature)
+		stmt.BindBytes(7, encodedProposal)
 	}
 
 	_, err = db.Exec(`
-		insert into proposals (id, ballot_id, layer, tx_ids, mesh_hash, state_hash, signature, proposal)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil)
+		insert into proposals (id, ballot_id, layer, tx_ids, mesh_hash, signature, proposal)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert proposal ID %v: %w", proposal.ID(), err)
 	}
@@ -196,10 +193,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 
 	meshBytes := make([]byte, stmt.ColumnLen(7))
 	stmt.ColumnBytes(7, meshBytes)
-	stateBytes := make([]byte, stmt.ColumnLen(8))
-	stmt.ColumnBytes(8, stateBytes)
-	signature := make([]byte, stmt.ColumnLen(9))
-	stmt.ColumnBytes(9, signature)
+	signature := make([]byte, stmt.ColumnLen(8))
+	stmt.ColumnBytes(8, signature)
 
 	txIDs := make([]types.TransactionID, 0)
 	if err := codec.Decode(txIDsBytes, &txIDs); err != nil {
@@ -209,10 +204,9 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	}
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
-			Ballot:    ballot,
-			TxIDs:     txIDs,
-			MeshHash:  types.BytesToHash(meshBytes),
-			StateHash: types.BytesToHash(stateBytes),
+			Ballot:   ballot,
+			TxIDs:    txIDs,
+			MeshHash: types.BytesToHash(meshBytes),
 		},
 		Signature: signature,
 	}

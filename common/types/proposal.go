@@ -47,9 +47,10 @@ type InnerProposal struct {
 	TxIDs []TransactionID
 	// aggregated hash up to the layer before this proposal.
 	MeshHash Hash32
+	// TODO add this when a state commitment mechanism is implemented.
 	// state root up to the layer before this proposal.
 	// note: this is needed in addition to mesh hash to detect bug in SVM
-	StateHash Hash32
+	// StateHash Hash32
 }
 
 // Initialize calculates and sets the Proposal's cached proposalID.
@@ -106,7 +107,6 @@ func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}))
 	encoder.AddString("mesh_hash", p.MeshHash.String())
-	encoder.AddString("state_root", p.StateHash.String())
 	p.Ballot.MarshalLogObject(encoder)
 	return nil
 }

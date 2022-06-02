@@ -21,10 +21,9 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, identities.SetMalicious(db, pub))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
-			Ballot:    ballot,
-			TxIDs:     []types.TransactionID{{3, 4}},
-			MeshHash:  types.RandomHash(),
-			StateHash: types.RandomHash(),
+			Ballot:   ballot,
+			TxIDs:    []types.TransactionID{{3, 4}},
+			MeshHash: types.RandomHash(),
 		},
 		Signature: []byte{5, 6},
 	}
@@ -44,10 +43,9 @@ func TestHas(t *testing.T) {
 	require.NoError(t, identities.SetMalicious(db, pub))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
-			Ballot:    ballot,
-			TxIDs:     []types.TransactionID{{3, 4}},
-			MeshHash:  types.RandomHash(),
-			StateHash: types.RandomHash(),
+			Ballot:   ballot,
+			TxIDs:    []types.TransactionID{{3, 4}},
+			MeshHash: types.RandomHash(),
 		},
 		Signature: []byte{5, 6},
 	}
@@ -73,10 +71,9 @@ func TestGet(t *testing.T) {
 
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
-			Ballot:    ballot,
-			TxIDs:     []types.TransactionID{{3, 4}},
-			MeshHash:  types.RandomHash(),
-			StateHash: types.RandomHash(),
+			Ballot:   ballot,
+			TxIDs:    []types.TransactionID{{3, 4}},
+			MeshHash: types.RandomHash(),
 		},
 		Signature: []byte{5, 6},
 	}

@@ -241,15 +241,7 @@ func (pb *ProposalBuilder) createProposal(
 		ib.RefBallot = refBallot
 	}
 
-	var (
-		state = types.Hash32{}
-		mesh  = types.Hash32{}
-	)
-	state, err = pb.conState.GetStateRoot()
-	if err != nil {
-		logger.With().Warning("failed to get state root", log.Err(err))
-	}
-	mesh, err = pb.msh.GetAggregatedLayerHash(layerID.Sub(1))
+	mesh, err := pb.msh.GetAggregatedLayerHash(layerID.Sub(1))
 	if err != nil {
 		logger.With().Warning("failed to get mesh hash", log.Err(err))
 	}
@@ -258,9 +250,8 @@ func (pb *ProposalBuilder) createProposal(
 			Ballot: types.Ballot{
 				InnerBallot: *ib,
 			},
-			TxIDs:     txIDs,
-			MeshHash:  mesh,
-			StateHash: state,
+			TxIDs:    txIDs,
+			MeshHash: mesh,
 		},
 	}
 	p.Ballot.Signature = pb.signer.Sign(p.Ballot.Bytes())

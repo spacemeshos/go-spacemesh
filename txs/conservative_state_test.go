@@ -85,7 +85,7 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 	return ids, txs
 }
 
-func createProposalsDupTXs(lid types.LayerID, hash, root types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
+func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
 	total := len(tids)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for offset := 0; offset < total; offset += step {
@@ -95,7 +95,6 @@ func createProposalsDupTXs(lid types.LayerID, hash, root types.Hash32, step, num
 		}
 		p := types.GenLayerProposal(lid, tids[offset:end])
 		p.MeshHash = hash
-		p.StateHash = root
 		proposals = append(proposals, p)
 	}
 	return proposals
@@ -130,10 +129,9 @@ func TestSelectBlockTXs(t *testing.T) {
 	numPerProposal := 30
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
-	stateRoot := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, stateRoot, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
 	require.Len(t, got, totalNumTXs)
@@ -159,10 +157,9 @@ func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	numPerProposal := 30
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
-	stateRoot := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, stateRoot, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
 	require.Len(t, got, expSize)
@@ -180,10 +177,9 @@ func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
 	numPerProposal := 30
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
-	stateRoot := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, stateRoot, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	// change proposal's mesh hash
 	for _, p := range proposals {
 		p.MeshHash = types.RandomHash()
@@ -200,36 +196,16 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 	tcs := createConservativeState(t)
 	numProposals := 10
 	meshHash := types.RandomHash()
-	stateRoot := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
 		p := types.GenLayerProposal(lid, nil)
 		p.MeshHash = meshHash
-		p.StateHash = stateRoot
 		proposals = append(proposals, p)
 	}
 	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), types.RandomHash()))
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.ErrorIs(t, err, errNodeHasBadMeshHash)
-	require.Nil(t, got)
-}
-
-func TestSelectBlockTXs_MeshHasMultipleStateRoots(t *testing.T) {
-	tcs := createConservativeState(t)
-	numProposals := 10
-	meshHash := types.RandomHash()
-	lid := types.NewLayerID(1333)
-	proposals := make([]*types.Proposal, 0, numProposals)
-	for i := 0; i < numProposals; i++ {
-		p := types.GenLayerProposal(lid, nil)
-		p.MeshHash = meshHash
-		p.StateHash = types.RandomHash()
-		proposals = append(proposals, p)
-	}
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
-	got, err := tcs.SelectBlockTXs(lid, proposals)
-	require.ErrorIs(t, err, errMultipleStateRoots)
 	require.Nil(t, got)
 }
 

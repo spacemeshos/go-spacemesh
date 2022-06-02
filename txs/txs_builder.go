@@ -1,7 +1,6 @@
 package txs
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 
 var (
 	errNodeHasBadMeshHash = errors.New("node has different mesh hash from majority")
-	errMultipleStateRoots = errors.New("multiple state root for the same mesh hash")
 
 	mempoolLayer = types.LayerID{}
 )
@@ -33,7 +31,6 @@ type blockMetadata struct {
 
 type meshState struct {
 	hash  types.Hash32
-	roots map[types.Hash32]struct{}
 	count int
 }
 
@@ -63,11 +60,9 @@ func extractProposalMetadata(
 			meshHashes[key] = &meshState{
 				hash:  p.MeshHash,
 				count: 1,
-				roots: map[types.Hash32]struct{}{p.StateHash: {}},
 			}
 		} else {
 			meshHashes[key].count++
-			meshHashes[key].roots[p.StateHash] = struct{}{}
 		}
 
 		for _, tid := range p.TxIDs {
@@ -125,26 +120,6 @@ func checkStateConsensus(
 			log.String("majority_hash", ms.hash.String()),
 			log.String("node_hash", ownMeshHash.String()))
 		return nil, errNodeHasBadMeshHash
-	}
-	if len(ms.roots) != 1 {
-		logger.With().Error("multiple state roots for the same mesh contents",
-			log.Object("mesh_state", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-				encoder.AddInt("num_proposals", ms.count)
-				encoder.AddString("mesh_hash", ms.hash.String())
-				_ = encoder.AddArray("state_roots", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-					rl := make([]types.Hash32, 0, len(ms.roots))
-					for r := range ms.roots {
-						rl = append(rl, r)
-					}
-					sort.Slice(rl, func(i, j int) bool { return bytes.Compare(rl[i].Bytes(), rl[j].Bytes()) < 0 })
-					for _, r := range rl {
-						encoder.AppendString(r.String())
-					}
-					return nil
-				}))
-				return nil
-			})))
-		return nil, errMultipleStateRoots
 	}
 	md.optFilter = true
 	logger.With().Info("consensus on mesh and state. doing optimistic filtering",

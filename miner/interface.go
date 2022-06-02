@@ -14,7 +14,6 @@ type proposalOracle interface {
 }
 
 type conservativeState interface {
-	GetStateRoot() (types.Hash32, error)
 	SelectProposalTXs(int) []types.TransactionID
 }
 
