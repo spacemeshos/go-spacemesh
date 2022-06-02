@@ -298,7 +298,10 @@ func (h *Handler) setBallotMalicious(ctx context.Context, b *types.Ballot) error
 
 func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) error {
 	exceptions := map[types.BlockID]struct{}{}
-	cutoff := b.LayerIndex.Sub(h.cfg.Hdist)
+	cutoff := types.LayerID{}
+	if b.LayerIndex.After(types.NewLayerID(h.cfg.Hdist)) {
+		cutoff = b.LayerIndex.Sub(h.cfg.Hdist)
+	}
 	layers := make(map[types.LayerID]types.BlockID)
 	// a ballot should not vote for multiple blocks in the same layer within hdist,
 	// since hare only output a single block each layer and miner should vote according

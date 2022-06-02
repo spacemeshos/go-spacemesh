@@ -238,6 +238,19 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errDoubleVoting)
 }
 
+func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
+	th := createTestHandler(t)
+	b := createBallot(t)
+	th.cfg.Hdist = b.LayerIndex.Add(1).Uint32()
+	require.GreaterOrEqual(t, 2, len(b.Votes.Support))
+	data := encodeBallot(t, b)
+	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[0]).Return(b.LayerIndex.Sub(1), nil)
+	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[1]).Return(b.LayerIndex.Sub(1), nil)
+	th.mm.EXPECT().SetIdentityMalicious(b.SmesherID()).Return(nil)
+	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errDoubleVoting)
+}
+
 func TestBallot_BallotDoubleVotedWithinHdist_SetMaliciousError(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
