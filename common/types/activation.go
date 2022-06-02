@@ -84,10 +84,6 @@ func (t ATXID) Compare(other ATXID) bool {
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = &ATXID{}
 
-func (t ATXID) IsEmpty() bool {
-	return t == *EmptyATXID
-}
-
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
 // well as the coinbase address and total weight.
 type ActivationTxHeader struct {

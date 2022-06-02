@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MockFetcher is a mock of Fetcher interface.
@@ -134,18 +133,6 @@ func (mr *MockFetcherMockRecorder) GetTxs(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxs", reflect.TypeOf((*MockFetcher)(nil).GetTxs), arg0, arg1)
 }
 
-// TrackATXPeer mocks base method.
-func (m *MockFetcher) TrackATXPeer(arg0 context.Context, arg1 p2p.Peer, arg2 []types.ATXID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TrackATXPeer", arg0, arg1, arg2)
-}
-
-// TrackATXPeer indicates an expected call of TrackATXPeer.
-func (mr *MockFetcherMockRecorder) TrackATXPeer(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackATXPeer", reflect.TypeOf((*MockFetcher)(nil).TrackATXPeer), arg0, arg1, arg2)
-}
-
 // MockBlockFetcher is a mock of BlockFetcher interface.
 type MockBlockFetcher struct {
 	ctrl     *gomock.Controller
@@ -232,18 +219,6 @@ func (m *MockAtxFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error
 func (mr *MockAtxFetcherMockRecorder) GetAtxs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockAtxFetcher)(nil).GetAtxs), arg0, arg1)
-}
-
-// TrackATXPeer mocks base method.
-func (m *MockAtxFetcher) TrackATXPeer(arg0 context.Context, arg1 p2p.Peer, arg2 []types.ATXID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TrackATXPeer", arg0, arg1, arg2)
-}
-
-// TrackATXPeer indicates an expected call of TrackATXPeer.
-func (mr *MockAtxFetcherMockRecorder) TrackATXPeer(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackATXPeer", reflect.TypeOf((*MockAtxFetcher)(nil).TrackATXPeer), arg0, arg1, arg2)
 }
 
 // MockTxFetcher is a mock of TxFetcher interface.

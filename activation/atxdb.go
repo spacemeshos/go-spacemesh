@@ -160,11 +160,11 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 		return fmt.Errorf("node ids don't match")
 	}
 
-	if atx.PositioningATX.IsEmpty() {
+	if atx.PositioningATX == *types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
 	}
 
-	if !atx.PrevATXID.IsEmpty() {
+	if atx.PrevATXID != *types.EmptyATXID {
 		prevATX, err := db.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
@@ -258,7 +258,7 @@ func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activatio
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
-	if !atx.PrevATXID.IsEmpty() {
+	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
 			db.log.With().Error("could not fetch node last atx", atx.ID(),
@@ -409,7 +409,7 @@ func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, erro
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
 // is not found in the ATX DB.
 func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
-	if id.IsEmpty() {
+	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
@@ -428,7 +428,7 @@ func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
 // in all databases.
 func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
-	if id.IsEmpty() {
+	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
@@ -443,13 +443,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 }
 
 // HandleGossipAtx handles the atx gossip data channel.
-func (db *DB) HandleGossipAtx(ctx context.Context, p p2p.Peer, msg []byte) pubsub.ValidationResult {
-	atx, err := types.BytesToAtx(msg)
-	if err != nil {
-		db.log.WithContext(ctx).With().Error("cannot parse incoming atx", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-	db.fetcher.TrackATXPeer(ctx, p, []types.ATXID{atx.PositioningATX, atx.PrevATXID})
+func (db *DB) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if err := db.handleAtxData(ctx, msg); errors.Is(err, errKnownAtx) {
 		return pubsub.ValidationIgnore
 	} else if err != nil {
@@ -515,14 +509,14 @@ func (db *DB) handleAtxData(ctx context.Context, data []byte) error {
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
 func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := db.log.WithContext(ctx)
-	if !atx.PositioningATX.IsEmpty() && atx.PositioningATX != db.goldenATXID {
+	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		if err := db.fetcher.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return fmt.Errorf("fetch positioning ATX: %w", err)
 		}
 	}
 
-	if !atx.PrevATXID.IsEmpty() {
+	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if err := db.fetcher.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return fmt.Errorf("fetch previous ATX ID: %w", err)
