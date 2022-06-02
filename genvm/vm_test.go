@@ -41,6 +41,7 @@ func (t *tester) persistent() *tester {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(logtest.New(t)))
+	return t
 }
 
 func (t *tester) addAccounts(n int) *tester {
