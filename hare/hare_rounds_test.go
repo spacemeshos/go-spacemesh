@@ -135,7 +135,18 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
-	time.Sleep(time.Second * 6)
+	require.Eventually(t, func() bool {
+		mu.RLock()
+		defer mu.RUnlock()
+		for i := 0; i < layers; i++ {
+			for j := 0; j < nodes; j++ {
+				if m[i][j] != 1 {
+					return false
+				}
+			}
+		}
+		return true
+	}, time.Second*10, time.Second)
 
 	mu.RLock()
 	defer mu.RUnlock()
