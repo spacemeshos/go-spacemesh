@@ -1,13 +1,19 @@
 package addressbook
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/libp2p/go-libp2p-core/peer"
+
+	atomicfile "github.com/natefinch/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -26,7 +32,7 @@ type serializedAddrManager struct {
 }
 
 // persistPeers saves all the known addresses to a file so they can be read back in at next run.
-func (a *AddrBook) persistPeers(path string) {
+func (a *AddrBook) persistPeers() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -58,17 +64,51 @@ func (a *AddrBook) persistPeers(path string) {
 		}
 	}
 
-	w, err := os.Create(path)
+	//w, err := os.Create(path)
+	//if err != nil {
+	//	a.logger.Error("Error creating file: %v", err)
+	//	return
+	//}
+	//enc := json.NewEncoder(w)
+	//defer w.Close()
+	//if err = enc.Encode(&sam); err != nil {
+	//	a.logger.Error("Failed to encode file %s: %v", a.path, err)
+	//	return
+	//}
+	data, err := json.Marshal(sam)
 	if err != nil {
-		a.logger.Error("Error creating file: %v", err)
+		a.logger.Error("Failed to encode data %s", err)
 		return
 	}
-	enc := json.NewEncoder(w)
-	defer w.Close()
-	if err := enc.Encode(&sam); err != nil {
-		a.logger.Error("Failed to encode file %s: %v", path, err)
+	if err = a.atomicallySaveToFile(data); err != nil {
+		a.logger.Error("Failed to encode file %s: %v", a.path, err)
 		return
 	}
+}
+
+func (a *AddrBook) atomicallySaveToFile(data []byte) error {
+	// create backup in case of failure
+	if err := atomicfile.ReplaceFile(a.path, a.path+".backup"); err != nil {
+		return errors.Wrap(err, "failed to backup addresses book")
+	}
+	if err := atomicfile.WriteFile(a.path, bytes.NewReader(data)); err != nil {
+		return errors.Wrap(err, "failed to write addresses to file")
+	}
+
+	// check crc of file and data
+	tmpFileData, err := os.ReadFile(a.path)
+	if err != nil {
+		return errors.Wrap(err, "failed to read addresses from file")
+	}
+	table := crc32.MakeTable(crc32.IEEE)
+	if crc32.Checksum(tmpFileData, table) != crc32.Checksum(data, table) {
+		// checksum mismatch, try rolling back backup
+		if err = atomicfile.ReplaceFile(a.path+".backup", a.path); err != nil {
+			return errors.Wrap(err, "failed to rollback addresses book in case checksum mismatch")
+		}
+		return errors.New("checksum mismatch, file was not updated")
+	}
+	return nil
 }
 
 // loadPeers loads the known address from the saved file. If empty, missing, or
@@ -169,19 +209,18 @@ func (a *AddrBook) decodeFrom(path string) error {
 func (a *AddrBook) Persist(ctx context.Context) {
 	ticker := time.NewTicker(persistInterval)
 	defer ticker.Stop()
-	path := a.path
-	if len(path) == 0 {
+	if len(a.path) == 0 {
 		return
 	}
 
 	for {
 		select {
 		case <-ticker.C:
-			a.persistPeers(path)
-			a.logger.Debug("saved peers to file %v", path)
+			a.persistPeers()
+			a.logger.Debug("saved peers to file %v", a.path)
 		case <-ctx.Done():
-			a.logger.Debug("saving peer before exit to file %v", path)
-			a.persistPeers(path)
+			a.logger.Debug("saving peer before exit to file %v", a.path)
+			a.persistPeers()
 			return
 		}
 	}
