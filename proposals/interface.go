@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -21,6 +22,8 @@ type meshDB interface {
 	HasBallot(types.BallotID) bool
 	AddBallot(*types.Ballot) error
 	GetBallot(types.BallotID) (*types.Ballot, error)
+	GetBlockLayer(types.BlockID) (types.LayerID, error)
+	SetIdentityMalicious(*signing.PublicKey) error
 }
 
 type proposalDB interface {
