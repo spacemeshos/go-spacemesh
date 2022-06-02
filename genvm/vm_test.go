@@ -9,12 +9,13 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/stretchr/testify/require"
 )
 
 func newTester(tb testing.TB) *tester {
@@ -172,6 +173,14 @@ func TestValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, header.Nonce)
 	require.True(t, req.Verify())
+}
+
+func FuzzParse(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		tt := newTester(t).addAccounts(1).applyGenesis()
+		req := tt.Validation(data)
+		req.Parse()
+	})
 }
 
 func BenchmarkValidation(b *testing.B) {

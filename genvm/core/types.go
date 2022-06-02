@@ -14,13 +14,14 @@ type (
 )
 
 type Handler interface {
-	Parse(*Context, uint8, *scale.Decoder) (Header, scale.Encodable)
+	Parse(*Context, uint8, *scale.Decoder) (Header, scale.Encodable, error)
 	Init(uint8, any, []byte) (Template, error)
-	Exec(*Context, uint8, any)
+	Exec(*Context, uint8, any) error
 }
 
 type Template interface {
 	scale.Encodable
+	MaxSpend(*Header, uint8, any) error
 	Verify(*Context, []byte) bool
 }
 

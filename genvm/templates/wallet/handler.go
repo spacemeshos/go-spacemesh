@@ -2,10 +2,10 @@ package wallet
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 )
@@ -18,32 +18,34 @@ const (
 
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 1
-	registry.Register(TemplateAddress, &api{})
+	registry.Register(TemplateAddress, &handler{})
 }
 
 var (
-	_               (core.Handler) = (*api)(nil)
+	_               (core.Handler) = (*handler)(nil)
 	TemplateAddress core.Address
 )
 
-type api struct{}
+type handler struct{}
 
-func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable) {
+func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
 	// TODO rethink cost approach
 	header.MaxGas += gasParse
 	switch method {
 	case 0:
 		var p SpawnPayload
-		if _, err := p.DecodeScale(decoder); err != nil {
-			ctx.Fail(errors.New("invalid tx"))
+		if _, err = p.DecodeScale(decoder); err != nil {
+			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+			return
 		}
 		args = &p.Arguments
 		header.GasPrice = uint64(p.GasPrice)
 		header.MaxGas += gasSpawn
 	case 1:
 		var p SpendPayload
-		if _, err := p.DecodeScale(decoder); err != nil {
-			ctx.Fail(errors.New("invalid tx"))
+		if _, err = p.DecodeScale(decoder); err != nil {
+			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+			return
 		}
 		args = &p.Arguments
 		header.GasPrice = uint64(p.GasPrice)
@@ -53,16 +55,13 @@ func (a *api) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (he
 	}
 	ctx.Header = header
 	ctx.Args = args
-	ctx.Consume(gasParse)
-	return header, args
+	return header, args, ctx.Consume(gasParse)
 }
 
-func (a *api) Init(method uint8, args any, imu []byte) (core.Template, error) {
+func (*handler) Init(method uint8, args any, imu []byte) (core.Template, error) {
 	if method == 0 {
 		return New(args.(*SpawnArguments)), nil
 	}
-	// TODO i dont like that it needs to initialize decoder here
-	// what can be done about it?
 	decoder := scale.NewDecoder(bytes.NewReader(imu))
 	var wallet Wallet
 	if _, err := wallet.DecodeScale(decoder); err != nil {
@@ -71,16 +70,24 @@ func (a *api) Init(method uint8, args any, imu []byte) (core.Template, error) {
 	return &wallet, nil
 }
 
-func (a *api) Exec(ctx *core.Context, method uint8, args any) {
+func (*handler) Exec(ctx *core.Context, method uint8, args any) error {
 	switch method {
 	case 0:
-		ctx.Consume(gasSpawn)
-		ctx.Spawn()
+		if err := ctx.Consume(gasSpawn); err != nil {
+			return err
+		}
+		if err := ctx.Spawn(); err != nil {
+			return err
+		}
 	case 1:
-		ctx.Consume(gasSpend)
-		ctx.Template.(*Wallet).Spend(ctx, args.(*Arguments))
+		if err := ctx.Consume(gasSpend); err != nil {
+			return err
+		}
+		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*Arguments)); err != nil {
+			return err
+		}
 	default:
-		// TODO change it to propagate errors without throws
-		ctx.Fail(errors.New("unkown selector"))
+		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
+	return nil
 }

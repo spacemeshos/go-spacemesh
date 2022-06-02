@@ -26,9 +26,9 @@ func (r *Registry) Get(address core.Address) core.Handler {
 	return r.templates[address]
 }
 
-func (r *Registry) Register(address core.Address, api core.Handler) {
+func (r *Registry) Register(address core.Address, handler core.Handler) {
 	if _, exist := r.templates[address]; exist {
 		panic(fmt.Sprintf("%x already register", address))
 	}
-	r.templates[address] = api
+	r.templates[address] = handler
 }

@@ -97,9 +97,14 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 			skipped = append(skipped, tx)
 			continue
 		}
-		ctx.Handler.Exec(ctx, ctx.Method, args)
+		if err := ctx.Handler.Exec(ctx, ctx.Method, args); err != nil {
+			vm.logger.With().Debug("transaction execution failed", log.Err(err))
+			if errors.Is(err, core.ErrInternal) {
+				return nil, err
+			}
+		}
 		if err := ctx.Apply(ss); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 	}
 	ss.IterateChanged(func(account *core.Account) bool {
@@ -109,10 +114,10 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 		return err == nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
 	vm.logger.With().Info("applied transactions", lid,
 		log.Int("count", len(txs)-len(skipped)),
@@ -190,9 +195,18 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 		Principal: principal,
 		Method:    method,
 	}
-	header, args := handler.Parse(ctx, method, decoder)
+	header, args, err := handler.Parse(ctx, method, decoder)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if header.Nonce.Counter != account.NextNonce() {
+		return nil, nil, nil, core.ErrInvalidNonce
+	}
 	ctx.Template, err = handler.Init(method, args, account.State)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := ctx.Template.MaxSpend(&header, ctx.Method, args); err != nil {
 		return nil, nil, nil, err
 	}
 	header.Principal = principal

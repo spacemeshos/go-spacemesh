@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -21,11 +20,14 @@ type Context struct {
 	Header Header
 	Args   scale.Encodable
 
+	consumed   uint64
+	transfered uint64
+
 	order   []Address
 	changed map[Address]*Account
 }
 
-func (c *Context) Spawn() {
+func (c *Context) Spawn() error {
 	var principal Address
 	hasher := sha256.New()
 	encoder := scale.NewEncoder(hasher)
@@ -34,17 +36,16 @@ func (c *Context) Spawn() {
 	c.Args.EncodeScale(encoder)
 	r1 := hasher.Sum(nil)
 	copy(principal[:], r1)
-
 	if principal != c.Principal {
-		c.Fail(fmt.Errorf("only self spawn is supported: %x != %x", principal, c.Principal))
+		return ErrSpawn
 	}
+	return nil
 }
 
-func (c *Context) Transfer(to Address, amount uint64) {
+func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount > c.Account.Balance {
-		c.Fail(errors.New("out of funds"))
+		return ErrNoBalance
 	}
-	c.Account.Balance -= amount
 	if c.changed == nil {
 		c.changed = map[Address]*Account{}
 	}
@@ -52,20 +53,32 @@ func (c *Context) Transfer(to Address, amount uint64) {
 	if !exist {
 		loaded, err := c.Loader.Get(to)
 		if err != nil {
-			c.Fail(err)
+			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 		}
 		c.changed[to] = &loaded
 		account = &loaded
 	}
+	c.transfered += amount
+	if c.transfered > c.Header.MaxSpend {
+		return ErrMaxSpend
+	}
+
+	c.Account.Balance -= amount
 	account.Balance += amount
+	return nil
 }
 
-func (c *Context) Consume(gas uint64) {
+func (c *Context) Consume(gas uint64) error {
 	amount := gas * c.Header.GasPrice
 	if amount > c.Account.Balance {
-		c.Fail(errors.New("out of funds"))
+		return ErrNoBalance
+	}
+	c.consumed += amount
+	if c.consumed > c.Header.MaxGas {
+		return ErrMaxGas
 	}
 	c.Account.Balance -= amount
+	return nil
 }
 
 func (c *Context) Apply(updater AccountUpdater) error {
@@ -75,17 +88,13 @@ func (c *Context) Apply(updater AccountUpdater) error {
 	c.Account.Nonce = c.Header.Nonce.Counter
 	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {
-		return err
+		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
 	for _, address := range c.order {
 		account := c.changed[address]
 		if err := updater.Update(*account); err != nil {
-			return err
+			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 		}
 	}
 	return nil
-}
-
-func (c *Context) Fail(err error) {
-	panic(err)
 }
