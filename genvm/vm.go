@@ -178,7 +178,7 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 		return nil, nil, nil, fmt.Errorf("unsupported version %d", version)
 	}
 
-	var principal scale.Address
+	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to decode principal: %w", err)
 	}
@@ -192,9 +192,9 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 	}
 	logger.With().Debug("loaded account state", log.Inline(&account))
 
-	var template *scale.Address
+	var template *core.Address
 	if method == 0 {
-		template = &scale.Address{}
+		template = &core.Address{}
 		if _, err := template.DecodeScale(decoder); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to decode template address %w", err)
 		}

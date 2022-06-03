@@ -3,7 +3,6 @@ package accounts
 import (
 	"fmt"
 
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -16,7 +15,7 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 		account.Nonce = uint64(stmt.ColumnInt64(2))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
 		if stmt.ColumnLen(4) > 0 {
-			account.Template = &scale.Address{}
+			account.Template = &types.Address{}
 			stmt.ColumnBytes(4, account.Template[:])
 			account.State = make([]byte, stmt.ColumnLen(5))
 			stmt.ColumnBytes(5, account.State)
@@ -64,7 +63,7 @@ func All(db sql.Executor) ([]*types.Account, error) {
 		account.Nonce = uint64(stmt.ColumnInt64(3))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(4)))
 		if stmt.ColumnLen(5) > 0 {
-			var template scale.Address
+			var template types.Address
 			stmt.ColumnBytes(5, template[:])
 			account.Template = &template
 			account.State = make([]byte, stmt.ColumnLen(6))

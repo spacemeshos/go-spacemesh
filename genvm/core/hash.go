@@ -11,7 +11,6 @@ func Hash(bufs ...[]byte) Hash32 {
 		hasher.Write(buf)
 	}
 	var rst Hash32
-	r1 := hasher.Sum(nil)
-	copy(rst[:], r1)
+	hasher.Sum(rst[:])
 	return rst
 }
