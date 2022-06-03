@@ -18,14 +18,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
+// Opt is for changing VM during initialization.
 type Opt func(*VM)
 
+// WithLogget sets logger for VM.
 func WithLogger(logger log.Log) Opt {
 	return func(vm *VM) {
 		vm.logger = logger
 	}
 }
 
+// New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
 		logger: log.NewNop(),
@@ -37,6 +40,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 	return vm
 }
 
+// VM handles modifications to the account state.
 type VM struct {
 	logger log.Log
 	db     *sql.Database
@@ -51,6 +55,7 @@ func (vm *VM) Validation(raw []byte) *Request {
 	}
 }
 
+// GetNonce returns expected next nonce for the address.
 func (vm *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(vm.db, types.Address(address))
 	if err != nil {
@@ -59,6 +64,7 @@ func (vm *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	return core.Nonce{Counter: account.NextNonce()}, nil
 }
 
+// ApplyGenesis saves list of accounts for genesis.
 func (vm *VM) ApplyGenesis(genesis []types.Account) error {
 	tx, err := vm.db.Tx(context.Background())
 	if err != nil {
@@ -134,6 +140,9 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 	return skipped, nil
 }
 
+// Request used to implement 2-step validation flow.
+// After Parse is executed - conservative cache may do validation and skip Verify
+// if transaction can't be executed.
 type Request struct {
 	vm *VM
 
@@ -142,6 +151,7 @@ type Request struct {
 	decoder *scale.Decoder
 }
 
+// Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	header, ctx, _, err := parse(r.vm.logger, core.NewStagedState(r.vm.db), r.decoder)
 	if err != nil {
@@ -151,9 +161,10 @@ func (r *Request) Parse() (*core.Header, error) {
 	return header, nil
 }
 
+// Verify transaction. Will panic if called without Parse completing succesfully.
 func (r *Request) Verify() bool {
 	if r.ctx == nil {
-		panic("Verify should be called after Parse")
+		panic("Verify should be called after succesfull Parse")
 	}
 	return verify(r.ctx, r.raw)
 }

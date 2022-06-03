@@ -1,9 +1,6 @@
 package types
 
 import (
-	"encoding/hex"
-
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -14,10 +11,11 @@ type Account struct {
 	Initialized bool
 	Nonce       uint64
 	Balance     uint64
-	Template    *scale.Address
+	Template    *Address
 	State       []byte
 }
 
+// NextNonce returns next expected nonce for the account state.
 func (a *Account) NextNonce() uint64 {
 	if a.Template == nil {
 		return 0
@@ -25,13 +23,14 @@ func (a *Account) NextNonce() uint64 {
 	return a.Nonce + 1
 }
 
+// MarshalLogObjects implements encoding for the account state.
 func (a *Account) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("layer", a.Layer.String())
 	encoder.AddString("address", a.Address.String())
 	encoder.AddUint64("nonce", a.Nonce)
 	encoder.AddUint64("balance", a.Balance)
 	if a.Template != nil {
-		encoder.AddString("template", hex.EncodeToString(a.Template[:]))
+		encoder.AddString("template", a.Template.String())
 	}
 	return nil
 }

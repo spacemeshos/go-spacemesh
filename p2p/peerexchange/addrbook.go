@@ -1,6 +1,7 @@
 package peerexchange
 
 import (
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"math/rand"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -530,7 +530,7 @@ func (a *addrBook) reset() {
 	a.addrIndex = make(map[peer.ID]*knownAddress)
 
 	// fill key with bytes from a good random source.
-	err := crypto.GetRandomBytesToBuffer(32, a.key[:])
+	_, err := crand.Read(a.key[:])
 	if err != nil {
 		a.logger.Panic("Error generating random bytes %v", err)
 	}

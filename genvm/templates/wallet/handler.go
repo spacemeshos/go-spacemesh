@@ -28,6 +28,7 @@ var (
 
 type handler struct{}
 
+// Parse header and arguments.
 func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
 	header.MaxGas += gasParse
 	switch method {
@@ -52,12 +53,16 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 		header.Nonce.Bitfield = p.Nonce.Bitfield
 		header.MaxGas += gasSpend
 	}
+	// TODO(dshulyak) need to implement it in a way that allows
+	// to validate with conservative cache, and don't skip transaction
+	// if it has enough gas for Parse during Apply
 	if err = ctx.Consume(gasParse); err != nil {
 		return
 	}
 	return header, args, nil
 }
 
+// Init wallet.
 func (*handler) Init(method uint8, args any, state []byte) (core.Template, error) {
 	if method == 0 {
 		return New(args.(*SpawnArguments)), nil
@@ -70,6 +75,7 @@ func (*handler) Init(method uint8, args any, state []byte) (core.Template, error
 	return &wallet, nil
 }
 
+// Exec spawn or spend based on the method selector.
 func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case 0:

@@ -3,34 +3,26 @@ package types
 import (
 	"fmt"
 	"math/big"
-	"math/rand"
 	"reflect"
 
-	"github.com/spacemeshos/sha256-simd"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
 	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
-	hash20Length = 20
-	hash12Length = 12
 )
-
-// Hash12 represents the first 12 bytes of sha256, mostly used for internal caches.
-type Hash12 [hash12Length]byte
 
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 
 // Hash20 represents the 20-byte sha256 hash of arbitrary data.
-type Hash20 [hash20Length]byte
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+type Hash20 [20]byte
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -64,7 +56,6 @@ func (h *Hash20) UnmarshalText(input []byte) error {
 	if err := util.UnmarshalFixedText("Hash", input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal text: %w", err)
 	}
-
 	return nil
 }
 
@@ -106,20 +97,14 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
 
-// CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
-func CalcHash12(data []byte) (h Hash12) {
-	h32 := sha256.Sum256(data)
-	copy(h[:], h32[:])
-	return
+// EncodeScale implements scale codec interface.
+func (h *Hash20) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, h[:])
 }
 
-// CalcProposalsHash32 returns the 32-byte sha256 sum of the IDs, sorted in lexicographic order. The pre-image is
-// prefixed with additionalBytes.
-func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
-	sortedView := make([]ProposalID, len(view))
-	copy(sortedView, view)
-	SortProposalIDs(sortedView)
-	return CalcProposalHash32Presorted(sortedView, additionalBytes)
+// DecodeScale implements scale codec interface.
+func (h *Hash20) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, h[:])
 }
 
 // CalcBlocksHash32 returns the 32-byte sha256 sum of the IDs, sorted in lexicographic order. The pre-image is
@@ -131,23 +116,10 @@ func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	return CalcBlockHash32Presorted(sortedView, additionalBytes)
 }
 
-// CalcProposalHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
-// prefixed with additionalBytes.
-func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
-	hash := sha256.New()
-	hash.Write(additionalBytes)
-	for _, id := range sortedView {
-		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
-	}
-	var res Hash32
-	hash.Sum(res[:0])
-	return res
-}
-
 // CalcBlockHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
-	hash := sha256.New()
+	hash := hash.New()
 	hash.Write(additionalBytes)
 	for _, id := range sortedView {
 		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
@@ -157,16 +129,13 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	return res
 }
 
-// CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
-func CalcMessageHash12(msg []byte, protocol string) Hash12 {
-	return CalcHash12(append(msg, protocol...))
-}
-
-var hashT = reflect.TypeOf(Hash32{})
+var (
+	hashT = reflect.TypeOf(Hash32{})
+)
 
 // CalcHash32 returns the 32-byte sha256 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
-	return sha256.Sum256(data)
+	return hash.Sum(data)
 }
 
 // CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.
@@ -264,27 +233,15 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 	return
 }
 
-// Generate implements testing/quick.Generator.
-func (h Hash32) Generate(rand *rand.Rand, _ int) reflect.Value {
-	m := rand.Intn(len(h))
-	for i := len(h) - 1; i > m; i-- {
-		h[i] = byte(rand.Uint32())
-	}
-	return reflect.ValueOf(h)
-}
-
-// Scan implements Scanner for database/sql.
-func (h *Hash32) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("can't scan %T into Hash", src)
-	}
-	if len(srcB) != Hash32Length {
-		return fmt.Errorf("can't scan []byte of len %d into Hash, want %d", len(srcB), Hash32Length)
-	}
-	copy(h[:], srcB)
-	return nil
-}
-
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash32) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+
+// EncodeScale implements scale codec interface.
+func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, h[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (h *Hash32) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, h[:])
+}

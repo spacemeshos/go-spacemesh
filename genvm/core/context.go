@@ -90,6 +90,7 @@ func (c *Context) Apply(updater AccountUpdater) error {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
 	c.Template.EncodeScale(encoder)
+
 	c.Account.Nonce = c.Header.Nonce.Counter
 	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {

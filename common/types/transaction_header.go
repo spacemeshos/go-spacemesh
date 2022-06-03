@@ -1,8 +1,8 @@
-package core
+package types
 
-// Header is a transaction header, with some of the fields defined directly in the tx
+// TxHeader is a transaction header, with some of the fields defined directly in the tx
 // and the rest is computed by the template based on immutable state and method arguments.
-type Header struct {
+type TxHeader struct {
 	Principal   Address
 	Nonce       Nonce
 	LayerLimits LayerLimits
@@ -16,7 +16,7 @@ type LayerLimits struct {
 	Min, Max uint32
 }
 
-//go:generate scalegen -pkg core -file header_scale.go -types Nonce -imports github.com/spacemeshos/go-spacemesh/genvm/core
+//go:generate scalegen -pkg types -file transaction_header_scale.go -types Nonce -imports github.com/spacemeshos/go-spacemesh/common/types
 
 // Nonce is for ordering transactions.
 // TODO(dshulyak) we are using only counter until bitfield is defined.
