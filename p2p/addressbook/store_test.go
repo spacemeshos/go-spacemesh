@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -37,12 +40,52 @@ func genRandomInfo(tb testing.TB, rng *rand.Rand) *AddrInfo {
 }
 
 func TestAddrBook_EncodeDecode(t *testing.T) {
-	var (
-		lg   = logtest.New(t)
-		cfg  = Config{DataDir: t.TempDir()}
-		book = NewAddrBook(DefaultAddressBookConfigWithDataDir(cfg.DataDir), lg)
-		rng  = rand.New(rand.NewSource(time.Now().Unix()))
-	)
+	t.Parallel()
+	t.Run("valid file", func(t *testing.T) {
+		t.Parallel()
+		expected, tmpDir := initBookAndPersist(t)
+
+		book := NewAddrBook(DefaultAddressBookConfigWithDataDir(tmpDir), logtest.New(t))
+		for pid, info := range expected {
+			found := book.Lookup(pid)
+			require.Equal(t, info, found)
+		}
+	})
+	t.Run("invalid data checksum", func(t *testing.T) {
+		t.Parallel()
+		expected, tmpDir := initBookAndPersist(t)
+
+		path := filepath.Join(tmpDir, peersFileName)
+		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		require.NoError(t, err)
+		_, err = file.WriteString(".")
+		require.NoError(t, err)
+		require.NoError(t, file.Close())
+
+		book := NewAddrBook(DefaultAddressBookConfigWithDataDir(tmpDir), logtest.New(t))
+		for pid := range expected {
+			found := book.Lookup(pid)
+			require.Nil(t, found)
+		}
+	})
+	t.Run("empty file", func(t *testing.T) {
+		t.Parallel()
+		expected, tmpDir := initBookAndPersist(t)
+
+		require.NoError(t, ioutil.WriteFile(filepath.Join(tmpDir, peersFileName), []byte{}, 0666))
+		book := NewAddrBook(DefaultAddressBookConfigWithDataDir(tmpDir), logtest.New(t))
+		for pid := range expected {
+			found := book.Lookup(pid)
+			require.Nil(t, found)
+		}
+	})
+}
+
+func initBookAndPersist(t *testing.T) (map[peer.ID]*AddrInfo, string) {
+	lg := logtest.New(t)
+	tmpDir := t.TempDir()
+	book := NewAddrBook(DefaultAddressBookConfigWithDataDir(tmpDir), lg)
+	rng := rand.New(rand.NewSource(time.Now().Unix()))
 
 	expected := map[peer.ID]*AddrInfo{}
 	for i := 0; i < 50; i++ {
@@ -51,17 +94,10 @@ func TestAddrBook_EncodeDecode(t *testing.T) {
 		book.AddAddress(info, info)
 	}
 	for pid, info := range expected {
-		found := book.Lookup(pid)
-		require.Equal(t, info, found)
+		require.Equal(t, info, book.Lookup(pid))
 	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	book.Persist(ctx)
-
-	book = NewAddrBook(DefaultAddressBookConfigWithDataDir(cfg.DataDir), lg)
-	for pid, info := range expected {
-		found := book.Lookup(pid)
-		require.Equal(t, info, found)
-	}
+	return expected, tmpDir
 }

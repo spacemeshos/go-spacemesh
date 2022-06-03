@@ -3,17 +3,17 @@ package addressbook
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"io/ioutil"
 	"os"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/libp2p/go-libp2p-core/peer"
-
 	atomicfile "github.com/natefinch/atomic"
+	"github.com/pkg/errors"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -64,17 +64,6 @@ func (a *AddrBook) persistPeers() {
 		}
 	}
 
-	//w, err := os.Create(path)
-	//if err != nil {
-	//	a.logger.Error("Error creating file: %v", err)
-	//	return
-	//}
-	//enc := json.NewEncoder(w)
-	//defer w.Close()
-	//if err = enc.Encode(&sam); err != nil {
-	//	a.logger.Error("Failed to encode file %s: %v", a.path, err)
-	//	return
-	//}
 	data, err := json.Marshal(sam)
 	if err != nil {
 		a.logger.Error("Failed to encode data %s", err)
@@ -82,31 +71,17 @@ func (a *AddrBook) persistPeers() {
 	}
 	if err = a.atomicallySaveToFile(data); err != nil {
 		a.logger.Error("Failed to encode file %s: %v", a.path, err)
-		return
 	}
 }
 
 func (a *AddrBook) atomicallySaveToFile(data []byte) error {
-	// create backup in case of failure
-	if err := atomicfile.ReplaceFile(a.path, a.path+".backup"); err != nil {
-		return errors.Wrap(err, "failed to backup addresses book")
-	}
-	if err := atomicfile.WriteFile(a.path, bytes.NewReader(data)); err != nil {
-		return errors.Wrap(err, "failed to write addresses to file")
-	}
+	checkSum := crc32.Checksum(data, crc32.MakeTable(crc32.IEEE))
+	checkSumBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(checkSumBytes, checkSum)
+	resultData := append(checkSumBytes, data...)
 
-	// check crc of file and data
-	tmpFileData, err := os.ReadFile(a.path)
-	if err != nil {
-		return errors.Wrap(err, "failed to read addresses from file")
-	}
-	table := crc32.MakeTable(crc32.IEEE)
-	if crc32.Checksum(tmpFileData, table) != crc32.Checksum(data, table) {
-		// checksum mismatch, try rolling back backup
-		if err = atomicfile.ReplaceFile(a.path+".backup", a.path); err != nil {
-			return errors.Wrap(err, "failed to rollback addresses book in case checksum mismatch")
-		}
-		return errors.New("checksum mismatch, file was not updated")
+	if err := atomicfile.WriteFile(a.path, bytes.NewReader(resultData)); err != nil {
+		return errors.Wrap(err, "failed to write addresses to file")
 	}
 	return nil
 }
@@ -128,7 +103,6 @@ func (a *AddrBook) loadPeers(path string) {
 			a.logger.With().Warning("failed to remove corrupt peers file", log.String("path", path), log.Err(err))
 		}
 		a.reset()
-		return
 	}
 }
 
@@ -144,8 +118,22 @@ func (a *AddrBook) decodeFrom(path string) error {
 	}
 	defer r.Close()
 
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return errors.Wrap(err, "error reading file")
+	}
+
+	if len(data) < 4 {
+		return errors.New("file is too short")
+	}
+	fileCrc := binary.LittleEndian.Uint32(data[:4])
+	dataCrc := crc32.Checksum(data[4:], crc32.MakeTable(crc32.IEEE))
+	if fileCrc != dataCrc {
+		return fmt.Errorf("checksum mismatch: %x != %x", fileCrc, dataCrc)
+	}
+
 	var sam serializedAddrManager
-	if err = json.NewDecoder(r).Decode(&sam); err != nil {
+	if err = json.Unmarshal(data[4:], &sam); err != nil {
 		return fmt.Errorf("error reading %s: %w", path, err)
 	}
 
