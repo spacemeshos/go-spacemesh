@@ -2,12 +2,14 @@ package core
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
 )
 
+// Context servers 2 purposes:
+// - maintains changes to the system state, that will be applied only after succeful execution
+// - accumulates set of reusable objects and data
 type Context struct {
 	Loader   AccountLoader
 	Handler  Handler
@@ -17,10 +19,10 @@ type Context struct {
 	Principal Address
 	Method    uint8
 
-	ExpectedNonce Nonce
-	Header        Header
-	Args          scale.Encodable
+	Header Header
+	Args   scale.Encodable
 
+	// consumed and transfered is for MaxGas/MaxSpend validation
 	consumed   uint64
 	transfered uint64
 
@@ -28,21 +30,19 @@ type Context struct {
 	changed map[Address]*Account
 }
 
-func (c *Context) Spawn() error {
-	var principal Address
-	hasher := sha256.New()
-	encoder := scale.NewEncoder(hasher)
-	c.Account.Template.EncodeScale(encoder)
-	c.Header.Nonce.EncodeScale(encoder)
-	c.Args.EncodeScale(encoder)
-	r1 := hasher.Sum(nil)
-	copy(principal[:], r1)
+// Spawn account.
+// TODO(dshulyak) only self-spawn is supported for now.
+func (c *Context) Spawn(template Address, args scale.Encodable) error {
+	principal := ComputePrincipal(template, c.Header.Nonce, args)
 	if principal != c.Principal {
 		return ErrSpawn
 	}
+
+	c.Account.Template = &template
 	return nil
 }
 
+// Transfer amount to the address after validation passes.
 func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount > c.Account.Balance {
 		return ErrNoBalance
@@ -70,6 +70,7 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	return nil
 }
 
+// Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) error {
 	amount := gas * c.Header.GasPrice
 	if amount > c.Account.Balance {
@@ -84,6 +85,7 @@ func (c *Context) Consume(gas uint64) error {
 	return nil
 }
 
+// Apply modifified state to the account updater.
 func (c *Context) Apply(updater AccountUpdater) error {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)

@@ -93,11 +93,15 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 		rd.Reset(tx)
 		_, ctx, args, err := parse(vm.logger, ss, decoder)
 		if err != nil {
-			vm.logger.With().Warning("skipping transaction", log.Err(err))
+			vm.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx)
 			continue
 		}
-		if ctx.ExpectedNonce != ctx.Header.Nonce {
+		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
+			vm.logger.With().Warning("skipping transaction. failed nonce check",
+				log.Uint64("account nonce", ctx.Account.NextNonce()),
+				log.Uint64("tx nonce", ctx.Header.Nonce.Counter),
+			)
 			skipped = append(skipped, tx)
 			continue
 		}
@@ -154,7 +158,7 @@ func (r *Request) Verify() bool {
 	return verify(r.ctx, r.raw)
 }
 
-func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, any, error) {
+func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, err
@@ -176,45 +180,48 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 		return nil, nil, nil, fmt.Errorf("failed to load state for principal %s: %w", principal, err)
 	}
 	logger.With().Debug("loaded account state", log.Inline(&account))
-	expected := core.Nonce{Counter: account.NextNonce()}
 
+	var template *scale.Address
 	if method == 0 {
-		var template scale.Address
+		template = &scale.Address{}
 		if _, err := template.DecodeScale(decoder); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to decode template address %w", err)
 		}
-		account.Template = &template
+	} else {
+		template = account.Template
 	}
-	if account.Template == nil {
+	if template == nil {
 		return nil, nil, nil, errors.New("account is not spawned")
 	}
 
-	handler := registry.Get(*account.Template)
+	handler := registry.Get(*template)
 	if handler == nil {
 		return nil, nil, nil, fmt.Errorf("unknown template %x", *account.Template)
 	}
 	ctx := &core.Context{
-		Loader:        loader,
-		Handler:       handler,
-		Account:       account,
-		Principal:     principal,
-		Method:        method,
-		ExpectedNonce: expected,
+		Loader:    loader,
+		Handler:   handler,
+		Account:   account,
+		Principal: principal,
+		Method:    method,
 	}
 	header, args, err := handler.Parse(ctx, method, decoder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	header.Principal = principal
+	ctx.Args = args
+	ctx.Header = header
+
 	ctx.Template, err = handler.Init(method, args, account.State)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err := ctx.Template.MaxSpend(&header, ctx.Method, args); err != nil {
+	maxspend, err := ctx.Template.MaxSpend(ctx.Method, args)
+	if err != nil {
 		return nil, nil, nil, err
 	}
-	header.Principal = principal
-	ctx.Args = args
-	ctx.Header = header
+	header.MaxSpend = maxspend
 	return &header, ctx, args, nil
 }
 

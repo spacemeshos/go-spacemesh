@@ -6,18 +6,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
-func NewStagedState(db sql.Executor) *StagedState {
-	return &StagedState{db: db, cache: map[Address]stagedAccount{}}
+func NewStagedState(db sql.Executor) *StagedCache {
+	return &StagedCache{db: db, cache: map[Address]stagedAccount{}}
 }
 
-type StagedState struct {
+// StagedCache is a passthrough cache for accounts state and enforces order for updated accounts.
+type StagedCache struct {
 	db sql.Executor
 	// list of changed accounts, preserving order
 	touched []Address
 	cache   map[Address]stagedAccount
 }
 
-func (ss *StagedState) Get(address Address) (Account, error) {
+// Get a copy of the Account state for the address.
+func (ss *StagedCache) Get(address Address) (Account, error) {
 	sacc, exist := ss.cache[address]
 	if exist {
 		return sacc.Account, nil
@@ -30,7 +32,8 @@ func (ss *StagedState) Get(address Address) (Account, error) {
 	return account, nil
 }
 
-func (ss *StagedState) Update(account Account) error {
+// Update cache with a copy of the account state.
+func (ss *StagedCache) Update(account Account) error {
 	sacc, exist := ss.cache[Address(account.Address)]
 	if !exist || !sacc.Changed {
 		ss.touched = append(ss.touched, Address(account.Address))
@@ -42,7 +45,8 @@ func (ss *StagedState) Update(account Account) error {
 	return nil
 }
 
-func (ss *StagedState) IterateChanged(f func(*Account) bool) {
+// IterateChanged accounts in the order they were updated.
+func (ss *StagedCache) IterateChanged(f func(*Account) bool) {
 	for _, address := range ss.touched {
 		account := ss.cache[address]
 		if !f(&account.Account) {

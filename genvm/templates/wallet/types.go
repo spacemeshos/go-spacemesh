@@ -10,20 +10,15 @@ type SpawnArguments struct {
 	PublicKey core.PublicKey
 }
 
-type Arguments struct {
+type SpendArguments struct {
 	Destination core.Address
 	Amount      uint64
 }
 
 type SpendPayload struct {
-	Arguments Arguments
-	Nonce     Nonce
+	Arguments SpendArguments
+	Nonce     core.Nonce
 	GasPrice  uint32
-}
-
-type Nonce struct {
-	Counter  uint64
-	Bitfield uint8
 }
 
 type SpawnPayload struct {

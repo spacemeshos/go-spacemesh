@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
+// Hash bytes into sha256 hash.
 func Hash(bufs ...[]byte) scale.Bytes32 {
 	hasher := sha256.New()
 	for _, buf := range bufs {

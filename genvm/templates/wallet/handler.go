@@ -29,7 +29,6 @@ var (
 type handler struct{}
 
 func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
-	// TODO rethink cost approach
 	header.MaxGas += gasParse
 	switch method {
 	case 0:
@@ -53,37 +52,38 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 		header.Nonce.Bitfield = p.Nonce.Bitfield
 		header.MaxGas += gasSpend
 	}
-	ctx.Header = header
-	ctx.Args = args
-	return header, args, ctx.Consume(gasParse)
+	if err = ctx.Consume(gasParse); err != nil {
+		return
+	}
+	return header, args, nil
 }
 
-func (*handler) Init(method uint8, args any, imu []byte) (core.Template, error) {
+func (*handler) Init(method uint8, args any, state []byte) (core.Template, error) {
 	if method == 0 {
 		return New(args.(*SpawnArguments)), nil
 	}
-	decoder := scale.NewDecoder(bytes.NewReader(imu))
+	decoder := scale.NewDecoder(bytes.NewReader(state))
 	var wallet Wallet
 	if _, err := wallet.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("malformed state %w", err)
+		return nil, fmt.Errorf("%w: malformed state %s", core.ErrInternal, err.Error())
 	}
 	return &wallet, nil
 }
 
-func (*handler) Exec(ctx *core.Context, method uint8, args any) error {
+func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case 0:
 		if err := ctx.Consume(gasSpawn); err != nil {
 			return err
 		}
-		if err := ctx.Spawn(); err != nil {
+		if err := ctx.Spawn(TemplateAddress, args); err != nil {
 			return err
 		}
 	case 1:
 		if err := ctx.Consume(gasSpend); err != nil {
 			return err
 		}
-		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*Arguments)); err != nil {
+		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*SpendArguments)); err != nil {
 			return err
 		}
 	default:

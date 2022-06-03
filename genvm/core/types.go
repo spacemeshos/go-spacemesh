@@ -13,15 +13,17 @@ type (
 	Account = types.Account
 )
 
+func (a *Account) Help() {}
+
 type Handler interface {
 	Parse(*Context, uint8, *scale.Decoder) (Header, scale.Encodable, error)
 	Init(uint8, any, []byte) (Template, error)
-	Exec(*Context, uint8, any) error
+	Exec(*Context, uint8, scale.Encodable) error
 }
 
 type Template interface {
 	scale.Encodable
-	MaxSpend(*Header, uint8, any) error
+	MaxSpend(uint8, any) (uint64, error)
 	Verify(*Context, []byte) bool
 }
 

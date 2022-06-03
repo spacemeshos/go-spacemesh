@@ -53,7 +53,7 @@ func (t *tester) addAccounts(n int) *tester {
 		t.pubs = append(t.pubs, pub)
 		args := wallet.SpawnArguments{}
 		copy(args.PublicKey[:], pub)
-		t.addresses = append(t.addresses, ComputePrincipal(wallet.TemplateAddress, core.Nonce{}, &args))
+		t.addresses = append(t.addresses, core.ComputePrincipal(wallet.TemplateAddress, core.Nonce{}, &args))
 		t.nonces = append(t.nonces, core.Nonce{})
 	}
 	return t
@@ -118,7 +118,7 @@ func (t *tester) sendWallet(from, to int, amount uint64) []byte {
 	payload.Arguments.Destination = t.addresses[to]
 	payload.Arguments.Amount = amount
 	payload.GasPrice = 1
-	payload.Nonce = wallet.Nonce(t.nextNonce(from))
+	payload.Nonce = core.Nonce(t.nextNonce(from))
 
 	typ := scale.U8(0)
 	method := scale.U8(1)
