@@ -56,7 +56,7 @@ func TestAddrBook_EncodeDecode(t *testing.T) {
 		expected, tmpDir := initBookAndPersist(t)
 
 		path := filepath.Join(tmpDir, peersFileName)
-		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		require.NoError(t, err)
 		_, err = file.WriteString(".")
 		require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestAddrBook_EncodeDecode(t *testing.T) {
 		t.Parallel()
 		expected, tmpDir := initBookAndPersist(t)
 
-		require.NoError(t, ioutil.WriteFile(filepath.Join(tmpDir, peersFileName), []byte{}, 0666))
+		require.NoError(t, ioutil.WriteFile(filepath.Join(tmpDir, peersFileName), []byte{}, 0o666))
 		book := NewAddrBook(DefaultAddressBookConfigWithDataDir(tmpDir), logtest.New(t))
 		for pid := range expected {
 			found := book.Lookup(pid)

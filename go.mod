@@ -22,6 +22,7 @@ require (
 	github.com/libp2p/go-tcp-transport v0.2.8
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/multiformats/go-multiaddr v0.4.0
+	github.com/natefinch/atomic v1.0.1
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae
 	github.com/pkg/errors v0.9.1
@@ -126,7 +127,6 @@ require (
 	github.com/multiformats/go-multihash v0.0.15 // indirect
 	github.com/multiformats/go-multistream v0.2.2 // indirect
 	github.com/multiformats/go-varint v0.0.6 // indirect
-	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pelletier/go-toml v1.8.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
