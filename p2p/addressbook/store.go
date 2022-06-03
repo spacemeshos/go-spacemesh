@@ -32,7 +32,7 @@ type serializedAddrManager struct {
 }
 
 // persistPeers saves all the known addresses to a file so they can be read back in at next run.
-func (a *AddrBook) persistPeers() {
+func (a *AddrBook) persistPeers() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -66,12 +66,12 @@ func (a *AddrBook) persistPeers() {
 
 	data, err := json.Marshal(sam)
 	if err != nil {
-		a.logger.Error("Failed to encode data %s", err)
-		return
+		return errors.Wrap(err, "failed to encode data")
 	}
 	if err = a.atomicallySaveToFile(data); err != nil {
-		a.logger.Error("Failed to encode file %s: %v", a.path, err)
+		return errors.Wrap(err, "failed to save file")
 	}
+	return nil
 }
 
 func (a *AddrBook) atomicallySaveToFile(data []byte) error {
@@ -196,6 +196,7 @@ func (a *AddrBook) decodeFrom(path string) error {
 // If started with canceled context it will persist exactly once.
 func (a *AddrBook) Persist(ctx context.Context) {
 	ticker := time.NewTicker(persistInterval)
+	var err error
 	defer ticker.Stop()
 	if len(a.path) == 0 {
 		return
@@ -204,11 +205,16 @@ func (a *AddrBook) Persist(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			a.persistPeers()
-			a.logger.Debug("saved peers to file %v", a.path)
+			if err = a.persistPeers(); err != nil {
+				a.logger.Error("Failed to persist file %s: %v", a.path, err)
+			} else {
+				a.logger.Debug("saved peers to file %v", a.path)
+			}
 		case <-ctx.Done():
 			a.logger.Debug("saving peer before exit to file %v", a.path)
-			a.persistPeers()
+			if err = a.persistPeers(); err != nil {
+				a.logger.Error("Failed to persist file %s: %v", a.path, err)
+			}
 			return
 		}
 	}
