@@ -140,6 +140,30 @@ func TestSelectBlockTXs(t *testing.T) {
 	checkIsStable(t, got, proposals, tcs.ConservativeState)
 }
 
+func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, txs := addBatch(t, tcs, totalNumTXs)
+	// optimistic filtering will query the real state again
+	for _, tx := range txs {
+		principal := tx.Origin()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+	}
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	lid := types.NewLayerID(1333)
+	proposals := createProposalsDupTXs(lid, types.EmptyLayerHash, step, numPerProposal, numProposals, tids)
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
 func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	totalNumTXs := 100
 	expSize := totalNumTXs / 3
@@ -204,6 +228,22 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 		proposals = append(proposals, p)
 	}
 	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), types.RandomHash()))
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.ErrorIs(t, err, errNodeHasBadMeshHash)
+	require.Nil(t, got)
+}
+
+func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
+	tcs := createConservativeState(t)
+	numProposals := 10
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for i := 0; i < numProposals; i++ {
+		p := types.GenLayerProposal(lid, nil)
+		p.MeshHash = meshHash
+		proposals = append(proposals, p)
+	}
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.ErrorIs(t, err, errNodeHasBadMeshHash)
 	require.Nil(t, got)

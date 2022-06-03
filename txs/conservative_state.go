@@ -93,8 +93,9 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
 	myHash, err := cs.cache.GetMeshHash(lid.Sub(1))
 	if err != nil {
-		cs.logger.With().Error("failed to get mesh hash", lid, log.Err(err))
-		return nil, fmt.Errorf("get own mesh hash: %w", err)
+		cs.logger.With().Warning("failed to get mesh hash", lid, log.Err(err))
+		// if we don't have hash for that layer, other nodes probably don't either
+		myHash = types.EmptyLayerHash
 	}
 
 	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs.GetMeshTransaction)
