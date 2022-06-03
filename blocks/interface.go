@@ -18,6 +18,6 @@ type meshProvider interface {
 	GetBallot(types.BallotID) (*types.Ballot, error)
 }
 
-type txProvider interface {
-	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
+type conservativeState interface {
+	SelectBlockTXs(types.LayerID, []*types.Proposal) ([]types.TransactionID, error)
 }

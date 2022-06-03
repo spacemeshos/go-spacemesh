@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"time"
 
@@ -94,7 +95,11 @@ type BaseConfig struct {
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
-	TxsPerBlock int `mapstructure:"txs-per-block"`
+	TxsPerProposal int    `mapstructure:"txs-per-proposal"`
+	BlockGasLimit  uint64 `mapstructure:"block-gas-limit"`
+	// if the number of proposals with the same mesh state crosses this threshold (in percentage),
+	// then we optimistically filter out infeasible transactions before constructing the block.
+	OptFilterThreshold int `mapstructure:"optimistic-filtering-threshold"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -153,7 +158,9 @@ func defaultBaseConfig() BaseConfig {
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		TxsPerBlock:         100,
+		TxsPerProposal:      100,
+		BlockGasLimit:       math.MaxUint64,
+		OptFilterThreshold:  90,
 	}
 }
 

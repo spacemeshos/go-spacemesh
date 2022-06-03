@@ -2,6 +2,7 @@ package txs
 
 import (
 	"errors"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -14,15 +15,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 const (
-	numTXsInProposal = 5
+	numTXsInProposal = 17
+	defaultGas       = uint64(100)
 	defaultBalance   = uint64(1000)
-	amount           = uint64(10)
-	fee              = uint64(5)
+	defaultAmount    = uint64(10)
+	defaultFee       = uint64(5)
 )
 
 func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
@@ -31,7 +34,7 @@ func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSig
 }
 
 func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	tx, err := transaction.GenerateCallTransaction(signer, dest, nonce, amount, 100, fee)
+	tx, err := transaction.GenerateCallTransaction(signer, dest, nonce, amount, defaultGas, fee)
 	require.NoError(t, err)
 	return tx
 }
@@ -42,15 +45,27 @@ type testConState struct {
 	mvm *mocks.MockvmState
 }
 
-func createConservativeState(t *testing.T) *testConState {
+func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
 	mvm := mocks.NewMockvmState(ctrl)
 	db := sql.InMemory()
-	return &testConState{
-		ConservativeState: NewConservativeState(mvm, db, logtest.New(t)),
-		db:                db,
-		mvm:               mvm,
+	cfg := CSConfig{
+		BlockGasLimit:      gasLimit,
+		NumTXsPerProposal:  numTXsInProposal,
+		OptFilterThreshold: 90,
 	}
+
+	return &testConState{
+		ConservativeState: NewConservativeState(mvm, db,
+			WithCSConfig(cfg),
+			WithLogger(logtest.New(t))),
+		db:  db,
+		mvm: mvm,
+	}
+}
+
+func createConservativeState(t *testing.T) *testConState {
+	return createTestState(t, math.MaxUint64)
 }
 
 func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
@@ -62,7 +77,7 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 		addr := types.BytesToAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
-		tx := newTx(t, nonce, amount, fee, signer)
+		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		ids = append(ids, tx.ID())
 		txs = append(txs, tx)
@@ -70,31 +85,223 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 	return ids, txs
 }
 
-func TestSelectTXsForProposal(t *testing.T) {
+func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
+	total := len(tids)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for offset := 0; offset < total; offset += step {
+		end := offset + numPer
+		if end >= total {
+			end = total
+		}
+		p := types.GenLayerProposal(lid, tids[offset:end])
+		p.MeshHash = hash
+		proposals = append(proposals, p)
+	}
+	return proposals
+}
+
+func checkIsStable(t *testing.T, expected []types.TransactionID, proposals []*types.Proposal, cs *ConservativeState) {
+	t.Helper()
+	lid := proposals[0].LayerIndex
+	numProposals := len(proposals)
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	newProposals := make([]*types.Proposal, 0, numProposals)
+	for i := numProposals - 1; i >= 0; i-- {
+		newProposals = append(newProposals, proposals[i])
+	}
+	got, err := cs.SelectBlockTXs(lid, newProposals)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
+
+func TestSelectBlockTXs(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, txs := addBatch(t, tcs, totalNumTXs)
+	// optimistic filtering will query the real state again
+	for _, tx := range txs {
+		principal := tx.Origin()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+	}
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, txs := addBatch(t, tcs, totalNumTXs)
+	// optimistic filtering will query the real state again
+	for _, tx := range txs {
+		principal := tx.Origin()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+	}
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	lid := types.NewLayerID(1333)
+	proposals := createProposalsDupTXs(lid, types.EmptyLayerHash, step, numPerProposal, numProposals, tids)
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
+	totalNumTXs := 100
+	expSize := totalNumTXs / 3
+	gasLimit := uint64(expSize) * defaultGas
+	tcs := createTestState(t, gasLimit)
+	tids, txs := addBatch(t, tcs, totalNumTXs)
+	// optimistic filtering will query the real state again
+	for _, tx := range txs {
+		principal := tx.Origin()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+	}
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, expSize)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	// make sure proposals have overlapping transactions
+	numProposals := 10
+	numPerProposal := 30
+	step := totalNumTXs / numProposals
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
+	// change proposal's mesh hash
+	for _, p := range proposals {
+		p.MeshHash = types.RandomHash()
+	}
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, err)
+	require.Len(t, got, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
+	tcs := createConservativeState(t)
+	numProposals := 10
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for i := 0; i < numProposals; i++ {
+		p := types.GenLayerProposal(lid, nil)
+		p.MeshHash = meshHash
+		proposals = append(proposals, p)
+	}
+	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), types.RandomHash()))
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.ErrorIs(t, err, errNodeHasBadMeshHash)
+	require.Nil(t, got)
+}
+
+func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
+	tcs := createConservativeState(t)
+	numProposals := 10
+	meshHash := types.RandomHash()
+	lid := types.NewLayerID(1333)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for i := 0; i < numProposals; i++ {
+		p := types.GenLayerProposal(lid, nil)
+		p.MeshHash = meshHash
+		proposals = append(proposals, p)
+	}
+	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.ErrorIs(t, err, errNodeHasBadMeshHash)
+	require.Nil(t, got)
+}
+
+func TestSelectProposalTXs(t *testing.T) {
 	tcs := createConservativeState(t)
 	numTXs := 2 * numTXsInProposal
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
-	expected := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
-		tx1 := newTx(t, 0, amount, fee, signer)
+		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx1, true))
 		// all the TXs with nonce 0 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID()}))
-		tx2 := newTx(t, 1, amount, fee, signer)
+		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx2, true))
-		expected = append(expected, tx2.ID())
 	}
-	got, err := tcs.SelectTXsForProposal(numTXsInProposal)
-	require.NoError(t, err)
-	require.ElementsMatch(t, expected[:numTXsInProposal], got)
+
+	got := tcs.SelectProposalTXs(1)
+	require.Len(t, got, numTXsInProposal)
+
+	// the second call should have different result than the first, as the transactions should be
+	// randomly selected
+	got2 := tcs.SelectProposalTXs(1)
+	require.Len(t, got2, numTXsInProposal)
+	require.NotSubset(t, got, got2)
+	require.NotSubset(t, got2, got)
 }
 
-func TestSelectTXsForProposal_ExhaustMemPool(t *testing.T) {
+func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
+	numTXs := 2 * numTXsInProposal
+	lid := types.NewLayerID(97)
+	bid := types.BlockID{100}
+	expSize := numTXsInProposal / 2
+	gasLimit := defaultGas * uint64(expSize)
+	tcs := createTestState(t, gasLimit)
+	for i := 0; i < numTXs; i++ {
+		signer := signing.NewEdSigner()
+		addr := types.GenerateAddress(signer.PublicKey().Bytes())
+		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
+		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
+		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
+		require.NoError(t, tcs.AddToCache(tx1, true))
+		// all the TXs with nonce 0 are pending in database
+		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID()}))
+		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
+		require.NoError(t, tcs.AddToCache(tx2, true))
+	}
+	got := tcs.SelectProposalTXs(1)
+	require.Len(t, got, expSize)
+}
+
+func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	tcs := createConservativeState(t)
 	numTXs := numTXsInProposal - 1
 	lid := types.NewLayerID(97)
@@ -105,20 +312,24 @@ func TestSelectTXsForProposal_ExhaustMemPool(t *testing.T) {
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
-		tx1 := newTx(t, 0, amount, fee, signer)
+		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx1, true))
 		// all the TXs with nonce 0 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID()}))
-		tx2 := newTx(t, 1, amount, fee, signer)
+		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx2, true))
 		expected = append(expected, tx2.ID())
 	}
-	got, err := tcs.SelectTXsForProposal(numTXsInProposal)
-	require.NoError(t, err)
-	require.ElementsMatch(t, expected, got)
+	got := tcs.SelectProposalTXs(1)
+	// no reshuffling happens when mempool is exhausted. two list should be exactly the same
+	require.Equal(t, expected, got)
+
+	// the second call should have the same result since both exhaust the mempool
+	got2 := tcs.SelectProposalTXs(1)
+	require.Equal(t, got, got2)
 }
 
-func TestSelectTXsForProposal_SamePrincipal(t *testing.T) {
+func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -129,24 +340,23 @@ func TestSelectTXsForProposal_SamePrincipal(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 	for i := 0; i < numInBlock; i++ {
-		tx := newTx(t, uint64(i), amount, fee, signer)
+		tx := newTx(t, uint64(i), defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID()}))
 	}
 	expected := make([]types.TransactionID, 0, numTXsInProposal)
 	for i := 0; i < numTXs; i++ {
-		tx := newTx(t, uint64(numInBlock+i), amount, fee, signer)
+		tx := newTx(t, uint64(numInBlock+i), defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		if i < numTXsInProposal {
 			expected = append(expected, tx.ID())
 		}
 	}
-	got, err := tcs.SelectTXsForProposal(numTXsInProposal)
-	require.NoError(t, err)
-	require.ElementsMatch(t, expected, got)
+	got := tcs.SelectProposalTXs(1)
+	require.Equal(t, expected, got)
 }
 
-func TestSelectTXsForProposal_TwoPrincipals(t *testing.T) {
+func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	const (
 		numInProposal = 30
 		numTXs        = numInProposal * 2
@@ -165,25 +375,24 @@ func TestSelectTXsForProposal_TwoPrincipals(t *testing.T) {
 	tcs.mvm.EXPECT().GetNonce(addr2).Return(uint64(0), nil).Times(1)
 	allTXs := make(map[types.TransactionID]*types.Transaction)
 	for i := 0; i < numInDBs; i++ {
-		tx := newTx(t, uint64(i), amount, fee, signer1)
+		tx := newTx(t, uint64(i), defaultAmount, defaultFee, signer1)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID()}))
 		allTXs[tx.ID()] = tx
-		tx = newTx(t, uint64(i), amount, fee, signer2)
+		tx = newTx(t, uint64(i), defaultAmount, defaultFee, signer2)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID()}))
 		allTXs[tx.ID()] = tx
 	}
 	for i := 0; i < numTXs; i++ {
-		tx := newTx(t, uint64(numInDBs+i), amount, fee, signer1)
+		tx := newTx(t, uint64(numInDBs+i), defaultAmount, defaultFee, signer1)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		allTXs[tx.ID()] = tx
-		tx = newTx(t, uint64(numInDBs+i), amount, fee, signer2)
+		tx = newTx(t, uint64(numInDBs+i), defaultAmount, defaultFee, signer2)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		allTXs[tx.ID()] = tx
 	}
-	got, err := tcs.SelectTXsForProposal(numInProposal)
-	require.NoError(t, err)
+	got := tcs.SelectProposalTXs(1)
 	// the odds of picking just one principal is 2^30
 	chosen := make(map[types.Address][]*types.Transaction)
 	for _, tid := range got {
@@ -208,15 +417,15 @@ func TestGetProjection(t *testing.T) {
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
-	tx1 := newTx(t, nonce, amount, fee, signer)
+	tx1 := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx1, true))
 	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(10), types.BlockID{100}, []types.TransactionID{tx1.ID()}))
-	tx2 := newTx(t, nonce+1, amount, fee, signer)
+	tx2 := newTx(t, nonce+1, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx2, true))
 
 	got, balance := tcs.GetProjection(addr)
 	require.EqualValues(t, nonce+2, got)
-	require.EqualValues(t, defaultBalance-2*(amount+fee), balance)
+	require.EqualValues(t, defaultBalance-2*(defaultAmount+defaultFee), balance)
 }
 
 func TestAddToCache(t *testing.T) {
@@ -225,7 +434,7 @@ func TestAddToCache(t *testing.T) {
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
-	tx := newTx(t, nonce, amount, fee, signer)
+	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx, true))
 	got, err := tcs.HasTx(tx.ID())
 	require.NoError(t, err)
@@ -238,7 +447,7 @@ func TestAddToCache_KnownTX(t *testing.T) {
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
-	tx := newTx(t, nonce, amount, fee, signer)
+	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx, false))
 	got, err := tcs.HasTx(tx.ID())
 	require.NoError(t, err)
@@ -249,9 +458,9 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
-	tcs.mvm.EXPECT().GetBalance(addr).Return(amount, nil).Times(1)
+	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
-	tx := newTx(t, nonce, amount, fee, signer)
+	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	err := tcs.AddToCache(tx, true)
 	require.ErrorIs(t, err, errInsufficientBalance)
 }
@@ -262,7 +471,7 @@ func TestGetMeshTransaction(t *testing.T) {
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
-	tx := newTx(t, nonce, amount, fee, signer)
+	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx, true))
 	mtx, err := tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
@@ -321,17 +530,17 @@ func TestGetTransactionsByAddress(t *testing.T) {
 
 	tcs.mvm.EXPECT().GetBalance(addr1).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr1).Return(nonce, nil).Times(1)
-	tx0 := newTxWthRecipient(t, addr2, nonce, amount, fee, signer1)
+	tx0 := newTxWthRecipient(t, addr2, nonce, defaultAmount, defaultFee, signer1)
 	require.NoError(t, tcs.AddToCache(tx0, true))
-	tx1 := newTxWthRecipient(t, addr3, nonce+1, amount, fee, signer1)
+	tx1 := newTxWthRecipient(t, addr3, nonce+1, defaultAmount, defaultFee, signer1)
 	require.NoError(t, tcs.AddToCache(tx1, true))
 	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(5), types.BlockID{11}, []types.TransactionID{tx1.ID()}))
 
 	tcs.mvm.EXPECT().GetBalance(addr2).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr2).Return(nonce, nil).Times(1)
-	tx2 := newTxWthRecipient(t, addr3, nonce, amount, fee, signer2)
+	tx2 := newTxWthRecipient(t, addr3, nonce, defaultAmount, defaultFee, signer2)
 	require.NoError(t, tcs.AddToCache(tx2, true))
-	tx3 := newTxWthRecipient(t, addr3, nonce+1, amount, fee, signer2)
+	tx3 := newTxWthRecipient(t, addr3, nonce+1, defaultAmount, defaultFee, signer2)
 	require.NoError(t, tcs.AddToCache(tx3, true))
 	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(6), types.BlockID{12}, []types.TransactionID{tx3.ID()}))
 
@@ -372,7 +581,7 @@ func TestApplyLayer(t *testing.T) {
 			TxIDs: ids,
 		})
 	for _, tx := range txs {
-		tcs.mvm.EXPECT().GetBalance(tx.Origin()).Return(defaultBalance-(amount+fee), nil)
+		tcs.mvm.EXPECT().GetBalance(tx.Origin()).Return(defaultBalance-(defaultAmount+defaultFee), nil)
 		tcs.mvm.EXPECT().GetNonce(tx.Origin()).Return(nonce+1, nil)
 	}
 	tcs.mvm.EXPECT().ApplyLayer(lid, gomock.Any(), block.Rewards).DoAndReturn(

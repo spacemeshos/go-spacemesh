@@ -6,15 +6,13 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 type store struct {
-	logger log.Log
-	db     *sql.Database
+	db *sql.Database
 }
 
 func newStore(db *sql.Database) *store {
@@ -28,6 +26,11 @@ func (s *store) LastAppliedLayer() (types.LayerID, error) {
 	// it's not correct to query transactions table for max applied layer because
 	// layer can be empty (contains no transactions).
 	return layers.GetLastApplied(s.db)
+}
+
+// GetMeshHash gets the aggregated layer hash at the specified layer.
+func (s *store) GetMeshHash(lid types.LayerID) (types.Hash32, error) {
+	return layers.GetAggregatedHash(s.db, lid)
 }
 
 // Add adds a transaction to the database.
