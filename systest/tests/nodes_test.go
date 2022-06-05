@@ -20,14 +20,9 @@ func TestAddNodes(t *testing.T) {
 
 	const (
 		epochBeforeJoin = 5
-		lastEpoch       = 7
+		lastEpoch       = 9
 
 		beforeAdding = 12
-		// 4 epochs to fully join:
-		// sync finishes at layer 16
-		// atx published layer 20, in the next epoch node will participate in beacon
-		// after beacon computed - node will build proposals
-		lastLayer = beforeAdding + 20
 
 		addedLater = 2
 	)
@@ -59,7 +54,7 @@ func TestAddNodes(t *testing.T) {
 		i := i
 		client := cl.Client(i)
 		watchProposals(tctx, &eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
-			if proposal.Layer.Number > lastLayer {
+			if proposal.Epoch.Value > lastEpoch {
 				return false, nil
 			}
 			if proposal.Status == spacemeshv1.Proposal_Created {
@@ -89,9 +84,20 @@ func TestAddNodes(t *testing.T) {
 	for epoch := uint64(4); epoch <= epochBeforeJoin; epoch++ {
 		require.GreaterOrEqual(t, len(unique[epoch]), cl.Total()-addedLater, "epoch=%d", epoch)
 	}
+	// condition is so that test waits until the first epoch where all smeshers participated.
+	// and if it finds such epoch, starting from that epoch all smeshers should consistently
+	// participate.
+	// test should fail if such epoch wasn't found.
+	var joined uint64
 	for epoch := uint64(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
-		require.Len(t, unique[epoch], cl.Total(), "epoch=%d", epoch)
+		if len(unique[epoch]) == cl.Total() {
+			joined = epoch
+		}
+		if joined != 0 && epoch >= joined {
+			require.Len(t, unique[epoch], cl.Total(), "epoch=%d", epoch)
+		}
 	}
+	require.NotEmpty(t, joined, "nodes weren't able to join the cluster")
 }
 
 func TestFailedNodes(t *testing.T) {
