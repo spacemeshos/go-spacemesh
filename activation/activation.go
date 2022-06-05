@@ -45,11 +45,6 @@ type nipostBuilder interface {
 	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
 }
 
-type idStore interface {
-	StoreNodeIdentity(id types.NodeID) error
-	GetIdentity(id string) (types.NodeID, error)
-}
-
 type nipostValidator interface {
 	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error
 	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
