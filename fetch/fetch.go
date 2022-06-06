@@ -65,9 +65,11 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
-	MapPeerToHash(hash types.Hash32, peer p2p.Peer)
 	Stop()
 	Start()
+	TrackBlockPeers(ctx context.Context, peer p2p.Peer, ids []types.BlockID)
+	TrackBallotPeers(ctx context.Context, peer p2p.Peer, ids []types.BallotID)
+	TrackATXPeers(ctx context.Context, peer p2p.Peer, ids []types.ATXID)
 }
 
 /// request contains all relevant Data for a single request for a specified hash.
@@ -751,9 +753,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	return resChan
 }
 
-func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
-	f.log.Info("map hash to peer", log.String("hash", hash.String()), log.String("peer", peer.String()))
-
+func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	f.hashToPeersM.Lock()
 	defer f.hashToPeersM.Unlock()
 
@@ -771,6 +771,49 @@ func (f *Fetch) MapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 
 	f.hashToPeers[hash].peers[peer] = struct{}{}
 
+	return
+}
+
+func (f *Fetch) TrackBlockPeers(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
+	if len(ids) == 0 {
+		return
+	}
+	if p2p.IsAnyPeer(peer) {
+		return
+	}
+	hashes := types.BlockIDsToHashes(ids)
+	for _, hash := range hashes {
+		f.mapPeerToHash(hash, peer)
+	}
+
+	return
+}
+
+func (f *Fetch) TrackBallotPeers(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
+	if len(ids) == 0 {
+		return
+	}
+	if p2p.IsAnyPeer(peer) {
+		return
+	}
+	hashes := types.BallotIDsToHashes(ids)
+	for _, hash := range hashes {
+		f.mapPeerToHash(hash, peer)
+	}
+	return
+}
+
+func (f *Fetch) TrackATXPeers(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
+	if len(ids) == 0 {
+		return
+	}
+	if p2p.IsAnyPeer(peer) {
+		return
+	}
+	hashes := types.ATXIDsToHashes(ids)
+	for _, hash := range hashes {
+		f.mapPeerToHash(hash, peer)
+	}
 	return
 }
 

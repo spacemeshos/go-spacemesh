@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -172,7 +174,7 @@ func Test_HandleSyncTransaction_Success(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg)
+	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer)
 	assert.NoError(t, got)
 }
 
@@ -187,7 +189,7 @@ func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg)
+	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer)
 	assert.ErrorIs(t, got, errAddrNotExtracted)
 }
 
@@ -203,7 +205,7 @@ func Test_HandleSyncTransaction_HasTXError(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg)
+	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer)
 	assert.ErrorIs(t, got, errUnknown)
 }
 
@@ -226,5 +228,5 @@ func Test_HandleSyncTransaction_FailedMemPoolIgnored(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	require.NoError(t, th.HandleSyncTransaction(context.TODO(), msg))
+	require.NoError(t, th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer))
 }

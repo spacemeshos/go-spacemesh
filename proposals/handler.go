@@ -130,7 +130,7 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m meshDB,
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
-	if err := h.handleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
+	if err := h.handleProposalData(newCtx, msg, p2p.AnyPeer); errors.Is(err, errKnownProposal) {
 		return pubsub.ValidationIgnore
 	} else if err != nil {
 		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
@@ -140,7 +140,7 @@ func (h *Handler) HandleProposal(ctx context.Context, _ p2p.Peer, msg []byte) pu
 }
 
 // HandleBallotData handles Ballot data from sync.
-func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
+func (h *Handler) HandleBallotData(ctx context.Context, data []byte, peer p2p.Peer) error {
 	newCtx := log.WithNewRequestID(ctx)
 	logger := h.logger.WithContext(newCtx)
 	logger.Info("processing ballot")
@@ -158,22 +158,22 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	}
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
-	if err := h.processBallot(ctx, &b, logger); err != nil {
+	if err := h.processBallot(ctx, &b, peer, logger); err != nil {
 		return err
 	}
 	return nil
 }
 
 // HandleProposalData handles Proposal data from sync.
-func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
-	err := h.handleProposalData(ctx, data)
+func (h *Handler) HandleProposalData(ctx context.Context, data []byte, peer p2p.Peer) error {
+	err := h.handleProposalData(ctx, data, peer)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
+func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.Peer) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing proposal")
 
@@ -197,7 +197,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new proposal", log.Inline(&p))
 
-	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
+	if err := h.processBallot(ctx, &p.Ballot, peer, logger); err != nil {
 		logger.With().Warning("failed to process ballot", log.Err(err))
 		return err
 	}
@@ -222,14 +222,14 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 	return nil
 }
 
-func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log.Log) error {
+func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, peer p2p.Peer, logger log.Log) error {
 	if h.mesh.HasBallot(b.ID()) {
 		logger.Debug("known ballot", b.ID())
 		return nil
 	}
 
 	logger.With().Info("new ballot", log.Inline(b))
-	if err := h.checkBallotSyntacticValidity(ctx, b); err != nil {
+	if err := h.checkBallotSyntacticValidity(ctx, b, peer); err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))
 		return fmt.Errorf("syntactic-check ballot: %w", err)
 	}
@@ -242,7 +242,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 	return nil
 }
 
-func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot) error {
+func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot, peer p2p.Peer) error {
 	h.logger.WithContext(ctx).With().Debug("checking proposal syntactic validity")
 
 	if err := h.checkBallotDataIntegrity(b); err != nil {
@@ -250,7 +250,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 		return err
 	}
 
-	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
+	if err := h.checkBallotDataAvailability(ctx, b, peer); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot data availability check failed", log.Err(err))
 		return err
 	}
@@ -331,12 +331,15 @@ func ballotBlockView(b *types.Ballot) []types.BlockID {
 	return combined
 }
 
-func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot) error {
+func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot, peer p2p.Peer) error {
 	ballots := []types.BallotID{b.Votes.Base}
 	if b.RefBallot != types.EmptyBallotID {
 		ballots = append(ballots, b.RefBallot)
 	}
-	if err := h.fetcher.GetBallots(ctx, ballots); err != nil {
+
+	h.fetcher.TrackBallotPeers(ctx, peer, ballots)
+
+	if err := h.fetcher.GetBallots(ctx, ballots, peer); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
 
@@ -344,7 +347,11 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 		return fmt.Errorf("fetch referenced ATXs: %w", err)
 	}
 
-	if err := h.fetcher.GetBlocks(ctx, ballotBlockView(b)); err != nil {
+	blocks := ballotBlockView(b)
+
+	h.fetcher.TrackBlockPeers(ctx, peer, blocks)
+
+	if err := h.fetcher.GetBlocks(ctx, blocks); err != nil {
 		return fmt.Errorf("fetch blocks: %w", err)
 	}
 

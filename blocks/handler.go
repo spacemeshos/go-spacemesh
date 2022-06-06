@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -48,7 +50,7 @@ func NewHandler(f system.Fetcher, m meshProvider, opts ...Opt) *Handler {
 }
 
 // HandleBlockData handles Block data from sync.
-func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
+func (h *Handler) HandleBlockData(ctx context.Context, data []byte, _ p2p.Peer) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing block")
 

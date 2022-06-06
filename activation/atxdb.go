@@ -454,7 +454,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) pubsu
 }
 
 // HandleAtxData handles atxs received either by gossip or sync.
-func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
+func (db *DB) HandleAtxData(ctx context.Context, data []byte, _ p2p.Peer) error {
 	err := db.handleAtxData(ctx, data)
 	if errors.Is(err, errKnownAtx) {
 		return nil
