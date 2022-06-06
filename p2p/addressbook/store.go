@@ -1,13 +1,19 @@
 package addressbook
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
+	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	atomicfile "github.com/natefinch/atomic"
+	"github.com/pkg/errors"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -26,7 +32,7 @@ type serializedAddrManager struct {
 }
 
 // persistPeers saves all the known addresses to a file so they can be read back in at next run.
-func (a *AddrBook) persistPeers(path string) {
+func (a *AddrBook) persistPeers() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -58,17 +64,26 @@ func (a *AddrBook) persistPeers(path string) {
 		}
 	}
 
-	w, err := os.Create(path)
+	data, err := json.Marshal(sam)
 	if err != nil {
-		a.logger.Error("Error creating file: %v", err)
-		return
+		return errors.Wrap(err, "failed to encode data")
 	}
-	enc := json.NewEncoder(w)
-	defer w.Close()
-	if err := enc.Encode(&sam); err != nil {
-		a.logger.Error("Failed to encode file %s: %v", path, err)
-		return
+	if err = a.atomicallySaveToFile(data); err != nil {
+		return errors.Wrap(err, "failed to save file")
 	}
+	return nil
+}
+
+func (a *AddrBook) atomicallySaveToFile(data []byte) error {
+	checkSum := crc32.Checksum(data, crc32.MakeTable(crc32.IEEE))
+	checkSumBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(checkSumBytes, checkSum)
+	resultData := append(checkSumBytes, data...)
+
+	if err := atomicfile.WriteFile(a.path, bytes.NewReader(resultData)); err != nil {
+		return errors.Wrap(err, "failed to write addresses to file")
+	}
+	return nil
 }
 
 // loadPeers loads the known address from the saved file. If empty, missing, or
@@ -88,7 +103,6 @@ func (a *AddrBook) loadPeers(path string) {
 			a.logger.With().Warning("failed to remove corrupt peers file", log.String("path", path), log.Err(err))
 		}
 		a.reset()
-		return
 	}
 }
 
@@ -104,8 +118,22 @@ func (a *AddrBook) decodeFrom(path string) error {
 	}
 	defer r.Close()
 
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return errors.Wrap(err, "error reading file")
+	}
+
+	if len(data) < 4 {
+		return errors.New("file is too short")
+	}
+	fileCrc := binary.LittleEndian.Uint32(data[:4])
+	dataCrc := crc32.Checksum(data[4:], crc32.MakeTable(crc32.IEEE))
+	if fileCrc != dataCrc {
+		return fmt.Errorf("checksum mismatch: %x != %x", fileCrc, dataCrc)
+	}
+
 	var sam serializedAddrManager
-	if err = json.NewDecoder(r).Decode(&sam); err != nil {
+	if err = json.Unmarshal(data[4:], &sam); err != nil {
 		return fmt.Errorf("error reading %s: %w", path, err)
 	}
 
@@ -168,20 +196,25 @@ func (a *AddrBook) decodeFrom(path string) error {
 // If started with canceled context it will persist exactly once.
 func (a *AddrBook) Persist(ctx context.Context) {
 	ticker := time.NewTicker(persistInterval)
+	var err error
 	defer ticker.Stop()
-	path := a.path
-	if len(path) == 0 {
+	if len(a.path) == 0 {
 		return
 	}
 
 	for {
 		select {
 		case <-ticker.C:
-			a.persistPeers(path)
-			a.logger.Debug("saved peers to file %v", path)
+			if err = a.persistPeers(); err != nil {
+				a.logger.Error("Failed to persist file %s: %v", a.path, err)
+			} else {
+				a.logger.Debug("saved peers to file %v", a.path)
+			}
 		case <-ctx.Done():
-			a.logger.Debug("saving peer before exit to file %v", path)
-			a.persistPeers(path)
+			a.logger.Debug("saving peer before exit to file %v", a.path)
+			if err = a.persistPeers(); err != nil {
+				a.logger.Error("Failed to persist file %s: %v", a.path, err)
+			}
 			return
 		}
 	}
