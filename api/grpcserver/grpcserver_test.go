@@ -38,7 +38,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -2865,16 +2864,6 @@ func TestGatewayService(t *testing.T) {
 	require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	require.NoError(t, err, "expected request to succeed")
 }
-
-type appliedTxsMock struct{}
-
-func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
-func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
-func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
-func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
-func (appliedTxsMock) Close()                             { panic("implement me") }
-func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
-func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)

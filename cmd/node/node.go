@@ -459,12 +459,6 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create IDs DB: %w", err)
-	}
-	app.closers = append(app.closers, idDBStore)
-
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create store DB: %w", err)
