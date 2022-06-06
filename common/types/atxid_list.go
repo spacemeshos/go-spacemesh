@@ -1,13 +1,13 @@
 package types
 
-import "github.com/spacemeshos/sha256-simd"
+import "github.com/spacemeshos/go-spacemesh/hash"
 
 // ATXIDList defines ATX ID list.
 type ATXIDList []ATXID
 
 // Hash returns ATX ID list hash.
 func (atxList ATXIDList) Hash() Hash32 {
-	hasher := sha256.New()
+	hasher := hash.New()
 
 	for _, id := range atxList {
 		if _, err := hasher.Write(id.Bytes()); err != nil {
@@ -15,9 +15,7 @@ func (atxList ATXIDList) Hash() Hash32 {
 		}
 	}
 
-	var res Hash32
-
-	hasher.Sum(res[:0])
-
-	return res
+	var rst Hash32
+	hasher.Sum(rst[:0])
+	return rst
 }

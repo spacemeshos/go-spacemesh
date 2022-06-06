@@ -989,7 +989,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
-	cfg.TxsPerBlock = 100
+	cfg.TxsPerProposal = 100
 	cfg.Tortoise.Hdist = 5
 	cfg.Tortoise.Zdist = 5
 

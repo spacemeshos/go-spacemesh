@@ -109,6 +109,22 @@ func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
 	return rst, err
 }
 
+// Layer returns the layer of a block.
+func Layer(db sql.Executor, id types.BlockID) (types.LayerID, error) {
+	var lid types.LayerID
+	if rows, err := db.Exec("select layer from blocks where id = ?1;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}, func(stmt *sql.Statement) bool {
+		lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		return true
+	}); err != nil {
+		return lid, fmt.Errorf("get block layer %s: %w", id, err)
+	} else if rows == 0 {
+		return lid, fmt.Errorf("%w block %s not in db", sql.ErrNotFound, err)
+	}
+	return lid, nil
+}
+
 // IDsInLayer returns list of block ids in the layer.
 func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID

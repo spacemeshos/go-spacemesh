@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 )
 
 func TestDiscovery_CheckBook(t *testing.T) {
@@ -26,8 +27,7 @@ func TestDiscovery_CheckBook(t *testing.T) {
 		totalAddressesBefore := calcTotalAddresses(instances)
 		totalPeerAddressesBefore := calcTotalAddressesPeerStore(instances)
 
-		brokeMesh(t, mesh)
-		time.Sleep(3 * time.Second)
+		brokeMesh(t, mesh, instances)
 		checkBooks(instances)
 
 		totalAddressesAfter := calcTotalAddresses(instances)
@@ -47,8 +47,7 @@ func TestDiscovery_CheckBook(t *testing.T) {
 		require.True(t, totalAddressesBefore > 0, "total addresses before break should be greater than 0")
 		require.True(t, totalPeerAddressesBefore > 0, "total addresses before break should be greater than 0")
 
-		brokeMesh(t, mesh)
-		time.Sleep(3 * time.Second)
+		brokeMesh(t, mesh, instances)
 		checkBooks(instances)
 
 		totalAddressesAfter := calcTotalAddresses(instances)
@@ -64,20 +63,22 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	hosts, instances := setupOverNodes(t, 2)
 	d := instances[0]
 
-	bootNodeAddress, err := parseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWGQrF3pHrR1W7P6nh8gypYxtFS93SnmvtN6qpyeSo7T2u")
+	bootNodeAddress, err := addressbook.ParseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWGQrF3pHrR1W7P6nh8gypYxtFS93SnmvtN6qpyeSo7T2u")
 	require.NoError(t, err)
-	sampleNode, err := parseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWBdbwmiMhLDzAbfY3Vy5RDGaumUEgHe2P1pL5G3dhhWMb")
+	sampleNode, err := addressbook.ParseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWBdbwmiMhLDzAbfY3Vy5RDGaumUEgHe2P1pL5G3dhhWMb")
 	require.NoError(t, err)
-	oldNode, err := parseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWJSLApvoWiX9q3oKkYQTXpxQC7qAKt6mTERCJuwCFT98d")
+	oldNode, err := addressbook.ParseAddrInfo("/dns4/sample.spacemesh.io/tcp/5003/p2p/12D3KooWJSLApvoWiX9q3oKkYQTXpxQC7qAKt6mTERCJuwCFT98d")
 	require.NoError(t, err)
 	hostConnected := hosts[1].Network().ListenAddresses()[0].String() + "/p2p/" + hosts[1].ID().String()
 	addr, err := ma.NewMultiaddr(hostConnected)
 	require.NoError(t, err)
-	connectedNodeAddress := &addrInfo{ID: hosts[1].ID(), RawAddr: hostConnected, addr: addr}
+	connectedNodeAddress := &addressbook.AddrInfo{ID: hosts[1].ID(), RawAddr: hostConnected}
+	connectedNodeAddress.SetAddr(addr)
 
 	t.Run("empty peers", func(t *testing.T) {
-		time.Sleep(100 * time.Millisecond)
-		require.Equal(t, 0, d.book.NumAddresses())
+		require.Eventually(t, func() bool {
+			return d.book.NumAddresses() == 0
+		}, 2*time.Second, 100*time.Millisecond)
 		res := d.GetRandomPeers(10)
 		require.Equal(t, 0, len(res), "should return 2 peers")
 	})
@@ -91,46 +92,65 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	d.book.AddAddress(connectedNodeAddress, best)
 
 	t.Run("check all nodes in book", func(t *testing.T) {
-		time.Sleep(3 * time.Second)
-		res := d.GetRandomPeers(10)
-		require.Equal(t, 4, len(res), "should return 4 peers")
+		require.Eventually(t, func() bool {
+			return len(d.GetRandomPeers(10)) == 4
+		}, 4*time.Second, 100*time.Millisecond, "should return 4 peers")
 	})
 
 	wrapDiscovery(instances)
 
 	t.Run("return all except connected node", func(t *testing.T) {
-		time.Sleep(3 * time.Second)
-		require.Equal(t, 4, d.book.NumAddresses())
-		res := d.GetRandomPeers(10)
-		require.Equal(t, 3, len(res), "should return 3 peers")
-		require.NotContains(t, res, connectedNodeAddress, "should not return connected node")
+		require.Eventually(t, func() bool {
+			return d.book.NumAddresses() == 4
+		}, 4*time.Second, 100*time.Millisecond)
+
+		require.Eventually(t, func() bool {
+			return len(d.GetRandomPeers(10)) == 3
+		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers")
+		require.NotContains(t, d.GetRandomPeers(10), connectedNodeAddress, "should not return connected node")
 	})
 
 	t.Run("return all except connected node and bootnode", func(t *testing.T) {
 		d.host.ConnManager().Protect(bootNodeAddress.ID, BootNodeTag)
 		defer d.host.ConnManager().Unprotect(bootNodeAddress.ID, BootNodeTag)
-		time.Sleep(3 * time.Second)
-		require.Equal(t, 4, d.book.NumAddresses())
+		require.Eventually(t, func() bool {
+			return d.book.NumAddresses() == 4
+		}, 4*time.Second, 100*time.Millisecond)
+
+		require.Eventually(t, func() bool {
+			return len(d.GetRandomPeers(10)) == 2
+		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 		res := d.GetRandomPeers(10)
-		require.Equal(t, 2, len(res), "should return 2 peers")
 		require.NotContains(t, res, connectedNodeAddress, "should not return connected node")
 		require.NotContains(t, res, bootNodeAddress, "should not return bootnode")
 	})
 
 	t.Run("check last usage address", func(t *testing.T) {
-		time.Sleep(3 * time.Second)
 		// trigger update last usage date
 		d.book.AddAddress(oldNode, best)
-		require.Equal(t, 4, d.book.NumAddresses())
-		time.Sleep(100 * time.Millisecond)
+		require.Eventually(t, func() bool {
+			return d.book.NumAddresses() == 4
+		}, 4*time.Second, 100*time.Millisecond)
+
+		require.Eventually(t, func() bool {
+			return len(d.GetRandomPeers(10)) == 2
+		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
+
 		res := d.GetRandomPeers(10)
-		require.Equal(t, 2, len(res), "should return 3 peers")
 		require.NotContains(t, res, oldNode, "should not return connected node")
 
-		time.Sleep(3 * time.Second)
-		res = d.GetRandomPeers(10)
-		require.Contains(t, res, oldNode, "should not return old node")
-		require.Equal(t, 3, len(res), "should return 3 peers")
+		require.Eventually(t, func() bool {
+			res = d.GetRandomPeers(10)
+			if len(res) != 3 {
+				return false
+			}
+			for _, peer := range res {
+				if peer.ID.String() == oldNode.ID.String() {
+					return true
+				}
+			}
+			return false
+		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers and contain old node")
 	})
 }
 
@@ -160,7 +180,7 @@ func setupOverMockNet(t *testing.T, nodesCount int) (mocknet.Mocknet, []*Discove
 func setup(t *testing.T, hosts []host.Host) []*Discovery {
 	var (
 		instances []*Discovery
-		bootnode  *addrInfo
+		bootnode  *addressbook.AddrInfo
 	)
 
 	for _, h := range hosts {
@@ -201,7 +221,6 @@ func wrapDiscovery(instances []*Discovery) {
 				if err := instance.Bootstrap(ctx); errors.Is(err, context.Canceled) {
 					return
 				}
-				time.Sleep(10 * time.Millisecond)
 			}
 		}(instance)
 	}
@@ -209,7 +228,7 @@ func wrapDiscovery(instances []*Discovery) {
 }
 
 // brokeMesh simulate that all peers are disconnected and the mesh is broken.
-func brokeMesh(t *testing.T, mesh mocknet.Mocknet) {
+func brokeMesh(t *testing.T, mesh mocknet.Mocknet, instances []*Discovery) {
 	for _, h := range mesh.Hosts() {
 		for _, hh := range mesh.Hosts() {
 			if h.ID() == hh.ID() {
@@ -221,6 +240,15 @@ func brokeMesh(t *testing.T, mesh mocknet.Mocknet) {
 			// require.NoError(t, mesh.DisconnectNets(h.Network(), hh.Network()))
 		}
 	}
+	// wait until address ussage will expire and will check again
+	require.Eventually(t, func() bool {
+		for _, instance := range instances {
+			if len(instance.GetRandomPeers(10)) == 0 {
+				return false
+			}
+		}
+		return true
+	}, 4*time.Second, 100*time.Millisecond)
 }
 
 // checkBook trigger book check in all instances.
@@ -240,7 +268,7 @@ func checkBooks(instances []*Discovery) {
 func calcTotalAddresses(instances []*Discovery) int {
 	totalAddresses := 0
 	for _, instance := range instances {
-		totalAddresses += len(instance.book.getAddresses())
+		totalAddresses += len(instance.book.GetAddresses())
 	}
 	return totalAddresses
 }

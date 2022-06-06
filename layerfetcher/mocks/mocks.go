@@ -225,11 +225,12 @@ func (m *MocklayerDB) EXPECT() *MocklayerDBMockRecorder {
 }
 
 // GetAggregatedLayerHash mocks base method.
-func (m *MocklayerDB) GetAggregatedLayerHash(arg0 types.LayerID) types.Hash32 {
+func (m *MocklayerDB) GetAggregatedLayerHash(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAggregatedLayerHash", arg0)
 	ret0, _ := ret[0].(types.Hash32)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetAggregatedLayerHash indicates an expected call of GetAggregatedLayerHash.
@@ -254,11 +255,12 @@ func (mr *MocklayerDBMockRecorder) GetHareConsensusOutput(arg0 interface{}) *gom
 }
 
 // GetLayerHash mocks base method.
-func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) types.Hash32 {
+func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerHash", arg0)
 	ret0, _ := ret[0].(types.Hash32)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerHash indicates an expected call of GetLayerHash.

@@ -38,7 +38,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -60,7 +59,7 @@ const (
 	genTimeUnix      = 1000000
 	layerDurationSec = 10
 	layerAvgSize     = 10
-	txsPerBlock      = 99
+	txsPerProposal   = 99
 	layersPerEpoch   = uint32(5)
 	networkID        = 120
 	atxPerLayer      = 2
@@ -1081,7 +1080,7 @@ func TestSmesherService(t *testing.T) {
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1135,7 +1134,7 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.MaxTxsPerSecond.Value)
+			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDurationSec), response.MaxTxsPerSecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2112,7 +2111,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2446,7 +2445,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}
 	logtest.SetupGlobal(t)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2680,7 +2679,7 @@ func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	cfg.GrpcServerPort = 9192
 	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2742,7 +2741,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
@@ -2866,16 +2865,6 @@ func TestGatewayService(t *testing.T) {
 	require.NoError(t, err, "expected request to succeed")
 }
 
-type appliedTxsMock struct{}
-
-func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
-func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
-func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
-func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
-func (appliedTxsMock) Close()                             { panic("implement me") }
-func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
-func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
-
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 
@@ -2975,7 +2964,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	lg := logtest.New(t).WithName("svm")
 	svm := vm.New(lg, sql.InMemory())
-	conState := txs.NewConservativeState(svm, sql.InMemory(), logtest.New(t).WithName("conState"))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 

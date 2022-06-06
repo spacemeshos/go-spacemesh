@@ -6,10 +6,9 @@ import (
 	"math/rand"
 	"reflect"
 
-	"github.com/spacemeshos/sha256-simd"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -108,7 +107,7 @@ func (h Hash20) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:
 
 // CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
 func CalcHash12(data []byte) (h Hash12) {
-	h32 := sha256.Sum256(data)
+	h32 := hash.Sum(data)
 	copy(h[:], h32[:])
 	return
 }
@@ -134,20 +133,20 @@ func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 // CalcProposalHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
-	hash := sha256.New()
-	hash.Write(additionalBytes)
+	hasher := hash.New()
+	hasher.Write(additionalBytes)
 	for _, id := range sortedView {
-		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
+		hasher.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
 	}
 	var res Hash32
-	hash.Sum(res[:0])
+	hasher.Sum(res[:0])
 	return res
 }
 
 // CalcBlockHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
-	hash := sha256.New()
+	hash := hash.New()
 	hash.Write(additionalBytes)
 	for _, id := range sortedView {
 		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
@@ -166,7 +165,7 @@ var hashT = reflect.TypeOf(Hash32{})
 
 // CalcHash32 returns the 32-byte sha256 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
-	return sha256.Sum256(data)
+	return hash.Sum(data)
 }
 
 // CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.

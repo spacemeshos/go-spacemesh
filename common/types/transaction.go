@@ -132,6 +132,11 @@ func (t *Transaction) GetFee() uint64 {
 	return t.Fee
 }
 
+// MaxGas returns the max gas this transaction can use.
+func (t *Transaction) MaxGas() uint64 {
+	return t.GasLimit
+}
+
 // Spending returns the total amount spent on by this transaction.
 func (t *Transaction) Spending() uint64 {
 	return t.Fee + t.Amount

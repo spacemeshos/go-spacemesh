@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -45,7 +45,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	proofBytes, err := types.InterfaceToBytes(msg.PoetProof)
 	require.NoError(t, err)
-	expectedRef := sha256.Sum256(proofBytes)
+	expectedRef := hash.Sum(proofBytes)
 	require.Equal(t, types.CalcHash32(expectedRef[:]).Bytes(), ref)
 
 	require.NoError(t, poetDb.StoreProof(ref, msg))

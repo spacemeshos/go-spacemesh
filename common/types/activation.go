@@ -9,9 +9,9 @@ import (
 
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -278,7 +278,7 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
-	ref := sha256.Sum256(poetProofBytes)
+	ref := hash.Sum(poetProofBytes)
 	h := CalcHash32(ref[:])
 	return h.Bytes(), nil
 }

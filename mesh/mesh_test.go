@@ -116,7 +116,8 @@ func TestMesh_LayerHashes(t *testing.T) {
 		require.NoError(t, tm.SaveHareConsensusOutput(context.TODO(), i, hareOutput.ID()))
 	}
 
-	prevAggHash := tm.GetAggregatedLayerHash(gLyr)
+	prevAggHash, err := tm.GetAggregatedLayerHash(gLyr)
+	require.NoError(t, err)
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		thisLyr, err := tm.GetLayer(i)
 		require.NoError(t, err)
@@ -126,13 +127,21 @@ func TestMesh_LayerHashes(t *testing.T) {
 		tm.mockState.EXPECT().ApplyLayer(blk).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 
-		require.Equal(t, types.EmptyLayerHash, tm.GetLayerHash(i))
-		require.Equal(t, types.EmptyLayerHash, tm.GetAggregatedLayerHash(i))
+		h, err := tm.GetLayerHash(i)
+		require.NoError(t, err)
+		require.Equal(t, types.EmptyLayerHash, h)
+		ah, err := tm.GetAggregatedLayerHash(i)
+		require.NoError(t, err)
+		require.Equal(t, types.EmptyLayerHash, ah)
 		require.NoError(t, tm.ProcessLayer(context.TODO(), thisLyr.Index()))
 		expectedHash := types.CalcBlocksHash32([]types.BlockID{blk.ID()}, nil)
-		assert.Equal(t, expectedHash, tm.GetLayerHash(i))
+		h, err = tm.GetLayerHash(i)
+		require.NoError(t, err)
+		assert.Equal(t, expectedHash, h)
 		expectedAggHash := types.CalcBlocksHash32([]types.BlockID{blk.ID()}, prevAggHash.Bytes())
-		assert.Equal(t, expectedAggHash, tm.GetAggregatedLayerHash(i))
+		ah, err = tm.GetAggregatedLayerHash(i)
+		require.NoError(t, err)
+		assert.Equal(t, expectedAggHash, ah)
 		prevAggHash = expectedAggHash
 	}
 }
@@ -345,7 +354,8 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus3, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus3)
 
-	oldHash := tm.GetAggregatedLayerHash(gPlus2)
+	oldHash, err := tm.GetAggregatedLayerHash(gPlus2)
+	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyLayerHash, oldHash)
 
 	// for layer gPlus2, every other block turns out to be valid
@@ -369,12 +379,15 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus4, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus4)
 
-	newHash := tm.GetAggregatedLayerHash(gPlus2)
+	newHash, err := tm.GetAggregatedLayerHash(gPlus2)
+	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyLayerHash, newHash)
 	require.NotEqual(t, oldHash, newHash)
 
 	// gPlus2 hash should contain all valid blocks
-	require.Equal(t, types.CalcBlocksHash32(types.ToBlockIDs(types.SortBlocks(blocks2[1:])), nil), tm.GetLayerHash(gPlus2))
+	h, err := tm.GetLayerHash(gPlus2)
+	require.NoError(t, err)
+	require.Equal(t, types.CalcBlocksHash32(types.ToBlockIDs(types.SortBlocks(blocks2[1:])), nil), h)
 
 	// another new layer won't cause a revert
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus5).Return(gPlus4).Times(1)
@@ -384,7 +397,9 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus5, tm.ProcessedLayer())
 	require.Equal(t, gPlus5, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus5)
-	require.Equal(t, newHash, tm.GetAggregatedLayerHash(gPlus2))
+	ah, err := tm.GetAggregatedLayerHash(gPlus2)
+	require.NoError(t, err)
+	require.Equal(t, newHash, ah)
 }
 
 func TestMesh_PersistProcessedLayer(t *testing.T) {
@@ -500,13 +515,17 @@ func TestMesh_persistLayerHash(t *testing.T) {
 	lyr := types.NewLayerID(3)
 	hash := types.RandomHash()
 	require.NoError(t, tm.persistLayerHash(lyr, hash))
-	assert.Equal(t, hash, tm.GetLayerHash(lyr))
+	h, err := tm.GetLayerHash(lyr)
+	require.NoError(t, err)
+	assert.Equal(t, hash, h)
 
 	// persist twice
 	newHash := types.RandomHash()
 	assert.NotEqual(t, newHash, hash)
 	require.NoError(t, tm.persistLayerHash(lyr, newHash))
-	assert.Equal(t, newHash, tm.GetLayerHash(lyr))
+	h, err = tm.GetLayerHash(lyr)
+	require.NoError(t, err)
+	assert.Equal(t, newHash, h)
 }
 
 func addBlockWithTXsToMesh(t *testing.T, tm *testMesh, id types.LayerID, valid bool, txIDs []types.TransactionID) *types.Block {

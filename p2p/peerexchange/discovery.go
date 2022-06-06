@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 )
 
 const (
@@ -43,7 +44,7 @@ type Discovery struct {
 	cancel context.CancelFunc
 	eg     errgroup.Group
 
-	book  *addrBook
+	book  *addressbook.AddrBook
 	crawl *crawler
 }
 
@@ -55,16 +56,19 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		logger: logger,
 		host:   h,
 		cancel: cancel,
-		book:   newAddrBook(config, logger),
+		book: addressbook.NewAddrBook(
+			addressbook.DefaultAddressBookConfigWithDataDir(config.DataDir),
+			logger,
+		),
 	}
 	d.eg.Go(func() error {
 		d.book.Persist(ctx)
 		return ctx.Err()
 	})
 
-	bootnodes := make([]*addrInfo, 0, len(config.Bootnodes))
+	bootnodes := make([]*addressbook.AddrInfo, 0, len(config.Bootnodes))
 	for _, raw := range config.Bootnodes {
-		info, err := parseAddrInfo(raw)
+		info, err := addressbook.ParseAddrInfo(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
@@ -122,7 +126,7 @@ func (d *Discovery) ExternalPort() uint16 {
 var errNotFound = errors.New("not found")
 
 // bestHostAddress returns routable address if exists, otherwise it returns first available address.
-func bestHostAddress(h host.Host) (*addrInfo, error) {
+func bestHostAddress(h host.Host) (*addressbook.AddrInfo, error) {
 	best, err := bestNetAddress(h)
 	if err == nil {
 		ip, err := manet.ToIP(best)
@@ -130,14 +134,15 @@ func bestHostAddress(h host.Host) (*addrInfo, error) {
 			return nil, fmt.Errorf("failed to recover ip from host address %v: %w", best, err)
 		}
 		full := ma.Join(best, ma.StringCast("/p2p/"+h.ID().String()))
-		return &addrInfo{
+		addr := &addressbook.AddrInfo{
 			IP:      ip,
 			ID:      h.ID(),
 			RawAddr: full.String(),
-			addr:    full,
-		}, nil
+		}
+		addr.SetAddr(full)
+		return addr, nil
 	}
-	return &addrInfo{
+	return &addressbook.AddrInfo{
 		IP: net.IP{127, 0, 0, 1},
 		ID: h.ID(),
 	}, nil
@@ -176,7 +181,7 @@ func routableNetAddress(h host.Host) (ma.Multiaddr, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to recover ip from host address %v: %w", addr, err)
 		}
-		if IsRoutable(ip) {
+		if addressbook.IsRoutable(ip) {
 			return addr, nil
 		}
 	}

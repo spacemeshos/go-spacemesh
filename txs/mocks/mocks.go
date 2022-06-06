@@ -262,12 +262,11 @@ func (m *MockconStateCache) EXPECT() *MockconStateCacheMockRecorder {
 }
 
 // GetMempool mocks base method.
-func (m *MockconStateCache) GetMempool() (map[types.Address][]*types0.NanoTX, error) {
+func (m *MockconStateCache) GetMempool() map[types.Address][]*types0.NanoTX {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMempool")
 	ret0, _ := ret[0].(map[types.Address][]*types0.NanoTX)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetMempool indicates an expected call of GetMempool.
@@ -442,6 +441,21 @@ func (m *MocktxProvider) GetByAddress(arg0, arg1 types.LayerID, arg2 types.Addre
 func (mr *MocktxProviderMockRecorder) GetByAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByAddress", reflect.TypeOf((*MocktxProvider)(nil).GetByAddress), arg0, arg1, arg2)
+}
+
+// GetMeshHash mocks base method.
+func (m *MocktxProvider) GetMeshHash(arg0 types.LayerID) (types.Hash32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMeshHash", arg0)
+	ret0, _ := ret[0].(types.Hash32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMeshHash indicates an expected call of GetMeshHash.
+func (mr *MocktxProviderMockRecorder) GetMeshHash(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshHash", reflect.TypeOf((*MocktxProvider)(nil).GetMeshHash), arg0)
 }
 
 // Has mocks base method.

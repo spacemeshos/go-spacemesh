@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"math/rand"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -333,7 +333,7 @@ func TestLayers(t *testing.T) {
 
 func expectedHash(tb testing.TB, balances ...uint64) types.Hash32 {
 	tb.Helper()
-	hasher := sha256.New()
+	hasher := hash.New()
 	buf := [8]byte{}
 	for _, balance := range balances {
 		binary.LittleEndian.PutUint64(buf[:], balance)

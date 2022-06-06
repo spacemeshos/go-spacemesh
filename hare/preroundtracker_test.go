@@ -2,7 +2,6 @@ package hare
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"math"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -162,7 +162,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	s1 := NewSetFromValues(value1, value2)
 
 	for _, v := range values {
-		sha := sha256.Sum256(v.proof)
+		sha := hash.Sum(v.proof)
 		shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 		r.Equal(v.val, shaUint32, "mismatch in hash output")
 		prMsg := BuildPreRoundMsg(signing.NewEdSigner(), s1, v.proof)

@@ -459,12 +459,6 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create IDs DB: %w", err)
-	}
-	app.closers = append(app.closers, idDBStore)
-
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create store DB: %w", err)
@@ -489,7 +483,13 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	state := vm.New(app.addLogger(SVMLogger, lg), sqlDB)
-	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
+	app.conState = txs.NewConservativeState(state, sqlDB,
+		txs.WithCSConfig(txs.CSConfig{
+			BlockGasLimit:      app.Config.BlockGasLimit,
+			NumTXsPerProposal:  app.Config.TxsPerProposal,
+			OptFilterThreshold: app.Config.OptFilterThreshold,
+		}),
+		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
@@ -551,10 +551,13 @@ func (app *App) initServices(ctx context.Context,
 
 	proposalListener := proposals.NewHandler(fetcherWrapped, beaconProtocol, atxDB, msh, proposalDB,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithLayerPerEpoch(layersPerEpoch),
-		proposals.WithLayerSize(layerSize),
-		proposals.WithGoldenATXID(goldenATXID),
-		proposals.WithMaxExceptions(trtlCfg.MaxExceptions))
+		proposals.WithConfig(proposals.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+			GoldenATXID:    goldenATXID,
+			MaxExceptions:  trtlCfg.MaxExceptions,
+			Hdist:          trtlCfg.Hdist,
+		}))
 
 	blockHandller := blocks.NewHandler(fetcherWrapped, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
@@ -613,13 +616,14 @@ func (app *App) initServices(ctx context.Context,
 		vrfSigner,
 		sqlDB,
 		atxDB,
+		msh,
 		app.host,
 		trtl,
 		beaconProtocol,
 		newSyncer,
 		app.conState,
 		miner.WithMinerID(nodeID),
-		miner.WithTxsPerProposal(app.Config.TxsPerBlock),
+		miner.WithTxsPerProposal(app.Config.TxsPerProposal),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
@@ -811,7 +815,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)

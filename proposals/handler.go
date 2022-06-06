@@ -29,6 +29,7 @@ var (
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
 	errMissingBeacon         = errors.New("beacon is missing in ref ballot")
 	errNotEligible           = errors.New("ballot not eligible")
+	errDoubleVoting          = errors.New("ballot doubly-voted in same layer")
 	errConflictingExceptions = errors.New("conflicting exceptions")
 	errExceptionsOverflow    = errors.New("too many exceptions")
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
@@ -49,44 +50,22 @@ type Handler struct {
 
 // Config defines configuration for the handler.
 type Config struct {
-	LayerSize            uint32
-	LayersPerEpoch       uint32
-	GoldenATXID          types.ATXID
-	MaxExceptions        int
-	EligibilityValidator eligibilityValidator
+	LayerSize      uint32
+	LayersPerEpoch uint32
+	GoldenATXID    types.ATXID
+	MaxExceptions  int
+	Hdist          uint32
 }
 
 // defaultConfig for BlockHandler.
 func defaultConfig() Config {
 	return Config{
-		MaxExceptions:        1000,
-		EligibilityValidator: nil,
+		MaxExceptions: 1000,
 	}
 }
 
 // Opt for configuring Handler.
 type Opt func(h *Handler)
-
-// WithGoldenATXID defines the golden ATXID.
-func WithGoldenATXID(atx types.ATXID) Opt {
-	return func(h *Handler) {
-		h.cfg.GoldenATXID = atx
-	}
-}
-
-// WithLayerSize defines the average number of proposal per layer.
-func WithLayerSize(size uint32) Opt {
-	return func(h *Handler) {
-		h.cfg.LayerSize = size
-	}
-}
-
-// WithLayerPerEpoch defines the number of layers per epoch.
-func WithLayerPerEpoch(layers uint32) Opt {
-	return func(h *Handler) {
-		h.cfg.LayersPerEpoch = layers
-	}
-}
 
 // withValidator defines eligibility Validator.
 func withValidator(v eligibilityValidator) Opt {
@@ -95,17 +74,17 @@ func withValidator(v eligibilityValidator) Opt {
 	}
 }
 
-// WithMaxExceptions defines max allowed exceptions in a ballot.
-func WithMaxExceptions(max int) Opt {
-	return func(h *Handler) {
-		h.cfg.MaxExceptions = max
-	}
-}
-
 // WithLogger defines logger for Handler.
 func WithLogger(logger log.Log) Opt {
 	return func(h *Handler) {
 		h.logger = logger
+	}
+}
+
+// WithConfig defines protocol parameters.
+func WithConfig(cfg Config) Opt {
+	return func(h *Handler) {
+		h.cfg = cfg
 	}
 }
 
@@ -245,7 +224,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, peer p2p.P
 func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot, peer p2p.Peer) error {
 	h.logger.WithContext(ctx).With().Debug("checking proposal syntactic validity")
 
-	if err := h.checkBallotDataIntegrity(b); err != nil {
+	if err := h.checkBallotDataIntegrity(ctx, b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot integrity check failed", log.Err(err))
 		return err
 	}
@@ -264,7 +243,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 	return nil
 }
 
-func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
+func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) error {
 	if b.AtxID == *types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
 		return errInvalidATXID
 	}
@@ -298,28 +277,96 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		}
 	}
 
-	if err := checkExceptions(b, h.cfg.MaxExceptions); err != nil {
+	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		return err
 	}
 	return nil
 }
 
-func checkExceptions(ballot *types.Ballot, max int) error {
+func (h *Handler) setBallotMalicious(ctx context.Context, b *types.Ballot) error {
+	if err := h.mesh.SetIdentityMalicious(b.SmesherID()); err != nil {
+		h.logger.WithContext(ctx).With().Error("failed to set smesher malicious",
+			b.ID(),
+			b.LayerIndex,
+			log.Stringer("smesher", b.SmesherID()),
+			log.Err(err))
+		return fmt.Errorf("set smesher malcious: %w", err)
+	}
+	b.SetMalicious()
+	return nil
+}
+
+func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) error {
 	exceptions := map[types.BlockID]struct{}{}
-	// TODO maybe validate that explicit votes do not conflict with abstain layers
-	for _, diff := range [][]types.BlockID{ballot.Votes.Support, ballot.Votes.Against} {
-		for _, bid := range diff {
-			_, exist := exceptions[bid]
-			if exist {
-				return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s",
-					errConflictingExceptions, bid, ballot.ID())
+	cutoff := types.LayerID{}
+	if b.LayerIndex.After(types.NewLayerID(h.cfg.Hdist)) {
+		cutoff = b.LayerIndex.Sub(h.cfg.Hdist)
+	}
+	layers := make(map[types.LayerID]types.BlockID)
+	// a ballot should not vote for multiple blocks in the same layer within hdist,
+	// since hare only output a single block each layer and miner should vote according
+	// to the hare output within hdist of the current layer when producing a ballot.
+	for _, bid := range b.Votes.Support {
+		exceptions[bid] = struct{}{}
+		lid, err := h.mesh.GetBlockLayer(bid)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
+			return fmt.Errorf("check exception get block layer: %w", err)
+		}
+		if voted, ok := layers[lid]; ok {
+			// already voted for a block in this layer
+			if voted != bid && !lid.Before(cutoff) {
+				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
+					b.ID(),
+					b.LayerIndex,
+					log.Stringer("smesher", b.SmesherID()),
+					log.Stringer("voted_bid", voted),
+					log.Stringer("voted_bid", bid),
+					log.Uint32("hdist", h.cfg.Hdist))
+				if err = h.setBallotMalicious(ctx, b); err != nil {
+					return err
+				}
+				return errDoubleVoting
 			}
-			exceptions[bid] = struct{}{}
+		} else {
+			layers[lid] = bid
 		}
 	}
-	if len(exceptions) > max {
+	// a ballot should not vote support and against on the same block.
+	for _, bid := range b.Votes.Against {
+		if _, exist := exceptions[bid]; exist {
+			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", bid, b.ID(), b.LayerIndex)
+			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
+				errConflictingExceptions, bid, b.ID(), b.LayerIndex)
+		}
+		lid, err := h.mesh.GetBlockLayer(bid)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
+			return fmt.Errorf("check exception get block layer: %w", err)
+		}
+		layers[lid] = bid
+	}
+	if len(exceptions) > h.cfg.MaxExceptions {
+		h.logger.WithContext(ctx).With().Warning("exceptions exceed limits",
+			b.ID(),
+			b.LayerIndex,
+			log.Int("len", len(exceptions)),
+			log.Int("max_allowed", h.cfg.MaxExceptions))
 		return fmt.Errorf("%w: %d exceptions with max allowed %d in ballot %s",
-			errExceptionsOverflow, len(exceptions), max, ballot.ID())
+			errExceptionsOverflow, len(exceptions), h.cfg.MaxExceptions, b.ID())
+	}
+	// a ballot should not abstain on a layer that it voted for/against on block in that layer.
+	for _, lid := range b.Votes.Abstain {
+		if _, ok := layers[lid]; ok {
+			h.logger.WithContext(ctx).With().Warning("conflicting votes on layer",
+				b.ID(),
+				b.LayerIndex,
+				log.Stringer("conflict_layer", lid))
+			if err := h.setBallotMalicious(ctx, b); err != nil {
+				return err
+			}
+			return errConflictingExceptions
+		}
 	}
 	return nil
 }

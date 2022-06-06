@@ -47,8 +47,8 @@ type txHandler interface {
 
 // layerDB is an interface that returns layer data and blocks.
 type layerDB interface {
-	GetLayerHash(types.LayerID) types.Hash32
-	GetAggregatedLayerHash(types.LayerID) types.Hash32
+	GetLayerHash(types.LayerID) (types.Hash32, error)
+	GetAggregatedLayerHash(types.LayerID) (types.Hash32, error)
 	LayerBallotIDs(types.LayerID) ([]types.BallotID, error)
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	GetHareConsensusOutput(types.LayerID) (types.BlockID, error)
@@ -214,32 +214,38 @@ func (l *Logic) layerContentReqReceiver(ctx context.Context, req []byte) ([]byte
 	if lyrID.After(processed) {
 		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
 	}
-	b := &layerData{
-		ProcessedLayer: processed,
-		Hash:           l.layerDB.GetLayerHash(lyrID),
-		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyrID),
-	}
+	ld := &layerData{ProcessedLayer: processed}
 	var err error
-	b.Ballots, err = l.layerDB.LayerBallotIDs(lyrID)
+	ld.Hash, err = l.layerDB.GetLayerHash(lyrID)
+	if err != nil {
+		l.log.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
+		return nil, ErrInternal
+	}
+	ld.AggregatedHash, err = l.layerDB.GetAggregatedLayerHash(lyrID)
+	if err != nil {
+		l.log.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lyrID, log.Err(err))
+		return nil, ErrInternal
+	}
+	ld.Ballots, err = l.layerDB.LayerBallotIDs(lyrID)
 	if err != nil {
 		// database.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		l.log.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
 		return nil, ErrInternal
 	}
-	b.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
+	ld.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
 	if err != nil {
 		// database.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		l.log.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, ErrInternal
 	}
-	if b.HareOutput, err = l.layerDB.GetHareConsensusOutput(lyrID); err != nil {
+	if ld.HareOutput, err = l.layerDB.GetHareConsensusOutput(lyrID); err != nil {
 		l.log.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, ErrInternal
 	}
 
-	out, err := codec.Encode(b)
+	out, err := codec.Encode(ld)
 	if err != nil {
 		l.log.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
 	}

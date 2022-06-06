@@ -2,6 +2,7 @@ package txs
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -11,6 +12,38 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+// CSConfig is the config for the conservative state/cache.
+type CSConfig struct {
+	BlockGasLimit      uint64
+	NumTXsPerProposal  int
+	OptFilterThreshold int
+}
+
+func defaultCSConfig() CSConfig {
+	return CSConfig{
+		BlockGasLimit:      math.MaxUint64,
+		NumTXsPerProposal:  100,
+		OptFilterThreshold: 90,
+	}
+}
+
+// ConservativeStateOpt for configuring conservative state.
+type ConservativeStateOpt func(cs *ConservativeState)
+
+// WithCSConfig defines the config used for the conservative state.
+func WithCSConfig(cfg CSConfig) ConservativeStateOpt {
+	return func(cs *ConservativeState) {
+		cs.cfg = cfg
+	}
+}
+
+// WithLogger defines logger for conservative state.
+func WithLogger(logger log.Log) ConservativeStateOpt {
+	return func(cs *ConservativeState) {
+		cs.logger = logger
+	}
+}
+
 // ConservativeState provides the conservative version of the VM state by taking into accounts of
 // nonce and balances for pending transactions in un-applied blocks and mempool.
 type ConservativeState struct {
@@ -18,37 +51,73 @@ type ConservativeState struct {
 	*cache
 
 	logger log.Log
+	cfg    CSConfig
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state vmState, db *sql.Database, logger log.Log) *ConservativeState {
+func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeStateOpt) *ConservativeState {
 	cs := &ConservativeState{
 		vmState: state,
-		logger:  logger,
+		cfg:     defaultCSConfig(),
+		logger:  log.NewNop(),
 	}
-	cs.cache = newCache(newStore(db), cs.getState, logger)
+	for _, opt := range opts {
+		opt(cs)
+	}
+	cs.cache = newCache(newStore(db), cs.getState, cs.logger)
 	return cs
 }
 
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	nonce, err := cs.vmState.GetNonce(addr)
 	if err != nil {
-		cs.logger.Fatal("failed to get nonce", log.Err(err))
+		cs.logger.With().Fatal("failed to get nonce", log.Err(err))
 	}
 	balance, err := cs.vmState.GetBalance(addr)
 	if err != nil {
-		cs.logger.Fatal("failed to get balance", log.Err(err))
+		cs.logger.With().Fatal("failed to get balance", log.Err(err))
 	}
 	return nonce, balance
 }
 
-// SelectTXsForProposal picks a specific number of random txs for miner to pack in a proposal.
-func (cs *ConservativeState) SelectTXsForProposal(numTXs int) ([]types.TransactionID, error) {
-	mi, err := newMempoolIterator(cs.logger, cs.cache, numTXs)
+// SelectBlockTXs combined the transactions in the proposals and put them in a stable order.
+// the steps are:
+// 0. do optimistic filtering if the proposals agree on the mesh hash and state root
+//    this mean the following transactions will be filtered out. transactions that
+//    - fail nonce check
+//    - fail balance check
+//    - are already applied in previous layer
+//    if the proposals don't agree on the mesh hash and state root, we keep all transactions
+// 1. put the output of step 0 in a stable order
+// 2. pick the transactions in step 1 until the gas limit runs out.
+func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+	myHash, err := cs.cache.GetMeshHash(lid.Sub(1))
 	if err != nil {
-		return nil, fmt.Errorf("create mempool iterator: %w", err)
+		cs.logger.With().Warning("failed to get mesh hash", lid, log.Err(err))
+		// if we don't have hash for that layer, other nodes probably don't either
+		myHash = types.EmptyLayerHash
 	}
-	return mi.PopAll(), nil
+
+	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs.GetMeshTransaction)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(md.mtxs) == 0 {
+		return nil, nil
+	}
+
+	logger := cs.logger.WithName("block").WithFields(lid)
+	blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(proposals), nil).Bytes()
+	return getBlockTXs(logger, md, cs.getState, blockSeed, cs.cfg.BlockGasLimit)
+}
+
+// SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
+func (cs *ConservativeState) SelectProposalTXs(numEligibility int) []types.TransactionID {
+	mi := newMempoolIterator(cs.logger, cs.cache, cs.cfg.BlockGasLimit)
+	predictedBlock, byAddrAndNonce := mi.PopAll()
+	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
+	return getProposalTXs(cs.logger, numTXs, predictedBlock, byAddrAndNonce)
 }
 
 // AddToCache adds the provided transaction to the conservative cache.
@@ -63,7 +132,7 @@ func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error
 		events.ReportAccountUpdate(tx.Origin())
 		events.ReportAccountUpdate(tx.GetRecipient())
 	}
-	return cs.cache.Add(tx, received)
+	return cs.cache.Add(tx, received, nil)
 }
 
 // RevertState reverts the VM state and database to the given layer.
