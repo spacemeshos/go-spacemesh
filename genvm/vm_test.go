@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
 func newTester(tb testing.TB) *tester {
@@ -60,11 +61,15 @@ func (t *tester) addAccounts(n int) *tester {
 }
 
 func (t *tester) applyGenesis() *tester {
+	return t.applyGenesisWithBalance(1_000_000_000_000)
+}
+
+func (t *tester) applyGenesisWithBalance(amount uint64) *tester {
 	accounts := make([]core.Account, len(t.pks))
 	for i := range accounts {
 		accounts[i] = core.Account{
 			Address: types.Address(t.addresses[i]),
-			Balance: 100000000000000000,
+			Balance: amount,
 		}
 	}
 	require.NoError(t, t.VM.ApplyGenesis(accounts))
@@ -83,12 +88,12 @@ func (t *tester) spawnWalletAll() [][]byte {
 		if t.nonces[i].Counter != 0 {
 			continue
 		}
-		rst = append(rst, t.spawnWallet(i))
+		rst = append(rst, t.selfSpawnWallet(i))
 	}
 	return rst
 }
 
-func (t *tester) spawnWallet(i int) []byte {
+func (t *tester) selfSpawnWallet(i int) []byte {
 	typ := scale.U8(0)
 	method := scale.U8(0)
 	payload := wallet.SpawnPayload{GasPrice: 1}
@@ -104,21 +109,30 @@ func (t *tester) spawnWallet(i int) []byte {
 func (t *tester) randSendWalletN(n int, amount uint64) [][]byte {
 	rst := make([][]byte, n)
 	for i := range rst {
-		rst[i] = t.randSendWallet(amount)
+		rst[i] = t.randSpendWallet(amount)
 	}
 	return rst
 }
 
-func (t *tester) randSendWallet(amount uint64) []byte {
-	return t.sendWallet(t.rng.Intn(len(t.addresses)), t.rng.Intn(len(t.addresses)), amount)
+func (t *tester) randSpendWallet(amount uint64) []byte {
+	return t.spendWallet(t.rng.Intn(len(t.addresses)), t.rng.Intn(len(t.addresses)), amount)
 }
 
-func (t *tester) sendWallet(from, to int, amount uint64) []byte {
+func (t *tester) withSeed(seed int64) *tester {
+	t.rng = rand.New(rand.NewSource(seed))
+	return t
+}
+
+func (t *tester) spendWallet(from, to int, amount uint64) []byte {
+	return t.spendWalletWithNonce(from, to, amount, t.nextNonce(from))
+}
+
+func (t *tester) spendWalletWithNonce(from, to int, amount uint64, nonce core.Nonce) []byte {
 	payload := wallet.SpendPayload{}
 	payload.Arguments.Destination = t.addresses[to]
 	payload.Arguments.Amount = amount
 	payload.GasPrice = 1
-	payload.Nonce = core.Nonce(t.nextNonce(from))
+	payload.Nonce = nonce
 
 	typ := scale.U8(0)
 	method := scale.U8(1)
@@ -142,7 +156,7 @@ func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encoda
 	hash := core.Hash(buf.Bytes())
 
 	sig := ed25519.Sign(pk, hash[:])
-	var sigfield scale.Signature
+	var sigfield core.Signature
 	copy(sigfield[:], sig)
 	_, err := sigfield.EncodeScale(encoder)
 	require.NoError(tb, err)
@@ -154,21 +168,180 @@ func TestSanity(t *testing.T) {
 		addAccounts(2).applyGenesis().addAccounts(3)
 
 	skipped, err := tt.Apply(types.NewLayerID(1), [][]byte{
-		tt.spawnWallet(0),
-		tt.spawnWallet(1),
+		tt.selfSpawnWallet(0),
+		tt.selfSpawnWallet(1),
 	})
 	require.NoError(t, err)
 	require.Empty(t, skipped)
 	skipped, err = tt.Apply(types.NewLayerID(2), [][]byte{
-		tt.sendWallet(0, 2, 100),
+		tt.spendWallet(0, 2, 100),
 	})
 	require.NoError(t, err)
 	require.Empty(t, skipped)
 }
 
+type testTx interface {
+	gen(*tester) []byte
+}
+
+type spawnWallet struct {
+	principal int
+}
+
+func (tx *spawnWallet) gen(t *tester) []byte {
+	return t.selfSpawnWallet(tx.principal)
+}
+
+type spendWallet struct {
+	from, to int
+	amount   uint64
+}
+
+func (tx *spendWallet) gen(t *tester) []byte {
+	return t.spendWallet(tx.from, tx.to, tx.amount)
+}
+
+type change interface {
+	verify(tb testing.TB, prev, current *core.Account)
+}
+
+type same struct{}
+
+func (ch same) verify(tb testing.TB, prev, current *core.Account) {
+	tb.Helper()
+	require.Equal(tb, prev, current)
+}
+
+type spawned struct {
+	template core.Address
+	change
+}
+
+func (ch spawned) verify(tb testing.TB, prev, current *core.Account) {
+	tb.Helper()
+
+	require.Nil(tb, prev.Template)
+	require.Nil(tb, prev.State)
+
+	require.Equal(tb, ch.template, *current.Template)
+	require.NotNil(tb, current.State)
+
+	prev.Template = current.Template
+	prev.State = current.State
+	if ch.change != nil {
+		ch.change.verify(tb, prev, current)
+	}
+}
+
+type earned struct {
+	amount int
+	change
+}
+
+func (ch earned) verify(tb testing.TB, prev, current *core.Account) {
+	tb.Helper()
+	require.Equal(tb, ch.amount, int(current.Balance-prev.Balance))
+
+	prev.Balance = current.Balance
+	if ch.change != nil {
+		ch.change.verify(tb, prev, current)
+	}
+}
+
+type spent struct {
+	amount int
+	next   change
+}
+
+func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
+	tb.Helper()
+	require.Equal(tb, ch.amount, int(prev.Balance-current.Balance))
+
+	prev.Balance = current.Balance
+	if ch.next != nil {
+		ch.next.verify(tb, prev, current)
+	}
+}
+
+func TestWorkflow(t *testing.T) {
+	const (
+		funded  = 10  // number of funded accounts, included in genesis
+		total   = 100 // total number of accounts
+		balance = 1_000_000_000
+
+		defaultGasPrice = 1
+	)
+
+	type layertc struct {
+		txs      []testTx
+		expected map[int]change
+		skipped  []int
+	}
+	for _, tc := range []struct {
+		desc   string
+		layers []layertc
+	}{
+		{
+			desc: "Sanity",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+					},
+					expected: map[int]change{
+						0: spawned{template: wallet.TemplateAddress},
+						1: same{},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendWallet{0, 10, 100},
+					},
+					expected: map[int]change{
+						0:  spent{amount: 100 + defaultGasPrice*wallet.TotalGasSpend},
+						1:  same{},
+						10: earned{amount: 100},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			tt := newTester(t).
+				addAccounts(funded).
+				applyGenesisWithBalance(balance).
+				addAccounts(total - funded)
+
+			for i, layer := range tc.layers {
+				var txs [][]byte
+				for _, gen := range layer.txs {
+					txs = append(txs, gen.gen(tt))
+				}
+				lid := types.NewLayerID(uint32(i + 1))
+				skipped, err := tt.Apply(lid, txs)
+				require.NoError(tt, err)
+				if layer.skipped == nil {
+					require.Empty(tt, skipped)
+				} else {
+					for i, pos := range layer.skipped {
+						require.Equal(t, txs[pos], skipped[i])
+					}
+				}
+				for account, changes := range layer.expected {
+					prev, err := accounts.Get(tt.db, tt.addresses[account], lid.Sub(1))
+					require.NoError(tt, err)
+					current, err := accounts.Get(tt.db, tt.addresses[account], lid)
+					require.NoError(tt, err)
+					changes.verify(tt, &prev, &current)
+				}
+			}
+		})
+	}
+}
+
 func TestValidation(t *testing.T) {
 	tt := newTester(t).addAccounts(2).applyGenesis()
-	req := tt.Validation(tt.spawnWallet(0))
+	req := tt.Validation(tt.selfSpawnWallet(0))
 	header, err := req.Parse()
 	require.NoError(t, err)
 	require.Empty(t, header.Nonce)
@@ -185,7 +358,7 @@ func FuzzParse(f *testing.F) {
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addAccounts(2).applyGenesis()
-	skipped, err := tt.Apply(types.NewLayerID(1), [][]byte{tt.spawnWallet(0)})
+	skipped, err := tt.Apply(types.NewLayerID(1), [][]byte{tt.selfSpawnWallet(0)})
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -206,11 +379,11 @@ func BenchmarkValidation(b *testing.B) {
 	}
 
 	b.Run("SpawnWallet", func(b *testing.B) {
-		bench(b, tt.spawnWallet(1))
+		bench(b, tt.selfSpawnWallet(1))
 	})
 
 	b.Run("SpendWallet", func(b *testing.B) {
-		bench(b, tt.sendWallet(0, 1, 10))
+		bench(b, tt.spendWallet(0, 1, 10))
 	})
 }
 

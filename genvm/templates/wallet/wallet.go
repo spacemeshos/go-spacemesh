@@ -13,7 +13,7 @@ func New(args *SpawnArguments) *Wallet {
 	return &Wallet{PublicKey: args.PublicKey}
 }
 
-//go:generate scalegen -pkg wallet -file wallet_scale.go -types Wallet -imports github.com/spacemeshos/go-spacemesh/genvm/wallet
+//go:generate scalegen
 
 // Wallet is a single-key wallet.
 type Wallet struct {

@@ -15,6 +15,6 @@ func ComputePrincipal(template Address, nonce Nonce, args scale.Encodable) Addre
 	args.EncodeScale(encoder)
 	hash := hasher.Sum(nil)
 	var rst Address
-	copy(rst[12:], hash)
+	copy(rst[:], hash[12:])
 	return rst
 }

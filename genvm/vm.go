@@ -97,12 +97,13 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 	)
 	for _, tx := range txs {
 		rd.Reset(tx)
-		_, ctx, args, err := parse(vm.logger, ss, decoder)
+		header, ctx, args, err := parse(vm.logger, ss, decoder)
 		if err != nil {
 			vm.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx)
 			continue
 		}
+		vm.logger.With().Debug("applying transaction", log.Inline(header))
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
 			vm.logger.With().Warning("skipping transaction. failed nonce check",
 				log.Uint64("account nonce", ctx.Account.NextNonce()),
@@ -121,6 +122,7 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 	}
+	// TODO move rewards here
 	ss.IterateChanged(func(account *core.Account) bool {
 		account.Layer = lid
 		vm.logger.With().Debug("update account state", log.Inline(account))
@@ -232,8 +234,8 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	header.MaxSpend = maxspend
-	return &header, ctx, args, nil
+	ctx.Header.MaxSpend = maxspend
+	return &ctx.Header, ctx, args, nil
 }
 
 func verify(ctx *core.Context, raw []byte) bool {

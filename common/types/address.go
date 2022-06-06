@@ -18,7 +18,7 @@ const (
 )
 
 // Address represents the address of a spacemesh account with AddressLength length.
-type Address [20]byte
+type Address [AddressLength]byte
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.

@@ -31,7 +31,7 @@ type LayerLimits struct {
 	Min, Max uint32
 }
 
-//go:generate scalegen -pkg types -file transaction_header_scale.go -types Nonce -imports github.com/spacemeshos/go-spacemesh/common/types
+//go:generate scalegen -types Nonce
 
 // Nonce is for ordering transactions.
 // TODO(dshulyak) we are using only counter until bitfield is defined.

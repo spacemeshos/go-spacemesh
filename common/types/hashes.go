@@ -18,6 +18,22 @@ const (
 	Hash32Length = 32
 )
 
+type Hash12 [12]byte
+
+func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+
+// CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
+func CalcHash12(data []byte) (h Hash12) {
+	h32 := hash.Sum(data)
+	copy(h[:], h32[:])
+	return
+}
+
+// CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
+func CalcMessageHash12(msg []byte, protocol string) Hash12 {
+	return CalcHash12(append(msg, protocol...))
+}
+
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 

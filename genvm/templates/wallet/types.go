@@ -4,7 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
-//go:generate scalegen -pkg wallet -file types_scale.go -types Arguments,SpawnArguments,SpendPayload,Nonce,SpawnPayload -imports github.com/spacemeshos/go-spacemesh/genvm/wallet
+//go:generate scalegen
 
 // SpawnArguments ...
 type SpawnArguments struct {

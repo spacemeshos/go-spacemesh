@@ -10,6 +10,7 @@ type (
 	PublicKey = types.Hash32
 	Hash32    = types.Hash32
 	Address   = types.Address
+	Signature = types.Bytes64
 
 	Account = types.Account
 	Header  = types.TxHeader

@@ -49,7 +49,7 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	}
 	c.transfered += amount
 	if c.transfered > c.Header.MaxSpend {
-		return ErrMaxSpend
+		return fmt.Errorf("%w: %d", ErrMaxSpend, c.Header.MaxSpend)
 	}
 
 	if c.changed == nil {
@@ -61,6 +61,7 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 		if err != nil {
 			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 		}
+		c.order = append(c.order, to)
 		c.changed[to] = &loaded
 		account = &loaded
 	}
@@ -80,7 +81,6 @@ func (c *Context) Consume(gas uint64) error {
 	if c.consumed > c.Header.MaxGas {
 		return ErrMaxGas
 	}
-
 	c.Account.Balance -= amount
 	return nil
 }

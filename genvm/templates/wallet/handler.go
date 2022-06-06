@@ -14,6 +14,11 @@ const (
 	gasParse = 10
 	gasSpawn = 100
 	gasSpend = 50
+
+	// TotalGasSpawn is consumed from principal in case of succesful spawn.
+	TotalGasSpawn = gasParse + gasSpawn
+	// TotalGasSpend is consumed from principal in case of succesful spend.
+	TotalGasSpend = gasParse + gasSpend
 )
 
 func init() {
@@ -54,8 +59,8 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 		header.MaxGas += gasSpend
 	}
 	// TODO(dshulyak) need to implement it in a way that allows
-	// to validate with conservative cache, and don't skip transaction
-	// if it has enough gas for Parse during Apply
+	// to validate using gas from conservative cache only
+	ctx.Header = header
 	if err = ctx.Consume(gasParse); err != nil {
 		return
 	}
