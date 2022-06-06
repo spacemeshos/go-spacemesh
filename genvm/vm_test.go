@@ -48,7 +48,7 @@ func (t *tester) persistent() *tester {
 
 func (t *tester) addAccounts(n int) *tester {
 	for i := 0; i < n; i++ {
-		pub, pk, err := ed25519.GenerateKey(nil)
+		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
 		t.pks = append(t.pks, pk)
 		t.pubs = append(t.pubs, pub)
@@ -414,6 +414,28 @@ func TestWorkflow(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "SendToIself",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+					},
+				},
+				{
+
+					txs: []testTx{
+						&spendWallet{0, 0, 1000},
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: defaultGasPrice * wallet.TotalGasSpend,
+							change: nonce{increased: 1},
+						},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			tt := newTester(t).
@@ -445,6 +467,22 @@ func TestWorkflow(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRandomTransfers(t *testing.T) {
+	tt := newTester(t).withSeed(101).
+		addAccounts(10).
+		applyGenesis()
+
+	skipped, err := tt.Apply(types.NewLayerID(1), tt.spawnWalletAll())
+	require.NoError(tt, err)
+	require.Empty(tt, skipped)
+	for i := 0; i < 1000; i++ {
+		lid := types.NewLayerID(2).Add(uint32(i))
+		skipped, err := tt.Apply(lid, tt.randSendWalletN(20, 10))
+		require.NoError(tt, err)
+		require.Empty(tt, skipped)
 	}
 }
 
@@ -507,7 +545,7 @@ func BenchmarkWallet(b *testing.B) {
 
 func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
-		addAccounts(accounts).applyGenesis()
+		addAccounts(accounts).applyGenesis().withSeed(101)
 	lid := types.NewLayerID(1)
 	skipped, err := tt.Apply(types.NewLayerID(1), tt.spawnWalletAll())
 	require.NoError(tt, err)

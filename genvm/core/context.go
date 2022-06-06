@@ -47,6 +47,10 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount > c.Account.Balance {
 		return ErrNoBalance
 	}
+	// noop. only gas is consumed
+	if c.Account.Address == to {
+		return nil
+	}
 	c.transfered += amount
 	if c.transfered > c.Header.MaxSpend {
 		return fmt.Errorf("%w: %d", ErrMaxSpend, c.Header.MaxSpend)
