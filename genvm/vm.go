@@ -103,17 +103,24 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 			skipped = append(skipped, tx)
 			continue
 		}
-		vm.logger.With().Debug("applying transaction", log.Inline(header))
+		vm.logger.With().Debug("applying transaction",
+			log.Object("header", header),
+			log.Object("account", &ctx.Account),
+		)
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
 			vm.logger.With().Warning("skipping transaction. failed nonce check",
-				log.Uint64("account nonce", ctx.Account.NextNonce()),
-				log.Uint64("tx nonce", ctx.Header.Nonce.Counter),
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
 			)
 			skipped = append(skipped, tx)
 			continue
 		}
 		if err := ctx.Handler.Exec(ctx, ctx.Method, args); err != nil {
-			vm.logger.With().Debug("transaction execution failed", log.Err(err))
+			vm.logger.With().Debug("transaction failed",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+				log.Err(err),
+			)
 			if errors.Is(err, core.ErrInternal) {
 				return nil, err
 			}

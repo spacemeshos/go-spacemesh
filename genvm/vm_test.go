@@ -233,7 +233,7 @@ func (ch earned) verify(tb testing.TB, prev, current *core.Account) {
 
 type spent struct {
 	amount int
-	next   change
+	change change
 }
 
 func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
@@ -241,6 +241,18 @@ func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
 	require.Equal(tb, ch.amount, int(prev.Balance-current.Balance))
 
 	prev.Balance = current.Balance
+	if ch.change != nil {
+		ch.change.verify(tb, prev, current)
+	}
+}
+
+type nonce struct {
+	increased int
+	next      change
+}
+
+func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
+	require.Equal(tb, ch.increased, int(current.Nonce-prev.Nonce))
 	if ch.next != nil {
 		ch.next.verify(tb, prev, current)
 	}
@@ -359,6 +371,45 @@ func TestWorkflow(t *testing.T) {
 						10: spent{amount: 2*100 + 2*defaultGasPrice*wallet.TotalGasSpend},
 						11: earned{amount: 100},
 						12: earned{amount: 100},
+					},
+				},
+			},
+		},
+		{
+			desc: "StateChangedTransfer",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+						&spawnWallet{1},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendWallet{1, 0, 1000},
+						&spendWallet{0, 10, 1000},
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: defaultGasPrice * wallet.TotalGasSpend,
+							change: nonce{increased: 1},
+						},
+						1:  spent{amount: 1000 + defaultGasPrice*wallet.TotalGasSpend},
+						10: earned{amount: 1000},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendWallet{0, 10, 1000},
+						&spendWallet{1, 0, 1000},
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: defaultGasPrice * wallet.TotalGasSpend,
+							change: nonce{increased: 1},
+						},
+						1:  spent{amount: 1000 + defaultGasPrice*wallet.TotalGasSpend},
+						10: earned{amount: 1000},
 					},
 				},
 			},

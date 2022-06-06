@@ -26,8 +26,9 @@ func (a *Account) NextNonce() uint64 {
 // MarshalLogObjects implements encoding for the account state.
 func (a *Account) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("layer", a.Layer.String())
-	encoder.AddString("address", a.Address.String())
+	encoder.AddString("principal", a.Address.String())
 	encoder.AddUint64("nonce", a.Nonce)
+	encoder.AddUint64("next nonce", a.NextNonce())
 	encoder.AddUint64("balance", a.Balance)
 	if a.Template != nil {
 		encoder.AddString("template", a.Template.String())
