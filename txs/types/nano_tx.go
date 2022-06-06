@@ -2,10 +2,10 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -45,7 +45,7 @@ func (n *NanoTX) MaxSpending() uint64 {
 }
 
 func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
-	hash := sha256.New()
+	hash := hash.New()
 	hash.Write(blockSeed)
 	hash.Write(n.Tid.Bytes())
 	return hash.Sum(nil)

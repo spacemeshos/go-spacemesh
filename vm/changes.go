@@ -3,10 +3,10 @@ package vm
 import (
 	"container/list"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -108,7 +108,7 @@ func (s *changes) commit() (types.Hash32, error) {
 		return types.Hash32{}, err
 	}
 	defer tx.Release()
-	hasher := sha256.New()
+	hasher := hash.New()
 	buf := [8]byte{}
 	for elem := s.order.Front(); elem != nil; elem = elem.Next() {
 		account := s.changed[elem.Value.(types.Address)]
