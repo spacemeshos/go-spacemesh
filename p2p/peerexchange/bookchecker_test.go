@@ -2,6 +2,7 @@ package peerexchange
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -152,6 +153,93 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 			return false
 		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers and contain old node")
 	})
+}
+
+func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
+	t.Parallel()
+
+	hosts, instances := setupOverNodes(t, 2)
+	nodeA, nodeB := instances[0], instances[1]
+
+	best, err := bestHostAddress(nodeA.host)
+	require.NoError(t, err)
+
+	connectedNodeAddress := addressFromHost(t, hosts[1])
+	nodeA.book.AddAddress(connectedNodeAddress, best)
+	wrapDiscovery(instances)
+
+	// check that after bootstrap, nodeB has only addresss of nodeA and nodeA has only addresss of nodeB
+	require.Eventually(t, func() bool {
+		aAddresses := nodeA.book.GetAddresses()
+		bAddresses := nodeB.book.GetAddresses()
+		if len(aAddresses) != 1 || len(bAddresses) != 1 {
+			return false
+		}
+		return aAddresses[0].ID.String() == nodeB.host.ID().String() && bAddresses[0].ID.String() == nodeA.host.ID().String()
+	}, 4*time.Second, 100*time.Millisecond, "nodeA should have only addresss of nodeB and nodeB should have only addresss of nodeA")
+
+	// disconnect nodeA and node. sleep 3 sec need for addresses become outdated and ready for check
+	require.NoError(t, nodeB.host.Network().ClosePeer(nodeA.host.ID()))
+	time.Sleep(3 * time.Second)
+
+	// add new nodes to network
+	hostsAdditional, _ := setupOverNodes(t, 2)
+	nodeA.book.AddAddress(addressFromHost(t, hostsAdditional[0]), best)
+	nodeA.book.AddAddress(addressFromHost(t, hostsAdditional[1]), best)
+	require.Eventually(t, func() bool {
+		addresses := nodeA.book.AddressCache()
+		if len(addresses) != 3 {
+			return false
+		}
+		for _, address := range addresses {
+			valid := address.ID.String() == hostsAdditional[0].ID().String() ||
+				address.ID.String() == hostsAdditional[1].ID().String() ||
+				address.ID.String() == hosts[1].ID().String()
+			if !valid {
+				return false
+			}
+		}
+		return true
+	}, 4*time.Second, 100*time.Millisecond, "nodeA should have 3 addresses")
+	require.Eventually(t, func() bool {
+		return 1 == len(nodeB.book.GetAddresses())
+	}, 4*time.Second, 100*time.Millisecond, "nodeB should still have 1 address")
+
+	// need to wait for address expire
+	nodeB.CheckPeers(context.Background())
+
+	require.Eventually(t, func() bool {
+		addresses := nodeB.book.AddressCache()
+		if len(addresses) != 3 {
+			return false
+		}
+		for _, address := range addresses {
+			valid := address.ID.String() == hostsAdditional[0].ID().String() ||
+				address.ID.String() == hostsAdditional[1].ID().String() ||
+				address.ID.String() == hosts[1].ID().String()
+			if !valid {
+				return false
+			}
+		}
+		return true
+	}, 4*time.Second, 100*time.Millisecond, "nodeB should have all new address")
+}
+
+func addressFromHost(t *testing.T, h host.Host) *addressbook.AddrInfo {
+	var hostIP string
+	tt := h.Network().ListenAddresses()
+	for _, ts := range tt {
+		if strings.HasPrefix(ts.String(), "/ip4/") {
+			hostIP = ts.String()
+			break
+		}
+	}
+	hostConnected := hostIP + "/p2p/" + h.ID().String()
+	addr, err := ma.NewMultiaddr(hostConnected)
+	require.NoError(t, err)
+	connectedNodeAddress := &addressbook.AddrInfo{ID: h.ID(), RawAddr: hostConnected}
+	connectedNodeAddress.SetAddr(addr)
+	return connectedNodeAddress
 }
 
 func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
