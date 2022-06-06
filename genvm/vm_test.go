@@ -163,23 +163,6 @@ func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encoda
 	return buf.Bytes()
 }
 
-func TestSanity(t *testing.T) {
-	tt := newTester(t).
-		addAccounts(2).applyGenesis().addAccounts(3)
-
-	skipped, err := tt.Apply(types.NewLayerID(1), [][]byte{
-		tt.selfSpawnWallet(0),
-		tt.selfSpawnWallet(1),
-	})
-	require.NoError(t, err)
-	require.Empty(t, skipped)
-	skipped, err = tt.Apply(types.NewLayerID(2), [][]byte{
-		tt.spendWallet(0, 2, 100),
-	})
-	require.NoError(t, err)
-	require.Empty(t, skipped)
-}
-
 type testTx interface {
 	gen(*tester) []byte
 }
@@ -301,6 +284,81 @@ func TestWorkflow(t *testing.T) {
 						0:  spent{amount: 100 + defaultGasPrice*wallet.TotalGasSpend},
 						1:  same{},
 						10: earned{amount: 100},
+					},
+				},
+			},
+		},
+		{
+			desc: "SpawnSpend",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+						&spendWallet{0, 10, 100},
+					},
+					expected: map[int]change{
+						0: spawned{template: wallet.TemplateAddress,
+							change: spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpend+wallet.TotalGasSpawn)}},
+						10: earned{amount: 100},
+					},
+				},
+			},
+		},
+		{
+			desc: "MultipleSpends",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendWallet{0, 10, 100},
+						&spendWallet{0, 11, 100},
+						&spendWallet{0, 12, 100},
+					},
+					expected: map[int]change{
+						0:  spent{amount: 100*3 + defaultGasPrice*3*wallet.TotalGasSpend},
+						10: earned{amount: 100},
+						11: earned{amount: 100},
+						12: earned{amount: 100},
+					},
+				},
+			},
+		},
+		{
+			desc: "SpendReceived",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendWallet{0, 10, 1000},
+						&spawnWallet{10},
+						&spendWallet{10, 11, 100},
+					},
+					expected: map[int]change{
+						0: spent{amount: 1000 + defaultGasPrice*wallet.TotalGasSpend},
+						10: spawned{
+							template: wallet.TemplateAddress,
+							change:   earned{amount: 1000 - 100 - defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)},
+						},
+						11: earned{amount: 100},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendWallet{10, 11, 100},
+						&spendWallet{10, 12, 100},
+					},
+					expected: map[int]change{
+						10: spent{amount: 2*100 + 2*defaultGasPrice*wallet.TotalGasSpend},
+						11: earned{amount: 100},
+						12: earned{amount: 100},
 					},
 				},
 			},
