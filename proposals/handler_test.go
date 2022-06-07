@@ -539,7 +539,6 @@ func TestProposal_FailedToAddBallot(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data, p2p.AnyPeer), errUnknown)
-
 }
 
 func TestProposal_DuplicateTXs(t *testing.T) {

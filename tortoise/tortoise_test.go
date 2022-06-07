@@ -845,7 +845,6 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// minority node is healed
-		lastVerified = layerID.Sub(1).Sub(alg1.cfg.Hdist)
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 
@@ -2269,7 +2268,6 @@ func TestSwitchVerifyingByUsingFullOutput(t *testing.T) {
 		last = s.Next(
 			sim.WithEmptyHareOutput(),
 		)
-		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 	verified = tortoise.HandleIncomingLayer(ctx, last)

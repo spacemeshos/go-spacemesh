@@ -765,7 +765,7 @@ func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	if !exists {
 		f.hashToPeers[hash] = &hashPeers{
 			peers: map[p2p.Peer]struct{}{
-				peer: struct{}{},
+				peer: {},
 			},
 			timestamp: time.Now().UTC(),
 		}
@@ -824,18 +824,20 @@ func (f *Fetch) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATX
 	return
 }
 
+// HashToPeersCacheHit tracks hash-to-peer cache hit.
 func (f *Fetch) HashToPeersCacheHit() {
 	atomic.AddInt64(&f.hashToPeersStats.Hits, 1)
 	f.hashToPeersStats.Metrics.LogHit()
 }
 
+// HashToPeersCacheMiss tracks hash-to-peer cache miss.
 func (f *Fetch) HashToPeersCacheMiss() {
 	atomic.AddInt64(&f.hashToPeersStats.Misses, 1)
 	f.hashToPeersStats.Metrics.LogMiss()
 }
 
 func (f *Fetch) getHashToPeersCacheStats() CacheStats {
-	var stats = CacheStats{
+	stats := CacheStats{
 		Hits:   atomic.LoadInt64(&f.hashToPeersStats.Hits),
 		Misses: atomic.LoadInt64(&f.hashToPeersStats.Misses),
 	}
