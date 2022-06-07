@@ -2,10 +2,6 @@ package addressbook
 
 import (
 	crand "crypto/rand"
-<<<<<<< HEAD:p2p/peerexchange/addrbook.go
-	"crypto/sha256"
-=======
->>>>>>> develop:p2p/addressbook/addrbook.go
 	"encoding/binary"
 	"math/rand"
 	"net"
@@ -16,10 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 
-<<<<<<< HEAD:p2p/peerexchange/addrbook.go
-=======
 	"github.com/spacemeshos/go-spacemesh/hash"
->>>>>>> develop:p2p/addressbook/addrbook.go
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
