@@ -184,6 +184,19 @@ func (tx *spendWallet) gen(t *tester) types.RawTx {
 	return t.spendWallet(tx.from, tx.to, tx.amount)
 }
 
+func (tx spendWallet) withNonce(nonce core.Nonce) *spendWalletNonce {
+	return &spendWalletNonce{spendWallet: tx, nonce: nonce}
+}
+
+type spendWalletNonce struct {
+	spendWallet
+	nonce core.Nonce
+}
+
+func (tx *spendWalletNonce) gen(t *tester) types.RawTx {
+	return t.spendWalletWithNonce(tx.from, tx.to, tx.amount, tx.nonce)
+}
+
 type change interface {
 	verify(tb testing.TB, prev, current *core.Account)
 }
@@ -206,6 +219,7 @@ func (ch spawned) verify(tb testing.TB, prev, current *core.Account) {
 	require.Nil(tb, prev.Template)
 	require.Nil(tb, prev.State)
 
+	require.NotNil(tb, current.Template, "account should be spawned")
 	require.Equal(tb, ch.template, *current.Template)
 	require.NotNil(tb, current.State)
 
@@ -445,7 +459,70 @@ func TestWorkflow(t *testing.T) {
 					},
 					skipped: []int{0},
 					expected: map[int]change{
-						0: same{},
+						0:  same{},
+						10: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "NoFundsForSpawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{11},
+					},
+					skipped: []int{0},
+					expected: map[int]change{
+						11: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "NoFundsForSend",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+						&spendWallet{0, 11, wallet.TotalGasSpawn},
+						&spawnWallet{11},
+						&spendWallet{11, 12, 1},
+					},
+					skipped: []int{3},
+					expected: map[int]change{
+						11: spawned{template: wallet.TemplateAddress},
+						12: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "BadNonceOrder",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
+						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
+					},
+					skipped: []int{1},
+					expected: map[int]change{
+						0: spawned{template: wallet.TemplateAddress,
+							change: spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)}},
+						10: earned{amount: 100},
+						11: same{},
+					},
+				},
+				{
+					txs: []testTx{
+						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
+						spendWallet{0, 12, 100}.withNonce(core.Nonce{Counter: 3}),
+					},
+					expected: map[int]change{
+						0:  spent{amount: 2*100 + 2*defaultGasPrice*wallet.TotalGasSpend},
+						10: earned{amount: 100},
+						12: earned{amount: 100},
 					},
 				},
 			},
@@ -468,6 +545,7 @@ func TestWorkflow(t *testing.T) {
 				if layer.skipped == nil {
 					require.Empty(tt, skipped)
 				} else {
+					require.Len(tt, skipped, len(layer.skipped))
 					for i, pos := range layer.skipped {
 						require.Equal(t, txs[pos].ID, skipped[i])
 					}

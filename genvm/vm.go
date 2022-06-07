@@ -223,7 +223,7 @@ func parse(logger log.Log, loader core.AccountLoader, id types.TransactionID, de
 		template = account.Template
 	}
 	if template == nil {
-		return nil, nil, nil, fmt.Errorf("%w: %s", core.ErrNotSpawned, principal)
+		return nil, nil, nil, fmt.Errorf("%w: %s", core.ErrNotSpawned, principal.String())
 	}
 
 	handler := registry.Get(*template)
