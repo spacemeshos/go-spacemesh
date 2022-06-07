@@ -17,7 +17,7 @@ func Hash(bufs ...[]byte) Hash32 {
 	return rst
 }
 
-// ComputePrincipal address as the last 20 bytes from sha256(scale(template || nonce || args)).
+// ComputePrincipal address as the last 20 bytes from sha256(scale(template || args)).
 func ComputePrincipal(template Address, args scale.Encodable) Address {
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)

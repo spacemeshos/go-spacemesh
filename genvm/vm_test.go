@@ -436,6 +436,20 @@ func TestWorkflow(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "SpendNoSpawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spendWallet{0, 10, 1},
+					},
+					skipped: []int{0},
+					expected: map[int]change{
+						0: same{},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			tt := newTester(t).

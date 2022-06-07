@@ -14,7 +14,7 @@ func NewStagedCache(db sql.Executor) *StagedCache {
 // StagedCache is a passthrough cache for accounts state and enforces order for updated accounts.
 type StagedCache struct {
 	db sql.Executor
-	// list of changed accounts, preserving order
+	// list of changed accounts. preserving order
 	touched []Address
 	cache   map[Address]stagedAccount
 }

@@ -48,13 +48,13 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount > c.Account.Balance {
 		return ErrNoBalance
 	}
-	// noop. only gas is consumed
-	if c.Account.Address == to {
-		return nil
-	}
 	c.transfered += amount
 	if c.transfered > c.Header.MaxSpend {
 		return fmt.Errorf("%w: %d", ErrMaxSpend, c.Header.MaxSpend)
+	}
+	// noop. only gas is consumed
+	if c.Account.Address == to {
+		return nil
 	}
 
 	if c.changed == nil {
@@ -90,7 +90,7 @@ func (c *Context) Consume(gas uint64) error {
 	return nil
 }
 
-// Apply modifified state to the account updater.
+// Apply is executed if transaction was consumed.
 func (c *Context) Apply(updater AccountUpdater) error {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)

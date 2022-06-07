@@ -50,7 +50,7 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 		header.GasPrice = p.GasPrice
 		header.Nonce.Counter = p.Nonce.Counter
 		header.Nonce.Bitfield = p.Nonce.Bitfield
-		header.MaxGas += TotalGasSpend
+		header.MaxGas = TotalGasSpend
 	}
 	return header, args, nil
 }

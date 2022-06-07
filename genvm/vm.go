@@ -130,6 +130,9 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 				log.Object("account", &ctx.Account),
 				log.Err(err),
 			)
+			// TODO anything but internal must be recorded in the execution result.
+			// internal errors are propagated upwards, but they are for fatal
+			// unrecovarable errors, such as disk problems
 			if errors.Is(err, core.ErrInternal) {
 				return nil, err
 			}
