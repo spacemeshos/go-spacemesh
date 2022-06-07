@@ -51,6 +51,8 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 		header.Nonce.Counter = p.Nonce.Counter
 		header.Nonce.Bitfield = p.Nonce.Bitfield
 		header.MaxGas = TotalGasSpend
+	default:
+		return header, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
 	return header, args, nil
 }

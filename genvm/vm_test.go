@@ -163,6 +163,18 @@ func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encoda
 	return buf.Bytes()
 }
 
+func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {
+	tb.Helper()
+
+	buf := bytes.NewBuffer(nil)
+	encoder := scale.NewEncoder(buf)
+	for _, field := range fields {
+		_, err := field.EncodeScale(encoder)
+		require.NoError(tb, err)
+	}
+	return types.NewRawTx(buf.Bytes())
+}
+
 type testTx interface {
 	gen(*tester) types.RawTx
 }
@@ -579,12 +591,91 @@ func TestRandomTransfers(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-	tt := newTester(t).addAccounts(2).applyGenesis()
-	req := tt.Validation(tt.selfSpawnWallet(0))
-	header, err := req.Parse()
-	require.NoError(t, err)
-	require.Empty(t, header.Nonce)
-	require.True(t, req.Verify())
+	tt := newTester(t).
+		addAccounts(1).
+		applyGenesis().
+		addAccounts(1)
+	skipped, err := tt.Apply(types.NewLayerID(1), []types.RawTx{tt.selfSpawnWallet(0)})
+	require.NoError(tt, err)
+	require.Empty(tt, skipped)
+
+	zero := scale.U8(0)
+	one := scale.U8(1)
+	two := scale.U8(2)
+
+	for _, tc := range []struct {
+		desc   string
+		tx     types.RawTx
+		header *core.Header
+		err    error
+	}{
+		{
+			desc: "Spawn",
+			tx:   tt.selfSpawnWallet(1),
+			header: &core.Header{
+				Principal: tt.addresses[1],
+				Method:    0,
+				Template:  wallet.TemplateAddress,
+				GasPrice:  1,
+				MaxGas:    wallet.TotalGasSpawn,
+			},
+		},
+		{
+			desc: "Spend",
+			tx:   tt.spendWallet(0, 1, 100),
+			header: &core.Header{
+				Principal: tt.addresses[0],
+				Method:    1,
+				Template:  wallet.TemplateAddress,
+				GasPrice:  1,
+				Nonce:     core.Nonce{Counter: 1},
+				MaxSpend:  100,
+				MaxGas:    wallet.TotalGasSpend,
+			},
+		},
+		{
+			desc: "WrongVersion",
+			tx:   encodeFields(tt, &one),
+			err:  core.ErrMalformed,
+		},
+		{
+			desc: "InvalidPrincipal",
+			tx:   encodeFields(tt, &one, &one),
+			err:  core.ErrMalformed,
+		},
+		{
+			desc: "InvalidTemplate",
+			tx:   encodeFields(tt, &zero, &tt.addresses[0], &zero, &one),
+			err:  core.ErrMalformed,
+		},
+		{
+			desc: "UnknownTemplate",
+			tx:   encodeFields(tt, &zero, &tt.addresses[0], &zero, &tt.addresses[0]),
+			err:  core.ErrMalformed,
+		},
+		{
+			desc: "UnknownMethod",
+			tx:   encodeFields(tt, &zero, &tt.addresses[0], &two),
+			err:  core.ErrMalformed,
+		},
+		{
+			desc: "NotSpawned",
+			tx:   tt.spendWallet(1, 1, 100),
+			err:  core.ErrNotSpawned,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			req := tt.Validation(tc.tx)
+			header, err := req.Parse()
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+			} else {
+				tc.header.ID = header.ID
+				require.Equal(t, tc.header, header)
+				require.True(t, req.Verify())
+			}
+		})
+	}
 }
 
 func FuzzParse(f *testing.F) {
