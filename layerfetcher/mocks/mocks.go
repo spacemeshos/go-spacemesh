@@ -224,11 +224,12 @@ func (m *MocklayerDB) EXPECT() *MocklayerDBMockRecorder {
 }
 
 // GetAggregatedLayerHash mocks base method.
-func (m *MocklayerDB) GetAggregatedLayerHash(arg0 types.LayerID) types.Hash32 {
+func (m *MocklayerDB) GetAggregatedLayerHash(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAggregatedLayerHash", arg0)
 	ret0, _ := ret[0].(types.Hash32)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetAggregatedLayerHash indicates an expected call of GetAggregatedLayerHash.
@@ -253,11 +254,12 @@ func (mr *MocklayerDBMockRecorder) GetHareConsensusOutput(arg0 interface{}) *gom
 }
 
 // GetLayerHash mocks base method.
-func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) types.Hash32 {
+func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerHash", arg0)
 	ret0, _ := ret[0].(types.Hash32)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerHash indicates an expected call of GetLayerHash.
@@ -397,34 +399,6 @@ func NewMockpoetDB(ctrl *gomock.Controller) *MockpoetDB {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockpoetDB) EXPECT() *MockpoetDBMockRecorder {
 	return m.recorder
-}
-
-// HasProof mocks base method.
-func (m *MockpoetDB) HasProof(proofRef []byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasProof", proofRef)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// HasProof indicates an expected call of HasProof.
-func (mr *MockpoetDBMockRecorder) HasProof(proofRef interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasProof", reflect.TypeOf((*MockpoetDB)(nil).HasProof), proofRef)
-}
-
-// ValidateAndStore mocks base method.
-func (m *MockpoetDB) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStore", proofMessage)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ValidateAndStore indicates an expected call of ValidateAndStore.
-func (mr *MockpoetDBMockRecorder) ValidateAndStore(proofMessage interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStore", reflect.TypeOf((*MockpoetDB)(nil).ValidateAndStore), proofMessage)
 }
 
 // ValidateAndStoreMsg mocks base method.

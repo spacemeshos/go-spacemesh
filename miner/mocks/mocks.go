@@ -76,19 +76,18 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// SelectTXsForProposal mocks base method.
-func (m *MockconservativeState) SelectTXsForProposal(arg0 int) ([]types.TransactionID, error) {
+// SelectProposalTXs mocks base method.
+func (m *MockconservativeState) SelectProposalTXs(arg0 int) []types.TransactionID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectTXsForProposal", arg0)
+	ret := m.ctrl.Call(m, "SelectProposalTXs", arg0)
 	ret0, _ := ret[0].([]types.TransactionID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
-// SelectTXsForProposal indicates an expected call of SelectTXsForProposal.
-func (mr *MockconservativeStateMockRecorder) SelectTXsForProposal(arg0 interface{}) *gomock.Call {
+// SelectProposalTXs indicates an expected call of SelectProposalTXs.
+func (mr *MockconservativeStateMockRecorder) SelectProposalTXs(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTXsForProposal", reflect.TypeOf((*MockconservativeState)(nil).SelectTXsForProposal), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectProposalTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectProposalTXs), arg0)
 }
 
 // MockvotesEncoder is a mock of votesEncoder interface.
@@ -201,4 +200,42 @@ func (m *MockactivationDB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch
 func (mr *MockactivationDBMockRecorder) GetNodeAtxIDForEpoch(nodeID, targetEpoch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeAtxIDForEpoch", reflect.TypeOf((*MockactivationDB)(nil).GetNodeAtxIDForEpoch), nodeID, targetEpoch)
+}
+
+// MockmeshProvider is a mock of meshProvider interface.
+type MockmeshProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockmeshProviderMockRecorder
+}
+
+// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
+type MockmeshProviderMockRecorder struct {
+	mock *MockmeshProvider
+}
+
+// NewMockmeshProvider creates a new mock instance.
+func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
+	mock := &MockmeshProvider{ctrl: ctrl}
+	mock.recorder = &MockmeshProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
+	return m.recorder
+}
+
+// GetAggregatedLayerHash mocks base method.
+func (m *MockmeshProvider) GetAggregatedLayerHash(arg0 types.LayerID) (types.Hash32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAggregatedLayerHash", arg0)
+	ret0, _ := ret[0].(types.Hash32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAggregatedLayerHash indicates an expected call of GetAggregatedLayerHash.
+func (mr *MockmeshProviderMockRecorder) GetAggregatedLayerHash(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAggregatedLayerHash", reflect.TypeOf((*MockmeshProvider)(nil).GetAggregatedLayerHash), arg0)
 }

@@ -107,18 +107,25 @@ func TestHost_LocalAddressChange(t *testing.T) {
 			discoveryBootstrap(nodeA.host.discovery)
 			discoveryBootstrap(nodeB.host.discovery)
 
-			require.Equal(t, 1, len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())), "nodeB should have 1 address of nodeA")
+			require.Eventually(t, func() bool {
+				return len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())) == 1
+			}, 4*time.Second, 100*time.Millisecond, "nodeB should have 1 address of nodeA")
 
 			// assing new address to nodeA, expect nodeB to be notified.
 			require.NoError(t, nodeA.host.Network().Listen(addrANew), "nodeA should be able to listen on new address")
 
-			time.Sleep(100 * time.Millisecond)
-			for _, addr := range nodeB.host.Peerstore().Addrs(nodeA.host.ID()) {
-				require.Condition(t, func() bool {
-					return addr.String() == addrANew.String() || addr.String() == addrAOld.String()
-				}, "nodeB should have address of nodeA")
-			}
-			require.Equal(t, 2, len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())), "nodeB should have 2 addresses of nodeA")
+			require.Eventually(t, func() bool {
+				for _, addr := range nodeB.host.Peerstore().Addrs(nodeA.host.ID()) {
+					valid := addr.String() == addrANew.String() || addr.String() == addrAOld.String()
+					if !valid {
+						return false
+					}
+				}
+				return true
+			}, 4*time.Second, 100*time.Millisecond) // wait for nodeB to be notified
+			require.Eventually(t, func() bool {
+				return len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())) == 2
+			}, 4*time.Second, 100*time.Millisecond, "nodeB should have 2 addresses of nodeA")
 
 			for _, addr := range testCase.block {
 				switch addr {
@@ -134,18 +141,22 @@ func TestHost_LocalAddressChange(t *testing.T) {
 			}
 			require.NoError(t, nodeA.host.Network().ClosePeer(nodeB.host.ID()), "nodeA should be able to close nodeB")
 			require.NoError(t, nodeB.host.Network().ClosePeer(nodeA.host.ID()), "nodeB should be able to close nodeA")
-			time.Sleep(100 * time.Millisecond)
 
 			nodeB.host.discovery.CheckPeers(context.Background())
-			time.Sleep(100 * time.Millisecond)
 
-			addressBookAddresses := nodeB.host.discovery.GetAddresses()
 			if len(testCase.expected) == 2 {
-				require.True(t, len(addressBookAddresses) > 0, "nodeB should have at least 1 address")
+				require.Eventually(t, func() bool {
+					return len(nodeB.host.discovery.GetAddresses()) > 0
+				}, 4*time.Second, 100*time.Millisecond, "nodeB should have at least 1 address")
 			} else {
-				peerStoreAddressList := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
-				require.Equal(t, len(testCase.expected), len(peerStoreAddressList), "nodeB should have %d addresses", len(testCase.expected))
-				require.Equal(t, len(testCase.expected), len(addressBookAddresses), "nodeB should have %d addresses", len(testCase.expected))
+				require.Eventually(t, func() bool {
+					return len(testCase.expected) == len(nodeB.host.Peerstore().Addrs(nodeA.host.ID()))
+				}, 4*time.Second, 100*time.Millisecond, "nodeB should have %d addresses", len(testCase.expected))
+
+				require.Eventually(t, func() bool {
+					return len(testCase.expected) == len(nodeB.host.discovery.GetAddresses())
+				}, 4*time.Second, 100*time.Millisecond, "nodeB should have %d addresses", len(testCase.expected))
+
 				for _, addr := range testCase.expected {
 					var expectAddress string
 					switch addr {
@@ -154,6 +165,8 @@ func TestHost_LocalAddressChange(t *testing.T) {
 					case newAddr:
 						expectAddress = addrANew.String()
 					}
+					addressBookAddresses := nodeB.host.discovery.GetAddresses()
+					peerStoreAddressList := nodeB.host.Peerstore().Addrs(nodeA.host.ID())
 					require.Equal(t, expectAddress, peerStoreAddressList[0].String(), "nodeB should have correct address of nodeA")
 					require.Equal(t, expectAddress+"/p2p/"+nodeA.host.ID().String(), addressBookAddresses[0].String(), "nodeB should have correct address of nodeA")
 				}

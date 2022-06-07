@@ -82,7 +82,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce[len(ac.txsByNonce)-1].postBalance
 }
 
-func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint64) error {
+func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint64, blockSeed []byte) error {
 	idx := getNonceOffset(ac.startNonce, ntx.Nonce)
 	if idx < 0 {
 		logger.With().Error("bad nonce",
@@ -124,7 +124,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 
 	// tx for an existing nonce
 	nonceTXs := ac.txsByNonce[idx]
-	if !ntx.Better(nonceTXs.best) {
+	if !ntx.Better(nonceTXs.best, blockSeed) {
 		return nil
 	}
 
@@ -182,7 +182,7 @@ func nonceMarshaller(any interface{}) log.ArrayMarshaler {
 	})
 }
 
-func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes.NanoTX) error {
+func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes.NanoTX, blockSeed []byte) error {
 	var (
 		oldNonce  = ac.nextNonce()
 		nextNonce = oldNonce
@@ -197,9 +197,12 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 			break
 		}
 
-		best := findBest(nonce2TXs[nextNonce], balance)
+		best := findBest(nonce2TXs[nextNonce], balance, blockSeed)
 		if best == nil {
-			logger.With().Warning("no feasible transactions at nonce", ac.addr, log.Uint64("nonce", nextNonce))
+			logger.With().Warning("no feasible transactions at nonce",
+				ac.addr,
+				log.Uint64("nonce", nextNonce),
+				log.Uint64("balance", balance))
 			break
 		} else {
 			logger.With().Debug("found best in nonce txs",
@@ -208,7 +211,7 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 				log.Uint64("nonce", nextNonce),
 				log.Uint64("fee", best.Fee))
 		}
-		if err := ac.accept(logger, best, balance); err != nil {
+		if err := ac.accept(logger, best, balance, blockSeed); err != nil {
 			logger.With().Warning("failed to add tx to account cache",
 				ac.addr,
 				best.Tid,
@@ -247,11 +250,11 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 	return nil
 }
 
-func findBest(ntxs []*txtypes.NanoTX, balance uint64) *txtypes.NanoTX {
+func findBest(ntxs []*txtypes.NanoTX, balance uint64, blockSeed []byte) *txtypes.NanoTX {
 	var best *txtypes.NanoTX
 	for _, ntx := range ntxs {
 		if balance >= ntx.MaxSpending() &&
-			(best == nil || ntx.Better(best)) {
+			(best == nil || ntx.Better(best, blockSeed)) {
 			best = ntx
 		}
 	}
@@ -279,7 +282,7 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, ntx *txtypes.NanoTX) 
 
 	nonceTXs := ac.txsByNonce[idx]
 	balance := nonceTXs.postBalance + nonceTXs.maxSpending()
-	return ac.accept(logger, ntx, balance)
+	return ac.accept(logger, ntx, balance, nil)
 }
 
 // adding a tx to the account cache. possible outcomes:
@@ -288,7 +291,7 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, ntx *txtypes.NanoTX) 
 //   reject from cache for now but will retrieve it from DB when the nonce gap is closed
 // - nonce already exists in the cache:
 //   if it is better than the best candidate in that nonce group, swap
-func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction, received time.Time) error {
+func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction, received time.Time, blockSeed []byte) error {
 	if tx.AccountNonce < ac.startNonce {
 		logger.With().Debug("nonce too small",
 			ac.addr,
@@ -321,7 +324,7 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 	}
 
 	// transaction uses the next nonce
-	if err := ac.accept(logger, ntx, ac.availBalance()); err != nil {
+	if err := ac.accept(logger, ntx, ac.availBalance(), blockSeed); err != nil {
 		if errors.Is(err, errTooManyNonce) {
 			ac.moreInDB = true
 			return nil
@@ -374,7 +377,7 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce
 	if _, ok := byPrincipal[ac.addr]; !ok {
 		logger.With().Panic("no txs for account after grouping", ac.addr)
 	}
-	return ac.addBatch(logger, byPrincipal[ac.addr])
+	return ac.addBatch(logger, byPrincipal[ac.addr], nil)
 }
 
 // find the first nonce without a layer.
@@ -388,15 +391,15 @@ func (ac *accountCache) getMempoolOffset() int {
 	return -1
 }
 
-func (ac *accountCache) getMempool(logger log.Log) ([]*txtypes.NanoTX, error) {
+func (ac *accountCache) getMempool(logger log.Log) []*txtypes.NanoTX {
 	bests := make([]*txtypes.NanoTX, 0, maxTXsPerAcct)
 	offset := ac.getMempoolOffset()
 	if offset < 0 {
-		return nil, nil
+		return nil
 	}
 	for _, nonceTXs := range ac.txsByNonce[offset:] {
 		if nonceTXs.layer() != (types.LayerID{}) {
-			logger.With().Error("some proposals/blocks packed txs out of order",
+			logger.With().Warning("some proposals/blocks packed txs out of order",
 				nonceTXs.id(),
 				nonceTXs.layer(),
 				nonceTXs.block(),
@@ -404,7 +407,7 @@ func (ac *accountCache) getMempool(logger log.Log) ([]*txtypes.NanoTX, error) {
 		}
 		bests = append(bests, nonceTXs.best)
 	}
-	return bests, nil
+	return bests
 }
 
 func (ac *accountCache) applyLayer(
@@ -544,16 +547,20 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 
 // BuildFromScratch builds the cache from database.
 func (c *cache) BuildFromScratch() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.pending = make(map[types.Address]*accountCache)
 	mtxs, err := c.tp.GetAllPending()
 	if err != nil {
 		c.logger.Error("failed to get all pending txs", log.Err(err))
 		return err
 	}
+	return c.BuildFromTXs(mtxs, nil)
+}
 
+// BuildFromTXs builds the cache from the provided transactions.
+func (c *cache) BuildFromTXs(mtxs []*types.MeshTransaction, blockSeed []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.pending = make(map[types.Address]*accountCache)
 	toCleanup := make(map[types.Address]struct{})
 	for _, tx := range mtxs {
 		toCleanup[tx.Origin()] = struct{}{}
@@ -564,7 +571,7 @@ func (c *cache) BuildFromScratch() error {
 	acctsAdded := 0
 	for principal, nonce2TXs := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
-		if err = c.pending[principal].addBatch(c.logger, nonce2TXs); err != nil {
+		if err := c.pending[principal].addBatch(c.logger, nonce2TXs, blockSeed); err != nil {
 			return err
 		}
 		if c.pending[principal].shouldEvict() {
@@ -612,14 +619,14 @@ func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	}
 }
 
-func (c *cache) Add(tx *types.Transaction, received time.Time) error {
+func (c *cache) Add(tx *types.Transaction, received time.Time, blockSeed []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	principal := tx.Origin()
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
-	if err := c.pending[principal].add(c.logger, c.tp, tx, received); err != nil {
+	if err := c.pending[principal].add(c.logger, c.tp, tx, received, blockSeed); err != nil {
 		return err
 	}
 	return nil
@@ -765,23 +772,19 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 	return c.pending[addr].nextNonce(), c.pending[addr].availBalance()
 }
 
-// GetMempool returns all the transactions that should be included in the next proposal.
-func (c *cache) GetMempool() (map[types.Address][]*txtypes.NanoTX, error) {
+// GetMempool returns all the transactions that eligible for a proposal/block.
+func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*txtypes.NanoTX)
 	for addr, accCache := range c.pending {
-		txs, err := accCache.getMempool(c.logger)
-		if err != nil {
-			return nil, err
-		}
+		txs := accCache.getMempool(c.logger)
 		if len(txs) > 0 {
-			// account with nonce gap will be kept in memory but has no pending txs
 			all[addr] = txs
 		}
 	}
-	return all, nil
+	return all
 }
 
 // AddToDB adds a transaction to the database.
@@ -833,4 +836,9 @@ func (c *cache) CheckApplyOrder(toApply types.LayerID) error {
 		return errLayerNotInOrder
 	}
 	return nil
+}
+
+// GetMeshHash gets the aggregated layer hash at the specified layer.
+func (c *cache) GetMeshHash(lid types.LayerID) (types.Hash32, error) {
+	return c.tp.GetMeshHash(lid)
 }

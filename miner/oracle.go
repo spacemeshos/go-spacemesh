@@ -170,7 +170,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	logger.With().Info("proposal eligibility calculated",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
-		log.Object("layers_to_num_proposals", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+		log.Array("layers_to_num_proposals", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 			// Sort the layer map to log the layer data in order
 			keys := make([]types.LayerID, 0, len(eligibilityProofs))
 			for k := range eligibilityProofs {
@@ -180,8 +180,11 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 				return keys[i].Before(keys[j])
 			})
 			for _, lyr := range keys {
-				encoder.AddUint32("layer", lyr.Uint32())
-				encoder.AddInt("slots", len(eligibilityProofs[lyr]))
+				encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+					encoder.AddUint32("layer", lyr.Uint32())
+					encoder.AddInt("slots", len(eligibilityProofs[lyr]))
+					return nil
+				}))
 			}
 			return nil
 		})))

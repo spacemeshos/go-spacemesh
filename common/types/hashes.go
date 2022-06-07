@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -21,13 +20,6 @@ const (
 type Hash12 [12]byte
 
 func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
-
-// CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
-func CalcHash12(data []byte) (h Hash12) {
-	h32 := hash.Sum(data)
-	copy(h[:], h32[:])
-	return
-}
 
 // CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
 func CalcMessageHash12(msg []byte, protocol string) Hash12 {
@@ -113,9 +105,11 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
 
-// EncodeScale implements scale codec interface.
-func (h *Hash20) EncodeScale(e *scale.Encoder) (int, error) {
-	return scale.EncodeByteArray(e, h[:])
+// CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
+func CalcHash12(data []byte) (h Hash12) {
+	h32 := hash.Sum(data)
+	copy(h[:], h32[:])
+	return
 }
 
 // DecodeScale implements scale codec interface.
@@ -130,6 +124,19 @@ func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	copy(sortedView, view)
 	SortBlockIDs(sortedView)
 	return CalcBlockHash32Presorted(sortedView, additionalBytes)
+}
+
+// CalcProposalHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
+// prefixed with additionalBytes.
+func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
+	hasher := hash.New()
+	hasher.Write(additionalBytes)
+	for _, id := range sortedView {
+		hasher.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
+	}
+	var res Hash32
+	hasher.Sum(res[:0])
+	return res
 }
 
 // CalcBlockHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is

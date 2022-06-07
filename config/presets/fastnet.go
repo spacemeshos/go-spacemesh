@@ -22,6 +22,8 @@ func fastnet() config.Config {
 		panic(err)
 	}
 
+	conf.BaseConfig.OptFilterThreshold = 100
+
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5

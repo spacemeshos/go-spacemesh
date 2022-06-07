@@ -2,12 +2,12 @@ package hare
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"math"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -41,7 +41,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	pub := msg.PubKey
 
 	// check for winning VRF
-	sha := sha256.Sum256(msg.InnerMsg.RoleProof)
+	sha := hash.Sum(msg.InnerMsg.RoleProof)
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	logger.With().Debug("received preround message",
 		log.String("sender_id", pub.ShortString()),

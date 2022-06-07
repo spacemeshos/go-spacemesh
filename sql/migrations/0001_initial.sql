@@ -110,12 +110,14 @@ CREATE TABLE atx_top
 
 CREATE TABLE proposals
 (
-    id        CHAR(20) PRIMARY KEY,
-    ballot_id CHAR(20),
-    layer     INT NOT NULL,
-    tx_ids    BLOB,
-    signature VARCHAR,
+    id         CHAR(20) PRIMARY KEY,
+    ballot_id  CHAR(20),
+    layer      INT NOT NULL,
+    tx_ids     BLOB,
+    mesh_hash  CHAR(32),
+    signature  VARCHAR,
     proposal   BLOB
+
 ) WITHOUT ROWID;
 CREATE INDEX proposals_by_layer ON proposals (layer);
 

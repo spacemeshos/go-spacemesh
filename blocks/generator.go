@@ -14,18 +14,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
-var (
-	errInvalidATXID = errors.New("proposal ATXID invalid")
-	errTXNotFound   = errors.New("proposal TX not found")
-)
+var errInvalidATXID = errors.New("proposal ATXID invalid")
 
 // Generator generates a block from proposals.
 type Generator struct {
-	logger log.Log
-	cfg    Config
-	atxDB  atxProvider
-	meshDB meshProvider
-	txs    txProvider
+	logger   log.Log
+	cfg      Config
+	atxDB    atxProvider
+	meshDB   meshProvider
+	conState conservativeState
 }
 
 // Config is the config for Generator.
@@ -59,13 +56,13 @@ func WithGeneratorLogger(logger log.Log) GeneratorOpt {
 }
 
 // NewGenerator creates new block generator.
-func NewGenerator(atxDB atxProvider, meshDB meshProvider, txs txProvider, opts ...GeneratorOpt) *Generator {
+func NewGenerator(atxDB atxProvider, meshDB meshProvider, cState conservativeState, opts ...GeneratorOpt) *Generator {
 	g := &Generator{
-		logger: log.NewNop(),
-		cfg:    defaultConfig(),
-		atxDB:  atxDB,
-		meshDB: meshDB,
-		txs:    txs,
+		logger:   log.NewNop(),
+		cfg:      defaultConfig(),
+		atxDB:    atxDB,
+		meshDB:   meshDB,
+		conState: cState,
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -76,10 +73,10 @@ func NewGenerator(atxDB atxProvider, meshDB meshProvider, txs txProvider, opts .
 // GenerateBlock generates a block from the list of Proposal.
 func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, proposals []*types.Proposal) (*types.Block, error) {
 	logger := g.logger.WithContext(ctx).WithFields(layerID, log.Int("num_proposals", len(proposals)))
-	types.SortProposals(proposals)
-	txIDs, _, err := g.extractOrderedUniqueTXs(layerID, proposals)
+	txIDs, err := g.conState.SelectBlockTXs(layerID, proposals)
 	if err != nil {
-		return nil, err
+		logger.With().Error("failed to select block txs", layerID, log.Err(err))
+		return nil, fmt.Errorf("select block txs: %w", err)
 	}
 	rewards, err := g.calculateCoinbaseWeight(logger, proposals)
 	if err != nil {
@@ -95,31 +92,6 @@ func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, pr
 	b.Initialize()
 	logger.With().Info("block generated", log.Inline(b))
 	return b, nil
-}
-
-func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, []*types.Transaction, error) {
-	seen := make(map[types.TransactionID]struct{})
-	var txIDs []types.TransactionID
-	for _, p := range proposals {
-		for _, id := range p.TxIDs {
-			if _, exist := seen[id]; exist {
-				continue
-			}
-			txIDs = append(txIDs, id)
-			seen[id] = struct{}{}
-		}
-	}
-	types.SortTransactionIDs(txIDs)
-	mtxs, missing := g.txs.GetMeshTransactions(txIDs)
-	if len(missing) > 0 {
-		g.logger.Error("could not find transactions %v from layer %v", missing, layerID)
-		return nil, nil, errTXNotFound
-	}
-	txs := make([]*types.Transaction, 0, len(mtxs))
-	for _, mtx := range mtxs {
-		txs = append(txs, &mtx.Transaction)
-	}
-	return txIDs, txs, nil
 }
 
 func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Proposal) ([]types.AnyReward, error) {

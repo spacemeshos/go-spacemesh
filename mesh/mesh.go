@@ -228,19 +228,20 @@ func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
 }
 
 // GetLayerHash returns layer hash.
-func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
+func (msh *Mesh) GetLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	h, err := msh.recoverLayerHash(layerID)
 	if err == nil {
-		return h
+		return h, nil
 	}
 	if errors.Is(err, database.ErrNotFound) {
 		// layer hash not persisted. i.e. contextual validity not yet determined
-		lyr, err := msh.GetLayer(layerID)
+		var lyr *types.Layer
+		lyr, err = msh.GetLayer(layerID)
 		if err == nil {
-			return lyr.Hash()
+			return lyr.Hash(), nil
 		}
 	}
-	return types.EmptyLayerHash
+	return types.EmptyLayerHash, err
 }
 
 // ProcessedLayer returns the last processed layer ID.
@@ -390,13 +391,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	return nil
 }
 
-func (msh *Mesh) getAggregatedHash(lid types.LayerID) (types.Hash32, error) {
-	if !lid.After(types.NewLayerID(1)) {
-		return types.EmptyLayerHash, nil
-	}
-	return layers.GetAggregatedHash(msh.db, lid)
-}
-
 func (msh *Mesh) persistLayerHashes(ctx context.Context, lid types.LayerID, bids []types.BlockID) error {
 	logger := msh.WithContext(ctx)
 	logger.With().Debug("persisting layer hash", lid, log.Int("num_blocks", len(bids)))
@@ -407,10 +401,16 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, lid types.LayerID, bids
 		return err
 	}
 
-	prevHash, err := msh.getAggregatedHash(lid.Sub(1))
-	if err != nil {
-		logger.With().Debug("failed to get previous aggregated hash", lid, log.Err(err))
-		return err
+	var (
+		prevHash = types.EmptyLayerHash
+		err      error
+	)
+	if prevLid := lid.Sub(1); prevLid.Uint32() > 0 {
+		prevHash, err = msh.GetAggregatedLayerHash(prevLid)
+		if err != nil {
+			logger.With().Error("failed to get previous aggregated hash", lid, log.Err(err))
+			return err
+		}
 	}
 
 	logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prevHash.ShortString()))
@@ -642,12 +642,8 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 }
 
 // GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer.
-func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
-	h, err := layers.GetAggregatedHash(msh.db, layerID)
-	if err != nil {
-		return types.EmptyLayerHash
-	}
-	return h
+func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
+	return layers.GetAggregatedHash(msh.db, layerID)
 }
 
 var errLayerHasBlock = errors.New("layer has block")

@@ -15,9 +15,7 @@ func (atxList ATXIDList) Hash() Hash32 {
 		}
 	}
 
-	var res Hash32
-
-	hasher.Sum(res[:0])
-
-	return res
+	var rst Hash32
+	hasher.Sum(rst[:0])
+	return rst
 }

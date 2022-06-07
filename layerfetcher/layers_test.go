@@ -129,8 +129,8 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 
 	tl := createTestLogicWithMocknet(t, newMockNet(t))
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(processed).Times(1)
-	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(hash).Times(1)
-	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(hash, nil).Times(1)
+	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return(ballots, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return(blocks, nil).Times(1)
 	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(hareOutput, nil).Times(1)
@@ -155,8 +155,8 @@ func TestLayerBlocksReqReceiver_SuccessEmptyLayer(t *testing.T) {
 	ballots := []types.BallotID{types.RandomBallotID(), types.RandomBallotID(), types.RandomBallotID(), types.RandomBallotID()}
 	tl := createTestLogicWithMocknet(t, newMockNet(t))
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(processed).Times(1)
-	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.EmptyLayerHash).Times(1)
-	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.EmptyLayerHash, nil).Times(1)
+	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return(ballots, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{}, nil).Times(1)
 	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(types.EmptyBlockID, nil).Times(1)
@@ -178,8 +178,8 @@ func TestLayerBlocksReqReceiver_GetHareOutputError(t *testing.T) {
 	lyrID := types.NewLayerID(100)
 	tl := createTestLogicWithMocknet(t, newMockNet(t))
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
-	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash()).Times(1)
-	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash()).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
+	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return([]types.BallotID{types.RandomBallotID()}, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{types.RandomBlockID()}, nil).Times(1)
 	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(types.EmptyBlockID, database.ErrNotFound).Times(1)
@@ -193,8 +193,8 @@ func TestLayerBlocksReqReceiver_GetBlockIDsError(t *testing.T) {
 	lyrID := types.NewLayerID(100)
 	tl := createTestLogicWithMocknet(t, newMockNet(t))
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
-	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash()).Times(1)
-	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash()).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
+	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return([]types.BallotID{types.RandomBallotID()}, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return(nil, database.ErrNotFound).Times(1)
 
@@ -207,9 +207,32 @@ func TestLayerBlocksReqReceiver_GetBallotIDsError(t *testing.T) {
 	lyrID := types.NewLayerID(100)
 	tl := createTestLogicWithMocknet(t, newMockNet(t))
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
-	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash()).Times(1)
-	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash()).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
+	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return(nil, database.ErrNotFound).Times(1)
+
+	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
+	assert.Nil(t, out)
+	assert.Equal(t, err, ErrInternal)
+}
+
+func TestLayerBlocksReqReceiver_GetAggLayerHashError(t *testing.T) {
+	lyrID := types.NewLayerID(100)
+	tl := createTestLogicWithMocknet(t, newMockNet(t))
+	tl.mLayerDB.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
+	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.EmptyLayerHash, errors.New("unknown")).Times(1)
+
+	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
+	assert.Nil(t, out)
+	assert.Equal(t, err, ErrInternal)
+}
+
+func TestLayerBlocksReqReceiver_GetLayerHashError(t *testing.T) {
+	lyrID := types.NewLayerID(100)
+	tl := createTestLogicWithMocknet(t, newMockNet(t))
+	tl.mLayerDB.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
+	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.EmptyLayerHash, errors.New("unknown")).Times(1)
 
 	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)

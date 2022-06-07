@@ -147,7 +147,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 			lStart = time.Now()
 			for i := 0; i < 100; i++ {
 				for _, blk := range lyr.Blocks() {
-					block, err := mdb.getBlock(blk.ID())
+					block, err := mdb.GetBlock(blk.ID())
 					require.NoError(b, err)
 					require.NotNil(b, block)
 				}

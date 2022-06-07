@@ -23,7 +23,7 @@ func TestStore_AddToProposal(t *testing.T) {
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		tx := newTx(t, nonce, amount, fee, signer)
+		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 		require.NoError(t, st.Add(tx, time.Now()))
 		txs = append(txs, tx)
 	}
@@ -54,7 +54,7 @@ func TestStore_AddToBlock(t *testing.T) {
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		tx := newTx(t, nonce, amount, fee, signer)
+		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 		require.NoError(t, st.Add(tx, time.Now()))
 		txs = append(txs, tx)
 	}
@@ -86,7 +86,7 @@ func TestStore_ApplyLayer(t *testing.T) {
 	signer := signing.NewEdSigner()
 	// create a bunch of transactions with competing txs for the same nonce
 	for i := 0; i < numTXs; i++ {
-		tx := newTx(t, nonce, amount, fee, signer)
+		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 		require.NoError(t, st.Add(tx, time.Now()))
 		txs = append(txs, tx)
 	}
@@ -94,7 +94,7 @@ func TestStore_ApplyLayer(t *testing.T) {
 	// create a bunch of transactions for different account
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSigner()
-		tx := newTx(t, nonce, amount, fee, s)
+		tx := newTx(t, nonce, defaultAmount, defaultFee, s)
 		require.NoError(t, st.Add(tx, time.Now()))
 		txs = append(txs, tx)
 	}
@@ -134,7 +134,7 @@ func TestStore_UndoLayers_Simple(t *testing.T) {
 		for j := 0; j < numLayers; j++ {
 			lyr := lid.Add(uint32(j))
 			nnc := nonce + uint64(j)
-			tx := newTx(t, nnc, amount, fee, signer)
+			tx := newTx(t, nnc, defaultAmount, defaultFee, signer)
 			require.NoError(t, st.Add(tx, time.Now()))
 			txs = append(txs, tx)
 			require.NoError(t, st.ApplyLayer(lyr, types.RandomBlockID(), principal, map[uint64]types.TransactionID{nnc: tx.ID()}))
@@ -166,11 +166,11 @@ func TestStore_UndoLayers_TXsInMultipleLayers(t *testing.T) {
 	principalA := types.BytesToAddress(signerA.PublicKey().Bytes())
 	signerB := signing.NewEdSigner()
 	principalB := types.BytesToAddress(signerB.PublicKey().Bytes())
-	txA0 := newTx(t, nonce, amount, fee, signerA)
-	txA1 := newTx(t, nonce+1, amount, fee, signerA)
-	txA2 := newTx(t, nonce+2, amount, fee, signerA)
-	txB0 := newTx(t, nonce, amount, fee, signerB)
-	txB1 := newTx(t, nonce+1, amount, fee, signerB)
+	txA0 := newTx(t, nonce, defaultAmount, defaultFee, signerA)
+	txA1 := newTx(t, nonce+1, defaultAmount, defaultFee, signerA)
+	txA2 := newTx(t, nonce+2, defaultAmount, defaultFee, signerA)
+	txB0 := newTx(t, nonce, defaultAmount, defaultFee, signerB)
+	txB1 := newTx(t, nonce+1, defaultAmount, defaultFee, signerB)
 	txs := []*types.Transaction{txA0, txA1, txA2, txB0, txB1}
 	for _, tx := range txs {
 		require.NoError(t, st.Add(tx, time.Now()))

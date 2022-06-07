@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -48,7 +47,6 @@ func (a Address) Hash() Hash32 { return CalcHash32(a[:]) }
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
 	unchecksummed := hex.EncodeToString(a[:])
-
 	sha := hash.New()
 	sha.Write([]byte(unchecksummed))
 	hh := sha.Sum(nil)
