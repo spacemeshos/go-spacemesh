@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
-// Context servers 2 purposes:
+// Context serves 2 purposes:
 // - maintains changes to the system state, that will be applied only after succeful execution
 // - accumulates set of reusable objects and data
 type Context struct {
@@ -15,9 +15,7 @@ type Context struct {
 	Handler  Handler
 	Template Template
 
-	Account   Account
-	Principal Address
-	Method    uint8
+	Account Account
 
 	Header Header
 	Args   scale.Encodable
@@ -26,15 +24,18 @@ type Context struct {
 	consumed   uint64
 	transfered uint64
 
-	order   []Address
+	// TODO all templates for genesis will support transfers to only one account.
+	// i keep it for the purposes of testing and validation (e.g we can implement more complex templates)
+	// but it can be simplified down to one variable
+	touched []Address
 	changed map[Address]*Account
 }
 
 // Spawn account.
-// TODO(dshulyak) only self-spawn is supported for now.
 func (c *Context) Spawn(template Address, args scale.Encodable) error {
-	principal := ComputePrincipal(template, c.Header.Nonce, args)
-	if principal != c.Principal {
+	principal := ComputePrincipal(template, args)
+	// TODO(dshulyak) only self-spawn is supported
+	if principal != c.Header.Principal {
 		return ErrSpawn
 	}
 
@@ -65,7 +66,7 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 		if err != nil {
 			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 		}
-		c.order = append(c.order, to)
+		c.touched = append(c.touched, to)
 		c.changed[to] = &loaded
 		account = &loaded
 	}
@@ -100,7 +101,7 @@ func (c *Context) Apply(updater AccountUpdater) error {
 	if err := updater.Update(c.Account); err != nil {
 		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
-	for _, address := range c.order {
+	for _, address := range c.touched {
 		account := c.changed[address]
 		if err := updater.Update(*account); err != nil {
 			return fmt.Errorf("%w: %s", ErrInternal, err.Error())

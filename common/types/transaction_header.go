@@ -5,7 +5,10 @@ import "github.com/spacemeshos/go-spacemesh/log"
 // TxHeader is a transaction header, with some of the fields defined directly in the tx
 // and the rest is computed by the template based on immutable state and method arguments.
 type TxHeader struct {
+	ID          TransactionID
 	Principal   Address
+	Template    Address
+	Method      uint8
 	Nonce       Nonce
 	LayerLimits LayerLimits
 	MaxGas      uint64
@@ -15,6 +18,7 @@ type TxHeader struct {
 
 // MarshalLogObjects implements encoding for the tx header.
 func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("id", h.ID.String())
 	encoder.AddString("principal", h.Principal.String())
 	encoder.AddUint64("nonce_counter", h.Nonce.Counter)
 	encoder.AddUint8("nonce_bitfield", h.Nonce.Bitfield)

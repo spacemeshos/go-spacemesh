@@ -54,7 +54,7 @@ func (t *tester) addAccounts(n int) *tester {
 		t.pubs = append(t.pubs, pub)
 		args := wallet.SpawnArguments{}
 		copy(args.PublicKey[:], pub)
-		t.addresses = append(t.addresses, core.ComputePrincipal(wallet.TemplateAddress, core.Nonce{}, &args))
+		t.addresses = append(t.addresses, core.ComputePrincipal(wallet.TemplateAddress, &args))
 		t.nonces = append(t.nonces, core.Nonce{})
 	}
 	return t
@@ -82,8 +82,8 @@ func (t *tester) nextNonce(i int) core.Nonce {
 	return nonce
 }
 
-func (t *tester) spawnWalletAll() [][]byte {
-	var rst [][]byte
+func (t *tester) spawnWalletAll() []types.RawTx {
+	var rst []types.RawTx
 	for i := 0; i < len(t.addresses); i++ {
 		if t.nonces[i].Counter != 0 {
 			continue
@@ -93,28 +93,28 @@ func (t *tester) spawnWalletAll() [][]byte {
 	return rst
 }
 
-func (t *tester) selfSpawnWallet(i int) []byte {
+func (t *tester) selfSpawnWallet(i int) types.RawTx {
 	typ := scale.U8(0)
 	method := scale.U8(0)
 	payload := wallet.SpawnPayload{GasPrice: 1}
 	copy(payload.Arguments.PublicKey[:], t.pubs[i])
 	t.nextNonce(i)
-	return encodeWalletTx(t, t.pks[i],
+	return types.NewRawTx(encodeWalletTx(t, t.pks[i],
 		&typ,
 		&t.addresses[i], &method, &wallet.TemplateAddress,
 		&payload,
-	)
+	))
 }
 
-func (t *tester) randSendWalletN(n int, amount uint64) [][]byte {
-	rst := make([][]byte, n)
+func (t *tester) randSendWalletN(n int, amount uint64) []types.RawTx {
+	rst := make([]types.RawTx, n)
 	for i := range rst {
 		rst[i] = t.randSpendWallet(amount)
 	}
 	return rst
 }
 
-func (t *tester) randSpendWallet(amount uint64) []byte {
+func (t *tester) randSpendWallet(amount uint64) types.RawTx {
 	return t.spendWallet(t.rng.Intn(len(t.addresses)), t.rng.Intn(len(t.addresses)), amount)
 }
 
@@ -123,11 +123,11 @@ func (t *tester) withSeed(seed int64) *tester {
 	return t
 }
 
-func (t *tester) spendWallet(from, to int, amount uint64) []byte {
+func (t *tester) spendWallet(from, to int, amount uint64) types.RawTx {
 	return t.spendWalletWithNonce(from, to, amount, t.nextNonce(from))
 }
 
-func (t *tester) spendWalletWithNonce(from, to int, amount uint64, nonce core.Nonce) []byte {
+func (t *tester) spendWalletWithNonce(from, to int, amount uint64, nonce core.Nonce) types.RawTx {
 	payload := wallet.SpendPayload{}
 	payload.Arguments.Destination = t.addresses[to]
 	payload.Arguments.Amount = amount
@@ -136,12 +136,12 @@ func (t *tester) spendWalletWithNonce(from, to int, amount uint64, nonce core.No
 
 	typ := scale.U8(0)
 	method := scale.U8(1)
-	return encodeWalletTx(t, t.pks[from],
+	return types.NewRawTx(encodeWalletTx(t, t.pks[from],
 		&typ,
 		&t.addresses[from],
 		&method,
 		&payload,
-	)
+	))
 }
 
 func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encodable) []byte {
@@ -164,14 +164,14 @@ func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encoda
 }
 
 type testTx interface {
-	gen(*tester) []byte
+	gen(*tester) types.RawTx
 }
 
 type spawnWallet struct {
 	principal int
 }
 
-func (tx *spawnWallet) gen(t *tester) []byte {
+func (tx *spawnWallet) gen(t *tester) types.RawTx {
 	return t.selfSpawnWallet(tx.principal)
 }
 
@@ -180,7 +180,7 @@ type spendWallet struct {
 	amount   uint64
 }
 
-func (tx *spendWallet) gen(t *tester) []byte {
+func (tx *spendWallet) gen(t *tester) types.RawTx {
 	return t.spendWallet(tx.from, tx.to, tx.amount)
 }
 
@@ -444,7 +444,7 @@ func TestWorkflow(t *testing.T) {
 				addAccounts(total - funded)
 
 			for i, layer := range tc.layers {
-				var txs [][]byte
+				var txs []types.RawTx
 				for _, gen := range layer.txs {
 					txs = append(txs, gen.gen(tt))
 				}
@@ -455,7 +455,7 @@ func TestWorkflow(t *testing.T) {
 					require.Empty(tt, skipped)
 				} else {
 					for i, pos := range layer.skipped {
-						require.Equal(t, txs[pos], skipped[i])
+						require.Equal(t, txs[pos].ID, skipped[i])
 					}
 				}
 				for account, changes := range layer.expected {
@@ -498,18 +498,18 @@ func TestValidation(t *testing.T) {
 func FuzzParse(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		tt := newTester(t).addAccounts(1).applyGenesis()
-		req := tt.Validation(data)
+		req := tt.Validation(types.NewRawTx(data))
 		req.Parse()
 	})
 }
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addAccounts(2).applyGenesis()
-	skipped, err := tt.Apply(types.NewLayerID(1), [][]byte{tt.selfSpawnWallet(0)})
+	skipped, err := tt.Apply(types.NewLayerID(1), []types.RawTx{tt.selfSpawnWallet(0)})
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
-	bench := func(b *testing.B, raw []byte) {
+	bench := func(b *testing.B, raw types.RawTx) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
@@ -551,7 +551,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
-	var layers [][][]byte
+	var layers [][]types.RawTx
 	for i := 0; i < b.N; i++ {
 		layers = append(layers, tt.randSendWalletN(n, 10))
 	}

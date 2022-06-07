@@ -64,7 +64,7 @@ func (t *SpendPayload) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	} else {
 		total += n
 	}
-	if n, err := scale.EncodeCompact32(enc, t.GasPrice); err != nil {
+	if n, err := scale.EncodeCompact64(enc, t.GasPrice); err != nil {
 		return total, err
 	} else {
 		total += n
@@ -83,7 +83,7 @@ func (t *SpendPayload) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	} else {
 		total += n
 	}
-	if field, n, err := scale.DecodeCompact32(dec); err != nil {
+	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
 	} else {
 		total += n
@@ -98,7 +98,7 @@ func (t *SpawnPayload) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	} else {
 		total += n
 	}
-	if n, err := scale.EncodeCompact32(enc, t.GasPrice); err != nil {
+	if n, err := scale.EncodeCompact64(enc, t.GasPrice); err != nil {
 		return total, err
 	} else {
 		total += n
@@ -112,7 +112,7 @@ func (t *SpawnPayload) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	} else {
 		total += n
 	}
-	if field, n, err := scale.DecodeCompact32(dec); err != nil {
+	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
 	} else {
 		total += n

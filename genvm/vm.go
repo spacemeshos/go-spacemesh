@@ -47,10 +47,10 @@ type VM struct {
 }
 
 // Validation initializes validation request.
-func (vm *VM) Validation(raw []byte) *Request {
+func (vm *VM) Validation(raw types.RawTx) *Request {
 	return &Request{
 		vm:      vm,
-		decoder: scale.NewDecoder(bytes.NewReader(raw)),
+		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
 		raw:     raw,
 	}
 }
@@ -82,7 +82,7 @@ func (vm *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
+func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID, error) {
 	tx, err := vm.db.Tx(context.Background())
 	if err != nil {
 		return nil, err
@@ -92,30 +92,39 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 		ss      = core.NewStagedState(tx)
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
-		skipped [][]byte
+		skipped []types.TransactionID
 		start   = time.Now()
 	)
-	for _, tx := range txs {
-		rd.Reset(tx)
-		header, ctx, args, err := parse(vm.logger, ss, decoder)
+	for i := range txs {
+		tx := &txs[i]
+		rd.Reset(tx.Raw)
+		header, ctx, args, err := parse(vm.logger, ss, tx.ID, decoder)
 		if err != nil {
 			vm.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
-			skipped = append(skipped, tx)
+			skipped = append(skipped, tx.ID)
 			continue
 		}
 		vm.logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
+			vm.logger.With().Warning("skipping transaction. can't cover gas",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			skipped = append(skipped, tx.ID)
+			continue
+		}
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
 			vm.logger.With().Warning("skipping transaction. failed nonce check",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			skipped = append(skipped, tx)
+			skipped = append(skipped, tx.ID)
 			continue
 		}
-		if err := ctx.Handler.Exec(ctx, ctx.Method, args); err != nil {
+		if err := ctx.Handler.Exec(ctx, ctx.Header.Method, args); err != nil {
 			vm.logger.With().Debug("transaction failed",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
@@ -155,14 +164,14 @@ func (vm *VM) Apply(lid types.LayerID, txs [][]byte) ([][]byte, error) {
 type Request struct {
 	vm *VM
 
-	raw     []byte
+	raw     types.RawTx
 	ctx     *core.Context
 	decoder *scale.Decoder
 }
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
-	header, ctx, _, err := parse(r.vm.logger, core.NewStagedState(r.vm.db), r.decoder)
+	header, ctx, _, err := parse(r.vm.logger, core.NewStagedState(r.vm.db), r.raw.ID, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -175,29 +184,29 @@ func (r *Request) Verify() bool {
 	if r.ctx == nil {
 		panic("Verify should be called after succesfull Parse")
 	}
-	return verify(r.ctx, r.raw)
+	return verify(r.ctx, r.raw.Raw)
 }
 
-func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
 	}
 	if version != 0 {
-		return nil, nil, nil, fmt.Errorf("unsupported version %d", version)
+		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to decode principal: %w", err)
+		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %s", core.ErrMalformed, err)
 	}
 	method, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to decode method selector: %w", err)
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %s", core.ErrMalformed, err.Error())
 	}
 	account, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load state for principal %s: %w", principal, err)
+		return nil, nil, nil, fmt.Errorf("%w: failed load state for principal %s - %s", core.ErrInternal, principal, err)
 	}
 	logger.With().Debug("loaded account state", log.Inline(&account))
 
@@ -205,31 +214,33 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 	if method == 0 {
 		template = &core.Address{}
 		if _, err := template.DecodeScale(decoder); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to decode template address %w", err)
+			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
 		}
 	} else {
 		template = account.Template
 	}
 	if template == nil {
-		return nil, nil, nil, errors.New("account is not spawned")
+		return nil, nil, nil, fmt.Errorf("%w: %s", core.ErrNotSpawned, principal)
 	}
 
 	handler := registry.Get(*template)
 	if handler == nil {
-		return nil, nil, nil, fmt.Errorf("unknown template %x", *account.Template)
+		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.Template)
 	}
 	ctx := &core.Context{
-		Loader:    loader,
-		Handler:   handler,
-		Account:   account,
-		Principal: principal,
-		Method:    method,
+		Loader:  loader,
+		Handler: handler,
+		Account: account,
 	}
 	header, args, err := handler.Parse(ctx, method, decoder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	header.ID = id
 	header.Principal = principal
+	header.Template = *template
+	header.Method = method
+
 	ctx.Args = args
 	ctx.Header = header
 
@@ -237,7 +248,7 @@ func parse(logger log.Log, loader core.AccountLoader, decoder *scale.Decoder) (*
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	maxspend, err := ctx.Template.MaxSpend(ctx.Method, args)
+	maxspend, err := ctx.Template.MaxSpend(ctx.Header.Method, args)
 	if err != nil {
 		return nil, nil, nil, err
 	}

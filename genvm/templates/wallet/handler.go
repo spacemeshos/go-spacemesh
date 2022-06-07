@@ -5,20 +5,15 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 )
 
 const (
-	gasParse = 10
-	gasSpawn = 100
-	gasSpend = 50
-
 	// TotalGasSpawn is consumed from principal in case of succesful spawn.
-	TotalGasSpawn = gasParse + gasSpawn
+	TotalGasSpawn = 200
 	// TotalGasSpend is consumed from principal in case of succesful spend.
-	TotalGasSpend = gasParse + gasSpend
+	TotalGasSpend = 100
 )
 
 func init() {
@@ -35,7 +30,6 @@ type handler struct{}
 
 // Parse header and arguments.
 func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
-	header.MaxGas += gasParse
 	switch method {
 	case 0:
 		var p SpawnPayload
@@ -44,8 +38,8 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 			return
 		}
 		args = &p.Arguments
-		header.GasPrice = uint64(p.GasPrice)
-		header.MaxGas += gasSpawn
+		header.GasPrice = p.GasPrice
+		header.MaxGas = TotalGasSpawn
 	case 1:
 		var p SpendPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
@@ -53,16 +47,10 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 			return
 		}
 		args = &p.Arguments
-		header.GasPrice = uint64(p.GasPrice)
+		header.GasPrice = p.GasPrice
 		header.Nonce.Counter = p.Nonce.Counter
 		header.Nonce.Bitfield = p.Nonce.Bitfield
-		header.MaxGas += gasSpend
-	}
-	// TODO(dshulyak) need to implement it in a way that allows
-	// to validate using gas from conservative cache only
-	ctx.Header = header
-	if err = ctx.Consume(gasParse); err != nil {
-		return
+		header.MaxGas += TotalGasSpend
 	}
 	return header, args, nil
 }
@@ -84,14 +72,14 @@ func (*handler) Init(method uint8, args any, state []byte) (core.Template, error
 func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case 0:
-		if err := ctx.Consume(gasSpawn); err != nil {
+		if err := ctx.Consume(TotalGasSpawn); err != nil {
 			return err
 		}
 		if err := ctx.Spawn(TemplateAddress, args); err != nil {
 			return err
 		}
 	case 1:
-		if err := ctx.Consume(gasSpend); err != nil {
+		if err := ctx.Consume(TotalGasSpend); err != nil {
 			return err
 		}
 		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*SpendArguments)); err != nil {

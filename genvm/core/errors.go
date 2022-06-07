@@ -18,4 +18,6 @@ var (
 	ErrMaxSpend = errors.New("max spend")
 	// ErrSpawn raised to block regular spawn.
 	ErrSpawn = errors.New("spawn is not supported")
+	// ErrNotSpawned raised if account is not spawned.
+	ErrNotSpawned = errors.New("account is not spawned")
 )
