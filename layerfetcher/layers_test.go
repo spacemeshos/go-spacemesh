@@ -308,8 +308,8 @@ func TestPollLayerBlocks_AllHaveLayerData(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
@@ -336,8 +336,8 @@ func TestPollLayerBlocks_AllHaveLayerData_EmptyHareOutput(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 
@@ -358,7 +358,7 @@ func TestPollLayerBlocks_FetchLayerBallotsError(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
 	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).DoAndReturn(
 		func([]types.Hash32, fetch.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
@@ -387,8 +387,8 @@ func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).DoAndReturn(
 		func([]types.Hash32, fetch.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
@@ -428,8 +428,8 @@ func TestPollLayerBlocks_OnlyOneHasLayerData(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(1)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(1)
-	tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), withDataPeer, gomock.Any())
-	tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), withDataPeer, gomock.Any())
+	tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), withDataPeer, gomock.Any())
+	tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), withDataPeer, gomock.Any())
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
 			assert.NotEqual(t, blockID, types.EmptyBlockID)
@@ -462,8 +462,8 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
-	tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), withDataPeer, gomock.Any())
-	tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), withDataPeer, gomock.Any())
+	tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), withDataPeer, gomock.Any())
+	tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), withDataPeer, gomock.Any())
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
 	assert.NoError(t, res.Err)
@@ -484,8 +484,8 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -512,8 +512,8 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).AnyTimes()
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).DoAndReturn(
 		func(hashes []types.Hash32, _ fetch.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
@@ -561,8 +561,8 @@ func TestPollLayerBlocks_DifferentHareOutputIgnored(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
@@ -589,8 +589,8 @@ func TestPollLayerBlocks_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(errors.New("whatever")).Times(1)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -612,8 +612,8 @@ func TestPollLayerBlocks_FailureToSaveZeroBallotLayerIgnored(t *testing.T) {
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -635,8 +635,8 @@ func TestPollLayerBlocks_FailedToSaveHareOutput(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().TrackBallotPeers(gomock.Any(), peer, gomock.Any())
-		tl.mFetcher.EXPECT().TrackBlockPeers(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBallotsPeer(gomock.Any(), peer, gomock.Any())
+		tl.mFetcher.EXPECT().TrackBlocksPeer(gomock.Any(), peer, gomock.Any())
 	}
 	errUnknown := errors.New("whatever")
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).Return(errUnknown).Times(1)
