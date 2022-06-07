@@ -37,9 +37,6 @@ func (s *Wallet) Verify(ctx *core.Context, tx []byte) bool {
 	if len(tx) < 64 {
 		return false
 	}
-	if len(s.PublicKey) != ed25519.PublicKeySize {
-		return false
-	}
 	hash := core.Hash(tx[:len(tx)-64])
 	return ed25519.Verify(ed25519.PublicKey(s.PublicKey[:]), hash[:], tx[len(tx)-64:])
 }
