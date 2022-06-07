@@ -1,6 +1,6 @@
 module github.com/spacemeshos/go-spacemesh/systest
 
-go 1.17
+go 1.18
 
 require (
 	github.com/chaos-mesh/chaos-mesh/api/v1alpha1 v0.0.0-20220121084546-3a8c60c4bc75
