@@ -1501,9 +1501,9 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	}
 	s.GetState(0).Beacons.StoreBeacon(last.GetEpoch()-1, beacon)
 
-	verified := tortoise.HandleIncomingLayer(ctx, last)
+	_ = tortoise.HandleIncomingLayer(ctx, last)
 	last = s.Next()
-	verified = tortoise.HandleIncomingLayer(ctx, last)
+	verified := tortoise.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified)
 }
 
@@ -2262,10 +2262,10 @@ func TestSwitchVerifyingByUsingFullOutput(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		last = s.Next()
-		verified = tortoise.HandleIncomingLayer(ctx, last)
+		_ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	for i := 0; i < int(cfg.Hdist)+1; i++ {
-		last = s.Next(
+		_ = s.Next(
 			sim.WithEmptyHareOutput(),
 		)
 	}

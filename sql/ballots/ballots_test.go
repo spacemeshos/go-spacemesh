@@ -138,6 +138,6 @@ func TestGetRefBallot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.BallotID{5}, count)
 
-	count, err = GetRefBallot(db, 1, pub4)
+	_, err = GetRefBallot(db, 1, pub4)
 	require.ErrorIs(t, err, database.ErrNotFound)
 }

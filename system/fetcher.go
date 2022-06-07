@@ -3,9 +3,8 @@ package system
 import (
 	"context"
 
-	"github.com/spacemeshos/go-spacemesh/p2p"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
