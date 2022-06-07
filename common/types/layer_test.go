@@ -280,3 +280,8 @@ func TestLayerID_FirstInEpoch(t *testing.T) {
 		})
 	}
 }
+
+func TestLayerIDSize(t *testing.T) {
+	var id LayerID
+	require.Len(t, id.Bytes(), LayerIDSize)
+}

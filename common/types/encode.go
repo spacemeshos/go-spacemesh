@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
+// Bytes returns the byte representation of the LayerID, using little endian encoding.
 func (l LayerID) Bytes() []byte { return util.Uint32ToBytes(l.Value) }
 
 // BytesToAtx deserializes an ActivationTx.

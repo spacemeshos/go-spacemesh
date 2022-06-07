@@ -15,22 +15,20 @@ import (
 const (
 	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
+	hash20Length = 20
+	hash12Length = 12
 )
 
-type Hash12 [12]byte
-
-func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
-
-// CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
-func CalcMessageHash12(msg []byte, protocol string) Hash12 {
-	return CalcHash12(append(msg, protocol...))
-}
+type Hash12 [hash12Length]byte
 
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 
 // Hash20 represents the 20-byte sha256 hash of arbitrary data.
-type Hash20 [20]byte
+type Hash20 [hash20Length]byte
+
+// Field returns a log field. Implements the LoggableField interface.
+func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -150,6 +148,11 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	var res Hash32
 	hash.Sum(res[:0])
 	return res
+}
+
+// CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
+func CalcMessageHash12(msg []byte, protocol string) Hash12 {
+	return CalcHash12(append(msg, protocol...))
 }
 
 var (
