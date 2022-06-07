@@ -89,7 +89,7 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 	}
 	defer tx.Release()
 	var (
-		ss      = core.NewStagedState(tx)
+		ss      = core.NewStagedCache(tx)
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
 		skipped []types.TransactionID
@@ -171,7 +171,7 @@ type Request struct {
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
-	header, ctx, _, err := parse(r.vm.logger, core.NewStagedState(r.vm.db), r.raw.ID, r.decoder)
+	header, ctx, _, err := parse(r.vm.logger, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
 	if err != nil {
 		return nil, err
 	}
