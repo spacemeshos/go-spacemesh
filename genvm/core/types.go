@@ -7,14 +7,21 @@ import (
 )
 
 type (
+	// PublicKey is an alias to Hash32.
 	PublicKey = types.Hash32
-	Hash32    = types.Hash32
-	Address   = types.Address
+	// Hash32 is an alias to types.Hash32.
+	Hash32 = types.Hash32
+	// Address is an alias to types.Address.
+	Address = types.Address
+	// Signature is an alias to types.Bytes64.
 	Signature = types.Bytes64
 
+	// Account is an alis to types.Account.
 	Account = types.Account
-	Header  = types.TxHeader
-	Nonce   = types.Nonce
+	// Header is an alias to types.TxHeader.
+	Header = types.TxHeader
+	// Nonce is an alias to types.Nonce.
+	Nonce = types.Nonce
 )
 
 // Handler provides set of static templates method that are not directly attached to the state.

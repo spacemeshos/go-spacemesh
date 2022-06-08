@@ -234,7 +234,7 @@ type Reward struct {
 	Coinbase    Address
 }
 
-// NewRatTx computes id from raw bytes and returns the object.
+// NewRawTx computes id from raw bytes and returns the object.
 func NewRawTx(raw []byte) RawTx {
 	return RawTx{
 		ID:  hash.Sum(raw),

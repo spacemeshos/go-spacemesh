@@ -9,7 +9,7 @@ import (
 
 // Context serves 2 purposes:
 // - maintains changes to the system state, that will be applied only after succeful execution
-// - accumulates set of reusable objects and data
+// - accumulates set of reusable objects and data.
 type Context struct {
 	Loader   AccountLoader
 	Handler  Handler

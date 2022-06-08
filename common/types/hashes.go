@@ -19,6 +19,7 @@ const (
 	hash12Length = 12
 )
 
+// Hash12 represents the first 12 bytes of sha256, mostly used for internal caches.
 type Hash12 [hash12Length]byte
 
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
@@ -164,9 +165,7 @@ func CalcMessageHash12(msg []byte, protocol string) Hash12 {
 	return CalcHash12(append(msg, protocol...))
 }
 
-var (
-	hashT = reflect.TypeOf(Hash32{})
-)
+var hashT = reflect.TypeOf(Hash32{})
 
 // CalcHash32 returns the 32-byte sha256 sum of the given data.
 func CalcHash32(data []byte) Hash32 {

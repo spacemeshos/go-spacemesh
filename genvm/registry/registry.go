@@ -6,9 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
-var (
-	reg = registry{templates: map[core.Address]core.Handler{}}
-)
+var reg = registry{templates: map[core.Address]core.Handler{}}
 
 // Get template handler for the address if it exists.
 func Get(address core.Address) core.Handler {

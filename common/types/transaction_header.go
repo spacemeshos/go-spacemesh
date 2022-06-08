@@ -16,7 +16,7 @@ type TxHeader struct {
 	MaxSpend    uint64
 }
 
-// MarshalLogObjects implements encoding for the tx header.
+// MarshalLogObject implements encoding for the tx header.
 func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("id", h.ID.String())
 	encoder.AddString("principal", h.Principal.String())

@@ -22,7 +22,8 @@ func init() {
 }
 
 var (
-	_               (core.Handler) = (*handler)(nil)
+	_ (core.Handler) = (*handler)(nil)
+	// TemplateAddress is an adress of the Wallet template.
 	TemplateAddress core.Address
 )
 
