@@ -14,7 +14,7 @@ var (
 	ErrNoBalance = errors.New("no balance")
 	// ErrMaxGas raised if tx consumed over MaxGas value.
 	ErrMaxGas = errors.New("max gas")
-	// ErrMaxSpend raised if tx transfered over MaxSpend value.
+	// ErrMaxSpend raised if tx transferred over MaxSpend value.
 	ErrMaxSpend = errors.New("max spend")
 	// ErrSpawn raised to block regular spawn.
 	ErrSpawn = errors.New("spawn is not supported")

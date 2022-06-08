@@ -10,20 +10,24 @@ import (
 )
 
 const (
-	// TotalGasSpawn is consumed from principal in case of succesful spawn.
+	// TotalGasSpawn is consumed from principal in case of successful spawn.
 	TotalGasSpawn = 200
-	// TotalGasSpend is consumed from principal in case of succesful spend.
+	// TotalGasSpend is consumed from principal in case of successful spend.
 	TotalGasSpend = 100
 )
 
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 1
+}
+
+// Register Wallet template.
+func Register(registry *registry.Registry) {
 	registry.Register(TemplateAddress, &handler{})
 }
 
 var (
 	_ (core.Handler) = (*handler)(nil)
-	// TemplateAddress is an adress of the Wallet template.
+	// TemplateAddress is an address of the Wallet template.
 	TemplateAddress core.Address
 )
 

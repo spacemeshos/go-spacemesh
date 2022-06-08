@@ -20,9 +20,9 @@ type Context struct {
 	Header Header
 	Args   scale.Encodable
 
-	// consumed and transfered is for MaxGas/MaxSpend validation
-	consumed   uint64
-	transfered uint64
+	// consumed and transferred is for MaxGas/MaxSpend validation
+	consumed    uint64
+	transferred uint64
 
 	// TODO all templates for genesis will support transfers to only one account.
 	// i keep it for the purposes of testing and validation (e.g we can implement more complex templates)
@@ -48,8 +48,8 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount > c.Account.Balance {
 		return ErrNoBalance
 	}
-	c.transfered += amount
-	if c.transfered > c.Header.MaxSpend {
+	c.transferred += amount
+	if c.transferred > c.Header.MaxSpend {
 		return fmt.Errorf("%w: %d", ErrMaxSpend, c.Header.MaxSpend)
 	}
 	// noop. only gas is consumed

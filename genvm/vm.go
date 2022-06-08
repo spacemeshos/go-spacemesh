@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	_ "github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -35,10 +36,12 @@ func WithLogger(logger log.Log) Opt {
 // New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
-		logger: log.NewNop(),
-		db:     db,
-		cfg:    vm.DefaultRewardConfig(),
+		logger:   log.NewNop(),
+		db:       db,
+		cfg:      vm.DefaultRewardConfig(),
+		registry: registry.New(),
 	}
+	wallet.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}
@@ -47,9 +50,10 @@ func New(db *sql.Database, opts ...Opt) *VM {
 
 // VM handles modifications to the account state.
 type VM struct {
-	logger log.Log
-	db     *sql.Database
-	cfg    vm.RewardConfig
+	logger   log.Log
+	db       *sql.Database
+	cfg      vm.RewardConfig
+	registry *registry.Registry
 }
 
 // Validation initializes validation request.
@@ -105,7 +109,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 	for i := range txs {
 		tx := &txs[i]
 		rd.Reset(tx.Raw)
-		header, ctx, args, err := parse(v.logger, ss, tx.ID, decoder)
+		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
 		if err != nil {
 			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx.ID)
@@ -144,11 +148,11 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 				return nil, err
 			}
 		}
-		if fee, err := ctx.Apply(ss); err != nil {
+		fee, err := ctx.Apply(ss)
+		if err != nil {
 			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		} else {
-			fees += fee
 		}
+		fees += fee
 	}
 
 	// TODO(dshulyak) why do we fail if there are no rewards? can we just burn them?
@@ -214,7 +218,7 @@ type Request struct {
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
-	header, ctx, _, err := parse(r.vm.logger, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
+	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -222,15 +226,15 @@ func (r *Request) Parse() (*core.Header, error) {
 	return header, nil
 }
 
-// Verify transaction. Will panic if called without Parse completing succesfully.
+// Verify transaction. Will panic if called without Parse completing successfully.
 func (r *Request) Verify() bool {
 	if r.ctx == nil {
-		panic("Verify should be called after succesfull Parse")
+		panic("Verify should be called after successful Parse")
 	}
 	return verify(r.ctx, r.raw.Raw)
 }
 
-func parse(logger log.Log, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
@@ -266,7 +270,7 @@ func parse(logger log.Log, loader core.AccountLoader, id types.TransactionID, de
 		return nil, nil, nil, fmt.Errorf("%w: %s", core.ErrNotSpawned, principal.String())
 	}
 
-	handler := registry.Get(*template)
+	handler := reg.Get(*template)
 	if handler == nil {
 		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.Template)
 	}
