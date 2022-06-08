@@ -54,7 +54,7 @@ type AccountLoader interface {
 
 //go:generate mockgen -package=mocks -destination=./mocks/updater.go github.com/spacemeshos/go-spacemesh/genvm/core AccountUpdater
 
-// AccountUpdate is an interface for updating accounts.
+// AccountUpdater is an interface for updating accounts.
 type AccountUpdater interface {
 	Update(Account) error
 }

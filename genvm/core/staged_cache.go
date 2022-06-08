@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
-// NewStatedCache returns instance of the staged cache.
+// NewStagedCache returns instance of the staged cache.
 func NewStagedCache(db sql.Executor) *StagedCache {
 	return &StagedCache{db: db, cache: map[Address]stagedAccount{}}
 }
