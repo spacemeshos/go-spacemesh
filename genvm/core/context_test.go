@@ -96,7 +96,8 @@ func TestApply(t *testing.T) {
 			return scale.EncodeByteArray(encoder, rst)
 		})
 		ctx.Template = template
-		require.NoError(t, ctx.Apply(ss))
+		_, err := ctx.Apply(ss)
+		require.NoError(t, err)
 
 		account, err := ss.Get(ctx.Account.Address)
 		require.NoError(t, err)
@@ -130,7 +131,8 @@ func TestApply(t *testing.T) {
 			actual = append(actual, account.Address)
 			return nil
 		}).AnyTimes()
-		require.NoError(t, ctx.Apply(updater))
+		_, err := ctx.Apply(updater)
+		require.NoError(t, err)
 		require.Equal(t, order, actual)
 	})
 }
