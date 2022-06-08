@@ -366,8 +366,10 @@ func TestWorkflow(t *testing.T) {
 						&spendWallet{0, 10, 100},
 					},
 					expected: map[int]change{
-						0: spawned{template: wallet.TemplateAddress,
-							change: spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpend+wallet.TotalGasSpawn)}},
+						0: spawned{
+							template: wallet.TemplateAddress,
+							change:   spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpend+wallet.TotalGasSpawn)},
+						},
 						10: earned{amount: 100},
 					},
 				},
@@ -480,7 +482,6 @@ func TestWorkflow(t *testing.T) {
 					},
 				},
 				{
-
 					txs: []testTx{
 						&spendWallet{0, 0, 1000},
 					},
@@ -551,8 +552,10 @@ func TestWorkflow(t *testing.T) {
 					},
 					skipped: []int{1},
 					expected: map[int]change{
-						0: spawned{template: wallet.TemplateAddress,
-							change: spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)}},
+						0: spawned{
+							template: wallet.TemplateAddress,
+							change:   spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)},
+						},
 						10: earned{amount: 100},
 						11: same{},
 					},
