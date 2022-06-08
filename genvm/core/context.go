@@ -91,7 +91,7 @@ func (c *Context) Consume(gas uint64) error {
 }
 
 // Apply is executed if transaction was consumed.
-func (c *Context) Apply(updater AccountUpdater) error {
+func (c *Context) Apply(updater AccountUpdater) (uint64, error) {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
 	c.Template.EncodeScale(encoder)
@@ -99,13 +99,13 @@ func (c *Context) Apply(updater AccountUpdater) error {
 	c.Account.Nonce = c.Header.Nonce.Counter
 	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {
-		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+		return 0, fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
 	for _, address := range c.touched {
 		account := c.changed[address]
 		if err := updater.Update(*account); err != nil {
-			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+			return 0, fmt.Errorf("%w: %s", ErrInternal, err.Error())
 		}
 	}
-	return nil
+	return c.consumed * c.Header.GasPrice, nil
 }

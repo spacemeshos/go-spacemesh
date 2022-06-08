@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	rewardsdb "github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 // Opt is for changing VM during initialization.
@@ -35,6 +37,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
 		logger: log.NewNop(),
 		db:     db,
+		cfg:    vm.DefaultRewardConfig(),
 	}
 	for _, opt := range opts {
 		opt(vm)
@@ -46,6 +49,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 type VM struct {
 	logger log.Log
 	db     *sql.Database
+	cfg    vm.RewardConfig
 }
 
 // Validation initializes validation request.
@@ -84,8 +88,8 @@ func (vm *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID, error) {
-	tx, err := vm.db.Tx(context.Background())
+func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyReward) ([]types.TransactionID, error) {
+	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -96,22 +100,23 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 		decoder = scale.NewDecoder(&rd)
 		skipped []types.TransactionID
 		start   = time.Now()
+		fees    uint64
 	)
 	for i := range txs {
 		tx := &txs[i]
 		rd.Reset(tx.Raw)
-		header, ctx, args, err := parse(vm.logger, ss, tx.ID, decoder)
+		header, ctx, args, err := parse(v.logger, ss, tx.ID, decoder)
 		if err != nil {
-			vm.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
+			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx.ID)
 			continue
 		}
-		vm.logger.With().Debug("applying transaction",
+		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
 		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			vm.logger.With().Warning("skipping transaction. can't cover gas",
+			v.logger.With().Warning("skipping transaction. can't cover gas",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -119,7 +124,7 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 			continue
 		}
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
-			vm.logger.With().Warning("skipping transaction. failed nonce check",
+			v.logger.With().Warning("skipping transaction. failed nonce check",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -127,7 +132,7 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 			continue
 		}
 		if err := ctx.Handler.Exec(ctx, ctx.Header.Method, args); err != nil {
-			vm.logger.With().Debug("transaction failed",
+			v.logger.With().Debug("transaction failed",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 				log.Err(err),
@@ -139,17 +144,39 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 				return nil, err
 			}
 		}
-		if err := ctx.Apply(ss); err != nil {
+		if fee, err := ctx.Apply(ss); err != nil {
 			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		} else {
+			fees += fee
 		}
 	}
-	// TODO move rewards here
+
+	// TODO(dshulyak) why do we fail if there are no rewards? can we just burn them?
+	if len(rewards) > 0 {
+		finalRewards, err := vm.CalculateRewards(v.logger, v.cfg, lid, fees, rewards)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		for _, reward := range finalRewards {
+			if err := rewardsdb.Add(tx, reward); err != nil {
+				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			}
+			account, err := ss.Get(reward.Coinbase)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			}
+			account.Balance += reward.TotalReward
+			if err := ss.Update(account); err != nil {
+				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			}
+		}
+	}
 
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
 	ss.IterateChanged(func(account *core.Account) bool {
 		account.Layer = lid
-		vm.logger.With().Debug("update account state", log.Inline(account))
+		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
 		account.EncodeScale(encoder)
 		return err == nil
@@ -165,7 +192,7 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
-	vm.logger.With().Info("applied transactions",
+	v.logger.With().Info("applied transactions",
 		lid,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(start)),
