@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
-	_ "github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
