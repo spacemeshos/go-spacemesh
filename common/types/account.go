@@ -4,6 +4,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+//go:generate scalegen
+
 // Account represents account state at a certain layer.
 type Account struct {
 	Layer       LayerID

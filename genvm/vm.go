@@ -13,9 +13,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	_ "github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 // Opt is for changing VM during initialization.
@@ -142,21 +144,32 @@ func (vm *VM) Apply(lid types.LayerID, txs []types.RawTx) ([]types.TransactionID
 		}
 	}
 	// TODO move rewards here
+
+	hasher := hash.New()
+	encoder := scale.NewEncoder(hasher)
 	ss.IterateChanged(func(account *core.Account) bool {
 		account.Layer = lid
 		vm.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
+		account.EncodeScale(encoder)
 		return err == nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
+	var hash types.Hash32
+	hasher.Sum(hash[:0])
+	if err := layers.UpdateStateHash(tx, lid, hash); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
-	vm.logger.With().Info("applied transactions", lid,
+	vm.logger.With().Info("applied transactions",
+		lid,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(start)),
+		log.Stringer("state_hash", hash),
 	)
 	return skipped, nil
 }

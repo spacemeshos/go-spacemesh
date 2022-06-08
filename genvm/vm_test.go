@@ -14,9 +14,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 func newTester(tb testing.TB) *tester {
@@ -715,6 +717,34 @@ func BenchmarkValidation(b *testing.B) {
 	b.Run("SpendWallet", func(b *testing.B) {
 		bench(b, tt.spendWallet(0, 1, 10))
 	})
+}
+
+func TestStateHashFromUpdatedAccounts(t *testing.T) {
+	tt := newTester(t).addAccounts(10).applyGenesis()
+
+	lid := types.NewLayerID(1)
+	skipped, err := tt.Apply(lid, []types.RawTx{
+		tt.selfSpawnWallet(0),
+		tt.selfSpawnWallet(1),
+		tt.spendWallet(0, 2, 100),
+		tt.spendWallet(1, 4, 100),
+	})
+	require.NoError(tt, err)
+	require.Empty(tt, skipped)
+
+	expected := types.Hash32{}
+	hasher := hash.New()
+	encoder := scale.NewEncoder(hasher)
+	for _, pos := range []int{0, 1, 2, 4} {
+		account, err := accounts.Get(tt.db, tt.addresses[pos], lid)
+		require.NoError(t, err)
+		account.EncodeScale(encoder)
+	}
+	hasher.Sum(expected[:0])
+
+	statehash, err := layers.GetStateHash(tt.db, lid)
+	require.NoError(t, err)
+	require.Equal(t, expected, statehash)
 }
 
 func BenchmarkWallet(b *testing.B) {
