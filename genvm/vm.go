@@ -25,7 +25,7 @@ import (
 // Opt is for changing VM during initialization.
 type Opt func(*VM)
 
-// WithLogget sets logger for VM.
+// WithLogger sets logger for VM.
 func WithLogger(logger log.Log) Opt {
 	return func(vm *VM) {
 		vm.logger = logger
@@ -56,17 +56,17 @@ type VM struct {
 }
 
 // Validation initializes validation request.
-func (vm *VM) Validation(raw types.RawTx) *Request {
+func (v *VM) Validation(raw types.RawTx) *Request {
 	return &Request{
-		vm:      vm,
+		vm:      v,
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
 		raw:     raw,
 	}
 }
 
 // GetNonce returns expected next nonce for the address.
-func (vm *VM) GetNonce(address core.Address) (core.Nonce, error) {
-	account, err := accounts.Latest(vm.db, types.Address(address))
+func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
+	account, err := accounts.Latest(v.db, types.Address(address))
 	if err != nil {
 		return core.Nonce{}, err
 	}
@@ -74,15 +74,15 @@ func (vm *VM) GetNonce(address core.Address) (core.Nonce, error) {
 }
 
 // ApplyGenesis saves list of accounts for genesis.
-func (vm *VM) ApplyGenesis(genesis []types.Account) error {
-	tx, err := vm.db.Tx(context.Background())
+func (v *VM) ApplyGenesis(genesis []types.Account) error {
+	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return err
 	}
 	defer tx.Release()
 	for i := range genesis {
 		account := &genesis[i]
-		vm.logger.With().Info("genesis account", log.Inline(account))
+		v.logger.With().Info("genesis account", log.Inline(account))
 		if err := accounts.Update(tx, account); err != nil {
 			return fmt.Errorf("inserting genesis account %w", err)
 		}
