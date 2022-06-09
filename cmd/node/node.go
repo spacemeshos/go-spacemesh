@@ -519,7 +519,7 @@ func (app *App) initServices(ctx context.Context,
 		msh = mesh.NewRecoveredMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
+		if err := state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
