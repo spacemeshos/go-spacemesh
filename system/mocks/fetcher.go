@@ -107,17 +107,17 @@ func (mr *MockFetcherMockRecorder) GetPoetProof(arg0, arg1 interface{}) *gomock.
 }
 
 // GetProposals mocks base method.
-func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
+func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID, arg2 p2p.Peer) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1, arg2)
 }
 
 // GetTxs mocks base method.
@@ -393,17 +393,17 @@ func (m *MockProposalFetcher) EXPECT() *MockProposalFetcherMockRecorder {
 }
 
 // GetProposals mocks base method.
-func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
+func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID, arg2 p2p.Peer) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1, arg2)
 }
 
 // MockPeerTracker is a mock of PeerTracker interface.

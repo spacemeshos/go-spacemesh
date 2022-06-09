@@ -619,13 +619,13 @@ func (l *Logic) GetBallots(ctx context.Context, ids []types.BallotID, peer p2p.P
 }
 
 // GetProposals gets the data for given proposal IDs from peers.
-func (l *Logic) GetProposals(ctx context.Context, ids []types.ProposalID) error {
+func (l *Logic) GetProposals(ctx context.Context, ids []types.ProposalID, peer p2p.Peer) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.ProposalDB, p2p.AnyPeer, l.proposalHandler.HandleProposalData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.ProposalDB, peer, l.proposalHandler.HandleProposalData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil

@@ -902,7 +902,7 @@ func TestGetProposals_FetchSomeError(t *testing.T) {
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs), errUnknown)
+	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs, p2p.AnyPeer), errUnknown)
 }
 
 func TestGetProposals_HandlerError(t *testing.T) {
@@ -929,7 +929,7 @@ func TestGetProposals_HandlerError(t *testing.T) {
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs), errUnknown)
+	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs, p2p.AnyPeer), errUnknown)
 }
 
 func TestGetProposals(t *testing.T) {
@@ -955,7 +955,7 @@ func TestGetProposals(t *testing.T) {
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
-	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs))
+	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs, p2p.AnyPeer))
 }
 
 func genTransactions(t *testing.T, num int) []*types.Transaction {

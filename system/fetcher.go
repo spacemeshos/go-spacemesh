@@ -48,7 +48,7 @@ type BallotFetcher interface {
 
 // ProposalFetcher defines an interface for fetching Proposal from remote peers.
 type ProposalFetcher interface {
-	GetProposals(context.Context, []types.ProposalID) error
+	GetProposals(context.Context, []types.ProposalID, p2p.Peer) error
 }
 
 // PeerTracker defines an interface to track ballot/block/atx peers.
