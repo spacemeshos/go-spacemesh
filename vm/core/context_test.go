@@ -7,9 +7,9 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
 )
 
 func TestSpawn(t *testing.T) {

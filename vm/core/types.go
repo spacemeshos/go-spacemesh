@@ -34,7 +34,7 @@ type Handler interface {
 	Exec(*Context, uint8, scale.Encodable) error
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/genvm/core Template
+//go:generate mockgen -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
 
 // Template is a concrete Template type initialized with mutable and immutable state.
 type Template interface {
@@ -52,7 +52,7 @@ type AccountLoader interface {
 	Get(Address) (Account, error)
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/updater.go github.com/spacemeshos/go-spacemesh/genvm/core AccountUpdater
+//go:generate mockgen -package=mocks -destination=./mocks/updater.go github.com/spacemeshos/go-spacemesh/vm/core AccountUpdater
 
 // AccountUpdater is an interface for updating accounts.
 type AccountUpdater interface {

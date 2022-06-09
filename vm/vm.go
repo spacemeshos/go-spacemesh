@@ -1,219 +1,92 @@
 package vm
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"math"
+	"time"
 
-	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	rewardsdb "github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
-// RewardConfig defines the configuration options for Spacemesh rewards.
-type RewardConfig struct {
-	BaseReward uint64 `mapstructure:"base-reward"`
-}
+// Opt is for changing VM during initialization.
+type Opt func(*VM)
 
-// DefaultRewardConfig returns the default RewardConfig.
-func DefaultRewardConfig() RewardConfig {
-	return RewardConfig{
-		BaseReward: 50 * uint64(math.Pow10(12)),
+// WithLogger sets logger for VM.
+func WithLogger(logger log.Log) Opt {
+	return func(vm *VM) {
+		vm.logger = logger
 	}
 }
 
-func calculateLayerReward(cfg RewardConfig) uint64 {
-	// todo: add inflation rules here
-	return cfg.BaseReward
+// New returns VM instance.
+func New(db *sql.Database, opts ...Opt) *VM {
+	vm := &VM{
+		logger:   log.NewNop(),
+		db:       db,
+		cfg:      DefaultRewardConfig(),
+		registry: registry.New(),
+	}
+	wallet.Register(vm.registry)
+	for _, opt := range opts {
+		opt(vm)
+	}
+	return vm
 }
 
-// VM manages accounts state.
+// VM handles modifications to the account state.
 type VM struct {
-	log log.Log
-	db  *sql.Database
-	cfg RewardConfig
+	logger   log.Log
+	db       *sql.Database
+	cfg      RewardConfig
+	registry *registry.Registry
 }
 
-// New creates a new `vm` instance from the given `state` and `logger`.
-func New(logger log.Log, db *sql.Database) *VM {
-	return &VM{
-		db:  db,
-		log: logger,
-		cfg: DefaultRewardConfig(),
+// Validation initializes validation request.
+func (v *VM) Validation(raw types.RawTx) *Request {
+	return &Request{
+		vm:      v,
+		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
+		raw:     raw,
 	}
-}
-
-// SetupGenesis creates new accounts and adds balances as dictated by `conf`.
-func (vm *VM) SetupGenesis(genesis *config.GenesisConfig) error {
-	if genesis == nil {
-		genesis = config.DefaultGenesisConfig()
-	}
-	ss := newChanges(vm.log, vm.db, types.GetEffectiveGenesis())
-	for id, balance := range genesis.Accounts {
-		bytes := util.FromHex(id)
-		if len(bytes) == 0 {
-			return fmt.Errorf("cannot decode entry %s for genesis account", id)
-		}
-		// just make it explicit that we want address and not a public key
-		if len(bytes) != types.AddressLength {
-			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
-		}
-		addr := types.BytesToAddress(bytes)
-		ss.addBalance(addr, balance)
-		vm.log.With().Info("genesis account created",
-			log.Stringer("address", addr),
-			log.Uint64("balance", balance))
-	}
-
-	if _, err := ss.commit(); err != nil {
-		return fmt.Errorf("cannot commit genesis state: %w", err)
-	}
-	return nil
-}
-
-// ApplyLayer applies the given rewards to some miners as well as a vector of
-// transactions for the given layer. to miners vector for layer. It returns an
-// error on failure, as well as a vector of failed transactions.
-func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []types.AnyReward) ([]*types.Transaction, error) {
-	vm.log.With().Info("apply layer to vm",
-		lid,
-		log.Int("rewards", len(rewards)),
-		log.Int("transactions", len(txs)),
-	)
-	ch := newChanges(vm.log, vm.db, lid)
-
-	var (
-		failed    []*types.Transaction
-		totalFees uint64
-	)
-	for {
-		for _, tx := range txs {
-			if err := applyTransaction(vm.log, ch, tx); err != nil {
-				if errors.Is(err, errInvalid) {
-					failed = append(failed, tx)
-				} else {
-					return nil, err
-				}
-			} else {
-				totalFees += tx.GetFee()
-			}
-			events.ReportNewTx(lid, tx)
-			events.ReportAccountUpdate(tx.Origin())
-			events.ReportAccountUpdate(tx.GetRecipient())
-		}
-		if len(failed) == len(txs) {
-			break
-		}
-		txs = failed
-		failed = nil
-	}
-
-	finalRewards, err := CalculateRewards(vm.log, vm.cfg, lid, totalFees, rewards)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, r := range finalRewards {
-		if err = ch.addBalance(r.Coinbase, r.TotalReward); err != nil {
-			return nil, err
-		}
-		ch.addReward(r)
-		events.ReportAccountUpdate(r.Coinbase)
-		events.ReportRewardReceived(events.Reward{
-			Layer:    r.Layer,
-			Coinbase: r.Coinbase,
-			Total:    r.TotalReward,
-		})
-	}
-	if _, err = ch.commit(); err != nil {
-		return nil, err
-	}
-	return failed, nil
-}
-
-// CalculateRewards splits layer rewards and total fees fairly between coinbases recorded in rewards.
-func CalculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
-	logger = logger.WithFields(lid)
-	totalWeight := util.WeightFromUint64(0)
-	byCoinbase := make(map[types.Address]util.Weight)
-	for _, reward := range rewards {
-		weight := util.WeightFromNumDenom(reward.Weight.Num, reward.Weight.Denom)
-		logger.With().Debug("coinbase weight", reward.Coinbase, log.Stringer("weight", weight))
-		if weight.Sign() == -1 {
-			logger.With().Error("invalid weight value",
-				log.Stringer("coinbase", reward.Coinbase),
-				log.Stringer("weight", weight))
-			return nil, fmt.Errorf("invalid weight value %v: %v", reward.Coinbase.String(), reward.Weight)
-		}
-		totalWeight.Add(weight)
-		if _, ok := byCoinbase[reward.Coinbase]; ok {
-			byCoinbase[reward.Coinbase].Add(weight)
-		} else {
-			byCoinbase[reward.Coinbase] = weight
-		}
-	}
-	if totalWeight.Cmp(util.WeightFromUint64(0)) == 0 {
-		logger.Error("zero total weight in block rewards")
-		return nil, fmt.Errorf("zero total weight")
-	}
-	finalRewards := make([]*types.Reward, 0, len(rewards))
-	layerRewards := calculateLayerReward(cfg)
-	totalRewards := layerRewards + totalFees
-	logger.With().Info("rewards info for layer",
-		log.Uint64("layer_rewards", layerRewards),
-		log.Uint64("fee", totalFees))
-	rewardPer := util.WeightFromUint64(totalRewards).Div(totalWeight)
-	lyrRewardPer := util.WeightFromUint64(layerRewards).Div(totalWeight)
-	seen := make(map[types.Address]struct{})
-	for _, reward := range rewards {
-		if _, ok := seen[reward.Coinbase]; ok {
-			continue
-		}
-
-		seen[reward.Coinbase] = struct{}{}
-		weight, ok := byCoinbase[reward.Coinbase]
-		if !ok {
-			logger.With().Fatal("missing weight for coinbase", log.Stringer("coinbase", reward.Coinbase))
-		}
-		fTotal, _ := rewardPer.Copy().Mul(weight).Float64()
-		totalReward := uint64(fTotal)
-		fLyr, _ := lyrRewardPer.Copy().Mul(weight).Float64()
-		finalRewards = append(finalRewards, &types.Reward{
-			Layer:       lid,
-			Coinbase:    reward.Coinbase,
-			TotalReward: totalReward,
-			LayerReward: uint64(fLyr),
-		})
-		events.ReportAccountUpdate(reward.Coinbase)
-	}
-	return finalRewards, nil
 }
 
 // GetLayerStateRoot returns the state root at a given layer.
-func (vm *VM) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
-	return layers.GetStateHash(vm.db, lid)
+func (v *VM) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
+	return layers.GetStateHash(v.db, lid)
 }
 
 // GetLayerApplied returns layer of the applied transaction.
-func (vm *VM) GetLayerApplied(tid types.TransactionID) (types.LayerID, error) {
-	return transactions.GetAppliedLayer(vm.db, tid)
+func (v *VM) GetLayerApplied(tid types.TransactionID) (types.LayerID, error) {
+	return transactions.GetAppliedLayer(v.db, tid)
 }
 
 // GetStateRoot gets the current state root hash.
-func (vm *VM) GetStateRoot() (types.Hash32, error) {
-	return layers.GetLatestStateHash(vm.db)
+func (v *VM) GetStateRoot() (types.Hash32, error) {
+	return layers.GetLatestStateHash(v.db)
 }
 
-func (vm *VM) revertInDbTX(lid types.LayerID) error {
-	tx, err := vm.db.Tx(context.Background())
+// GetAllAccounts returns a dump of all accounts in global state.
+func (v *VM) GetAllAccounts() ([]*types.Account, error) {
+	return accounts.All(v.db)
+}
+
+func (v *VM) revert(lid types.LayerID) error {
+	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return err
 	}
@@ -227,102 +100,255 @@ func (vm *VM) revertInDbTX(lid types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 // Revert all changes that we made after the layer. Returns state hash of the layer.
-func (vm *VM) Revert(lid types.LayerID) (types.Hash32, error) {
-	if err := vm.revertInDbTX(lid); err != nil {
+func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
+	if err := v.revert(lid); err != nil {
 		return types.Hash32{}, err
 	}
-	return vm.GetStateRoot()
+	return v.GetStateRoot()
 }
 
-func (vm *VM) account(address types.Address) (types.Account, error) {
-	return accounts.Latest(vm.db, address)
-}
-
-// AddressExists checks if an account address exists in this node's global state.
-func (vm *VM) AddressExists(addr types.Address) (bool, error) {
-	acc, err := vm.account(addr)
+// GetNonce returns expected next nonce for the address.
+func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
+	account, err := accounts.Latest(v.db, types.Address(address))
 	if err != nil {
-		return false, err
+		return core.Nonce{}, err
 	}
-	return acc.Layer.Value > 0, nil
+	return core.Nonce{Counter: account.NextNonce()}, nil
 }
 
-// GetBalance Retrieve the balance from the given address or 0 if object not found.
-func (vm *VM) GetBalance(addr types.Address) (uint64, error) {
-	acc, err := vm.account(addr)
-	if err != nil {
-		return 0, err
-	}
-	return acc.Balance, nil
-}
-
-// GetNonce gets the current nonce of the given addr, if the address is not
-// found it returns 0.
-func (vm *VM) GetNonce(addr types.Address) (uint64, error) {
-	acc, err := vm.account(addr)
-	if err != nil {
-		return 0, err
-	}
-	if !acc.Initialized {
-		return 0, nil
-	}
-	return acc.Nonce + 1, nil
-}
-
-// GetAllAccounts returns a dump of all accounts in global state.
-func (vm *VM) GetAllAccounts() ([]*types.Account, error) {
-	return accounts.All(vm.db)
-}
-
-var (
-	errInvalid = errors.New("invalid tx")
-	errFunds   = fmt.Errorf("%w: insufficient funds", errInvalid)
-	errNonce   = fmt.Errorf("%w: incorrect nonce", errInvalid)
-)
-
-// applyTransaction applies provided transaction to the current state, but does not commit it to persistent
-// storage. It returns an error if the transaction is invalid, i.e., if there is not enough balance in the source
-// account to perform the transaction and pay the fee or if the nonce is incorrect.
-func applyTransaction(logger log.Log, ch *changes, tx *types.Transaction) error {
-	balance, err := ch.balance(tx.Origin())
+// ApplyGenesis saves list of accounts for genesis.
+func (v *VM) ApplyGenesis(genesis []types.Account) error {
+	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return err
 	}
-	if total := tx.GetFee() + tx.Amount; balance < total {
-		logger.With().Warning("not enough funds",
-			log.Uint64("balance_have", balance),
-			log.Uint64("balance_need", total))
-		return errFunds
+	defer tx.Release()
+	for i := range genesis {
+		account := &genesis[i]
+		v.logger.With().Info("genesis account", log.Inline(account))
+		if err := accounts.Update(tx, account); err != nil {
+			return fmt.Errorf("inserting genesis account %w", err)
+		}
 	}
-	nonce, err := ch.nextNonce(tx.Origin())
+	return tx.Commit()
+}
+
+// Apply transactions.
+func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyReward) ([]types.TransactionID, error) {
+	tx, err := v.db.Tx(context.Background())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if nonce != tx.AccountNonce {
-		logger.With().Warning("invalid nonce",
-			log.Uint64("nonce_correct", nonce),
-			log.Uint64("nonce_actual", tx.AccountNonce))
-		return errNonce
+	defer tx.Release()
+	var (
+		ss      = core.NewStagedCache(tx)
+		rd      bytes.Reader
+		decoder = scale.NewDecoder(&rd)
+		skipped []types.TransactionID
+		start   = time.Now()
+		fees    uint64
+	)
+	for i := range txs {
+		tx := &txs[i]
+		rd.Reset(tx.Raw)
+		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
+		if err != nil {
+			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
+			skipped = append(skipped, tx.ID)
+			continue
+		}
+		v.logger.With().Debug("applying transaction",
+			log.Object("header", header),
+			log.Object("account", &ctx.Account),
+		)
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
+			v.logger.With().Warning("skipping transaction. can't cover gas",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			skipped = append(skipped, tx.ID)
+			continue
+		}
+		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
+			v.logger.With().Warning("skipping transaction. failed nonce check",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			skipped = append(skipped, tx.ID)
+			continue
+		}
+		if err := ctx.Handler.Exec(ctx, ctx.Header.Method, args); err != nil {
+			v.logger.With().Debug("transaction failed",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+				log.Err(err),
+			)
+			// TODO anything but internal must be recorded in the execution result.
+			// internal errors are propagated upwards, but they are for fatal
+			// unrecovarable errors, such as disk problems
+			if errors.Is(err, core.ErrInternal) {
+				return nil, err
+			}
+		}
+		fee, err := ctx.Apply(ss)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		fees += fee
 	}
-	if err := ch.setNonce(tx.Origin(), tx.AccountNonce); err != nil {
-		return err
+
+	// TODO(dshulyak) why it fails if there are no rewards?
+	if len(rewards) > 0 {
+		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, rewards)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		for _, reward := range finalRewards {
+			if err := rewardsdb.Add(tx, reward); err != nil {
+				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			}
+			account, err := ss.Get(reward.Coinbase)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			}
+			account.Balance += reward.TotalReward
+			if err := ss.Update(account); err != nil {
+				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			}
+		}
 	}
-	if err := ch.addBalance(tx.GetRecipient(), tx.Amount); err != nil {
-		return err
+
+	hasher := hash.New()
+	encoder := scale.NewEncoder(hasher)
+	ss.IterateChanged(func(account *core.Account) bool {
+		account.Layer = lid
+		v.logger.With().Debug("update account state", log.Inline(account))
+		err = accounts.Update(tx, account)
+		account.EncodeScale(encoder)
+		return err == nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
-	if err := ch.subBalance(tx.Origin(), tx.Amount); err != nil {
-		return err
+	var hash types.Hash32
+	hasher.Sum(hash[:0])
+	if err := layers.UpdateStateHash(tx, lid, hash); err != nil {
+		return nil, err
 	}
-	if err := ch.subBalance(tx.Origin(), tx.GetFee()); err != nil {
-		return err
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
-	logger.With().Info("transaction processed", log.Stringer("transaction", tx))
-	return nil
+	v.logger.With().Info("applied transactions",
+		lid,
+		log.Int("count", len(txs)-len(skipped)),
+		log.Duration("duration", time.Since(start)),
+		log.Stringer("state_hash", hash),
+	)
+	return skipped, nil
+}
+
+// Request used to implement 2-step validation flow.
+// After Parse is executed - conservative cache may do validation and skip Verify
+// if transaction can't be executed.
+type Request struct {
+	vm *VM
+
+	raw     types.RawTx
+	ctx     *core.Context
+	decoder *scale.Decoder
+}
+
+// Parse header from the raw transaction.
+func (r *Request) Parse() (*core.Header, error) {
+	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
+	if err != nil {
+		return nil, err
+	}
+	r.ctx = ctx
+	return header, nil
+}
+
+// Verify transaction. Will panic if called without Parse completing successfully.
+func (r *Request) Verify() bool {
+	if r.ctx == nil {
+		panic("Verify should be called after successful Parse")
+	}
+	return verify(r.ctx, r.raw.Raw)
+}
+
+func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+	version, _, err := scale.DecodeCompact8(decoder)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
+	}
+	if version != 0 {
+		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
+	}
+
+	var principal core.Address
+	if _, err := principal.DecodeScale(decoder); err != nil {
+		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %s", core.ErrMalformed, err)
+	}
+	method, _, err := scale.DecodeCompact8(decoder)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %s", core.ErrMalformed, err.Error())
+	}
+	account, err := loader.Get(principal)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: failed load state for principal %s - %s", core.ErrInternal, principal, err)
+	}
+	logger.With().Debug("loaded account state", log.Inline(&account))
+
+	var template *core.Address
+	if method == 0 {
+		template = &core.Address{}
+		if _, err := template.DecodeScale(decoder); err != nil {
+			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
+		}
+	} else {
+		template = account.Template
+	}
+	if template == nil {
+		return nil, nil, nil, fmt.Errorf("%w: %s", core.ErrNotSpawned, principal.String())
+	}
+
+	handler := reg.Get(*template)
+	if handler == nil {
+		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.Template)
+	}
+	ctx := &core.Context{
+		Loader:  loader,
+		Handler: handler,
+		Account: account,
+	}
+	header, args, err := handler.Parse(ctx, method, decoder)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	header.ID = id
+	header.Principal = principal
+	header.Template = *template
+	header.Method = method
+
+	ctx.Args = args
+	ctx.Header = header
+
+	ctx.Template, err = handler.Init(method, args, account.State)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	maxspend, err := ctx.Template.MaxSpend(ctx.Header.Method, args)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ctx.Header.MaxSpend = maxspend
+	return &ctx.Header, ctx, args, nil
+}
+
+func verify(ctx *core.Context, raw []byte) bool {
+	return ctx.Template.Verify(ctx, raw)
 }
