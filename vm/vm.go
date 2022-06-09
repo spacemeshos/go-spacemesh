@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	rewardsdb "github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
@@ -57,7 +58,7 @@ type VM struct {
 }
 
 // Validation initializes validation request.
-func (v *VM) Validation(raw types.RawTx) *Request {
+func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
 		vm:      v,
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
@@ -113,11 +114,20 @@ func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 
 // GetNonce returns expected next nonce for the address.
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
-	account, err := accounts.Latest(v.db, types.Address(address))
+	account, err := accounts.Latest(v.db, address)
 	if err != nil {
 		return core.Nonce{}, err
 	}
 	return core.Nonce{Counter: account.NextNonce()}, nil
+}
+
+// GetBalance returns balance for an adress.
+func (v *VM) GetBalance(address types.Address) (uint64, error) {
+	account, err := accounts.Latest(v.db, address)
+	if err != nil {
+		return 0, err
+	}
+	return account.Balance, nil
 }
 
 // ApplyGenesis saves list of accounts for genesis.

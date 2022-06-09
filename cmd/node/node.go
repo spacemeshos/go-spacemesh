@@ -482,7 +482,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
-	state := vm.New(app.addLogger(SVMLogger, lg), sqlDB)
+	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(SVMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,

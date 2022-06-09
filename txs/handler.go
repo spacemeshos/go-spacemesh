@@ -44,50 +44,29 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, ms
 }
 
 func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
-	tx, err := types.BytesToTransaction(msg)
-	if err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to parse tx", log.Err(err))
-		return errMalformedMsg
-	}
-
-	if exists, err := th.state.HasTx(tx.ID()); err != nil {
+	raw := types.NewRawTx(msg)
+	if exists, err := th.state.HasTx(raw.ID); err != nil {
 		th.logger.WithContext(ctx).With().Error("failed to check tx exists", log.Err(err))
 		return fmt.Errorf("has tx: %w", err)
 	} else if exists {
 		return errDuplicateTX
 	}
 
-	if err = tx.CalcAndSetOrigin(); err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to calculate tx origin", tx.ID(), log.Err(err))
-		return errAddrNotExtracted
+	req := th.state.Validation(raw)
+	header, err := req.Parse()
+	if err != nil {
+		return fmt.Errorf("failed to parse %s: %w", raw.ID, err)
+	}
+	if req.Verify() {
+		return fmt.Errorf("failed to verify %s", raw.ID)
 	}
 
-	th.logger.WithContext(ctx).With().Info("got new tx",
-		tx.ID(),
-		log.Uint64("nonce", tx.AccountNonce),
-		log.Uint64("amount", tx.Amount),
-		log.Uint64("fee", tx.GetFee()),
-		log.Uint64("gas", tx.GasLimit),
-		log.Stringer("recipient", tx.GetRecipient()),
-		log.Stringer("origin", tx.Origin()))
-
-	if exists, err := th.state.AddressExists(tx.Origin()); err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to check if address exists",
-			log.Stringer("origin", tx.Origin()),
-		)
-		return fmt.Errorf("failed to load address %v: %w", tx.Origin(), err)
-	} else if !exists {
-		th.logger.WithContext(ctx).With().Error("tx origin does not exist",
-			log.String("transaction", tx.String()),
-			tx.ID(),
-			log.String("origin", tx.Origin().Short()))
-		return errAddrNotFound
-	}
-
-	if err = th.state.AddToCache(tx, true); err != nil {
+	if err := th.state.AddToCache(&types.ParsedTx{
+		RawTx:    raw,
+		TxHeader: *header,
+	}, true); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
-			tx.Origin(),
-			tx.ID(),
+			raw.ID,
 			log.Err(err))
 	}
 
@@ -100,23 +79,26 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 // transactions received via sync are necessarily referenced somewhere meaning that we must have them stored, even if
 // they're invalid, for the data availability of the referencing block.
 func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) error {
-	var tx types.Transaction
-	err := types.BytesToInterface(data, &tx)
-	if err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to parse sync tx", log.Err(err))
-		return errMalformedMsg
-	}
-	if err = tx.CalcAndSetOrigin(); err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to calculate sync tx origin", tx.ID(), log.Err(err))
-		return errAddrNotExtracted
-	}
-	exists, err := th.state.HasTx(tx.ID())
+	raw := types.NewRawTx(data)
+	exists, err := th.state.HasTx(raw.ID)
 	if err != nil {
 		th.logger.WithContext(ctx).With().Error("failed to check sync tx exists", log.Err(err))
 		return fmt.Errorf("has sync tx: %w", err)
 	}
-	if err = th.state.AddToCache(&tx, !exists); err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to add sync tx to conservative cache", tx.ID(), log.Err(err))
+	req := th.state.Validation(raw)
+	header, err := req.Parse()
+	if err != nil {
+		return fmt.Errorf("failed to parse %s: %w", raw.ID, err)
+	}
+	if req.Verify() {
+		return fmt.Errorf("failed to verify %s", raw.ID)
+	}
+
+	if err = th.state.AddToCache(&types.ParsedTx{
+		RawTx:    raw,
+		TxHeader: *header,
+	}, !exists); err != nil {
+		th.logger.WithContext(ctx).With().Warning("failed to add sync tx to conservative cache", raw.ID, log.Err(err))
 	}
 	return nil
 }

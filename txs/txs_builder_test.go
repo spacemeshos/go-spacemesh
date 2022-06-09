@@ -28,7 +28,7 @@ func TestGetBlockTXs_OptimisticFiltering(t *testing.T) {
 		for i := 0; i < num; i++ {
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			mtxs = append(mtxs, mtx)
-			expected = append(expected, mtx.ID())
+			expected = append(expected, mtx.ID)
 			nextNonce++
 		}
 	}
@@ -65,7 +65,7 @@ func TestGetBlockTXs_OptimisticFiltering_SomeTXsApplied(t *testing.T) {
 			if i == 0 {
 				mtx.State = types.APPLIED
 			} else {
-				expected = append(expected, mtx.ID())
+				expected = append(expected, mtx.ID)
 			}
 			mtxs = append(mtxs, mtx)
 			nextNonce++
@@ -97,7 +97,7 @@ func TestGetBlockTXs_OptimisticFiltering_InsufficientBalance(t *testing.T) {
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			mtxs = append(mtxs, mtx)
 			if i < num-1 {
-				expected = append(expected, mtx.ID())
+				expected = append(expected, mtx.ID)
 			}
 			nextNonce++
 		}
@@ -129,7 +129,7 @@ func TestGetBlockTXs_OptimisticFiltering_BadNonce(t *testing.T) {
 			// cause the following transaction to fail the nonce check
 			nextNonce = nextNonce + 2
 			if i == 0 {
-				expected = append(expected, mtx.ID())
+				expected = append(expected, mtx.ID)
 			}
 		}
 	}
@@ -153,7 +153,7 @@ func TestGetBlockTXs_NoOptimisticFiltering(t *testing.T) {
 		for i := 0; i < num; i++ {
 			mtx := newMeshTX(t, nextNonce, ta.signer, balance, now)
 			mtxs = append(mtxs, mtx)
-			expected = append(expected, mtx.ID())
+			expected = append(expected, mtx.ID)
 			nextNonce++
 		}
 	}

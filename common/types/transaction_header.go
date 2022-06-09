@@ -15,6 +15,16 @@ type TxHeader struct {
 	MaxSpend    uint64
 }
 
+// Fee is a MaxGas multiplied by a GasPrice.
+func (h *TxHeader) Fee() uint64 {
+	return h.MaxGas * h.GasPrice
+}
+
+// Spending is Fee() + MaxSpend.
+func (h *TxHeader) Spending() uint64 {
+	return h.Fee() + h.MaxSpend
+}
+
 // MarshalLogObject implements encoding for the tx header.
 func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("principal", h.Principal.String())
