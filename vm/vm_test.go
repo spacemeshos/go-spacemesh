@@ -766,7 +766,6 @@ func TestValidation(t *testing.T) {
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
-				tc.header.ID = header.ID
 				require.Equal(t, tc.header, header)
 				require.True(t, req.Verify())
 			}

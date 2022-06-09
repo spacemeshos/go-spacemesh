@@ -4,8 +4,8 @@ import (
 	"bytes"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -37,6 +37,7 @@ func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
 	for _, opt := range opts {
 		opt(options)
 	}
+
 	payload := wallet.SpawnPayload{}
 	payload.GasPrice = options.GasPrice
 	copy(payload.Arguments.PublicKey[:], pk[32:])
@@ -46,6 +47,7 @@ func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
 	} else {
 		principal = core.ComputePrincipal(wallet.TemplateAddress, &payload.Arguments)
 	}
+
 	tx := encode(&zero, &principal, &zero, &wallet.TemplateAddress, &payload)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
@@ -58,11 +60,17 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, opts ...sdk.O
 	for _, opt := range opts {
 		opt(options)
 	}
-	if options.Principal == nil {
-		panic("principal is required for spend")
-	}
 	if options.Nonce == nil {
 		panic("nonce is required for spend")
+	}
+
+	var principal types.Address
+	if options.Principal == nil {
+		spawnargs := wallet.SpawnArguments{}
+		copy(spawnargs.PublicKey[:], pk[32:])
+		principal = core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
+	} else {
+		principal = *options.Principal
 	}
 
 	payload := wallet.SpendPayload{}
@@ -71,7 +79,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, opts ...sdk.O
 	payload.Arguments.Amount = amount
 	payload.Nonce = *options.Nonce
 
-	tx := encode(&zero, options.Principal, &one, &payload)
+	tx := encode(&zero, &principal, &one, &payload)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)

@@ -329,7 +329,6 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	header.ID = id
 	header.Principal = principal
 	header.Template = *template
 	header.Method = method
