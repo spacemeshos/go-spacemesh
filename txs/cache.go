@@ -659,37 +659,37 @@ func (c *cache) has(tid types.TransactionID) bool {
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
-func (c *cache) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, IDs []types.TransactionID) error {
-	if len(IDs) == 0 {
+func (c *cache) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+	if len(tids) == 0 {
 		return nil
 	}
-	if err := c.tp.AddToProposal(lid, pid, IDs); err != nil {
+	if err := c.tp.AddToProposal(lid, pid, tids); err != nil {
 		c.logger.With().Error("failed to link txs to proposal in db", log.Err(err))
 		return err
 	}
-	return c.updateLayer(lid, types.EmptyBlockID, IDs)
+	return c.updateLayer(lid, types.EmptyBlockID, tids)
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
-func (c *cache) LinkTXsWithBlock(lid types.LayerID, bid types.BlockID, IDs []types.TransactionID) error {
-	if len(IDs) == 0 {
+func (c *cache) LinkTXsWithBlock(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+	if len(tids) == 0 {
 		return nil
 	}
-	if err := c.tp.AddToBlock(lid, bid, IDs); err != nil {
+	if err := c.tp.AddToBlock(lid, bid, tids); err != nil {
 		return err
 	}
-	return c.updateLayer(lid, bid, IDs)
+	return c.updateLayer(lid, bid, tids)
 }
 
 // updateLayer associates the transactions to a layer and optionally a block.
 // A transaction is tagged with a layer when it's included in a proposal/block.
 // If a transaction is included in multiple proposals/blocks in different layers,
 // the lowest layer is retained.
-func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, IDs []types.TransactionID) error {
+func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for _, ID := range IDs {
+	for _, ID := range tids {
 		if _, ok := c.cachedTXs[ID]; !ok {
 			// transaction is not considered best in its nonce group
 			return nil
@@ -801,14 +801,14 @@ func (c *cache) GetMeshTransaction(tid types.TransactionID) (*types.MeshTransact
 func (c *cache) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 	missing := make(map[types.TransactionID]struct{})
 	mtxs := make([]*types.MeshTransaction, 0, len(ids))
-	for _, ID := range ids {
+	for _, tid := range ids {
 		var (
 			mtx *types.MeshTransaction
 			err error
 		)
-		if mtx, err = c.GetMeshTransaction(ID); err != nil {
-			c.logger.With().Warning("could not get tx", ID, log.Err(err))
-			missing[ID] = struct{}{}
+		if mtx, err = c.GetMeshTransaction(tid); err != nil {
+			c.logger.With().Warning("could not get tx", tid, log.Err(err))
+			missing[tid] = struct{}{}
 		} else {
 			mtxs = append(mtxs, mtx)
 		}
