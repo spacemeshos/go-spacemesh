@@ -12,7 +12,7 @@ import (
 )
 
 // PoetProofProtocol is the name of the PoetProof gossip protocol.
-const PoetProofProtocol = "PoetProof"
+const PoetProofProtocol = "PoetProof/1"
 
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
