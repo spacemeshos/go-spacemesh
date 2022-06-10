@@ -47,7 +47,7 @@ const (
 )
 
 const (
-	fetchProtocol = "/sync/2.0/"
+	fetchProtocol = "/sync/2"
 	batchMaxSize  = 20
 )
 
