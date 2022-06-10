@@ -86,7 +86,7 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 		signer := signing.NewEdSigner()
 		addr := types.BytesToAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-		tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
+		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(tx, true))
 		ids = append(ids, tx.ID)
@@ -132,7 +132,7 @@ func TestSelectBlockTXs(t *testing.T) {
 	for _, tx := range txs {
 		principal := tx.Principal
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
 	}
 	// make sure proposals have overlapping transactions
 	numProposals := 10
@@ -158,7 +158,7 @@ func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
 	for _, tx := range txs {
 		principal := tx.Principal
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
 	}
 	// make sure proposals have overlapping transactions
 	numProposals := 10
@@ -184,7 +184,7 @@ func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	for _, tx := range txs {
 		principal := tx.Principal
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
 	}
 	// make sure proposals have overlapping transactions
 	numProposals := 10
