@@ -16,14 +16,15 @@ import (
 
 func createMeshTX(t *testing.T, signer *signing.EdSigner, lid ctypes.LayerID) *ctypes.MeshTransaction {
 	t.Helper()
-	nonce := ctypes.Nonce{Counter: uint64(rand.Int())}
-	tx := wallet.Spend(signer.PrivateKey(), ctypes.Address{1, 2, 3}, 223, sdk.WithNonce(nonce))
+	nonce := ctypes.Nonce{Counter: 223}
+	amount := uint64(rand.Int())
+	tx := wallet.Spend(signer.PrivateKey(), ctypes.Address{1, 2, 3}, amount, sdk.WithNonce(nonce))
 	parsed := ctypes.ParsedTx{
 		RawTx: ctypes.NewRawTx(tx),
 	}
 	parsed.MaxGas = 32132
 	parsed.GasPrice = 1
-	parsed.MaxSpend = 223
+	parsed.MaxSpend = amount
 	parsed.Nonce = nonce
 	parsed.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
 	return &ctypes.MeshTransaction{
@@ -40,7 +41,7 @@ func TestNewNanoTX(t *testing.T) {
 	ntx := NewNanoTX(mtx)
 	require.Equal(t, mtx.ID, ntx.ID)
 	require.Equal(t, mtx.Principal, ntx.Principal)
-	require.Equal(t, mtx.Fee, ntx.Fee)
+	require.Equal(t, mtx.Fee(), ntx.Fee())
 	require.Equal(t, mtx.MaxGas, ntx.MaxGas)
 	require.Equal(t, mtx.Received, ntx.Received)
 	require.Equal(t, mtx.MaxSpend, ntx.MaxSpend)
