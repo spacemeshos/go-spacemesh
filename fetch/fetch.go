@@ -561,9 +561,9 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 		if exists {
 			f.HashToPeersCacheHit()
 			hashPeers = peerMapToList(hashPeersMap.peers)
+		} else {
+			f.HashToPeersCacheMiss()
 		}
-
-		f.HashToPeersCacheMiss()
 
 		var p p2p.Peer
 		if len(hashPeers) > 0 {
