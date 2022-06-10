@@ -510,7 +510,7 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.atxHandler.HandleAtxData(ctx, data, p2p.AnyPeer); err != nil {
+	if err := l.atxHandler.HandleAtxData(ctx, data, p2p.NoPeer); err != nil {
 		return fmt.Errorf("handle ATX data %s len %d: %w", hash, len(data), err)
 	}
 
@@ -565,7 +565,7 @@ func (l *Logic) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.ATXDB, p2p.AnyPeer, l.atxHandler.HandleAtxData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.ATXDB, p2p.NoPeer, l.atxHandler.HandleAtxData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -638,7 +638,7 @@ func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, p2p.AnyPeer, l.blockHandler.HandleBlockData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, p2p.NoPeer, l.blockHandler.HandleBlockData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -651,7 +651,7 @@ func (l *Logic) GetTxs(ctx context.Context, ids []types.TransactionID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.TXDB, p2p.AnyPeer, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.TXDB, p2p.NoPeer, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil

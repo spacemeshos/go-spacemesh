@@ -223,7 +223,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	hareOutput := types.EmptyBlockID
 	if len(pids) > 0 {
 		// fetch proposals from peers if not locally available
-		if err := h.fetcher.GetProposals(ctx, pids, p2p.AnyPeer); err != nil {
+		if err := h.fetcher.GetProposals(ctx, pids, p2p.NoPeer); err != nil {
 			h.WithContext(ctx).With().Warning("failed to fetch proposals", log.Err(err))
 			return fmt.Errorf("hare fetch proposals: %w", err)
 		}

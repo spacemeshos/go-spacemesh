@@ -208,8 +208,6 @@ type CacheStats struct {
 	Hits int64 `json:"hits"`
 	// Misses is a number of not found hashes
 	Misses int64 `json:"misses"`
-	// Prometheus metrics
-	Metrics *metrics.HashToPeersCacheCollector
 }
 
 type hashPeers struct {
@@ -220,18 +218,17 @@ type hashPeers struct {
 // NewFetch creates a new Fetch struct.
 func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
 	f := &Fetch{
-		cfg:              cfg,
-		log:              logger,
-		dbs:              dbs,
-		activeRequests:   make(map[types.Hash32][]*request),
-		pendingRequests:  make(map[types.Hash32][]*request),
-		requestReceiver:  make(chan request),
-		batchTimeout:     time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
-		stop:             make(chan struct{}),
-		activeBatches:    make(map[types.Hash32]batchInfo),
-		doneChan:         make(chan struct{}),
-		hashToPeers:      make(map[types.Hash32]*hashPeers),
-		hashToPeersStats: CacheStats{Metrics: metrics.NewHashToPeersCacheCollector()},
+		cfg:             cfg,
+		log:             logger,
+		dbs:             dbs,
+		activeRequests:  make(map[types.Hash32][]*request),
+		pendingRequests: make(map[types.Hash32][]*request),
+		requestReceiver: make(chan request),
+		batchTimeout:    time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
+		stop:            make(chan struct{}),
+		activeBatches:   make(map[types.Hash32]batchInfo),
+		doneChan:        make(chan struct{}),
+		hashToPeers:     make(map[types.Hash32]*hashPeers),
 	}
 	// TODO(dshulyak) this is done for tests. needs to be mocked properly
 	if h != nil {
@@ -783,7 +780,7 @@ func (f *Fetch) TrackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.
 	if len(ids) == 0 {
 		return
 	}
-	if p2p.IsAnyPeer(peer) {
+	if p2p.IsNoPeer(peer) {
 		return
 	}
 	hashes := types.BlockIDsToHashes(ids)
@@ -799,7 +796,7 @@ func (f *Fetch) TrackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types
 	if len(ids) == 0 {
 		return
 	}
-	if p2p.IsAnyPeer(peer) {
+	if p2p.IsNoPeer(peer) {
 		return
 	}
 	hashes := types.BallotIDsToHashes(ids)
@@ -814,7 +811,7 @@ func (f *Fetch) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATX
 	if len(ids) == 0 {
 		return
 	}
-	if p2p.IsAnyPeer(peer) {
+	if p2p.IsNoPeer(peer) {
 		return
 	}
 	hashes := types.ATXIDsToHashes(ids)
@@ -827,13 +824,13 @@ func (f *Fetch) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATX
 // HashToPeersCacheHit tracks hash-to-peer cache hit.
 func (f *Fetch) HashToPeersCacheHit() {
 	atomic.AddInt64(&f.hashToPeersStats.Hits, 1)
-	f.hashToPeersStats.Metrics.LogHit()
+	metrics.LogHit()
 }
 
 // HashToPeersCacheMiss tracks hash-to-peer cache miss.
 func (f *Fetch) HashToPeersCacheMiss() {
 	atomic.AddInt64(&f.hashToPeersStats.Misses, 1)
-	f.hashToPeersStats.Metrics.LogMiss()
+	metrics.LogMiss()
 }
 
 func (f *Fetch) getHashToPeersCacheStats() CacheStats {

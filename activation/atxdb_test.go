@@ -631,7 +631,7 @@ func TestActivationDB_HandleAtxNilNipst(t *testing.T) {
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
-	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, p2p.AnyPeer))
+	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, p2p.NoPeer))
 }
 
 func TestActivationDB_KnownATX(t *testing.T) {
@@ -641,7 +641,7 @@ func TestActivationDB_KnownATX(t *testing.T) {
 	buf, err := codec.Encode(atx)
 	require.NoError(t, err)
 
-	require.NoError(t, atxdb.HandleAtxData(context.TODO(), buf, p2p.AnyPeer))
+	require.NoError(t, atxdb.HandleAtxData(context.TODO(), buf, p2p.NoPeer))
 	require.Equal(t, pubsub.ValidationIgnore, atxdb.HandleGossipAtx(context.TODO(), "", buf))
 }
 

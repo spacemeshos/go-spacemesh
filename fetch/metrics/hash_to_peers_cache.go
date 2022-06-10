@@ -14,21 +14,12 @@ var (
 	totalMisses = metrics.NewCounter("total_misses", subsystem, "Total cache misses", nil)
 )
 
-// HashToPeersCacheCollector implement metrics.Reporter
-// that keeps track of the number of messages sent and received per protocol.
-type HashToPeersCacheCollector struct{}
-
-// NewHashToPeersCacheCollector creates a new HashToPeersCacheCollector.
-func NewHashToPeersCacheCollector() *HashToPeersCacheCollector {
-	return &HashToPeersCacheCollector{}
-}
-
 // LogHit logs cache hit.
-func (b *HashToPeersCacheCollector) LogHit() {
+func LogHit() {
 	totalHits.WithLabelValues().Inc()
 }
 
 // LogMiss logs the message received from the peer.
-func (b *HashToPeersCacheCollector) LogMiss() {
+func LogMiss() {
 	totalMisses.WithLabelValues().Inc()
 }

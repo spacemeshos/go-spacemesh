@@ -173,7 +173,7 @@ func Test_HandleSyncTransaction_Success(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer)
+	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.NoPeer)
 	assert.NoError(t, got)
 }
 
@@ -188,7 +188,7 @@ func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer)
+	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.NoPeer)
 	assert.ErrorIs(t, got, errAddrNotExtracted)
 }
 
@@ -204,7 +204,7 @@ func Test_HandleSyncTransaction_HasTXError(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer)
+	got := th.HandleSyncTransaction(context.TODO(), msg, p2p.NoPeer)
 	assert.ErrorIs(t, got, errUnknown)
 }
 
@@ -227,5 +227,5 @@ func Test_HandleSyncTransaction_FailedMemPoolIgnored(t *testing.T) {
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
-	require.NoError(t, th.HandleSyncTransaction(context.TODO(), msg, p2p.AnyPeer))
+	require.NoError(t, th.HandleSyncTransaction(context.TODO(), msg, p2p.NoPeer))
 }
