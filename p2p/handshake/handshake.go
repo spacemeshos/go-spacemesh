@@ -34,7 +34,7 @@ func WithLog(logger log.Log) Opt {
 }
 
 const (
-	hsprotocol    = "/handshake/1.0.0"
+	hsprotocol    = "/handshake/1"
 	streamTimeout = 10 * time.Second
 )
 
