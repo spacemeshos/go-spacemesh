@@ -557,18 +557,13 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 
 	for _, req := range requests {
 		hashPeersMap, exists := f.hashToPeers[req.Hash]
-		var hashPeers []p2p.Peer
+		var p p2p.Peer
 		if exists {
 			f.HashToPeersCacheHit()
-			hashPeers = peerMapToList(hashPeersMap.peers)
-		} else {
-			f.HashToPeersCacheMiss()
-		}
-
-		var p p2p.Peer
-		if len(hashPeers) > 0 {
+			hashPeers := peerMapToList(hashPeersMap.peers)
 			p = hashPeers[rng.Intn(len(hashPeers))]
 		} else {
+			f.HashToPeersCacheMiss()
 			p = GetRandomPeer(f.net.GetPeers())
 		}
 
