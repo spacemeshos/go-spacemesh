@@ -552,11 +552,10 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]requestMessage)
 
-	// max retries to find another peer with fewer requests attached
-	const maxRetries = 3
-
+	f.hashToPeersM.RLock()
 	for _, req := range requests {
 		hashPeersMap, exists := f.hashToPeers[req.Hash]
+
 		var p p2p.Peer
 		if exists {
 			f.HashToPeersCacheHit()
@@ -574,6 +573,7 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 			peer2requests[p] = append(peer2requests[p], req)
 		}
 	}
+	f.hashToPeersM.RUnlock()
 
 	// split every peer's requests into batches of f.cfg.BatchSize each
 	result := make(map[p2p.Peer][][]requestMessage)
