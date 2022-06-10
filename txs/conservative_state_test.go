@@ -41,9 +41,9 @@ func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, f
 	tx := types.ParsedTx{
 		RawTx: types.NewRawTx(raw),
 	}
-	tx.MaxGas = 100
+	tx.MaxGas = fee
 	tx.MaxSpend = amount
-	tx.GasPrice = fee
+	tx.GasPrice = 1
 	tx.Nonce = types.Nonce{Counter: nonce}
 	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
 	return &tx
