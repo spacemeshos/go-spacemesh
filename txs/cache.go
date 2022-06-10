@@ -633,29 +633,29 @@ func (c *cache) Add(tx *types.Transaction, received time.Time, blockSeed []byte)
 }
 
 // Get gets a transaction from the cache.
-func (c *cache) Get(ID types.TransactionID) *txtypes.NanoTX {
+func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.cachedTXs[ID]
+	return c.cachedTXs[tid]
 }
 
 // HasTx returns true if transaction exists in the cache.
-func (c *cache) HasTx(ID types.TransactionID) (bool, error) {
-	if c.has(ID) {
+func (c *cache) HasTx(tid types.TransactionID) (bool, error) {
+	if c.has(tid) {
 		return true, nil
 	}
 
-	has, err := c.tp.Has(ID)
+	has, err := c.tp.Has(tid)
 	if err != nil {
 		return false, fmt.Errorf("has tx: %w", err)
 	}
 	return has, nil
 }
 
-func (c *cache) has(ID types.TransactionID) bool {
+func (c *cache) has(tid types.TransactionID) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.cachedTXs[ID] != nil
+	return c.cachedTXs[tid] != nil
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
@@ -793,8 +793,8 @@ func (c *cache) AddToDB(tx *types.Transaction, received time.Time) error {
 }
 
 // GetMeshTransaction retrieves a tx by its id.
-func (c *cache) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
-	return c.tp.Get(id)
+func (c *cache) GetMeshTransaction(tid types.TransactionID) (*types.MeshTransaction, error) {
+	return c.tp.Get(tid)
 }
 
 // GetMeshTransactions retrieves a list of txs by their id's.
