@@ -77,17 +77,19 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 }
 
 // Consume gas from the account after validation passes.
-func (c *Context) Consume(gas uint64) error {
+func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
 	if amount > c.Account.Balance {
 		return ErrNoBalance
 	}
-	c.consumed += amount
-	if c.consumed > c.Header.MaxGas {
-		return ErrMaxGas
+	if total := c.consumed + gas; total > c.Header.MaxGas {
+		gas = c.Header.MaxGas - c.consumed
+		amount = gas * c.Header.GasPrice
+		err = ErrMaxGas
 	}
+	c.consumed += gas
 	c.Account.Balance -= amount
-	return nil
+	return err
 }
 
 // Apply is executed if transaction was consumed.
