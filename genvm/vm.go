@@ -181,7 +181,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 		account.Layer = lid
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
-		if err != nil {
+		if err == nil {
 			account.EncodeScale(encoder)
 		}
 		return err == nil
