@@ -182,9 +182,8 @@ func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	tids, txs := addBatch(t, tcs, totalNumTXs)
 	// optimistic filtering will query the real state again
 	for _, tx := range txs {
-		principal := tx.Principal
-		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
 	}
 	// make sure proposals have overlapping transactions
 	numProposals := 10
@@ -426,7 +425,7 @@ func TestGetProjection(t *testing.T) {
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx1 := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx1, true))
 	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(10), types.BlockID{100}, []types.TransactionID{tx1.ID}))
@@ -443,7 +442,7 @@ func TestAddToCache(t *testing.T) {
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx, true))
 	got, err := tcs.HasTx(tx.ID)
@@ -456,7 +455,7 @@ func TestAddToCache_KnownTX(t *testing.T) {
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx, false))
 	got, err := tcs.HasTx(tx.ID)
@@ -469,7 +468,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	err := tcs.AddToCache(tx, true)
 	require.ErrorIs(t, err, errInsufficientBalance)
@@ -480,7 +479,7 @@ func TestGetMeshTransaction(t *testing.T) {
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx, true))
 	mtx, err := tcs.GetMeshTransaction(tx.ID)
@@ -539,7 +538,7 @@ func TestGetTransactionsByAddress(t *testing.T) {
 	require.Empty(t, mtxs)
 
 	tcs.mvm.EXPECT().GetBalance(addr1).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr1).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr1).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx0 := newTxWthRecipient(t, addr2, nonce, defaultAmount, defaultFee, signer1)
 	require.NoError(t, tcs.AddToCache(tx0, true))
 	tx1 := newTxWthRecipient(t, addr3, nonce+1, defaultAmount, defaultFee, signer1)
@@ -547,7 +546,7 @@ func TestGetTransactionsByAddress(t *testing.T) {
 	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(5), types.BlockID{11}, []types.TransactionID{tx1.ID}))
 
 	tcs.mvm.EXPECT().GetBalance(addr2).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr2).Return(nonce, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr2).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx2 := newTxWthRecipient(t, addr3, nonce, defaultAmount, defaultFee, signer2)
 	require.NoError(t, tcs.AddToCache(tx2, true))
 	tx3 := newTxWthRecipient(t, addr3, nonce+1, defaultAmount, defaultFee, signer2)
@@ -571,9 +570,7 @@ func TestGetTransactionsByAddress(t *testing.T) {
 
 	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(6), addr3)
 	require.NoError(t, err)
-	require.Len(t, mtxs, 2)
-	require.Equal(t, mtxs[0].ParsedTx, *tx1)
-	require.Equal(t, mtxs[1].ParsedTx, *tx3)
+	require.Len(t, mtxs, 0)
 }
 
 func TestApplyLayer(t *testing.T) {
@@ -592,7 +589,7 @@ func TestApplyLayer(t *testing.T) {
 		})
 	for _, tx := range txs {
 		tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance-(defaultAmount+defaultFee), nil)
-		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(nonce+1, nil)
+		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	}
 	tcs.mvm.EXPECT().Apply(lid, gomock.Any(), block.Rewards).DoAndReturn(
 		func(_ types.LayerID, got []*types.Transaction, _ []types.AnyReward) ([]*types.Transaction, error) {
@@ -633,7 +630,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 	for _, tx := range txs[numFailed:] {
 		principal := tx.Principal
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance-(tx.Spending()), nil).Times(1)
-		tcs.mvm.EXPECT().GetNonce(principal).Return(nonce+1, nil).Times(1)
+		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)
 	}
 	coinbase := types.GenerateAddress(types.RandomBytes(20))
 	weight := util.WeightFromFloat64(200.56)
