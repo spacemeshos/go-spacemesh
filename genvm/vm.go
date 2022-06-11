@@ -181,7 +181,9 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 		account.Layer = lid
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
-		account.EncodeScale(encoder)
+		if err != nil {
+			account.EncodeScale(encoder)
+		}
 		return err == nil
 	})
 	if err != nil {
@@ -271,7 +273,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 
 	handler := reg.Get(*template)
 	if handler == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.Template)
+		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *template)
 	}
 	ctx := &core.Context{
 		Loader:  loader,
