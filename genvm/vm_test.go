@@ -183,7 +183,7 @@ func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encoda
 		_, err := field.EncodeScale(encoder)
 		require.NoError(tb, err)
 	}
-	hash := core.Hash(buf.Bytes())
+	hash := hash.Sum(buf.Bytes())
 
 	sig := ed25519.Sign(pk, hash[:])
 	var sigfield core.Signature
