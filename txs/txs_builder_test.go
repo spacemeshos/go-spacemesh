@@ -21,10 +21,11 @@ func TestGetBlockTXs_OptimisticFiltering(t *testing.T) {
 		nextNonce := ta.nonce
 		balance := ta.balance
 		availPerTx := balance / uint64(num)
-		if availPerTx <= defaultFee {
+		fee := defaultFee * defaultGas
+		if availPerTx <= fee {
 			continue
 		}
-		amt := availPerTx - defaultFee
+		amt := availPerTx - fee
 		for i := 0; i < num; i++ {
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			mtxs = append(mtxs, mtx)
@@ -56,10 +57,11 @@ func TestGetBlockTXs_OptimisticFiltering_SomeTXsApplied(t *testing.T) {
 		nextNonce := ta.nonce - 1
 		balance := ta.balance
 		availPerTx := balance / uint64(num)
-		if availPerTx <= defaultFee {
+		fee := defaultFee * defaultGas
+		if availPerTx <= fee {
 			continue
 		}
-		amt := availPerTx - defaultFee
+		amt := availPerTx - fee
 		for i := 0; i < num; i++ {
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			if i == 0 {
@@ -89,10 +91,11 @@ func TestGetBlockTXs_OptimisticFiltering_InsufficientBalance(t *testing.T) {
 		balance := ta.balance
 		// cause the last transaction to fail the balance check
 		availPerTx := balance / uint64(num-1)
-		if availPerTx <= defaultFee {
+		fee := defaultFee * defaultGas
+		if availPerTx <= fee {
 			continue
 		}
-		amt := availPerTx - defaultFee
+		amt := availPerTx - fee
 		for i := 0; i < num; i++ {
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			mtxs = append(mtxs, mtx)
@@ -119,10 +122,11 @@ func TestGetBlockTXs_OptimisticFiltering_BadNonce(t *testing.T) {
 		nextNonce := ta.nonce
 		balance := ta.balance
 		availPerTx := balance / uint64(num)
-		if availPerTx <= defaultFee {
+		fee := defaultFee * defaultGas
+		if availPerTx <= fee {
 			continue
 		}
-		amt := availPerTx - defaultFee
+		amt := availPerTx - fee
 		for i := 0; i < num; i++ {
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			mtxs = append(mtxs, mtx)

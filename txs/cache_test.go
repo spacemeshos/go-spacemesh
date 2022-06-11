@@ -377,7 +377,7 @@ func TestCache_Account_TooManySameNonceTXs(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+maxTXsPerNonce)
 	for i, mtx := range mtxs {
 		mtx.GasPrice = defaultFee + uint64(i)
-		mtx.MaxGas = 100
+		mtx.MaxGas = 1
 		mtx.Nonce.Counter = ta.nonce
 	}
 	// the last one has the highest fee but not considered
@@ -477,7 +477,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 
 	// now add a tx at the next nonce that cause all later nonce transactions to be infeasible
 	higherFee := defaultFee + 1
-	bigAmount := ta.balance - higherFee
+	bigAmount := ta.balance - higherFee*defaultGas
 	better := &types.MeshTransaction{
 		ParsedTx: *newTx(t, ta.nonce, bigAmount, higherFee, ta.signer),
 		Received: time.Now(),
@@ -717,7 +717,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
 	higherFee := defaultFee + 1
-	largeAmount := defaultBalance - higherFee
+	largeAmount := defaultBalance - higherFee*defaultGas
 	better := &types.MeshTransaction{
 		ParsedTx: *newTx(t, ta.nonce+1, largeAmount, higherFee, ta.signer),
 		Received: time.Now(),
@@ -842,7 +842,7 @@ func TestCache_BuildFromScratch(t *testing.T) {
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (defaultAmount + defaultFee)
+		minBalance := numTXs * (defaultAmount + defaultFee*defaultGas)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
