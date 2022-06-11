@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -231,4 +232,18 @@ type Reward struct {
 	TotalReward uint64
 	LayerReward uint64
 	Coinbase    Address
+}
+
+// NewRawTx computes id from raw bytes and returns the object.
+func NewRawTx(raw []byte) RawTx {
+	return RawTx{
+		ID:  hash.Sum(raw),
+		Raw: raw,
+	}
+}
+
+// RawTx stores an identity and a pointer to raw bytes.
+type RawTx struct {
+	ID  TransactionID
+	Raw []byte
 }

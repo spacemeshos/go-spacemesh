@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -48,11 +50,11 @@ func (a Address) Hex() string {
 	unchecksummed := hex.EncodeToString(a[:])
 	sha := hash.New()
 	sha.Write([]byte(unchecksummed))
-	hash := sha.Sum(nil)
+	hh := sha.Sum(nil)
 
 	result := []byte(unchecksummed)
 	for i := 0; i < len(result); i++ {
-		hashByte := hash[i/2]
+		hashByte := hh[i/2]
 		if i%2 == 0 {
 			hashByte = hashByte >> 4
 		} else {
@@ -94,10 +96,19 @@ func (a *Address) SetBytes(b []byte) {
 	copy(a[AddressLength-len(b):], b)
 }
 
+// EncodeScale implements scale codec interface.
+func (a *Address) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, a[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (a *Address) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, a[:])
+}
+
 // GenerateAddress generates an address from a public key.
 func GenerateAddress(publicKey []byte) Address {
 	var addr Address
 	addr.SetBytes(publicKey)
-
 	return addr
 }
