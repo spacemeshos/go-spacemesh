@@ -24,7 +24,7 @@ const (
 	// RoundsPerIteration is the number of rounds per iteration in the hare protocol.
 	RoundsPerIteration = 4
 	// ProtoName is the protocol indicator for hare gossip messages.
-	ProtoName = "HARE_PROTOCOL"
+	ProtoName = "HARE_PROTOCOL/1"
 )
 
 type role byte

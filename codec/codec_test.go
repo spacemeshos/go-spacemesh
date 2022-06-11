@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"encoding/binary"
 	"strings"
 	"testing"
 
@@ -30,5 +31,20 @@ func BenchmarkEncode(b *testing.B) {
 		if err != nil {
 			require.NoError(b, err)
 		}
+	}
+}
+
+func BenchmarkInvalidLength(b *testing.B) {
+	type object struct {
+		// xdr will incode length length in uint32
+		// and append the rest plus padding
+		Value []byte
+	}
+
+	buf := make([]byte, 10)
+	binary.BigEndian.PutUint32(buf, 200<<20) // ~200mb
+	for i := 0; i < b.N; i++ {
+		var obj object
+		Decode(buf, &obj)
 	}
 }

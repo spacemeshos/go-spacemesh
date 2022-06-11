@@ -9,6 +9,12 @@ import (
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 )
 
+func init() {
+	// xdr will fail with overflow if slice size is larger than 1mb
+	// see BenchmarkInvalidLength
+	xdr.SliceLimit = 1 << 20
+}
+
 // Encodable is an interface that must be implemented by a struct to be encoded.
 type Encodable interface{}
 
