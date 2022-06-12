@@ -305,6 +305,21 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 	return resChannel
 }
 
+// registerLayerHashes registers provided hashes with provided peer.
+func (l *Logic) registerLayerHashes(peer p2p.Peer, blocks *layerData) {
+	var layerHashes []types.Hash32
+	for _, ballotID := range blocks.Ballots {
+		layerHashes = append(layerHashes, ballotID.AsHash32())
+	}
+	for _, blkID := range blocks.Blocks {
+		layerHashes = append(layerHashes, blkID.AsHash32())
+	}
+
+	l.fetcher.RegisterPeerHashes(peer, layerHashes)
+
+	return
+}
+
 // fetchLayerData fetches the all content referenced in layerData.
 func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Peer, layerID types.LayerID, blocks *layerData) error {
 	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
@@ -337,17 +352,11 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 	}
 	l.mutex.Unlock()
 
-	ballotHashes := types.BallotIDsToHashes(ballotsToFetch)
-	l.fetcher.RegisterPeerHashes(peer, ballotHashes)
-
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch, peer); err != nil {
 		// fail sync for the entire layer
 		return err
 	}
-
-	blockHashes := types.BlockIDsToHashes(blocksToFetch)
-	l.fetcher.RegisterPeerHashes(peer, blockHashes)
 
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
@@ -382,6 +391,9 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	logger := l.log.WithContext(ctx).WithFields(layerID, log.String("peer", peer.String()))
 	logger.Debug("received layer content from peer")
 	peerRes := extractPeerResult(logger, layerID, data, peerErr)
+
+	l.registerLayerHashes(peer, peerRes.data)
+
 	if peerRes.err == nil {
 		if err := l.fetchLayerData(ctx, logger, peer, layerID, peerRes.data); err != nil {
 			peerRes.err = ErrLayerDataNotFetched
