@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/fetch/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -194,27 +192,12 @@ type Fetch struct {
 	onlyOnce             sync.Once
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
-	// FIFO cache of hash->[peer set] to keep track of peers to pull blocks/ballots/txs from
-	hashToPeers      map[types.Hash32]*hashPeers
-	hashToPeersM     sync.RWMutex
-	hashToPeersStats CacheStats
-}
-
-// CacheStats stores FIFO cache statistics.
-type CacheStats struct {
-	// Hits is a number of successfully found hashes
-	Hits int64 `json:"hits"`
-	// Misses is a number of not found hashes
-	Misses int64 `json:"misses"`
-}
-
-type hashPeers struct {
-	peers     map[p2p.Peer]struct{}
-	timestamp time.Time
+	hashToPeers          HashPeersCache
+	hashToPeersM         sync.RWMutex
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
+func NewFetch(_ context.Context, cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
@@ -226,7 +209,7 @@ func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, dbs map[Hint]databas
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		doneChan:        make(chan struct{}),
-		hashToPeers:     make(map[types.Hash32]*hashPeers),
+		hashToPeers:     NewHashPeersCache(1000),
 	}
 	// TODO(dshulyak) this is done for tests. needs to be mocked properly
 	if h != nil {
@@ -538,29 +521,21 @@ func (f *Fetch) send(requests []requestMessage) {
 	}
 }
 
-func peerMapToList(m map[p2p.Peer]struct{}) []p2p.Peer {
-	result := make([]p2p.Peer, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-	return result
-}
-
 func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]requestMessage {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]requestMessage)
 
 	f.hashToPeersM.RLock()
 	for _, req := range requests {
-		hashPeersMap, exists := f.hashToPeers[req.Hash]
+		hashPeersMap, exists := f.hashToPeers.Get(req.Hash)
 
 		var p p2p.Peer
 		if exists {
-			f.HashToPeersCacheHit()
-			hashPeers := peerMapToList(hashPeersMap.peers)
+			f.hashToPeers.Hit()
+			hashPeers := hashPeersMap.ToList()
 			p = hashPeers[rng.Intn(len(hashPeers))]
 		} else {
-			f.HashToPeersCacheMiss()
+			f.hashToPeers.Miss()
 			p = GetRandomPeer(f.net.GetPeers())
 		}
 
@@ -751,19 +726,14 @@ func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	f.hashToPeersM.Lock()
 	defer f.hashToPeersM.Unlock()
 
-	_, exists := f.hashToPeers[hash]
+	peers, exists := f.hashToPeers.Get(hash)
 	if !exists {
-		f.hashToPeers[hash] = &hashPeers{
-			peers: map[p2p.Peer]struct{}{
-				peer: {},
-			},
-			timestamp: time.Now().UTC(),
-		}
-
+		f.hashToPeers.Add(hash, hashPeers{peer: {}})
 		return
 	}
 
-	f.hashToPeers[hash].peers[peer] = struct{}{}
+	peers[peer] = struct{}{}
+	f.hashToPeers.Add(hash, peers)
 
 	return
 }
@@ -780,24 +750,4 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 		f.mapPeerToHash(hash, peer)
 	}
 	return
-}
-
-// HashToPeersCacheHit tracks hash-to-peer cache hit.
-func (f *Fetch) HashToPeersCacheHit() {
-	atomic.AddInt64(&f.hashToPeersStats.Hits, 1)
-	metrics.LogHit()
-}
-
-// HashToPeersCacheMiss tracks hash-to-peer cache miss.
-func (f *Fetch) HashToPeersCacheMiss() {
-	atomic.AddInt64(&f.hashToPeersStats.Misses, 1)
-	metrics.LogMiss()
-}
-
-func (f *Fetch) getHashToPeersCacheStats() CacheStats {
-	stats := CacheStats{
-		Hits:   atomic.LoadInt64(&f.hashToPeersStats.Hits),
-		Misses: atomic.LoadInt64(&f.hashToPeersStats.Misses),
-	}
-	return stats
 }
