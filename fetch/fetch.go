@@ -47,8 +47,8 @@ const (
 )
 
 const (
-	fetchProtocol = "/sync/2.0/"
-	maxQueueSize  = 20
+	fetchProtocol = "/sync/2"
+	batchMaxSize  = 20
 )
 
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers.
@@ -292,7 +292,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 		return true
 	}
 	f.log.With().Debug("request added to queue", log.String("hash", req.hash.ShortString()))
-	if rLen > maxQueueSize {
+	if rLen > batchMaxSize {
 		go f.requestHashBatchFromPeers() // Process the batch.
 		return true
 	}

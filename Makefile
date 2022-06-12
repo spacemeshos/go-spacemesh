@@ -65,7 +65,7 @@ endif
 
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 17
+	go run scripts/check-go-version.go --major 1 --minor 18
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.45.2

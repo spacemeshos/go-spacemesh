@@ -1,5 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
+replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1.0
+
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
@@ -24,7 +26,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/natefinch/atomic v1.0.1
-	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
+	github.com/nullstyle/go-xdr v0.1.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.11.0
@@ -34,13 +36,14 @@ require (
 	github.com/spacemeshos/api/release/go v1.4.1-0.20220208052242-dd7698a0ca84
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
+	github.com/spacemeshos/go-scale v0.0.0-20220608060210-3f1e2c40f8dd
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.0
@@ -151,4 +154,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
-go 1.17
+go 1.18

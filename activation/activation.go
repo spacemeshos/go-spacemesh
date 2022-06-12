@@ -30,7 +30,7 @@ var (
 )
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip.
-const AtxProtocol = "AtxGossip"
+const AtxProtocol = "AtxGossip/1"
 
 const defaultPoetRetryInterval = 5 * time.Second
 

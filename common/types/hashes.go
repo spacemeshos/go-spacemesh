@@ -3,8 +3,9 @@ package types
 import (
 	"fmt"
 	"math/big"
-	"math/rand"
 	"reflect"
+
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -63,7 +64,6 @@ func (h *Hash20) UnmarshalText(input []byte) error {
 	if err := util.UnmarshalFixedText("Hash", input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal text: %w", err)
 	}
-
 	return nil
 }
 
@@ -263,27 +263,15 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 	return
 }
 
-// Generate implements testing/quick.Generator.
-func (h Hash32) Generate(rand *rand.Rand, _ int) reflect.Value {
-	m := rand.Intn(len(h))
-	for i := len(h) - 1; i > m; i-- {
-		h[i] = byte(rand.Uint32())
-	}
-	return reflect.ValueOf(h)
-}
-
-// Scan implements Scanner for database/sql.
-func (h *Hash32) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("can't scan %T into Hash", src)
-	}
-	if len(srcB) != Hash32Length {
-		return fmt.Errorf("can't scan []byte of len %d into Hash, want %d", len(srcB), Hash32Length)
-	}
-	copy(h[:], srcB)
-	return nil
-}
-
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash32) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+
+// EncodeScale implements scale codec interface.
+func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, h[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (h *Hash32) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, h[:])
+}

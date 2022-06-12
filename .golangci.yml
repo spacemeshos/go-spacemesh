@@ -60,7 +60,7 @@ output:
 linters-settings:
   staticcheck:
     # Select the Go version to target. The default is '1.13'.
-    go: "1.17"
+    go: "1.18"
     # https://staticcheck.io/docs/options#checks
     checks: [ "all" ]
 
@@ -164,14 +164,14 @@ linters-settings:
     # comments to be checked: `declarations`, `toplevel`, or `all`
     scope: declarations
     # list of regexps for excluding particular comment lines from check
-    exclude:
+    exclude: []
     # example: exclude comments which contain numbers
     # - '[0-9]+'
     # check that each sentence starts with a capital letter
     capital: false
   gofumpt:
     # Select the Go version to target. The default is `1.15`.
-    lang-version: "1.17"
+    lang-version: "1.18"
     # Choose whether or not to use the extra rules that are disabled
     # by default
     extra-rules: false

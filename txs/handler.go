@@ -12,7 +12,7 @@ import (
 )
 
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
-const IncomingTxProtocol = "TxGossip"
+const IncomingTxProtocol = "TxGossip/1"
 
 var (
 	errMalformedMsg     = errors.New("malformed tx")

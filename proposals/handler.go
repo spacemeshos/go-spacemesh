@@ -17,7 +17,7 @@ import (
 )
 
 // NewProposalProtocol is the protocol indicator for gossip Proposals.
-const NewProposalProtocol = "newProposal"
+const NewProposalProtocol = "newProposal/1"
 
 var (
 	errMalformedData         = errors.New("malformed data")

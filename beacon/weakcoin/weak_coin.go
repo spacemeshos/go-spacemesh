@@ -18,7 +18,7 @@ const (
 	// Prefix defines weak coin proposal prefix.
 	proposalPrefix = "WeakCoin"
 	// GossipProtocol is weak coin Gossip protocol name.
-	GossipProtocol = "WeakCoinGossip"
+	GossipProtocol = "WeakCoinGossip/1"
 
 	// equal to 2^256 / 2.
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"

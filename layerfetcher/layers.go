@@ -138,8 +138,8 @@ func DefaultConfig() Config {
 }
 
 const (
-	blockProtocol = "/block/1.0.0"
-	atxProtocol   = "/atx/1.0.0"
+	blockProtocol = "/block/1"
+	atxProtocol   = "/atx/1"
 )
 
 // DataHandlers collects handlers for different data type.
