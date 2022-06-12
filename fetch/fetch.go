@@ -496,27 +496,11 @@ func (f *Fetch) send(requests []requestMessage) {
 		return
 	}
 
-	retries := 0
-	for {
-		peer2batches := f.organizeRequests(requests)
-		requests = requests[:0]
+	peer2batches := f.organizeRequests(requests)
 
-		for peer, peerBatches := range peer2batches {
-			for _, reqs := range peerBatches {
-				err := f.sendBatch(peer, reqs)
-				if err != nil {
-					requests = append(requests, reqs...)
-				}
-			}
-		}
-
-		if len(requests) == 0 {
-			break
-		}
-
-		retries++
-		if retries > f.cfg.MaxRetriesForBatch {
-			break
+	for peer, peerBatches := range peer2batches {
+		for _, reqs := range peerBatches {
+			f.sendBatch(peer, reqs)
 		}
 	}
 }
@@ -594,7 +578,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
 		f.handleHashError(batch.ID, err)
 	}
 
-	// try sending batch to some random peer
+	// try sending batch to provided peer
 	retries := 0
 	for {
 		if f.stopped() {
