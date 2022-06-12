@@ -65,6 +65,18 @@ func (mr *MockFetcherMockRecorder) GetHashes(hash, hint, validateHash interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashes", reflect.TypeOf((*MockFetcher)(nil).GetHashes), hash, hint, validateHash)
 }
 
+// RegisterPeerHashes mocks base method.
+func (m *MockFetcher) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterPeerHashes", peer, hashes)
+}
+
+// RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
+func (mr *MockFetcherMockRecorder) RegisterPeerHashes(peer, hashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockFetcher)(nil).RegisterPeerHashes), peer, hashes)
+}
+
 // Start mocks base method.
 func (m *MockFetcher) Start() {
 	m.ctrl.T.Helper()
@@ -87,42 +99,6 @@ func (m *MockFetcher) Stop() {
 func (mr *MockFetcherMockRecorder) Stop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockFetcher)(nil).Stop))
-}
-
-// TrackATXPeer mocks base method.
-func (m *MockFetcher) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TrackATXPeer", ctx, peer, ids)
-}
-
-// TrackATXPeer indicates an expected call of TrackATXPeer.
-func (mr *MockFetcherMockRecorder) TrackATXPeer(ctx, peer, ids interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackATXPeer", reflect.TypeOf((*MockFetcher)(nil).TrackATXPeer), ctx, peer, ids)
-}
-
-// TrackBallotsPeer mocks base method.
-func (m *MockFetcher) TrackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TrackBallotsPeer", ctx, peer, ids)
-}
-
-// TrackBallotsPeer indicates an expected call of TrackBallotsPeer.
-func (mr *MockFetcherMockRecorder) TrackBallotsPeer(ctx, peer, ids interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackBallotsPeer", reflect.TypeOf((*MockFetcher)(nil).TrackBallotsPeer), ctx, peer, ids)
-}
-
-// TrackBlocksPeer mocks base method.
-func (m *MockFetcher) TrackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TrackBlocksPeer", ctx, peer, ids)
-}
-
-// TrackBlocksPeer indicates an expected call of TrackBlocksPeer.
-func (mr *MockFetcherMockRecorder) TrackBlocksPeer(ctx, peer, ids interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackBlocksPeer", reflect.TypeOf((*MockFetcher)(nil).TrackBlocksPeer), ctx, peer, ids)
 }
 
 // MocknetworkInterface is a mock of networkInterface interface.

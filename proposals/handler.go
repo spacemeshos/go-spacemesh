@@ -384,7 +384,8 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 		ballots = append(ballots, b.RefBallot)
 	}
 
-	h.fetcher.TrackBallotsPeer(ctx, peer, ballots)
+	ballotHashes := types.BallotIDsToHashes(ballots)
+	h.fetcher.RegisterPeerHashes(peer, ballotHashes)
 
 	if err := h.fetcher.GetBallots(ctx, ballots, peer); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
@@ -395,8 +396,8 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	}
 
 	blocks := ballotBlockView(b)
-
-	h.fetcher.TrackBlocksPeer(ctx, peer, blocks)
+	blockHashes := types.BlockIDsToHashes(blocks)
+	h.fetcher.RegisterPeerHashes(peer, blockHashes)
 
 	if err := h.fetcher.GetBlocks(ctx, blocks); err != nil {
 		return fmt.Errorf("fetch blocks: %w", err)

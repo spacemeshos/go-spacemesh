@@ -337,7 +337,8 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 	}
 	l.mutex.Unlock()
 
-	l.fetcher.TrackBallotsPeer(ctx, peer, ballotsToFetch)
+	ballotHashes := types.BallotIDsToHashes(ballotsToFetch)
+	l.fetcher.RegisterPeerHashes(peer, ballotHashes)
 
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch, peer); err != nil {
@@ -345,7 +346,8 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 		return err
 	}
 
-	l.fetcher.TrackBlocksPeer(ctx, peer, blocksToFetch)
+	blockHashes := types.BlockIDsToHashes(blocksToFetch)
+	l.fetcher.RegisterPeerHashes(peer, blockHashes)
 
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
@@ -495,7 +497,8 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	l.log.WithContext(ctx).With().Debug("tracking peer for atxs",
 		log.Int("to_fetch", len(res.Atxs)),
 		log.String("peer", peer.String()))
-	l.fetcher.TrackATXPeer(ctx, peer, res.Atxs)
+	atxHashes := types.ATXIDsToHashes(res.Atxs)
+	l.fetcher.RegisterPeerHashes(peer, atxHashes)
 
 	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
@@ -671,17 +674,7 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	return nil
 }
 
-// TrackBlocksPeer is a wrapper around fetcher's TrackBlocksPeer.
-func (l *Logic) TrackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
-	l.fetcher.TrackBlocksPeer(ctx, peer, ids)
-}
-
-// TrackBallotsPeer is a wrapper around fetcher's TrackBallotsPeer.
-func (l *Logic) TrackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
-	l.fetcher.TrackBallotsPeer(ctx, peer, ids)
-}
-
-// TrackATXPeer is a wrapper around fetcher's TrackATXPeer.
-func (l *Logic) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
-	l.fetcher.TrackATXPeer(ctx, peer, ids)
+// RegisterPeerHashes is a wrapper around fetcher's RegisterPeerHashes.
+func (l *Logic) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	l.fetcher.RegisterPeerHashes(peer, hashes)
 }

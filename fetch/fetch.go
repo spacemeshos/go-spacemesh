@@ -68,9 +68,7 @@ type Fetcher interface {
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
 	Stop()
 	Start()
-	TrackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.BlockID)
-	TrackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types.BallotID)
-	TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATXID)
+	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 }
 
 /// request contains all relevant Data for a single request for a specified hash.
@@ -770,46 +768,14 @@ func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	return
 }
 
-// TrackBlocksPeer tracks a peer for a list pf block hashes.
-func (f *Fetch) TrackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.BlockID) {
-	if len(ids) == 0 {
+// RegisterPeerHashes tracks a peer for a list of ATX hashes.
+func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	if len(hashes) == 0 {
 		return
 	}
 	if p2p.IsNoPeer(peer) {
 		return
 	}
-	hashes := types.BlockIDsToHashes(ids)
-	for _, hash := range hashes {
-		f.mapPeerToHash(hash, peer)
-	}
-
-	return
-}
-
-// TrackBallotsPeer tracks a peer for a list of ballot hashes.
-func (f *Fetch) TrackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types.BallotID) {
-	if len(ids) == 0 {
-		return
-	}
-	if p2p.IsNoPeer(peer) {
-		return
-	}
-	hashes := types.BallotIDsToHashes(ids)
-	for _, hash := range hashes {
-		f.mapPeerToHash(hash, peer)
-	}
-	return
-}
-
-// TrackATXPeer tracks a peer for a list of ATX hashes.
-func (f *Fetch) TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATXID) {
-	if len(ids) == 0 {
-		return
-	}
-	if p2p.IsNoPeer(peer) {
-		return
-	}
-	hashes := types.ATXIDsToHashes(ids)
 	for _, hash := range hashes {
 		f.mapPeerToHash(hash, peer)
 	}

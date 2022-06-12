@@ -51,9 +51,7 @@ type ProposalFetcher interface {
 	GetProposals(context.Context, []types.ProposalID, p2p.Peer) error
 }
 
-// PeerTracker defines an interface to track ballot/block/atx peers.
+// PeerTracker defines an interface to track peer hashes.
 type PeerTracker interface {
-	TrackBlocksPeer(ctx context.Context, peer p2p.Peer, ids []types.BlockID)
-	TrackBallotsPeer(ctx context.Context, peer p2p.Peer, ids []types.BallotID)
-	TrackATXPeer(ctx context.Context, peer p2p.Peer, ids []types.ATXID)
+	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 }
