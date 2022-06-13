@@ -37,6 +37,18 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
 }
 
+// AddPeersFromHash mocks base method.
+func (m *MockFetcher) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPeersFromHash", fromHash, toHashes)
+}
+
+// AddPeersFromHash indicates an expected call of AddPeersFromHash.
+func (mr *MockFetcherMockRecorder) AddPeersFromHash(fromHash, toHashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockFetcher)(nil).AddPeersFromHash), fromHash, toHashes)
+}
+
 // GetHash mocks base method.
 func (m *MockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()

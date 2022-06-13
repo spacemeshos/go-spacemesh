@@ -36,6 +36,18 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
 }
 
+// AddPeersFromHash mocks base method.
+func (m *MockFetcher) AddPeersFromHash(arg0 types.Hash32, arg1 []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPeersFromHash", arg0, arg1)
+}
+
+// AddPeersFromHash indicates an expected call of AddPeersFromHash.
+func (mr *MockFetcherMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockFetcher)(nil).AddPeersFromHash), arg0, arg1)
+}
+
 // FetchAtx mocks base method.
 func (m *MockFetcher) FetchAtx(arg0 context.Context, arg1 types.ATXID) error {
 	m.ctrl.T.Helper()
@@ -65,17 +77,17 @@ func (mr *MockFetcherMockRecorder) GetAtxs(arg0, arg1 interface{}) *gomock.Call 
 }
 
 // GetBallots mocks base method.
-func (m *MockFetcher) GetBallots(arg0 context.Context, arg1 []types.BallotID, arg2 p2p.Peer) error {
+func (m *MockFetcher) GetBallots(arg0 context.Context, arg1 []types.BallotID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBallots", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetBallots", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetBallots indicates an expected call of GetBallots.
-func (mr *MockFetcherMockRecorder) GetBallots(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetBallots(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockFetcher)(nil).GetBallots), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockFetcher)(nil).GetBallots), arg0, arg1)
 }
 
 // GetBlocks mocks base method.
@@ -107,17 +119,17 @@ func (mr *MockFetcherMockRecorder) GetPoetProof(arg0, arg1 interface{}) *gomock.
 }
 
 // GetProposals mocks base method.
-func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID, arg2 p2p.Peer) error {
+func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1)
 }
 
 // GetTxs mocks base method.
@@ -332,17 +344,17 @@ func (m *MockBallotFetcher) EXPECT() *MockBallotFetcherMockRecorder {
 }
 
 // GetBallots mocks base method.
-func (m *MockBallotFetcher) GetBallots(arg0 context.Context, arg1 []types.BallotID, arg2 p2p.Peer) error {
+func (m *MockBallotFetcher) GetBallots(arg0 context.Context, arg1 []types.BallotID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBallots", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetBallots", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetBallots indicates an expected call of GetBallots.
-func (mr *MockBallotFetcherMockRecorder) GetBallots(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockBallotFetcherMockRecorder) GetBallots(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockBallotFetcher)(nil).GetBallots), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockBallotFetcher)(nil).GetBallots), arg0, arg1)
 }
 
 // MockProposalFetcher is a mock of ProposalFetcher interface.
@@ -369,17 +381,17 @@ func (m *MockProposalFetcher) EXPECT() *MockProposalFetcherMockRecorder {
 }
 
 // GetProposals mocks base method.
-func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID, arg2 p2p.Peer) error {
+func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1)
 }
 
 // MockPeerTracker is a mock of PeerTracker interface.
@@ -403,6 +415,18 @@ func NewMockPeerTracker(ctrl *gomock.Controller) *MockPeerTracker {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockPeerTracker) EXPECT() *MockPeerTrackerMockRecorder {
 	return m.recorder
+}
+
+// AddPeersFromHash mocks base method.
+func (m *MockPeerTracker) AddPeersFromHash(arg0 types.Hash32, arg1 []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPeersFromHash", arg0, arg1)
+}
+
+// AddPeersFromHash indicates an expected call of AddPeersFromHash.
+func (mr *MockPeerTrackerMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockPeerTracker)(nil).AddPeersFromHash), arg0, arg1)
 }
 
 // RegisterPeerHashes mocks base method.

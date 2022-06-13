@@ -22,27 +22,27 @@ import (
 
 // atxHandler defines handling function for incoming ATXs.
 type atxHandler interface {
-	HandleAtxData(context.Context, []byte, p2p.Peer) error
+	HandleAtxData(context.Context, []byte) error
 }
 
 // blockHandler defines handling function for blocks.
 type blockHandler interface {
-	HandleBlockData(context.Context, []byte, p2p.Peer) error
+	HandleBlockData(context.Context, []byte) error
 }
 
 // ballotHandler defines handling function for ballots.
 type ballotHandler interface {
-	HandleBallotData(context.Context, []byte, p2p.Peer) error
+	HandleBallotData(context.Context, []byte) error
 }
 
 // proposalHandler defines handling function for proposals.
 type proposalHandler interface {
-	HandleProposalData(context.Context, []byte, p2p.Peer) error
+	HandleProposalData(context.Context, []byte) error
 }
 
 // txHandler is an interface for handling TX data received in sync.
 type txHandler interface {
-	HandleSyncTransaction(context.Context, []byte, p2p.Peer) error
+	HandleSyncTransaction(context.Context, []byte) error
 }
 
 // layerDB is an interface that returns layer data and blocks.
@@ -307,12 +307,19 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 
 // registerLayerHashes registers provided hashes with provided peer.
 func (l *Logic) registerLayerHashes(peer p2p.Peer, blocks *layerData) {
+	if blocks == nil {
+		return
+	}
 	var layerHashes []types.Hash32
 	for _, ballotID := range blocks.Ballots {
 		layerHashes = append(layerHashes, ballotID.AsHash32())
 	}
 	for _, blkID := range blocks.Blocks {
 		layerHashes = append(layerHashes, blkID.AsHash32())
+	}
+
+	if len(layerHashes) == 0 {
+		return
 	}
 
 	l.fetcher.RegisterPeerHashes(peer, layerHashes)
@@ -353,7 +360,7 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Pee
 	l.mutex.Unlock()
 
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
-	if err := l.GetBallots(ctx, ballotsToFetch, peer); err != nil {
+	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
 		// fail sync for the entire layer
 		return err
 	}
@@ -525,7 +532,7 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.atxHandler.HandleAtxData(ctx, data, p2p.NoPeer); err != nil {
+	if err := l.atxHandler.HandleAtxData(ctx, data); err != nil {
 		return fmt.Errorf("handle ATX data %s len %d: %w", hash, len(data), err)
 	}
 
@@ -580,15 +587,15 @@ func (l *Logic) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.ATXDB, p2p.NoPeer, l.atxHandler.HandleAtxData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.ATXDB, l.atxHandler.HandleAtxData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
 }
 
-type dataReceiver func(context.Context, []byte, p2p.Peer) error
+type dataReceiver func(context.Context, []byte) error
 
-func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch.Hint, peer p2p.Peer, receiver dataReceiver) []error {
+func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch.Hint, receiver dataReceiver) []error {
 	errs := make([]error, 0, len(hashes))
 	results := l.fetcher.GetHashes(hashes, hint, false)
 	for hash, resC := range results {
@@ -608,7 +615,7 @@ func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch
 			continue
 		}
 		if !res.IsLocal {
-			if err := receiver(ctx, res.Data, peer); err != nil {
+			if err := receiver(ctx, res.Data); err != nil {
 				l.log.WithContext(ctx).With().Warning("failed to handle data",
 					log.String("hint", string(hint)),
 					log.String("hash", hash.String()),
@@ -621,26 +628,26 @@ func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
-func (l *Logic) GetBallots(ctx context.Context, ids []types.BallotID, peer p2p.Peer) error {
+func (l *Logic) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.BallotDB, peer, l.ballotHandler.HandleBallotData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.BallotDB, l.ballotHandler.HandleBallotData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
 }
 
 // GetProposals gets the data for given proposal IDs from peers.
-func (l *Logic) GetProposals(ctx context.Context, ids []types.ProposalID, peer p2p.Peer) error {
+func (l *Logic) GetProposals(ctx context.Context, ids []types.ProposalID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.ProposalDB, peer, l.proposalHandler.HandleProposalData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.ProposalDB, l.proposalHandler.HandleProposalData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -653,7 +660,7 @@ func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, p2p.NoPeer, l.blockHandler.HandleBlockData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, l.blockHandler.HandleBlockData); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -666,7 +673,7 @@ func (l *Logic) GetTxs(ctx context.Context, ids []types.TransactionID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, fetch.TXDB, p2p.NoPeer, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, fetch.TXDB, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -689,4 +696,9 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 // RegisterPeerHashes is a wrapper around fetcher's RegisterPeerHashes.
 func (l *Logic) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	l.fetcher.RegisterPeerHashes(peer, hashes)
+}
+
+// RegisterPeerHashes is a wrapper around fetcher's RegisterPeerHashes.
+func (l *Logic) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	l.fetcher.AddPeersFromHash(fromHash, toHashes)
 }

@@ -309,7 +309,6 @@ func TestPollLayerBlocks_AllHaveLayerData(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
@@ -336,7 +335,6 @@ func TestPollLayerBlocks_AllHaveLayerData_EmptyHareOutput(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
@@ -388,7 +386,6 @@ func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).DoAndReturn(
 		func([]types.Hash32, fetch.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
@@ -429,7 +426,6 @@ func TestPollLayerBlocks_OnlyOneHasLayerData(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(1)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(1)
 	tl.mFetcher.EXPECT().RegisterPeerHashes(withDataPeer, gomock.Any())
-	tl.mFetcher.EXPECT().RegisterPeerHashes(withDataPeer, gomock.Any())
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
 			assert.NotEqual(t, blockID, types.EmptyBlockID)
@@ -446,12 +442,12 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 
 	net := newMockNet(t)
 	numPeers := 4
-	var withDataPeer p2p.Peer
+	//var withDataPeer p2p.Peer
 	for i := 0; i < numPeers; i++ {
 		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		if i == numPeers-1 {
-			withDataPeer = peer
+			//withDataPeer = peer
 			net.layerData[peer] = generateEmptyLayer()
 		} else {
 			net.errors[peer] = errors.New("SendRequest error")
@@ -462,8 +458,6 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
-	tl.mFetcher.EXPECT().RegisterPeerHashes(withDataPeer, gomock.Any())
-	tl.mFetcher.EXPECT().RegisterPeerHashes(withDataPeer, gomock.Any())
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
 	assert.NoError(t, res.Err)
@@ -483,10 +477,6 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
-	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-	}
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
 	assert.NoError(t, res.Err)
@@ -512,7 +502,6 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).AnyTimes()
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).DoAndReturn(
@@ -562,7 +551,6 @@ func TestPollLayerBlocks_DifferentHareOutputIgnored(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, blockID types.BlockID) interface{} {
@@ -588,10 +576,6 @@ func TestPollLayerBlocks_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(errors.New("whatever")).Times(1)
-	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-	}
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
 	assert.NoError(t, res.Err)
@@ -611,10 +595,6 @@ func TestPollLayerBlocks_FailureToSaveZeroBallotLayerIgnored(t *testing.T) {
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
-	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-	}
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
 	assert.NoError(t, res.Err)
@@ -635,7 +615,6 @@ func TestPollLayerBlocks_FailedToSaveHareOutput(t *testing.T) {
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), fetch.BlockDB, false).Return(nil).Times(numPeers)
 	for _, peer := range net.peers {
-		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	errUnknown := errors.New("whatever")
@@ -695,7 +674,7 @@ func TestGetBlocks_FetchSomeError(t *testing.T) {
 				Hash: h,
 				Data: data,
 			}
-			l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+			l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(nil).Times(1)
 		}
 
 		results[h] = ch
@@ -725,7 +704,7 @@ func TestGetBlocks_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data, p2p.NoPeer).Return(errUnknown).Times(1)
+		l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BlockDB, false).Return(results).Times(1)
@@ -751,7 +730,7 @@ func TestGetBlocks(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+		l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BlockDB, false).Return(results).Times(1)
@@ -779,7 +758,7 @@ func TestGetBallots_FetchAllError(t *testing.T) {
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs, p2p.NoPeer), errUnknown)
+	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs), errUnknown)
 }
 
 func TestGetBallots_FetchSomeError(t *testing.T) {
@@ -807,14 +786,14 @@ func TestGetBallots_FetchSomeError(t *testing.T) {
 				Hash: h,
 				Data: data,
 			}
-			l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+			l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(nil).Times(1)
 		}
 
 		results[h] = ch
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs, p2p.NoPeer), errUnknown)
+	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs), errUnknown)
 }
 
 func TestGetBallots_HandlerError(t *testing.T) {
@@ -837,11 +816,11 @@ func TestGetBallots_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data, p2p.NoPeer).Return(errUnknown).Times(1)
+		l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs, p2p.NoPeer), errUnknown)
+	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs), errUnknown)
 }
 
 func TestGetBallots(t *testing.T) {
@@ -863,11 +842,11 @@ func TestGetBallots(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+		l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
-	assert.NoError(t, l.GetBallots(context.TODO(), ballotIDs, p2p.NoPeer))
+	assert.NoError(t, l.GetBallots(context.TODO(), ballotIDs))
 }
 
 func TestGetProposals_FetchSomeError(t *testing.T) {
@@ -895,14 +874,14 @@ func TestGetProposals_FetchSomeError(t *testing.T) {
 				Hash: h,
 				Data: data,
 			}
-			l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+			l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data).Return(nil).Times(1)
 		}
 
 		results[h] = ch
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs, p2p.NoPeer), errUnknown)
+	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs), errUnknown)
 }
 
 func TestGetProposals_HandlerError(t *testing.T) {
@@ -925,11 +904,11 @@ func TestGetProposals_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data, p2p.NoPeer).Return(errUnknown).Times(1)
+		l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs, p2p.NoPeer), errUnknown)
+	assert.ErrorIs(t, l.GetProposals(context.TODO(), proposalIDs), errUnknown)
 }
 
 func TestGetProposals(t *testing.T) {
@@ -951,11 +930,11 @@ func TestGetProposals(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+		l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
-	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs, p2p.NoPeer))
+	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs))
 }
 
 func genTransactions(t *testing.T, num int) []*types.Transaction {
@@ -991,7 +970,7 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 				Hash: h,
 				Data: data,
 			}
-			l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+			l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
 		}
 		results[h] = ch
 	}
@@ -1017,7 +996,7 @@ func TestGetTxs_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data, p2p.NoPeer).Return(errUnknown).Times(1)
+		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.TXDB, false).Return(results).Times(1)
@@ -1040,7 +1019,7 @@ func TestGetTxs(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.TXDB, false).Return(results).Times(1)
@@ -1079,7 +1058,7 @@ func TestGetAtxs_FetchSomeError(t *testing.T) {
 				Hash: h,
 				Data: data,
 			}
-			l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+			l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(nil).Times(1)
 		}
 		results[h] = ch
 	}
@@ -1105,7 +1084,7 @@ func TestGetAtxs_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data, p2p.NoPeer).Return(errUnknown).Times(1)
+		l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ATXDB, false).Return(results).Times(1)
@@ -1128,7 +1107,7 @@ func TestGetAtxs(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data, p2p.NoPeer).Return(nil).Times(1)
+		l.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ATXDB, false).Return(results).Times(1)

@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -631,7 +630,7 @@ func TestActivationDB_HandleAtxNilNipst(t *testing.T) {
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
-	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, p2p.NoPeer))
+	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf))
 }
 
 func TestActivationDB_KnownATX(t *testing.T) {
@@ -641,7 +640,7 @@ func TestActivationDB_KnownATX(t *testing.T) {
 	buf, err := codec.Encode(atx)
 	require.NoError(t, err)
 
-	require.NoError(t, atxdb.HandleAtxData(context.TODO(), buf, p2p.NoPeer))
+	require.NoError(t, atxdb.HandleAtxData(context.TODO(), buf))
 	require.Equal(t, pubsub.ValidationIgnore, atxdb.HandleGossipAtx(context.TODO(), "", buf))
 }
 

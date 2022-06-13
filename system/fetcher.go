@@ -43,15 +43,16 @@ type PoetProofFetcher interface {
 
 // BallotFetcher defines an interface for fetching Ballot from remote peers.
 type BallotFetcher interface {
-	GetBallots(context.Context, []types.BallotID, p2p.Peer) error
+	GetBallots(context.Context, []types.BallotID) error
 }
 
 // ProposalFetcher defines an interface for fetching Proposal from remote peers.
 type ProposalFetcher interface {
-	GetProposals(context.Context, []types.ProposalID, p2p.Peer) error
+	GetProposals(context.Context, []types.ProposalID) error
 }
 
 // PeerTracker defines an interface to track peer hashes.
 type PeerTracker interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
+	AddPeersFromHash(types.Hash32, []types.Hash32)
 }

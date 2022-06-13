@@ -437,7 +437,7 @@ func Test_multipleCPs(t *testing.T) {
 			func(layerID types.LayerID) ([]*types.Proposal, error) {
 				return proposals[layerID], nil
 			}).AnyTimes()
-		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any(), p2p.NoPeer).Return(nil).AnyTimes()
+		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.mockProposalDB.EXPECT().GetProposals(gomock.Any()).DoAndReturn(
 			func(pids []types.ProposalID) ([]*types.Proposal, error) {
 				props := make([]*types.Proposal, 0, len(pids))
@@ -532,7 +532,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			func(layerID types.LayerID) ([]*types.Proposal, error) {
 				return proposals[layerID], nil
 			}).AnyTimes()
-		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any(), p2p.NoPeer).Return(nil).AnyTimes()
+		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.mockProposalDB.EXPECT().GetProposals(gomock.Any()).DoAndReturn(
 			func(pids []types.ProposalID) ([]*types.Proposal, error) {
 				props := make([]*types.Proposal, 0, len(pids))

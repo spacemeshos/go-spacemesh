@@ -99,7 +99,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 // HandleSyncTransaction only deserializes transactions and stores them regardless of validity. This is because
 // transactions received via sync are necessarily referenced somewhere meaning that we must have them stored, even if
 // they're invalid, for the data availability of the referencing block.
-func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte, _ p2p.Peer) error {
+func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) error {
 	var tx types.Transaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {

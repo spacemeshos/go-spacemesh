@@ -67,6 +67,7 @@ type Fetcher interface {
 	Stop()
 	Start()
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
+	AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32)
 }
 
 /// request contains all relevant Data for a single request for a specified hash.
@@ -732,6 +733,18 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	}
 	for _, hash := range hashes {
 		f.mapPeerToHash(hash, peer)
+	}
+	return
+}
+
+// AddPeersFromHash registers
+func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	peers, exists := f.hashToPeers.Get(fromHash)
+	if !exists {
+		return
+	}
+	for peer := range peers {
+		f.RegisterPeerHashes(peer, toHashes)
 	}
 	return
 }
