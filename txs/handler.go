@@ -39,6 +39,7 @@ func NewTxHandler(s conservativeState, l log.Log) *TxHandler {
 // HandleGossipTransaction handles data received on the transactions gossip channel.
 func (th *TxHandler) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if err := th.handleTransaction(ctx, msg); err != nil {
+		th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
@@ -47,7 +48,6 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, ms
 func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	raw := types.NewRawTx(msg)
 	if exists, err := th.state.HasTx(raw.ID); err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to check tx exists", log.Err(err))
 		return fmt.Errorf("has tx: %w", err)
 	} else if exists {
 		return errDuplicateTX
@@ -58,14 +58,14 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse %s: %w", raw.ID, err)
 	}
-	if req.Verify() {
+	if !req.Verify() {
 		return fmt.Errorf("failed to verify %s", raw.ID)
 	}
 
 	if err := th.state.AddToCache(&types.Transaction{
 		RawTx:    raw,
 		TxHeader: header,
-	}, true); err != nil {
+	}); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err))
@@ -83,7 +83,7 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	raw := types.NewRawTx(data)
 	exists, err := th.state.HasTx(raw.ID)
 	if err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to check sync tx exists", log.Err(err))
+		th.logger.WithContext(ctx).With().Warning("failed to check sync tx exists", log.Err(err))
 		return fmt.Errorf("has sync tx: %w", err)
 	} else if exists {
 		return nil

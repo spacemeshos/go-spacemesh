@@ -52,17 +52,17 @@ func (mr *MockconservativeStateMockRecorder) Add(arg0, arg1 interface{}) *gomock
 }
 
 // AddToCache mocks base method.
-func (m *MockconservativeState) AddToCache(arg0 *types.Transaction, arg1 bool) error {
+func (m *MockconservativeState) AddToCache(arg0 *types.Transaction) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddToCache", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddToCache", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddToCache indicates an expected call of AddToCache.
-func (mr *MockconservativeStateMockRecorder) AddToCache(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) AddToCache(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0)
 }
 
 // HasTx mocks base method.

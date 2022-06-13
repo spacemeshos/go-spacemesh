@@ -127,16 +127,16 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 }
 
 // AddToCache adds the provided transaction to the conservative cache.
-func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error {
+func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	received := time.Now()
 	// save all new transactions as long as they are syntactically correct
-	if newTX {
-		if err := cs.cache.AddToDB(tx, received); err != nil {
-			return err
-		}
-		events.ReportNewTx(types.LayerID{}, tx)
-		events.ReportAccountUpdate(tx.Principal)
+
+	if err := cs.cache.AddToDB(tx, received); err != nil {
+		return err
 	}
+	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportAccountUpdate(tx.Principal)
+
 	return cs.cache.Add(tx, received, nil)
 }
 

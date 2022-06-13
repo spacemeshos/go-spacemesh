@@ -14,7 +14,7 @@ type conservativeState interface {
 	Add(*types.Transaction, time.Time) error
 	HasTx(types.TransactionID) (bool, error)
 	Validation(types.RawTx) system.ValidationRequest
-	AddToCache(*types.Transaction, bool) error
+	AddToCache(*types.Transaction) error
 }
 
 type vmState interface {
