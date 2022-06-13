@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -84,21 +85,13 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	if err != nil {
 		th.logger.WithContext(ctx).With().Error("failed to check sync tx exists", log.Err(err))
 		return fmt.Errorf("has sync tx: %w", err)
+	} else if exists {
+		return nil
 	}
-	req := th.state.Validation(raw)
-	header, err := req.Parse()
+	err = th.state.Add(&types.Transaction{RawTx: raw}, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to parse %s: %w", raw.ID, err)
-	}
-	if req.Verify() {
-		return fmt.Errorf("failed to verify %s", raw.ID)
-	}
-
-	if err = th.state.AddToCache(&types.Transaction{
-		RawTx:    raw,
-		TxHeader: header,
-	}, !exists); err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to add sync tx to conservative cache", raw.ID, log.Err(err))
+		th.logger.WithContext(ctx).With().Warning("failed to add transaction", log.Err(err))
+		return fmt.Errorf("add tx %w", err)
 	}
 	return nil
 }
