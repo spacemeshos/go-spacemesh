@@ -45,7 +45,7 @@ func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Log
 		return
 	}
 	if !statEnabled {
-		collector.logger.With().Debug("sqlite compiled without `SQLITE_ENABLE_DBSTAT_VTAB`. Metrics will not collected")
+		collector.logger.With().Info("sqlite compiled without `SQLITE_ENABLE_DBSTAT_VTAB`. Metrics will not collected")
 		return
 	}
 
@@ -54,6 +54,7 @@ func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Log
 		collector.logger.With().Error("error get list of tables", log.Err(err))
 		return
 	}
+	collector.logger.With().Info("start collect stat")
 	go collector.CollectMetrics(ctx)
 }
 
