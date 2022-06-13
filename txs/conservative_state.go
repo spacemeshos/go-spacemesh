@@ -127,7 +127,7 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 }
 
 // AddToCache adds the provided transaction to the conservative cache.
-func (cs *ConservativeState) AddToCache(tx *types.ParsedTx, newTX bool) error {
+func (cs *ConservativeState) AddToCache(tx *types.Transaction, newTX bool) error {
 	received := time.Now()
 	// save all new transactions as long as they are syntactically correct
 	if newTX {
@@ -164,7 +164,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		return nil, err
 	}
 
-	// vm parses fields sequentially, so it can't use ParsedTx
+	// vm parses fields sequentially, so it can't use Transaction
 	raw := make([]types.RawTx, 0, len(txs))
 	for _, tx := range txs {
 		raw = append(raw, tx.RawTx)
@@ -182,7 +182,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 
 	finalList := txs
 	if len(skipped) > 0 {
-		finalList = make([]*types.ParsedTx, 0, len(txs))
+		finalList = make([]*types.Transaction, 0, len(txs))
 		failed := make(map[types.TransactionID]struct{})
 		for _, id := range skipped {
 			failed[id] = struct{}{}
@@ -203,18 +203,18 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	return skipped, nil
 }
 
-func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.ParsedTx, error) {
+func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, error) {
 	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
 	}
-	txs := make([]*types.ParsedTx, 0, len(mtxs))
+	txs := make([]*types.Transaction, 0, len(mtxs))
 	for _, mtx := range mtxs {
 		// some TXs in the block may be already applied previously
 		if mtx.State == types.APPLIED {
 			continue
 		}
-		txs = append(txs, &mtx.ParsedTx)
+		txs = append(txs, &mtx.Transaction)
 	}
 	return txs, nil
 }

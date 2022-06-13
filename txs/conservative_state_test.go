@@ -33,13 +33,14 @@ func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSig
 	return newTxWthRecipient(t, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.ParsedTx {
+func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		sdk.WithNonce(types.Nonce{Counter: nonce}),
 		sdk.WithGasPrice(fee),
 	)
-	tx := types.ParsedTx{
-		RawTx: types.NewRawTx(raw),
+	tx := types.Transaction{
+		RawTx:    types.NewRawTx(raw),
+		TxHeader: &types.TxHeader{},
 	}
 	tx.MaxGas = defaultGas
 	tx.MaxSpend = amount
@@ -509,7 +510,7 @@ func TestGetMeshTransactions(t *testing.T) {
 	mtxs, missing := tcs.GetMeshTransactions(allIDs)
 	require.Len(t, tids, numTXs)
 	for i, mtx := range mtxs {
-		require.Equal(t, *txs[i], mtx.ParsedTx)
+		require.Equal(t, *txs[i], mtx.Transaction)
 	}
 	require.Len(t, missing, len(badIDs))
 	for _, id := range badIDs {
@@ -561,12 +562,12 @@ func TestGetTransactionsByAddress(t *testing.T) {
 	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(5), addr1)
 	require.NoError(t, err)
 	require.Len(t, mtxs, 1)
-	require.Equal(t, mtxs[0].ParsedTx, *tx1)
+	require.Equal(t, mtxs[0].Transaction, *tx1)
 
 	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(6), addr2)
 	require.NoError(t, err)
 	require.Len(t, mtxs, 1)
-	require.Equal(t, mtxs[0].ParsedTx, *tx3)
+	require.Equal(t, mtxs[0].Transaction, *tx3)
 
 	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(6), addr3)
 	require.NoError(t, err)
@@ -712,7 +713,7 @@ func TestTXFetcher(t *testing.T) {
 	}
 }
 
-func matchReceived(tb testing.TB, expected []*types.ParsedTx, got []types.RawTx) {
+func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.RawTx) {
 	tb.Helper()
 	require.Len(tb, got, len(expected))
 	for i := range expected {

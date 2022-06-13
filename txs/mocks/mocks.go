@@ -38,7 +38,7 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // AddToCache mocks base method.
-func (m *MockconservativeState) AddToCache(arg0 *types.ParsedTx, arg1 bool) error {
+func (m *MockconservativeState) AddToCache(arg0 *types.Transaction, arg1 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddToCache", arg0, arg1)
 	ret0, _ := ret[0].(error)

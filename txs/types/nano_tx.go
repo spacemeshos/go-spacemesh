@@ -24,7 +24,7 @@ type NanoTX struct {
 func NewNanoTX(mtx *types.MeshTransaction) *NanoTX {
 	return &NanoTX{
 		ID:       mtx.ID,
-		TxHeader: mtx.TxHeader,
+		TxHeader: *mtx.TxHeader,
 		Received: mtx.Received,
 		Block:    mtx.BlockID,
 		Layer:    mtx.LayerID,

@@ -15,7 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
-func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, fee uint64) *types.ParsedTx {
+func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, fee uint64) *types.Transaction {
 	t.Helper()
 
 	var raw []byte
@@ -26,8 +26,9 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 			sdk.WithNonce(types.Nonce{Counter: nonce}), sdk.WithGasPrice(fee))
 	}
 
-	parsed := types.ParsedTx{
-		RawTx: types.NewRawTx(raw),
+	parsed := types.Transaction{
+		RawTx:    types.NewRawTx(raw),
+		TxHeader: &types.TxHeader{},
 	}
 	// this is a fake principal for the purposes of testing.
 	copy(parsed.Principal[:], types.BytesToAddress(principal.PublicKey().Bytes()).Bytes())
@@ -62,13 +63,13 @@ func packedInBlock(t *testing.T, db *sql.Database, tid types.TransactionID, lid 
 	require.NoError(t, dbtx.Commit())
 }
 
-func makeMeshTX(tx *types.ParsedTx, lid types.LayerID, bid types.BlockID, received time.Time, state types.TXState) *types.MeshTransaction {
+func makeMeshTX(tx *types.Transaction, lid types.LayerID, bid types.BlockID, received time.Time, state types.TXState) *types.MeshTransaction {
 	return &types.MeshTransaction{
-		ParsedTx: *tx,
-		LayerID:  lid,
-		BlockID:  bid,
-		Received: received,
-		State:    state,
+		Transaction: *tx,
+		LayerID:     lid,
+		BlockID:     bid,
+		Received:    received,
+		State:       state,
 	}
 }
 

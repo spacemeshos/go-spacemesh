@@ -16,10 +16,16 @@ const (
 )
 
 // Add adds a transaction to the database.
-func Add(db sql.Executor, tx *types.ParsedTx, received time.Time) error {
-	header, err := codec.Encode(tx.TxHeader)
-	if err != nil {
-		return fmt.Errorf("encode %+v: %w", tx, err)
+func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
+	var (
+		header []byte
+		err    error
+	)
+	if tx.TxHeader != nil {
+		header, err = codec.Encode(tx.TxHeader)
+		if err != nil {
+			return fmt.Errorf("encode %+v: %w", tx, err)
+		}
 	}
 	if _, err = db.Exec(`
 		insert into transactions (id, tx, header, layer, block, principal, nonce, timestamp, applied)
@@ -27,11 +33,15 @@ func Add(db sql.Executor, tx *types.ParsedTx, received time.Time) error {
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, tx.ID.Bytes())
 			stmt.BindBytes(2, tx.Raw)
-			stmt.BindBytes(3, header)
 			stmt.BindInt64(4, int64(types.LayerID{}.Value))
 			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
-			stmt.BindBytes(6, tx.Principal[:])
-			stmt.BindInt64(7, int64(tx.Nonce.Counter))
+
+			if header != nil {
+				stmt.BindBytes(3, header)
+				stmt.BindBytes(6, tx.Principal[:])
+				stmt.BindInt64(7, int64(tx.Nonce.Counter))
+			}
+
 			stmt.BindInt64(8, received.UnixNano())
 			stmt.BindInt64(9, statePending)
 		}, nil); err != nil {
@@ -242,13 +252,16 @@ func SetNextLayer(db sql.Executor, id types.TransactionID, lid types.LayerID) (t
 // tx, header, layer, block, timestamp.
 func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement) (*types.MeshTransaction, error) {
 	var (
-		parsed types.ParsedTx
+		parsed types.Transaction
 		bid    types.BlockID
 	)
 	parsed.Raw = make([]byte, stmt.ColumnLen(0))
 	stmt.ColumnBytes(0, parsed.Raw)
-	if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &parsed.TxHeader); err != nil {
-		return nil, fmt.Errorf("decode %w", err)
+	if stmt.ColumnLen(1) > 0 {
+		parsed.TxHeader = &types.TxHeader{}
+		if _, err := codec.DecodeFrom(stmt.ColumnReader(1), parsed.TxHeader); err != nil {
+			return nil, fmt.Errorf("decode %w", err)
+		}
 	}
 
 	lid := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
@@ -270,17 +283,18 @@ func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement)
 		state = types.DISCARDED
 	}
 	return &types.MeshTransaction{
-		ParsedTx: parsed,
-		LayerID:  lid,
-		BlockID:  bid,
-		Received: time.Unix(0, stmt.ColumnInt64(4)),
-		State:    state,
+		Transaction: parsed,
+		LayerID:     lid,
+		BlockID:     bid,
+		Received:    time.Unix(0, stmt.ColumnInt64(4)),
+		State:       state,
 	}, nil
 }
 
 // Get gets a transaction from database.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
-	if rows, err := db.Exec("select tx, header, layer, block, timestamp, applied from transactions where id = ?1",
+	var rows int
+	rows, err = db.Exec("select tx, header, layer, block, timestamp, applied from transactions where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
@@ -290,7 +304,8 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 				return false
 			}
 			return true
-		}); err != nil {
+		})
+	if err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("%w: tx %s", sql.ErrNotFound, id)

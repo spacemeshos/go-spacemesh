@@ -13,7 +13,7 @@ import (
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
 	Validation(types.RawTx) system.ValidationRequest
-	AddToCache(*types.ParsedTx, bool) error
+	AddToCache(*types.Transaction, bool) error
 }
 
 type vmState interface {

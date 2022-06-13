@@ -57,7 +57,10 @@ func TxIdsField(ids []TransactionID) log.Field {
 }
 
 // Transaction is an alias to RawTx.
-type Transaction = ParsedTx
+type Transaction struct {
+	RawTx
+	*TxHeader
+}
 
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
@@ -114,20 +117,11 @@ const (
 
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
-	ParsedTx
+	Transaction
 	LayerID  LayerID
 	BlockID  BlockID
 	State    TXState
 	Received time.Time
-}
-
-// InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
-type InnerTransaction struct {
-	AccountNonce uint64
-	Recipient    Address
-	GasLimit     uint64
-	Fee          uint64
-	Amount       uint64
 }
 
 // Reward is a virtual reward transaction, which the node keeps track of for the gRPC api.
@@ -150,10 +144,4 @@ func NewRawTx(raw []byte) RawTx {
 type RawTx struct {
 	ID  TransactionID
 	Raw []byte
-}
-
-// ParsedTx includes data from parsing transaction using VM.
-type ParsedTx struct {
-	RawTx
-	TxHeader
 }

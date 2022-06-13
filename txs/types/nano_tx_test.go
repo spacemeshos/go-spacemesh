@@ -19,7 +19,7 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid ctypes.LayerID) *c
 	nonce := ctypes.Nonce{Counter: 223}
 	amount := uint64(rand.Int())
 	tx := wallet.Spend(signer.PrivateKey(), ctypes.Address{1, 2, 3}, amount, sdk.WithNonce(nonce))
-	parsed := ctypes.ParsedTx{
+	parsed := ctypes.Transaction{
 		RawTx: ctypes.NewRawTx(tx),
 	}
 	parsed.MaxGas = 32132
@@ -28,11 +28,11 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid ctypes.LayerID) *c
 	parsed.Nonce = nonce
 	parsed.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
 	return &ctypes.MeshTransaction{
-		ParsedTx: parsed,
-		LayerID:  lid,
-		BlockID:  ctypes.BlockID{1, 3, 5},
-		Received: time.Now(),
-		State:    ctypes.MEMPOOL,
+		Transaction: parsed,
+		LayerID:     lid,
+		BlockID:     ctypes.BlockID{1, 3, 5},
+		Received:    time.Now(),
+		State:       ctypes.MEMPOOL,
 	}
 }
 

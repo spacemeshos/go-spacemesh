@@ -313,10 +313,10 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 	}
 
 	ntx := txtypes.NewNanoTX(&types.MeshTransaction{
-		ParsedTx: *tx,
-		Received: received,
-		LayerID:  types.LayerID{},
-		BlockID:  types.EmptyBlockID,
+		Transaction: *tx,
+		Received:    received,
+		LayerID:     types.LayerID{},
+		BlockID:     types.EmptyBlockID,
 	})
 
 	if ntx.Nonce.Counter < next {
