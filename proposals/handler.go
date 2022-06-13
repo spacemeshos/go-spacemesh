@@ -234,6 +234,11 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 		return err
 	}
 
+	if err := h.checkVotesConsistency(ctx, b); err != nil {
+		h.logger.WithContext(ctx).With().Warning("ballot votes consistency check failed", log.Err(err))
+		return err
+	}
+
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return errNotEligible
@@ -271,14 +276,8 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			}
 			set[atx] = struct{}{}
 		}
-	} else {
-		if b.EpochData != nil {
-			return errUnexpectedEpochData
-		}
-	}
-
-	if err := h.checkVotesConsistency(ctx, b); err != nil {
-		return err
+	} else if b.EpochData != nil {
+		return errUnexpectedEpochData
 	}
 	return nil
 }
