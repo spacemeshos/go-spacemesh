@@ -1,8 +1,8 @@
 module github.com/spacemeshos/go-spacemesh
 
-replace (
-	github.com/spacemeshos/api/release/go => ../api/release/go
-)
+replace github.com/spacemeshos/api/release/go => ../api/release/go
+
+replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1.0
 
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
@@ -28,7 +28,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/natefinch/atomic v1.0.1
-	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
+	github.com/nullstyle/go-xdr v0.1.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.11.0

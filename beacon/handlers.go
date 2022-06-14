@@ -19,13 +19,13 @@ type category uint8
 
 const (
 	// ProposalProtocol is the protocol for sending proposal messages through Gossip.
-	ProposalProtocol = "BeaconProposal"
+	ProposalProtocol = "BeaconProposal/1"
 
 	// FirstVotesProtocol is the protocol for sending first vote messages through Gossip.
-	FirstVotesProtocol = "BeaconFirstVotes"
+	FirstVotesProtocol = "BeaconFirstVotes/1"
 
 	// FollowingVotesProtocol is the protocol for sending following vote messages through Gossip.
-	FollowingVotesProtocol = "BeaconFollowingVotes"
+	FollowingVotesProtocol = "BeaconFollowingVotes/1"
 
 	valid            category = 1
 	potentiallyValid category = 2

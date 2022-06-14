@@ -2,13 +2,19 @@ package peerexchange
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
+	"math/rand"
+	"net"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
 	connmgr "github.com/libp2p/go-libp2p-connmgr"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -154,6 +160,57 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	})
 }
 
+func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
+	t.Parallel()
+	extraNodesCount := 120
+
+	_, instances := setupOverNodes(t, 2)
+	nodeA, nodeB := instances[0], instances[1]
+	wrapDiscovery(instances)
+
+	// check that after bootstrap, nodeB has only address of nodeA and nodeA has only address of nodeB
+	require.Eventually(t, func() bool {
+		return nodeA.book.NumAddresses() == 1 && nodeB.book.NumAddresses() == 1
+	}, 4*time.Second, 100*time.Millisecond, "nodeA and nodeB should have only 1 address")
+	require.Equal(t, nodeA.book.GetAddresses()[0].ID, nodeB.host.ID(), "nodeA should have only address of nodeB")
+	require.Equal(t, nodeB.book.GetAddresses()[0].ID, nodeA.host.ID(), "nodeB should have only address of nodeA")
+
+	// disconnect nodeA and node
+	require.NoError(t, nodeB.host.Network().ClosePeer(nodeA.host.ID()))
+	// wait for addresses become outdated and ready for check
+	require.Eventually(t, func() bool {
+		return len(nodeB.GetRandomPeers(nodeB.cfg.CheckPeersNumber)) > 0
+	}, 3*time.Second, 100*time.Millisecond, "nodeB should return addresses to check")
+
+	// add new nodes to network
+	rng := rand.New(rand.NewSource(1001))
+	var addrs []*addressbook.AddrInfo
+	var ids []peer.ID
+	for i := 0; i < extraNodesCount; i++ {
+		tmpAddr := genRandomInfo(t, rng)
+		addrs = append(addrs, tmpAddr)
+		ids = append(ids, tmpAddr.ID)
+	}
+
+	best, err := bestHostAddress(nodeA.host)
+	require.NoError(t, err)
+	nodeA.book.AddAddresses(addrs, best)
+
+	require.Equal(t, extraNodesCount+1, nodeA.book.NumAddresses(), "nodeA should have all extra addresses")
+	require.Equal(t, 1, nodeB.book.NumAddresses(), "nodeB should still have 1 address")
+
+	nodeB.CheckPeers(context.Background())
+
+	// we can't know exact nodes count, cause on addrExchange handler we randomly return addresses from buckets
+	addresses := nodeB.book.GetAddresses()
+	require.True(t, len(addresses) > 1 && len(addresses) <= extraNodesCount+1, "nodeB should have some of additional addresses")
+
+	ids = append(ids, nodeA.host.ID())
+	for _, addr := range addresses {
+		require.Subset(t, ids, []peer.ID{addr.ID}, "address should be one of known")
+	}
+}
+
 func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 	hosts := make([]host.Host, 0, nodesCount)
 	for i := 0; i < nodesCount; i++ {
@@ -284,4 +341,25 @@ func calcTotalAddressesPeerStore(instances []*Discovery) int {
 		}
 	}
 	return totalAddresses
+}
+
+// genRandomInfo generates addrInfo with valid multiaddr.
+func genRandomInfo(tb testing.TB, rng *rand.Rand) *addressbook.AddrInfo {
+	tb.Helper()
+	pk, _, err := crypto.GenerateEd25519Key(rng)
+	require.NoError(tb, err)
+	bytes, err := pk.Raw()
+	require.NoError(tb, err)
+
+	ip := net.IPv4(169, 255, bytes[0], bytes[1])
+	port := binary.BigEndian.Uint64(bytes) % 65535
+	id, err := peer.IDFromPrivateKey(pk)
+	require.NoError(tb, err)
+
+	raw := fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ip, port, id)
+	addr, err := ma.NewMultiaddr(raw)
+	require.NoError(tb, err)
+	result := &addressbook.AddrInfo{IP: ip, ID: id, RawAddr: raw}
+	result.SetAddr(addr)
+	return result
 }
