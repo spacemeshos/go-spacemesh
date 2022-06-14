@@ -305,16 +305,15 @@ func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
 	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
-	tx.GasPrice = 1
 	if nonce == 0 {
 		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
-			sdk.WithGasPrice(defaultFee),
+			sdk.WithGasPrice(0),
 		))
 		tx.MaxGas = wallet.TotalGasSpawn
 	} else {
 		tx.RawTx = types.NewRawTx(
 			wallet.Spend(signer.PrivateKey(), recipient, 1,
-				sdk.WithGasPrice(defaultFee),
+				sdk.WithGasPrice(0),
 				sdk.WithNonce(types.Nonce{Counter: nonce}),
 			),
 		)
@@ -2859,7 +2858,7 @@ func TestEventsReceived(t *testing.T) {
 		Id: globalTx.ID.Bytes(),
 	})
 
-	accountReq1 := &pb.AccountDataStreamRequest{
+	principalReq := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: addr1.Bytes()},
 			AccountDataFlags: uint32(
@@ -2869,10 +2868,9 @@ func TestEventsReceived(t *testing.T) {
 		},
 	}
 
-	originAddr := types.GenerateAddress(signer1.PublicKey().Bytes())
-	accountReq2 := &pb.AccountDataStreamRequest{
+	receiverReq := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
-			AccountId: &pb.AccountId{Address: originAddr.Bytes()},
+			AccountId: &pb.AccountId{Address: addr2.Bytes()},
 			AccountDataFlags: uint32(
 				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
@@ -2886,51 +2884,43 @@ func TestEventsReceived(t *testing.T) {
 	txStream, err := txClient.TransactionsStateStream(context.Background(), txReq)
 	require.NoError(t, err)
 
-	accountStream1, err := accountClient.AccountDataStream(context.Background(), accountReq1)
+	principalStream, err := accountClient.AccountDataStream(context.Background(), principalReq)
 	require.NoError(t, err, "stream request returned unexpected error")
 
-	accountStream2, err := accountClient.AccountDataStream(context.Background(), accountReq2)
-	require.NoError(t, err, "stream request returned unexpected error")
+	receiverStream, err := accountClient.AccountDataStream(context.Background(), receiverReq)
+	require.NoError(t, err, "receiver stream")
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
+	waiter := make(chan struct{})
 	go func() {
-		defer wg.Done()
-
-		for i := 0; i < 2; i++ {
-			txRes, err := txStream.Recv()
-			require.NoError(t, err)
-			require.Nil(t, txRes.Transaction)
-			require.Equal(t, globalTx.ID.Bytes(), txRes.TransactionState.Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
-
-			acc1Res, err := accountStream1.Recv()
-			require.NoError(t, err)
-			require.Equal(t, addr1.Bytes(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
-
-			acc2Res, err := accountStream2.Recv()
-			require.NoError(t, err)
-			require.Equal(t, originAddr.Bytes(), acc2Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
-		}
-
-		acc1res3, err := accountStream1.Recv()
+		txRes, err := txStream.Recv()
 		require.NoError(t, err)
-		require.Equal(t, addr1.Bytes(), acc1res3.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+		require.Nil(t, txRes.Transaction)
+		require.Equal(t, globalTx.ID.Bytes(), txRes.TransactionState.Id.Id)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
+
+		acc1Res, err := principalStream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, addr1.Bytes(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+
+		receiverRes, err := receiverStream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, addr2.Bytes(), receiverRes.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+
+		close(waiter)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(globalTx)
-	time.Sleep(100 * time.Millisecond)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
-	rewards := []types.AnyReward{{Coinbase: addr1, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
+	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.Apply(layerFirst, []types.RawTx{globalTx.RawTx}, rewards)
 
-	time.Sleep(100 * time.Millisecond)
-
-	wg.Wait()
+	select {
+	case <-waiter:
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "didn't get from data from streams above")
+	}
 }

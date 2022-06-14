@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -239,6 +240,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
 		account.EncodeScale(encoder)
+		events.ReportAccountUpdate(account.Address)
 		return err == nil
 	})
 	if err != nil {
