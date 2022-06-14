@@ -471,7 +471,10 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	if app.Config.CollectMetrics {
-		dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+		if dbCollector != nil {
+			app.closers = append(app.closers, dbCollector)
+		}
 	}
 
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))

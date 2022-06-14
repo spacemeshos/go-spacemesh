@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -23,6 +24,8 @@ type DBMetricsCollector struct {
 	checkInterval time.Duration
 	db            *sql.Database
 	tablesList    map[string]struct{}
+	eg            errgroup.Group
+	cancel        context.CancelFunc
 
 	tableSize *prometheus.GaugeVec
 	indexSize *prometheus.GaugeVec
@@ -30,11 +33,13 @@ type DBMetricsCollector struct {
 }
 
 // NewDBMetricsCollector creates new DBMetricsCollector.
-func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Logger, checkInterval time.Duration) {
+func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Logger, checkInterval time.Duration) *DBMetricsCollector {
+	ctx, cancel := context.WithCancel(ctx)
 	collector := &DBMetricsCollector{
 		checkInterval: checkInterval,
 		logger:        logger.WithName("db_metrics"),
 		db:            db,
+		cancel:        cancel,
 		tableSize:     metrics.NewGauge("table_size", subsystem, "Size of table in bytes", []string{"name"}),
 		indexSize:     metrics.NewGauge("index_size", subsystem, "Size of index in bytes", []string{"name"}),
 		totalSize:     metrics.NewGauge("total_size", subsystem, "Total size of db in bytes", nil),
@@ -42,20 +47,31 @@ func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Log
 	statEnabled, err := collector.checkCompiledWithDBStat()
 	if err != nil {
 		collector.logger.With().Error("error check compile options", log.Err(err))
-		return
+		return nil
 	}
 	if !statEnabled {
 		collector.logger.With().Info("sqlite compiled without `SQLITE_ENABLE_DBSTAT_VTAB`. Metrics will not collected")
-		return
+		return nil
 	}
 
 	collector.tablesList, err = collector.getListOfTables()
 	if err != nil {
 		collector.logger.With().Error("error get list of tables", log.Err(err))
-		return
+		return nil
 	}
 	collector.logger.With().Info("start collect stat")
-	go collector.CollectMetrics(ctx)
+	collector.eg.Go(func() error {
+		collector.CollectMetrics(ctx)
+		return nil
+	})
+	return collector
+}
+
+func (d *DBMetricsCollector) Close() {
+	d.cancel()
+	if err := d.eg.Wait(); err != nil {
+		d.logger.With().Error("received error waiting for db metrics collector", log.Err(err))
+	}
 }
 
 // CollectMetrics collects metrics from db.
