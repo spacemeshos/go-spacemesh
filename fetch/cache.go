@@ -69,8 +69,8 @@ func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 
 // cacheStats stores hash-to-peers cache hits & misses.
 type cacheStats struct {
-	hits   uint64 `json:"hits"`
-	misses uint64 `json:"misses"`
+	hits   uint64
+	misses uint64
 }
 
 func (hpc *HashPeersCache) hit() {
