@@ -59,22 +59,16 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
-	tx, err := types.BytesToTransaction(in.Transaction)
-	if err != nil {
-		log.Error("failed to deserialize tx, error: %v", err)
-		return nil, status.Error(codes.InvalidArgument,
-			"`Transaction` must contain a valid, serialized transaction")
-	}
-
 	if err := s.publisher.Publish(ctx, txs.IncomingTxProtocol, in.Transaction); err != nil {
 		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
+	raw := types.NewRawTx(in.Transaction)
 
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{
-			Id:    &pb.TransactionId{Id: tx.ID.Bytes()},
+			Id:    &pb.TransactionId{Id: raw.ID[:]},
 			State: pb.TransactionState_TRANSACTION_STATE_MEMPOOL,
 		},
 	}, nil

@@ -762,7 +762,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey()))
 
-	// Coordinate ending the test
+	// TODO(dshulyak) synchronization below is messed up
 	wg2 := sync.WaitGroup{}
 	wg2.Add(1)
 	go func() {
@@ -804,15 +804,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	require.Equal(t, int32(code.Code_OK), res1.Status.Code)
 	require.Equal(t, tx1.ID.Bytes(), res1.Txstate.Id.Id)
 	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res1.Txstate.State)
-
-	// Submit the tx
-	res2, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-		Transaction: tx1.Raw,
-	})
-	require.NoError(t, err)
-	require.Equal(t, int32(code.Code_OK), res2.Status.Code)
-	require.Equal(t, tx1.ID.Bytes(), res2.Txstate.Id.Id)
-	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res2.Txstate.State)
 
 	// Wait for messages to be received
 	wg2.Wait()
