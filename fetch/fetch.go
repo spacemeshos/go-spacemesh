@@ -132,7 +132,6 @@ type responseBatch struct {
 type Config struct {
 	BatchTimeout         int // in milliseconds
 	MaxRetriesForPeer    int
-	MaxRetriesForBatch   int
 	BatchSize            int
 	RequestTimeout       int // in seconds
 	MaxRetriesForRequest int
@@ -143,7 +142,6 @@ func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         50,
 		MaxRetriesForPeer:    2,
-		MaxRetriesForBatch:   2,
 		BatchSize:            20,
 		RequestTimeout:       10,
 		MaxRetriesForRequest: 100,

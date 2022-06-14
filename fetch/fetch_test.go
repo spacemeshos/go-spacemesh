@@ -109,7 +109,6 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 		3,
 		3,
 		3,
-		3,
 	}
 
 	mckNet := &mockNet{

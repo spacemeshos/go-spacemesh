@@ -328,7 +328,7 @@ func (l *Logic) registerLayerHashes(peer p2p.Peer, blocks *layerData) {
 }
 
 // fetchLayerData fetches the all content referenced in layerData.
-func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, peer p2p.Peer, layerID types.LayerID, blocks *layerData) error {
+func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *layerData) error {
 	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
 	l.mutex.Lock()
 	lyrResult := l.layerBlocksRes[layerID]
@@ -402,7 +402,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	l.registerLayerHashes(peer, peerRes.data)
 
 	if peerRes.err == nil {
-		if err := l.fetchLayerData(ctx, logger, peer, layerID, peerRes.data); err != nil {
+		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
 			peerRes.err = ErrLayerDataNotFetched
 		}
 	}
