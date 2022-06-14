@@ -2,7 +2,7 @@ package sdk
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
 // Opt modifies

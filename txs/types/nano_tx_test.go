@@ -9,9 +9,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	ctypes "github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/vm/sdk"
-	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 func createMeshTX(t *testing.T, signer *signing.EdSigner, lid ctypes.LayerID) *ctypes.MeshTransaction {
