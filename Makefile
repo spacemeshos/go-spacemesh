@@ -65,6 +65,10 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
+patch_sqlite3: ## Update vendor sqlite3 for usage concurrent transactions.
+	cp sql/sqlitelibs/sqlite3ext.h vendor/crawshaw.io/sqlite/sqlite3ext.h
+	cp sql/sqlitelibs/sqlite3.h vendor/crawshaw.io/sqlite/sqlite3.h
+	cp sql/sqlitelibs/sqlite3.c vendor/crawshaw.io/sqlite/c/sqlite3.c
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 18
@@ -77,7 +81,7 @@ build: go-spacemesh
 .PHONY: build
 
 # TODO(nkryuchkov): uncomment when go-svm is imported
-get-libs: get-gpu-setup #get-svm
+get-libs: get-gpu-setup patch_sqlite3 #get-svm
 .PHONY: get-libs
 
 gen-p2p-identity:
