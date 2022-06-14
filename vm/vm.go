@@ -116,7 +116,7 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 		failed = nil
 	}
 
-	finalRewards, err := calculateRewards(vm.log, vm.cfg, lid, totalFees, rewards)
+	finalRewards, err := CalculateRewards(vm.log, vm.cfg, lid, totalFees, rewards)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,8 @@ func (vm *VM) ApplyLayer(lid types.LayerID, txs []*types.Transaction, rewards []
 	return failed, nil
 }
 
-func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
+// CalculateRewards splits layer rewards and total fees fairly between coinbases recorded in rewards.
+func CalculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
 	logger = logger.WithFields(lid)
 	totalWeight := util.WeightFromUint64(0)
 	byCoinbase := make(map[types.Address]util.Weight)
