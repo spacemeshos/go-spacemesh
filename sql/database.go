@@ -142,6 +142,16 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 	return tx, tx.begin()
 }
 
+// TxConcurrent starts a concurrent transaction. Locking of db is deferred until commit will be called.
+func (db *Database) TxConcurrent(ctx context.Context) (*Tx, error) {
+	conn := db.pool.Get(ctx)
+	if conn == nil {
+		return nil, ErrNoConnection
+	}
+	tx := &Tx{db: db, conn: conn}
+	return tx, tx.beginConcurrent()
+}
+
 // Exec statement using one of the connection from the pool.
 //
 // If you care about atomicity of the operation (for example writing rewards to multiple accounts)
@@ -214,6 +224,15 @@ type Tx struct {
 
 func (tx *Tx) begin() error {
 	stmt := tx.conn.Prep("BEGIN;")
+	_, err := stmt.Step()
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	return nil
+}
+
+func (tx *Tx) beginConcurrent() error {
+	stmt := tx.conn.Prep("BEGIN CONCURRENT;")
 	_, err := stmt.Step()
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
