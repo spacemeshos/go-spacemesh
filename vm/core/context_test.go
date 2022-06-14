@@ -62,8 +62,8 @@ func TestConsume(t *testing.T) {
 	})
 	t.Run("MaxGas", func(t *testing.T) {
 		ctx := core.Context{}
-		ctx.Account.Balance = 100
-		ctx.Header.GasPrice = 1
+		ctx.Account.Balance = 200
+		ctx.Header.GasPrice = 2
 		ctx.Header.MaxGas = 10
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
 	})
@@ -103,6 +103,31 @@ func TestApply(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, ctx.Account.Nonce, account.Nonce)
 		require.Equal(t, rst, account.State)
+	})
+	t.Run("ConsumeMaxGas", func(t *testing.T) {
+		ss := core.NewStagedCache(sql.InMemory())
+
+		ctx := core.Context{Loader: ss}
+		ctx.Account.Balance = 1000
+		ctx.Header.GasPrice = 2
+		ctx.Header.MaxGas = 10
+
+		ctx.Account.Address = core.Address{1}
+		ctx.Header.Nonce = core.Nonce{Counter: 10}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		template := mocks.NewMockTemplate(ctrl)
+		rst := []byte{1, 1, 1}
+		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
+			return scale.EncodeByteArray(encoder, rst)
+		})
+		ctx.Template = template
+		require.NoError(t, ctx.Consume(5))
+		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
+		fee, err := ctx.Apply(ss)
+		require.NoError(t, err)
+		require.Equal(t, fee, ctx.Header.MaxGas*ctx.Header.GasPrice)
 	})
 	t.Run("PreserveTransferOrder", func(t *testing.T) {
 		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}

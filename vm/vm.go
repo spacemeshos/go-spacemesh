@@ -239,9 +239,12 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 		account.Layer = lid
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
+		if err != nil {
+			return false
+		}
 		account.EncodeScale(encoder)
 		events.ReportAccountUpdate(account.Address)
-		return err == nil
+		return true
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
@@ -330,7 +333,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 
 	handler := reg.Get(*template)
 	if handler == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.Template)
+		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *template)
 	}
 	ctx := &core.Context{
 		Loader:  loader,
