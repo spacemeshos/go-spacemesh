@@ -1,7 +1,5 @@
 module github.com/spacemeshos/go-spacemesh
 
-replace github.com/spacemeshos/api/release/go => ../api/release/go
-
 replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1.0
 
 require (
