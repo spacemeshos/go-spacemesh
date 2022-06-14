@@ -67,6 +67,7 @@ func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Log
 	return collector
 }
 
+// Close closes DBMetricsCollector.
 func (d *DBMetricsCollector) Close() {
 	d.cancel()
 	if err := d.eg.Wait(); err != nil {
