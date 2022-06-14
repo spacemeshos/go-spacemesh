@@ -241,6 +241,9 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
 	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[0]).Return(cutoff.Add(1), nil)
 	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[1]).Return(cutoff.Add(1), nil)
@@ -256,6 +259,9 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[0]).Return(b.LayerIndex.Sub(1), nil)
 	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[1]).Return(b.LayerIndex.Sub(1), nil)
 	th.mm.EXPECT().SetIdentityMalicious(b.SmesherID()).Return(nil)
@@ -269,6 +275,9 @@ func TestBallot_BallotDoubleVotedWithinHdist_SetMaliciousError(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
 	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[0]).Return(cutoff, nil)
 	th.mm.EXPECT().GetBlockLayer(b.Votes.Support[1]).Return(cutoff, nil)
@@ -283,13 +292,13 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
 	for _, bid := range b.Votes.Support {
 		th.mm.EXPECT().GetBlockLayer(bid).Return(cutoff.Sub(1), nil)
 	}
-	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
-	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
-	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, ballot *types.Ballot) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
@@ -311,6 +320,9 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), append(b.Votes.Support, b.Votes.Against...)).Return(nil).Times(1)
 	for i, bid := range b.Votes.Support {
 		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
 	}
@@ -325,6 +337,9 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	for i, bid := range b.Votes.Support {
 		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
 	}
@@ -342,6 +357,9 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), append(b.Votes.Support, b.Votes.Against...)).Return(nil).Times(1)
 	for i, bid := range b.Votes.Against {
 		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
 	}
@@ -357,6 +375,9 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
 	for i, bid := range b.Votes.Support {
 		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
 	}
@@ -369,9 +390,6 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
-	for i, bid := range b.Votes.Support {
-		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
-	}
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errUnknown)
@@ -383,9 +401,6 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
-	for i, bid := range b.Votes.Support {
-		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
-	}
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(errUnknown).Times(1)
@@ -398,9 +413,6 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
-	for i, bid := range b.Votes.Support {
-		th.mm.EXPECT().GetBlockLayer(bid).Return(b.LayerIndex.Sub(uint32(i+1)), nil)
-	}
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
