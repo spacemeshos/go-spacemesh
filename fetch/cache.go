@@ -69,18 +69,18 @@ func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 
 // cacheStats stores hash-to-peers cache hits & misses.
 type cacheStats struct {
-	// Hits is a number of successfully found hashes
-	Hits int64 `json:"hits"`
-	// Misses is a number of not found hashes
-	Misses int64 `json:"misses"`
+	hits   uint64 `json:"hits"`
+	misses uint64 `json:"misses"`
 }
 
 func (hpc *HashPeersCache) hit() {
-	atomic.AddInt64(&hpc.stats.Hits, 1)
+	atomic.AddUint64(&hpc.stats.hits, 1)
 	metrics.LogHit()
+	metrics.LogHitRate(atomic.LoadUint64(&hpc.stats.hits), atomic.LoadUint64(&hpc.stats.misses))
 }
 
 func (hpc *HashPeersCache) miss() {
-	atomic.AddInt64(&hpc.stats.Misses, 1)
+	atomic.AddUint64(&hpc.stats.misses, 1)
 	metrics.LogMiss()
+	metrics.LogHitRate(atomic.LoadUint64(&hpc.stats.hits), atomic.LoadUint64(&hpc.stats.misses))
 }

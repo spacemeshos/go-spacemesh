@@ -10,8 +10,9 @@ const (
 )
 
 var (
-	totalHits   = metrics.NewCounter("total_hits", subsystem, "Total cache hits", nil)
-	totalMisses = metrics.NewCounter("total_misses", subsystem, "Total cache misses", nil)
+	totalHits   = metrics.NewCounter("total_hits", subsystem, "Total hash-to-peer cache hits", nil)
+	totalMisses = metrics.NewCounter("total_misses", subsystem, "Total hash-to-peer cache misses", nil)
+	hitRate     = metrics.NewGauge("hit_rate", subsystem, "Hash-to-peer hit rate", nil)
 )
 
 // LogHit logs cache hit.
@@ -19,7 +20,13 @@ func LogHit() {
 	totalHits.WithLabelValues().Inc()
 }
 
-// LogMiss logs the message received from the peer.
+// LogMiss logs cache miss.
 func LogMiss() {
 	totalMisses.WithLabelValues().Inc()
+}
+
+// LogHitRate logs hit rate.
+func LogHitRate(hits, misses uint64) {
+	rate := float64(hits) / (float64(hits) + float64(misses)) * 100
+	hitRate.WithLabelValues().Set(rate)
 }
