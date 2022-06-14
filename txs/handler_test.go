@@ -53,7 +53,7 @@ func Test_HandleSync(t *testing.T) {
 
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
-				cstate.EXPECT().Add(&types.Transaction{RawTx: tx.RawTx}, gomock.Any()).
+				cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).
 					Times(1).Return(tc.addErr)
 			}
 			err := th.HandleSyncTransaction(context.TODO(), tx.Raw)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -87,7 +86,7 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	} else if exists {
 		return nil
 	}
-	err = th.state.Add(&types.Transaction{RawTx: raw}, time.Now())
+	err = th.state.AddToDB(&types.Transaction{RawTx: raw})
 	if err != nil {
 		return fmt.Errorf("add tx %w", err)
 	}

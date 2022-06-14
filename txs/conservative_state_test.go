@@ -1,6 +1,7 @@
 package txs
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand"
@@ -11,10 +12,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
@@ -52,8 +55,14 @@ func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, f
 
 type testConState struct {
 	*ConservativeState
-	db  *sql.Database
-	mvm *mocks.MockvmState
+	logger log.Log
+	db     *sql.Database
+	mvm    *mocks.MockvmState
+	ctrl   *gomock.Controller
+}
+
+func (t *testConState) handler() *TxHandler {
+	return NewTxHandler(t, t.logger)
 }
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
@@ -65,13 +74,15 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		NumTXsPerProposal:  numTXsInProposal,
 		OptFilterThreshold: 90,
 	}
-
+	logger := logtest.New(t)
 	return &testConState{
 		ConservativeState: NewConservativeState(mvm, db,
 			WithCSConfig(cfg),
-			WithLogger(logtest.New(t))),
-		db:  db,
-		mvm: mvm,
+			WithLogger(logger)),
+		logger: logger,
+		db:     db,
+		mvm:    mvm,
+		ctrl:   ctrl,
 	}
 }
 
@@ -688,16 +699,17 @@ func TestApplyLayer_VMError(t *testing.T) {
 	}
 }
 
-func TestConsistentConservativeState(t *testing.T) {
-	// we have two different workflows for transactions
+func TestConsistentHandling(t *testing.T) {
+	// there are two different workflows for transactions
 	// 1. receive gossiped transaction and verify it immediatly
 	// 2. receive synced transaction and delay verification
 	// this test is meant to ensure that both of them will result in a consistent
 	// conservative cache state
 
-	tcs1 := createConservativeState(t)
-	tcs2 := createConservativeState(t)
-	_ = tcs2
+	instances := []*testConState{
+		createConservativeState(t),
+		createConservativeState(t),
+	}
 
 	rng := rand.New(rand.NewSource(101))
 	signers := make([]*signing.EdSigner, 30)
@@ -705,9 +717,10 @@ func TestConsistentConservativeState(t *testing.T) {
 	for i := range signers {
 		signers[i] = signing.NewEdSignerFromRand(rng)
 	}
-	tcs1.mvm.EXPECT().GetBalance(gomock.Any()).Return(defaultBalance, nil).AnyTimes()
-	tcs1.mvm.EXPECT().GetNonce(gomock.Any()).Return(types.Nonce{}, nil).AnyTimes()
-
+	for _, instance := range instances {
+		instance.mvm.EXPECT().GetBalance(gomock.Any()).Return(defaultBalance, nil).AnyTimes()
+		instance.mvm.EXPECT().GetNonce(gomock.Any()).Return(types.Nonce{}, nil).AnyTimes()
+	}
 	for lid := 1; lid < 10; lid++ {
 		txs := make([]*types.Transaction, 100)
 		ids := make([]types.TransactionID, len(txs))
@@ -718,7 +731,15 @@ func TestConsistentConservativeState(t *testing.T) {
 			nonces[signer]++
 			ids[i] = txs[i].ID
 			raw[i] = txs[i].RawTx
-			require.NoError(t, tcs1.AddToCache(txs[i]))
+			for _, instance := range instances {
+				req := smocks.NewMockValidationRequest(instances[1].ctrl)
+				req.EXPECT().Parse().Times(1).Return(txs[i].TxHeader, nil)
+				req.EXPECT().Verify().Times(1).Return(true)
+				instance.mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(req)
+			}
+
+			instances[0].handler().HandleGossipTransaction(context.TODO(), "", txs[i].Raw)
+			instances[1].handler().HandleSyncTransaction(context.TODO(), txs[i].Raw)
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{
@@ -726,9 +747,20 @@ func TestConsistentConservativeState(t *testing.T) {
 				TxIDs:      ids,
 			},
 		)
-		tcs1.mvm.EXPECT().Apply(block.LayerIndex, raw, block.Rewards).Return(nil, nil).Times(1)
-		_, err := tcs1.ApplyLayer(block)
-		require.NoError(t, err)
+		for _, instance := range instances {
+			instance.mvm.EXPECT().Apply(block.LayerIndex, raw, block.Rewards).Return(nil, nil).Times(1)
+			_, err := instance.ApplyLayer(block)
+			require.NoError(t, err)
+			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
+		}
+		for i, signer := range signers {
+			address := types.BytesToAddress(signer.PublicKey().Bytes())
+			expect := nonces[i]
+			for i, instance := range instances {
+				nonce, _ := instance.GetProjection(address)
+				require.Equal(t, int(expect), int(nonce), "instance=%d", i)
+			}
+		}
 	}
 }
 

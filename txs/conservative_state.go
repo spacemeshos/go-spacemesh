@@ -139,6 +139,11 @@ func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	return cs.cache.Add(tx, received, nil)
 }
 
+// AddToDB ...
+func (cs *ConservativeState) AddToDB(tx *types.Transaction) error {
+	return cs.cache.AddToDB(tx, time.Now())
+}
+
 // RevertState reverts the VM state and database to the given layer.
 func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, error) {
 	root, err := cs.vmState.Revert(revertTo)
@@ -198,12 +203,15 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 }
 
 func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, []types.RawTx, error) {
+	// TODO this allocates an additional map for all tx ids in the block
+	// it would make much more sense to load transactions in the loop below
+	// and terminate with error if transaction is missing
 	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
 		return nil, nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
 	}
-	txs := make([]*types.Transaction, 0, len(mtxs))
-	raw := make([]types.RawTx, 0, len(mtxs))
+	txs := make([]*types.Transaction, 0, len(toApply.TxIDs))
+	raw := make([]types.RawTx, 0, len(toApply.TxIDs))
 	for _, mtx := range mtxs {
 		// some TXs in the block may be already applied previously
 		if mtx.State == types.APPLIED {
@@ -211,6 +219,11 @@ func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Trans
 		}
 		// txs without header were saved by syncer without validation
 		if mtx.TxHeader == nil {
+			cs.logger.With().Debug("verifying synced transaction",
+				toApply.ID(),
+				toApply.LayerIndex,
+				mtx.ID,
+			)
 			req := cs.vmState.Validation(mtx.RawTx)
 			header, err := req.Parse()
 			if err != nil {
