@@ -83,14 +83,12 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	raw := types.NewRawTx(data)
 	exists, err := th.state.HasTx(raw.ID)
 	if err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to check sync tx exists", log.Err(err))
 		return fmt.Errorf("has sync tx: %w", err)
 	} else if exists {
 		return nil
 	}
 	err = th.state.Add(&types.Transaction{RawTx: raw}, time.Now())
 	if err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to add transaction", log.Err(err))
 		return fmt.Errorf("add tx %w", err)
 	}
 	return nil

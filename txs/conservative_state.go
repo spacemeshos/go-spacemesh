@@ -130,7 +130,6 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	received := time.Now()
 	// save all new transactions as long as they are syntactically correct
-
 	if err := cs.cache.AddToDB(tx, received); err != nil {
 		return err
 	}
@@ -159,16 +158,11 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		return nil, err
 	}
 
-	txs, err := cs.getTXsToApply(toApply)
+	txs, raw, err := cs.getTXsToApply(toApply)
 	if err != nil {
 		return nil, err
 	}
 
-	// vm parses fields sequentially, so it can't use Transaction
-	raw := make([]types.RawTx, 0, len(txs))
-	for _, tx := range txs {
-		raw = append(raw, tx.RawTx)
-	}
 	skipped, err := cs.vmState.Apply(toApply.LayerIndex, raw, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
@@ -203,20 +197,43 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	return skipped, nil
 }
 
-func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, error) {
+func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, []types.RawTx, error) {
 	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
+		return nil, nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
 	}
 	txs := make([]*types.Transaction, 0, len(mtxs))
+	raw := make([]types.RawTx, 0, len(mtxs))
 	for _, mtx := range mtxs {
 		// some TXs in the block may be already applied previously
 		if mtx.State == types.APPLIED {
 			continue
 		}
+		// txs without header were saved by syncer without validation
+		if mtx.TxHeader == nil {
+			req := cs.vmState.Validation(mtx.RawTx)
+			header, err := req.Parse()
+			if err != nil {
+				return nil, nil, fmt.Errorf("parsing %s: %w", mtx.ID, err)
+			}
+			if !req.Verify() {
+				return nil, nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
+			}
+			mtx.TxHeader = header
+			// updating header also updates principal/nonce indexes
+			if err := cs.tp.AddHeader(mtx.ID, header); err != nil {
+				return nil, nil, err
+			}
+			// restore cache consistency (e.g nonce/balance) so that gossiped
+			// transactions can be added succesfully
+			if err := cs.cache.Add(&mtx.Transaction, mtx.Received, nil); err != nil {
+				return nil, nil, err
+			}
+		}
 		txs = append(txs, &mtx.Transaction)
+		raw = append(raw, mtx.RawTx)
 	}
-	return txs, nil
+	return txs, raw, nil
 }
 
 // Transactions exports the transactions DB.

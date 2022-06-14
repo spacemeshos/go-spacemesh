@@ -325,6 +325,20 @@ func (mr *MocktxProviderMockRecorder) Add(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MocktxProvider)(nil).Add), arg0, arg1)
 }
 
+// AddHeader mocks base method.
+func (m *MocktxProvider) AddHeader(arg0 types.TransactionID, arg1 *types.TxHeader) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddHeader", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddHeader indicates an expected call of AddHeader.
+func (mr *MocktxProviderMockRecorder) AddHeader(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeader", reflect.TypeOf((*MocktxProvider)(nil).AddHeader), arg0, arg1)
+}
+
 // AddToBlock mocks base method.
 func (m *MocktxProvider) AddToBlock(arg0 types.LayerID, arg1 types.BlockID, arg2 []types.TransactionID) error {
 	m.ctrl.T.Helper()

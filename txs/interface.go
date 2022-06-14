@@ -35,6 +35,7 @@ type conStateCache interface {
 
 type txProvider interface {
 	Add(*types.Transaction, time.Time) error
+	AddHeader(types.TransactionID, *types.TxHeader) error
 	Has(types.TransactionID) (bool, error)
 	Get(types.TransactionID) (*types.MeshTransaction, error)
 	GetBlob(types.TransactionID) ([]byte, error)

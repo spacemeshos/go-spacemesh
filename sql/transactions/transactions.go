@@ -50,6 +50,30 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 	return nil
 }
 
+// AddHeader and derived fields to the existing transaction.
+func AddHeader(db sql.Executor, tid types.TransactionID, header *types.TxHeader) error {
+	buf, err := codec.Encode(header)
+	if err != nil {
+		return fmt.Errorf("encode %+v: %w", header, err)
+	}
+	rows, err := db.Exec(`update transactions 
+		set header = ?1, principal = ?2, nonce = ?3
+		where id = ?4 returning id;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, buf)
+			stmt.BindBytes(2, header.Principal[:])
+			stmt.BindInt64(3, int64(header.Nonce.Counter))
+			stmt.BindBytes(4, tid.Bytes())
+		}, nil)
+	if rows == 0 {
+		return fmt.Errorf("%w: %s", sql.ErrNotFound, err)
+	}
+	if err != nil {
+		return fmt.Errorf("add header %s: %w", tid, err)
+	}
+	return nil
+}
+
 // AddToProposal associates a transaction with a proposal.
 func AddToProposal(db sql.Executor, tid types.TransactionID, lid types.LayerID, pid types.ProposalID) error {
 	if _, err := db.Exec(`insert into proposal_transactions (pid, tid, layer) values (?1, ?2, ?3)`,

@@ -688,6 +688,50 @@ func TestApplyLayer_VMError(t *testing.T) {
 	}
 }
 
+func TestConsistentConservativeState(t *testing.T) {
+	// we have two different workflows for transactions
+	// 1. receive gossiped transaction and verify it immediatly
+	// 2. receive synced transaction and delay verification
+	// this test is meant to ensure that both of them will result in a consistent
+	// conservative cache state
+
+	tcs1 := createConservativeState(t)
+	tcs2 := createConservativeState(t)
+	_ = tcs2
+
+	rng := rand.New(rand.NewSource(101))
+	signers := make([]*signing.EdSigner, 30)
+	nonces := make([]uint64, len(signers))
+	for i := range signers {
+		signers[i] = signing.NewEdSignerFromRand(rng)
+	}
+	tcs1.mvm.EXPECT().GetBalance(gomock.Any()).Return(defaultBalance, nil).AnyTimes()
+	tcs1.mvm.EXPECT().GetNonce(gomock.Any()).Return(types.Nonce{}, nil).AnyTimes()
+
+	for lid := 1; lid < 10; lid++ {
+		txs := make([]*types.Transaction, 100)
+		ids := make([]types.TransactionID, len(txs))
+		raw := make([]types.RawTx, len(txs))
+		for i := range txs {
+			signer := rng.Intn(len(signers))
+			txs[i] = newTx(t, nonces[signer], 1, 1, signers[signer])
+			nonces[signer]++
+			ids[i] = txs[i].ID
+			raw[i] = txs[i].RawTx
+			require.NoError(t, tcs1.AddToCache(txs[i]))
+		}
+		block := types.NewExistingBlock(types.BlockID{byte(lid)},
+			types.InnerBlock{
+				LayerIndex: types.NewLayerID(uint32(lid)),
+				TxIDs:      ids,
+			},
+		)
+		tcs1.mvm.EXPECT().Apply(block.LayerIndex, raw, block.Rewards).Return(nil, nil).Times(1)
+		_, err := tcs1.ApplyLayer(block)
+		require.NoError(t, err)
+	}
+}
+
 func TestTXFetcher(t *testing.T) {
 	tcs := createConservativeState(t)
 	ids, txs := addBatch(t, tcs, numTXs)
