@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"sync"
 	"sync/atomic"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -14,6 +15,7 @@ import (
 // HashPeersCache holds lru cache of peers to pull hash from.
 type HashPeersCache struct {
 	*lru.Cache
+	mu    sync.Mutex
 	stats cacheStats
 }
 
@@ -30,22 +32,32 @@ func (hp HashPeers) ToList() []p2p.Peer {
 }
 
 // NewHashPeersCache creates a new hash-to-peers cache.
-func NewHashPeersCache(size int) HashPeersCache {
+func NewHashPeersCache(size int) *HashPeersCache {
 	cache, err := lru.New(size)
 	if err != nil {
 		log.Panic("could not initialize cache ", err)
 	}
-	return HashPeersCache{Cache: cache}
+	return &HashPeersCache{Cache: cache}
 }
 
-// Add adds hash peers to cache.
-func (hpc *HashPeersCache) Add(hash types.Hash32, HashPeers HashPeers) {
-	hpc.Cache.Add(hash, HashPeers)
+// Add adds peer to a hash.
+func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
+	hpc.mu.Lock()
+	defer hpc.mu.Unlock()
+
+	peers, exists := hpc.Get(hash)
+	if !exists {
+		hpc.Cache.Add(hash, HashPeers{peer: {}})
+		return
+	}
+
+	peers[peer] = struct{}{}
+	hpc.Cache.Add(hash, peers)
 }
 
 // Get returns hash peers, it also returns a boolean to indicate whether the item
 // was found in cache.
-func (hpc HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
+func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 	item, found := hpc.Cache.Get(hash)
 	if !found {
 		return nil, false
@@ -62,13 +74,13 @@ type cacheStats struct {
 }
 
 // Hit tracks hash-to-peer cache hit.
-func (hpc HashPeersCache) Hit() {
+func (hpc *HashPeersCache) Hit() {
 	atomic.AddInt64(&hpc.stats.Hits, 1)
 	metrics.LogHit()
 }
 
 // Miss tracks hash-to-peer cache miss.
-func (hpc HashPeersCache) Miss() {
+func (hpc *HashPeersCache) Miss() {
 	atomic.AddInt64(&hpc.stats.Misses, 1)
 	metrics.LogMiss()
 }

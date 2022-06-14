@@ -191,8 +191,7 @@ type Fetch struct {
 	onlyOnce             sync.Once
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
-	hashToPeers          HashPeersCache
-	hashToPeersM         sync.RWMutex
+	hashToPeers          *HashPeersCache
 }
 
 // NewFetch creates a new Fetch struct.
@@ -508,7 +507,6 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]requestMessage)
 
-	f.hashToPeersM.RLock()
 	for _, req := range requests {
 		hashPeersMap, exists := f.hashToPeers.Get(req.Hash)
 
@@ -529,7 +527,6 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 			peer2requests[p] = append(peer2requests[p], req)
 		}
 	}
-	f.hashToPeersM.RUnlock()
 
 	// split every peer's requests into batches of f.cfg.BatchSize each
 	result := make(map[p2p.Peer][][]requestMessage)
@@ -705,22 +702,6 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	return resChan
 }
 
-func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
-	f.hashToPeersM.Lock()
-	defer f.hashToPeersM.Unlock()
-
-	peers, exists := f.hashToPeers.Get(hash)
-	if !exists {
-		f.hashToPeers.Add(hash, HashPeers{peer: {}})
-		return
-	}
-
-	peers[peer] = struct{}{}
-	f.hashToPeers.Add(hash, peers)
-
-	return
-}
-
 // RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	if len(hashes) == 0 {
@@ -730,7 +711,7 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 		return
 	}
 	for _, hash := range hashes {
-		f.mapPeerToHash(hash, peer)
+		f.hashToPeers.Add(hash, peer)
 	}
 	return
 }
