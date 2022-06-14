@@ -81,8 +81,8 @@ var (
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	addr1       = types.HexToAddress("33333")
-	addr2       = types.HexToAddress("44444")
+	addr1       = wallet.Address(signer1.PublicKey().Bytes())
+	addr2       = wallet.Address(signer2.PublicKey().Bytes())
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.BytesToNodeID(pub)
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
@@ -105,8 +105,8 @@ var (
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
-			globalTx.Principal: big.NewInt(int64(accountBalance)),
-			addr1:              big.NewInt(int64(accountBalance)),
+			addr1: big.NewInt(int64(accountBalance)),
+			addr2: big.NewInt(int64(accountBalance)),
 		},
 		nonces: map[types.Address]uint64{
 			globalTx.Principal: uint64(accountCounter),
