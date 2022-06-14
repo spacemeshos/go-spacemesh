@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/chaos-mesh/chaos-mesh/api/v1alpha1 v0.0.0-20220121084546-3a8c60c4bc75
 	github.com/golang/protobuf v1.5.2
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220208052242-dd7698a0ca84
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220614092720-7b683bad6ba1
 	github.com/spacemeshos/ed25519 v0.0.0-20200604074309-d72da3b5f487
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1

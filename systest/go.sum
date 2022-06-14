@@ -429,6 +429,8 @@ github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4k
 github.com/soheilhy/cmux v0.1.5/go.mod h1:T7TcVDs9LWfQgPlPsdngu6I6QIoyIFZDDC6sNE1GqG0=
 github.com/spacemeshos/api/release/go v1.4.1-0.20220208052242-dd7698a0ca84 h1:dukr+zRddDoSw9n3tUGDG2ZM+9NHAYiR4ASwVvfLLmQ=
 github.com/spacemeshos/api/release/go v1.4.1-0.20220208052242-dd7698a0ca84/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
+github.com/spacemeshos/api/release/go v1.4.1-0.20220614092720-7b683bad6ba1 h1:9kp3gaBeBnJzXnjTrSTXf46Sbv2oreP7u5Dtesh4Dgw=
+github.com/spacemeshos/api/release/go v1.4.1-0.20220614092720-7b683bad6ba1/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/ed25519 v0.0.0-20200604074309-d72da3b5f487 h1:2WH45FeS7+jruksH6TPjv9dqDFJ0h2dmTaWx9qhn8F8=
 github.com/spacemeshos/ed25519 v0.0.0-20200604074309-d72da3b5f487/go.mod h1:lyZLUyZXvd7gp6KHwGS5ZgtS2ZvV++lBjdE4MLqmLnU=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
