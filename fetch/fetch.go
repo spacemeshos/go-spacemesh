@@ -713,7 +713,7 @@ func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 
 	peers, exists := f.hashToPeers.Get(hash)
 	if !exists {
-		f.hashToPeers.Add(hash, hashPeers{peer: {}})
+		f.hashToPeers.Add(hash, HashPeers{peer: {}})
 		return
 	}
 
@@ -723,7 +723,7 @@ func (f *Fetch) mapPeerToHash(hash types.Hash32, peer p2p.Peer) {
 	return
 }
 
-// RegisterPeerHashes tracks a peer for a list of ATX hashes.
+// RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	if len(hashes) == 0 {
 		return
@@ -737,7 +737,7 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	return
 }
 
-// AddPeersFromHash registers
+// AddPeersFromHash adds peers from one hash to others.
 func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
 	peers, exists := f.hashToPeers.Get(fromHash)
 	if !exists {

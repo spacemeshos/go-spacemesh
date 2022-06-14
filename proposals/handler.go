@@ -146,7 +146,7 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	return nil
 }
 
-// collectHashes gathers all hashes in the ballot
+// collectHashes gathers all hashes in the ballot.
 func collectHashes(b *types.Ballot) []types.Hash32 {
 	hashes := types.BlockIDsToHashes(ballotBlockView(b))
 	if b.RefBallot != types.EmptyBallotID {

@@ -442,12 +442,11 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 
 	net := newMockNet(t)
 	numPeers := 4
-	//var withDataPeer p2p.Peer
+
 	for i := 0; i < numPeers; i++ {
 		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		if i == numPeers-1 {
-			//withDataPeer = peer
 			net.layerData[peer] = generateEmptyLayer()
 		} else {
 			net.errors[peer] = errors.New("SendRequest error")

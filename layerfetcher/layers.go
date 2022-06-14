@@ -698,7 +698,7 @@ func (l *Logic) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	l.fetcher.RegisterPeerHashes(peer, hashes)
 }
 
-// RegisterPeerHashes is a wrapper around fetcher's RegisterPeerHashes.
+// AddPeersFromHash is a wrapper around fetcher's AddPeersFromHash.
 func (l *Logic) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
 	l.fetcher.AddPeersFromHash(fromHash, toHashes)
 }

@@ -1,12 +1,14 @@
 package fetch
 
 import (
+	"sync/atomic"
+
 	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"sync/atomic"
 )
 
 // HashPeersCache holds lru cache of peers to pull hash from.
@@ -15,9 +17,11 @@ type HashPeersCache struct {
 	stats cacheStats
 }
 
-type hashPeers map[p2p.Peer]struct{}
+// HashPeers holds registered peers for a hash.
+type HashPeers map[p2p.Peer]struct{}
 
-func (hp hashPeers) ToList() []p2p.Peer {
+// ToList converts hash peers map to a list.
+func (hp HashPeers) ToList() []p2p.Peer {
 	result := make([]p2p.Peer, 0, len(hp))
 	for k := range hp {
 		result = append(result, k)
@@ -35,18 +39,18 @@ func NewHashPeersCache(size int) HashPeersCache {
 }
 
 // Add adds hash peers to cache.
-func (hpc *HashPeersCache) Add(hash types.Hash32, hashPeers hashPeers) {
-	hpc.Cache.Add(hash, hashPeers)
+func (hpc *HashPeersCache) Add(hash types.Hash32, HashPeers HashPeers) {
+	hpc.Cache.Add(hash, HashPeers)
 }
 
 // Get returns hash peers, it also returns a boolean to indicate whether the item
 // was found in cache.
-func (hpc HashPeersCache) Get(hash types.Hash32) (hashPeers, bool) {
+func (hpc HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 	item, found := hpc.Cache.Get(hash)
 	if !found {
 		return nil, false
 	}
-	return item.(hashPeers), true
+	return item.(HashPeers), true
 }
 
 // cacheStats stores hash-to-peers cache hits & misses.
