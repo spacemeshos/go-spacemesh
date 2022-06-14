@@ -14,6 +14,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
+const (
+	// TotalGasSpawn is a fixed amount of gas for spawn.
+	TotalGasSpawn = wallet.TotalGasSpawn
+	// TotalGasSpend is a fixed amount of gas for spend.
+	TotalGasSpend = wallet.TotalGasSpend
+)
+
 var (
 	zero = scale.U8(0)
 	one  = scale.U8(1)

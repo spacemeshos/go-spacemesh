@@ -74,7 +74,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{
-			Id:    &pb.TransactionId{Id: tx.ID().Bytes()},
+			Id:    &pb.TransactionId{Id: tx.ID.Bytes()},
 			State: pb.TransactionState_TRANSACTION_STATE_MEMPOOL,
 		},
 	}, nil
@@ -176,12 +176,12 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 			// Filter
 			for _, txid := range in.TransactionId {
-				if bytes.Equal(tx.Transaction.ID().Bytes(), txid.Id) {
+				if bytes.Equal(tx.Transaction.ID.Bytes(), txid.Id) {
 					// If the tx was just invalidated, we already know its state.
 					// If not, read it from the database.
 					var txstate pb.TransactionState_TransactionState
 					if tx.Valid {
-						_, txstate = s.getTransactionAndStatus(tx.Transaction.ID())
+						_, txstate = s.getTransactionAndStatus(tx.Transaction.ID)
 					} else {
 						txstate = pb.TransactionState_TRANSACTION_STATE_CONFLICTING
 					}

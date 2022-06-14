@@ -1,5 +1,9 @@
 module github.com/spacemeshos/go-spacemesh
 
+replace (
+	github.com/spacemeshos/api/release/go => ../api/release/go
+)
+
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec

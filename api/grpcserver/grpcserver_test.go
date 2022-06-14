@@ -47,7 +47,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const (
@@ -104,11 +105,11 @@ var (
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
-			globalTx.Origin(): big.NewInt(int64(accountBalance)),
-			addr1:             big.NewInt(int64(accountBalance)),
+			globalTx.Principal: big.NewInt(int64(accountBalance)),
+			addr1:              big.NewInt(int64(accountBalance)),
 		},
 		nonces: map[types.Address]uint64{
-			globalTx.Origin(): uint64(accountCounter),
+			globalTx.Principal: uint64(accountCounter),
 		},
 		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
@@ -124,9 +125,9 @@ func init() {
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
 	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
-	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	conStateAPI.returnTx[globalTx.ID()] = globalTx
-	conStateAPI.returnTx[globalTx2.ID()] = globalTx2
+	block1.TxIDs = []types.TransactionID{globalTx.ID, globalTx2.ID}
+	conStateAPI.returnTx[globalTx.ID] = globalTx
+	conStateAPI.returnTx[globalTx2.ID] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
@@ -224,8 +225,7 @@ type ConStateAPIMock struct {
 
 func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
 	t.poolByTxid[id] = tx
-	t.poolByAddress[tx.GetRecipient()] = id
-	t.poolByAddress[tx.Origin()] = id
+	t.poolByAddress[tx.Principal] = id
 	events.ReportNewTx(types.LayerID{}, tx)
 }
 
@@ -272,10 +272,7 @@ func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, accou
 	}
 	var txs []*types.MeshTransaction
 	for _, tx := range t.returnTx {
-		if tx.Origin().String() == account.String() {
-			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
-		}
-		if tx.GetRecipient().String() == account.String() {
+		if tx.Principal.String() == account.String() {
 			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 		}
 	}
@@ -285,7 +282,7 @@ func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, accou
 func (t *ConStateAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
 	for _, txid := range txids {
 		for _, tx := range t.returnTx {
-			if tx.ID() == txid {
+			if tx.ID == txid {
 				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
@@ -301,21 +298,30 @@ func (t *ConStateAPIMock) GetBalance(addr types.Address) (uint64, error) {
 	return t.balances[addr].Uint64(), nil
 }
 
-func (t *ConStateAPIMock) GetNonce(addr types.Address) (uint64, error) {
-	return t.nonces[addr], nil
+func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
+	return types.Nonce{Counter: t.nonces[addr]}, nil
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
+	tx := types.Transaction{TxHeader: &types.TxHeader{}}
+	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
+	tx.GasPrice = 1
 	if nonce == 0 {
-		return transaction.GenerateSpawnTransaction(signer, recipient)
+		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
+			sdk.WithGasPrice(defaultFee),
+		))
+		tx.MaxGas = wallet.TotalGasSpawn
+	} else {
+		tx.RawTx = types.NewRawTx(
+			wallet.Spend(signer.PrivateKey(), recipient, 1,
+				sdk.WithGasPrice(defaultFee),
+				sdk.WithNonce(types.Nonce{Counter: nonce}),
+			),
+		)
+		tx.MaxSpend = 1
+		tx.MaxGas = wallet.TotalGasSpend
 	}
-
-	tx, err := transaction.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
-	if err != nil {
-		return nil
-	}
-
-	return tx
+	return &tx
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
@@ -1688,7 +1694,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+		require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 	}
 	require.Equal(t, expected, n)
@@ -1699,15 +1705,8 @@ func TestTransactionService(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
-	var receivedMu sync.Mutex
-	received := []byte{}
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-		receivedMu.Lock()
-		defer receivedMu.Unlock()
 
-		received = msg
-		return nil
-	})
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -1737,7 +1736,7 @@ func TestTransactionService(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+			require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 		}},
 		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
@@ -1772,13 +1771,13 @@ func TestTransactionService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 			res, err := c.TransactionsState(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 0, len(res.Transactions))
-			require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState[0].Id.Id)
+			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
 		}},
 		{"TransactionsState_All", func(t *testing.T) {
@@ -1786,13 +1785,13 @@ func TestTransactionService(t *testing.T) {
 			req := &pb.TransactionsStateRequest{}
 			req.IncludeTransactions = true
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 			res, err := c.TransactionsState(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 1, len(res.Transactions))
-			require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState[0].Id.Id)
+			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
 
 			checkTransaction(t, res.Transactions[0])
@@ -1824,7 +1823,7 @@ func TestTransactionService(t *testing.T) {
 			// Set up the reporter
 			req := &pb.TransactionsStateStreamRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 
 			events.CloseEventReporter()
@@ -1843,7 +1842,7 @@ func TestTransactionService(t *testing.T) {
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Nil(t, res.Transaction)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 			}()
 
@@ -1856,7 +1855,7 @@ func TestTransactionService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateStreamRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 			req.IncludeTransactions = true
 
@@ -1868,7 +1867,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				res, err := stream.Recv()
 				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 				checkTransaction(t, res.Transaction)
 			}()
@@ -1885,14 +1884,14 @@ func TestTransactionService(t *testing.T) {
 		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			// Remove the tx from the mesh so it only appears in the mempool
-			delete(conStateAPI.returnTx, globalTx.ID())
-			defer func() { conStateAPI.returnTx[globalTx.ID()] = globalTx }()
+			delete(conStateAPI.returnTx, globalTx.ID)
+			defer func() { conStateAPI.returnTx[globalTx.ID] = globalTx }()
 
 			// STREAM
 			// Open the stream first and listen for new transactions
 			req := &pb.TransactionsStateStreamRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 			req.IncludeTransactions = true
 
@@ -1903,17 +1902,8 @@ func TestTransactionService(t *testing.T) {
 				// Wait until the data is available
 				wgBroadcast.Wait()
 
-				receivedMu.Lock()
-				data := received
-				receivedMu.Unlock()
-				// Deserialize
-				tx, err := types.BytesToTransaction(data)
-				require.NotNil(t, tx, "expected transaction")
-				require.NoError(t, tx.CalcAndSetOrigin())
-				require.NoError(t, err, "error deserializing broadcast tx")
-
 				// We assume the data is valid here, and put it directly into the txpool
-				conStateAPI.Put(tx.ID(), tx)
+				conStateAPI.Put(globalTx.ID, globalTx)
 			}()
 
 			wg := sync.WaitGroup{}
@@ -1924,7 +1914,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				res, err := stream.Recv()
 				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
 				// We expect the tx to go to the mempool
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 				checkTransaction(t, res.Transaction)
@@ -1940,7 +1930,7 @@ func TestTransactionService(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+			require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 			wgBroadcast.Done()
 
@@ -1950,7 +1940,7 @@ func TestTransactionService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateStreamRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 			req.IncludeTransactions = true
 
@@ -1970,7 +1960,7 @@ func TestTransactionService(t *testing.T) {
 				for _, stream := range streams {
 					res, err := stream.Recv()
 					require.NoError(t, err)
-					require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+					require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
 					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 					checkTransaction(t, res.Transaction)
 				}
@@ -1988,7 +1978,7 @@ func TestTransactionService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateStreamRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
+				Id: globalTx.ID.Bytes(),
 			})
 			req.IncludeTransactions = true
 
@@ -2030,19 +2020,12 @@ func TestTransactionService(t *testing.T) {
 }
 
 func checkTransaction(t *testing.T, tx *pb.Transaction) {
-	require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
-	require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
-	require.Equal(t, globalTx.Fee, tx.GasOffered.GasProvided)
-	require.Equal(t, globalTx.Amount, tx.Amount.Value)
-	require.Equal(t, globalTx.AccountNonce, tx.Counter)
-	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
-	switch x := tx.Datum.(type) {
-	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
-			"inner coin transfer tx has bad recipient")
-	default:
-		require.Fail(t, "inner tx has wrong tx data type")
-	}
+	require.Equal(t, globalTx.ID.Bytes(), tx.Id)
+	require.Equal(t, globalTx.Principal.Bytes(), tx.Principal)
+	require.Equal(t, globalTx.GasPrice, tx.GasPrice)
+	require.Equal(t, globalTx.MaxGas, tx.MaxGas)
+	require.Equal(t, globalTx.MaxSpend, tx.MaxSpend)
+	require.Equal(t, globalTx.Nonce.Counter, tx.Nonce.Counter)
 }
 
 func checkLayer(t *testing.T, l *pb.Layer) {
@@ -2090,23 +2073,12 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 	// Check the tx as well
 	resTx := resBlock.Transactions[0]
-	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
-	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
-	require.Equal(t, globalTx.Fee, resTx.GasOffered.GasProvided)
-	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
-	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
-	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
-	require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
-	require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
-
-	// The Data field is a bit trickier to read
-	switch x := resTx.Datum.(type) {
-	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
-			"inner coin transfer tx has bad recipient")
-	default:
-		require.Fail(t, "inner tx has wrong tx data type")
-	}
+	require.Equal(t, globalTx.ID.Bytes(), resTx.Id)
+	require.Equal(t, globalTx.Principal.Bytes(), resTx.Principal)
+	require.Equal(t, globalTx.GasPrice, resTx.GasPrice)
+	require.Equal(t, globalTx.MaxGas, resTx.MaxGas)
+	require.Equal(t, globalTx.MaxSpend, resTx.MaxSpend)
+	require.Equal(t, globalTx.Nonce.Counter, resTx.Nonce.Counter)
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
@@ -2554,23 +2526,9 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_MeshTransaction:
 		// Check the sender
-		require.Equal(t, globalTx.Origin().Bytes(), x.MeshTransaction.Transaction.Signature.PublicKey,
-			"inner coin transfer tx has bad sender")
-		require.Equal(t, globalTx.Amount, x.MeshTransaction.Transaction.Amount.Value,
-			"inner coin transfer tx has bad amount")
-		require.Equal(t, globalTx.AccountNonce, x.MeshTransaction.Transaction.Counter,
-			"inner coin transfer tx has bad counter")
-
-		// Need to further check tx type
-		switch y := x.MeshTransaction.Transaction.Datum.(type) {
-		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, globalTx.GetRecipient().Bytes(), y.CoinTransfer.Receiver.Address,
-				"inner coin transfer tx has bad recipient")
-		default:
-			require.Fail(t, "inner tx has wrong tx data type")
-		}
+		require.Equal(t, globalTx.Principal.Bytes(), x.MeshTransaction.Transaction.Principal)
 	default:
-		require.Fail(t, "inner account data item has wrong data type")
+		require.Fail(t, "inner account data item has wrong data type", x)
 	}
 }
 
@@ -2791,7 +2749,7 @@ func TestDebugService(t *testing.T) {
 		for _, a := range res.AccountWrapper {
 			addresses = append(addresses, a.AccountId.Address)
 		}
-		require.Contains(t, addresses, globalTx.Origin().Bytes())
+		require.Contains(t, addresses, globalTx.Principal.Bytes())
 		require.Contains(t, addresses, addr1.Bytes())
 	})
 	t.Run("networkID", func(t *testing.T) {
@@ -2898,7 +2856,7 @@ func TestEventsReceived(t *testing.T) {
 
 	txReq := &pb.TransactionsStateStreamRequest{}
 	txReq.TransactionId = append(txReq.TransactionId, &pb.TransactionId{
-		Id: globalTx.ID().Bytes(),
+		Id: globalTx.ID.Bytes(),
 	})
 
 	accountReq1 := &pb.AccountDataStreamRequest{
@@ -2944,7 +2902,7 @@ func TestEventsReceived(t *testing.T) {
 			txRes, err := txStream.Recv()
 			require.NoError(t, err)
 			require.Nil(t, txRes.Transaction)
-			require.Equal(t, globalTx.ID().Bytes(), txRes.TransactionState.Id.Id)
+			require.Equal(t, globalTx.ID.Bytes(), txRes.TransactionState.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
 
 			acc1Res, err := accountStream1.Recv()
@@ -2962,16 +2920,15 @@ func TestEventsReceived(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	lg := logtest.New(t).WithName("svm")
-	svm := vm.New(lg, sql.InMemory())
+	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(globalTx, true)
+	conState.AddToCache(globalTx)
 	time.Sleep(100 * time.Millisecond)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.AnyReward{{Coinbase: addr1, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
-	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
+	svm.Apply(layerFirst, []types.RawTx{globalTx.RawTx}, rewards)
 
 	time.Sleep(100 * time.Millisecond)
 
