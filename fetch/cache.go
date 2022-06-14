@@ -60,8 +60,10 @@ func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
 func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 	item, found := hpc.Cache.Get(hash)
 	if !found {
+		hpc.miss()
 		return nil, false
 	}
+	hpc.hit()
 	return item.(HashPeers), true
 }
 
@@ -73,14 +75,12 @@ type cacheStats struct {
 	Misses int64 `json:"misses"`
 }
 
-// Hit tracks hash-to-peer cache hit.
-func (hpc *HashPeersCache) Hit() {
+func (hpc *HashPeersCache) hit() {
 	atomic.AddInt64(&hpc.stats.Hits, 1)
 	metrics.LogHit()
 }
 
-// Miss tracks hash-to-peer cache miss.
-func (hpc *HashPeersCache) Miss() {
+func (hpc *HashPeersCache) miss() {
 	atomic.AddInt64(&hpc.stats.Misses, 1)
 	metrics.LogMiss()
 }

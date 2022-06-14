@@ -512,11 +512,9 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 
 		var p p2p.Peer
 		if exists {
-			f.hashToPeers.Hit()
 			hashPeers := hashPeersMap.ToList()
 			p = hashPeers[rng.Intn(len(hashPeers))]
 		} else {
-			f.hashToPeers.Miss()
 			p = GetRandomPeer(f.net.GetPeers())
 		}
 
