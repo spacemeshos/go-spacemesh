@@ -3,7 +3,6 @@ module github.com/spacemeshos/go-spacemesh
 replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1.0
 
 require (
-	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
@@ -40,6 +39,7 @@ require (
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
+	github.com/spacemeshos/sqlite v0.3.6
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0

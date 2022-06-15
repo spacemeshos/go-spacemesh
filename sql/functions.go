@@ -3,7 +3,7 @@ package sql
 import (
 	"fmt"
 
-	"crawshaw.io/sqlite"
+	"github.com/spacemeshos/sqlite"
 )
 
 func registerFunctions(conn *sqlite.Conn) error {
