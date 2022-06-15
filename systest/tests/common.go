@@ -80,8 +80,10 @@ func extractNames(nodes ...*cluster.NodeClient) []string {
 	return rst
 }
 
-func watchLayers(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient,
-	collector func(*spacemeshv1.LayerStreamResponse) (bool, error)) {
+func watchLayers(ctx context.Context, eg *errgroup.Group,
+	client *cluster.NodeClient,
+	collector func(*spacemeshv1.LayerStreamResponse) (bool, error),
+) {
 	eg.Go(func() error {
 		meshapi := spacemeshv1.NewMeshServiceClient(client)
 		layers, err := meshapi.LayerStream(ctx, &spacemeshv1.LayerStreamRequest{})
