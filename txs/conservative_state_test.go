@@ -701,7 +701,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 
 func TestConsistentHandling(t *testing.T) {
 	// there are two different workflows for transactions
-	// 1. receive gossiped transaction and verify it immediatly
+	// 1. receive gossiped transaction and verify it immediately
 	// 2. receive synced transaction and delay verification
 	// this test is meant to ensure that both of them will result in a consistent
 	// conservative cache state

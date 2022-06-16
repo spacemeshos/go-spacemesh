@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
-// Opt modifies
+// Opt modifies Options.
 type Opt func(*Options)
 
 // Defaults returns default Options.
@@ -20,7 +20,7 @@ type Options struct {
 	Nonce     *core.Nonce
 }
 
-// WithPrincial provides principal address.
+// WithPrincipal provides principal address.
 func WithPrincipal(address types.Address) Opt {
 	return func(opts *Options) {
 		opts.Principal = &address

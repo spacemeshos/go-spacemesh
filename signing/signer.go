@@ -119,8 +119,8 @@ func (es *EdSigner) PublicKey() *PublicKey {
 }
 
 // PrivateKey returns private key.
-func (ed *EdSigner) PrivateKey() PrivateKey {
-	return ed.privKey
+func (es *EdSigner) PrivateKey() PrivateKey {
+	return es.privKey
 }
 
 // LittleEndian indicates whether byte order in a signature is little-endian.

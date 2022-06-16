@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
-	rewardsdb "github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -122,7 +121,7 @@ func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	return core.Nonce{Counter: account.NextNonce()}, nil
 }
 
-// GetBalance returns balance for an adress.
+// GetBalance returns balance for an address.
 func (v *VM) GetBalance(address types.Address) (uint64, error) {
 	account, err := accounts.Latest(v.db, address)
 	if err != nil {
@@ -149,7 +148,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyReward) ([]types.TransactionID, error) {
+func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, error) {
 	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return nil, err
@@ -213,13 +212,13 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyRewa
 	}
 
 	// TODO(dshulyak) why it fails if there are no rewards?
-	if len(rewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, rewards)
+	if len(blockRewards) > 0 {
+		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, blockRewards)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		for _, reward := range finalRewards {
-			if err := rewardsdb.Add(tx, reward); err != nil {
+			if err := rewards.Add(tx, reward); err != nil {
 				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 			}
 			account, err := ss.Get(reward.Coinbase)

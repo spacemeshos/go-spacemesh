@@ -8,36 +8,35 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	ctypes "github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func createMeshTX(t *testing.T, signer *signing.EdSigner, lid ctypes.LayerID) *ctypes.MeshTransaction {
+func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *types.MeshTransaction {
 	t.Helper()
-	nonce := ctypes.Nonce{Counter: 223}
+	nonce := types.Nonce{Counter: 223}
 	amount := uint64(rand.Int())
-	tx := wallet.Spend(signer.PrivateKey(), ctypes.Address{1, 2, 3}, amount, sdk.WithNonce(nonce))
-	parsed := ctypes.Transaction{
-		RawTx: ctypes.NewRawTx(tx),
+	tx := wallet.Spend(signer.PrivateKey(), types.Address{1, 2, 3}, amount, sdk.WithNonce(nonce))
+	parsed := types.Transaction{
+		RawTx: types.NewRawTx(tx),
 	}
 	parsed.MaxGas = 32132
 	parsed.GasPrice = 1
 	parsed.MaxSpend = amount
 	parsed.Nonce = nonce
 	parsed.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
-	return &ctypes.MeshTransaction{
+	return &types.MeshTransaction{
 		Transaction: parsed,
 		LayerID:     lid,
-		BlockID:     ctypes.BlockID{1, 3, 5},
+		BlockID:     types.BlockID{1, 3, 5},
 		Received:    time.Now(),
-		State:       ctypes.MEMPOOL,
+		State:       types.MEMPOOL,
 	}
 }
 
 func TestNewNanoTX(t *testing.T) {
-	mtx := createMeshTX(t, signing.NewEdSigner(), ctypes.NewLayerID(13))
+	mtx := createMeshTX(t, signing.NewEdSigner(), types.NewLayerID(13))
 	ntx := NewNanoTX(mtx)
 	require.Equal(t, mtx.ID, ntx.ID)
 	require.Equal(t, mtx.Principal, ntx.Principal)
@@ -52,10 +51,10 @@ func TestNewNanoTX(t *testing.T) {
 }
 
 func TestUpdateMaybe(t *testing.T) {
-	mtx := createMeshTX(t, signing.NewEdSigner(), ctypes.LayerID{})
+	mtx := createMeshTX(t, signing.NewEdSigner(), types.LayerID{})
 	ntx := NewNanoTX(mtx)
-	lid := ctypes.NewLayerID(23)
-	bid := ctypes.RandomBlockID()
+	lid := types.NewLayerID(23)
+	bid := types.RandomBlockID()
 	require.NotEqual(t, lid, ntx.Layer)
 	require.NotEqual(t, bid, ntx.Block)
 	ntx.UpdateLayerMaybe(lid, bid)
@@ -63,32 +62,32 @@ func TestUpdateMaybe(t *testing.T) {
 	require.Equal(t, bid, ntx.Block)
 
 	lid = lid.Sub(1)
-	ntx.UpdateLayerMaybe(lid, ctypes.EmptyBlockID)
+	ntx.UpdateLayerMaybe(lid, types.EmptyBlockID)
 	require.Equal(t, lid, ntx.Layer)
-	require.Equal(t, ctypes.EmptyBlockID, ntx.Block)
+	require.Equal(t, types.EmptyBlockID, ntx.Block)
 
 	lid = lid.Add(1)
-	bid = ctypes.RandomBlockID()
-	ntx.UpdateLayerMaybe(lid, ctypes.RandomBlockID())
+	bid = types.RandomBlockID()
+	ntx.UpdateLayerMaybe(lid, types.RandomBlockID())
 	require.Equal(t, lid.Sub(1), ntx.Layer)
-	require.Equal(t, ctypes.EmptyBlockID, ntx.Block)
+	require.Equal(t, types.EmptyBlockID, ntx.Block)
 }
 
 func TestBetter_PanicOnInvalidArguments(t *testing.T) {
 	signer := signing.NewEdSigner()
-	ntx0 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
-	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), ctypes.LayerID{}))
+	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
+	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), types.LayerID{}))
 	require.Panics(t, func() { ntx0.Better(ntx1, nil) })
 
-	ntx2 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
+	ntx2 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
 	ntx2.Nonce.Counter = ntx0.Nonce.Counter + 1
 	require.Panics(t, func() { ntx0.Better(ntx2, nil) })
 }
 
 func TestBetter(t *testing.T) {
 	signer := signing.NewEdSigner()
-	ntx0 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
-	ntx1 := NewNanoTX(createMeshTX(t, signer, ctypes.LayerID{}))
+	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
+	ntx1 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
 	require.Equal(t, ntx0.Principal, ntx1.Principal)
 	require.Equal(t, ntx0.Nonce, ntx1.Nonce)
 	// fees are equal, ntx0 is better due to earlier timestamp

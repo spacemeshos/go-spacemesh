@@ -238,7 +238,7 @@ func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Trans
 				return nil, nil, err
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
-			// transactions can be added succesfully
+			// transactions can be added successfully
 			if err := cs.cache.Add(&mtx.Transaction, mtx.Received, nil); err != nil {
 				return nil, nil, err
 			}
