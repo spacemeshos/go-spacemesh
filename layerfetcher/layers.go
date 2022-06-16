@@ -306,16 +306,19 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 }
 
 // registerLayerHashes registers provided hashes with provided peer.
-func (l *Logic) registerLayerHashes(peer p2p.Peer, blocks *layerData) {
-	if blocks == nil {
+func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
+	if data == nil {
 		return
 	}
 	var layerHashes []types.Hash32
-	for _, ballotID := range blocks.Ballots {
+	for _, ballotID := range data.Ballots {
 		layerHashes = append(layerHashes, ballotID.AsHash32())
 	}
-	for _, blkID := range blocks.Blocks {
+	for _, blkID := range data.Blocks {
 		layerHashes = append(layerHashes, blkID.AsHash32())
+	}
+	if data.HareOutput != types.EmptyBlockID {
+		layerHashes = append(layerHashes, data.HareOutput.AsHash32())
 	}
 
 	if len(layerHashes) == 0 {
