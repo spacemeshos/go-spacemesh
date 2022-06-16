@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestShortTimeskew(t *testing.T) {
