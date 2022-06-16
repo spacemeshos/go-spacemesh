@@ -67,7 +67,7 @@ func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 	return hashPeers, true
 }
 
-// get is the same as Get but doesn't affect cache stats
+// get is the same as Get but doesn't affect cache stats.
 func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 	item, found := hpc.Cache.Get(hash)
 	if !found {
