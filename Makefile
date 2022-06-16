@@ -15,6 +15,8 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 export GO111MODULE := on
 export CGO_ENABLED := 1
+export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
+
 PKGS = $(shell go list ./...)
 
 # These commands cause problems on Windows
