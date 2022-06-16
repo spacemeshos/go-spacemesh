@@ -45,7 +45,7 @@ func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
-	peers, exists := hpc.Get(hash)
+	peers, exists := hpc.get(hash)
 	if !exists {
 		hpc.Cache.Add(hash, HashPeers{peer: {}})
 		return
@@ -58,12 +58,21 @@ func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
 // Get returns hash peers, it also returns a boolean to indicate whether the item
 // was found in cache.
 func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
-	item, found := hpc.Cache.Get(hash)
+	hashPeers, found := hpc.get(hash)
 	if !found {
 		hpc.miss()
 		return nil, false
 	}
 	hpc.hit()
+	return hashPeers, true
+}
+
+// get is the same as Get but doesn't affect cache stats
+func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
+	item, found := hpc.Cache.Get(hash)
+	if !found {
+		return nil, false
+	}
 	return item.(HashPeers), true
 }
 
