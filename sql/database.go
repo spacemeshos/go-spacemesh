@@ -126,32 +126,6 @@ type Database struct {
 	pool *sqlitex.Pool
 }
 
-// Tx creates deferred sqlite transaction.
-//
-// Deferred transactions are not started until the first statement.
-// Transaction may be started in read mode and automatically upgraded to write mode
-// after one of the write statements.
-//
-// https://www.sqlite.org/lang_transaction.html
-func (db *Database) Tx(ctx context.Context) (*Tx, error) {
-	conn := db.pool.Get(ctx)
-	if conn == nil {
-		return nil, ErrNoConnection
-	}
-	tx := &Tx{db: db, conn: conn}
-	return tx, tx.begin()
-}
-
-// TxConcurrent starts a concurrent transaction. Locking of db is deferred until commit will be called.
-func (db *Database) TxConcurrent(ctx context.Context) (*Tx, error) {
-	conn := db.pool.Get(ctx)
-	if conn == nil {
-		return nil, ErrNoConnection
-	}
-	tx := &Tx{db: db, conn: conn}
-	return tx, tx.beginConcurrent()
-}
-
 // Exec statement using one of the connection from the pool.
 //
 // If you care about atomicity of the operation (for example writing rewards to multiple accounts)
@@ -214,55 +188,22 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	}
 }
 
-// Tx is wrapper for database transaction.
-type Tx struct {
-	db        *Database
-	conn      *sqlite.Conn
-	committed bool
-	err       error
-}
-
-func (tx *Tx) begin() error {
-	stmt := tx.conn.Prep("BEGIN;")
-	_, err := stmt.Step()
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	return nil
-}
-
-func (tx *Tx) beginConcurrent() error {
-	stmt := tx.conn.Prep("BEGIN CONCURRENT;")
-	_, err := stmt.Step()
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	return nil
-}
-
-// Commit transaction.
-func (tx *Tx) Commit() error {
-	stmt := tx.conn.Prep("COMMIT;")
-	_, tx.err = stmt.Step()
-	if tx.err != nil {
-		return tx.err
-	}
-	tx.committed = true
-	return nil
-}
-
-// Release transaction. Every transaction that was created must be released.
-func (tx *Tx) Release() error {
-	defer tx.db.pool.Put(tx.conn)
-	if tx.committed {
+// GetSQLiteError returns sqlite error for the given error.
+func (db *Database) GetSQLiteError(err error) *sqlite.Error {
+	if err == nil {
 		return nil
 	}
-	stmt := tx.conn.Prep("ROLLBACK")
-	_, tx.err = stmt.Step()
-	return tx.err
-}
-
-// Exec query.
-func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
-	return exec(tx.conn, query, encoder, decoder)
+	tmpErr := err
+	if sqliteErr, ok := tmpErr.(sqlite.Error); ok {
+		return &sqliteErr
+	}
+	for {
+		tmpErr = errors.Unwrap(tmpErr)
+		if tmpErr == nil {
+			return nil
+		}
+		if sqliteErr, ok := tmpErr.(sqlite.Error); ok {
+			return &sqliteErr
+		}
+	}
 }
