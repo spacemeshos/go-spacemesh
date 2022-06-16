@@ -1686,10 +1686,8 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	}()
 	c := pb.NewTransactionServiceClient(conn)
 	for i := 0; i < expected; i++ {
-		serializedTx, err := types.InterfaceToBytes(globalTx)
-		require.NoError(t, err, "error serializing tx")
 		res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-			Transaction: serializedTx,
+			Transaction: globalTx.Raw,
 		})
 		require.NoError(t, err)
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
@@ -1728,27 +1726,13 @@ func TestTransactionService(t *testing.T) {
 	}{
 		{"SubmitSpawnTransaction", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
+				Transaction: globalTx.Raw,
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
-		}},
-		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			// Try sending invalid tx data
-			serializedTx, err := types.InterfaceToBytes("this is not the transaction you're looking for")
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` must contain")
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1922,10 +1906,8 @@ func TestTransactionService(t *testing.T) {
 			// SUBMIT
 			events.CloseEventReporter()
 			events.InitializeReporter()
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
+				Transaction: globalTx.Raw,
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
