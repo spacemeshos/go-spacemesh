@@ -35,21 +35,6 @@ func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient
 	return nil
 }
 
-func newSpender(pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) func(context.Context) error {
-	return func(ctx context.Context) error {
-		if err := submitTransacition(ctx,
-			wallet.Spend(
-				signing.PrivateKey(pk), types.Address(receiver), amount,
-				sdk.WithNonce(types.Nonce{Counter: nonce}),
-			),
-			client); err != nil {
-			return err
-		}
-		nonce++
-		return nil
-	}
-}
-
 func extractNames(nodes ...*cluster.NodeClient) []string {
 	var rst []string
 	for _, n := range nodes {
@@ -171,38 +156,19 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address []byte) (
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
 
-func waitSpawned(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	svc := spacemeshv1.NewGlobalStateServiceClient(client)
+	return submitTransacition(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
+}
 
-	stream, err := svc.AccountDataStream(ctx, &spacemeshv1.AccountDataStreamRequest{
-		Filter: &spacemeshv1.AccountDataFilter{
-			AccountId:        &spacemeshv1.AccountId{Address: cluster.Address(account)},
-			AccountDataFlags: uint32(spacemeshv1.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := submitTransacition(ctx, wallet.SelfSpawn(cluster.Private(account)), client); err != nil {
-		return err
-	}
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream recv %w", err)
-		}
-		switch resp.Datum.Datum.(type) {
-		case *spacemeshv1.AccountData_AccountWrapper:
-			account := resp.Datum.GetAccountWrapper()
-			if account.StateCurrent.Counter == 1 {
-				return nil
-			}
-		default:
-			return fmt.Errorf("received unexpected data %v", resp.Datum.Datum)
-		}
-	}
-
+func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return submitTransacition(ctx,
+		wallet.Spend(
+			signing.PrivateKey(pk), types.Address(receiver), amount,
+			sdk.WithNonce(types.Nonce{Counter: nonce}),
+		),
+		client)
 }
