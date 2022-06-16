@@ -53,6 +53,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -468,6 +469,12 @@ func (app *App) initServices(ctx context.Context,
 	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
+	}
+	if app.Config.CollectMetrics {
+		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+		if dbCollector != nil {
+			app.closers = append(app.closers, dbCollector)
+		}
 	}
 
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
