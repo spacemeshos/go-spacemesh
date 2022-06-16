@@ -19,7 +19,8 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 	amount := uint64(rand.Int())
 	tx := wallet.Spend(signer.PrivateKey(), types.Address{1, 2, 3}, amount, sdk.WithNonce(nonce))
 	parsed := types.Transaction{
-		RawTx: types.NewRawTx(tx),
+		RawTx:    types.NewRawTx(tx),
+		TxHeader: &types.TxHeader{},
 	}
 	parsed.MaxGas = 32132
 	parsed.GasPrice = 1
