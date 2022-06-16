@@ -195,7 +195,7 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(_ context.Context, cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
+func NewFetch(cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,

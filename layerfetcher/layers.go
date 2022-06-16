@@ -157,7 +157,7 @@ func NewLogic(ctx context.Context, cfg Config, poet poetDB, atxIDs atxIDsDB, lay
 ) *Logic {
 	l := &Logic{
 		log:             log,
-		fetcher:         fetch.NewFetch(ctx, cfg.Config, host, dbStores, log.WithName("fetch")),
+		fetcher:         fetch.NewFetch(cfg.Config, host, dbStores, log.WithName("fetch")),
 		host:            host,
 		goldenATXID:     cfg.GoldenATXID,
 		layerBlocksRes:  make(map[types.LayerID]*layerResult),
