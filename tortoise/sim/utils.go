@@ -7,7 +7,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -71,7 +70,7 @@ type beaconStore struct {
 func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
 	beacon, exist := b.beacons[eid-1]
 	if !exist {
-		return types.EmptyBeacon, database.ErrNotFound
+		return types.EmptyBeacon, sql.ErrNotFound
 	}
 	return beacon, nil
 }
