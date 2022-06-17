@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
@@ -20,8 +21,7 @@ var errInvalidATXID = errors.New("proposal ATXID invalid")
 type Generator struct {
 	logger   log.Log
 	cfg      Config
-	atxDB    atxProvider
-	meshDB   meshProvider
+	cdb      *datastore.CachedDB
 	conState conservativeState
 }
 
@@ -56,12 +56,11 @@ func WithGeneratorLogger(logger log.Log) GeneratorOpt {
 }
 
 // NewGenerator creates new block generator.
-func NewGenerator(atxDB atxProvider, meshDB meshProvider, cState conservativeState, opts ...GeneratorOpt) *Generator {
+func NewGenerator(cdb *datastore.CachedDB, cState conservativeState, opts ...GeneratorOpt) *Generator {
 	g := &Generator{
 		logger:   log.NewNop(),
 		cfg:      defaultConfig(),
-		atxDB:    atxDB,
-		meshDB:   meshDB,
+		cdb:      cdb,
 		conState: cState,
 	}
 	for _, opt := range opts {
@@ -103,13 +102,13 @@ func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Propo
 			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
 			return nil, errInvalidATXID
 		}
-		atx, err := g.atxDB.GetAtxHeader(p.AtxID)
+		atx, err := g.cdb.GetAtxHeader(p.AtxID)
 		if err != nil {
 			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
 			return nil, fmt.Errorf("block gen get ATX: %w", err)
 		}
 		ballot := &p.Ballot
-		weightPer, err := proposals.ComputeWeightPerEligibility(g.atxDB, g.meshDB, ballot, g.cfg.LayerSize, g.cfg.LayersPerEpoch)
+		weightPer, err := proposals.ComputeWeightPerEligibility(g.cdb, ballot, g.cfg.LayerSize, g.cfg.LayersPerEpoch)
 		if err != nil {
 			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
 			return nil, err
