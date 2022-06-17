@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/poet/verifier"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,7 +26,7 @@ type PoetDb struct {
 	mu                        sync.Mutex
 }
 
-// NewPoetDb returns a new PoET DB.
+// NewPoetDb returns a new PoET handler.
 func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
 	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
@@ -219,23 +218,4 @@ func validatePoet(membershipRoot []byte, merkleProof shared.MerkleProof, leafCou
 	}
 
 	return nil
-}
-
-// PoETs exports the PoETs database.
-func (db *PoetDb) PoETs() database.Getter {
-	return newPoETFetcherDB(db)
-}
-
-func newPoETFetcherDB(db *PoetDb) *PoETFetcher {
-	return &PoETFetcher{DB: db}
-}
-
-// PoETFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
-type PoETFetcher struct {
-	DB *PoetDb
-}
-
-// Get gets an PoET as bytes by an PoET ID as bytes.
-func (f *PoETFetcher) Get(key []byte) ([]byte, error) {
-	return poets.Get(f.DB.sqlDB, key)
 }
