@@ -20,13 +20,3 @@ type conservativeState interface {
 type votesEncoder interface {
 	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Votes, error)
 }
-
-type activationDB interface {
-	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
-}
-
-type meshProvider interface {
-	GetAggregatedLayerHash(types.LayerID) (types.Hash32, error)
-}
