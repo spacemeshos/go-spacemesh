@@ -98,11 +98,11 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	_, err := poetDb.getProofRef(msg.PoetServiceID, "0")
-	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: leveldb: not found", msg.PoetServiceID[:5], "0"))
+	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
 
 	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
-	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: leveldb: not found", ref[:5]))
+	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: database: not found", ref[:5]))
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
