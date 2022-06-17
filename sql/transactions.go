@@ -19,7 +19,7 @@ type txRetryer struct {
 
 func newTxRetryer(opts ...TxRetryOpt) *txRetryer {
 	tr := &txRetryer{
-		retryMs:  10,
+		retryMs:  10 * time.Millisecond,
 		retryNum: 3,
 	}
 	for _, opt := range opts {
@@ -44,9 +44,9 @@ func WithRetryBusy(n int) TxRetryOpt {
 }
 
 // WithRetryTimeout timeout for retrying db transactions.
-func WithRetryTimeout(milliseconds int) TxRetryOpt {
+func WithRetryTimeout(retryTimeout time.Duration) TxRetryOpt {
 	return func(t *txRetryer) {
-		t.retryMs = time.Duration(milliseconds) * time.Millisecond
+		t.retryMs = retryTimeout
 	}
 }
 
