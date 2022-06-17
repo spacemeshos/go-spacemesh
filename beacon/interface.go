@@ -13,13 +13,6 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
-type activationDB interface {
-	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
-	GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error)
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-	GetAtxTimestamp(types.ATXID) (time.Time, error)
-}
-
 type coin interface {
 	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)
 	StartRound(context.Context, types.RoundID) error
