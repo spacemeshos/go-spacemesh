@@ -2,25 +2,20 @@ package sim
 
 import (
 	"math/rand"
-	"os"
 	"path/filepath"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-var goldenATX = types.ATXID{1, 1, 1}
-
 const (
-	meshpath = "mesh"
-	atxpath  = "atx"
+	atxpath = "atx"
 )
 
-func newAtxDB(logger log.Log, conf config) *activation.DB {
+func newCacheDB(logger log.Log, conf config) *datastore.CachedDB {
 	var (
 		db  *sql.Database
 		err error
@@ -33,19 +28,7 @@ func newAtxDB(logger log.Log, conf config) *activation.DB {
 			panic(err)
 		}
 	}
-	return activation.NewDB(db, nil, conf.LayersPerEpoch, goldenATX, nil, logger)
-}
-
-func newMeshDB(logger log.Log, conf config) *mesh.DB {
-	if len(conf.Path) > 0 {
-		os.MkdirAll(filepath.Join(conf.Path, meshpath), os.ModePerm)
-		db, err := mesh.NewPersistentMeshDB(sql.InMemory(), logger)
-		if err != nil {
-			panic(err)
-		}
-		return db
-	}
-	return mesh.NewMemMeshDB(logger)
+	return datastore.NewCachedDB(db, logger)
 }
 
 func intInRange(rng *rand.Rand, ints [2]int) int {
