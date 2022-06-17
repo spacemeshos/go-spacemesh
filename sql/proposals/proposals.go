@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -69,7 +68,7 @@ func GetIDsByLayer(db sql.Executor, layer types.LayerID) (ids []types.ProposalID
 	if rows, err := db.Exec("select id from proposals where layer = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec layer %v: %w", layer, err)
 	} else if rows == 0 {
-		return []types.ProposalID{}, database.ErrNotFound
+		return []types.ProposalID{}, sql.ErrNotFound
 	}
 
 	return ids, nil

@@ -7,10 +7,10 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 var (
@@ -78,7 +78,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	// calculate the proof
 	atx, err := o.getOwnEpochATX(epoch)
 	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
+		if errors.Is(err, sql.ErrNotFound) {
 			return *types.EmptyATXID, nil, nil, errMinerHasNoATXInPreviousEpoch
 		}
 		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)

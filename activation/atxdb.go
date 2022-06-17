@@ -336,7 +336,7 @@ type ErrAtxNotFound error
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	id, err := atxs.GetLastIDByNodeID(db.sqlDB, nodeID)
 	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
+		if errors.Is(err, sql.ErrNotFound) {
 			err := ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 			return *types.EmptyATXID, fmt.Errorf("find ATX in DB: %w", err)
 		}
@@ -370,7 +370,7 @@ func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.E
 func (db *DB) GetPosAtxID() (types.ATXID, error) {
 	id, err := atxs.GetTop(db.sqlDB)
 	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
+		if errors.Is(err, sql.ErrNotFound) {
 			return db.goldenATXID, nil
 		}
 		return *types.EmptyATXID, fmt.Errorf("failed to get top atx: %v", err)

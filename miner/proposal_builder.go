@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
@@ -223,7 +222,7 @@ func (pb *ProposalBuilder) createProposal(
 	epoch := layerID.GetEpoch()
 	refBallot, err := pb.getRefBallot(epoch)
 	if err != nil {
-		if !errors.Is(err, database.ErrNotFound) {
+		if !errors.Is(err, sql.ErrNotFound) {
 			logger.With().Error("failed to get ref ballot", log.Err(err))
 			return nil, fmt.Errorf("get ref ballot: %w", err)
 		}

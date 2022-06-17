@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -126,30 +126,6 @@ func (*ValidatorMock) ValidatePost(id []byte, Post *types.Post, PostMetadata *ty
 	return nil
 }
 
-func NewMockDB() *MockDB {
-	return &MockDB{
-		make(map[string][]byte),
-		false,
-	}
-}
-
-type MockDB struct {
-	mp      map[string][]byte
-	hadNone bool
-}
-
-func (m *MockDB) Put(key, val []byte) error {
-	if len(val) == 0 {
-		m.hadNone = true
-	}
-	m.mp[util.Bytes2Hex(key)] = val
-	return nil
-}
-
-func (m *MockDB) Get(key []byte) ([]byte, error) {
-	return m.mp[util.Bytes2Hex(key)], nil
-}
-
 type FaultyNetMock struct {
 	bt     []byte
 	retErr bool
@@ -229,7 +205,7 @@ func newBuilder(tb testing.TB, activationDb atxDBProvider) *Builder {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, nipostBuilderMock, &postSetupProviderMock{},
-		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(tb).WithName("atxBuilder"))
+		layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(tb).WithName("atxBuilder"))
 	b.initialPost = initialPost
 	return b
 }
@@ -307,7 +283,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	close(sessionChan)
 	builder := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, nipostBuilderMock,
 		&postSetupProviderMock{sessionChan: sessionChan},
-		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+		layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
@@ -366,14 +342,14 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "sign and broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
 
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
-	b = NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	b = NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 	published, builtNipost, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.False(published)
@@ -407,7 +383,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 	published, builtNIPost, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "sign and broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
@@ -536,7 +512,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 
 	activationDb := newActivationDb(t)
 	nipostBuilder := &NIPostErrBuilderMock{} // 👀 mock that returns error from BuildNIPost()
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 	b.initialPost = initialPost
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
@@ -616,7 +592,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ed := signing.NewEdSigner()
 	nodeID := types.BytesToNodeID(ed.PublicKey().Bytes())
 	activationDb := NewDB(sql.InMemory(), nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
-	b := NewBuilder(cfg, nodeID, ed, activationDb, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, ed, activationDb, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, nipost)
@@ -639,7 +615,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
-	db := NewMockDB()
+	db := sql.InMemory()
 	sig := &MockSigning{}
 	activationDb := NewDB(sql.InMemory(), nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	net.atxDb = activationDb
@@ -697,7 +673,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
-	db.hadNone = false
+	got, err := niposts.Get(db, getNIPostKey())
+	require.NoError(t, err)
+	require.NotEmpty(t, got)
 	// test load challenge in later epoch - NIPost should be truncated
 	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.loadChallenge()
@@ -706,7 +684,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
-	assert.True(t, db.hadNone)
+	got, err = niposts.Get(db, getNIPostKey())
+	require.NoError(t, err)
+	require.Empty(t, got)
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
@@ -724,7 +704,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	nipostBuilder := &NIPostBuilderMock{}
 	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, net,
 		nipostBuilder, &postSetupProviderMock{}, layerClockMock,
-		&mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"),
+		&mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"),
 		WithPoetRetryInterval(retryInterval),
 	)
 	b.initialPost = initialPost
@@ -778,7 +758,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	}
 	postSetupProvider := &postSetupProviderMock{}
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, nipostBuilderMock, postSetupProvider,
-		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+		layerClockMock, &mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"))
 
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)
@@ -822,7 +802,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 		poetDb, database.NewMemDatabase(), logtest.New(t).WithName(string(minerID)))
 	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock,
 		nb, postProver, layerClockMock,
-		&mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"),
+		&mockSyncer{}, sql.InMemory(), logtest.New(t).WithName("atxBuilder"),
 		WithPoetRetryInterval(time.Millisecond),
 		WithPoETClientInitializer(mockInitializer),
 	)

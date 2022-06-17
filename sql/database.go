@@ -7,16 +7,13 @@ import (
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
-
-	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 var (
 	// ErrNoConnection is returned if pooled connection is not available.
 	ErrNoConnection = errors.New("database: no free connection")
 	// ErrNotFound is returned if requested record is not found.
-	// TODO(dshulyak) is an alias to datatabase.ErrNotFound until full transition is implemented.
-	ErrNotFound = database.ErrNotFound
+	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
 )

@@ -34,7 +34,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -73,7 +72,6 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
-	StoreLogger            = "store"
 	PoetDbLogger           = "poetDb"
 	MeshDBLogger           = "meshDb"
 	TrtlLogger             = "trtl"
@@ -460,12 +458,6 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create store DB: %w", err)
-	}
-	app.closers = append(app.closers, store)
-
 	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
@@ -512,11 +504,11 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
 	processed, err := mdb.GetProcessedLayer()
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
 	verified, err := mdb.GetVerifiedLayer()
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
 
@@ -642,7 +634,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
 	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 	if app.Config.SMESHING.Start {
@@ -657,7 +649,7 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
+		postSetupMgr, clock, newSyncer, sqlDB, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {

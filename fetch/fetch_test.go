@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func randomHash() (hash types.Hash32) {
@@ -102,6 +102,12 @@ func (m *mockNet) Request(_ context.Context, pid p2p.Peer, payload []byte, resHa
 	return nil
 }
 
+type blobDB struct{}
+
+func (b *blobDB) Get([]byte) ([]byte, error) {
+	return nil, sql.ErrNotFound
+}
+
 func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 	cfg := Config{
 		2000, // make sure we never hit the batch timeout
@@ -116,7 +122,7 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	dbs := LocalDataSource{"db": database.NewMemDatabase(), "db2": database.NewMemDatabase()}
+	dbs := LocalDataSource{"db": &blobDB{}, "db2": &blobDB{}}
 	f := NewFetch(context.TODO(), cfg, nil, dbs, lg)
 	f.net = mckNet
 
@@ -129,7 +135,7 @@ func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	f := NewFetch(context.TODO(), cfg, nil, LocalDataSource{"db": database.NewMemDatabase()}, lg)
+	f := NewFetch(context.TODO(), cfg, nil, LocalDataSource{"db": &blobDB{}}, lg)
 	f.net = mckNet
 	return f, mckNet
 }

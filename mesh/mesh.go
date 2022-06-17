@@ -11,7 +11,6 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -143,7 +142,7 @@ func (msh *Mesh) getMinUpdatedLayer() types.LayerID {
 func (msh *Mesh) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, newValid bool) error {
 	msh.With().Debug("updating validity for block", lid, bid)
 	oldValid, err := msh.DB.ContextualValidity(bid)
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("error reading contextual validity of block %v: %w", bid, err)
 	}
 
@@ -233,7 +232,7 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	if err == nil {
 		return h, nil
 	}
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		// layer hash not persisted. i.e. contextual validity not yet determined
 		var lyr *types.Layer
 		lyr, err = msh.GetLayer(layerID)

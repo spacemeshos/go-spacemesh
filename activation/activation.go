@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
 var (
@@ -57,11 +59,6 @@ type atxDBProvider interface {
 	GetAtxTimestamp(id types.ATXID) (time.Time, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
-}
-
-type bytesStore interface {
-	Put(key []byte, buf []byte) error
-	Get(key []byte) ([]byte, error)
 }
 
 type signer interface {
@@ -123,7 +120,7 @@ type Builder struct {
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
 	mu                    sync.Mutex
-	store                 bytesStore
+	sdb                   *sql.Database
 	syncer                syncer
 	log                   log.Log
 	parentCtx             context.Context
@@ -164,7 +161,7 @@ func WithContext(ctx context.Context) BuilderOption {
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
-	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption,
+	syncer syncer, sdb *sql.Database, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
@@ -178,7 +175,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		nipostBuilder:     nipostBuilder,
 		postSetupProvider: postSetupProvider,
 		layerClock:        layerClock,
-		store:             store,
+		sdb:               sdb,
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
@@ -439,7 +436,7 @@ func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
 
-func (b *Builder) getNIPostKey() []byte {
+func getNIPostKey() []byte {
 	return []byte("NIPost")
 }
 
@@ -449,7 +446,7 @@ func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
 		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
 
-	if err := b.store.Put(b.getNIPostKey(), bts); err != nil {
+	if err := niposts.Add(b.sdb, getNIPostKey(), bts); err != nil {
 		return fmt.Errorf("put NIPost challenge to store: %w", err)
 	}
 
@@ -457,7 +454,7 @@ func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
 }
 
 func (b *Builder) loadChallenge() error {
-	bts, err := b.store.Get(b.getNIPostKey())
+	bts, err := niposts.Get(b.sdb, getNIPostKey())
 	if err != nil {
 		return fmt.Errorf("get NIPost challenge from store: %w", err)
 	}
@@ -590,7 +587,7 @@ func (b *Builder) currentEpoch() types.EpochID {
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
 	b.pendingATX = nil
-	if err := b.store.Put(b.getNIPostKey(), []byte{}); err != nil {
+	if err := niposts.Add(b.sdb, getNIPostKey(), []byte{}); err != nil {
 		b.log.Error("failed to discard NIPost challenge: %v", err)
 	}
 }

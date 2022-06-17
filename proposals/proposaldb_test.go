@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -73,11 +72,11 @@ func TestDB_GetProposal(t *testing.T) {
 	p2 := createProposalAndSaveBallot(t, td, layerID)
 
 	got1, err := td.GetProposal(p1.ID())
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, got1)
 
 	got2, err := td.GetProposal(p2.ID())
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, got2)
 
 	require.NoError(t, td.AddProposal(context.TODO(), p1))
@@ -88,7 +87,7 @@ func TestDB_GetProposal(t *testing.T) {
 	require.Equal(t, p1, got1)
 
 	got2, err = td.GetProposal(p2.ID())
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, got2)
 }
 
@@ -153,7 +152,7 @@ func TestDB_LayerProposalIDs(t *testing.T) {
 	}
 
 	got, err := td.LayerProposalIDs(layerID.Add(numLayers + 1))
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }
 
@@ -180,6 +179,6 @@ func TestDB_LayerProposals(t *testing.T) {
 	}
 
 	got, err := td.LayerProposals(layerID.Add(numLayers + 1))
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }
