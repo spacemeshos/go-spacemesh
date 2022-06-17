@@ -33,6 +33,24 @@ func TestHareOutput(t *testing.T) {
 	require.Equal(t, expected, output)
 }
 
+func TestWeakCoin(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.NewLayerID(10)
+
+	_, err := GetWeakCoin(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	require.NoError(t, SetWeakCoin(db, lid, true))
+	got, err := GetWeakCoin(db, lid)
+	require.NoError(t, err)
+	require.True(t, got)
+
+	require.NoError(t, SetWeakCoin(db, lid, false))
+	got, err = GetWeakCoin(db, lid)
+	require.NoError(t, err)
+	require.False(t, got)
+}
+
 func TestAppliedBlock(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.NewLayerID(10)
