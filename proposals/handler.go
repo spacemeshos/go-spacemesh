@@ -107,9 +107,9 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m meshDB,
 }
 
 // HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) HandleProposal(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
-	if err := h.handleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
+	if err := h.handleProposalData(newCtx, msg, peer); errors.Is(err, errKnownProposal) {
 		return pubsub.ValidationIgnore
 	} else if err != nil {
 		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
@@ -158,14 +158,14 @@ func collectHashes(b *types.Ballot) []types.Hash32 {
 
 // HandleProposalData handles Proposal data from sync.
 func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
-	err := h.handleProposalData(ctx, data)
+	err := h.handleProposalData(ctx, data, p2p.NoPeer)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
+func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.Peer) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing proposal")
 
@@ -188,6 +188,8 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
 	logger.With().Info("new proposal", log.Inline(&p))
+
+	h.fetcher.RegisterPeerHashes(peer, collectHashes(&p.Ballot))
 
 	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
 		logger.With().Warning("failed to process ballot", log.Err(err))
