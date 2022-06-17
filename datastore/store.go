@@ -3,6 +3,8 @@ package datastore
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -10,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -132,9 +133,27 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 	case ProposalDB:
 		return proposals.GetBlob(bs.DB, key)
 	case BallotDB:
-		return ballots.GetBlob(bs.DB, key)
+		id := types.BallotID(types.BytesToHash(key).ToHash20())
+		blt, err := ballots.Get(bs.DB, id)
+		if err != nil {
+			return nil, fmt.Errorf("get ballot blob: %w", err)
+		}
+		data, err := codec.Encode(blt)
+		if err != nil {
+			return data, fmt.Errorf("serialize: %w", err)
+		}
+		return data, nil
 	case BlockDB:
-		return blocks.GetBlob(bs.DB, key)
+		id := types.BlockID(types.BytesToHash(key).ToHash20())
+		blk, err := blocks.Get(bs.DB, id)
+		if err != nil {
+			return nil, fmt.Errorf("get block: %w", err)
+		}
+		data, err := codec.Encode(blk)
+		if err != nil {
+			return data, fmt.Errorf("serialize: %w", err)
+		}
+		return data, nil
 	case TXDB:
 		return transactions.GetBlob(bs.DB, key)
 	case POETDB:

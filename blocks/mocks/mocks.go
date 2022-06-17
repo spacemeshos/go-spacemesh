@@ -12,44 +12,6 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MockatxProvider is a mock of atxProvider interface.
-type MockatxProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockatxProviderMockRecorder
-}
-
-// MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
-type MockatxProviderMockRecorder struct {
-	mock *MockatxProvider
-}
-
-// NewMockatxProvider creates a new mock instance.
-func NewMockatxProvider(ctrl *gomock.Controller) *MockatxProvider {
-	mock := &MockatxProvider{ctrl: ctrl}
-	mock.recorder = &MockatxProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
-	return m.recorder
-}
-
-// GetAtxHeader mocks base method.
-func (m *MockatxProvider) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockatxProviderMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxProvider)(nil).GetAtxHeader), arg0)
-}
-
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
@@ -85,35 +47,6 @@ func (m *MockmeshProvider) AddBlockWithTXs(arg0 context.Context, arg1 *types.Blo
 func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
-}
-
-// GetBallot mocks base method.
-func (m *MockmeshProvider) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBallot", arg0)
-	ret0, _ := ret[0].(*types.Ballot)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBallot indicates an expected call of GetBallot.
-func (mr *MockmeshProviderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockmeshProvider)(nil).GetBallot), arg0)
-}
-
-// HasBlock mocks base method.
-func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasBlock", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// HasBlock indicates an expected call of HasBlock.
-func (mr *MockmeshProviderMockRecorder) HasBlock(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBlock", reflect.TypeOf((*MockmeshProvider)(nil).HasBlock), arg0)
 }
 
 // MockconservativeState is a mock of conservativeState interface.
