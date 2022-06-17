@@ -135,10 +135,10 @@ func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err
 }
 
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id types.ATXID) (buf []byte, err error) {
+func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 	if rows, err := db.Exec("select atx from atxs where id = ?1",
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id.Bytes())
+			stmt.BindBytes(1, id)
 		}, func(stmt *sql.Statement) bool {
 			buf = make([]byte, stmt.ColumnLen(0))
 			stmt.ColumnBytes(0, buf)
