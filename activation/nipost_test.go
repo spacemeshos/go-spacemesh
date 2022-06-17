@@ -10,7 +10,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
-	_ "github.com/syndtr/goleveldb/leveldb/table"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
