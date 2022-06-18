@@ -446,34 +446,33 @@ func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), e
 
 // AddResult adds result for the transaction. It would make sense if it was atomic with
 // Apply.
-func AddResult(db sql.Executor, rst *types.TransactionResult) error {
+func AddResult(db sql.Executor, id types.TransactionID, rst *types.TransactionResult) error {
+	buf, err := codec.Encode(rst)
+	if err != nil {
+		return fmt.Errorf("encode %w", err)
+	}
 	if _, err := db.Exec(`insert into transactions_results 
-		(tid, status, message, layer, block, gas, fee) 
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+		(tid, result) 
+		values (?1, ?2)`,
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, rst.Transaction.ID[:])
-			stmt.BindInt64(2, int64(rst.Status))
-			stmt.BindText(3, rst.Message)
-			stmt.BindInt64(4, int64(rst.Layer.Value))
-			stmt.BindBytes(5, rst.Block[:])
-			stmt.BindInt64(6, int64(rst.Gas))
-			stmt.BindInt64(7, int64(rst.Fee))
+			stmt.BindBytes(1, id[:])
+			stmt.BindBytes(2, buf)
 		},
 		func(stmt *sql.Statement) bool {
 			return false
 		},
 	); err != nil {
-		return fmt.Errorf("insert result for %s: %w", rst.Transaction.ID, err)
+		return fmt.Errorf("insert result for %s: %w", id[:], err)
 	}
 	for i := range rst.Addresses {
 		if _, err := db.Exec(`insert into transactions_results_addresses 
 		(address, tid) values (?1, ?2);`,
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, rst.Addresses[i][:])
-				stmt.BindBytes(2, rst.Transaction.ID[:])
+				stmt.BindBytes(2, id[:])
 			}, nil); err != nil {
 			return fmt.Errorf("add address %s to %s: %w",
-				rst.Addresses[i].String(), rst.Transaction.ID, err)
+				rst.Addresses[i].String(), id[:], err)
 		}
 	}
 	return nil

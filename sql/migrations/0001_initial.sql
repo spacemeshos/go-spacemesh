@@ -64,17 +64,12 @@ CREATE TABLE transactions
 ) WITHOUT ROWID;
 CREATE INDEX transaction_by_applied ON transactions (applied);
 CREATE INDEX transaction_by_principal_nonce ON transactions (principal, nonce);
-CREATE INDEX transaction_by_principal ON transactions (principal, layer);
+CREATE INDEX transaction_by_layer_principal ON transactions (layer asc, principal);
 
 CREATE TABLE transactions_results 
 (
     tid     CHAR(32) PRIMARY KEY,
-    status  INT,
-    message VARCHAR,
-    layer   LONG INT,
-    block   CHAR(32),
-    fee     UNSIGNED LONG INT,
-    gas     UNSIGNED LONG INT,
+    result  BLOB,
     FOREIGN KEY(tid) REFERENCES transactions(id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 

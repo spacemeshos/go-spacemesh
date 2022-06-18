@@ -27,13 +27,12 @@ func (t TransactionStatus) String() string {
 
 // TransactionResult is created after consuming transaction.
 type TransactionResult struct {
-	Transaction Transaction
-	Status      TransactionStatus
-	Message     string
-	Gas         uint64
-	Fee         uint64
-	Block       BlockID
-	Layer       LayerID
+	Status  TransactionStatus
+	Message string
+	Gas     uint64
+	Fee     uint64
+	Block   BlockID
+	Layer   LayerID
 	// Addresses contains all updated addresses.
 	// For genesis this will be either one or two addresses.
 	Addresses []Address
@@ -41,7 +40,6 @@ type TransactionResult struct {
 
 // MarshalLogObject implements encoding for the tx result.
 func (h *TransactionResult) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("id", h.Transaction.ID.String())
 	encoder.AddString("status", h.Status.String())
 	if h.Status > 0 {
 		encoder.AddString("message", h.Message)
@@ -57,4 +55,10 @@ func (h *TransactionResult) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}))
 	return nil
+}
+
+// TransactionWithResult is a transaction with attached result.
+type TransactionWithResult struct {
+	Transaction
+	TransactionResult
 }
