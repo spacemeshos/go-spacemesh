@@ -66,6 +66,26 @@ CREATE INDEX transaction_by_applied ON transactions (applied);
 CREATE INDEX transaction_by_principal_nonce ON transactions (principal, nonce);
 CREATE INDEX transaction_by_principal ON transactions (principal, layer);
 
+CREATE TABLE transactions_results 
+(
+    tid     CHAR(32) PRIMARY KEY,
+    status  INT,
+    message VARCHAR,
+    layer   LONG INT,
+    block   CHAR(32),
+    fee     UNSIGNED LONG INT,
+    gas     UNSIGNED LONG INT,
+    FOREIGN KEY(tid) REFERENCES transactions(id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
+CREATE TABLE transactions_results_addresses
+(
+    address CHAR(20),
+    tid     CHAR(32),
+    PRIMARY KEY (address, tid),
+    FOREIGN KEY(tid) REFERENCES transactions_results(tid) ON DELETE CASCADE
+) WITHOUT ROWID;
+
 CREATE TABLE proposal_transactions
 (
     tid     CHAR(32),

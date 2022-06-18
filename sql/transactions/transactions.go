@@ -202,6 +202,11 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 	if err != nil {
 		return nil, fmt.Errorf("undo layer %s: %w", from, err)
 	}
+	if _, err := db.Exec("delete from transactions_results where layer > ?1;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(from.Value))
+	}, nil); err != nil {
+		return nil, fmt.Errorf("undo transactions_results from %s: %w", from, err)
+	}
 	return updated, nil
 }
 
@@ -437,4 +442,39 @@ func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), e
 		return nil, fmt.Errorf("%s: %w", errStr, err)
 	}
 	return rst, err
+}
+
+// AddResult adds result for the transaction. It would make sense if it was atomic with
+// Apply.
+func AddResult(db sql.Executor, rst *types.TransactionResult) error {
+	if _, err := db.Exec(`insert into transactions_results 
+		(tid, status, message, layer, block, gas, fee) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, rst.Transaction.ID[:])
+			stmt.BindInt64(2, int64(rst.Status))
+			stmt.BindText(3, rst.Message)
+			stmt.BindInt64(4, int64(rst.Layer.Value))
+			stmt.BindBytes(5, rst.Block[:])
+			stmt.BindInt64(6, int64(rst.Gas))
+			stmt.BindInt64(7, int64(rst.Fee))
+		},
+		func(stmt *sql.Statement) bool {
+			return false
+		},
+	); err != nil {
+		return fmt.Errorf("insert result for %s: %w", rst.Transaction.ID, err)
+	}
+	for i := range rst.Addresses {
+		if _, err := db.Exec(`insert into transactions_results_addresses 
+		(address, tid) values (?1, ?2);`,
+			func(stmt *sql.Statement) {
+				stmt.BindBytes(1, rst.Addresses[i][:])
+				stmt.BindBytes(2, rst.Transaction.ID[:])
+			}, nil); err != nil {
+			return fmt.Errorf("add address %s to %s: %w",
+				rst.Addresses[i].String(), rst.Transaction.ID, err)
+		}
+	}
+	return nil
 }
