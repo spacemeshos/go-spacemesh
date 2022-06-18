@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -690,19 +689,5 @@ func TestApplyLayer_VMError(t *testing.T) {
 		require.Equal(t, types.MEMPOOL, mtx.State)
 		require.Equal(t, types.EmptyBlockID, mtx.BlockID)
 		require.Equal(t, types.LayerID{}, mtx.LayerID)
-	}
-}
-
-func TestTXFetcher(t *testing.T) {
-	tcs := createConservativeState(t)
-	ids, txs := addBatch(t, tcs, numTXs)
-	for i, id := range ids {
-		buf, err := tcs.Transactions().Get(id.Bytes())
-		require.NoError(t, err)
-		var rst types.Transaction
-		require.NoError(t, codec.Decode(buf, &rst))
-		require.NoError(t, rst.CalcAndSetOrigin())
-		rst.ID() // side effects
-		require.Equal(t, txs[i], &rst)
 	}
 }
