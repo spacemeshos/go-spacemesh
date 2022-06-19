@@ -228,14 +228,14 @@ func (l *Logic) layerContentReqReceiver(ctx context.Context, req []byte) ([]byte
 	}
 	ld.Ballots, err = l.layerDB.LayerBallotIDs(lyrID)
 	if err != nil {
-		// database.ErrNotFound should be considered a programming error since we are only responding for
+		// sql.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		l.log.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
 		return nil, ErrInternal
 	}
 	ld.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
 	if err != nil {
-		// database.ErrNotFound should be considered a programming error since we are only responding for
+		// sql.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		l.log.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, ErrInternal

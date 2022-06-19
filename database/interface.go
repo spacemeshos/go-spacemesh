@@ -18,12 +18,5 @@ package database
 
 // Getter wraps the database read operation.
 type Getter interface {
-	Get(key []byte) ([]byte, error)
-}
-
-// Database wraps all database operations. All methods are safe for concurrent use.
-type Database interface {
-	Put([]byte, []byte) error
-	Delete([]byte) error
 	Get([]byte) ([]byte, error)
 }

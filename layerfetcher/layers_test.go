@@ -11,7 +11,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	fmocks "github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
@@ -182,7 +181,7 @@ func TestLayerBlocksReqReceiver_GetHareOutputError(t *testing.T) {
 	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return([]types.BallotID{types.RandomBallotID()}, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{types.RandomBlockID()}, nil).Times(1)
-	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(types.EmptyBlockID, database.ErrNotFound).Times(1)
+	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(types.EmptyBlockID, sql.ErrNotFound).Times(1)
 
 	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)
@@ -196,7 +195,7 @@ func TestLayerBlocksReqReceiver_GetBlockIDsError(t *testing.T) {
 	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return([]types.BallotID{types.RandomBallotID()}, nil).Times(1)
-	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return(nil, database.ErrNotFound).Times(1)
+	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return(nil, sql.ErrNotFound).Times(1)
 
 	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)
@@ -209,7 +208,7 @@ func TestLayerBlocksReqReceiver_GetBallotIDsError(t *testing.T) {
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
 	tl.mLayerDB.EXPECT().GetLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
 	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(types.RandomHash(), nil).Times(1)
-	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return(nil, database.ErrNotFound).Times(1)
+	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return(nil, sql.ErrNotFound).Times(1)
 
 	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)

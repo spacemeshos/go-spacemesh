@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -334,7 +333,7 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 		return beacon, nil
 	}
 
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		pd.logger.With().Warning("beacon not available", targetEpoch)
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}

@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
@@ -138,6 +137,6 @@ func TestGetRefBallot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.BallotID{5}, count)
 
-	_, err = GetRefBallot(db, 1, pub4)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	count, err = GetRefBallot(db, 1, pub4)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
