@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
+
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -555,6 +557,7 @@ func TestProposal_FailedToAddBallot(t *testing.T) {
 			return true, nil
 		})
 	errUnknown := errors.New("unknown")
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
 }
@@ -587,6 +590,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errDuplicateTX)
 }
@@ -608,6 +612,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
@@ -631,6 +636,7 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
@@ -659,6 +665,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -688,6 +695,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -716,6 +724,7 @@ func TestMetrics(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
