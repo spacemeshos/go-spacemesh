@@ -7,8 +7,6 @@ import (
 
 	"github.com/spacemeshos/sqlite"
 	"github.com/spacemeshos/sqlite/sqlitex"
-
-	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 var (
