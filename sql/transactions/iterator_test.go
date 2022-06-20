@@ -2,28 +2,28 @@ package transactions
 
 import (
 	"bytes"
+	"math/rand"
 	"sort"
 	"testing"
 	"time"
 
-	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func matchTx(tx types.TransactionWithResult, filter ResultsFilter) bool {
-	if len(filter.Addresses) > 0 {
-		for _, addr := range filter.Addresses {
-			found := false
-			for _, txaddr := range tx.Addresses {
-				if addr == txaddr {
-					found = true
-				}
+	if filter.Address != nil {
+		addr := *filter.Address
+		matched := false
+		for _, txaddr := range tx.Addresses {
+			if addr == txaddr {
+				matched = true
 			}
-			if !found {
-				return false
-			}
+		}
+		if !matched {
+			return false
 		}
 	}
 	if filter.Start != nil {
@@ -57,7 +57,8 @@ func filterTxs(txs []types.TransactionWithResult, filter ResultsFilter) []types.
 func TestIterateResults(t *testing.T) {
 	db := sql.InMemory()
 
-	fuzzer := fuzz.NewWithSeed(time.Now().Unix())
+	rng := rand.New(rand.NewSource(101))
+
 	addrs := make([]types.Address, 10)
 	for i := range addrs {
 		addrs[i] = types.Address{byte(i)}
@@ -70,32 +71,32 @@ func TestIterateResults(t *testing.T) {
 	for i := range layers {
 		layers[i] = types.NewLayerID(uint32(1 + i))
 	}
-	fuzzer = fuzzer.Funcs(
-		func(e *[]types.Address, c fuzz.Continue) {
-			n := c.Intn(len(addrs))
-			*e = addrs[:n]
-		},
-		func(e *types.BlockID, c fuzz.Continue) {
-			*e = blocks[c.Intn(len(blocks))]
-		},
-		func(e *types.LayerID, c fuzz.Continue) {
-			*e = layers[c.Intn(len(layers))]
-		},
-	)
 	txs := make([]types.TransactionWithResult, 100)
 	for i := range txs {
-		fuzzer.Fuzz(&txs[i])
-		txs[i].ID = types.TransactionID{byte(i)}
+		rng.Read(txs[i].ID[:])
+		txs[i].Raw = make([]byte, 10)
+		rng.Read(txs[i].Raw)
+		txs[i].Block = blocks[rng.Intn(len(blocks))]
+		txs[i].Layer = layers[rng.Intn(len(layers))]
+		if lth := rng.Intn(len(addrs)); lth > 0 {
+			txs[i].Addresses = make([]types.Address, lth)
+
+			rng.Shuffle(len(addrs), func(i, j int) {
+				addrs[i], addrs[j] = addrs[j], addrs[i]
+			})
+			copy(txs[i].Addresses, addrs)
+		}
+
 		require.NoError(t, Add(db, &txs[i].Transaction, time.Time{}))
 		require.NoError(t, AddResult(db, txs[i].ID, &txs[i].TransactionResult))
 		_, err := Apply(db, txs[i].ID, txs[i].Layer, txs[i].Block)
 		require.NoError(t, err)
 	}
 	sort.Slice(txs, func(i, j int) bool {
-		if txs[i].Layer.Before(txs[j].Layer) {
-			return true
+		if txs[i].Layer == txs[j].Layer {
+			return bytes.Compare(txs[i].ID[:], txs[j].ID[:]) == -1
 		}
-		return bytes.Compare(txs[i].ID[:], txs[j].ID[:]) == -1
+		return txs[i].Layer.Before(txs[j].Layer)
 	})
 	for _, tc := range []struct {
 		desc   string
@@ -104,15 +105,49 @@ func TestIterateResults(t *testing.T) {
 		{
 			desc: "All",
 		},
+		{
+			desc: "Start",
+			filter: ResultsFilter{
+				Start: &layers[5],
+			},
+		},
+		{
+			desc: "End",
+			filter: ResultsFilter{
+				End: &layers[8],
+			},
+		},
+		{
+			desc: "StartEnd",
+			filter: ResultsFilter{
+				Start: &layers[4],
+				End:   &layers[8],
+			},
+		},
+		{
+			desc: "ID",
+			filter: ResultsFilter{
+				TID: &txs[50].ID,
+			},
+		},
+		{
+			desc: "Address",
+			filter: ResultsFilter{
+				Address: &addrs[0],
+			},
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			expected := filterTxs(txs, tc.filter)
 			i := 0
 			require.NoError(t, IterateResults(db, tc.filter, func(rst *types.TransactionWithResult) bool {
-				require.Equal(t, expected[i], *rst)
+				if !assert.Equal(t, expected[i], *rst) {
+					return false
+				}
 				i++
 				return true
 			}))
+			assert.Equal(t, len(expected), i)
 		})
 	}
 }

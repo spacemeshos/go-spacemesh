@@ -12,9 +12,13 @@ import (
 
 // ResultsFilter applies filter on transaction results query.
 type ResultsFilter struct {
-	Addresses  []types.Address
+	Address    *types.Address
 	Start, End *types.LayerID
 	TID        *types.TransactionID
+}
+
+func (f *ResultsFilter) hasWhere() bool {
+	return f.Address != nil || f.Start != nil || f.End != nil || f.TID != nil
 }
 
 func (f *ResultsFilter) query() string {
@@ -25,47 +29,48 @@ func (f *ResultsFilter) query() string {
 		join transactions_results rst on id=rst.tid
 		left join transactions_results_addresses addr on id=addr.tid
 	`)
-	position := 1
-	for i := range f.Addresses {
-		if i > 0 {
-			q.WriteString(" or")
-		}
+	if f.hasWhere() {
+		q.WriteString(" where")
+	}
+	i := 1
+	if f.Address != nil {
 		q.WriteString(" address = ?")
-		q.WriteString(strconv.Itoa(position))
-		position++
+		q.WriteString(strconv.Itoa(i))
+		i++
 	}
 	if f.Start != nil {
-		if position != 1 {
+		if i != 1 {
 			q.WriteString(" and")
 		}
 		q.WriteString(" layer >= ?")
-		q.WriteString(strconv.Itoa(position))
-		position++
+		q.WriteString(strconv.Itoa(i))
+		i++
 	}
-	if f.Start != nil {
-		if position != 1 {
+	if f.End != nil {
+		if i != 1 {
 			q.WriteString(" and")
 		}
 		q.WriteString(" layer <= ?")
-		q.WriteString(strconv.Itoa(position))
-		position++
+		q.WriteString(strconv.Itoa(i))
+		i++
 	}
 	if f.TID != nil {
-		if position != 1 {
+		if i != 1 {
 			q.WriteString(" and")
 		}
 		q.WriteString(" id = ?")
-		q.WriteString(strconv.Itoa(position))
-		position++
+		q.WriteString(strconv.Itoa(i))
+		i++
 	}
+	q.WriteString("order by layer, id")
 	q.WriteString(";")
 	return q.String()
 }
 
 func (f *ResultsFilter) binding(stmt *sql.Statement) {
 	position := 1
-	for i := range f.Addresses {
-		stmt.BindBytes(position, f.Addresses[i][:])
+	if f.Address != nil {
+		stmt.BindBytes(position, f.Address[:])
 		position++
 	}
 	if f.Start != nil {
@@ -91,10 +96,12 @@ func IterateResults(db sql.Executor, filter ResultsFilter, fn func(*types.Transa
 		stmt.ColumnBytes(0, tx.ID[:])
 		tx.Raw = make([]byte, stmt.ColumnLen(1))
 		stmt.ColumnBytes(1, tx.Raw)
-		tx.TxHeader = &types.TxHeader{}
-		_, ierr = codec.DecodeFrom(stmt.ColumnReader(2), tx.TxHeader)
-		if ierr != nil {
-			return false
+		if stmt.ColumnLen(2) > 0 {
+			tx.TxHeader = &types.TxHeader{}
+			_, ierr = codec.DecodeFrom(stmt.ColumnReader(2), tx.TxHeader)
+			if ierr != nil {
+				return false
+			}
 		}
 		_, ierr = codec.DecodeFrom(stmt.ColumnReader(3), &tx.TransactionResult)
 		if ierr != nil {
