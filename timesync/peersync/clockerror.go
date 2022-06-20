@@ -8,12 +8,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/errcode"
 )
 
-type ClockError struct {
+type clockError struct {
 	err     error
 	details clockErrorDetails
 }
 
-func (c *ClockError) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (c clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("code", errcode.ErrClockDrift)
 	encoder.AddString("errmsg", c.err.Error())
 	if err := encoder.AddObject("details", &c.details); err != nil {
@@ -23,7 +23,7 @@ func (c *ClockError) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (c *ClockError) Error() string {
+func (c clockError) Error() string {
 	return c.err.Error()
 }
 
@@ -31,7 +31,7 @@ type clockErrorDetails struct {
 	Drift time.Duration
 }
 
-func (c *clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (c clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddDuration("drift", c.Drift)
 	return nil
 }
