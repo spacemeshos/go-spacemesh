@@ -11,11 +11,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -191,7 +191,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	lid := types.NewLayerID(layersPerEpoch * 3)
-	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(*types.EmptyATXID, database.ErrNotFound).Times(1)
+	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(*types.EmptyATXID, sql.ErrNotFound).Times(1)
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
 	assert.Equal(t, *types.EmptyATXID, atxID)

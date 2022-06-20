@@ -15,7 +15,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -672,7 +671,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := atxdb.GetAtxHeader(types.ATXID{1, 1, 1})
-		require.ErrorIs(b, err, database.ErrNotFound)
+		require.ErrorIs(b, err, sql.ErrNotFound)
 	}
 	atomic.StoreUint64(&stop, 1)
 	wg.Wait()

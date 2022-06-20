@@ -7,7 +7,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -147,7 +146,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageAtx{Atx: atx})
 	case MessageBlock:
 		ids, err := c.meshdb.LayerBlockIds(ev.Block.LayerIndex)
-		if errors.Is(err, database.ErrNotFound) || len(ids) == 0 {
+		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
 			c.meshdb.SaveHareConsensusOutput(context.Background(), ev.Block.LayerIndex, ev.Block.ID())
 		}
 		c.meshdb.AddBlock(ev.Block)
@@ -175,7 +174,7 @@ type beaconStore struct {
 func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
 	beacon, exist := b.beacons[eid-1]
 	if !exist {
-		return types.Beacon{}, database.ErrNotFound
+		return types.Beacon{}, sql.ErrNotFound
 	}
 	return beacon, nil
 }

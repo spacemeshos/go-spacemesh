@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 type category uint8
@@ -179,7 +179,7 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 	minerID := m.NodeID.ShortString()
 
 	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(m.NodeID, m.EpochID-1)
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("[proposal] miner has no ATX in previous epoch")
 		return types.ATXID{}, fmt.Errorf("[proposal] miner has no ATX in previous epoch (miner ID %v): %w", minerID, errMinerATXNotFound)
 	}
@@ -290,7 +290,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	}
 
 	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(nodeID, m.EpochID-1)
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] miner has no ATX in previous epoch (miner ID %v): %w", types.FirstRound, minerID, errMinerATXNotFound)
 	}
@@ -421,7 +421,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 	}
 
 	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(nodeID, m.EpochID-1)
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] miner has no ATX in previous epoch (miner ID %v): %w", round, minerID, errMinerATXNotFound)
 	}
