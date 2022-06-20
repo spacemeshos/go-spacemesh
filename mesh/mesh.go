@@ -76,6 +76,26 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 	if err == nil && lid != (types.LayerID{}) {
 		msh.recoverFromDB()
 		recovered = true
+	} else {
+		gLayer := types.GenesisLayer()
+		for _, b := range gLayer.Ballots() {
+			msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
+			if err = ballots.Add(msh.cdb, b); err != nil {
+				msh.logger.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
+			}
+		}
+		for _, b := range gLayer.Blocks() {
+			msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
+			if err = blocks.Add(msh.cdb, b); err != nil {
+				msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
+			}
+			if err = blocks.SetValid(msh.cdb, b.ID()); err != nil {
+				msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
+			}
+		}
+		if err = layers.SetHareOutput(msh.cdb, gLayer.Index(), types.GenesisBlockID); err != nil {
+			log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
+		}
 	}
 	return msh, recovered, nil
 }
