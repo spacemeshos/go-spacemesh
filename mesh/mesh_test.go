@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
@@ -71,11 +72,6 @@ func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.N
 	return b
 }
 
-func createLayerBallotsAndBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID) ([]*types.Ballot, []*types.Block) {
-	t.Helper()
-	return createLayerBallots(t, mesh, lyrID), createLayerBlocks(t, mesh, lyrID, true)
-}
-
 func createLayerBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID, valid bool) []*types.Block {
 	t.Helper()
 	blks := make([]*types.Block, 0, numBlocks)
@@ -103,6 +99,64 @@ func checkLastApplied(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	lid, err := layers.GetLastApplied(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
+}
+
+func TestMesh_FromGenesis(t *testing.T) {
+	tm := createTestMesh(t)
+	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
+	require.NoError(t, err)
+	require.False(t, recovered)
+	gotP, err := msh.GetProcessedLayer()
+	require.NoError(t, err)
+	require.Equal(t, types.GetEffectiveGenesis(), gotP)
+	gotV, err := msh.GetVerifiedLayer()
+	require.NoError(t, err)
+	require.Equal(t, types.LayerID{}, gotV)
+
+	gLayer := types.GenesisLayer()
+	for _, b := range gLayer.Ballots() {
+		has, err := ballots.Has(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+	}
+
+	for _, b := range gLayer.Ballots() {
+		has, err := ballots.Has(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+	}
+
+	for _, b := range gLayer.Blocks() {
+		has, err := blocks.Has(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+		valid, err := blocks.IsValid(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, valid)
+	}
+	bid, err := layers.GetHareOutput(tm.cdb, gLayer.Index())
+	require.NoError(t, err)
+	require.Equal(t, types.GenesisBlockID, bid)
+}
+
+func TestMesh_WakeUp(t *testing.T) {
+	tm := createTestMesh(t)
+	latest := types.NewLayerID(11)
+	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Latest))
+	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Processed))
+	latestState := latest.Sub(1)
+	require.NoError(t, layers.SetStatus(tm.cdb, latestState, layers.Applied))
+
+	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
+	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
+	require.NoError(t, err)
+	require.True(t, recovered)
+	gotP, err := msh.GetProcessedLayer()
+	require.NoError(t, err)
+	require.Equal(t, latest, gotP)
+	gotV, err := msh.GetVerifiedLayer()
+	require.NoError(t, err)
+	require.Equal(t, latestState, gotV)
 }
 
 func TestMesh_LayerHashes(t *testing.T) {
@@ -404,25 +458,6 @@ func TestMesh_LatestKnownLayer(t *testing.T) {
 	assert.Equal(t, types.NewLayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
-func TestMesh_WakeUp(t *testing.T) {
-	tm := createTestMesh(t)
-	latest := types.NewLayerID(11)
-	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Latest))
-	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Processed))
-	latestState := latest.Sub(1)
-	require.NoError(t, layers.SetStatus(tm.cdb, latestState, layers.Applied))
-	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
-	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
-	require.NoError(t, err)
-	require.True(t, recovered)
-	gotP, err := msh.GetProcessedLayer()
-	require.NoError(t, err)
-	require.Equal(t, latest, gotP)
-	gotV, err := msh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, latestState, gotV)
-}
-
 func TestMesh_pushLayersToState_verified(t *testing.T) {
 	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
@@ -619,14 +654,14 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	lid := types.NewLayerID(1)
 	pub := []byte{1, 1, 1}
 
-	ballots := []types.Ballot{
+	blts := []types.Ballot{
 		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
 		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
 		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
 	}
-	require.NoError(t, tm.addBallot(&ballots[0]))
-	require.False(t, ballots[0].IsMalicious())
-	for _, ballot := range ballots[1:] {
+	require.NoError(t, tm.addBallot(&blts[0]))
+	require.False(t, blts[0].IsMalicious())
+	for _, ballot := range blts[1:] {
 		require.NoError(t, tm.addBallot(&ballot))
 		require.True(t, ballot.IsMalicious())
 	}
