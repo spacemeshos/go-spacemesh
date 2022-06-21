@@ -3,7 +3,9 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -15,11 +17,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
+	db        *sql.Database
 	publisher api.Publisher // P2P Swarm
 	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
@@ -33,12 +38,14 @@ func (s TransactionService) RegisterService(server *Server) {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
+	db *sql.Database,
 	publisher api.Publisher,
 	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
+		db:        db,
 		publisher: publisher,
 		mesh:      msh,
 		conState:  conState,
@@ -270,5 +277,67 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		}
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
+	}
+}
+
+// StreamResults ...
+func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stream pb.TransactionService_StreamResultsServer) error {
+	filter := transactions.ResultsFilter{}
+	if len(in.Address) > 0 {
+		addr := types.BytesToAddress(in.Address)
+		filter.Address = &addr
+	}
+	if len(in.Id) > 0 {
+		var id types.TransactionID
+		copy(id[:], in.Id)
+		filter.TID = &id
+	}
+	if in.Start > 0 {
+		lid := types.NewLayerID(in.Start)
+		filter.Start = &lid
+	}
+	if in.End > 0 {
+		lid := types.NewLayerID(in.End)
+		filter.End = &lid
+	}
+
+	dtx, err := s.db.Tx(stream.Context())
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	var ierr error
+	err = transactions.IterateResults(dtx, filter, func(rst *types.TransactionWithResult) bool {
+		ierr = stream.Send(castResult(rst))
+		return ierr == nil
+	})
+	if err == nil {
+		err = ierr
+	}
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	// TODO subscribe to live events
+	// subscription needs to happen before the end of iteration above
+	return nil
+}
+
+func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
+	addrs := make([][]byte, len(rst.Addresses))
+	for i := range rst.Addresses {
+		addrs[i] = rst.Addresses[i][:]
+	}
+	return &pb.TransactionResult{
+		Tx:        convertTransaction(&rst.Transaction),
+		Status:    pb.TransactionResult_Status(rst.Status),
+		Message:   rst.Message,
+		Gas:       rst.Gas,
+		Fee:       rst.Fee,
+		Block:     rst.Block[:],
+		Layer:     rst.Layer.Value,
+		Addresses: addrs,
 	}
 }
