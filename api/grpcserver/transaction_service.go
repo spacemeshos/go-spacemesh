@@ -280,9 +280,14 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	}
 }
 
-// StreamResults ...
+// StreamResults allows to query historical results and subscribe to live using the same filter.
 func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stream pb.TransactionService_StreamResultsServer) error {
-	filter := transactions.ResultsFilter{}
+	var (
+		filter    transactions.ResultsFilter
+		sub       *events.BufferedSubscription[types.TransactionWithResult]
+		err       error
+		persisted types.LayerID
+	)
 	if len(in.Address) > 0 {
 		addr := types.BytesToAddress(in.Address)
 		filter.Address = &addr
@@ -297,8 +302,19 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		filter.Start = &lid
 	}
 	if in.End > 0 {
+		if in.Watch {
+			return status.Error(codes.InvalidArgument, "watch stream should have an empty End argument")
+		}
 		lid := types.NewLayerID(in.End)
 		filter.End = &lid
+	}
+
+	if in.Watch {
+		sub, err = events.SubscribeMatched(resultsMatcher(filter).match)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
 	}
 
 	dtx, err := s.db.Tx(stream.Context())
@@ -308,21 +324,40 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 
 	var ierr error
 	err = transactions.IterateResults(dtx, filter, func(rst *types.TransactionWithResult) bool {
+		if rst.Layer.After(persisted) {
+			persisted = rst.Layer
+		}
 		ierr = stream.Send(castResult(rst))
 		return ierr == nil
 	})
 	if err == nil {
 		err = ierr
 	}
-	if errors.Is(err, io.EOF) {
+	if (err == nil || errors.Is(err, io.EOF)) && sub == nil {
 		return nil
 	}
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	// TODO subscribe to live events
-	// subscription needs to happen before the end of iteration above
-	return nil
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-sub.Full():
+			return status.Error(codes.Canceled, "buffer overflow")
+		case rst := <-sub.Out():
+			if !rst.Layer.After(persisted) {
+				break
+			}
+			if err := stream.Send(castResult(&rst)); err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
 }
 
 func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
@@ -340,4 +375,37 @@ func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 		Layer:     rst.Layer.Value,
 		Addresses: addrs,
 	}
+}
+
+type resultsMatcher transactions.ResultsFilter
+
+func (m resultsMatcher) match(rst types.TransactionWithResult) bool {
+	if m.Address != nil {
+		found := false
+		for i := range rst.Addresses {
+			if rst.Addresses[i] == *m.Address {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if m.Start != nil {
+		if rst.Layer.Before(*m.Start) {
+			return false
+		}
+	}
+	if m.End != nil {
+		if rst.Layer.After(*m.End) {
+			return false
+		}
+	}
+	if m.TID != nil {
+		if rst.ID != *m.TID {
+			return false
+		}
+	}
+	return true
 }
