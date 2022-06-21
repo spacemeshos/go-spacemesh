@@ -224,7 +224,7 @@ func TestGetBlob(t *testing.T) {
 	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
 
 	require.NoError(t, Add(db, atx, time.Now()))
-	buf, err := GetBlob(db, atx.ID())
+	buf, err := GetBlob(db, atx.ID().Bytes())
 	require.NoError(t, err)
 	encoded, err := codec.Encode(atx)
 	require.NoError(t, err)

@@ -15,10 +15,10 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
@@ -52,11 +52,8 @@ type nipostValidator interface {
 	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
 }
 
-type atxDBProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
+type atxHandler interface {
 	GetPosAtxID() (types.ATXID, error)
-	GetAtxTimestamp(id types.ATXID) (time.Time, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }
@@ -109,7 +106,8 @@ type Builder struct {
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
-	db                atxDBProvider
+	cdb               *datastore.CachedDB
+	atxHandler        atxHandler
 	publisher         pubsub.Publisher
 	tickProvider      poetNumberOfTickProvider
 	nipostBuilder     nipostBuilder
@@ -120,7 +118,6 @@ type Builder struct {
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
 	mu                    sync.Mutex
-	sdb                   *sql.Database
 	syncer                syncer
 	log                   log.Log
 	parentCtx             context.Context
@@ -159,9 +156,9 @@ func WithContext(ctx context.Context) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher,
+func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
-	syncer syncer, sdb *sql.Database, log log.Log, opts ...BuilderOption,
+	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
@@ -170,12 +167,12 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		coinbaseAccount:   conf.CoinbaseAccount,
 		goldenATXID:       conf.GoldenATXID,
 		layersPerEpoch:    conf.LayersPerEpoch,
-		db:                db,
+		cdb:               cdb,
+		atxHandler:        hdlr,
 		publisher:         publisher,
 		nipostBuilder:     nipostBuilder,
 		postSetupProvider: postSetupProvider,
 		layerClock:        layerClock,
-		sdb:               sdb,
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
@@ -303,7 +300,7 @@ func (b *Builder) generateProof() error {
 	}
 
 	// don't generate the commitment every time smeshing is starting, but once only.
-	if _, err := b.GetPrevAtx(b.nodeID); err != nil {
+	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
@@ -385,7 +382,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
 	challenge.StartTick = endTick
 	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
-	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
+	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
@@ -446,15 +443,15 @@ func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
 		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
 
-	if err := niposts.Add(b.sdb, getNIPostKey(), bts); err != nil {
-		return fmt.Errorf("put NIPost challenge to store: %w", err)
+	if err := niposts.Add(b.cdb, getNIPostKey(), bts); err != nil {
+		return fmt.Errorf("put NIPost challenge to database: %w", err)
 	}
 
 	return nil
 }
 
 func (b *Builder) loadChallenge() error {
-	bts, err := niposts.Get(b.sdb, getNIPostKey())
+	bts, err := niposts.Get(b.cdb, getNIPostKey())
 	if err != nil {
 		return fmt.Errorf("get NIPost challenge from store: %w", err)
 	}
@@ -496,8 +493,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	atx := b.pendingATX
-	atxReceived := b.db.AwaitAtx(atx.ID())
-	defer b.db.UnsubscribeAtx(atx.ID())
+	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
+	defer b.atxHandler.UnsubscribeAtx(atx.ID())
 	size, err := b.signAndBroadcast(ctx, atx)
 	if err != nil {
 		b.log.Error(err.Error())
@@ -587,7 +584,7 @@ func (b *Builder) currentEpoch() types.EpochID {
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
 	b.pendingATX = nil
-	if err := niposts.Add(b.sdb, getNIPostKey(), []byte{}); err != nil {
+	if err := niposts.Add(b.cdb, getNIPostKey(), []byte{}); err != nil {
 		b.log.Error("failed to discard NIPost challenge: %v", err)
 	}
 }
@@ -609,27 +606,15 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 // GetPositioningAtxInfo return the following details about the latest atx, to be used as a positioning atx:
 // 	atxID, pubLayerID, endTick
 func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
-	if id, err := b.db.GetPosAtxID(); err != nil {
+	if id, err := b.atxHandler.GetPosAtxID(); err != nil {
 		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("cannot find pos atx: %v", err)
 	} else if id == b.goldenATXID {
 		b.log.With().Info("using golden atx as positioning atx", id)
 		return id, types.LayerID{}, 0, nil
-	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
+	} else if atx, err := b.cdb.GetAtxHeader(id); err != nil {
 		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
 		return id, atx.PubLayerID, atx.EndTick, nil
-	}
-}
-
-// GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
-// AtxHeader struct in db.
-func (b *Builder) GetPrevAtx(node types.NodeID) (*types.ActivationTxHeader, error) {
-	if id, err := b.db.GetNodeLastAtxID(node); err != nil {
-		return nil, fmt.Errorf("no prev atx found: %v", err)
-	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
-	} else {
-		return atx, nil
 	}
 }
 

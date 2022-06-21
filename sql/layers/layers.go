@@ -37,6 +37,45 @@ const (
 	Applied
 )
 
+// SetWeakCoin for the layer.
+func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
+	if _, err := db.Exec(`insert into layers (id, weak_coin) values (?1, ?2) 
+					on conflict(id) do update set weak_coin=?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBool(2, weakcoin)
+		}, nil); err != nil {
+		return fmt.Errorf("set weak coin %s: %w", lid, err)
+	}
+	return nil
+}
+
+// GetWeakCoin for layer.
+func GetWeakCoin(db sql.Executor, lid types.LayerID) (bool, error) {
+	var (
+		weakcoin bool
+		err      error
+		rows     int
+	)
+	if rows, err = db.Exec("select weak_coin from layers where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		},
+		func(stmt *sql.Statement) bool {
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w weak coin for %s is null", sql.ErrNotFound, lid)
+				return false
+			}
+			weakcoin = stmt.ColumnInt(0) == 1
+			return true
+		}); err != nil {
+		return false, fmt.Errorf("is empty %s: %w", lid, err)
+	} else if rows == 0 {
+		return false, fmt.Errorf("%w weak coin is not set for %s", sql.ErrNotFound, lid)
+	}
+	return weakcoin, err
+}
+
 // SetHareOutput for the layer to a block id.
 func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) error {
 	if _, err := db.Exec(`insert into layers (id, hare_output) values (?1, ?2) 

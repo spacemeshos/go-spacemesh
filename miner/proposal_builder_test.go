@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
@@ -30,10 +32,7 @@ const (
 
 type testBuilder struct {
 	*ProposalBuilder
-	db      *sql.Database
 	mOracle *mocks.MockproposalOracle
-	mAtxDB  *mocks.MockactivationDB
-	mMsh    *mocks.MockmeshProvider
 	mBaseBP *mocks.MockvotesEncoder
 	mCState *mocks.MockconservativeState
 	mPubSub *pubsubmocks.MockPublisher
@@ -46,19 +45,18 @@ func createBuilder(tb testing.TB) *testBuilder {
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
 	ctrl := gomock.NewController(tb)
 	pb := &testBuilder{
-		db:      sql.InMemory(),
 		mOracle: mocks.NewMockproposalOracle(ctrl),
-		mAtxDB:  mocks.NewMockactivationDB(ctrl),
-		mMsh:    mocks.NewMockmeshProvider(ctrl),
 		mBaseBP: mocks.NewMockvotesEncoder(ctrl),
 		mCState: mocks.NewMockconservativeState(ctrl),
 		mPubSub: pubsubmocks.NewMockPublisher(ctrl),
 		mBeacon: smocks.NewMockBeaconGetter(ctrl),
 		mSync:   smocks.NewMockSyncStateProvider(ctrl),
 	}
+	lg := logtest.New(tb)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
-		pb.db, pb.mAtxDB, pb.mMsh, pb.mPubSub, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
-		WithLogger(logtest.New(tb)),
+		cdb, pb.mPubSub, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
+		WithLogger(lg),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
 		WithTxsPerProposal(txCount),
@@ -130,7 +128,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mCState.EXPECT().SelectProposalTXs(len(proofs)).Return([]types.TransactionID{tx1.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: base}, nil).Times(1)
 	meshHash := types.RandomHash()
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(meshHash, nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -176,7 +174,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mCState.EXPECT().SelectProposalTXs(len(proofs)).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: bb}, nil).Times(1)
 	meshHash := types.RandomHash()
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(meshHash, nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), meshHash))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -278,7 +276,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), activeSet, genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(types.RandomHash(), nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var got types.Proposal
@@ -298,7 +296,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	layerID := types.NewLayerID(layersPerEpoch * 3).Add(1)
 	refBallot := types.NewExistingBallot(
 		types.BallotID{1}, nil, b.ProposalBuilder.signer.PublicKey().Bytes(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
-	require.NoError(t, ballots.Add(b.db, &refBallot))
+	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
@@ -307,7 +305,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(types.RandomHash(), nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var got types.Proposal
@@ -335,7 +333,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(types.RandomHash(), nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 
 	b.Close()
 	require.NoError(t, b.handleLayer(context.TODO(), layerID))
@@ -355,7 +353,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(types.RandomHash(), nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	// publish error is ignored
@@ -377,7 +375,7 @@ func TestBuilder_HandleLayer_StateRootErrorOK(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(types.RandomHash(), nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	require.NoError(t, b.handleLayer(context.TODO(), layerID))
@@ -398,7 +396,6 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(types.EmptyLayerHash, errors.New("unknown")).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	require.NoError(t, b.handleLayer(context.TODO(), layerID))
@@ -416,11 +413,11 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	beacon := types.RandomBeacon()
 	meshHash := types.RandomHash()
 
-	builder1.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(meshHash, nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(builder1.cdb, layerID.Sub(1), meshHash))
 	b1, err := builder1.createProposal(context.TODO(), layerID, nil, atxID1, activeSet, beacon, nil, types.Votes{})
 	require.NoError(t, err)
 
-	builder2.mMsh.EXPECT().GetAggregatedLayerHash(layerID.Sub(1)).Return(meshHash, nil).Times(1)
+	require.NoError(t, layers.SetAggregatedHash(builder2.cdb, layerID.Sub(1), meshHash))
 	b2, err := builder2.createProposal(context.TODO(), layerID, nil, atxID2, activeSet, beacon, nil, types.Votes{})
 	require.NoError(t, err)
 

@@ -7,6 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
 
 var (
@@ -57,8 +59,7 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint3
 
 // ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
 func ComputeWeightPerEligibility(
-	atxdb atxDB,
-	mdb ballotDB,
+	cdb *datastore.CachedDB,
 	ballot *types.Ballot,
 	layerSize,
 	layersPerEpoch uint32,
@@ -73,15 +74,15 @@ func ComputeWeightPerEligibility(
 		if ballot.RefBallot == types.EmptyBallotID {
 			return util.Weight{}, fmt.Errorf("%w: empty ref ballot but no epoch data %s", errBadBallotData, ballot.ID())
 		}
-		refBallot, err = mdb.GetBallot(ballot.RefBallot)
+		refBallot, err = ballots.Get(cdb, ballot.RefBallot)
 		if err != nil {
 			return util.Weight{}, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
 		}
 	}
 	for _, atxID := range refBallot.EpochData.ActiveSet {
-		hdr, err = atxdb.GetAtxHeader(atxID)
+		hdr, err = cdb.GetAtxHeader(atxID)
 		if err != nil {
-			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %d)", err, atxID, ballot.RefBallot, ballot.ID())
+			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
 		}
 		weight := hdr.GetWeight()
 		total += weight

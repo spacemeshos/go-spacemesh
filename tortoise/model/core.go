@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -20,24 +24,19 @@ const (
 )
 
 func newCore(rng *rand.Rand, id string, logger log.Log) *core {
-	db := sql.InMemory()
-	mdb, err := mesh.NewPersistentMeshDB(db, logger)
-	if err != nil {
-		panic(err)
-	}
+	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 	c := &core{
 		id:      id,
 		logger:  logger,
 		rng:     rng,
-		meshdb:  mdb,
-		atxdb:   activation.NewDB(db, nil, types.GetLayersPerEpoch(), types.ATXID{1}, nil, logger),
+		cdb:     cdb,
 		beacons: newBeaconStore(),
 		units:   units,
 		signer:  signing.NewEdSignerFromRand(rng),
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise = tortoise.New(c.meshdb, c.atxdb, c.beacons, updater{c.meshdb},
+	c.tortoise = tortoise.New(c.cdb, c.beacons, updater{c.cdb},
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
@@ -50,8 +49,7 @@ type core struct {
 	logger log.Log
 	rng    *rand.Rand
 
-	meshdb   *mesh.DB
-	atxdb    *activation.DB
+	cdb      *datastore.CachedDB
 	beacons  *beaconStore
 	tortoise *tortoise.Tortoise
 
@@ -79,7 +77,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			return
 		}
 		if c.refBallot == nil {
-			total, _, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
+			total, _, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
 			if err != nil {
 				panic(err)
 			}
@@ -99,7 +97,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot
 		} else {
-			_, activeset, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
+			_, activeset, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
 			if err != nil {
 				panic(err)
 			}
@@ -145,19 +143,19 @@ func (c *core) OnMessage(m Messenger, event Message) {
 
 		m.Send(MessageAtx{Atx: atx})
 	case MessageBlock:
-		ids, err := c.meshdb.LayerBlockIds(ev.Block.LayerIndex)
+		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
-			c.meshdb.SaveHareConsensusOutput(context.Background(), ev.Block.LayerIndex, ev.Block.ID())
+			layers.SetHareOutput(c.cdb, ev.Block.LayerIndex, ev.Block.ID())
 		}
-		c.meshdb.AddBlock(ev.Block)
+		blocks.Add(c.cdb, ev.Block)
 	case MessageBallot:
-		c.meshdb.AddBallot(ev.Ballot)
+		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		c.atxdb.StoreAtx(context.TODO(), ev.Atx.TargetEpoch(), ev.Atx)
+		atxs.Add(c.cdb, ev.Atx, time.Now())
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:
-		c.meshdb.RecordCoinflip(context.TODO(), ev.LayerID, ev.Coinflip)
+		layers.SetWeakCoin(c.cdb, ev.LayerID, ev.Coinflip)
 	}
 }
 
@@ -191,9 +189,15 @@ func max(i, j uint32) uint32 {
 }
 
 type updater struct {
-	*mesh.DB
+	*datastore.CachedDB
 }
 
-func (u updater) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, rst bool) error {
-	return u.SaveContextualValidity(bid, lid, rst)
+func (u updater) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
+	var err error
+	if valid {
+		err = blocks.SetValid(u, bid)
+	} else {
+		err = blocks.SetInvalid(u, bid)
+	}
+	return err
 }

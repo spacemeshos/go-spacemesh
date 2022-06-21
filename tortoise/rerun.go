@@ -38,7 +38,7 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	updated.bdp = current.bdp
+	updated.cdb = current.cdb
 	updated.logger = current.logger
 	updated.mode = updated.mode.toggleRerun()
 	t.trtl = updated
