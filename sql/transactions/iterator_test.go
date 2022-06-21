@@ -89,8 +89,6 @@ func TestIterateResults(t *testing.T) {
 
 		require.NoError(t, Add(db, &txs[i].Transaction, time.Time{}))
 		require.NoError(t, AddResult(db, txs[i].ID, &txs[i].TransactionResult))
-		_, err := Apply(db, txs[i].ID, txs[i].Layer, txs[i].Block)
-		require.NoError(t, err)
 	}
 	sort.Slice(txs, func(i, j int) bool {
 		if txs[i].Layer == txs[j].Layer {
@@ -134,6 +132,13 @@ func TestIterateResults(t *testing.T) {
 			desc: "Address",
 			filter: ResultsFilter{
 				Address: &addrs[0],
+			},
+		},
+		{
+			desc: "StartAddress",
+			filter: ResultsFilter{
+				Address: &addrs[0],
+				Start:   &layers[3],
 			},
 		},
 	} {

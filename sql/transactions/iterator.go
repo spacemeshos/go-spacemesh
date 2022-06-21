@@ -26,8 +26,7 @@ func (f *ResultsFilter) query() string {
 	q.WriteString(`
 		select distinct id, tx, header, result 
 		from transactions
-		join transactions_results rst on id=rst.tid
-		left join transactions_results_addresses addr on id=addr.tid
+		left join transactions_results_addresses on id=tid
 	`)
 	if f.hasWhere() {
 		q.WriteString(" where")

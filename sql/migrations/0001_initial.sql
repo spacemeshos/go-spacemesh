@@ -55,6 +55,7 @@ CREATE TABLE transactions
     id          CHAR(32) PRIMARY KEY,
     tx          BLOB,
     header      BLOB,
+    result      BLOB,
     layer       INT,
     block       CHAR(20),
     principal   CHAR(20),
@@ -66,19 +67,12 @@ CREATE INDEX transaction_by_applied ON transactions (applied);
 CREATE INDEX transaction_by_principal_nonce ON transactions (principal, nonce);
 CREATE INDEX transaction_by_layer_principal ON transactions (layer asc, principal);
 
-CREATE TABLE transactions_results 
-(
-    tid     CHAR(32) PRIMARY KEY,
-    result  BLOB,
-    FOREIGN KEY(tid) REFERENCES transactions(id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
 CREATE TABLE transactions_results_addresses
 (
     address CHAR(20),
     tid     CHAR(32),
     PRIMARY KEY (address, tid),
-    FOREIGN KEY(tid) REFERENCES transactions_results(tid) ON DELETE CASCADE
+    FOREIGN KEY(tid) REFERENCES transactions(tid) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 CREATE TABLE proposal_transactions

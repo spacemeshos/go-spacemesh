@@ -185,7 +185,7 @@ func Apply(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid type
 func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, error) {
 	var updated []types.TransactionID
 	_, err := db.Exec(`
-		update transactions set applied = ?2, layer = ?3, block = ?4 where layer between ?1 and
+		update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer between ?1 and
 		(select max(layer) from transactions where applied = ?5) returning id`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Value))
@@ -201,11 +201,6 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 		})
 	if err != nil {
 		return nil, fmt.Errorf("undo layer %s: %w", from, err)
-	}
-	if _, err := db.Exec("delete from transactions_results where layer > ?1;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(from.Value))
-	}, nil); err != nil {
-		return nil, fmt.Errorf("undo transactions_results from %s: %w", from, err)
 	}
 	return updated, nil
 }
@@ -451,12 +446,16 @@ func AddResult(db sql.Executor, id types.TransactionID, rst *types.TransactionRe
 	if err != nil {
 		return fmt.Errorf("encode %w", err)
 	}
-	if _, err := db.Exec(`insert into transactions_results 
-		(tid, result) 
-		values (?1, ?2)`,
+
+	if _, err := db.Exec(`update transactions 
+		set result = ?2, applied = ?3, layer = ?4, block = ?5 
+		where id = ?1`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
 			stmt.BindBytes(2, buf)
+			stmt.BindInt64(3, stateApplied)
+			stmt.BindInt64(4, int64(rst.Layer.Value))
+			stmt.BindBytes(5, rst.Block[:])
 		},
 		func(stmt *sql.Statement) bool {
 			return false
