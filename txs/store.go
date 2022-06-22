@@ -48,11 +48,6 @@ func (s *store) Get(tid types.TransactionID) (*types.MeshTransaction, error) {
 	return transactions.Get(s.db, tid)
 }
 
-// GetBlob returns a transaction as a byte array.
-func (s *store) GetBlob(tid types.TransactionID) ([]byte, error) {
-	return transactions.GetBlob(s.db, tid)
-}
-
 // GetByAddress returns a list of transactions from `address` with layers in [from, to].
 func (s *store) GetByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	return transactions.GetByAddress(s.db, from, to, address)
@@ -175,4 +170,9 @@ func undoLayers(dbtx *sql.Tx, from types.LayerID) error {
 		}
 	}
 	return nil
+}
+
+// AddHeader to previously stored tx.
+func (s *store) AddHeader(tid types.TransactionID, header *types.TxHeader) error {
+	return transactions.AddHeader(s.db, tid, header)
 }

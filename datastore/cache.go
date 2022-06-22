@@ -1,4 +1,4 @@
-package activation
+package datastore
 
 import (
 	lru "github.com/hashicorp/golang-lru"

@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	datastore "github.com/spacemeshos/go-spacemesh/datastore"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -50,7 +51,7 @@ func (mr *MockFetcherMockRecorder) AddPeersFromHash(fromHash, toHashes interface
 }
 
 // GetHash mocks base method.
-func (m *MockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
+func (m *MockFetcher) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHash", hash, h, validateHash)
 	ret0, _ := ret[0].(chan fetch.HashDataPromiseResult)
@@ -64,7 +65,7 @@ func (mr *MockFetcherMockRecorder) GetHash(hash, h, validateHash interface{}) *g
 }
 
 // GetHashes mocks base method.
-func (m *MockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateHash bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+func (m *MockFetcher) GetHashes(hash []types.Hash32, hint datastore.Hint, validateHash bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHashes", hash, hint, validateHash)
 	ret0, _ := ret[0].(map[types.Hash32]chan fetch.HashDataPromiseResult)

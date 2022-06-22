@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -98,7 +99,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, updater blockValidityUpdater, opts ...Opt) *Tortoise {
+func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockValidityUpdater, opts ...Opt) *Tortoise {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -123,8 +124,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 
 	t.trtl = newTurtle(
 		t.logger,
-		mdb,
-		atxdb,
+		cdb,
 		beacons,
 		updater,
 		t.cfg,
@@ -262,5 +262,5 @@ func (t *Tortoise) WaitReady(ctx context.Context) error {
 // Stop background workers.
 func (t *Tortoise) Stop() {
 	t.cancel()
-	t.eg.Wait()
+	_ = t.eg.Wait()
 }

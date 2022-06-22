@@ -43,7 +43,7 @@ type ConservativeState interface {
 	GetLayerApplied(types.TransactionID) (types.LayerID, error)
 	GetAllAccounts() ([]*types.Account, error)
 	GetBalance(types.Address) (uint64, error)
-	GetNonce(types.Address) (uint64, error)
+	GetNonce(types.Address) (types.Nonce, error)
 	GetProjection(types.Address) (uint64, uint64)
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})

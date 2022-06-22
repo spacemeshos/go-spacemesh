@@ -11,14 +11,16 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -46,7 +48,7 @@ func (mlt *mockLayerTicker) GetCurrentLayer() types.LayerID {
 	return mlt.current.Load().(types.LayerID)
 }
 
-func newMemMesh(t *testing.T, lg log.Log, allMocked bool) (*mesh.Mesh, *mmocks.MockconservativeState, *mmocks.Mocktortoise) {
+func newMesh(t *testing.T, lg log.Log, cdb *datastore.CachedDB, allMocked bool) (*mesh.Mesh, *mmocks.MockconservativeState, *mmocks.Mocktortoise) {
 	ctrl := gomock.NewController(t)
 	mcs := mmocks.NewMockconservativeState(ctrl)
 	mt := mmocks.NewMocktortoise(ctrl)
@@ -57,12 +59,14 @@ func newMemMesh(t *testing.T, lg log.Log, allMocked bool) (*mesh.Mesh, *mmocks.M
 				return lid.Sub(1)
 			}).AnyTimes()
 	}
-	atxdb := activation.NewDB(nil, nil, layersPerEpoch, types.ATXID{}, nil, lg)
-	return mesh.NewMesh(mesh.NewMemMeshDB(lg), atxdb, mt, mcs, lg), mcs, mt
+	msh, _, err := mesh.NewMesh(cdb, mt, mcs, lg)
+	require.NoError(t, err)
+	return msh, mcs, mt
 }
 
 type testSyncer struct {
 	syncer  *Syncer
+	cdb     *datastore.CachedDB
 	msh     *mesh.Mesh
 	mTicker *mockLayerTicker
 
@@ -78,7 +82,8 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, de
 	types.SetLayersPerEpoch(layersPerEpoch)
 	lg := logtest.New(t)
 	mt := newMockLayerTicker()
-	mm, mcs, mtrt := newMemMesh(t, lg.WithName("test_mesh"), defaultMocked)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	mm, mcs, mtrt := newMesh(t, lg.WithName("test_mesh"), cdb, defaultMocked)
 
 	ctrl := gomock.NewController(t)
 	mb := smocks.NewMockBeaconGetter(ctrl)
@@ -87,6 +92,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, de
 	mlp := mocks.NewMocklayerProcessor(ctrl)
 	return &testSyncer{
 		syncer:        NewSyncer(ctx, Configuration{SyncInterval: interval}, mt, mb, mm, mf, mp, lg.WithName("test_sync")),
+		cdb:           cdb,
 		msh:           mm,
 		mTicker:       mt,
 		mLyrFetcher:   mf,
@@ -569,8 +575,8 @@ func TestSyncMissingLayer(t *testing.T) {
 		LayerIndex: failed,
 		TxIDs:      []types.TransactionID{{1, 1, 1}},
 	})
-	require.NoError(t, ts.msh.AddBlock(block))
-	require.NoError(t, ts.msh.SaveHareConsensusOutput(context.TODO(), failed, block.ID()))
+	require.NoError(t, blocks.Add(ts.cdb, block))
+	require.NoError(t, layers.SetHareOutput(ts.cdb, failed, block.ID()))
 
 	rst := make(chan layerfetcher.LayerPromiseResult)
 	close(rst)
@@ -626,7 +632,7 @@ func TestSync_SkipProcessedLayer(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 
 	// simulate hare advancing the mesh forward
-	ts.msh.SetZeroBlockLayer(lyr)
+	require.NoError(t, ts.msh.SetZeroBlockLayer(lyr))
 	require.NoError(t, ts.msh.ProcessLayer(context.TODO(), lyr))
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 

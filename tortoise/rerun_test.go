@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
@@ -149,19 +150,19 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	}
 	require.Equal(tb, last.Sub(1), verified)
 
-	blocks, err := s.GetState(0).MeshDB.LayerBlockIds(misverified)
+	blks, err := blocks.IDsInLayer(s.GetState(0).DB, misverified)
 	require.NoError(tb, err)
-	for _, block := range blocks {
-		validity, err := s.GetState(0).MeshDB.ContextualValidity(block)
+	for _, blk := range blks {
+		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err)
-		require.False(tb, validity, "validity for block %s", block)
+		require.False(tb, validity, "validity for block %s", blk)
 	}
 	require.NoError(tb, tortoise.rerun(ctx))
 
-	for _, block := range blocks {
-		validity, err := s.GetState(0).MeshDB.ContextualValidity(block)
+	for _, blk := range blks {
+		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err)
-		require.Equal(tb, expectedValidity, validity, "validity for block %s", block)
+		require.Equal(tb, expectedValidity, validity, "validity for block %s", blk)
 	}
 }
 

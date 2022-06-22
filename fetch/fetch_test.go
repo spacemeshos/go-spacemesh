@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -44,7 +45,7 @@ func (m *mockNet) Close() error {
 	return nil
 }
 
-func (m *mockNet) Request(_ context.Context, pid p2p.Peer, payload []byte, resHandler func(msg []byte), failHandler func(err error)) error {
+func (m *mockNet) Request(_ context.Context, _ p2p.Peer, payload []byte, resHandler func(msg []byte), _ func(err error)) error {
 	m.Mu.Lock()
 	m.TotalBatchCalls++
 	retErr := m.ReturnError
@@ -102,12 +103,6 @@ func (m *mockNet) Request(_ context.Context, pid p2p.Peer, payload []byte, resHa
 	return nil
 }
 
-type blobDB struct{}
-
-func (b *blobDB) Get([]byte) ([]byte, error) {
-	return nil, sql.ErrNotFound
-}
-
 func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 	cfg := Config{
 		2000, // make sure we never hit the batch timeout
@@ -122,8 +117,7 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	dbs := LocalDataSource{"db": &blobDB{}, "db2": &blobDB{}}
-	f := NewFetch(cfg, nil, dbs, lg)
+	f := NewFetch(cfg, nil, datastore.NewBlobStore(sql.InMemory()), lg)
 	f.net = mckNet
 
 	return f, mckNet
@@ -135,7 +129,7 @@ func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	f := NewFetch(cfg, nil, LocalDataSource{"db": &blobDB{}}, lg)
+	f := NewFetch(cfg, nil, datastore.NewBlobStore(sql.InMemory()), lg)
 	f.net = mckNet
 	return f, mckNet
 }
@@ -145,8 +139,8 @@ func TestFetch_GetHash(t *testing.T) {
 	defer f.Stop()
 	f.Start()
 	h1 := randomHash()
-	hint := Hint("db")
-	hint2 := Hint("db2")
+	hint := datastore.POETDB
+	hint2 := datastore.BallotDB
 
 	// test hash aggregation
 	f.GetHash(h1, hint, false)
@@ -175,12 +169,11 @@ func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
 	net.Responses[h1] = res
 	net.Mu.Unlock()
 
-	hint := Hint("db")
 	request1 := request{
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
-		hint:                 hint,
+		hint:                 datastore.POETDB,
 		returnChan:           make(chan HashDataPromiseResult, 6),
 	}
 
@@ -229,12 +222,11 @@ func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
 	net.AsyncChannel = make(chan struct{})
 	net.Mu.Unlock()
 
-	hint := Hint("db")
 	request1 := request{
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
-		hint:                 hint,
+		hint:                 datastore.POETDB,
 		returnChan:           make(chan HashDataPromiseResult, 3),
 	}
 
@@ -271,12 +263,11 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 	net.ReturnError = true
 	net.Mu.Unlock()
 
-	hint := Hint("db")
 	request1 := request{
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
-		hint:                 hint,
+		hint:                 datastore.POETDB,
 		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
 	}
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
@@ -320,7 +311,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	net.AckChannel = make(chan struct{})
 	net.Mu.Unlock()
 
-	hint := Hint("db")
+	hint := datastore.POETDB
 
 	defer f.Stop()
 	f.Start()
@@ -371,7 +362,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	net.Mu.RUnlock()
 }
 
-func makeRequest(h types.Hash32, p priority, hint Hint) *request {
+func makeRequest(h types.Hash32, p priority, hint datastore.Hint) *request {
 	return &request{
 		hash:                 h,
 		priority:             p,
@@ -382,7 +373,7 @@ func makeRequest(h types.Hash32, p priority, hint Hint) *request {
 }
 
 func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T) {
-	hint := Hint("db")
+	hint := datastore.POETDB
 	hash1 := randomHash()
 	req1 := makeRequest(hash1, High, hint)
 	req2 := makeRequest(hash1, High, hint)

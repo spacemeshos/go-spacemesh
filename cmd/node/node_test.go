@@ -38,17 +38,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -696,6 +695,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	cfg := config.DefaultTestConfig()
 	app.Config = &cfg
 
+	signer := signing.NewEdSigner()
+	address := wallet.Address(signer.PublicKey().Bytes())
+
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
 		r.NoError(app.Initialize())
@@ -719,7 +721,11 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.LayerDurationSec = 2
 
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-		app.Config.Genesis = apiConfig.DefaultTestGenesisConfig()
+		app.Config.Genesis = &apiConfig.GenesisConfig{
+			Accounts: map[string]uint64{
+				address.String(): 100_000_000,
+			},
+		}
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -754,22 +760,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	r.NoError(err)
 	c := pb.NewTransactionServiceClient(conn)
 
-	// Construct some mock tx data
-	// The tx origin must be the hardcoded test account or else it will have no balance.
-	signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account1Private))
-	require.NoError(t, err)
-	txorigin := types.Address{}
-	txorigin.SetBytes(signer.PublicKey().Bytes())
-	dst := types.GenerateAddress([]byte{0x02})
+	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey()))
 
-	tx1 := transaction.GenerateSpawnTransaction(signer, dst)
-	tx1bytes, _ := types.InterfaceToBytes(tx1)
-
-	tx2, err := transaction.GenerateCallTransaction(signer, dst, 1, 10, 1, 1)
-	require.NoError(t, err, "unable to create signed mock tx")
-	tx2bytes, _ := types.InterfaceToBytes(tx2)
-
-	// Coordinate ending the test
+	// TODO(dshulyak) synchronization below is messed up
 	wg2 := sync.WaitGroup{}
 	wg2.Add(1)
 	go func() {
@@ -781,7 +774,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		// Open a transaction stream
 		stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
-			TransactionId:       []*pb.TransactionId{{Id: tx2.ID().Bytes()}},
+			TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
 			IncludeTransactions: true,
 		})
 		require.NoError(t, err)
@@ -789,25 +782,13 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Now listen on the stream
 		res, err := stream.Recv()
 		require.NoError(t, err)
-		require.Equal(t, tx2.ID().Bytes(), res.TransactionState.Id.Id)
+		require.Equal(t, tx1.ID.Bytes(), res.TransactionState.Id.Id)
 
 		// We expect the tx to go to the mempool
 		inTx := res.Transaction
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
-		require.Equal(t, tx2.ID().Bytes(), inTx.Id.Id)
-		require.Equal(t, tx2.Origin().Bytes(), inTx.Sender.Address)
-		require.Equal(t, tx2.GasLimit, inTx.GasOffered.GasProvided)
-		require.Equal(t, tx2.Amount, inTx.Amount.Value)
-		require.Equal(t, tx2.AccountNonce, inTx.Counter)
-		require.Equal(t, tx2.Origin().Bytes(), inTx.Signature.PublicKey)
-		switch x := inTx.Datum.(type) {
-		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, tx2.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
-				"inner coin transfer tx has bad recipient")
-		default:
-			require.Fail(t, "inner tx has wrong tx data type")
-		}
-
+		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
+		require.Equal(t, address.Bytes(), inTx.Principal)
 		// Let the test end
 		once.Do(oncebody)
 
@@ -817,21 +798,12 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Submit the txs
 	res1, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-		Transaction: tx1bytes,
+		Transaction: tx1.Raw,
 	})
 	require.NoError(t, err)
 	require.Equal(t, int32(code.Code_OK), res1.Status.Code)
-	require.Equal(t, tx1.ID().Bytes(), res1.Txstate.Id.Id)
+	require.Equal(t, tx1.ID.Bytes(), res1.Txstate.Id.Id)
 	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res1.Txstate.State)
-
-	// Submit the tx
-	res2, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-		Transaction: tx2bytes,
-	})
-	require.NoError(t, err)
-	require.Equal(t, int32(code.Code_OK), res2.Status.Code)
-	require.Equal(t, tx2.ID().Bytes(), res2.Txstate.Id.Id)
-	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res2.Txstate.State)
 
 	// Wait for messages to be received
 	wg2.Wait()

@@ -10,29 +10,13 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-// Hint marks which DB should be queried for a certain provided hash.
-type Hint string
-
 var emptyHash = types.Hash32{}
-
-// DB hints per DB.
-const (
-	BallotDB   Hint = "ballotDB"
-	BlockDB    Hint = "blocksDB"
-	ProposalDB Hint = "proposalDB"
-	ATXDB      Hint = "ATXDB"
-	TXDB       Hint = "TXDB"
-	POETDB     Hint = "POETDB"
-)
-
-// LocalDataSource defines the mapping between hint for local data source and the actual data source.
-type LocalDataSource map[Hint]database.Getter
 
 // priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
 // until fetched.
@@ -62,8 +46,8 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that correspond to a hash
 // from other remote peers.
 type Fetcher interface {
-	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
-	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
+	GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) chan HashDataPromiseResult
+	GetHashes(hash []types.Hash32, hint datastore.Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
 	Stop()
 	Start()
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
@@ -75,14 +59,14 @@ type request struct {
 	hash                 types.Hash32               // hash is the hash of the Data requested
 	priority             priority                   // priority is for QoS
 	validateResponseHash bool                       // if true perform hash validation on received Data
-	hint                 Hint                       // the hint from which database to fetch this hash
+	hint                 datastore.Hint             // the hint from which database to fetch this hash
 	returnChan           chan HashDataPromiseResult // channel that will signal if the call succeeded or not
 	retries              int
 }
 
 // requestMessage is the on the wire message that will be send to the peer for hash query.
 type requestMessage struct {
-	Hint Hint
+	Hint datastore.Hint
 	Hash types.Hash32
 }
 
@@ -173,7 +157,7 @@ func GetRandomPeer(peers []p2p.Peer) p2p.Peer {
 type Fetch struct {
 	cfg Config
 	log log.Log
-	dbs map[Hint]database.Getter
+	bs  *datastore.BlobStore
 
 	// activeRequests contains requests that are not processed
 	activeRequests map[types.Hash32][]*request
@@ -195,11 +179,11 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
+func NewFetch(cfg Config, h *p2p.Host, bs *datastore.BlobStore, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
-		dbs:             dbs,
+		bs:              bs,
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
 		requestReceiver: make(chan request),
@@ -334,12 +318,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, e
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
-		db, ok := f.dbs[r.Hint]
-		if !ok {
-			f.log.WithContext(ctx).With().Warning("hint not found in database", log.String("hint", string(r.Hint)))
-			continue
-		}
-		res, err := db.Get(r.Hash.Bytes())
+		res, err := f.bs.Get(r.Hint, r.Hash.Bytes())
 		if err != nil {
 			f.log.WithContext(ctx).With().Info("remote peer requested nonexistent hash",
 				log.String("hash", r.Hash.ShortString()),
@@ -648,7 +627,7 @@ type HashDataPromiseResult struct {
 }
 
 // GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels.
-func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
+func (f *Fetch) GetHashes(hashes []types.Hash32, hint datastore.Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
 	hashWaiting := make(map[types.Hash32]chan HashDataPromiseResult)
 	for _, id := range hashes {
 		resChan := f.GetHash(id, hint, validateHash)
@@ -660,7 +639,7 @@ func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) m
 
 // GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
 // know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error.
-func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult {
+func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) chan HashDataPromiseResult {
 	resChan := make(chan HashDataPromiseResult, 1)
 
 	if f.stopped() {
@@ -669,13 +648,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	}
 
 	// check if we already have this hash locally
-	db, ok := f.dbs[h]
-	if !ok {
-		f.log.With().Panic("tried to fetch Data from DB that doesn't exist locally",
-			log.String("hint", string(h)))
-	}
-
-	if b, err := db.Get(hash.Bytes()); err == nil {
+	if b, err := f.bs.Get(h, hash.Bytes()); err == nil {
 		resChan <- HashDataPromiseResult{
 			Err:     nil,
 			Hash:    hash,

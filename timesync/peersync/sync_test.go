@@ -120,7 +120,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	}()
 	select {
 	case err := <-errors:
-		require.ErrorIs(t, err, ErrPeersNotSynced)
+		require.ErrorContains(t, err, ErrPeersNotSynced.Error())
 	case <-time.After(100 * time.Millisecond):
 		require.FailNow(t, "timed out waiting for sync to fail")
 	}
@@ -167,7 +167,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		}()
 		select {
 		case err := <-wait:
-			require.ErrorIs(t, err, errors[i])
+			require.ErrorContains(t, err, errors[i].Error())
 		case <-time.After(1000 * time.Millisecond):
 			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
 		}

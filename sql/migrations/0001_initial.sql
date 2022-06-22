@@ -26,6 +26,7 @@ CREATE TABLE identities
 CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,
+    weak_coin       SMALL INT,
     hare_output     VARCHAR,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
@@ -54,18 +55,17 @@ CREATE TABLE transactions
 (
     id          CHAR(32) PRIMARY KEY,
     tx          BLOB,
+    header      BLOB,
     layer       INT,
     block       CHAR(20),
-    origin      CHAR(20),
-    destination CHAR(20),
+    principal   CHAR(20),
     nonce       UNSIGNED LONG INT,
     timestamp   INT NOT NULL,
     applied     SMALL INT DEFAULT 0
 ) WITHOUT ROWID;
 CREATE INDEX transaction_by_applied ON transactions (applied);
-CREATE INDEX transaction_by_origin_nonce ON transactions (origin, nonce);
-CREATE INDEX transaction_by_origin ON transactions (origin, layer);
-CREATE INDEX transaction_by_destination ON transactions (destination, layer);
+CREATE INDEX transaction_by_principal_nonce ON transactions (principal, nonce);
+CREATE INDEX transaction_by_principal ON transactions (principal, layer);
 
 CREATE TABLE proposal_transactions
 (

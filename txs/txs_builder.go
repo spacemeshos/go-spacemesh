@@ -150,11 +150,11 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		minNonceByAddr := make(map[types.Address]uint64)
 		for _, mtx := range pmd.mtxs {
 			mtx.LayerID = mempoolLayer // for dbLessCache.GetMempool
-			principal := mtx.Origin()
+			principal := mtx.Principal
 			if _, ok := minNonceByAddr[principal]; !ok {
-				minNonceByAddr[principal] = mtx.AccountNonce
-			} else if minNonceByAddr[principal] > mtx.AccountNonce {
-				minNonceByAddr[principal] = mtx.AccountNonce
+				minNonceByAddr[principal] = mtx.Nonce.Counter
+			} else if minNonceByAddr[principal] > mtx.Nonce.Counter {
+				minNonceByAddr[principal] = mtx.Nonce.Counter
 			}
 		}
 		stateF = func(addr types.Address) (uint64, uint64) {
@@ -182,7 +182,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 	for _, acctTXs := range byAddrAndNonce {
 		ntxs = append(ntxs, acctTXs...)
 		for _, ntx := range acctTXs {
-			byTid[ntx.Tid] = ntx
+			byTid[ntx.ID] = ntx
 		}
 	}
 	return &blockMetadata{candidates: ntxs, byAddrAndNonce: byAddrAndNonce, byTid: byTid}, nil
@@ -199,7 +199,7 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, bloc
 		return nil, nil
 	}
 
-	sort.Slice(bmd.candidates, func(i, j int) bool { return bmd.candidates[i].Tid.Compare(bmd.candidates[j].Tid) })
+	sort.Slice(bmd.candidates, func(i, j int) bool { return bmd.candidates[i].ID.Compare(bmd.candidates[j].ID) })
 	// initialize a Mersenne Twister with the block seed and use it as a source of randomness for
 	// a Fisher-Yates shuffle of the sorted transaction IDs.
 	mt := mt19937.New()
@@ -214,7 +214,7 @@ func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*txtypes.NanoTX
 	if len(predictedBlock) <= numTXs {
 		result := make([]types.TransactionID, 0, len(predictedBlock))
 		for _, ntx := range predictedBlock {
-			result = append(result, ntx.Tid)
+			result = append(result, ntx.ID)
 		}
 		return result
 	}
@@ -245,7 +245,7 @@ func shuffleWithNonceOrder(
 		if len(byAddrAndNonce[p]) == 0 {
 			logger.With().Fatal("txs missing", p)
 		}
-		result = append(result, byAddrAndNonce[p][0].Tid)
+		result = append(result, byAddrAndNonce[p][0].ID)
 		if len(byAddrAndNonce[p]) == 1 {
 			delete(byAddrAndNonce, p)
 		} else {
