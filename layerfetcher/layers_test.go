@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	fmocks "github.com/spacemeshos/go-spacemesh/fetch/mocks"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -845,7 +844,7 @@ func TestGetProposals(t *testing.T) {
 func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
-		sdk.WithNonce(types.Nonce{Counter: nonce}),
+		types.Nonce{Counter: nonce},
 	)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),

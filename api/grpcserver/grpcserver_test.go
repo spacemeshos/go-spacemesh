@@ -313,8 +313,8 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	} else {
 		tx.RawTx = types.NewRawTx(
 			wallet.Spend(signer.PrivateKey(), recipient, 1,
+				types.Nonce{Counter: nonce},
 				sdk.WithGasPrice(0),
-				sdk.WithNonce(types.Nonce{Counter: nonce}),
 			),
 		)
 		tx.MaxSpend = 1

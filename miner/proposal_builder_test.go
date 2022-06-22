@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
@@ -70,7 +69,7 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	tb.Helper()
 
 	raw := wallet.Spend(signer.PrivateKey(), recipient, defaultFee,
-		sdk.WithNonce(types.Nonce{Counter: nonce}),
+		types.Nonce{Counter: nonce},
 	)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),

@@ -17,6 +17,11 @@ type PrivateKey = ed25519.PrivateKey
 
 const shortStringSize = 5
 
+// Public returns public key part from ed25519 private key.
+func Public(priv PrivateKey) ed25519.PublicKey {
+	return ed25519.PublicKey(priv[ed25519.PrivateKeySize-ed25519.PublicKeySize:])
+}
+
 // PublicKey is the type describing a public key.
 type PublicKey struct {
 	pub []byte

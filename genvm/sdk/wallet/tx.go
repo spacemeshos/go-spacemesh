@@ -47,13 +47,8 @@ func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
 
 	payload := wallet.SpawnPayload{}
 	payload.GasPrice = options.GasPrice
-	copy(payload.Arguments.PublicKey[:], pk[32:])
-	var principal core.Address
-	if options.Principal != nil {
-		principal = *options.Principal
-	} else {
-		principal = core.ComputePrincipal(wallet.TemplateAddress, &payload.Arguments)
-	}
+	copy(payload.Arguments.PublicKey[:], signing.Public(pk))
+	principal := core.ComputePrincipal(wallet.TemplateAddress, &payload.Arguments)
 
 	tx := encode(&zero, &principal, &zero, &wallet.TemplateAddress, &payload)
 	hh := hash.Sum(tx)
@@ -62,29 +57,21 @@ func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
 }
 
 // Spend creates spend transaction.
-func Spend(pk signing.PrivateKey, to types.Address, amount uint64, opts ...sdk.Opt) []byte {
+func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) []byte {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
-	if options.Nonce == nil {
-		panic("nonce is required for spend")
-	}
 
-	var principal types.Address
-	if options.Principal == nil {
-		spawnargs := wallet.SpawnArguments{}
-		copy(spawnargs.PublicKey[:], pk[32:])
-		principal = core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
-	} else {
-		principal = *options.Principal
-	}
+	spawnargs := wallet.SpawnArguments{}
+	copy(spawnargs.PublicKey[:], signing.Public(pk))
+	principal := core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
 
 	payload := wallet.SpendPayload{}
 	payload.GasPrice = options.GasPrice
 	payload.Arguments.Destination = to
 	payload.Arguments.Amount = amount
-	payload.Nonce = *options.Nonce
+	payload.Nonce = nonce
 
 	tx := encode(&zero, &principal, &one, &payload)
 	hh := hash.Sum(tx)

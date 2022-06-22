@@ -38,7 +38,7 @@ func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSig
 
 func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
-		sdk.WithNonce(types.Nonce{Counter: nonce}),
+		types.Nonce{Counter: nonce},
 		sdk.WithGasPrice(fee),
 	)
 	tx := types.Transaction{
