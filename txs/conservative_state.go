@@ -202,9 +202,6 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 }
 
 func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, []types.RawTx, error) {
-	// TODO this allocates an additional map for all tx ids in the block
-	// it would make much more sense to load transactions in the loop below
-	// and terminate with error if transaction is missing
 	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
 		return nil, nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
