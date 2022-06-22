@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -174,7 +175,7 @@ func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
 		priority:             0,
 		validateResponseHash: false,
 		hint:                 datastore.POETDB,
-		returnChan:           make(chan HashDataPromiseResult, 6),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, 6),
 	}
 
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
@@ -227,7 +228,7 @@ func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
 		priority:             0,
 		validateResponseHash: false,
 		hint:                 datastore.POETDB,
-		returnChan:           make(chan HashDataPromiseResult, 3),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, 3),
 	}
 
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
@@ -268,7 +269,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 		priority:             0,
 		validateResponseHash: false,
 		hint:                 datastore.POETDB,
-		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
 	}
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
@@ -343,7 +344,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 		assert.Fail(t, "timeout getting")
 	}
 
-	responses := []chan HashDataPromiseResult{r1, r2, r3}
+	responses := []chan ftypes.HashDataPromiseResult{r1, r2, r3}
 	for _, res := range responses {
 		select {
 		case data := <-res:
@@ -368,7 +369,7 @@ func makeRequest(h types.Hash32, p priority, hint datastore.Hint) *request {
 		priority:             p,
 		validateResponseHash: false,
 		hint:                 hint,
-		returnChan:           make(chan HashDataPromiseResult, 1),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, 1),
 	}
 }
 
