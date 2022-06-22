@@ -11,6 +11,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -315,12 +316,16 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 			return status.Error(codes.Internal, err.Error())
 		}
 		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return status.Errorf(codes.Unavailable, "can't send header")
+		}
 	}
 
 	dtx, err := s.db.Tx(stream.Context())
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
+	defer dtx.Release()
 
 	var ierr error
 	err = transactions.IterateResults(dtx, filter, func(rst *types.TransactionWithResult) bool {
@@ -333,13 +338,15 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 	if err == nil {
 		err = ierr
 	}
-	if (err == nil || errors.Is(err, io.EOF)) && sub == nil {
-		return nil
-	}
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
 		return status.Error(codes.Internal, err.Error())
 	}
-
+	if sub == nil {
+		return nil
+	}
 	for {
 		select {
 		case <-stream.Context().Done():

@@ -1,6 +1,8 @@
 package events
 
-import "context"
+import (
+	"context"
+)
 
 func newSubconf(opts ...SubOpt) *subconf {
 	conf := &subconf{buffer: 1 << 10}

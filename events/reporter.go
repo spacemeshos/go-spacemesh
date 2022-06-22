@@ -161,7 +161,7 @@ func ReportNodeStatusUpdate() {
 }
 
 // ReportResult reports creation or receipt of a new tx receipt.
-func ReportResult(rst *types.TransactionWithResult) {
+func ReportResult(rst types.TransactionWithResult) {
 	if reporter != nil {
 		if err := reporter.resultsEmitter.Emit(rst); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
@@ -438,7 +438,7 @@ func newEventReporter() *EventReporter {
 		log.With().Panic("failed to create reward emitter", log.Err(err))
 	}
 
-	resultsEmitter, err := bus.Emitter(new(types.TransactionResult))
+	resultsEmitter, err := bus.Emitter(new(types.TransactionWithResult))
 	if err != nil {
 		log.With().Panic("failed to create receipt emitter", log.Err(err))
 	}
