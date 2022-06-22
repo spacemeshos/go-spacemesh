@@ -11,18 +11,6 @@ type GenesisConfig struct {
 	Accounts map[string]uint64 `mapstructure:"accounts"`
 }
 
-// ToAccounts creates list of types.Account instance from config.
-func (g *GenesisConfig) ToAccounts() []types.Account {
-	var rst []types.Account
-	for addr, balance := range g.Accounts {
-		rst = append(rst, types.Account{
-			Address: types.HexToAddress(addr),
-			Balance: balance,
-		})
-	}
-	return rst
-}
-
 // Account1Address is the address from Account1Private.
 const Account1Address = "0x1b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
 

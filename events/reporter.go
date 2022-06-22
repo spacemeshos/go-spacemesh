@@ -68,7 +68,7 @@ func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bo
 	if reporter != nil {
 		if err := reporter.transactionEmitter.Emit(txWithValidity); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit transaction", tx.ID, layerID, log.Err(err))
+			log.With().Error("Failed to emit transaction", tx.ID(), layerID, log.Err(err))
 		} else {
 			log.Debug("reported tx: %v", txWithValidity)
 		}

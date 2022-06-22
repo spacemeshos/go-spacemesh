@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
@@ -19,9 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/rewards"
-	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	"github.com/spacemeshos/go-spacemesh/system"
+	rewardsdb "github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 // Opt is for changing VM during initialization.
@@ -39,7 +37,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   log.NewNop(),
 		db:       db,
-		cfg:      DefaultRewardConfig(),
+		cfg:      vm.DefaultRewardConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -53,12 +51,12 @@ func New(db *sql.Database, opts ...Opt) *VM {
 type VM struct {
 	logger   log.Log
 	db       *sql.Database
-	cfg      RewardConfig
+	cfg      vm.RewardConfig
 	registry *registry.Registry
 }
 
 // Validation initializes validation request.
-func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
+func (v *VM) Validation(raw types.RawTx) *Request {
 	return &Request{
 		vm:      v,
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
@@ -66,68 +64,13 @@ func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	}
 }
 
-// GetLayerStateRoot returns the state root at a given layer.
-func (v *VM) GetLayerStateRoot(lid types.LayerID) (types.Hash32, error) {
-	return layers.GetStateHash(v.db, lid)
-}
-
-// GetLayerApplied returns layer of the applied transaction.
-func (v *VM) GetLayerApplied(tid types.TransactionID) (types.LayerID, error) {
-	return transactions.GetAppliedLayer(v.db, tid)
-}
-
-// GetStateRoot gets the current state root hash.
-func (v *VM) GetStateRoot() (types.Hash32, error) {
-	return layers.GetLatestStateHash(v.db)
-}
-
-// GetAllAccounts returns a dump of all accounts in global state.
-func (v *VM) GetAllAccounts() ([]*types.Account, error) {
-	return accounts.All(v.db)
-}
-
-func (v *VM) revert(lid types.LayerID) error {
-	tx, err := v.db.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-	defer tx.Release()
-
-	err = accounts.Revert(tx, lid)
-	if err != nil {
-		return err
-	}
-	err = rewards.Revert(tx, lid)
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// Revert all changes that we made after the layer. Returns state hash of the layer.
-func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
-	if err := v.revert(lid); err != nil {
-		return types.Hash32{}, err
-	}
-	return v.GetStateRoot()
-}
-
 // GetNonce returns expected next nonce for the address.
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
-	account, err := accounts.Latest(v.db, address)
+	account, err := accounts.Latest(v.db, types.Address(address))
 	if err != nil {
 		return core.Nonce{}, err
 	}
 	return core.Nonce{Counter: account.NextNonce()}, nil
-}
-
-// GetBalance returns balance for an address.
-func (v *VM) GetBalance(address types.Address) (uint64, error) {
-	account, err := accounts.Latest(v.db, address)
-	if err != nil {
-		return 0, err
-	}
-	return account.Balance, nil
 }
 
 // ApplyGenesis saves list of accounts for genesis.
@@ -148,7 +91,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, error) {
+func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, rewards []types.AnyReward) ([]types.TransactionID, error) {
 	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return nil, err
@@ -211,14 +154,14 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 		fees += fee
 	}
 
-	// TODO(dshulyak) why it fails if there are no rewards?
-	if len(blockRewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, blockRewards)
+	// TODO(dshulyak) why do we fail if there are no rewards? can we just burn them?
+	if len(rewards) > 0 {
+		finalRewards, err := vm.CalculateRewards(v.logger, v.cfg, lid, fees, rewards)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		for _, reward := range finalRewards {
-			if err := rewards.Add(tx, reward); err != nil {
+			if err := rewardsdb.Add(tx, reward); err != nil {
 				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 			}
 			account, err := ss.Get(reward.Coinbase)
@@ -238,12 +181,10 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 		account.Layer = lid
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
-		if err != nil {
-			return false
+		if err == nil {
+			account.EncodeScale(encoder)
 		}
-		account.EncodeScale(encoder)
-		events.ReportAccountUpdate(account.Address)
-		return true
+		return err == nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
@@ -343,6 +284,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	header.ID = id
 	header.Principal = principal
 	header.Template = *template
 	header.Method = method

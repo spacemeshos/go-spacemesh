@@ -17,59 +17,25 @@ const (
 
 // Add adds a transaction to the database.
 func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
-	var (
-		header []byte
-		err    error
-	)
-	if tx.TxHeader != nil {
-		header, err = codec.Encode(tx.TxHeader)
-		if err != nil {
-			return fmt.Errorf("encode %+v: %w", tx, err)
-		}
+	buf, err := codec.Encode(tx)
+	if err != nil {
+		return fmt.Errorf("encode %+v: %w", tx, err)
 	}
 	if _, err = db.Exec(`
-		insert into transactions (id, tx, header, layer, block, principal, nonce, timestamp, applied)
+		insert into transactions (id, tx, layer, block, origin, destination, nonce, timestamp, applied)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, tx.ID.Bytes())
-			stmt.BindBytes(2, tx.Raw)
-			stmt.BindInt64(4, int64(types.LayerID{}.Value))
-			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
-
-			if header != nil {
-				stmt.BindBytes(3, header)
-				stmt.BindBytes(6, tx.Principal[:])
-				stmt.BindInt64(7, int64(tx.Nonce.Counter))
-			}
-
+			stmt.BindBytes(1, tx.ID().Bytes())
+			stmt.BindBytes(2, buf)
+			stmt.BindInt64(3, int64(types.LayerID{}.Value))
+			stmt.BindBytes(4, types.EmptyBlockID.Bytes())
+			stmt.BindBytes(5, tx.Origin().Bytes())
+			stmt.BindBytes(6, tx.Recipient.Bytes())
+			stmt.BindInt64(7, int64(tx.AccountNonce))
 			stmt.BindInt64(8, received.UnixNano())
 			stmt.BindInt64(9, statePending)
 		}, nil); err != nil {
-		return fmt.Errorf("insert %s: %w", tx.ID, err)
-	}
-	return nil
-}
-
-// AddHeader and derived fields to the existing transaction.
-func AddHeader(db sql.Executor, tid types.TransactionID, header *types.TxHeader) error {
-	buf, err := codec.Encode(header)
-	if err != nil {
-		return fmt.Errorf("encode %+v: %w", header, err)
-	}
-	rows, err := db.Exec(`update transactions 
-		set header = ?1, principal = ?2, nonce = ?3
-		where id = ?4 returning id;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, buf)
-			stmt.BindBytes(2, header.Principal[:])
-			stmt.BindInt64(3, int64(header.Nonce.Counter))
-			stmt.BindBytes(4, tid.Bytes())
-		}, nil)
-	if rows == 0 {
-		return fmt.Errorf("%w: %s", sql.ErrNotFound, err)
-	}
-	if err != nil {
-		return fmt.Errorf("add header %s: %w", tid, err)
+		return fmt.Errorf("insert %s: %w", tx.ID(), err)
 	}
 	return nil
 }
@@ -207,7 +173,7 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 
 // DiscardNonceBelow sets the applied field to `stateDiscarded` for transactions with nonce lower than specified.
 func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) error {
-	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where principal = ?1 and nonce < ?2 and applied != ?6`,
+	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where origin = ?1 and nonce < ?2 and applied != ?6`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindInt64(2, int64(nonce))
@@ -224,7 +190,7 @@ func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) err
 
 // DiscardByAcctNonce sets the applied field to `stateDiscarded` and layer to `lid` for transactions with addr and nonce.
 func DiscardByAcctNonce(db sql.Executor, applied types.TransactionID, lid types.LayerID, addr types.Address, nonce uint64) error {
-	_, err := db.Exec(`update transactions set applied = ?4, layer = ?5, block = ?6 where principal = ?1 and nonce = ?2 and id != ?3`,
+	_, err := db.Exec(`update transactions set applied = ?4, layer = ?5, block = ?6 where origin = ?1 and nonce = ?2 and id != ?3`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, addr.Bytes())
 			stmt.BindInt64(2, int64(nonce))
@@ -273,25 +239,21 @@ func SetNextLayer(db sql.Executor, id types.TransactionID, lid types.LayerID) (t
 	return next, bid, nil
 }
 
-// tx, header, layer, block, timestamp.
+// tx, layer, block, origin, timestamp.
 func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement) (*types.MeshTransaction, error) {
 	var (
-		parsed types.Transaction
+		tx     types.Transaction
+		origin types.Address
 		bid    types.BlockID
 	)
-	parsed.Raw = make([]byte, stmt.ColumnLen(0))
-	stmt.ColumnBytes(0, parsed.Raw)
-	if stmt.ColumnLen(1) > 0 {
-		parsed.TxHeader = &types.TxHeader{}
-		if _, err := codec.DecodeFrom(stmt.ColumnReader(1), parsed.TxHeader); err != nil {
-			return nil, fmt.Errorf("decode %w", err)
-		}
+	if _, err := codec.DecodeFrom(stmt.ColumnReader(0), &tx); err != nil {
+		return nil, fmt.Errorf("decode %w", err)
 	}
-
-	lid := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
-	stmt.ColumnBytes(3, bid[:])
-	parsed.ID = id
-
+	lid := types.NewLayerID(uint32(stmt.ColumnInt64(1)))
+	stmt.ColumnBytes(2, bid[:])
+	stmt.ColumnBytes(3, origin[:])
+	tx.SetOrigin(origin)
+	tx.SetID(id)
 	state := types.APPLIED
 	switch applied {
 	case stateApplied:
@@ -307,7 +269,7 @@ func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement)
 		state = types.DISCARDED
 	}
 	return &types.MeshTransaction{
-		Transaction: parsed,
+		Transaction: tx,
 		LayerID:     lid,
 		BlockID:     bid,
 		Received:    time.Unix(0, stmt.ColumnInt64(4)),
@@ -317,8 +279,7 @@ func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement)
 
 // Get gets a transaction from database.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
-	var rows int
-	rows, err = db.Exec("select tx, header, layer, block, timestamp, applied from transactions where id = ?1",
+	if rows, err := db.Exec("select tx, layer, block, origin, timestamp, applied from transactions where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
@@ -328,8 +289,7 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 				return false
 			}
 			return true
-		})
-	if err != nil {
+		}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("%w: tx %s", sql.ErrNotFound, id)
@@ -370,8 +330,8 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
 	if _, err := db.Exec(`
-		select tx, header, layer, block, timestamp, applied, id from transactions
-		where principal = ?1 and layer between ?2 and ?3 and applied != ?4`,
+		select tx, layer, block, origin, timestamp, applied, id from transactions
+		where (origin = ?1 or destination = ?1) and layer between ?2 and ?3 and applied != ?4`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
 			stmt.BindInt64(2, int64(from.Value))
@@ -400,7 +360,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 // GetAllPending get all transactions that are not yet applied.
 func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
-		select tx, header, layer, block, principal, timestamp, id from transactions
+		select tx, layer, block, origin, timestamp, id from transactions
 		where applied = ?1 order by timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
@@ -410,8 +370,8 @@ func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
 // GetAcctPendingFromNonce get all pending transactions with nonce <= `from` for the given address.
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
-		select tx, header, layer, block, timestamp, id from transactions
-		where applied = ?1 and principal = ?2 and nonce >= ?3 order by nonce asc`,
+		select tx, layer, block, origin, timestamp, id from transactions
+		where applied = ?1 and origin = ?2 and nonce >= ?3 order by nonce asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
 			stmt.BindBytes(2, address.Bytes())
@@ -419,7 +379,7 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		}, "get acct pending from nonce")
 }
 
-// query MUST ensure that this order of fields tx, layer, block, principal, timestamp, id.
+// query MUST ensure that this order of fields tx, layer, block, origin, timestamp, id.
 func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), errStr string) (rst []*types.MeshTransaction, err error) {
 	if _, err = db.Exec(query, encoder, func(stmt *sql.Statement) bool {
 		var (

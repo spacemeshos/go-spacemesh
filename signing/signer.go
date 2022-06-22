@@ -12,15 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// PrivateKey is an alias to spacemeshos/ed25519.PrivateKey.
-type PrivateKey = ed25519.PrivateKey
-
 const shortStringSize = 5
-
-// Public returns public key part from ed25519 private key.
-func Public(priv PrivateKey) ed25519.PublicKey {
-	return ed25519.PublicKey(priv[ed25519.PrivateKeySize-ed25519.PublicKeySize:])
-}
 
 // PublicKey is the type describing a public key.
 type PublicKey struct {
@@ -121,11 +113,6 @@ func (es *EdSigner) Sign(m []byte) []byte {
 // PublicKey returns the public key of the signer.
 func (es *EdSigner) PublicKey() *PublicKey {
 	return NewPublicKey(es.pubKey)
-}
-
-// PrivateKey returns private key.
-func (es *EdSigner) PrivateKey() PrivateKey {
-	return es.privKey
 }
 
 // LittleEndian indicates whether byte order in a signature is little-endian.

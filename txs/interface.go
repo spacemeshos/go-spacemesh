@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/system"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
@@ -12,21 +11,20 @@ import (
 
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
-	Validation(types.RawTx) system.ValidationRequest
-	AddToCache(*types.Transaction) error
-	AddToDB(*types.Transaction) error
+	AddressExists(types.Address) (bool, error)
+	AddToCache(*types.Transaction, bool) error
 }
 
 type vmState interface {
-	Validation(types.RawTx) system.ValidationRequest
 	GetStateRoot() (types.Hash32, error)
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetLayerApplied(types.TransactionID) (types.LayerID, error)
 	GetAllAccounts() ([]*types.Account, error)
+	AddressExists(types.Address) (bool, error)
 	GetBalance(types.Address) (uint64, error)
-	GetNonce(types.Address) (types.Nonce, error)
+	GetNonce(types.Address) (uint64, error)
 	Revert(types.LayerID) (types.Hash32, error)
-	Apply(types.LayerID, []types.RawTx, []types.AnyReward) ([]types.TransactionID, error)
+	ApplyLayer(types.LayerID, []*types.Transaction, []types.AnyReward) ([]*types.Transaction, error)
 }
 
 type conStateCache interface {
@@ -35,7 +33,6 @@ type conStateCache interface {
 
 type txProvider interface {
 	Add(*types.Transaction, time.Time) error
-	AddHeader(types.TransactionID, *types.TxHeader) error
 	Has(types.TransactionID) (bool, error)
 	Get(types.TransactionID) (*types.MeshTransaction, error)
 	GetByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
