@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Context serves 2 purposes:
@@ -93,7 +94,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 }
 
 // Apply is executed if transaction was consumed.
-func (c *Context) Apply(updater AccountUpdater) (uint64, error) {
+func (c *Context) Apply(updater AccountUpdater) error {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
 	c.Template.EncodeScale(encoder)
@@ -101,13 +102,31 @@ func (c *Context) Apply(updater AccountUpdater) (uint64, error) {
 	c.Account.Nonce = c.Header.Nonce.Counter
 	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {
-		return 0, fmt.Errorf("%w: %s", ErrInternal, err.Error())
+		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
 	for _, address := range c.touched {
 		account := c.changed[address]
 		if err := updater.Update(*account); err != nil {
-			return 0, fmt.Errorf("%w: %s", ErrInternal, err.Error())
+			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 		}
 	}
-	return c.consumed * c.Header.GasPrice, nil
+	return nil
+}
+
+// Consumed gas.
+func (c *Context) Consumed() uint64 {
+	return c.consumed
+}
+
+// Fee computed from consumed gas.
+func (c *Context) Fee() uint64 {
+	return c.consumed * c.Header.GasPrice
+}
+
+// Updated list of addresses.
+func (c *Context) Updated() []types.Address {
+	rst := make([]types.Address, len(c.touched)+1)
+	rst = append(rst, c.Account.Address)
+	copy(rst[1:], c.touched)
+	return rst
 }
