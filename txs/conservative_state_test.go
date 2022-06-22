@@ -764,18 +764,6 @@ func TestConsistentHandling(t *testing.T) {
 	}
 }
 
-func TestTXFetcher(t *testing.T) {
-	tcs := createConservativeState(t)
-	ids, txs := addBatch(t, tcs, numTXs)
-	for i, id := range ids {
-		buf, err := tcs.Transactions().Get(id.Bytes())
-		require.NoError(t, err)
-		raw := types.NewRawTx(buf)
-		require.Equal(t, txs[i].ID, raw.ID)
-		require.Equal(t, txs[i].Raw, buf)
-	}
-}
-
 func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.RawTx) {
 	tb.Helper()
 	require.Len(tb, got, len(expected))

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -247,20 +246,4 @@ func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Trans
 		raw = append(raw, mtx.RawTx)
 	}
 	return txs, raw, nil
-}
-
-// Transactions exports the transactions DB.
-func (cs *ConservativeState) Transactions() database.Getter {
-	return &txFetcher{tp: cs.cache.tp}
-}
-
-type txFetcher struct {
-	tp txProvider
-}
-
-// Get transaction blob, by transaction id.
-func (f *txFetcher) Get(hash []byte) ([]byte, error) {
-	id := types.TransactionID{}
-	copy(id[:], hash)
-	return f.tp.GetBlob(id)
 }

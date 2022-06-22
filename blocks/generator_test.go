@@ -3,9 +3,9 @@ package blocks
 import (
 	"bytes"
 	"context"
-	"errors"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -13,10 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 const (
@@ -34,19 +37,19 @@ type testGenerator struct {
 	*Generator
 	ctrl       *gomock.Controller
 	mockMesh   *mocks.MockmeshProvider
-	mockATXDB  *mocks.MockatxProvider
 	mockCState *mocks.MockconservativeState
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
+	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
 	tg := &testGenerator{
-		ctrl:       ctrl,
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
-		mockATXDB:  mocks.NewMockatxProvider(ctrl),
 		mockCState: mocks.NewMockconservativeState(ctrl),
 	}
-	tg.Generator = NewGenerator(tg.mockATXDB, tg.mockMesh, tg.mockCState, WithGeneratorLogger(logtest.New(t)), WithConfig(testConfig()))
+	lg := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	tg.Generator = NewGenerator(cdb, tg.mockCState, WithGeneratorLogger(lg), WithConfig(testConfig()))
 	return tg
 }
 
@@ -77,25 +80,25 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 	return txIDs
 }
 
-func createATXs(t *testing.T, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx, map[types.ATXID]*types.ActivationTx) {
+func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
 	t.Helper()
-	atxs := make([]*types.ActivationTx, 0, numATXs)
-	atxByID := make(map[types.ATXID]*types.ActivationTx)
+	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
 	for i := 0; i < numATXs; i++ {
 		signer := signing.NewEdSigner()
 		signers = append(signers, signer)
 		address := types.BytesToAddress(signer.PublicKey().Bytes())
 		nipostChallenge := types.NIPostChallenge{
-			NodeID:    types.BytesToNodeID(signer.PublicKey().Bytes()),
-			StartTick: 1,
-			EndTick:   2,
+			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
+			StartTick:  1,
+			EndTick:    2,
+			PubLayerID: lid,
 		}
 		atx := types.NewActivationTx(nipostChallenge, address, nil, numUint, nil)
-		atxs = append(atxs, atx)
-		atxByID[atx.ID()] = atx
+		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		atxes = append(atxes, atx)
 	}
-	return signers, atxs, atxByID
+	return signers, atxes
 }
 
 func createProposals(t *testing.T, layerID types.LayerID, signers []*signing.EdSigner, activeSet []types.ATXID, txIDs []types.TransactionID) []*types.Proposal {
@@ -161,14 +164,10 @@ func Test_GenerateBlock(t *testing.T) {
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createTransactions(t, numTXs)
-	signers, atxs, atxByID := createATXs(t, numProposals)
-	activeSet := types.ToATXIDs(atxs)
+	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
 	proposals := createProposals(t, layerID, signers, activeSet, txIDs)
 	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(txIDs, nil)
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -179,29 +178,25 @@ func Test_GenerateBlock(t *testing.T) {
 	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	expWeight := util.WeightFromInt64(numUint * 1 / 3)
-	checkRewards(t, atxs, expWeight, block.Rewards)
+	checkRewards(t, atxes, expWeight, block.Rewards)
 }
 
 func Test_GenerateBlock_EmptyProposals(t *testing.T) {
 	tg := createTestGenerator(t)
 	numProposals := 10
-	signers, atxs, atxByID := createATXs(t, numProposals)
-	activeSet := types.ToATXIDs(atxs)
+	lid := types.GetEffectiveGenesis().Add(20)
+	signers, atxes := createATXs(t, tg.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
 	epochData := &types.EpochData{
 		ActiveSet: activeSet,
 		Beacon:    types.RandomBeacon(),
 	}
-	lid := types.GetEffectiveGenesis().Add(2)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
 		p := createProposal(t, epochData, lid, activeSet[i], signers[i], nil, 1)
 		proposals = append(proposals, p)
 	}
 	tg.mockCState.EXPECT().SelectBlockTXs(lid, proposals).Return(nil, nil)
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
 	block, err := tg.GenerateBlock(context.TODO(), lid, proposals)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -212,7 +207,7 @@ func Test_GenerateBlock_EmptyProposals(t *testing.T) {
 	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	expWeight := util.WeightFromInt64(numUint * 1 / 3)
-	checkRewards(t, atxs, expWeight, block.Rewards)
+	checkRewards(t, atxes, expWeight, block.Rewards)
 }
 
 func Test_GenerateBlockStableBlockID(t *testing.T) {
@@ -222,14 +217,10 @@ func Test_GenerateBlockStableBlockID(t *testing.T) {
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createTransactions(t, numTXs)
-	signers, atxs, atxByID := createATXs(t, numProposals)
-	activeSet := types.ToATXIDs(atxs)
+	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
 	proposals := createProposals(t, layerID, signers, activeSet, txIDs)
 	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(txIDs, nil)
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -253,8 +244,8 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createTransactions(t, numTXs)
-	signers, atxs, atxByID := createATXs(t, numProposals)
-	activeSet := types.ToATXIDs(atxs)
+	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
 	epochData := &types.EpochData{
 		ActiveSet: activeSet,
 		Beacon:    types.RandomBeacon(),
@@ -264,10 +255,6 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 	proposal2 := createProposal(t, epochData, layerID, atxID, signers[0], txIDs[400:], 1)
 	proposals := []*types.Proposal{proposal1, proposal2}
 	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(txIDs, nil)
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -279,7 +266,7 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	// since there are two proposals for the same coinbase, the final weight is `numUnit` * 1/3 * 2
 	expWeight := util.WeightFromInt64(numUint * 1 / 3 * 2)
-	checkRewards(t, atxs[0:1], expWeight, block.Rewards)
+	checkRewards(t, atxes[0:1], expWeight, block.Rewards)
 }
 
 func Test_GenerateBlock_EmptyATXID(t *testing.T) {
@@ -289,44 +276,16 @@ func Test_GenerateBlock_EmptyATXID(t *testing.T) {
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createTransactions(t, numTXs)
-	signers, atxs, atxByID := createATXs(t, numProposals)
-	activeSet := types.ToATXIDs(atxs)
+	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
 	proposals := createProposals(t, layerID, signers, activeSet, txIDs)
 	// set the last proposal ID to be empty
 	types.SortProposals(proposals)
 	proposals[numProposals-1].AtxID = *types.EmptyATXID
 
 	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(txIDs, nil)
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	require.ErrorIs(t, err, errInvalidATXID)
-	require.Nil(t, block)
-}
-
-func Test_GenerateBlock_ATXNotFound(t *testing.T) {
-	tg := createTestGenerator(t)
-	layerID := types.GetEffectiveGenesis().Add(100)
-	// create multiple proposals with overlapping TXs
-	numTXs := 1000
-	numProposals := 10
-	txIDs := createTransactions(t, numTXs)
-	signers, atxs, atxByID := createATXs(t, numProposals)
-	activeSet := types.ToATXIDs(atxs)
-	proposals := createProposals(t, layerID, signers, activeSet, txIDs)
-	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(txIDs, nil)
-	errUnknown := errors.New("unknown")
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			if id == proposals[numProposals-1].AtxID {
-				return nil, errUnknown
-			}
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
-	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
-	require.ErrorIs(t, err, errUnknown)
 	require.Nil(t, block)
 }
 
@@ -334,24 +293,19 @@ func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	ids := createTransactions(t, 1000)
-	signers, atxs, atxByID := createATXs(t, 10)
-	activeSet := types.ToATXIDs(atxs)
+	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
+	activeSet := types.ToATXIDs(atxes)
 	epochData := &types.EpochData{
 		ActiveSet: activeSet,
 		Beacon:    types.RandomBeacon(),
 	}
 	proposals := []*types.Proposal{
-		createProposal(t, epochData, layerID, atxs[0].ID(), signers[0], ids, 2),
-		createProposal(t, epochData, layerID, atxs[1].ID(), signers[1], ids, 1),
-		createProposal(t, epochData, layerID, atxs[2].ID(), signers[2], ids, 5),
+		createProposal(t, epochData, layerID, atxes[0].ID(), signers[0], ids, 2),
+		createProposal(t, epochData, layerID, atxes[1].ID(), signers[1], ids, 1),
+		createProposal(t, epochData, layerID, atxes[2].ID(), signers[2], ids, 5),
 	}
 
 	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(ids, nil)
-	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).DoAndReturn(
-		func(id types.ATXID) (*types.ActivationTxHeader, error) {
-			return atxByID[id].ActivationTxHeader, nil
-		}).AnyTimes()
-
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	require.NoError(t, err)
 	require.Len(t, block.Rewards, len(proposals))

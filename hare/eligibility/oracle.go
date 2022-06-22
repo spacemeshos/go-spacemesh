@@ -12,9 +12,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -37,17 +40,6 @@ type cache interface {
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
-type atxProvider interface {
-	// GetEpochAtxs is used to get the tortoise active set for an epoch
-	GetEpochAtxs(types.EpochID) ([]types.ATXID, error)
-	// GetAtxHeader returns the ATX header for an ATX ID
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-}
-
-type meshProvider interface {
-	LayerBallots(types.LayerID) ([]*types.Ballot, error)
-}
-
 // a function to verify the message with the signature and its public key.
 type verifierFunc = func(pub, msg, sig []byte) bool
 
@@ -55,8 +47,7 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 type Oracle struct {
 	lock           sync.Mutex
 	beacons        system.BeaconGetter
-	atxdb          atxProvider
-	meshdb         meshProvider
+	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    verifierFunc
 	layersPerEpoch uint32
@@ -106,8 +97,7 @@ func safeLayerRange(
 // New returns a new eligibility oracle instance.
 func New(
 	beacons system.BeaconGetter,
-	atxdb atxProvider,
-	meshdb meshProvider,
+	db *datastore.CachedDB,
 	vrfVerifier verifierFunc,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
@@ -126,8 +116,7 @@ func New(
 
 	return &Oracle{
 		beacons:        beacons,
-		atxdb:          atxdb,
-		meshdb:         meshdb,
+		cdb:            db,
 		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
@@ -202,7 +191,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
+		o.WithContext(ctx).With().Error("failed to get active set", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -469,13 +458,13 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				log.String("epoch_beacon", beacon.ShortString()))
 			beacons[epoch] = beacon
 		}
-		ballots, err := o.meshdb.LayerBallots(layerID)
+		blts, err := ballots.Layer(o.cdb, layerID)
 		if err != nil {
 			logger.With().Warning("failed to get layer ballots", layerID, log.Err(err))
 			return nil, fmt.Errorf("error getting ballots for layer %v (target layer %v): %w",
 				layerID, targetLayer, err)
 		}
-		for _, b := range ballots {
+		for _, b := range blts {
 			activeBallots[b.ID()] = b
 		}
 	}
@@ -513,7 +502,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				continue
 			}
 			seenATXIDs[id] = struct{}{}
-			atx, err := o.atxdb.GetAtxHeader(id)
+			atx, err := o.cdb.GetAtxHeader(id)
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
@@ -523,7 +512,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 
 	// remove miners who published ballots with bad beacons
 	for id := range badBeaconATXIDs {
-		atx, err := o.atxdb.GetAtxHeader(id)
+		atx, err := o.cdb.GetAtxHeader(id)
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
@@ -547,19 +536,19 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	}
-	atxs, err := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	atxids, err := atxs.GetIDsByEpoch(o.cdb, targetLayer.GetEpoch()-1)
 	if err != nil {
 		return nil, fmt.Errorf("can't get atxs for an epoch %d: %w", targetLayer.GetEpoch()-1, err)
 	}
-	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
-	if len(atxs) == 0 {
+	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxids)))
+	if len(atxids) == 0 {
 		return nil, fmt.Errorf("%w: layer %v / epoch %v", errEmptyActiveSet, targetLayer, targetLayer.GetEpoch())
 	}
 
 	// extract the nodeIDs and weights
-	activeMap := make(map[types.NodeID]uint64, len(atxs))
-	for _, atxid := range atxs {
-		atxHeader, err := o.atxdb.GetAtxHeader(atxid)
+	activeMap := make(map[types.NodeID]uint64, len(atxids))
+	for _, atxid := range atxids {
+		atxHeader, err := o.cdb.GetAtxHeader(atxid)
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}

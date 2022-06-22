@@ -26,6 +26,7 @@ CREATE TABLE identities
 CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,
+    weak_coin       SMALL INT,
     hare_output     VARCHAR,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
@@ -129,6 +130,12 @@ CREATE TABLE poets
 ) WITHOUT ROWID;
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
+
+CREATE TABLE niposts
+(
+    id VARCHAR PRIMARY KEY,
+    value BLOB
+) WITHOUT ROWID;
 
 
 CREATE TABLE accounts

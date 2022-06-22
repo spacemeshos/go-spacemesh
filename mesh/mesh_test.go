@@ -11,8 +11,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 const (
@@ -23,7 +28,6 @@ const (
 
 type testMesh struct {
 	*Mesh
-	ctrl         *gomock.Controller
 	mockState    *mocks.MockconservativeState
 	mockTortoise *mocks.Mocktortoise
 }
@@ -32,14 +36,15 @@ func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
 	lg := logtest.New(t)
-	mmdb := NewMemMeshDB(lg)
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
-		ctrl:         ctrl,
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: mocks.NewMocktortoise(ctrl),
 	}
-	tm.Mesh = NewMesh(mmdb, nil, tm.mockTortoise, tm.mockState, lg)
+	msh, recovered, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockTortoise, tm.mockState, lg)
+	require.NoError(t, err)
+	require.False(t, recovered)
+	tm.Mesh = msh
 	checkLastApplied(t, tm.Mesh, types.GetEffectiveGenesis())
 	return tm
 }
@@ -62,61 +67,112 @@ func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.N
 		},
 	}
 	b.Initialize()
-	require.NoError(t, mesh.AddBlock(b))
-	require.NoError(t, mesh.SaveContextualValidity(b.ID(), layerID, valid))
+	require.NoError(t, blocks.Add(mesh.cdb, b))
+	require.NoError(t, mesh.saveContextualValidity(b.ID(), layerID, valid))
 	return b
-}
-
-func createLayerBallotsAndBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID) ([]*types.Ballot, []*types.Block) {
-	t.Helper()
-	return createLayerBallots(t, mesh, lyrID), createLayerBlocks(t, mesh, lyrID, true)
 }
 
 func createLayerBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID, valid bool) []*types.Block {
 	t.Helper()
-	blocks := make([]*types.Block, 0, numBlocks)
+	blks := make([]*types.Block, 0, numBlocks)
 	for i := 0; i < numBlocks; i++ {
 		nodeID := types.NodeID{byte(i)}
 		blk := createBlock(t, mesh, lyrID, nodeID, valid)
-		blocks = append(blocks, blk)
+		blks = append(blks, blk)
 	}
-	return blocks
+	return blks
 }
 
 func createLayerBallots(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.Ballot {
 	t.Helper()
-	ballots := make([]*types.Ballot, 0, numBallots)
+	blts := make([]*types.Ballot, 0, numBallots)
 	for i := 0; i < numBallots; i++ {
 		ballot := types.GenLayerBallot(lyrID)
-		ballots = append(ballots, ballot)
-		require.NoError(t, mesh.DB.AddBallot(ballot))
+		blts = append(blts, ballot)
+		require.NoError(t, mesh.addBallot(ballot))
 	}
-	return ballots
+	return blts
 }
 
 func checkLastApplied(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	t.Helper()
-	lid, err := mesh.LastAppliedLayer()
+	lid, err := layers.GetLastApplied(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
 }
 
+func TestMesh_FromGenesis(t *testing.T) {
+	tm := createTestMesh(t)
+	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
+	require.NoError(t, err)
+	require.False(t, recovered)
+	gotP, err := msh.GetProcessedLayer()
+	require.NoError(t, err)
+	require.Equal(t, types.GetEffectiveGenesis(), gotP)
+	gotV, err := msh.GetVerifiedLayer()
+	require.NoError(t, err)
+	require.Equal(t, types.LayerID{}, gotV)
+
+	gLayer := types.GenesisLayer()
+	for _, b := range gLayer.Ballots() {
+		has, err := ballots.Has(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+	}
+
+	for _, b := range gLayer.Ballots() {
+		has, err := ballots.Has(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+	}
+
+	for _, b := range gLayer.Blocks() {
+		has, err := blocks.Has(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+		valid, err := blocks.IsValid(tm.cdb, b.ID())
+		require.NoError(t, err)
+		require.True(t, valid)
+	}
+	bid, err := layers.GetHareOutput(tm.cdb, gLayer.Index())
+	require.NoError(t, err)
+	require.Equal(t, types.GenesisBlockID, bid)
+}
+
+func TestMesh_WakeUp(t *testing.T) {
+	tm := createTestMesh(t)
+	latest := types.NewLayerID(11)
+	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Latest))
+	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Processed))
+	latestState := latest.Sub(1)
+	require.NoError(t, layers.SetStatus(tm.cdb, latestState, layers.Applied))
+
+	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
+	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
+	require.NoError(t, err)
+	require.True(t, recovered)
+	gotP, err := msh.GetProcessedLayer()
+	require.NoError(t, err)
+	require.Equal(t, latest, gotP)
+	gotV, err := msh.GetVerifiedLayer()
+	require.NoError(t, err)
+	require.Equal(t, latestState, gotV)
+}
+
 func TestMesh_LayerHashes(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	gLyr := types.GetEffectiveGenesis()
 	numLayers := 5
 	latestLyr := gLyr.Add(uint32(numLayers))
 	lyrBlocks := make(map[types.LayerID]*types.Block)
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
-		blocks := createLayerBlocks(t, tm.Mesh, i, true)
-		hareOutput := types.SortBlocks(blocks)[0]
+		blks := createLayerBlocks(t, tm.Mesh, i, true)
+		hareOutput := types.SortBlocks(blks)[0]
 		lyrBlocks[i] = hareOutput
-		require.NoError(t, tm.SaveHareConsensusOutput(context.TODO(), i, hareOutput.ID()))
+		require.NoError(t, layers.SetHareOutput(tm.cdb, i, hareOutput.ID()))
 	}
 
-	prevAggHash, err := tm.GetAggregatedLayerHash(gLyr)
+	prevAggHash, err := layers.GetAggregatedHash(tm.cdb, gLyr)
 	require.NoError(t, err)
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		thisLyr, err := tm.GetLayer(i)
@@ -127,19 +183,19 @@ func TestMesh_LayerHashes(t *testing.T) {
 		tm.mockState.EXPECT().ApplyLayer(blk).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 
-		h, err := tm.GetLayerHash(i)
+		h, err := layers.GetHash(tm.cdb, i)
 		require.NoError(t, err)
 		require.Equal(t, types.EmptyLayerHash, h)
-		ah, err := tm.GetAggregatedLayerHash(i)
+		ah, err := layers.GetAggregatedHash(tm.cdb, i)
 		require.NoError(t, err)
 		require.Equal(t, types.EmptyLayerHash, ah)
 		require.NoError(t, tm.ProcessLayer(context.TODO(), thisLyr.Index()))
 		expectedHash := types.CalcBlocksHash32([]types.BlockID{blk.ID()}, nil)
-		h, err = tm.GetLayerHash(i)
+		h, err = layers.GetHash(tm.cdb, i)
 		require.NoError(t, err)
 		assert.Equal(t, expectedHash, h)
 		expectedAggHash := types.CalcBlocksHash32([]types.BlockID{blk.ID()}, prevAggHash.Bytes())
-		ah, err = tm.GetAggregatedLayerHash(i)
+		ah, err = layers.GetAggregatedHash(tm.cdb, i)
 		require.NoError(t, err)
 		assert.Equal(t, expectedAggHash, ah)
 		prevAggHash = expectedAggHash
@@ -148,28 +204,24 @@ func TestMesh_LayerHashes(t *testing.T) {
 
 func TestMesh_GetLayer(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	id := types.GetEffectiveGenesis().Add(1)
 	lyr, err := tm.GetLayer(id)
 	require.NoError(t, err)
 	assert.Empty(t, lyr.Blocks())
 	assert.Empty(t, lyr.Ballots())
 
-	blocks := createLayerBlocks(t, tm.Mesh, id, true)
-	ballots := createLayerBallots(t, tm.Mesh, id)
+	blks := createLayerBlocks(t, tm.Mesh, id, true)
+	blts := createLayerBallots(t, tm.Mesh, id)
 	lyr, err = tm.GetLayer(id)
 	require.NoError(t, err)
 	require.Equal(t, id, lyr.Index())
-	require.Len(t, lyr.Ballots(), len(ballots))
-	assert.ElementsMatch(t, ballots, lyr.Ballots())
-	assert.ElementsMatch(t, blocks, lyr.Blocks())
+	require.Len(t, lyr.Ballots(), len(blts))
+	assert.ElementsMatch(t, blts, lyr.Ballots())
+	assert.ElementsMatch(t, blks, lyr.Blocks())
 }
 
 func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	gLyr := types.GetEffectiveGenesis()
 	gPlus1 := gLyr.Add(1)
 	gPlus2 := gLyr.Add(2)
@@ -195,7 +247,7 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 		tm.mockState.EXPECT().ApplyLayer(toApply).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 		require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), i, toApply.ID()))
-		got, err := tm.GetHareConsensusOutput(i)
+		got, err := layers.GetHareOutput(tm.cdb, i)
 		require.NoError(t, err)
 		assert.Equal(t, toApply.ID(), got)
 		assert.Equal(t, i, tm.ProcessedLayer())
@@ -205,8 +257,6 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 
 func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	gLyr := types.GetEffectiveGenesis()
 	gPlus1 := gLyr.Add(1)
 	gPlus2 := gLyr.Add(2)
@@ -225,7 +275,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm.mockState.EXPECT().ApplyLayer(blocks1[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus1, blocks1[0].ID()))
-	got, err := tm.GetHareConsensusOutput(gPlus1)
+	got, err := layers.GetHareOutput(tm.cdb, gPlus1)
 	require.NoError(t, err)
 	assert.Equal(t, blocks1[0].ID(), got)
 	assert.Equal(t, gPlus1, tm.ProcessedLayer())
@@ -236,7 +286,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	// will try to apply state for gPlus2
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus3, blocks3[0].ID())
 	assert.ErrorIs(t, err, errMissingHareOutput)
-	got, err = tm.GetHareConsensusOutput(gPlus3)
+	got, err = layers.GetHareOutput(tm.cdb, gPlus3)
 	require.NoError(t, err)
 	assert.Equal(t, blocks3[0].ID(), got)
 	assert.Equal(t, gPlus1, tm.ProcessedLayer())
@@ -247,7 +297,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	// will try to apply state for gPlus2
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus5, blocks5[0].ID())
 	assert.ErrorIs(t, err, errMissingHareOutput)
-	got, err = tm.GetHareConsensusOutput(gPlus5)
+	got, err = layers.GetHareOutput(tm.cdb, gPlus5)
 	require.NoError(t, err)
 	assert.Equal(t, blocks5[0].ID(), got)
 	assert.Equal(t, gPlus1, tm.ProcessedLayer())
@@ -263,7 +313,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(2)
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, blocks2[0].ID())
 	assert.ErrorIs(t, err, errMissingHareOutput)
-	got, err = tm.GetHareConsensusOutput(gPlus2)
+	got, err = layers.GetHareOutput(tm.cdb, gPlus2)
 	require.NoError(t, err)
 	assert.Equal(t, blocks2[0].ID(), got)
 	assert.Equal(t, gPlus3, tm.ProcessedLayer())
@@ -278,7 +328,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm.mockState.EXPECT().ApplyLayer(blocks5[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(2)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus4, blocks4[0].ID()))
-	got, err = tm.GetHareConsensusOutput(gPlus4)
+	got, err = layers.GetHareOutput(tm.cdb, gPlus4)
 	require.NoError(t, err)
 	assert.Equal(t, blocks4[0].ID(), got)
 	assert.Equal(t, gPlus5, tm.ProcessedLayer())
@@ -288,8 +338,6 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 
 func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	gLyr := types.GetEffectiveGenesis()
 	gPlus1 := gLyr.Add(1)
 	blocks1 := createLayerBlocks(t, tm.Mesh, gPlus1, false)
@@ -297,7 +345,7 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	tm.mockState.EXPECT().ApplyLayer(blocks1[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus1, blocks1[0].ID()))
-	hareOutput, err := tm.GetHareConsensusOutput(gPlus1)
+	hareOutput, err := layers.GetHareOutput(tm.cdb, gPlus1)
 	require.NoError(t, err)
 	require.Equal(t, blocks1[0].ID(), hareOutput)
 	require.Equal(t, gPlus1, tm.ProcessedLayer())
@@ -310,7 +358,7 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, types.EmptyBlockID))
 
 	// hare output saved
-	hareOutput, err = tm.GetHareConsensusOutput(gPlus2)
+	hareOutput, err = layers.GetHareOutput(tm.cdb, gPlus2)
 	require.NoError(t, err)
 	assert.Equal(t, types.EmptyBlockID, hareOutput)
 
@@ -322,8 +370,6 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 
 func TestMesh_Revert(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	gLyr := types.GetEffectiveGenesis()
 	gPlus1 := gLyr.Add(1)
 	gPlus2 := gLyr.Add(2)
@@ -354,7 +400,7 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus3, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus3)
 
-	oldHash, err := tm.GetAggregatedLayerHash(gPlus2)
+	oldHash, err := layers.GetAggregatedHash(tm.cdb, gPlus2)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyLayerHash, oldHash)
 
@@ -379,13 +425,13 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus4, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus4)
 
-	newHash, err := tm.GetAggregatedLayerHash(gPlus2)
+	newHash, err := layers.GetAggregatedHash(tm.cdb, gPlus2)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyLayerHash, newHash)
 	require.NotEqual(t, oldHash, newHash)
 
 	// gPlus2 hash should contain all valid blocks
-	h, err := tm.GetLayerHash(gPlus2)
+	h, err := layers.GetHash(tm.cdb, gPlus2)
 	require.NoError(t, err)
 	require.Equal(t, types.CalcBlocksHash32(types.ToBlockIDs(types.SortBlocks(blocks2[1:])), nil), h)
 
@@ -397,27 +443,13 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, gPlus5, tm.ProcessedLayer())
 	require.Equal(t, gPlus5, tm.LatestLayerInState())
 	checkLastApplied(t, tm.Mesh, gPlus5)
-	ah, err := tm.GetAggregatedLayerHash(gPlus2)
+	ah, err := layers.GetAggregatedHash(tm.cdb, gPlus2)
 	require.NoError(t, err)
 	require.Equal(t, newHash, ah)
 }
 
-func TestMesh_PersistProcessedLayer(t *testing.T) {
-	tm := createTestMesh(t)
-	t.Cleanup(func() {
-		tm.Close()
-	})
-	layerID := types.NewLayerID(7)
-	assert.NoError(t, tm.persistProcessedLayer(layerID))
-	rLyr, err := tm.GetProcessedLayer()
-	assert.NoError(t, err)
-	assert.Equal(t, layerID, rLyr)
-}
-
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	tm.setLatestLayer(types.NewLayerID(3))
 	tm.setLatestLayer(types.NewLayerID(7))
 	tm.setLatestLayer(types.NewLayerID(10))
@@ -426,41 +458,8 @@ func TestMesh_LatestKnownLayer(t *testing.T) {
 	assert.Equal(t, types.NewLayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
-func TestMesh_WakeUp(t *testing.T) {
-	tm := createTestMesh(t)
-	defer tm.Close()
-
-	gLyr := types.GetEffectiveGenesis()
-	ballots1, blocks1 := createLayerBallotsAndBlocks(t, tm.Mesh, gLyr.Add(1))
-	ballots2, blocks2 := createLayerBallotsAndBlocks(t, tm.Mesh, gLyr.Add(2))
-
-	for _, b := range append(ballots1, ballots2...) {
-		got, err := tm.GetBallot(b.ID())
-		assert.NoError(t, err)
-		assert.Equal(t, b, got)
-	}
-	for _, b := range append(blocks1, blocks2...) {
-		got, err := tm.GetBlock(b.ID())
-		assert.NoError(t, err)
-		assert.Equal(t, b, got)
-	}
-	recoveredMesh := NewMesh(tm.DB, nil, tm.mockTortoise, tm.mockState, logtest.New(t))
-	for _, b := range append(ballots1, ballots2...) {
-		got, err := recoveredMesh.GetBallot(b.ID())
-		assert.NoError(t, err)
-		assert.Equal(t, b, got)
-	}
-	for _, b := range append(blocks1, blocks2...) {
-		got, err := recoveredMesh.GetBlock(b.ID())
-		assert.NoError(t, err)
-		assert.Equal(t, b, got)
-	}
-}
-
 func TestMesh_pushLayersToState_verified(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
 	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
@@ -473,7 +472,7 @@ func TestMesh_pushLayersToState_verified(t *testing.T) {
 	addBlockWithTXsToMesh(t, tm, layerID, false, txIDs[4:])
 
 	// set block3 to be hare output
-	require.NoError(t, tm.SaveHareConsensusOutput(context.TODO(), layerID, block3.ID()))
+	require.NoError(t, layers.SetHareOutput(tm.cdb, layerID, block3.ID()))
 
 	valids := []*types.Block{block1, block2}
 	types.SortBlocks(valids)
@@ -486,8 +485,6 @@ func TestMesh_pushLayersToState_verified(t *testing.T) {
 
 func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
 	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
@@ -499,7 +496,7 @@ func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	addBlockWithTXsToMesh(t, tm, layerID, true, txIDs[1:4])
 	addBlockWithTXsToMesh(t, tm, layerID, true, txIDs[3:])
 	hareOutput := addBlockWithTXsToMesh(t, tm, layerID, true, txIDs[4:])
-	require.NoError(t, tm.SaveHareConsensusOutput(context.TODO(), layerID, hareOutput.ID()))
+	require.NoError(t, layers.SetHareOutput(tm.cdb, layerID, hareOutput.ID()))
 
 	tm.mockState.EXPECT().ApplyLayer(hareOutput).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
@@ -507,41 +504,18 @@ func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	checkLastApplied(t, tm.Mesh, layerID)
 }
 
-func TestMesh_persistLayerHash(t *testing.T) {
-	tm := createTestMesh(t)
-	defer tm.Close()
-
-	// persist once
-	lyr := types.NewLayerID(3)
-	hash := types.RandomHash()
-	require.NoError(t, tm.persistLayerHash(lyr, hash))
-	h, err := tm.GetLayerHash(lyr)
-	require.NoError(t, err)
-	assert.Equal(t, hash, h)
-
-	// persist twice
-	newHash := types.RandomHash()
-	assert.NotEqual(t, newHash, hash)
-	require.NoError(t, tm.persistLayerHash(lyr, newHash))
-	h, err = tm.GetLayerHash(lyr)
-	require.NoError(t, err)
-	assert.Equal(t, newHash, h)
-}
-
 func addBlockWithTXsToMesh(t *testing.T, tm *testMesh, id types.LayerID, valid bool, txIDs []types.TransactionID) *types.Block {
 	t.Helper()
 	b := types.GenLayerBlock(id, txIDs)
 	tm.mockState.EXPECT().LinkTXsWithBlock(id, b.ID(), b.TxIDs).Times(1)
 	require.NoError(t, tm.Mesh.AddBlockWithTXs(context.TODO(), b))
-	require.NoError(t, tm.Mesh.SaveContextualValidity(b.ID(), id, valid))
+	require.NoError(t, tm.Mesh.saveContextualValidity(b.ID(), id, valid))
 	return b
 }
 
 func TestMesh_AddTXsFromProposal(t *testing.T) {
 	r := require.New(t)
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(1)
 	pid := types.RandomProposalID()
 	txIDs := types.RandomTXSet(numTXs)
@@ -552,9 +526,6 @@ func TestMesh_AddTXsFromProposal(t *testing.T) {
 func TestMesh_AddBlockWithTXs(t *testing.T) {
 	r := require.New(t)
 	tm := createTestMesh(t)
-	defer tm.ctrl.Finish()
-	defer tm.Close()
-
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
 	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 
@@ -567,14 +538,12 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 
 func TestMesh_ReverifyFailed(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	ctx := context.TODO()
 	genesis := types.GetEffectiveGenesis()
 	last := genesis.Add(10)
 
 	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
-		require.NoError(t, tm.SaveHareConsensusOutput(ctx, lid, types.EmptyBlockID))
+		require.NoError(t, layers.SetHareOutput(tm.cdb, lid, types.EmptyBlockID))
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 		tm.mockState.EXPECT().GetStateRoot()
 		require.NoError(t, tm.ProcessLayer(ctx, lid))
@@ -589,8 +558,8 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{LayerIndex: last, TxIDs: []types.TransactionID{{1, 1, 1}}})
-	require.NoError(t, tm.AddBlock(block))
-	require.NoError(t, tm.SaveHareConsensusOutput(ctx, last, block.ID()))
+	require.NoError(t, blocks.Add(tm.cdb, block))
+	require.NoError(t, layers.SetHareOutput(tm.cdb, last, block.ID()))
 	errTXMissing := errors.New("tx missing")
 	tm.mockState.EXPECT().ApplyLayer(block).Return(nil, errTXMissing)
 	require.Error(t, tm.ProcessLayer(ctx, last))
@@ -600,9 +569,9 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	checkLastApplied(t, tm.Mesh, last.Sub(1))
 
 	last = last.Add(1)
-	require.NoError(t, tm.SaveContextualValidity(block.ID(), last.Sub(1), true))
+	require.NoError(t, tm.saveContextualValidity(block.ID(), last.Sub(1), true))
 	tm.mockState.EXPECT().ApplyLayer(block).Return(nil, nil)
-	require.NoError(t, tm.SaveHareConsensusOutput(ctx, last, types.EmptyBlockID))
+	require.NoError(t, layers.SetHareOutput(tm.cdb, last, types.EmptyBlockID))
 	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(last.Sub(1))
 		tm.mockState.EXPECT().GetStateRoot()
@@ -617,16 +586,14 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 
 func TestMesh_MissingTransactionsFailure(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	ctx := context.TODO()
 	genesis := types.GetEffectiveGenesis()
 	last := genesis.Add(1)
 
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{LayerIndex: last, TxIDs: []types.TransactionID{{1, 1, 1}}})
-	require.NoError(t, tm.AddBlock(block))
-	require.NoError(t, tm.SaveHareConsensusOutput(ctx, last, block.ID()))
+	require.NoError(t, blocks.Add(tm.cdb, block))
+	require.NoError(t, layers.SetHareOutput(tm.cdb, last, block.ID()))
 
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), last).Return(last.Sub(1))
 	errTXMissing := errors.New("tx missing")
@@ -640,22 +607,20 @@ func TestMesh_MissingTransactionsFailure(t *testing.T) {
 
 func TestMesh_NoPanicOnIncorrectVerified(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	ctx := context.TODO()
 	genesis := types.GetEffectiveGenesis()
 	const n = 10
 	last := genesis.Add(n)
 
 	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
-		require.NoError(t, tm.SaveHareConsensusOutput(ctx, lid, types.EmptyBlockID))
+		require.NoError(t, layers.SetHareOutput(tm.cdb, lid, types.EmptyBlockID))
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 		tm.mockState.EXPECT().GetStateRoot()
 		require.NoError(t, tm.ProcessLayer(ctx, lid))
 	}
 	require.Equal(t, last, tm.LatestLayerInState())
 
-	require.NoError(t, tm.SaveHareConsensusOutput(ctx, last.Add(1), types.EmptyBlockID))
+	require.NoError(t, layers.SetHareOutput(tm.cdb, last.Add(1), types.EmptyBlockID))
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), last.Add(1)).Return(tm.LatestLayerInState().Sub(1))
 	tm.mockState.EXPECT().GetStateRoot()
 	require.NoError(t, tm.ProcessLayer(ctx, last.Add(1)))
@@ -668,8 +633,6 @@ func TestMesh_NoPanicOnIncorrectVerified(t *testing.T) {
 
 func TestMesh_CallOnBlock(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	block := types.Block{}
 	block.LayerIndex = types.NewLayerID(10)
 	block.Initialize()
@@ -681,11 +644,25 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 func TestMesh_CallOnBallot(t *testing.T) {
 	tm := createTestMesh(t)
-	defer tm.Close()
-
 	ballot := types.RandomBallot()
-
 	tm.mockTortoise.EXPECT().OnBallot(ballot)
-
 	require.NoError(t, tm.AddBallot(ballot))
+}
+
+func TestMesh_MaliciousBallots(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.NewLayerID(1)
+	pub := []byte{1, 1, 1}
+
+	blts := []types.Ballot{
+		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+	}
+	require.NoError(t, tm.addBallot(&blts[0]))
+	require.False(t, blts[0].IsMalicious())
+	for _, ballot := range blts[1:] {
+		require.NoError(t, tm.addBallot(&ballot))
+		require.True(t, ballot.IsMalicious())
+	}
 }

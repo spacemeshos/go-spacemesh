@@ -38,7 +38,6 @@ type txProvider interface {
 	AddHeader(types.TransactionID, *types.TxHeader) error
 	Has(types.TransactionID) (bool, error)
 	Get(types.TransactionID) (*types.MeshTransaction, error)
-	GetBlob(types.TransactionID) ([]byte, error)
 	GetByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
 	AddToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
 	AddToBlock(types.LayerID, types.BlockID, []types.TransactionID) error

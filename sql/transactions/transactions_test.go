@@ -506,7 +506,7 @@ func TestGetBlob(t *testing.T) {
 		txs = append(txs, tx)
 	}
 	for _, tx := range txs {
-		buf, err := GetBlob(db, tx.ID)
+		buf, err := GetBlob(db, tx.ID[:])
 		require.NoError(t, err)
 		require.Equal(t, tx.Raw, buf)
 	}

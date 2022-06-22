@@ -10,19 +10,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 )
 
 type meshProvider interface {
 	AddBlockWithTXs(context.Context, *types.Block) error
-	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
-	RecordCoinflip(context.Context, types.LayerID, bool)
 	SetZeroBlockLayer(types.LayerID) error
 	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
-}
-
-type proposalProvider interface {
-	LayerProposals(types.LayerID) ([]*types.Proposal, error)
-	LayerProposalIDs(types.LayerID) ([]types.ProposalID, error)
 }
 
 type blockGenerator interface {
@@ -31,8 +27,8 @@ type blockGenerator interface {
 
 // SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip.
 type SuperHare struct {
+	db           *sql.Database
 	mesh         meshProvider
-	ppp          proposalProvider
 	blockGen     blockGenerator
 	conf         config.Config
 	beginLayer   chan types.LayerID
@@ -41,8 +37,8 @@ type SuperHare struct {
 }
 
 // New creates a new instance of SuperHare.
-func New(_ context.Context, conf config.Config, mesh meshProvider, ppp proposalProvider, blockGen blockGenerator, beginLayer chan types.LayerID, logger log.Log) *SuperHare {
-	return &SuperHare{mesh, ppp, blockGen, conf, beginLayer, make(chan struct{}), logger}
+func New(db *sql.Database, conf config.Config, mesh meshProvider, blockGen blockGenerator, beginLayer chan types.LayerID, logger log.Log) *SuperHare {
+	return &SuperHare{db, mesh, blockGen, conf, beginLayer, make(chan struct{}), logger}
 }
 
 // Start is a stub to support service API.
@@ -71,7 +67,7 @@ func (h *SuperHare) Start(ctx context.Context) error {
 
 					// use lowest-order bit
 					coinflip := layerID.Bytes()[0]&byte(1) == byte(1)
-					h.mesh.RecordCoinflip(ctx, layerID, coinflip)
+					layers.SetWeakCoin(h.db, layerID, coinflip)
 					logger.With().Info("superhare recorded coinflip", layerID, log.Bool("coinflip", coinflip))
 
 					// pass all blocks in the layer to the mesh
@@ -79,19 +75,19 @@ func (h *SuperHare) Start(ctx context.Context) error {
 						logger.With().Info("not sending blocks to mesh for genesis layer")
 						return
 					}
-					proposals, err := h.ppp.LayerProposals(layerID)
+					props, err := proposals.GetByLayer(h.db, layerID)
 					if err != nil {
 						logger.With().Warning("error getting proposals for layer, using empty set",
 							layerID,
 							log.Err(err))
 					}
 					hareOutput := types.EmptyBlockID
-					if len(proposals) == 0 {
+					if len(props) == 0 {
 						logger.With().Warning("hare output empty set")
 						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
 							logger.With().Error("failed to set layer as a zero block", log.Err(err))
 						}
-					} else if block, err := h.blockGen.GenerateBlock(ctx, layerID, proposals); err != nil {
+					} else if block, err := h.blockGen.GenerateBlock(ctx, layerID, props); err != nil {
 						logger.With().Error("failed to generate block", log.Err(err))
 						return
 					} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
