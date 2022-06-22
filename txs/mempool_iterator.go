@@ -27,7 +27,7 @@ func (pq priorityQueue) Len() int { return len(pq) }
 // Less implements head.Interface.
 func (pq priorityQueue) Less(i, j int) bool {
 	// We want Pop to give us the highest, not lowest, fee, so we use greater than here.
-	return pq[i].Fee() > pq[j].Fee() || (pq[i].Fee() == pq[j].Fee() && pq[i].Received.Before(pq[j].Received))
+	return pq[i].Fee > pq[j].Fee || (pq[i].Fee == pq[j].Fee && pq[i].Received.Before(pq[j].Received))
 }
 
 // Swap implements head.Interface.
@@ -96,9 +96,9 @@ func (mi *mempoolIterator) buildPQ() {
 		i++
 		mi.pq = append(mi.pq, it)
 		mi.logger.With().Debug("adding item to pq",
-			ntx.ID,
+			ntx.Tid,
 			ntx.Principal,
-			log.Uint64("fee", ntx.Fee()),
+			log.Uint64("fee", ntx.Fee),
 			log.Uint64("gas", ntx.MaxGas),
 			log.Time("received", ntx.Received))
 
@@ -137,9 +137,9 @@ func (mi *mempoolIterator) pop() *txtypes.NanoTX {
 			break
 		}
 		mi.logger.With().Debug("tx max gas too high, removing addr from mempool",
-			top.ID,
+			top.Tid,
 			top.Principal,
-			log.Uint64("fee", top.Fee()),
+			log.Uint64("fee", top.Fee),
 			log.Uint64("gas", top.MaxGas),
 			log.Uint64("gas_left", mi.gasRemaining),
 			log.Time("received", top.Received))
@@ -156,9 +156,9 @@ func (mi *mempoolIterator) pop() *txtypes.NanoTX {
 	ntx := top.NanoTX
 	mi.gasRemaining -= ntx.MaxGas
 	mi.logger.With().Debug("popping tx",
-		ntx.ID,
+		ntx.Tid,
 		ntx.Principal,
-		log.Uint64("fee", ntx.Fee()),
+		log.Uint64("fee", ntx.Fee),
 		log.Uint64("gas_used", ntx.MaxGas),
 		log.Uint64("gas_left", mi.gasRemaining),
 		log.Time("received", ntx.Received))
@@ -168,9 +168,9 @@ func (mi *mempoolIterator) pop() *txtypes.NanoTX {
 		_ = heap.Pop(&mi.pq)
 	} else {
 		mi.logger.With().Debug("added tx for addr",
-			next.ID,
+			next.Tid,
 			next.Principal,
-			log.Uint64("fee", next.Fee()),
+			log.Uint64("fee", next.Fee),
 			log.Uint64("gas", next.MaxGas),
 			log.Time("received", next.Received))
 		// updating the item (for the same address) in the heap is less expensive than a pop followed by a push.

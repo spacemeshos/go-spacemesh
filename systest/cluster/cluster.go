@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
@@ -335,8 +334,7 @@ type signer struct {
 }
 
 func (s *signer) Address() []byte {
-	address := wallet.Address(s.Pub)
-	return address[:]
+	return s.Pub[12:]
 }
 
 func (s *signer) HexAddress() string {

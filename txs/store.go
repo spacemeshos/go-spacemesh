@@ -171,8 +171,3 @@ func undoLayers(dbtx *sql.Tx, from types.LayerID) error {
 	}
 	return nil
 }
-
-// AddHeader to previously stored tx.
-func (s *store) AddHeader(tid types.TransactionID, header *types.TxHeader) error {
-	return transactions.AddHeader(s.db, tid, header)
-}

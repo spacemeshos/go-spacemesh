@@ -59,7 +59,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 	return &pb.Account{
 		AccountId: &pb.AccountId{Address: addr.Bytes()},
 		StateCurrent: &pb.AccountState{
-			Counter: counterActual.Counter,
+			Counter: counterActual,
 			Balance: &pb.Amount{Value: balanceActual},
 		},
 		StateProjected: &pb.AccountState{
