@@ -2239,15 +2239,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// Ensure receiving has started.
 	time.Sleep(10 * time.Millisecond)
 
-	// publish a receipt
-	events.ReportReceipt(events.TxReceipt{
-		Address: addr1,
-		Index:   receiptIndex,
-	})
-
-	// Wait before every event to ensure their ordering.
-	time.Sleep(10 * time.Millisecond)
-
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
 		Layer:       layerFirst,
@@ -2353,14 +2344,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	// initialize the streamer
 	events.CloseEventReporter()
 	events.InitializeReporter()
-
-	time.Sleep(10 * time.Millisecond)
-
-	// publish a receipt
-	events.ReportReceipt(events.TxReceipt{
-		Address: addr1,
-		Index:   receiptIndex,
-	})
 
 	time.Sleep(10 * time.Millisecond)
 	// publish a reward

@@ -169,17 +169,12 @@ func ReportNodeStatusUpdate() {
 	}
 }
 
-// ReportReceipt reports creation or receipt of a new tx receipt.
-func ReportReceipt(r TxReceipt) {
-	mu.RLock()
-	defer mu.RUnlock()
-
+// ReportResult reports creation or receipt of a new tx receipt.
+func ReportResult(rst *types.TransactionWithResult) {
 	if reporter != nil {
-		if err := reporter.receiptEmitter.Emit(r); err != nil {
+		if err := reporter.resultsEmitter.Emit(rst); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit receipt", r.ID, log.Err(err))
-		} else {
-			log.Debug("reported receipt: %v", r)
+			log.With().Error("Failed to emit tx results", rst.ID, log.Err(err))
 		}
 	}
 }
@@ -313,22 +308,6 @@ func SubscribeRewards() Subscription {
 	return nil
 }
 
-// SubscribeReceipts subscribes to receipts.
-func SubscribeReceipts() Subscription {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(TxReceipt))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to receipts")
-		}
-
-		return sub
-	}
-	return nil
-}
-
 // SubscribeToLayers is used to track and report automatically every time a
 // new layer is reached.
 func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
@@ -433,7 +412,7 @@ type EventReporter struct {
 	statusEmitter      event.Emitter
 	accountEmitter     event.Emitter
 	rewardEmitter      event.Emitter
-	receiptEmitter     event.Emitter
+	resultsEmitter     event.Emitter
 	proposalsEmitter   event.Emitter
 	stopChan           chan struct{}
 }
@@ -494,7 +473,7 @@ func newEventReporter() *EventReporter {
 		statusEmitter:      statusEmitter,
 		accountEmitter:     accountEmitter,
 		rewardEmitter:      rewardEmitter,
-		receiptEmitter:     receiptEmitter,
+		resultsEmitter:     receiptEmitter,
 		errorEmitter:       errorEmitter,
 		proposalsEmitter:   proposalsEmitter,
 		stopChan:           make(chan struct{}),
@@ -527,7 +506,7 @@ func CloseEventReporter() {
 		if err := reporter.rewardEmitter.Close(); err != nil {
 			log.With().Panic("failed to close rewardEmitter", log.Err(err))
 		}
-		if err := reporter.receiptEmitter.Close(); err != nil {
+		if err := reporter.resultsEmitter.Close(); err != nil {
 			log.With().Panic("failed to close receiptEmitter", log.Err(err))
 		}
 		if err := reporter.proposalsEmitter.Close(); err != nil {
