@@ -163,12 +163,12 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		return nil, err
 	}
 
-	txs, raw, err := cs.getTXsToApply(toApply)
+	raw, err := cs.getTXsToApply(toApply)
 	if err != nil {
 		return nil, err
 	}
 
-	skipped, err := cs.vmState.Apply(toApply.LayerIndex, raw, toApply.Rewards)
+	skipped, rsts, err := cs.vmState.Apply(toApply.LayerIndex, raw, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,
@@ -179,38 +179,23 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		return nil, fmt.Errorf("apply layer: %w", err)
 	}
 
-	finalList := txs
-	if len(skipped) > 0 {
-		finalList = make([]*types.Transaction, 0, len(txs))
-		failed := make(map[types.TransactionID]struct{})
-		for _, id := range skipped {
-			failed[id] = struct{}{}
-		}
-		for _, tx := range txs {
-			if _, ok := failed[tx.ID]; !ok {
-				finalList = append(finalList, tx)
-			}
-		}
-	}
-
 	logger.With().Info("applying layer to cache",
 		log.Int("num_txs_failed", len(skipped)),
-		log.Int("num_txs_final", len(finalList)))
-	if _, errs := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), finalList); len(errs) > 0 {
+		log.Int("num_txs_final", len(rsts)))
+	if _, errs := cs.cache.ApplyLayer(toApply.LayerIndex, toApply.ID(), rsts); len(errs) > 0 {
 		return nil, errs[0]
 	}
 	return skipped, nil
 }
 
-func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Transaction, []types.RawTx, error) {
+func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]types.RawTx, error) {
 	// TODO this allocates an additional map for all tx ids in the block
 	// it would make much more sense to load transactions in the loop below
 	// and terminate with error if transaction is missing
 	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
-		return nil, nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
+		return nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
 	}
-	txs := make([]*types.Transaction, 0, len(toApply.TxIDs))
 	raw := make([]types.RawTx, 0, len(toApply.TxIDs))
 	for _, mtx := range mtxs {
 		// some TXs in the block may be already applied previously
@@ -227,26 +212,25 @@ func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]*types.Trans
 			req := cs.vmState.Validation(mtx.RawTx)
 			header, err := req.Parse()
 			if err != nil {
-				return nil, nil, fmt.Errorf("parsing %s: %w", mtx.ID, err)
+				return nil, fmt.Errorf("parsing %s: %w", mtx.ID, err)
 			}
 			if !req.Verify() {
-				return nil, nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
+				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
 			}
 			mtx.TxHeader = header
 			// updating header also updates principal/nonce indexes
 			if err := cs.tp.AddHeader(mtx.ID, header); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
 			// transactions can be added successfully
 			if err := cs.cache.Add(&mtx.Transaction, mtx.Received, nil); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 		}
-		txs = append(txs, &mtx.Transaction)
 		raw = append(raw, mtx.RawTx)
 	}
-	return txs, raw, nil
+	return raw, nil
 }
 
 // Transactions exports the transactions DB.

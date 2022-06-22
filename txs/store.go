@@ -133,23 +133,20 @@ func addToBlock(dbtx *sql.Tx, lid types.LayerID, bid types.BlockID, tids []types
 
 // ApplyLayer sets transactions to applied and discarded accordingly, and sets the layer at which the
 // transactions are applied/discarded.
-func (s *store) ApplyLayer(lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionID) error {
+func (s *store) ApplyLayer(lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionWithResult) error {
 	return s.runInDBTransaction(func(dbtx *sql.Tx) error {
 		return applyLayer(dbtx, lid, bid, addr, appliedByNonce)
 	})
 }
 
-func applyLayer(dbtx *sql.Tx, lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionID) error {
+func applyLayer(dbtx *sql.Tx, lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionWithResult) error {
 	// nonce order doesn't matter here
-	for nonce, tid := range appliedByNonce {
-		updated, err := transactions.Apply(dbtx, tid, lid, bid)
+	for nonce, tx := range appliedByNonce {
+		err := transactions.AddResult(dbtx, tx.ID, &tx.TransactionResult)
 		if err != nil {
 			return fmt.Errorf("apply %w", err)
 		}
-		if updated == 0 {
-			return fmt.Errorf("tx not applied %v", tid)
-		}
-		if err = transactions.DiscardByAcctNonce(dbtx, tid, lid, addr, nonce); err != nil {
+		if err = transactions.DiscardByAcctNonce(dbtx, tx.ID, lid, addr, nonce); err != nil {
 			return fmt.Errorf("apply discard %w", err)
 		}
 	}

@@ -416,7 +416,7 @@ func (ac *accountCache) applyLayer(
 	tp txProvider,
 	lid types.LayerID,
 	bid types.BlockID,
-	appliedByNonce map[uint64]types.TransactionID,
+	appliedByNonce map[uint64]types.TransactionWithResult,
 ) error {
 	nextNonce := ac.startNonce
 	for {
@@ -700,7 +700,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Transaction) ([]error, []error) {
+func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []types.TransactionWithResult) ([]error, []error) {
 	if err := c.CheckApplyOrder(lid); err != nil {
 		return nil, []error{err}
 	}
@@ -714,16 +714,16 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Tr
 	}
 	defer c.cleanupAccounts(toCleanup)
 
-	byPrincipal := make(map[types.Address]map[uint64]types.TransactionID)
+	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
 	for _, tx := range txs {
 		principal := tx.Principal
 		if _, ok := byPrincipal[principal]; !ok {
-			byPrincipal[principal] = make(map[uint64]types.TransactionID)
+			byPrincipal[principal] = make(map[uint64]types.TransactionWithResult)
 		}
 		if _, ok := byPrincipal[principal][tx.Nonce.Counter]; ok {
 			return nil, []error{errDupNonceApplied}
 		}
-		byPrincipal[principal][tx.Nonce.Counter] = tx.ID
+		byPrincipal[principal][tx.Nonce.Counter] = tx
 	}
 
 	errsApply := make([]error, 0, len(byPrincipal))

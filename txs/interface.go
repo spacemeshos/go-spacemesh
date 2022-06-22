@@ -26,7 +26,7 @@ type vmState interface {
 	GetBalance(types.Address) (uint64, error)
 	GetNonce(types.Address) (types.Nonce, error)
 	Revert(types.LayerID) (types.Hash32, error)
-	Apply(types.LayerID, []types.RawTx, []types.AnyReward) ([]types.TransactionID, error)
+	Apply(types.LayerID, []types.RawTx, []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error)
 }
 
 type conStateCache interface {
@@ -43,7 +43,7 @@ type txProvider interface {
 	AddToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
 	AddToBlock(types.LayerID, types.BlockID, []types.TransactionID) error
 	UndoLayers(types.LayerID) error
-	ApplyLayer(types.LayerID, types.BlockID, types.Address, map[uint64]types.TransactionID) error
+	ApplyLayer(types.LayerID, types.BlockID, types.Address, map[uint64]types.TransactionWithResult) error
 	DiscardNonceBelow(types.Address, uint64) error
 	SetNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
 	GetAllPending() ([]*types.MeshTransaction, error)
