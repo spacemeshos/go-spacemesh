@@ -24,7 +24,7 @@ func WithBuffer(n int) SubOpt {
 	}
 }
 
-func subscribe[T any](matcher func(T) bool, opts ...SubOpt) (*BufferedSubscription[T], error) {
+func subscribe[T any](matcher func(*T) bool, opts ...SubOpt) (*BufferedSubscription[T], error) {
 	sub, err := reporter.bus.Subscribe(new(T))
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func Subscribe[T any](opts ...SubOpt) (*BufferedSubscription[T], error) {
 }
 
 // SubscribeMatched subscribes and filters results before adding them to the Out channel.
-func SubscribeMatched[T any](matcher func(T) bool, opts ...SubOpt) (*BufferedSubscription[T], error) {
+func SubscribeMatched[T any](matcher func(*T) bool, opts ...SubOpt) (*BufferedSubscription[T], error) {
 	return subscribe(matcher, opts...)
 }
 
@@ -78,7 +78,7 @@ func (sub *BufferedSubscription[T]) Full() <-chan struct{} {
 	return sub.full
 }
 
-func (sub *BufferedSubscription[T]) run(ctx context.Context, s Subscription, matcher func(T) bool) {
+func (sub *BufferedSubscription[T]) run(ctx context.Context, s Subscription, matcher func(*T) bool) {
 	defer s.Close()
 	for {
 		select {
@@ -86,7 +86,7 @@ func (sub *BufferedSubscription[T]) run(ctx context.Context, s Subscription, mat
 			return
 		case evt := <-s.Out():
 			typed := evt.(T)
-			if matcher != nil && !matcher(typed) {
+			if matcher != nil && !matcher(&typed) {
 				break
 			}
 			select {

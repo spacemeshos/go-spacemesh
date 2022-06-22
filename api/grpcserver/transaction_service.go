@@ -280,7 +280,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	}
 }
 
-// StreamResults allows to query historical results and subscribe to live using the same filter.
+// StreamResults allows to query historical results and subscribe to live data using the same filter.
 func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stream pb.TransactionService_StreamResultsServer) error {
 	var (
 		filter    transactions.ResultsFilter
@@ -379,7 +379,7 @@ func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 
 type resultsMatcher transactions.ResultsFilter
 
-func (m resultsMatcher) match(rst types.TransactionWithResult) bool {
+func (m resultsMatcher) match(rst *types.TransactionWithResult) bool {
 	if m.Address != nil {
 		found := false
 		for i := range rst.Addresses {

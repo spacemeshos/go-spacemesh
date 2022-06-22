@@ -2,11 +2,11 @@ package transactions
 
 import (
 	"bytes"
-	"math/rand"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/stretchr/testify/assert"
@@ -57,38 +57,14 @@ func filterTxs(txs []types.TransactionWithResult, filter ResultsFilter) []types.
 func TestIterateResults(t *testing.T) {
 	db := sql.InMemory()
 
-	rng := rand.New(rand.NewSource(101))
-
-	addrs := make([]types.Address, 10)
-	for i := range addrs {
-		addrs[i] = types.Address{byte(i)}
-	}
-	blocks := make([]types.BlockID, 10)
-	for i := range blocks {
-		blocks[i] = types.BlockID{byte(i)}
-	}
-	layers := make([]types.LayerID, 10)
-	for i := range layers {
-		layers[i] = types.NewLayerID(uint32(1 + i))
-	}
+	gen := fixture.NewTransactionResultGenerator()
 	txs := make([]types.TransactionWithResult, 100)
 	for i := range txs {
-		rng.Read(txs[i].ID[:])
-		txs[i].Raw = make([]byte, 10)
-		rng.Read(txs[i].Raw)
-		txs[i].Block = blocks[rng.Intn(len(blocks))]
-		txs[i].Layer = layers[rng.Intn(len(layers))]
-		if lth := rng.Intn(len(addrs)); lth > 0 {
-			txs[i].Addresses = make([]types.Address, lth)
+		tx := gen.Next()
 
-			rng.Shuffle(len(addrs), func(i, j int) {
-				addrs[i], addrs[j] = addrs[j], addrs[i]
-			})
-			copy(txs[i].Addresses, addrs)
-		}
-
-		require.NoError(t, Add(db, &txs[i].Transaction, time.Time{}))
-		require.NoError(t, AddResult(db, txs[i].ID, &txs[i].TransactionResult))
+		require.NoError(t, Add(db, &tx.Transaction, time.Time{}))
+		require.NoError(t, AddResult(db, tx.ID, &tx.TransactionResult))
+		txs[i] = *tx
 	}
 	sort.Slice(txs, func(i, j int) bool {
 		if txs[i].Layer == txs[j].Layer {
@@ -106,20 +82,20 @@ func TestIterateResults(t *testing.T) {
 		{
 			desc: "Start",
 			filter: ResultsFilter{
-				Start: &layers[5],
+				Start: &gen.Layers[5],
 			},
 		},
 		{
 			desc: "End",
 			filter: ResultsFilter{
-				End: &layers[8],
+				End: &gen.Layers[8],
 			},
 		},
 		{
 			desc: "StartEnd",
 			filter: ResultsFilter{
-				Start: &layers[4],
-				End:   &layers[8],
+				Start: &gen.Layers[4],
+				End:   &gen.Layers[8],
 			},
 		},
 		{
@@ -131,14 +107,14 @@ func TestIterateResults(t *testing.T) {
 		{
 			desc: "Address",
 			filter: ResultsFilter{
-				Address: &addrs[0],
+				Address: &gen.Addrs[0],
 			},
 		},
 		{
 			desc: "StartAddress",
 			filter: ResultsFilter{
-				Address: &addrs[0],
-				Start:   &layers[3],
+				Address: &gen.Addrs[0],
+				Start:   &gen.Layers[3],
 			},
 		},
 	} {

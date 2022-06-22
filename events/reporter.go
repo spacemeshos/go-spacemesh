@@ -81,19 +81,10 @@ func ReportNewActivation(activation *types.ActivationTx) {
 	defer mu.RUnlock()
 
 	activationTxEvent := ActivationTx{ActivationTx: activation}
-
 	if reporter != nil {
-		innerBytes, err := activation.InnerBytes()
-		if err != nil {
-			log.Error("error attempting to report activation: unable to encode activation")
-			return
-		}
-
 		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
 			log.With().Error("Failed to emit activation", activation.ID(), activation.PubLayerID, log.Err(err))
-		} else {
-			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 		}
 	}
 }
@@ -377,9 +368,6 @@ type Reward struct {
 	Total       uint64
 	LayerReward uint64
 	Coinbase    types.Address
-	// TODO: We don't currently have a way to get the Layer Computed.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-	// LayerComputed
 }
 
 // Transaction wraps a tx with its layer ID and validity info.
@@ -450,7 +438,7 @@ func newEventReporter() *EventReporter {
 		log.With().Panic("failed to create reward emitter", log.Err(err))
 	}
 
-	receiptEmitter, err := bus.Emitter(new(TxReceipt))
+	resultsEmitter, err := bus.Emitter(new(types.TransactionResult))
 	if err != nil {
 		log.With().Panic("failed to create receipt emitter", log.Err(err))
 	}
@@ -473,7 +461,7 @@ func newEventReporter() *EventReporter {
 		statusEmitter:      statusEmitter,
 		accountEmitter:     accountEmitter,
 		rewardEmitter:      rewardEmitter,
-		resultsEmitter:     receiptEmitter,
+		resultsEmitter:     resultsEmitter,
 		errorEmitter:       errorEmitter,
 		proposalsEmitter:   proposalsEmitter,
 		stopChan:           make(chan struct{}),

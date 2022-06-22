@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+
 	"github.com/stretchr/testify/require"
 )
 
