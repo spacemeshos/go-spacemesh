@@ -62,6 +62,7 @@ var (
 	errShuttingDown      = errors.New("shutting down")
 	errBeaconUnavailable = errors.New("beacon unavailable")
 	errHareInCharge      = errors.New("hare in charge of layer")
+	errATXsNotSynced     = errors.New("ATX not synced")
 )
 
 // Syncer is responsible to keep the node in sync with the network.
@@ -77,12 +78,14 @@ type Syncer struct {
 	patrol        layerPatrol
 	syncOnce      sync.Once
 	syncState     atomic.Value
+	atxSyncState  atomic.Value
 	isBusy        atomic.Value
 	syncTimer     *time.Ticker
 	validateTimer *time.Ticker
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
 	targetSyncedLayer atomic.Value
 	lastLayerSynced   atomic.Value
+	lastATXsSynced    atomic.Value
 
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
@@ -118,9 +121,11 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beac
 		cancelFunc:    cancel,
 	}
 	s.syncState.Store(notSynced)
+	s.atxSyncState.Store(notSynced)
 	s.isBusy.Store(0)
 	s.targetSyncedLayer.Store(types.LayerID{})
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
+	s.lastATXsSynced.Store(types.EpochID(0))
 	return s
 }
 
@@ -145,9 +150,14 @@ func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
 }
 
-// ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data.
+// ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.
 func (s *Syncer) ListenToGossip() bool {
 	return s.getSyncState() >= gossipSync
+}
+
+// ListenToATXGossip returns true if the node is listening to gossip for ATXs data.
+func (s *Syncer) ListenToATXGossip() bool {
+	return s.getATXSyncState() == synced
 }
 
 // IsSynced returns true if the node is in synced state.
@@ -168,6 +178,7 @@ func (s *Syncer) Start(ctx context.Context) {
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
 			if s.ticker.GetCurrentLayer().Uint32() <= 1 {
+				s.setATXSynced()
 				s.setSyncState(ctx, synced)
 			}
 			for {
@@ -221,6 +232,14 @@ func (s *Syncer) isClosed() bool {
 	default:
 		return false
 	}
+}
+
+func (s *Syncer) setATXSynced() {
+	s.atxSyncState.Store(synced)
+}
+
+func (s *Syncer) getATXSyncState() syncState {
+	return s.atxSyncState.Load().(syncState)
 }
 
 func (s *Syncer) getSyncState() syncState {
@@ -283,6 +302,14 @@ func (s *Syncer) getLastSyncedLayer() types.LayerID {
 	return s.lastLayerSynced.Load().(types.LayerID)
 }
 
+func (s *Syncer) setLastSyncedATXs(epoch types.EpochID) {
+	s.lastATXsSynced.Store(epoch)
+}
+
+func (s *Syncer) getLastSyncedATXs() types.EpochID {
+	return s.lastATXsSynced.Load().(types.EpochID)
+}
+
 // synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
 // it returns false if the data sync failed.
 func (s *Syncer) synchronize(ctx context.Context) bool {
@@ -316,6 +343,20 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	s.setStateBeforeSync(ctx)
 	syncFunc := func() bool {
+		if !s.ListenToATXGossip() {
+			logger.Info("syncing atx before everything else")
+			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
+				logger.With().Info("syncing atxs for epoch", epoch)
+				if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
+					s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
+					return false
+				}
+				s.setLastSyncedATXs(epoch)
+			}
+			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
+			s.setATXSynced()
+		}
+
 		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
 			logger.With().Info("fetching data for missing layer", missing)
 			if err := s.syncLayer(ctx, missing); err != nil {
@@ -369,6 +410,7 @@ func isTooFarBehind(current, latest types.LayerID, logger log.Logger) bool {
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.GetCurrentLayer()
 	if current.Uint32() <= 1 {
+		s.setATXSynced()
 		s.setSyncState(ctx, synced)
 		return
 	}
@@ -431,10 +473,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 		return err
 	}
 
-	if err := s.getATXs(ctx, layerID); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -447,36 +485,12 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) e
 	return nil
 }
 
-func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
-	if layerID.GetEpoch() == 0 {
-		s.logger.WithContext(ctx).Info("skip getting atx in epoch 0")
-		return nil
-	}
-	epoch := layerID.GetEpoch()
-	atCurrentEpoch := epoch == s.ticker.GetCurrentLayer().GetEpoch()
-	atLastLayerOfEpoch := layerID == (epoch + 1).FirstLayer().Sub(1)
-	// only get ATXs if
-	// - layerID is in the current epoch
-	// - layerID is the last layer of a previous epoch
-	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
-	if atCurrentEpoch || atLastLayerOfEpoch {
-		s.logger.WithContext(ctx).With().Debug("getting atxs", epoch, layerID)
-		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-			// don't fail sync if we cannot fetch atxs for the current epoch before the last layer
-			if !atCurrentEpoch || atLastLayerOfEpoch {
-				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
-				return fmt.Errorf("get epoch ATXs: %w", err)
-			}
-			s.logger.WithContext(ctx).With().Warning("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
-		}
-	}
-	return nil
-}
-
 func (s *Syncer) processLayers(ctx context.Context) error {
 	if s.mesh.LatestLayerInState() == s.getLastSyncedLayer() {
 		return nil
+	}
+	if !s.ListenToATXGossip() {
+		return errATXsNotSynced
 	}
 	s.logger.WithContext(ctx).With().Info("processing synced layers",
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
