@@ -183,7 +183,7 @@ func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encoda
 		_, err := field.EncodeScale(encoder)
 		require.NoError(tb, err)
 	}
-	hash := hash.Sum(buf.Bytes())
+	hash := core.Hash(buf.Bytes())
 
 	sig := ed25519.Sign(pk, hash[:])
 	var sigfield core.Signature
@@ -766,7 +766,6 @@ func TestValidation(t *testing.T) {
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
-				tc.header.ID = header.ID
 				require.Equal(t, tc.header, header)
 				require.True(t, req.Verify())
 			}

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	fmocks "github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -25,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func randPeer(tb testing.TB) p2p.Peer {
@@ -841,13 +841,29 @@ func TestGetProposals(t *testing.T) {
 	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs))
 }
 
+func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
+	t.Helper()
+	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
+		types.Nonce{Counter: nonce},
+	)
+	tx := types.Transaction{
+		RawTx:    types.NewRawTx(raw),
+		TxHeader: &types.TxHeader{},
+	}
+	tx.MaxGas = 100
+	tx.MaxSpend = amount
+	tx.GasPrice = price
+	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	return tx
+}
+
 func genTransactions(t *testing.T, num int) []*types.Transaction {
 	t.Helper()
 	txs := make([]*types.Transaction, 0, num)
 	for i := 0; i < num; i++ {
-		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.Address{1, 2, 3}, 197, 991, 1, 10)
-		require.NoError(t, err)
-		txs = append(txs, tx)
+		tx := genTx(t, signing.NewEdSigner(), types.Address{1}, 1, 1, 1)
+		txs = append(txs, &tx)
 	}
 	return txs
 }

@@ -2,12 +2,9 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -59,117 +56,27 @@ func TxIdsField(ids []TransactionID) log.Field {
 	return log.String("tx_ids", strings.Join(strs, ", "))
 }
 
-// EmptyTransactionID is a canonical empty TransactionID.
-var EmptyTransactionID = TransactionID{}
-
-// Transaction contains all transaction fields, including the signature and cached origin address and transaction ID.
+// Transaction is an alias to RawTx.
 type Transaction struct {
-	InnerTransaction
-	Signature [64]byte
-	origin    *Address
-	id        *TransactionID
-}
-
-// Origin returns the transaction's origin address: the public key extracted from the transaction signature.
-func (t *Transaction) Origin() Address {
-	if t.origin == nil {
-		panic("origin not set")
-	}
-
-	return *t.origin
-}
-
-// SetID updates transaction ID.
-func (t *Transaction) SetID(id TransactionID) {
-	t.id = &id
-}
-
-// SetOrigin sets the cache of the transaction's origin address.
-func (t *Transaction) SetOrigin(origin Address) {
-	if t.origin != nil && *t.origin == origin {
-		// Avoid data races caused by writing if origin is the same.
-		return
-	}
-
-	t.origin = &origin
-}
-
-// CalcAndSetOrigin extracts the public key from the transaction's signature and caches it as the transaction's origin
-// address.
-func (t *Transaction) CalcAndSetOrigin() error {
-	txBytes, err := InterfaceToBytes(&t.InnerTransaction)
-	if err != nil {
-		return fmt.Errorf("failed to marshal transaction: %v", err)
-	}
-	pubKey, err := ed25519.ExtractPublicKey(txBytes, t.Signature[:])
-	if err != nil {
-		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
-	}
-
-	t.SetOrigin(GenerateAddress(pubKey))
-
-	return nil
-}
-
-// ID returns the transaction's ID. If it's not cached, it's calculated, cached and returned.
-func (t *Transaction) ID() TransactionID {
-	if t.id != nil {
-		return *t.id
-	}
-
-	txBytes, err := InterfaceToBytes(t)
-	if err != nil {
-		panic("failed to marshal transaction: " + err.Error())
-	}
-
-	id := TransactionID(CalcHash32(txBytes))
-	t.SetID(id)
-
-	return id
-}
-
-// GetFee returns the fee of the transaction.
-func (t *Transaction) GetFee() uint64 {
-	return t.Fee
-}
-
-// MaxGas returns the max gas this transaction can use.
-func (t *Transaction) MaxGas() uint64 {
-	return t.GasLimit
-}
-
-// Spending returns the total amount spent on by this transaction.
-func (t *Transaction) Spending() uint64 {
-	return t.Fee + t.Amount
-}
-
-// GetRecipient returns the transaction recipient.
-func (t *Transaction) GetRecipient() Address {
-	return t.Recipient
+	RawTx
+	*TxHeader
 }
 
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
-	return t.ID().Hash32()
+	return t.ID.Hash32()
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
 func (t *Transaction) ShortString() string {
-	return t.ID().ShortString()
-}
-
-// String returns a string representation of the Transaction, for logging purposes.
-// It implements the fmt.Stringer interface.
-func (t *Transaction) String() string {
-	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
-		t.ID().ShortString(), t.Origin().Short(), t.GetRecipient().Short(), t.Amount, t.AccountNonce, t.GasLimit, t.GetFee())
+	return t.ID.ShortString()
 }
 
 // ToTransactionIDs returns a slice of TransactionID corresponding to the given transactions.
 func ToTransactionIDs(txs []*Transaction) []TransactionID {
 	ids := make([]TransactionID, 0, len(txs))
 	for _, tx := range txs {
-		ids = append(ids, tx.ID())
+		ids = append(ids, tx.ID)
 	}
 	return ids
 }
@@ -215,15 +122,6 @@ type MeshTransaction struct {
 	BlockID  BlockID
 	State    TXState
 	Received time.Time
-}
-
-// InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
-type InnerTransaction struct {
-	AccountNonce uint64
-	Recipient    Address
-	GasLimit     uint64
-	Fee          uint64
-	Amount       uint64
 }
 
 // Reward is a virtual reward transaction, which the node keeps track of for the gRPC api.

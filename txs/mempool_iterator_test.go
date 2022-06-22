@@ -15,11 +15,13 @@ import (
 
 func makeNanoTX(addr types.Address, fee uint64, received time.Time) *txtypes.NanoTX {
 	return &txtypes.NanoTX{
-		Tid:       types.RandomTransactionID(),
-		Principal: addr,
-		Fee:       fee,
-		MaxGas:    1,
-		Received:  received,
+		ID: types.RandomTransactionID(),
+		TxHeader: types.TxHeader{
+			Principal: addr,
+			GasPrice:  fee,
+			MaxGas:    1,
+		},
+		Received: received,
 	}
 }
 

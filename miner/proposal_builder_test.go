@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -20,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 const (
@@ -67,9 +67,20 @@ func createBuilder(tb testing.TB) *testBuilder {
 
 func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
-	tx, err := transaction.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
-	require.NoError(tb, err)
-	return tx
+
+	raw := wallet.Spend(signer.PrivateKey(), recipient, defaultFee,
+		types.Nonce{Counter: nonce},
+	)
+	tx := types.Transaction{
+		RawTx:    types.NewRawTx(raw),
+		TxHeader: &types.TxHeader{},
+	}
+	tx.MaxGas = defaultGasLimit
+	tx.MaxSpend = defaultFee
+	tx.GasPrice = 1
+	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	return &tx
 }
 
 func genActiveSet(tb testing.TB) []types.ATXID {
@@ -125,7 +136,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(atxID, activeSet, proofs, nil).Times(1)
 
 	// for 1st proposal, containing the ref ballot of this epoch
-	b.mCState.EXPECT().SelectProposalTXs(len(proofs)).Return([]types.TransactionID{tx1.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(len(proofs)).Return([]types.TransactionID{tx1.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: base}, nil).Times(1)
 	meshHash := types.RandomHash()
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), meshHash))
@@ -141,7 +152,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.NotNil(t, p.EpochData)
 			require.Equal(t, activeSet, p.EpochData.ActiveSet)
 			require.Equal(t, beacon, p.EpochData.Beacon)
-			require.Equal(t, []types.TransactionID{tx1.ID()}, p.TxIDs)
+			require.Equal(t, []types.TransactionID{tx1.ID}, p.TxIDs)
 			require.Equal(t, proofs, p.EligibilityProofs)
 			require.Equal(t, meshHash, p.MeshHash)
 			return nil
@@ -171,7 +182,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(atxID, activeSet, proofs, nil).Times(1)
 
 	// for 1st proposal, containing the ref ballot of this epoch
-	b.mCState.EXPECT().SelectProposalTXs(len(proofs)).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(len(proofs)).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: bb}, nil).Times(1)
 	meshHash := types.RandomHash()
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), meshHash))
@@ -187,7 +198,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.NotNil(t, p.EpochData)
 			require.Equal(t, activeSet, p.EpochData.ActiveSet)
 			require.Equal(t, beacon, p.EpochData.Beacon)
-			require.Equal(t, []types.TransactionID{tx.ID()}, p.TxIDs)
+			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
 			require.Equal(t, meshHash, p.MeshHash)
 			return nil
 		}).Times(1)
@@ -274,7 +285,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), activeSet, genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
@@ -303,7 +314,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
@@ -331,7 +342,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 
@@ -351,7 +362,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
@@ -373,7 +384,7 @@ func TestBuilder_HandleLayer_StateRootErrorOK(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	require.NoError(t, layers.SetAggregatedHash(b.cdb, layerID.Sub(1), types.RandomHash()))
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
@@ -394,7 +405,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID()}).Times(1)
+	b.mCState.EXPECT().SelectProposalTXs(1).Return([]types.TransactionID{tx.ID}).Times(1)
 	b.mBaseBP.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
