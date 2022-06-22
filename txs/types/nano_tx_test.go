@@ -67,7 +67,6 @@ func TestUpdateMaybe(t *testing.T) {
 	require.Equal(t, types.EmptyBlockID, ntx.Block)
 
 	lid = lid.Add(1)
-	bid = types.RandomBlockID()
 	ntx.UpdateLayerMaybe(lid, types.RandomBlockID())
 	require.Equal(t, lid.Sub(1), ntx.Layer)
 	require.Equal(t, types.EmptyBlockID, ntx.Block)
