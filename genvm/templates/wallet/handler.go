@@ -23,6 +23,7 @@ const (
 )
 
 func init() {
+	// single key wallet reserves template at the address ending with 1.
 	TemplateAddress[len(TemplateAddress)-1] = 1
 }
 

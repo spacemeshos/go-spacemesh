@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	system "github.com/spacemeshos/go-spacemesh/system"
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
@@ -38,31 +37,32 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // AddToCache mocks base method.
-func (m *MockconservativeState) AddToCache(arg0 *types.Transaction) error {
+func (m *MockconservativeState) AddToCache(arg0 *types.Transaction, arg1 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddToCache", arg0)
+	ret := m.ctrl.Call(m, "AddToCache", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddToCache indicates an expected call of AddToCache.
-func (mr *MockconservativeStateMockRecorder) AddToCache(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) AddToCache(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0, arg1)
 }
 
-// AddToDB mocks base method.
-func (m *MockconservativeState) AddToDB(arg0 *types.Transaction) error {
+// AddressExists mocks base method.
+func (m *MockconservativeState) AddressExists(arg0 types.Address) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddToDB", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "AddressExists", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// AddToDB indicates an expected call of AddToDB.
-func (mr *MockconservativeStateMockRecorder) AddToDB(arg0 interface{}) *gomock.Call {
+// AddressExists indicates an expected call of AddressExists.
+func (mr *MockconservativeStateMockRecorder) AddressExists(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToDB", reflect.TypeOf((*MockconservativeState)(nil).AddToDB), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressExists", reflect.TypeOf((*MockconservativeState)(nil).AddressExists), arg0)
 }
 
 // HasTx mocks base method.
@@ -78,20 +78,6 @@ func (m *MockconservativeState) HasTx(arg0 types.TransactionID) (bool, error) {
 func (mr *MockconservativeStateMockRecorder) HasTx(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasTx", reflect.TypeOf((*MockconservativeState)(nil).HasTx), arg0)
-}
-
-// Validation mocks base method.
-func (m *MockconservativeState) Validation(arg0 types.RawTx) system.ValidationRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validation", arg0)
-	ret0, _ := ret[0].(system.ValidationRequest)
-	return ret0
-}
-
-// Validation indicates an expected call of Validation.
-func (mr *MockconservativeStateMockRecorder) Validation(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockconservativeState)(nil).Validation), arg0)
 }
 
 // MockvmState is a mock of vmState interface.
@@ -117,19 +103,34 @@ func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
 	return m.recorder
 }
 
-// Apply mocks base method.
-func (m *MockvmState) Apply(arg0 types.LayerID, arg1 []types.RawTx, arg2 []types.AnyReward) ([]types.TransactionID, error) {
+// AddressExists mocks base method.
+func (m *MockvmState) AddressExists(arg0 types.Address) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]types.TransactionID)
+	ret := m.ctrl.Call(m, "AddressExists", arg0)
+	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Apply indicates an expected call of Apply.
-func (mr *MockvmStateMockRecorder) Apply(arg0, arg1, arg2 interface{}) *gomock.Call {
+// AddressExists indicates an expected call of AddressExists.
+func (mr *MockvmStateMockRecorder) AddressExists(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockvmState)(nil).Apply), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressExists", reflect.TypeOf((*MockvmState)(nil).AddressExists), arg0)
+}
+
+// ApplyLayer mocks base method.
+func (m *MockvmState) ApplyLayer(arg0 types.LayerID, arg1 []*types.Transaction, arg2 []types.AnyReward) ([]*types.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*types.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ApplyLayer indicates an expected call of ApplyLayer.
+func (mr *MockvmStateMockRecorder) ApplyLayer(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MockvmState)(nil).ApplyLayer), arg0, arg1, arg2)
 }
 
 // GetAllAccounts mocks base method.
@@ -193,10 +194,10 @@ func (mr *MockvmStateMockRecorder) GetLayerStateRoot(arg0 interface{}) *gomock.C
 }
 
 // GetNonce mocks base method.
-func (m *MockvmState) GetNonce(arg0 types.Address) (types.Nonce, error) {
+func (m *MockvmState) GetNonce(arg0 types.Address) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNonce", arg0)
-	ret0, _ := ret[0].(types.Nonce)
+	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -235,20 +236,6 @@ func (m *MockvmState) Revert(arg0 types.LayerID) (types.Hash32, error) {
 func (mr *MockvmStateMockRecorder) Revert(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revert", reflect.TypeOf((*MockvmState)(nil).Revert), arg0)
-}
-
-// Validation mocks base method.
-func (m *MockvmState) Validation(arg0 types.RawTx) system.ValidationRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validation", arg0)
-	ret0, _ := ret[0].(system.ValidationRequest)
-	return ret0
-}
-
-// Validation indicates an expected call of Validation.
-func (mr *MockvmStateMockRecorder) Validation(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockvmState)(nil).Validation), arg0)
 }
 
 // MockconStateCache is a mock of conStateCache interface.
@@ -323,20 +310,6 @@ func (m *MocktxProvider) Add(arg0 *types.Transaction, arg1 time.Time) error {
 func (mr *MocktxProviderMockRecorder) Add(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MocktxProvider)(nil).Add), arg0, arg1)
-}
-
-// AddHeader mocks base method.
-func (m *MocktxProvider) AddHeader(arg0 types.TransactionID, arg1 *types.TxHeader) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddHeader", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddHeader indicates an expected call of AddHeader.
-func (mr *MocktxProviderMockRecorder) AddHeader(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeader", reflect.TypeOf((*MocktxProvider)(nil).AddHeader), arg0, arg1)
 }
 
 // AddToBlock mocks base method.

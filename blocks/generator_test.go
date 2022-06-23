@@ -14,11 +14,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 const (
@@ -52,29 +52,13 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	return tg
 }
 
-func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
-	t.Helper()
-	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
-		types.Nonce{Counter: nonce},
-	)
-	tx := types.Transaction{
-		RawTx:    types.NewRawTx(raw),
-		TxHeader: &types.TxHeader{},
-	}
-	tx.MaxGas = 100
-	tx.MaxSpend = amount
-	tx.GasPrice = price
-	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
-	return tx
-}
-
 func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 	t.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
-		tx := genTx(t, signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100)
-		txIDs = append(txIDs, tx.ID)
+		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, 3)
+		require.NoError(t, err)
+		txIDs = append(txIDs, tx.ID())
 	}
 	return txIDs
 }

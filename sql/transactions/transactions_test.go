@@ -8,33 +8,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
-func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, fee uint64) *types.Transaction {
+func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, gas, fee uint64) *types.Transaction {
 	t.Helper()
-
-	var raw []byte
-	if nonce == 0 {
-		raw = wallet.SelfSpawn(principal.PrivateKey(), sdk.WithGasPrice(fee))
-	} else {
-		raw = wallet.Spend(principal.PrivateKey(), dest, amount,
-			types.Nonce{Counter: nonce}, sdk.WithGasPrice(fee))
-	}
-
-	parsed := types.Transaction{
-		RawTx:    types.NewRawTx(raw),
-		TxHeader: &types.TxHeader{},
-	}
-	// this is a fake principal for the purposes of testing.
-	copy(parsed.Principal[:], types.BytesToAddress(principal.PublicKey().Bytes()).Bytes())
-	parsed.Nonce = types.Nonce{Counter: nonce}
-	parsed.GasPrice = fee
-	return &parsed
+	tx, err := transaction.GenerateCallTransaction(principal, dest, nonce, amount, gas, fee)
+	require.NoError(t, err)
+	return tx
 }
 
 func packedInProposal(t *testing.T, db *sql.Database, tid types.TransactionID, lid types.LayerID, pid types.ProposalID, expectUpdated int) {
@@ -95,9 +80,9 @@ func TestAddGetHas(t *testing.T) {
 	signer1 := signing.NewEdSignerFromRand(rng)
 	signer2 := signing.NewEdSignerFromRand(rng)
 	txs := []*types.Transaction{
-		createTX(t, signer1, types.Address{1}, 1, 191, 1),
-		createTX(t, signer2, types.Address{2}, 1, 191, 1),
-		createTX(t, signer1, types.Address{3}, 1, 191, 1),
+		createTX(t, signer1, types.Address{1}, 1, 191, 1, 1),
+		createTX(t, signer2, types.Address{2}, 1, 191, 1, 1),
+		createTX(t, signer1, types.Address{3}, 1, 191, 1, 1),
 	}
 
 	received := time.Now()
@@ -106,12 +91,12 @@ func TestAddGetHas(t *testing.T) {
 	}
 
 	for _, tx := range txs {
-		got, err := Get(db, tx.ID)
+		got, err := Get(db, tx.ID())
 		require.NoError(t, err)
 		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
 		checkMeshTXEqual(t, *expected, *got)
 
-		has, err := Has(db, tx.ID)
+		has, err := Has(db, tx.ID())
 		require.NoError(t, err)
 		require.True(t, has)
 	}
@@ -130,18 +115,18 @@ func TestAddToProposal(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	lid := types.NewLayerID(10)
 	pid := types.ProposalID{1, 1}
-	require.NoError(t, AddToProposal(db, tx.ID, lid, pid))
+	require.NoError(t, AddToProposal(db, tx.ID(), lid, pid))
 
-	has, err := HasProposalTX(db, pid, tx.ID)
+	has, err := HasProposalTX(db, pid, tx.ID())
 	require.NoError(t, err)
 	require.True(t, has)
 
-	has, err = HasProposalTX(db, types.ProposalID{2, 2}, tx.ID)
+	has, err = HasProposalTX(db, types.ProposalID{2, 2}, tx.ID())
 	require.NoError(t, err)
 	require.False(t, has)
 }
@@ -151,18 +136,18 @@ func TestAddToBlock(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
-	require.NoError(t, AddToBlock(db, tx.ID, lid, bid))
+	require.NoError(t, AddToBlock(db, tx.ID(), lid, bid))
 
-	has, err := HasBlockTX(db, bid, tx.ID)
+	has, err := HasBlockTX(db, bid, tx.ID())
 	require.NoError(t, err)
 	require.True(t, has)
 
-	has, err = HasBlockTX(db, types.BlockID{2, 2}, tx.ID)
+	has, err = HasBlockTX(db, types.BlockID{2, 2}, tx.ID())
 	require.NoError(t, err)
 	require.False(t, has)
 }
@@ -172,64 +157,64 @@ func TestUpdateIfBetter(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
 	received := time.Now()
 	require.NoError(t, Add(db, tx, received))
 	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// tx is included in a proposal -> updated
 	lid := types.NewLayerID(10)
-	updated, err := UpdateIfBetter(db, tx.ID, lid, types.EmptyBlockID)
+	updated, err := UpdateIfBetter(db, tx.ID(), lid, types.EmptyBlockID)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 	expected = makeMeshTX(tx, lid, types.EmptyBlockID, received, types.PROPOSAL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// tx is included in another proposal at a later layer -> not updated
-	updated, err = UpdateIfBetter(db, tx.ID, lid.Add(1), types.EmptyBlockID)
+	updated, err = UpdateIfBetter(db, tx.ID(), lid.Add(1), types.EmptyBlockID)
 	require.NoError(t, err)
 	require.Equal(t, 0, updated)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// tx is included in a proposal at an earlier layer -> updated
 	lower := lid.Sub(1)
-	updated, err = UpdateIfBetter(db, tx.ID, lower, types.EmptyBlockID)
+	updated, err = UpdateIfBetter(db, tx.ID(), lower, types.EmptyBlockID)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 	expected.LayerID = lower
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// tx is packed into a block of higher layer -> not updated
 	bid0 := types.BlockID{2, 3, 4}
-	updated, err = UpdateIfBetter(db, tx.ID, lid, bid0)
+	updated, err = UpdateIfBetter(db, tx.ID(), lid, bid0)
 	require.NoError(t, err)
 	require.Equal(t, 0, updated)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// tx is packed into a block in an earlier layer -> updated
 	bid1 := types.BlockID{3, 4, 5}
 	expected.State = types.BLOCK
-	updated, err = UpdateIfBetter(db, tx.ID, lower, bid1)
+	updated, err = UpdateIfBetter(db, tx.ID(), lower, bid1)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 	expected.BlockID = bid1
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// apply the tx -> updated
-	updated, err = Apply(db, tx.ID, lower, bid1)
+	updated, err = Apply(db, tx.ID(), lower, bid1)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 	expected.State = types.APPLIED
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// tx is packed into a block of even earlier layer -> not updated
 	evenLower := lower.Sub(1)
 	bid2 := types.BlockID{4, 5, 6}
-	updated, err = UpdateIfBetter(db, tx.ID, evenLower, bid2)
+	updated, err = UpdateIfBetter(db, tx.ID(), evenLower, bid2)
 	require.NoError(t, err)
 	require.Equal(t, 0, updated)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 }
 
 func TestApply_AlreadyApplied(t *testing.T) {
@@ -238,21 +223,21 @@ func TestApply_AlreadyApplied(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	lid := types.NewLayerID(10)
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	bid := types.RandomBlockID()
-	updated, err := Apply(db, tx.ID, lid, bid)
+	updated, err := Apply(db, tx.ID(), lid, bid)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 
 	// same block applied again
-	updated, err = Apply(db, tx.ID, lid, bid)
+	updated, err = Apply(db, tx.ID(), lid, bid)
 	require.NoError(t, err)
 	require.Equal(t, 0, updated)
 
 	// different block applied again
-	updated, err = Apply(db, tx.ID, lid.Add(1), types.RandomBlockID())
+	updated, err = Apply(db, tx.ID(), lid.Add(1), types.RandomBlockID())
 	require.NoError(t, err)
 	require.Equal(t, 0, updated)
 }
@@ -274,13 +259,13 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	applied := make([]types.TransactionID, 0, numLayers)
 	for lid := firstLayer; lid.Before(firstLayer.Add(numLayers)); lid = lid.Add(1) {
 		signer := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1, 1)
 		require.NoError(t, Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
-		updated, err := Apply(db, tx.ID, lid, bid)
+		updated, err := Apply(db, tx.ID(), lid, bid)
 		require.NoError(t, err)
 		require.Equal(t, 1, updated)
-		applied = append(applied, tx.ID)
+		applied = append(applied, tx.ID())
 	}
 
 	for _, tid := range applied {
@@ -317,7 +302,7 @@ func TestDiscardNonceBelow(t *testing.T) {
 	received := time.Now()
 	txs := make([]*types.Transaction, 0, numTXs*2)
 	for nonce := uint64(0); nonce < uint64(numTXs); nonce++ {
-		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1)
+		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
@@ -325,7 +310,7 @@ func TestDiscardNonceBelow(t *testing.T) {
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
+		tx := createTX(t, s, types.Address{1}, 1, 191, 1, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
@@ -333,21 +318,21 @@ func TestDiscardNonceBelow(t *testing.T) {
 	// apply nonce 0
 	lid := types.NewLayerID(71)
 	bid := types.RandomBlockID()
-	updated, err := Apply(db, txs[0].ID, lid, bid)
+	updated, err := Apply(db, txs[0].ID(), lid, bid)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 	cutoff := uint64(numTXs) / 2
 	require.NoError(t, DiscardNonceBelow(db, principal, cutoff))
 	for _, tx := range txs {
 		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-		if tx.Principal == principal {
-			if tx.Nonce.Counter == 0 {
+		if tx.Origin() == principal {
+			if tx.AccountNonce == 0 {
 				expected = makeMeshTX(tx, lid, bid, received, types.APPLIED)
-			} else if tx.Nonce.Counter < cutoff {
+			} else if tx.AccountNonce < cutoff {
 				expected.State = types.DISCARDED
 			}
 		}
-		getAndCheckMeshTX(t, db, tx.ID, expected)
+		getAndCheckMeshTX(t, db, tx.ID(), expected)
 	}
 }
 
@@ -362,15 +347,15 @@ func TestDiscardByAcctNonce(t *testing.T) {
 	nonce := uint64(10000)
 	received := time.Now()
 	for i := 0; i < sameNonceTXs; i++ {
-		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1+uint64(i))
+		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1+uint64(i), 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
 	for i := 1; i <= numTXs/2; i++ {
-		tx := createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
-		tx = createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)
+		tx = createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
@@ -378,19 +363,19 @@ func TestDiscardByAcctNonce(t *testing.T) {
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
+		tx := createTX(t, s, types.Address{1}, 1, 191, 1, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
 
 	principal := types.BytesToAddress(signer.PublicKey().Bytes())
-	applied := txs[0].ID
+	applied := txs[0].ID()
 	lid := types.NewLayerID(99)
 	require.NoError(t, DiscardByAcctNonce(db, applied, lid, principal, nonce))
 	for _, tx := range txs {
-		mtx, err := Get(db, tx.ID)
+		mtx, err := Get(db, tx.ID())
 		require.NoError(t, err)
-		if tx.Principal == principal && tx.Nonce.Counter == nonce && tx.ID != applied {
+		if tx.Origin() == principal && tx.AccountNonce == nonce && tx.ID() != applied {
 			require.Equal(t, types.DISCARDED, mtx.State)
 		} else {
 			require.Equal(t, types.MEMPOOL, mtx.State)
@@ -403,11 +388,11 @@ func TestSetNextLayer(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
 	received := time.Now()
 	require.NoError(t, Add(db, tx, received))
 	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	lid9 := types.NewLayerID(9)
 	lid10 := types.NewLayerID(10)
@@ -417,47 +402,47 @@ func TestSetNextLayer(t *testing.T) {
 	p10 := types.RandomProposalID()
 	p11 := types.RandomProposalID()
 	p12 := types.RandomProposalID()
-	packedInProposal(t, db, tx.ID, lid9, p9, 1)
-	packedInProposal(t, db, tx.ID, lid10, p10, 0)
-	packedInProposal(t, db, tx.ID, lid11, p11, 0)
-	packedInProposal(t, db, tx.ID, lid12, p12, 0)
+	packedInProposal(t, db, tx.ID(), lid9, p9, 1)
+	packedInProposal(t, db, tx.ID(), lid10, p10, 0)
+	packedInProposal(t, db, tx.ID(), lid11, p11, 0)
+	packedInProposal(t, db, tx.ID(), lid12, p12, 0)
 	expected = makeMeshTX(tx, lid9, types.EmptyBlockID, received, types.PROPOSAL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	b10 := types.RandomBlockID()
 	b11 := types.RandomBlockID()
-	packedInBlock(t, db, tx.ID, lid10, b10, 0)
-	packedInBlock(t, db, tx.ID, lid11, b11, 0)
+	packedInBlock(t, db, tx.ID(), lid10, b10, 0)
+	packedInBlock(t, db, tx.ID(), lid11, b11, 0)
 	expected = makeMeshTX(tx, lid9, types.EmptyBlockID, received, types.PROPOSAL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err := SetNextLayer(db, tx.ID, lid9)
+	next, bid, err := SetNextLayer(db, tx.ID(), lid9)
 	require.NoError(t, err)
 	require.Equal(t, lid10, next)
 	require.Equal(t, b10, bid)
 	expected = makeMeshTX(tx, lid10, b10, received, types.BLOCK)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err = SetNextLayer(db, tx.ID, lid10)
+	next, bid, err = SetNextLayer(db, tx.ID(), lid10)
 	require.NoError(t, err)
 	require.Equal(t, lid11, next)
 	require.Equal(t, b11, bid)
 	expected = makeMeshTX(tx, lid11, b11, received, types.BLOCK)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err = SetNextLayer(db, tx.ID, lid11)
+	next, bid, err = SetNextLayer(db, tx.ID(), lid11)
 	require.NoError(t, err)
 	require.Equal(t, lid12, next)
 	require.Equal(t, types.EmptyBlockID, bid)
 	expected = makeMeshTX(tx, lid12, types.EmptyBlockID, received, types.PROPOSAL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
-	next, bid, err = SetNextLayer(db, tx.ID, lid12)
+	next, bid, err = SetNextLayer(db, tx.ID(), lid12)
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID{}, next)
 	require.Equal(t, types.EmptyBlockID, bid)
 	expected = makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 }
 
 func TestSetNextLayerAndUpdate(t *testing.T) {
@@ -465,33 +450,33 @@ func TestSetNextLayerAndUpdate(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1, 1)
 	received := time.Now()
 	require.NoError(t, Add(db, tx, received))
 	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	lid := types.NewLayerID(11)
 	pid := types.ProposalID{1, 2, 3}
-	packedInProposal(t, db, tx.ID, lid, pid, 1)
+	packedInProposal(t, db, tx.ID(), lid, pid, 1)
 	expected = makeMeshTX(tx, lid, types.EmptyBlockID, received, types.PROPOSAL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// this tx is not applied as part of this layer. reset its layer in db
-	next, bid, err := SetNextLayer(db, tx.ID, lid)
+	next, bid, err := SetNextLayer(db, tx.ID(), lid)
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID{}, next)
 	require.Equal(t, types.EmptyBlockID, bid)
 	expected = makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 
 	// because there is no more entries for this tx, both layer/block are set to null
 	// make sure we can update it
-	updated, err := UpdateIfBetter(db, tx.ID, lid.Add(1), types.EmptyBlockID)
+	updated, err := UpdateIfBetter(db, tx.ID(), lid.Add(1), types.EmptyBlockID)
 	require.NoError(t, err)
 	require.Equal(t, 1, updated)
 	expected = makeMeshTX(tx, lid.Add(1), types.EmptyBlockID, received, types.PROPOSAL)
-	getAndCheckMeshTX(t, db, tx.ID, expected)
+	getAndCheckMeshTX(t, db, tx.ID(), expected)
 }
 
 func TestGetBlob(t *testing.T) {
@@ -501,14 +486,16 @@ func TestGetBlob(t *testing.T) {
 	numTXs := 5
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		tx := createTX(t, signing.NewEdSignerFromRand(rng), types.Address{1}, 1, 191, 1)
+		tx := createTX(t, signing.NewEdSignerFromRand(rng), types.Address{1}, 1, 191, 1, 1)
 		require.NoError(t, Add(db, tx, time.Now()))
 		txs = append(txs, tx)
 	}
 	for _, tx := range txs {
-		buf, err := GetBlob(db, tx.ID[:])
+		buf, err := GetBlob(db, tx.ID().Bytes())
 		require.NoError(t, err)
-		require.Equal(t, tx.Raw, buf)
+		encoded, err := codec.Encode(tx)
+		require.NoError(t, err)
+		require.Equal(t, encoded, buf)
 	}
 }
 
@@ -522,18 +509,17 @@ func TestGetByAddress(t *testing.T) {
 	lid := types.NewLayerID(10)
 	pid := types.ProposalID{1, 1}
 	bid := types.BlockID{2, 2}
-
 	txs := []*types.Transaction{
-		createTX(t, signer1, types.Address{1}, 1, 191, 1),
-		createTX(t, signer2, types.Address{2}, 1, 191, 1),
-		createTX(t, signer1, signer2Address, 1, 191, 1),
+		createTX(t, signer1, types.Address{1}, 1, 191, 1, 1),
+		createTX(t, signer2, types.Address{2}, 1, 191, 1, 1),
+		createTX(t, signer1, signer2Address, 1, 191, 1, 1),
 	}
 	received := time.Now()
 	for _, tx := range txs {
 		require.NoError(t, Add(db, tx, received))
-		packedInProposal(t, db, tx.ID, lid, pid, 1)
+		packedInProposal(t, db, tx.ID(), lid, pid, 1)
 	}
-	packedInBlock(t, db, txs[2].ID, lid, bid, 1)
+	packedInBlock(t, db, txs[2].ID(), lid, bid, 1)
 
 	// should be nothing before lid
 	got, err := GetByAddress(db, types.NewLayerID(1), lid.Sub(1), signer2Address)
@@ -542,9 +528,11 @@ func TestGetByAddress(t *testing.T) {
 
 	got, err = GetByAddress(db, types.LayerID{}, lid, signer2Address)
 	require.NoError(t, err)
-	require.Len(t, got, 1)
+	require.Len(t, got, 2)
 	expected1 := makeMeshTX(txs[1], lid, types.EmptyBlockID, received, types.PROPOSAL)
 	checkMeshTXEqual(t, *expected1, *got[0])
+	expected2 := makeMeshTX(txs[2], lid, bid, received, types.BLOCK)
+	checkMeshTXEqual(t, *expected2, *got[1])
 }
 
 func TestGetAllPending(t *testing.T) {
@@ -563,20 +551,20 @@ func TestGetAllPending(t *testing.T) {
 		signer := signing.NewEdSignerFromRand(rng)
 		numApplied := rand.Intn(numTXs)
 		for j := 0; j < numTXs; j++ {
-			tx := createTX(t, signer, types.Address{1}, uint64(j), 191, 1)
+			tx := createTX(t, signer, types.Address{1}, uint64(j), 191, 1, 1)
 			require.NoError(t, Add(db, tx, received.Add(time.Duration(i+j))))
 			// causing some txs to be applied, some packed in a block, and some in mempool
 			if j < numApplied {
-				updated, err := Apply(db, tx.ID, lid, bid)
+				updated, err := Apply(db, tx.ID(), lid, bid)
 				require.NoError(t, err)
 				require.Equal(t, updated, 1)
 			} else if j < numTXs-1 {
-				inBlock[tx.ID] = tx
-				updated, err := UpdateIfBetter(db, tx.ID, lid, bid)
+				inBlock[tx.ID()] = tx
+				updated, err := UpdateIfBetter(db, tx.ID(), lid, bid)
 				require.NoError(t, err)
 				require.Equal(t, updated, 1)
 			} else {
-				inMempool[tx.ID] = tx
+				inMempool[tx.ID()] = tx
 			}
 		}
 		totalApplied += numApplied
@@ -586,9 +574,9 @@ func TestGetAllPending(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, numTXs*numAccts-totalApplied)
 	for _, mtx := range got {
-		if _, ok := inBlock[mtx.ID]; ok {
+		if _, ok := inBlock[mtx.ID()]; ok {
 			require.Equal(t, types.BLOCK, mtx.State)
-		} else if _, ok = inMempool[mtx.ID]; ok {
+		} else if _, ok = inMempool[mtx.ID()]; ok {
 			require.Equal(t, types.MEMPOOL, mtx.State)
 		}
 	}
@@ -603,10 +591,10 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	nonce := uint64(987)
 	received := time.Now()
 	for i := 0; i < numTXs; i++ {
-		tx := createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1, 1)
 		require.NoError(t, Add(db, tx, received.Add(time.Duration(i))))
 		if i > 0 {
-			tx = createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1)
+			tx = createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1, 1)
 			require.NoError(t, Add(db, tx, received.Add(time.Duration(i))))
 		}
 	}
@@ -614,7 +602,7 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
+		tx := createTX(t, s, types.Address{1}, 1, 191, 1, 1)
 		require.NoError(t, Add(db, tx, received))
 	}
 
@@ -631,27 +619,27 @@ func TestAppliedLayer(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
 	txs := []*types.Transaction{
-		createTX(t, signer, types.Address{1}, 1, 191, 1),
-		createTX(t, signer, types.Address{1}, 2, 191, 1),
+		createTX(t, signer, types.Address{1}, 1, 191, 1, 1),
+		createTX(t, signer, types.Address{1}, 2, 191, 1, 1),
 	}
 	lid := types.NewLayerID(10)
 
 	for _, tx := range txs {
 		require.NoError(t, Add(db, tx, time.Now()))
 	}
-	_, err := Apply(db, txs[0].ID, lid, types.BlockID{1, 1})
+	_, err := Apply(db, txs[0].ID(), lid, types.BlockID{1, 1})
 	require.NoError(t, err)
-	applied, err := GetAppliedLayer(db, txs[0].ID)
+	applied, err := GetAppliedLayer(db, txs[0].ID())
 	require.NoError(t, err)
 	require.Equal(t, lid, applied)
 
-	_, err = GetAppliedLayer(db, txs[1].ID)
+	_, err = GetAppliedLayer(db, txs[1].ID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	undone, err := UndoLayers(db, lid)
 	require.NoError(t, err)
 	require.Len(t, undone, 1)
-	require.Equal(t, txs[0].ID, undone[0])
-	_, err = GetAppliedLayer(db, txs[0].ID)
+	require.Equal(t, txs[0].ID(), undone[0])
+	_, err = GetAppliedLayer(db, txs[0].ID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
