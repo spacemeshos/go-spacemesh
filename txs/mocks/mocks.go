@@ -369,7 +369,7 @@ func (mr *MocktxProviderMockRecorder) AddToProposal(arg0, arg1, arg2 interface{}
 }
 
 // ApplyLayer mocks base method.
-func (m *MocktxProvider) ApplyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2 types.Address, arg3 map[uint64]types.TransactionID) error {
+func (m *MocktxProvider) ApplyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2 types.Address, arg3 map[uint64]types.TransactionWithResult) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
