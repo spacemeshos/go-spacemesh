@@ -71,11 +71,8 @@ CREATE TABLE transactions_results_addresses
 (
     address CHAR(20),
     tid     CHAR(32),
-    layer   INT,
-    PRIMARY KEY (address, tid)
+    PRIMARY KEY (tid, address)
 ) WITHOUT ROWID;
-CREATE INDEX transactions_results_by_layer ON transactions_results_addresses(layer);
-CREATE INDEX transactions_results_by_tid ON transactions_results_addresses(tid);
 
 CREATE TABLE proposal_transactions
 (
