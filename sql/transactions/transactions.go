@@ -183,10 +183,16 @@ func Apply(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid type
 
 // UndoLayers unset all transactions to `statePending` from `from` layer to the max layer with applied transactions.
 func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, error) {
+	_, err := db.Exec(`delete from transactions_results_addresses where layer >= ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from.Value))
+		}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("delete addresses mapping %w", err)
+	}
 	var updated []types.TransactionID
-	_, err := db.Exec(`
-		update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer between ?1 and
-		(select max(layer) from transactions where applied = ?5) returning id`,
+	_, err = db.Exec(`
+		update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer >= ?1 and applied = ?5 returning id`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Value))
 			stmt.BindInt64(2, statePending)
@@ -465,10 +471,11 @@ func AddResult(db sql.Executor, id types.TransactionID, rst *types.TransactionRe
 	}
 	for i := range rst.Addresses {
 		if _, err := db.Exec(`insert into transactions_results_addresses 
-		(address, tid) values (?1, ?2);`,
+		(address, tid, layer) values (?1, ?2, ?3);`,
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, rst.Addresses[i][:])
 				stmt.BindBytes(2, id[:])
+				stmt.BindInt64(3, int64(rst.Layer.Value))
 			}, nil); err != nil {
 			return fmt.Errorf("add address %s to %s: %w",
 				rst.Addresses[i].String(), id[:], err)

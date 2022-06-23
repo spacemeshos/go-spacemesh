@@ -71,9 +71,11 @@ CREATE TABLE transactions_results_addresses
 (
     address CHAR(20),
     tid     CHAR(32),
-    PRIMARY KEY (address, tid),
-    FOREIGN KEY(tid) REFERENCES transactions(tid) ON DELETE CASCADE
+    layer   INT,
+    PRIMARY KEY (address, tid)
 ) WITHOUT ROWID;
+CREATE INDEX transactions_results_by_layer ON transactions_results_addresses(layer);
+CREATE INDEX transactions_results_by_tid ON transactions_results_addresses(tid);
 
 CREATE TABLE proposal_transactions
 (
