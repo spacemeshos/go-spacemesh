@@ -61,8 +61,7 @@ func (f *ResultsFilter) query() string {
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
-	q.WriteString("order by txs.layer, id")
-	q.WriteString(";")
+	q.WriteString("order by txs.layer, id;")
 	return q.String()
 }
 
