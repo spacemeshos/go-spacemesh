@@ -71,6 +71,11 @@ func (m *mockNet) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler 
 }
 func (mockNet) Close() {}
 
+const (
+	txsForBlock    = iota
+	txsForProposal = iota
+)
+
 type testLogic struct {
 	*Logic
 	mMesh      *mocks.MockmeshProvider
@@ -78,9 +83,33 @@ type testLogic struct {
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
 	mProposalH *mocks.MockproposalHandler
+	method     int
 	mTxH       *mocks.MocktxHandler
 	mPoetH     *mocks.MockpoetHandler
 	mFetcher   *fmocks.MockFetcher
+}
+
+func (l *testLogic) withMethod(method int) *testLogic {
+	l.method = method
+	return l
+}
+
+func (l *testLogic) expecctTransactionCall(data []byte) *gomock.Call {
+	if l.method == txsForBlock {
+		return l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data)
+	} else if l.method == txsForProposal {
+		return l.mTxH.EXPECT().HandleProposalTransaction(gomock.Any(), data)
+	}
+	return nil
+}
+
+func (l *testLogic) getTxs(tids []types.TransactionID) error {
+	if l.method == txsForBlock {
+		return l.GetBlockTxs(context.TODO(), tids)
+	} else if l.method == txsForProposal {
+		return l.GetProposalTxs(context.TODO(), tids)
+	}
+	return nil
 }
 
 func createTestLogic(t *testing.T) *testLogic {
@@ -890,13 +919,13 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 				Hash: h,
 				Data: data,
 			}
-			l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
+			l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(nil).Times(1)
 		}
 		results[h] = ch
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetTxs(context.TODO(), tids), errUnknown)
+	assert.ErrorIs(t, l.GetBlockTxs(context.TODO(), tids), errUnknown)
 }
 
 func TestGetTxs_HandlerError(t *testing.T) {
@@ -916,11 +945,11 @@ func TestGetTxs_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(errUnknown).Times(1)
+		l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetTxs(context.TODO(), tids), errUnknown)
+	assert.ErrorIs(t, l.GetBlockTxs(context.TODO(), tids), errUnknown)
 }
 
 func TestGetTxs(t *testing.T) {
@@ -939,11 +968,11 @@ func TestGetTxs(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
+		l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.NoError(t, l.GetTxs(context.TODO(), tids))
+	assert.NoError(t, l.GetBlockTxs(context.TODO(), tids))
 }
 
 func genATXs(t *testing.T, num int) []*types.ActivationTx {

@@ -47,7 +47,8 @@ type proposalHandler interface {
 
 // txHandler is an interface for handling TX data received in sync.
 type txHandler interface {
-	HandleSyncTransaction(context.Context, []byte) error
+	HandleBlockTransaction(context.Context, []byte) error
+	HandleProposalTransaction(context.Context, []byte) error
 }
 
 // poetHandler is an interface to reading and storing poet proofs.
@@ -626,14 +627,24 @@ func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	return nil
 }
 
-// GetTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
-func (l *Logic) GetTxs(ctx context.Context, ids []types.TransactionID) error {
+// GetProposalTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
+func (l *Logic) GetProposalTxs(ctx context.Context, ids []types.TransactionID) error {
+	return l.getTxs(ctx, ids, l.txHandler.HandleProposalTransaction)
+}
+
+// GetBlockTxs fetches the txs provided as IDs and saves them, they will be validated
+// before block is applied.
+func (l *Logic) GetBlockTxs(ctx context.Context, ids []types.TransactionID) error {
+	return l.getTxs(ctx, ids, l.txHandler.HandleBlockTransaction)
+}
+
+func (l *Logic) getTxs(ctx context.Context, ids []types.TransactionID, receiver dataReceiver) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	l.log.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, datastore.TXDB, l.txHandler.HandleSyncTransaction); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, datastore.TXDB, receiver); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil

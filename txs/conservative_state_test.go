@@ -739,7 +739,7 @@ func TestConsistentHandling(t *testing.T) {
 			}
 
 			instances[0].handler().HandleGossipTransaction(context.TODO(), "", txs[i].Raw)
-			instances[1].handler().HandleSyncTransaction(context.TODO(), txs[i].Raw)
+			instances[1].handler().HandleBlockTransaction(context.TODO(), txs[i].Raw)
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{

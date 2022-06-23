@@ -565,7 +565,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			return true, nil
 		})
 	errUnknown := errors.New("unknown")
-	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
+	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
 	checkProposal(t, th.cdb, p, false)
 }
@@ -586,7 +586,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
@@ -609,7 +609,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, th.HandleProposalData(context.TODO(), data))
 	checkProposal(t, th.cdb, p, true)
@@ -631,7 +631,7 @@ func TestMetrics(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, th.HandleProposalData(context.TODO(), data))
 	checkProposal(t, th.cdb, p, true)

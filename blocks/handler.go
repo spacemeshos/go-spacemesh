@@ -98,7 +98,7 @@ func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetTxs(ctx, b.TxIDs); err != nil {
+	if err := h.fetcher.GetBlockTxs(ctx, b.TxIDs); err != nil {
 		return fmt.Errorf("block get TXs: %w", err)
 	}
 	return nil
