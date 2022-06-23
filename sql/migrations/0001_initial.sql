@@ -73,6 +73,7 @@ CREATE TABLE transactions_results_addresses
     tid     CHAR(32),
     PRIMARY KEY (tid, address)
 ) WITHOUT ROWID;
+CREATE INDEX transactions_results_addresses_by_address ON transactions_results_addresses(address);
 
 CREATE TABLE proposal_transactions
 (
