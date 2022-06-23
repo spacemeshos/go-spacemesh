@@ -26,6 +26,6 @@ func TestAddGet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, newVal, got)
 
-	got, err = Get(db, []byte("not here"))
+	_, err = Get(db, []byte("not here"))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
