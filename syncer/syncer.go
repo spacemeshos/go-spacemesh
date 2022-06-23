@@ -486,7 +486,7 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) e
 }
 
 func (s *Syncer) processLayers(ctx context.Context) error {
-	if s.mesh.LatestLayerInState() == s.getLastSyncedLayer() {
+	if !s.mesh.LatestLayerInState().Before(s.getLastSyncedLayer()) {
 		return nil
 	}
 	if !s.ListenToATXGossip() {
