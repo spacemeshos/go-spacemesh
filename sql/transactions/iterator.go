@@ -25,7 +25,7 @@ func (f *ResultsFilter) query() string {
 	var q strings.Builder
 	q.WriteString(`
 		select distinct id, tx, header, result 
-		from transactions txs
+		from transactions
 		left join transactions_results_addresses on id=tid
 	`)
 	if f.hasWhere() {
@@ -41,7 +41,7 @@ func (f *ResultsFilter) query() string {
 		if i != 1 {
 			q.WriteString(" and")
 		}
-		q.WriteString(" txs.layer >= ?")
+		q.WriteString(" layer >= ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
@@ -49,7 +49,7 @@ func (f *ResultsFilter) query() string {
 		if i != 1 {
 			q.WriteString(" and")
 		}
-		q.WriteString(" txs.layer <= ?")
+		q.WriteString(" layer <= ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
@@ -61,7 +61,7 @@ func (f *ResultsFilter) query() string {
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
-	q.WriteString("order by txs.layer, id;")
+	q.WriteString("order by layer, id;")
 	return q.String()
 }
 
