@@ -94,7 +94,7 @@ func (l *testLogic) withMethod(method int) *testLogic {
 	return l
 }
 
-func (l *testLogic) expecctTransactionCall(data []byte) *gomock.Call {
+func (l *testLogic) expectTransactionCall(data []byte) *gomock.Call {
 	if l.method == txsForBlock {
 		return l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data)
 	} else if l.method == txsForProposal {
@@ -898,34 +898,50 @@ func genTransactions(t *testing.T, num int) []*types.Transaction {
 }
 
 func TestGetTxs_FetchSomeError(t *testing.T) {
-	l := createTestLogic(t)
-	txs := genTransactions(t, 19)
-	tids := types.ToTransactionIDs(txs)
-	hashes := types.TransactionIDsToHashes(tids)
+	for _, tc := range []struct {
+		desc   string
+		method int
+	}{
+		{
+			desc:   "proposal",
+			method: txsForProposal,
+		},
+		{
+			desc:   "block",
+			method: txsForBlock,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			l := createTestLogic(t).withMethod(tc.method)
+			txs := genTransactions(t, 19)
+			tids := types.ToTransactionIDs(txs)
+			hashes := types.TransactionIDsToHashes(tids)
 
-	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
-	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
-		if i == 0 {
-			ch <- fetch.HashDataPromiseResult{
-				Hash: h,
-				Err:  errUnknown,
+			errUnknown := errors.New("unknown")
+			results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+			for i, h := range hashes {
+				ch := make(chan fetch.HashDataPromiseResult, 1)
+				if i == 0 {
+					ch <- fetch.HashDataPromiseResult{
+						Hash: h,
+						Err:  errUnknown,
+					}
+				} else {
+					data, err := codec.Encode(tids[i])
+					require.NoError(t, err)
+					ch <- fetch.HashDataPromiseResult{
+						Hash: h,
+						Data: data,
+					}
+					l.expectTransactionCall(data).Return(nil).Times(1)
+				}
+				results[h] = ch
 			}
-		} else {
-			data, err := codec.Encode(tids[i])
-			require.NoError(t, err)
-			ch <- fetch.HashDataPromiseResult{
-				Hash: h,
-				Data: data,
-			}
-			l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(nil).Times(1)
-		}
-		results[h] = ch
+
+			l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
+			assert.ErrorIs(t, l.getTxs(tids), errUnknown)
+		})
 	}
-
-	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetBlockTxs(context.TODO(), tids), errUnknown)
 }
 
 func TestGetTxs_HandlerError(t *testing.T) {
