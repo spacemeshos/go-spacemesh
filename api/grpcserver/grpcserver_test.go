@@ -1951,7 +1951,8 @@ func TestTransactionService(t *testing.T) {
 			events.InitializeReporter()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
-			time.Sleep(10 * time.Millisecond)
+			// TODO send header after stream has subscribed
+			time.Sleep(100 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
