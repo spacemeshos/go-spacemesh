@@ -22,6 +22,7 @@ var emptyHash = types.Hash32{}
 const (
 	fetchProtocol = "/sync/2"
 	batchMaxSize  = 20
+	cacheSize     = 1000
 )
 
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers.
@@ -166,7 +167,7 @@ func NewFetch(cfg Config, h *p2p.Host, bs *datastore.BlobStore, logger log.Log) 
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		doneChan:        make(chan struct{}),
-		hashToPeers:     NewHashPeersCache(1000),
+		hashToPeers:     NewHashPeersCache(cacheSize),
 	}
 	// TODO(dshulyak) this is done for tests. needs to be mocked properly
 	if h != nil {

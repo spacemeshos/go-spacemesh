@@ -89,6 +89,8 @@ type DataHandlers struct {
 }
 
 // NewLogic creates a new instance of layer fetching logic.
+// TODO clean up the tangle between Logic and Fetch. ideally Logic should only care about layer data and epoch ATX
+// and leave the actual request sending to Fetch. this will improve testing as well.
 func NewLogic(cfg Config, db *sql.Database, msh meshProvider,
 	host *p2p.Host, handlers DataHandlers, log log.Log,
 ) *Logic {
