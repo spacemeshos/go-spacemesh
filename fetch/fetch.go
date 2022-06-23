@@ -19,18 +19,6 @@ import (
 
 var emptyHash = types.Hash32{}
 
-// priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
-// until fetched.
-type priority uint16
-
-// Message priority constants.
-const (
-	// Low will perform batched calls.
-	Low priority = 0
-	// High will call fetch immediately.
-	High priority = 1
-)
-
 const (
 	fetchProtocol = "/sync/2"
 	batchMaxSize  = 20
@@ -45,7 +33,6 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 // request contains all relevant Data for a single request for a specified hash.
 type request struct {
 	hash                 types.Hash32                      // hash is the hash of the Data requested
-	priority             priority                          // priority is for QoS
 	validateResponseHash bool                              // if true perform hash validation on received Data
 	hint                 datastore.Hint                    // the hint from which database to fetch this hash
 	returnChan           chan ftypes.HashDataPromiseResult // channel that will signal if the call succeeded or not
@@ -247,20 +234,9 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 		f.activeReqM.Unlock()
 		return false
 	}
-	sendNow := req.priority > Low
-	// group requests by hash
-	if sendNow {
-		f.pendingRequests[req.hash] = append(f.pendingRequests[req.hash], req)
-	} else {
-		f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
-	}
+	f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
 	rLen := len(f.activeRequests)
 	f.activeReqM.Unlock()
-	if sendNow {
-		f.send([]requestMessage{{req.hint, req.hash}})
-		f.log.With().Debug("high priority request sent", log.String("hash", req.hash.ShortString()))
-		return true
-	}
 	f.log.With().Debug("request added to queue", log.String("hash", req.hash.ShortString()))
 	if rLen > batchMaxSize {
 		go f.requestHashBatchFromPeers() // Process the batch.
@@ -641,7 +617,6 @@ func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) 
 	// if not present in db, call fetching of the item
 	req := request{
 		hash,
-		Low,
 		validateHash,
 		h,
 		resChan,
