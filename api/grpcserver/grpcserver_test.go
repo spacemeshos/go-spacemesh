@@ -2891,6 +2891,9 @@ func TestEventsReceived(t *testing.T) {
 		close(waiter)
 	}()
 
+	// without sleep execution in the test goroutine completes
+	// before streams can subscribe to the internal events.
+	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(globalTx)
