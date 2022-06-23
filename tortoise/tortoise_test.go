@@ -850,7 +850,6 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// minority node is healed
-		lastVerified = layerID.Sub(1).Sub(alg1.cfg.Hdist)
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 
@@ -1507,9 +1506,9 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	}
 	s.GetState(0).Beacons.StoreBeacon(last.GetEpoch()-1, beacon)
 
-	verified := tortoise.HandleIncomingLayer(ctx, last)
+	_ = tortoise.HandleIncomingLayer(ctx, last)
 	last = s.Next()
-	verified = tortoise.HandleIncomingLayer(ctx, last)
+	verified := tortoise.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified)
 }
 
@@ -2270,13 +2269,12 @@ func TestSwitchVerifyingByUsingFullOutput(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		last = s.Next()
-		verified = tortoise.HandleIncomingLayer(ctx, last)
+		_ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	for i := 0; i < int(cfg.Hdist)+1; i++ {
-		last = s.Next(
+		_ = s.Next(
 			sim.WithEmptyHareOutput(),
 		)
-		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 	verified = tortoise.HandleIncomingLayer(ctx, last)

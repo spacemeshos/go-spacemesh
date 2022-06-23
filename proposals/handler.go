@@ -112,9 +112,9 @@ func NewHandler(cdb *datastore.CachedDB, f system.Fetcher, bc system.BeaconColle
 }
 
 // HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) HandleProposal(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
-	if err := h.handleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
+	if err := h.handleProposalData(newCtx, msg, peer); errors.Is(err, errKnownProposal) {
 		return pubsub.ValidationIgnore
 	} else if err != nil {
 		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
@@ -141,6 +141,9 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 		return errInitialize
 	}
 
+	bidHash := b.ID().AsHash32()
+	h.fetcher.AddPeersFromHash(bidHash, collectHashes(&b))
+
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
 	if err := h.processBallot(ctx, &b, logger); err != nil {
 		return err
@@ -148,16 +151,26 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	return nil
 }
 
+// collectHashes gathers all hashes in the ballot.
+func collectHashes(b *types.Ballot) []types.Hash32 {
+	hashes := types.BlockIDsToHashes(ballotBlockView(b))
+	if b.RefBallot != types.EmptyBallotID {
+		hashes = append(hashes, b.RefBallot.AsHash32())
+	}
+	hashes = append(hashes, b.Votes.Base.AsHash32())
+	return hashes
+}
+
 // HandleProposalData handles Proposal data from sync.
 func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
-	err := h.handleProposalData(ctx, data)
+	err := h.handleProposalData(ctx, data, p2p.NoPeer)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
 	return err
 }
 
-func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
+func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.Peer) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing proposal")
 
@@ -183,6 +196,8 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
 	logger.With().Info("new proposal", log.Inline(&p))
+
+	h.fetcher.RegisterPeerHashes(peer, collectHashes(&p.Ballot))
 
 	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
 		logger.With().Warning("failed to process ballot", log.Err(err))

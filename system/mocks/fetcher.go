@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MockFetcher is a mock of Fetcher interface.
@@ -33,6 +34,18 @@ func NewMockFetcher(ctrl *gomock.Controller) *MockFetcher {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
+}
+
+// AddPeersFromHash mocks base method.
+func (m *MockFetcher) AddPeersFromHash(arg0 types.Hash32, arg1 []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPeersFromHash", arg0, arg1)
+}
+
+// AddPeersFromHash indicates an expected call of AddPeersFromHash.
+func (mr *MockFetcherMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockFetcher)(nil).AddPeersFromHash), arg0, arg1)
 }
 
 // FetchAtx mocks base method.
@@ -145,6 +158,18 @@ func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID
 func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1)
+}
+
+// RegisterPeerHashes mocks base method.
+func (m *MockFetcher) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterPeerHashes", peer, hashes)
+}
+
+// RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
+func (mr *MockFetcherMockRecorder) RegisterPeerHashes(peer, hashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockFetcher)(nil).RegisterPeerHashes), peer, hashes)
 }
 
 // MockBlockFetcher is a mock of BlockFetcher interface.
@@ -395,4 +420,51 @@ func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.Pr
 func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1)
+}
+
+// MockPeerTracker is a mock of PeerTracker interface.
+type MockPeerTracker struct {
+	ctrl     *gomock.Controller
+	recorder *MockPeerTrackerMockRecorder
+}
+
+// MockPeerTrackerMockRecorder is the mock recorder for MockPeerTracker.
+type MockPeerTrackerMockRecorder struct {
+	mock *MockPeerTracker
+}
+
+// NewMockPeerTracker creates a new mock instance.
+func NewMockPeerTracker(ctrl *gomock.Controller) *MockPeerTracker {
+	mock := &MockPeerTracker{ctrl: ctrl}
+	mock.recorder = &MockPeerTrackerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPeerTracker) EXPECT() *MockPeerTrackerMockRecorder {
+	return m.recorder
+}
+
+// AddPeersFromHash mocks base method.
+func (m *MockPeerTracker) AddPeersFromHash(arg0 types.Hash32, arg1 []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPeersFromHash", arg0, arg1)
+}
+
+// AddPeersFromHash indicates an expected call of AddPeersFromHash.
+func (mr *MockPeerTrackerMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockPeerTracker)(nil).AddPeersFromHash), arg0, arg1)
+}
+
+// RegisterPeerHashes mocks base method.
+func (m *MockPeerTracker) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterPeerHashes", peer, hashes)
+}
+
+// RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
+func (mr *MockPeerTrackerMockRecorder) RegisterPeerHashes(peer, hashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockPeerTracker)(nil).RegisterPeerHashes), peer, hashes)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -174,6 +175,7 @@ func TestBallot_KnownBallot(t *testing.T) {
 	b := createBallot(t)
 	require.NoError(t, ballots.Add(th.cdb, b))
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	require.NoError(t, th.HandleBallotData(context.TODO(), data))
 }
 
@@ -183,6 +185,7 @@ func TestBallot_EmptyATXID(t *testing.T) {
 	b.AtxID = *types.EmptyATXID
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errInvalidATXID)
 }
 
@@ -192,6 +195,7 @@ func TestBallot_GoldenATXID(t *testing.T) {
 	b.AtxID = genGoldenATXID()
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errInvalidATXID)
 }
 
@@ -201,6 +205,7 @@ func TestBallot_MissingBaseBallot(t *testing.T) {
 	b.Votes.Base = types.EmptyBallotID
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMissingBaseBallot)
 }
 
@@ -209,6 +214,7 @@ func TestBallot_RefBallotMissingEpochData(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData = nil
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(gomock.Any(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMissingEpochData)
 }
 
@@ -217,6 +223,7 @@ func TestBallot_RefBallotMissingBeacon(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData.Beacon = types.EmptyBeacon
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(gomock.Any(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMissingBeacon)
 }
 
@@ -225,6 +232,7 @@ func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData.ActiveSet = nil
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(gomock.Any(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errEmptyActiveSet)
 }
 
@@ -233,6 +241,7 @@ func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
 	b := createRefBallot(t)
 	b.EpochData.ActiveSet = append(b.EpochData.ActiveSet, b.EpochData.ActiveSet[0])
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(gomock.Any(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errDuplicateATX)
 }
 
@@ -242,6 +251,7 @@ func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
 	b.EpochData = &types.EpochData{}
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errUnexpectedEpochData)
 	checkBallot(t, th.cdb, b, false, false)
 }
@@ -256,6 +266,7 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -273,6 +284,8 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -289,6 +302,8 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -313,6 +328,7 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), append(b.Votes.Support, b.Votes.Against...)).Return(nil).Times(1)
@@ -330,6 +346,7 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -349,6 +366,7 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), append(b.Votes.Support, b.Votes.Against...)).Return(nil).Times(1)
@@ -366,6 +384,7 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -377,7 +396,9 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
 	data := encodeBallot(t, b)
+
 	errUnknown := errors.New("unknown")
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errUnknown)
 	checkBallot(t, th.cdb, b, false, false)
@@ -387,6 +408,7 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(errUnknown).Times(1)
@@ -398,6 +420,7 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
@@ -409,11 +432,13 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 func TestBallot_ErrorCheckingEligible(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
+
 	for i, bid := range b.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -429,11 +454,13 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 func TestBallot_NotEligible(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
+
 	for i, bid := range b.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -454,6 +481,7 @@ func TestBallot_Success(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.Votes.Support).Return(nil).Times(1)
@@ -474,6 +502,7 @@ func TestBallot_RefBallot(t *testing.T) {
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), gomock.Any()).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base}).Return(nil).Times(1)
 	atxIDs := types.ATXIDList{b.AtxID}
 	atxIDs = append(atxIDs, b.EpochData.ActiveSet...)
@@ -544,6 +573,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errDuplicateTX)
 	checkProposal(t, th.cdb, p, false)
 }
@@ -559,11 +589,13 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil).Times(1)
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
@@ -587,6 +619,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	errUnknown := errors.New("unknown")
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
@@ -610,6 +643,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, th.HandleProposalData(context.TODO(), data))
 	checkProposal(t, th.cdb, p, true)
@@ -632,6 +666,7 @@ func TestMetrics(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, gomock.Any())
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, th.HandleProposalData(context.TODO(), data))
 	checkProposal(t, th.cdb, p, true)

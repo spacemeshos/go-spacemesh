@@ -299,6 +299,31 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 	return resChannel
 }
 
+// registerLayerHashes registers provided hashes with provided peer.
+func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
+	if data == nil {
+		return
+	}
+	var layerHashes []types.Hash32
+	for _, ballotID := range data.Ballots {
+		layerHashes = append(layerHashes, ballotID.AsHash32())
+	}
+	for _, blkID := range data.Blocks {
+		layerHashes = append(layerHashes, blkID.AsHash32())
+	}
+	if data.HareOutput != types.EmptyBlockID {
+		layerHashes = append(layerHashes, data.HareOutput.AsHash32())
+	}
+
+	if len(layerHashes) == 0 {
+		return
+	}
+
+	l.fetcher.RegisterPeerHashes(peer, layerHashes)
+
+	return
+}
+
 // fetchLayerData fetches the all content referenced in layerData.
 func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *layerData) error {
 	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
@@ -336,6 +361,7 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 		// fail sync for the entire layer
 		return err
 	}
+
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
 		logger.With().Warning("failed fetching new blocks", log.Err(err))
@@ -369,6 +395,9 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	logger := l.log.WithContext(ctx).WithFields(layerID, log.String("peer", peer.String()))
 	logger.Debug("received layer content from peer")
 	peerRes := extractPeerResult(logger, layerID, data, peerErr)
+
+	l.registerLayerHashes(peer, peerRes.data)
+
 	if peerRes.err == nil {
 		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
 			peerRes.err = ErrLayerDataNotFetched
@@ -471,7 +500,8 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if l.host.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
-	if err := l.atxsrv.Request(ctx, fetch.GetRandomPeer(l.host.GetPeers()), id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
+	peer := fetch.GetRandomPeer(l.host.GetPeers())
+	if err := l.atxsrv.Request(ctx, peer, id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
 		return fmt.Errorf("failed to send request to the peer: %w", err)
 	}
 	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
@@ -479,6 +509,12 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if res.Error != nil {
 		return res.Error
 	}
+
+	l.log.WithContext(ctx).With().Debug("tracking peer for atxs",
+		log.Int("to_fetch", len(res.Atxs)),
+		log.String("peer", peer.String()))
+	atxHashes := types.ATXIDsToHashes(res.Atxs)
+	l.fetcher.RegisterPeerHashes(peer, atxHashes)
 
 	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
@@ -662,4 +698,14 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 		return l.getPoetResult(ctx, res.Hash, res.Data)
 	}
 	return nil
+}
+
+// RegisterPeerHashes is a wrapper around fetcher's RegisterPeerHashes.
+func (l *Logic) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	l.fetcher.RegisterPeerHashes(peer, hashes)
+}
+
+// AddPeersFromHash is a wrapper around fetcher's AddPeersFromHash.
+func (l *Logic) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	l.fetcher.AddPeersFromHash(fromHash, toHashes)
 }
