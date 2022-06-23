@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -15,12 +14,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 type testHandler struct {
@@ -53,18 +49,6 @@ func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.Transact
 	return block, data
 }
 
-func createAndSaveTxs(t *testing.T, db *sql.Database, numTXs int) []types.TransactionID {
-	t.Helper()
-	txIDs := make([]types.TransactionID, 0, numTXs)
-	for i := 0; i < numTXs; i++ {
-		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, 3)
-		require.NoError(t, err)
-		require.NoError(t, transactions.Add(db, tx, time.Now()))
-		txIDs = append(txIDs, tx.ID())
-	}
-	return txIDs
-}
-
 func Test_HandleBlockData_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
@@ -95,27 +79,10 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
 }
 
-func Test_HandleBlockData_TXsOutOfOrder(t *testing.T) {
-	th := createTestHandler(t)
-	layerID := types.NewLayerID(99)
-	signer := signing.NewEdSigner()
-	tx1, err := transaction.GenerateCallTransaction(signer, types.HexToAddress("1"), 1, 10, 100, 3)
-	require.NoError(t, err)
-	require.NoError(t, transactions.Add(th.db, tx1, time.Now()))
-	tx2, err := transaction.GenerateCallTransaction(signer, types.HexToAddress("1"), 2, 10, 100, 3)
-	require.NoError(t, err)
-	require.NoError(t, transactions.Add(th.db, tx2, time.Now()))
-	txIDs := types.ToTransactionIDs([]*types.Transaction{tx2, tx1})
-
-	_, data := createBlockData(t, layerID, txIDs)
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
-	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errTXsOutOfOrder)
-}
-
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	txIDs := createAndSaveTxs(t, th.db, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
@@ -127,7 +94,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 func Test_HandleBlockData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	txIDs := createAndSaveTxs(t, th.db, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
