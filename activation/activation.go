@@ -4,22 +4,24 @@ package activation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 	"unsafe"
 
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/post/shared"
+	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/post/shared"
 )
 
 var (
@@ -81,6 +83,7 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 	MinGas() uint64
 	SetMinGas(value uint64)
+	EstimateReward(layerID uint32) (amount uint64, err error)
 }
 
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
@@ -91,12 +94,15 @@ type Config struct {
 	CoinbaseAccount types.Address
 	GoldenATXID     types.ATXID
 	LayersPerEpoch  uint32
+	LayerAvgSize    int
+	RewardConf      vm.RewardConfig
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
+	rewardConf        vm.RewardConfig
 	pendingPoetClient atomic.UnsafePointer
 	started           atomic.Bool
 
@@ -106,6 +112,7 @@ type Builder struct {
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
+	layerAvgSize      int
 	cdb               *datastore.CachedDB
 	atxHandler        atxHandler
 	publisher         pubsub.Publisher
@@ -162,10 +169,12 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 ) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
+		rewardConf:        conf.RewardConf,
 		signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
 		goldenATXID:       conf.GoldenATXID,
+		layerAvgSize:      conf.LayerAvgSize,
 		layersPerEpoch:    conf.LayersPerEpoch,
 		cdb:               cdb,
 		atxHandler:        hdlr,
@@ -431,6 +440,30 @@ func (b *Builder) MinGas() uint64 {
 // SetMinGas [...].
 func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
+}
+
+func (b *Builder) EstimateReward(layerID uint32) (amount uint64, err error) {
+	if layerID < b.layerClock.GetCurrentLayer().Value {
+		// If layer is in the past, we can just serve value from `rewards` table.
+		return b.cdb.GetRewardForLayer(layerID)
+	}
+	if b.pendingATX == nil {
+		return 0, errors.New("no pending ATX")
+	}
+	// try to calculate possible reward for layer.
+	layerReward := b.rewardConf.CalculateLayerReward(layerID)
+	totalWeight, activeSet, err := b.cdb.GetEpochWeight(types.NewLayerID(layerID).GetEpoch())
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get epoch weight")
+	}
+	if len(activeSet) == 0 {
+		return 0, errors.New("empty active set for epoch")
+	}
+	expNumSlots, err := proposals.GetNumEligibleSlots(b.pendingATX.GetWeight(), totalWeight, uint32(b.layerAvgSize), b.layersPerEpoch)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to estimate number of eligible slots")
+	}
+	return layerReward / uint64(expNumSlots), nil
 }
 
 func getNIPostKey() []byte {

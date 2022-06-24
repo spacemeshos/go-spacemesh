@@ -1,8 +1,9 @@
 package datastore
 
 import (
-	"errors"
 	"fmt"
+
+	"github.com/pkg/errors"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -13,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -87,6 +89,17 @@ func (db *CachedDB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID
 		weight += atxHeader.GetWeight()
 	}
 	return weight, activeSet, nil
+}
+
+func (db *CachedDB) GetRewardForLayer(layerID uint32) (uint64, error) {
+	reward, err := rewards.RewardPerLayer(db, layerID)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get reward from db")
+	}
+	if reward == nil {
+		return 0, errors.New("no reward found in db")
+	}
+	return reward.LayerReward, nil
 }
 
 // GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no

@@ -598,6 +598,8 @@ func (app *App) initServices(ctx context.Context,
 		CoinbaseAccount: coinbaseAddr,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
+		RewardConf:      app.Config.REWARD,
+		LayerAvgSize:    app.Config.LayerAvgSize,
 	}
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, cdb, atxHandler, app.host, nipostBuilder,
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),

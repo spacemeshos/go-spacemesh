@@ -7,18 +7,21 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 // ========== Vars / Consts ==========
@@ -302,6 +305,126 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		require.NoError(t, builder.StopSmeshing(true))
 		require.False(t, builder.Smeshing())
 	}
+}
+
+func TestBuilder_EstimateReward(t *testing.T) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+	layerClockMock.currentLayer = types.EpochID(3).FirstLayer().Add(3) // current layer is 33
+	t.Run("layer from past and no reward", func(t *testing.T) {
+		cdb := newCachedDB(t)
+		b := newBuilder(t, cdb, newAtxHandler(t, cdb))
+
+		amount, err := b.EstimateReward(uint32(13))
+		require.Error(t, err)
+		require.Equal(t, uint64(0), amount)
+	})
+	t.Run("layer from past and reward", func(t *testing.T) {
+		cdb := newCachedDB(t)
+		rwd := &types.Reward{
+			TotalReward: 1000,
+			LayerReward: 100,
+			Coinbase:    coinbase,
+			Layer:       types.NewLayerID(13),
+		}
+		require.NoError(t, rewards.Add(cdb.Database, rwd))
+		b := newBuilder(t, cdb, newAtxHandler(t, cdb))
+
+		amount, err := b.EstimateReward(uint32(13))
+		require.NoError(t, err)
+		require.Equal(t, rwd.LayerReward, amount)
+	})
+	t.Run("empty pendingATX", func(t *testing.T) {
+		cdb := newCachedDB(t)
+		b := newBuilder(t, cdb, newAtxHandler(t, cdb))
+
+		amount, err := b.EstimateReward(uint32(34))
+		require.Zero(t, amount)
+		require.Error(t, err)
+	})
+	t.Run("empty activations", func(t *testing.T) {
+		b := createBuilderWithPendingATX(t, newCachedDB(t))
+		amount, err := b.EstimateReward(uint32(34))
+		require.Error(t, err)
+		require.Zero(t, amount)
+	})
+	t.Run("layer with existing activations with zero weight", func(t *testing.T) {
+		cdb := newCachedDB(t)
+		b := createBuilderWithPendingATX(t, cdb)
+		// generate 10 activations.
+		layer := types.NewLayerID(21)
+		for i := 0; i < 10; i++ {
+			sign := signing.NewEdSigner()
+			address := types.BytesToAddress(sign.PublicKey().Bytes())
+			nipostChallenge := types.NIPostChallenge{
+				NodeID:     types.BytesToNodeID(sign.PublicKey().Bytes()),
+				StartTick:  1,
+				EndTick:    2,
+				PubLayerID: layer,
+			}
+			atx := types.NewActivationTx(nipostChallenge, address, nil, 12, nil)
+			atx.PubLayerID = layer
+			atx.NumUnits = 0
+			require.NoError(t, atxs.Add(cdb.Database, atx, time.Now()))
+		}
+
+		amount, err := b.EstimateReward(uint32(34))
+		require.Error(t, err)
+		require.Zero(t, amount)
+	})
+	t.Run("layer with existing activations", func(t *testing.T) {
+		cdb := newCachedDB(t)
+		b := createBuilderWithPendingATX(t, cdb)
+		// generate 10 activations.
+		layer := types.NewLayerID(21)
+		for i := 0; i < 10; i++ {
+			sign := signing.NewEdSigner()
+			address := types.BytesToAddress(sign.PublicKey().Bytes())
+			nipostChallenge := types.NIPostChallenge{
+				NodeID:     types.BytesToNodeID(sign.PublicKey().Bytes()),
+				StartTick:  1,
+				EndTick:    2,
+				PubLayerID: layer,
+			}
+			atx := types.NewActivationTx(nipostChallenge, address, nil, 12, nil)
+			atx.PubLayerID = layer
+			require.NoError(t, atxs.Add(cdb.Database, atx, time.Now()))
+		}
+
+		amount, err := b.EstimateReward(uint32(34))
+		require.NoError(t, err)
+		require.Equal(t, uint64(1200019200), amount)
+	})
+}
+
+func createBuilderWithPendingATX(t *testing.T, cdb *datastore.CachedDB) *Builder {
+	id := types.BytesToNodeID([]byte("aaaaaa"))
+	coinbase := types.HexToAddress("0xaaa")
+	net := &NetMock{}
+	nipostBuilder := &NIPostBuilderMock{}
+	layersPerEpoch := uint32(10)
+	sig := &MockSigning{}
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	net.atxHdlr = atxHdlr
+
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+		LayerAvgSize:    50,
+		RewardConf:      vm.DefaultRewardConfig(),
+	}
+
+	b := NewBuilder(cfg, id, sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+
+	prevAtx := types.ATXID(types.HexToHash32("0x111"))
+	chlng := types.HexToHash32("0x3333")
+	poetRef := []byte{0xbe, 0xef}
+	nipostBuilder.poetRef = poetRef
+	npst := NewNIPostWithChallenge(&chlng, poetRef)
+
+	atx := newActivationTx(types.BytesToNodeID([]byte("aaaaaa")), 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
+	b.pendingATX = atx
+	return b
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {

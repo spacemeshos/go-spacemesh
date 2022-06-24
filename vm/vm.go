@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -17,23 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
-
-// RewardConfig defines the configuration options for Spacemesh rewards.
-type RewardConfig struct {
-	BaseReward uint64 `mapstructure:"base-reward"`
-}
-
-// DefaultRewardConfig returns the default RewardConfig.
-func DefaultRewardConfig() RewardConfig {
-	return RewardConfig{
-		BaseReward: 50 * uint64(math.Pow10(12)),
-	}
-}
-
-func calculateLayerReward(cfg RewardConfig) uint64 {
-	// todo: add inflation rules here
-	return cfg.BaseReward
-}
 
 // VM manages accounts state.
 type VM struct {
@@ -165,7 +147,7 @@ func CalculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, total
 		return nil, fmt.Errorf("zero total weight")
 	}
 	finalRewards := make([]*types.Reward, 0, len(rewards))
-	layerRewards := calculateLayerReward(cfg)
+	layerRewards := cfg.CalculateLayerReward(lid.Value)
 	totalRewards := layerRewards + totalFees
 	logger.With().Info("rewards info for layer",
 		log.Uint64("layer_rewards", layerRewards),
