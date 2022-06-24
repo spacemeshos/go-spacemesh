@@ -56,10 +56,10 @@ func List(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err err
 }
 
 // RewardPerLayer returns the reward per layer from `rewards` table.
-func RewardPerLayer(db sql.Executor, layerID uint32) (rwd *types.Reward, err error) {
+func RewardPerLayer(db sql.Executor, layer types.LayerID) (rwd *types.Reward, err error) {
 	_, err = db.Exec("select coinbase, layer, total_reward, layer_reward from rewards where layer = ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(layerID))
+			stmt.BindInt64(1, int64(layer.Value))
 		}, func(stmt *sql.Statement) bool {
 			var coinbase types.Address
 			stmt.ColumnBytes(0, coinbase[:])

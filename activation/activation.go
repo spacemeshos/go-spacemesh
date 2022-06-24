@@ -10,18 +10,18 @@ import (
 	"unsafe"
 
 	"github.com/pkg/errors"
+	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
-	"github.com/spacemeshos/go-spacemesh/vm"
-	"github.com/spacemeshos/post/shared"
 )
 
 var (
@@ -83,7 +83,7 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 	MinGas() uint64
 	SetMinGas(value uint64)
-	EstimateReward(layerID uint32) (amount uint64, err error)
+	EstimateReward(layerID types.LayerID) (amount uint64, err error)
 }
 
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
@@ -442,17 +442,18 @@ func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
 
-func (b *Builder) EstimateReward(layerID uint32) (amount uint64, err error) {
-	if layerID < b.layerClock.GetCurrentLayer().Value {
+// EstimateReward try to estimate the reward for the given layer.
+func (b *Builder) EstimateReward(layer types.LayerID) (amount uint64, err error) {
+	if layer.Value < b.layerClock.GetCurrentLayer().Value {
 		// If layer is in the past, we can just serve value from `rewards` table.
-		return b.cdb.GetRewardForLayer(layerID)
+		return b.cdb.GetRewardForLayer(layer)
 	}
 	if b.pendingATX == nil {
 		return 0, errors.New("no pending ATX")
 	}
 	// try to calculate possible reward for layer.
-	layerReward := b.rewardConf.CalculateLayerReward(layerID)
-	totalWeight, activeSet, err := b.cdb.GetEpochWeight(types.NewLayerID(layerID).GetEpoch())
+	layerReward := b.rewardConf.CalculateLayerReward(layer)
+	totalWeight, activeSet, err := b.cdb.GetEpochWeight(layer.GetEpoch())
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to get epoch weight")
 	}

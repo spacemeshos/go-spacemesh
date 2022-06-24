@@ -91,8 +91,9 @@ func (db *CachedDB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID
 	return weight, activeSet, nil
 }
 
-func (db *CachedDB) GetRewardForLayer(layerID uint32) (uint64, error) {
-	reward, err := rewards.RewardPerLayer(db, layerID)
+// GetRewardForLayer returns the reward for the given layer.
+func (db *CachedDB) GetRewardForLayer(layer types.LayerID) (uint64, error) {
+	reward, err := rewards.RewardPerLayer(db, layer)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to get reward from db")
 	}

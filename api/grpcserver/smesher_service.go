@@ -5,13 +5,13 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -155,8 +155,8 @@ func (s SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.Se
 func (s SmesherService) EstimatedRewards(ctx context.Context, req *pb.EstimatedRewardsRequest) (*pb.EstimatedRewardsResponse, error) {
 	log.Info("GRPC SmesherService.EstimatedRewards")
 	layerID := uint32(1) // todo 3222: layerID should be passed in request
-
-	amount, err := s.smeshingProvider.EstimateReward(layerID)
+	layer := types.NewLayerID(layerID)
+	amount, err := s.smeshingProvider.EstimateReward(layer)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to estimate reward for layer `%d`", layerID)
 	}

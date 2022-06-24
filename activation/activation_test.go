@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -21,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 // ========== Vars / Consts ==========

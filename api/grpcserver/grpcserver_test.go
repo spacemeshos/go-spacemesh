@@ -435,6 +435,10 @@ func (*SmeshingAPIMock) MinGas() uint64 {
 func (*SmeshingAPIMock) SetMinGas(value uint64) {
 }
 
+func (*SmeshingAPIMock) EstimateReward(layerID uint32) (amount uint64, err error) {
+	return 42, nil
+}
+
 type GenesisTimeMock struct {
 	t time.Time
 }

@@ -21,9 +21,10 @@ func DefaultRewardConfig() RewardConfig {
 	}
 }
 
-func calculateLayerReward(cfg RewardConfig) uint64 {
-	// todo: add inflation rules here
-	return cfg.BaseReward
+// CalculateLayerReward returns the reward for the given layer.
+func (r *RewardConfig) CalculateLayerReward(_ types.LayerID) uint64 {
+	// todo: add inflation rules here, this is one of items in the "genesis research pipeline"
+	return r.BaseReward
 }
 
 // calculateRewards splits layer rewards and total fees fairly between coinbases recorded in rewards.
@@ -46,7 +47,7 @@ func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, total
 		return nil, fmt.Errorf("zero total weight")
 	}
 	finalRewards := make([]*types.Reward, 0, len(rewards))
-	layerRewards := calculateLayerReward(cfg)
+	layerRewards := cfg.CalculateLayerReward(lid)
 	totalRewards := layerRewards + totalFees
 	logger.With().Info("rewards info for layer",
 		log.Uint64("layer_rewards", layerRewards),
