@@ -2204,10 +2204,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountDataItemReceipt(t, res.Datum.Datum)
-
-		res, err = stream.Recv()
-		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemReward(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
@@ -2290,8 +2286,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		GlobalStateDataFlags: uint32(
 			pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT |
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH |
-				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD |
-				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_TRANSACTION_RECEIPT),
+				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
 	}
 
 	// Synchronize the two routines
@@ -2305,10 +2300,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.GlobalStateStreamResponse
-
-		res, err = stream.Recv()
-		require.NoError(t, err, "got error from stream")
-		checkGlobalStateDataReceipt(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")

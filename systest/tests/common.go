@@ -13,7 +13,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
@@ -168,7 +167,7 @@ func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [20]byte, 
 	return submitTransacition(ctx,
 		wallet.Spend(
 			signing.PrivateKey(pk), types.Address(receiver), amount,
-			sdk.WithNonce(types.Nonce{Counter: nonce}),
+			types.Nonce{Counter: nonce},
 		),
 		client)
 }
