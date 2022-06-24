@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -118,7 +119,7 @@ func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockvmState) Apply(arg0 types.LayerID, arg1 []types.RawTx, arg2 []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+func (m *MockvmState) Apply(arg0 vm.ApplyContext, arg1 []types.RawTx, arg2 []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]types.TransactionID)

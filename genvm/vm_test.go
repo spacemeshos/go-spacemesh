@@ -648,7 +648,7 @@ func TestWorkflow(t *testing.T) {
 					txs = append(txs, gen.gen(tt))
 				}
 				lid := types.NewLayerID(uint32(i + 1))
-				skipped, _, err := tt.Apply(lid, txs, tt.rewards(layer.rewards...))
+				skipped, _, err := tt.Apply(ApplyContext{Layer: lid}, txs, tt.rewards(layer.rewards...))
 				require.NoError(tt, err)
 				if layer.skipped == nil {
 					require.Empty(tt, skipped)
@@ -675,12 +675,12 @@ func TestRandomTransfers(t *testing.T) {
 		addAccounts(10).
 		applyGenesis()
 
-	skipped, _, err := tt.Apply(types.NewLayerID(1), tt.spawnWalletAll(), nil)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)}, tt.spawnWalletAll(), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 	for i := 0; i < 1000; i++ {
 		lid := types.NewLayerID(2).Add(uint32(i))
-		skipped, _, err := tt.Apply(lid, tt.randSendWalletN(20, 10), nil)
+		skipped, _, err := tt.Apply(ApplyContext{Layer: lid}, tt.randSendWalletN(20, 10), nil)
 		require.NoError(tt, err)
 		require.Empty(tt, skipped)
 	}
@@ -691,7 +691,7 @@ func TestValidation(t *testing.T) {
 		addAccounts(1).
 		applyGenesis().
 		addAccounts(1)
-	skipped, _, err := tt.Apply(types.NewLayerID(1), []types.RawTx{tt.selfSpawnWallet(0)}, nil)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)}, []types.RawTx{tt.selfSpawnWallet(0)}, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -783,7 +783,7 @@ func FuzzParse(f *testing.F) {
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addAccounts(2).applyGenesis()
-	skipped, _, err := tt.Apply(types.NewLayerID(1), []types.RawTx{tt.selfSpawnWallet(0)}, nil)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)}, []types.RawTx{tt.selfSpawnWallet(0)}, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -816,7 +816,7 @@ func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	tt := newTester(t).addAccounts(10).applyGenesis()
 
 	lid := types.NewLayerID(1)
-	skipped, _, err := tt.Apply(lid, []types.RawTx{
+	skipped, _, err := tt.Apply(ApplyContext{Layer: lid}, []types.RawTx{
 		tt.selfSpawnWallet(0),
 		tt.selfSpawnWallet(1),
 		tt.spendWallet(0, 2, 100),
@@ -853,7 +853,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
 		addAccounts(accounts).applyGenesis().withSeed(101)
 	lid := types.NewLayerID(1)
-	skipped, _, err := tt.Apply(types.NewLayerID(1), tt.spawnWalletAll(), nil)
+	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)}, tt.spawnWalletAll(), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -867,7 +867,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 
 	for _, txs := range layers {
 		lid = lid.Add(1)
-		skipped, _, err := tt.Apply(lid, txs, nil)
+		skipped, _, err := tt.Apply(ApplyContext{Layer: lid}, txs, nil)
 		if err != nil {
 			b.Fatal(err)
 		}

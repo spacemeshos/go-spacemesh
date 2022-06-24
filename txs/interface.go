@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/system"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -26,7 +27,7 @@ type vmState interface {
 	GetBalance(types.Address) (uint64, error)
 	GetNonce(types.Address) (types.Nonce, error)
 	Revert(types.LayerID) (types.Hash32, error)
-	Apply(types.LayerID, []types.RawTx, []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error)
+	Apply(vm.ApplyContext, []types.RawTx, []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error)
 }
 
 type conStateCache interface {

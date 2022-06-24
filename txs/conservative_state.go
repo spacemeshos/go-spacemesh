@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -168,7 +169,8 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		return nil, err
 	}
 
-	skipped, rsts, err := cs.vmState.Apply(toApply.LayerIndex, raw, toApply.Rewards)
+	skipped, rsts, err := cs.vmState.Apply(vm.ApplyContext{
+		Layer: toApply.LayerIndex, Block: toApply.ID()}, raw, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,

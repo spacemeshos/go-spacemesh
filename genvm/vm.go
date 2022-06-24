@@ -148,7 +148,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 	tx, err := v.db.Tx(context.Background())
 	if err != nil {
 		return nil, nil, err
@@ -193,6 +193,8 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 			continue
 		}
 		rst := types.TransactionWithResult{}
+		rst.Layer = lctx.Layer
+		rst.Block = lctx.Block
 		err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
 		if err != nil {
 			v.logger.With().Debug("transaction failed",
@@ -217,7 +219,6 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 		rst.Gas = ctx.Consumed()
 		rst.Fee = ctx.Fee()
 		rst.Addresses = ctx.Updated()
-		rst.Layer = lid
 
 		err = ctx.Apply(ss)
 		if err != nil {
@@ -229,7 +230,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 
 	// TODO(dshulyak) why it fails if there are no rewards?
 	if len(blockRewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, blockRewards)
+		finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
@@ -251,7 +252,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
 	ss.IterateChanged(func(account *core.Account) bool {
-		account.Layer = lid
+		account.Layer = lctx.Layer
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
 		if err != nil {
@@ -266,14 +267,15 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 	}
 	var hash types.Hash32
 	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateHash(tx, lid, hash); err != nil {
+	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
 		return nil, nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
 	v.logger.With().Info("applied transactions",
-		lid,
+		lctx.Layer,
+		lctx.Block,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(start)),
 		log.Stringer("state_hash", hash),
@@ -380,4 +382,10 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 
 func verify(ctx *core.Context, raw []byte) bool {
 	return ctx.Template.Verify(ctx, raw)
+}
+
+// ApplyContext has information on layer and block id.
+type ApplyContext struct {
+	Layer types.LayerID
+	Block types.BlockID
 }
