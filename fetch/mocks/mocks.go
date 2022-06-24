@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	datastore "github.com/spacemeshos/go-spacemesh/datastore"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -37,8 +38,20 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
 }
 
+// AddPeersFromHash mocks base method.
+func (m *MockFetcher) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPeersFromHash", fromHash, toHashes)
+}
+
+// AddPeersFromHash indicates an expected call of AddPeersFromHash.
+func (mr *MockFetcherMockRecorder) AddPeersFromHash(fromHash, toHashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockFetcher)(nil).AddPeersFromHash), fromHash, toHashes)
+}
+
 // GetHash mocks base method.
-func (m *MockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
+func (m *MockFetcher) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHash", hash, h, validateHash)
 	ret0, _ := ret[0].(chan fetch.HashDataPromiseResult)
@@ -52,7 +65,7 @@ func (mr *MockFetcherMockRecorder) GetHash(hash, h, validateHash interface{}) *g
 }
 
 // GetHashes mocks base method.
-func (m *MockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateHash bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+func (m *MockFetcher) GetHashes(hash []types.Hash32, hint datastore.Hint, validateHash bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHashes", hash, hint, validateHash)
 	ret0, _ := ret[0].(map[types.Hash32]chan fetch.HashDataPromiseResult)
@@ -63,6 +76,18 @@ func (m *MockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateHa
 func (mr *MockFetcherMockRecorder) GetHashes(hash, hint, validateHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashes", reflect.TypeOf((*MockFetcher)(nil).GetHashes), hash, hint, validateHash)
+}
+
+// RegisterPeerHashes mocks base method.
+func (m *MockFetcher) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterPeerHashes", peer, hashes)
+}
+
+// RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
+func (mr *MockFetcherMockRecorder) RegisterPeerHashes(peer, hashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockFetcher)(nil).RegisterPeerHashes), peer, hashes)
 }
 
 // Start mocks base method.

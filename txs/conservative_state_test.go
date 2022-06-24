@@ -39,7 +39,7 @@ func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSig
 
 func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
-		sdk.WithNonce(types.Nonce{Counter: nonce}),
+		types.Nonce{Counter: nonce},
 		sdk.WithGasPrice(fee),
 	)
 	tx := types.Transaction{
@@ -760,7 +760,7 @@ func TestConsistentHandling(t *testing.T) {
 			}
 
 			instances[0].handler().HandleGossipTransaction(context.TODO(), "", txs[i].Raw)
-			instances[1].handler().HandleSyncTransaction(context.TODO(), txs[i].Raw)
+			instances[1].handler().HandleBlockTransaction(context.TODO(), txs[i].Raw)
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{
@@ -796,18 +796,6 @@ func TestConsistentHandling(t *testing.T) {
 				require.Equal(t, int(expect), int(nonce), "instance=%d", i)
 			}
 		}
-	}
-}
-
-func TestTXFetcher(t *testing.T) {
-	tcs := createConservativeState(t)
-	ids, txs := addBatch(t, tcs, numTXs)
-	for i, id := range ids {
-		buf, err := tcs.Transactions().Get(id.Bytes())
-		require.NoError(t, err)
-		raw := types.NewRawTx(buf)
-		require.Equal(t, txs[i].ID, raw.ID)
-		require.Equal(t, txs[i].Raw, buf)
 	}
 }
 

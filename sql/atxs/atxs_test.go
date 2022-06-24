@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -81,7 +80,7 @@ func TestGetTimestampByID(t *testing.T) {
 	require.EqualValues(t, ts.UnixNano(), timestamp.UnixNano())
 
 	_, err = GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
@@ -112,7 +111,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	require.EqualValues(t, atx4.ID(), id2)
 
 	_, err = GetLastIDByNodeID(db, nodeID0)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestGetIDByEpochAndNodeID(t *testing.T) {
@@ -141,7 +140,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	require.EqualValues(t, atx1.ID(), l1n1)
 
 	_, err = GetIDByEpochAndNodeID(db, l1.GetEpoch(), nodeID2)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	l2n1, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), nodeID1)
 	require.NoError(t, err)
@@ -152,7 +151,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	require.EqualValues(t, atx3.ID(), l2n2)
 
 	_, err = GetIDByEpochAndNodeID(db, l3.GetEpoch(), nodeID1)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	l3n2, err := GetIDByEpochAndNodeID(db, l3.GetEpoch(), nodeID2)
 	require.NoError(t, err)
@@ -225,7 +224,7 @@ func TestGetBlob(t *testing.T) {
 	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
 
 	require.NoError(t, Add(db, atx, time.Now()))
-	buf, err := GetBlob(db, atx.ID())
+	buf, err := GetBlob(db, atx.ID().Bytes())
 	require.NoError(t, err)
 	encoded, err := codec.Encode(atx)
 	require.NoError(t, err)

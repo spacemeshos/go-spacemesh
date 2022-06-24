@@ -681,7 +681,6 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	income := defaultBalance * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending() + income
-
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)

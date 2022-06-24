@@ -5,14 +5,14 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
 // computeBallotWeight compute and assign ballot weight to the weights map.
 func computeBallotWeight(
-	atxdb atxDataProvider,
-	bdp blockDataProvider,
+	cdb *datastore.CachedDB,
 	referenceWeights, weights map[types.BallotID]util.Weight,
 	ballot *types.Ballot,
 	layerSize,
@@ -31,7 +31,7 @@ func computeBallotWeight(
 		refBallotID = ballot.RefBallot
 	}
 	if reference, exist = referenceWeights[refBallotID]; !exist {
-		reference, err = proposals.ComputeWeightPerEligibility(atxdb, bdp, ballot, layerSize, layersPerEpoch)
+		reference, err = proposals.ComputeWeightPerEligibility(cdb, ballot, layerSize, layersPerEpoch)
 		if err != nil {
 			return util.Weight{}, fmt.Errorf("get ballot weight %w", err)
 		}
@@ -42,12 +42,12 @@ func computeBallotWeight(
 	return actual, nil
 }
 
-func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {
+func computeEpochWeight(cdb *datastore.CachedDB, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {
 	layerWeight, exist := epochWeights[eid]
 	if exist {
 		return layerWeight, nil
 	}
-	epochWeight, _, err := atxdb.GetEpochWeight(eid)
+	epochWeight, _, err := cdb.GetEpochWeight(eid)
 	if err != nil {
 		return util.Weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
 	}

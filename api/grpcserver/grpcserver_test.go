@@ -313,8 +313,8 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	} else {
 		tx.RawTx = types.NewRawTx(
 			wallet.Spend(signer.PrivateKey(), recipient, 1,
+				types.Nonce{Counter: nonce},
 				sdk.WithGasPrice(0),
-				sdk.WithNonce(types.Nonce{Counter: nonce}),
 			),
 		)
 		tx.MaxSpend = 1
@@ -1951,7 +1951,8 @@ func TestTransactionService(t *testing.T) {
 			events.InitializeReporter()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
-			time.Sleep(10 * time.Millisecond)
+			// TODO send header after stream has subscribed
+			time.Sleep(100 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
@@ -2874,6 +2875,9 @@ func TestEventsReceived(t *testing.T) {
 		close(waiter)
 	}()
 
+	// without sleep execution in the test goroutine completes
+	// before streams can subscribe to the internal events.
+	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(globalTx)

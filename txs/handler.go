@@ -44,6 +44,15 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, ms
 	return pubsub.ValidationAccept
 }
 
+// HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
+func (th *TxHandler) HandleProposalTransaction(ctx context.Context, msg []byte) error {
+	err := th.handleTransaction(ctx, msg)
+	if err == nil || errors.Is(err, errDuplicateTX) {
+		return nil
+	}
+	return err
+}
+
 func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	raw := types.NewRawTx(msg)
 	if exists, err := th.state.HasTx(raw.ID); err != nil {
@@ -73,12 +82,8 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	return nil
 }
 
-// HandleSyncTransaction handles transactions received via sync.
-// Unlike HandleGossipTransaction, which only stores valid transactions,
-// HandleSyncTransaction only deserializes transactions and stores them regardless of validity. This is because
-// transactions received via sync are necessarily referenced somewhere meaning that we must have them stored, even if
-// they're invalid, for the data availability of the referencing block.
-func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) error {
+// HandleBlockTransaction handles transactions received as a reference to a block.
+func (th *TxHandler) HandleBlockTransaction(ctx context.Context, data []byte) error {
 	raw := types.NewRawTx(data)
 	exists, err := th.state.HasTx(raw.ID)
 	if err != nil {

@@ -8,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -21,6 +23,7 @@ type Handler struct {
 	logger log.Log
 
 	fetcher system.Fetcher
+	db      *sql.Database
 	mesh    meshProvider
 }
 
@@ -35,10 +38,11 @@ func WithLogger(logger log.Log) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(f system.Fetcher, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt) *Handler {
 	h := &Handler{
 		logger:  log.NewNop(),
 		fetcher: f,
+		db:      db,
 		mesh:    m,
 	}
 	for _, opt := range opts {
@@ -61,7 +65,9 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 	// set the block ID when received
 	b.Initialize()
 
-	if h.mesh.HasBlock(b.ID()) {
+	if exists, err := blocks.Has(h.db, b.ID()); err != nil {
+		logger.With().Error("failed to check block exist", b.ID(), log.Err(err))
+	} else if exists {
 		logger.Info("known block")
 		return nil
 	}
@@ -92,7 +98,7 @@ func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetTxs(ctx, b.TxIDs); err != nil {
+	if err := h.fetcher.GetBlockTxs(ctx, b.TxIDs); err != nil {
 		return fmt.Errorf("block get TXs: %w", err)
 	}
 	return nil

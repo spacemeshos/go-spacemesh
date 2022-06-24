@@ -5,6 +5,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 )
 
 // Frac is a shortcut for creating Fraction object.
@@ -80,7 +82,7 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 
 	for i := range gens {
 		part := conf.Partitions[i]
-		share := total * int(part.Nominator) / int(part.Denominator)
+		share := total * part.Nominator / part.Denominator
 
 		gens[i] = New(
 			withRng(g.rng),
@@ -128,7 +130,7 @@ func (g *Generator) mergeActivations(other *Generator) {
 			}
 		}
 		if !exists {
-			atx, err := other.GetState(0).AtxDB.GetFullAtx(atxid)
+			atx, err := other.GetState(0).DB.GetFullAtx(atxid)
 			if err != nil {
 				g.logger.With().Panic("failed to get atx", atxid, log.Err(err))
 			}
@@ -154,7 +156,7 @@ func (g *Generator) mergeLayers(other *Generator) {
 				}
 			}
 			if !exists {
-				rst, _ := g.GetState(0).MeshDB.GetBallot(ballot.ID())
+				rst, _ := ballots.Get(g.GetState(0).DB, ballot.ID())
 				if rst != nil {
 					continue
 				}
@@ -173,7 +175,7 @@ func (g *Generator) mergeLayers(other *Generator) {
 				}
 			}
 			if !exists {
-				rst, _ := g.GetState(0).MeshDB.GetBlock(block.ID())
+				rst, _ := blocks.Get(g.GetState(0).DB, block.ID())
 				if rst != nil {
 					continue
 				}

@@ -209,7 +209,10 @@ func (s *Sync) run() error {
 					log.Duration("max_offset", s.config.MaxClockOffset),
 				)
 				if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
-					return ErrPeersNotSynced
+					return clockError{
+						err:     ErrPeersNotSynced,
+						details: clockErrorDetails{Drift: offset},
+					}
 				}
 			} else {
 				s.log.With().Info("peers offset is within max allowed clock difference",

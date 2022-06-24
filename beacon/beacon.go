@@ -18,11 +18,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -81,10 +82,9 @@ func withWeakCoin(wc coin) Opt {
 func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
-	atxDB activationDB,
 	edSigner *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
-	db *sql.Database,
+	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
 ) *ProtocolDriver {
@@ -94,10 +94,9 @@ func New(
 		config:             DefaultConfig(),
 		nodeID:             nodeID,
 		publisher:          publisher,
-		atxDB:              atxDB,
 		edSigner:           edSigner,
 		vrfSigner:          vrfSigner,
-		db:                 db,
+		cdb:                cdb,
 		clock:              clock,
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
@@ -133,7 +132,6 @@ type ProtocolDriver struct {
 	nodeID      types.NodeID
 	sync        system.SyncStateProvider
 	publisher   pubsub.Publisher
-	atxDB       activationDB
 	edSigner    *signing.EdSigner
 	vrfSigner   *signing.VRFSigner
 	edVerifier  signing.EDVerifier
@@ -143,7 +141,7 @@ type ProtocolDriver struct {
 
 	clock       layerClock
 	layerTicker chan types.LayerID
-	db          *sql.Database
+	cdb         *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -334,7 +332,7 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 		return beacon, nil
 	}
 
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		pd.logger.With().Warning("beacon not available", targetEpoch)
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}
@@ -364,7 +362,7 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 }
 
 func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := beacons.Add(pd.db, epoch, beacon); err != nil {
+	if err := beacons.Add(pd.cdb, epoch, beacon); err != nil {
 		if !errors.Is(err, sql.ErrObjectExists) {
 			pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
 			return fmt.Errorf("persist beacon: %w", err)
@@ -382,7 +380,7 @@ func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon
 }
 
 func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon, error) {
-	data, err := beacons.Get(pd.db, epoch)
+	data, err := beacons.Get(pd.cdb, epoch)
 	if err != nil {
 		return types.EmptyBeacon, fmt.Errorf("get from DB: %w", err)
 	}
@@ -413,7 +411,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return s, nil
 	}
 
-	epochWeight, atxs, err := pd.atxDB.GetEpochWeight(epoch)
+	epochWeight, atxs, err := pd.cdb.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
 		return nil, fmt.Errorf("get epoch weight: %w", err)
@@ -537,7 +535,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 	}
 
 	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(pd.nodeID, epoch-1)
+	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
 	if err != nil {
 		logger.With().Info("not running beacon protocol: no own ATX in last epoch", log.Err(err))
 		return
@@ -737,7 +735,7 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 	// we need to pass a map with spacetime unit allowances before any round is started
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
-		header, err := pd.atxDB.GetAtxHeader(id)
+		header, err := pd.cdb.GetAtxHeader(id)
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
@@ -970,12 +968,12 @@ func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, dat
 }
 
 func (pd *ProtocolDriver) getOwnWeight(epoch types.EpochID) uint64 {
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(pd.nodeID, epoch)
+	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch, pd.nodeID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
 		return 0
 	}
-	hdr, err := pd.atxDB.GetAtxHeader(atxID)
+	hdr, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
 		return 0

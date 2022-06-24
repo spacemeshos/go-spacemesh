@@ -17,7 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 )
 
-func Test_HandleSync(t *testing.T) {
+func Test_HandleBlock(t *testing.T) {
 	for _, tc := range []struct {
 		desc           string
 		has            bool
@@ -56,7 +56,7 @@ func Test_HandleSync(t *testing.T) {
 				cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).
 					Times(1).Return(tc.addErr)
 			}
-			err := th.HandleSyncTransaction(context.TODO(), tx.Raw)
+			err := th.HandleBlockTransaction(context.TODO(), tx.Raw)
 			if tc.failed {
 				require.Error(t, err)
 			} else {
@@ -64,6 +64,34 @@ func Test_HandleSync(t *testing.T) {
 			}
 		})
 	}
+}
+
+func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verify bool) (*TxHandler, *types.Transaction) {
+	ctrl := gomock.NewController(t)
+	cstate := mocks.NewMockconservativeState(ctrl)
+	th := NewTxHandler(cstate, logtest.New(t))
+
+	signer := signing.NewEdSigner()
+	tx := newTx(t, 3, 10, 1, signer)
+
+	cstate.EXPECT().HasTx(tx.ID).Return(has, hasErr).Times(1)
+	if hasErr == nil && !has {
+		req := smocks.NewMockValidationRequest(ctrl)
+		req.EXPECT().Parse().Times(1).Return(tx.TxHeader, parseErr)
+		cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+		if parseErr == nil {
+			req.EXPECT().Verify().Times(1).Return(verify)
+			if verify {
+				cstate.EXPECT().AddToCache(gomock.Any()).DoAndReturn(
+					func(got *types.Transaction) error {
+						assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
+						assert.Equal(t, tx, got)
+						return addErr
+					}).Times(1)
+			}
+		}
+	}
+	return th, tx
 }
 
 func Test_HandleGossip(t *testing.T) {
@@ -107,35 +135,66 @@ func Test_HandleGossip(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			cstate := mocks.NewMockconservativeState(ctrl)
-			th := NewTxHandler(cstate, logtest.New(t))
-
-			signer := signing.NewEdSigner()
-			tx := newTx(t, 3, 10, 1, signer)
-
-			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
-			if tc.hasErr == nil && !tc.has {
-				req := smocks.NewMockValidationRequest(ctrl)
-				req.EXPECT().Parse().Times(1).Return(tx.TxHeader, tc.parseErr)
-				cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
-				if tc.parseErr == nil {
-					req.EXPECT().Verify().Times(1).Return(tc.verify)
-					if tc.verify {
-						cstate.EXPECT().AddToCache(gomock.Any()).DoAndReturn(
-							func(got *types.Transaction) error {
-								assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
-								assert.Equal(t, tx, got)
-								return tc.addErr
-							}).Times(1)
-					}
-				}
-			}
-
+			th, tx := gossipExpectations(t,
+				tc.hasErr, tc.parseErr, tc.addErr,
+				tc.has, tc.verify,
+			)
 			require.Equal(t,
 				tc.expect,
 				th.HandleGossipTransaction(context.TODO(), "peer", tx.Raw),
 			)
+		})
+	}
+}
+
+func Test_HandleProposal(t *testing.T) {
+	for _, tc := range []struct {
+		desc                     string
+		has                      bool
+		hasErr, addErr, parseErr error
+		verify                   bool
+		fail                     bool
+	}{
+		{
+			desc:   "Success",
+			verify: true,
+		},
+		{
+			desc: "Dup",
+			has:  true,
+		},
+		{
+			desc:   "HasFailed",
+			hasErr: errors.New("test"),
+			fail:   true,
+		},
+		{
+			desc:   "ParseFailed",
+			addErr: errors.New("test"),
+			fail:   true,
+		},
+		{
+			desc: "VerifyFalse",
+			fail: true,
+		},
+		{
+			desc:   "AddFailed",
+			verify: true,
+			addErr: errors.New("test"),
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			th, tx := gossipExpectations(t,
+				tc.hasErr, tc.parseErr, tc.addErr,
+				tc.has, tc.verify,
+			)
+			err := th.HandleProposalTransaction(context.TODO(), tx.Raw)
+			if tc.fail {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }

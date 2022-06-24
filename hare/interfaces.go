@@ -23,22 +23,11 @@ type Rolacle interface {
 
 type meshProvider interface {
 	AddBlockWithTXs(context.Context, *types.Block) error
-	GetBallot(types.BallotID) (*types.Ballot, error)
 	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
-	RecordCoinflip(context.Context, types.LayerID, bool)
-}
-
-type proposalProvider interface {
-	LayerProposals(types.LayerID) ([]*types.Proposal, error)
-	GetProposals([]types.ProposalID) ([]*types.Proposal, error)
 }
 
 type blockGenerator interface {
 	GenerateBlock(context.Context, types.LayerID, []*types.Proposal) (*types.Block, error)
-}
-
-type identityProvider interface {
-	GetIdentity(string) (types.NodeID, error)
 }
 
 // stateQuerier provides a query to check if an Ed public key is active on the current consensus view.

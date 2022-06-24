@@ -156,7 +156,10 @@ linters-settings:
   goimports:
     local-prefixes: github.com/spacemeshos/go-spacemesh
   gci:
-    local-prefixes: github.com/spacemeshos/go-spacemesh
+    sections:
+      - standard
+      - default
+      - prefix(github.com/spacemeshos/go-spacemesh)
   godot:
     # comments to be checked: `declarations`, `toplevel`, or `all`
     scope: declarations
