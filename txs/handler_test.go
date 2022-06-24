@@ -9,222 +9,192 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 )
 
-func Test_HandleGossipTransaction_Success(t *testing.T) {
+func Test_HandleBlock(t *testing.T) {
+	for _, tc := range []struct {
+		desc           string
+		has            bool
+		hasErr, addErr error
+		failed         bool
+	}{
+		{
+			desc: "Success",
+		},
+		{
+			desc: "Dup",
+			has:  true,
+		},
+		{
+			desc:   "HasFailed",
+			hasErr: errors.New("test"),
+			failed: true,
+		},
+		{
+			desc:   "AddFailed",
+			addErr: errors.New("test"),
+			failed: true,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			cstate := mocks.NewMockconservativeState(ctrl)
+			th := NewTxHandler(cstate, logtest.New(t))
+
+			signer := signing.NewEdSigner()
+			tx := newTx(t, 3, 10, 1, signer)
+
+			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
+			if tc.hasErr == nil && !tc.has {
+				cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).
+					Times(1).Return(tc.addErr)
+			}
+			err := th.HandleBlockTransaction(context.TODO(), tx.Raw)
+			if tc.failed {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verify bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
-	origin := types.GenerateAddress(signer.PublicKey().Bytes())
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, nil).Times(1)
-	cstate.EXPECT().AddressExists(origin).Return(true, nil).Times(1)
-	cstate.EXPECT().AddToCache(gomock.Any(), true).DoAndReturn(
-		func(got *types.Transaction, check bool) error {
-			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
-			assert.Equal(t, tx, got)
-			return nil
-		}).Times(1)
 
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	got := th.HandleGossipTransaction(context.TODO(), "peer", msg)
-	assert.Equal(t, pubsub.ValidationAccept, got)
+	cstate.EXPECT().HasTx(tx.ID).Return(has, hasErr).Times(1)
+	if hasErr == nil && !has {
+		req := smocks.NewMockValidationRequest(ctrl)
+		req.EXPECT().Parse().Times(1).Return(tx.TxHeader, parseErr)
+		cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+		if parseErr == nil {
+			req.EXPECT().Verify().Times(1).Return(verify)
+			if verify {
+				cstate.EXPECT().AddToCache(gomock.Any()).DoAndReturn(
+					func(got *types.Transaction) error {
+						assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
+						assert.Equal(t, tx, got)
+						return addErr
+					}).Times(1)
+			}
+		}
+	}
+	return th, tx
 }
 
-func Test_HandleGossipTransaction_MalformedMsg(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	msg, err := codec.Encode(newTx(t, 3, 10, 1, signer))
-	require.NoError(t, err)
-
-	got := th.HandleGossipTransaction(context.TODO(), "peer", msg[1:])
-	assert.Equal(t, pubsub.ValidationIgnore, got)
+func Test_HandleGossip(t *testing.T) {
+	for _, tc := range []struct {
+		desc                     string
+		has                      bool
+		hasErr, addErr, parseErr error
+		verify                   bool
+		expect                   pubsub.ValidationResult
+	}{
+		{
+			desc:   "Success",
+			verify: true,
+			expect: pubsub.ValidationAccept,
+		},
+		{
+			desc:   "Dup",
+			has:    true,
+			expect: pubsub.ValidationIgnore,
+		},
+		{
+			desc:   "HasFailed",
+			hasErr: errors.New("test"),
+			expect: pubsub.ValidationIgnore,
+		},
+		{
+			desc:   "ParseFailed",
+			addErr: errors.New("test"),
+			expect: pubsub.ValidationIgnore,
+		},
+		{
+			desc:   "VerifyFalse",
+			expect: pubsub.ValidationIgnore,
+		},
+		{
+			desc:   "AddFailed",
+			verify: true,
+			addErr: errors.New("test"),
+			expect: pubsub.ValidationAccept,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			th, tx := gossipExpectations(t,
+				tc.hasErr, tc.parseErr, tc.addErr,
+				tc.has, tc.verify,
+			)
+			require.Equal(t,
+				tc.expect,
+				th.HandleGossipTransaction(context.TODO(), "peer", tx.Raw),
+			)
+		})
+	}
 }
 
-func Test_handleTransaction_MalformedMsg(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	th := NewTxHandler(mocks.NewMockconservativeState(ctrl), logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	msg, err := codec.Encode(newTx(t, 3, 10, 1, signer))
-	require.NoError(t, err)
-
-	got := th.handleTransaction(context.TODO(), msg[1:])
-	assert.ErrorIs(t, got, errMalformedMsg)
-}
-
-func Test_handleTransaction_BadSignature(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	cstate.EXPECT().HasTx(gomock.Any()).Return(false, nil).Times(1)
-	tx.Signature[63] = 224
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	got := th.handleTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errAddrNotExtracted)
-}
-
-func Test_handleTransaction_HasTXError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	errUnknown := errors.New("unknown")
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, errUnknown).Times(1)
-	got := th.handleTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errUnknown)
-}
-
-func Test_handleTransaction_DuplicateTX(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	cstate.EXPECT().HasTx(tx.ID()).Return(true, nil).Times(1)
-	got := th.handleTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errDuplicateTX)
-}
-
-func Test_handleTransaction_AddressNotFound(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, nil).Times(1)
-	origin := types.GenerateAddress(signer.PublicKey().Bytes())
-	cstate.EXPECT().AddressExists(origin).Return(false, nil).Times(1)
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	got := th.handleTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errAddrNotFound)
-}
-
-func Test_handleTransaction_FailedMemPoolIgnored(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, nil).Times(1)
-	origin := types.GenerateAddress(signer.PublicKey().Bytes())
-	cstate.EXPECT().AddressExists(origin).Return(true, nil).Times(1)
-	errUnknown := errors.New("unknown")
-	cstate.EXPECT().AddToCache(gomock.Any(), true).DoAndReturn(
-		func(got *types.Transaction, check bool) error {
-			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
-			assert.Equal(t, tx, got)
-			return errUnknown
-		}).Times(1)
-
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	require.NoError(t, th.handleTransaction(context.TODO(), msg))
-}
-
-func Test_HandleSyncTransaction_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, nil).Times(1)
-	cstate.EXPECT().AddToCache(gomock.Any(), true).DoAndReturn(
-		func(got *types.Transaction, newTX bool) error {
-			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
-			assert.Equal(t, tx, got)
-			return nil
-		}).Times(1)
-
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	got := th.HandleSyncTransaction(context.TODO(), msg)
-	assert.NoError(t, got)
-}
-
-func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	tx.Signature[63] = 224
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	got := th.HandleSyncTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errAddrNotExtracted)
-}
-
-func Test_HandleSyncTransaction_HasTXError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	errUnknown := errors.New("unknown")
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, errUnknown).Times(1)
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	got := th.HandleSyncTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errUnknown)
-}
-
-func Test_HandleSyncTransaction_FailedMemPoolIgnored(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
-	th := NewTxHandler(cstate, logtest.New(t))
-
-	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
-	errUnknown := errors.New("unknown")
-	cstate.EXPECT().HasTx(tx.ID()).Return(false, nil).Times(1)
-	cstate.EXPECT().AddToCache(gomock.Any(), true).DoAndReturn(
-		func(got *types.Transaction, newTX bool) error {
-			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
-			assert.Equal(t, tx, got)
-			return errUnknown
-		}).Times(1)
-
-	msg, err := codec.Encode(tx)
-	require.NoError(t, err)
-
-	require.NoError(t, th.HandleSyncTransaction(context.TODO(), msg))
+func Test_HandleProposal(t *testing.T) {
+	for _, tc := range []struct {
+		desc                     string
+		has                      bool
+		hasErr, addErr, parseErr error
+		verify                   bool
+		fail                     bool
+	}{
+		{
+			desc:   "Success",
+			verify: true,
+		},
+		{
+			desc: "Dup",
+			has:  true,
+		},
+		{
+			desc:   "HasFailed",
+			hasErr: errors.New("test"),
+			fail:   true,
+		},
+		{
+			desc:   "ParseFailed",
+			addErr: errors.New("test"),
+			fail:   true,
+		},
+		{
+			desc: "VerifyFalse",
+			fail: true,
+		},
+		{
+			desc:   "AddFailed",
+			verify: true,
+			addErr: errors.New("test"),
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			th, tx := gossipExpectations(t,
+				tc.hasErr, tc.parseErr, tc.addErr,
+				tc.has, tc.verify,
+			)
+			err := th.HandleProposalTransaction(context.TODO(), tx.Raw)
+			if tc.fail {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

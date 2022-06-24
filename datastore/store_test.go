@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func TestBlobStore_GetATXBlob(t *testing.T) {
@@ -157,21 +156,17 @@ func TestBlobStore_GetTXBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := NewBlobStore(db)
 
-	signer := signing.NewEdSigner()
-	tx, err := transaction.GenerateCallTransaction(signer, types.Address{1, 2, 3}, 11, 2, 1, 1)
-	require.NoError(t, err)
+	tx := &types.Transaction{}
+	tx.Raw = []byte{1, 1, 1}
+	tx.ID = types.TransactionID{1}
 
-	_, err = bs.Get(TXDB, tx.ID().Bytes())
+	_, err := bs.Get(TXDB, tx.ID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.NoError(t, transactions.Add(db, tx, time.Now()))
-	got, err := bs.Get(TXDB, tx.ID().Bytes())
+	got, err := bs.Get(TXDB, tx.ID.Bytes())
 	require.NoError(t, err)
-	var gotT types.Transaction
-	require.NoError(t, codec.Decode(got, &gotT))
-	require.NoError(t, gotT.CalcAndSetOrigin())
-	gotT.ID()
-	require.Equal(t, *tx, gotT)
+	require.Equal(t, tx.Raw, got)
 
-	_, err = bs.Get(BlockDB, tx.ID().Bytes())
+	_, err = bs.Get(BlockDB, tx.ID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }

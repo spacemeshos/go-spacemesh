@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -34,10 +35,8 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := 0; i < cl.Accounts(); i++ {
+		i := i
 		client := cl.Client(i % cl.Total())
-		nonce, err := getNonce(tctx, client, cl.Address(i))
-		require.NoError(t, err)
-		submitter := newTransactionSubmitter(cl.Private(i), receiver, uint64(amount), nonce, client)
 		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stopSending {
 				return false, nil
@@ -46,14 +45,23 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 				layer.Layer.Number.Number < first {
 				return true, nil
 			}
+			nonce, err := getNonce(tctx, client, cl.Address(i))
+			require.NoError(t, err)
+			if nonce == 0 {
+				tctx.Log.Infow("address needs to be spawned", "account", i)
+				if err := submitSpawn(ctx, cl, i, client); err != nil {
+					return false, fmt.Errorf("failed to spawn %w", err)
+				}
+				return true, nil
+			}
 			tctx.Log.Debugw("submitting transactions",
 				"layer", layer.Layer.Number.Number,
 				"client", client.Name,
 				"batch", batch,
 			)
 			for j := 0; j < batch; j++ {
-				if err := submitter(ctx); err != nil {
-					return false, err
+				if err := submitSpend(ctx, cl.Private(i), receiver, uint64(amount), nonce+uint64(j), client); err != nil {
+					return false, fmt.Errorf("spend failed %w", err)
 				}
 			}
 			return true, nil
@@ -94,7 +102,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		}
 	}
 
-	diff := batch * amount * int(sendFor) * cl.Accounts()
+	diff := batch * amount * int(sendFor-1) * cl.Accounts()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		state := spacemeshv1.NewGlobalStateServiceClient(client)

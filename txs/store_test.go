@@ -35,14 +35,14 @@ func TestStore_AddToProposal(t *testing.T) {
 	require.NoError(t, st.AddToProposal(lid1, pid1, types.ToTransactionIDs(txs)))
 
 	for _, tx := range txs {
-		mtx, err := st.Get(tx.ID())
+		mtx, err := st.Get(tx.ID)
 		require.NoError(t, err)
 		require.Equal(t, lid0, mtx.LayerID)
 		require.Equal(t, types.EmptyBlockID, mtx.BlockID)
-		has, err := transactions.HasProposalTX(db, pid0, tx.ID())
+		has, err := transactions.HasProposalTX(db, pid0, tx.ID)
 		require.NoError(t, err)
 		require.True(t, has)
-		has, err = transactions.HasProposalTX(db, pid1, tx.ID())
+		has, err = transactions.HasProposalTX(db, pid1, tx.ID)
 		require.NoError(t, err)
 		require.True(t, has)
 	}
@@ -66,14 +66,14 @@ func TestStore_AddToBlock(t *testing.T) {
 	require.NoError(t, st.AddToBlock(lid1, bid1, types.ToTransactionIDs(txs)))
 
 	for _, tx := range txs {
-		mtx, err := st.Get(tx.ID())
+		mtx, err := st.Get(tx.ID)
 		require.NoError(t, err)
 		require.Equal(t, lid0, mtx.LayerID)
 		require.Equal(t, bid0, mtx.BlockID)
-		has, err := transactions.HasBlockTX(db, bid0, tx.ID())
+		has, err := transactions.HasBlockTX(db, bid0, tx.ID)
 		require.NoError(t, err)
 		require.True(t, has)
-		has, err = transactions.HasBlockTX(db, bid1, tx.ID())
+		has, err = transactions.HasBlockTX(db, bid1, tx.ID)
 		require.NoError(t, err)
 		require.True(t, has)
 	}
@@ -103,12 +103,12 @@ func TestStore_ApplyLayer(t *testing.T) {
 	bid := types.BlockID{1, 2, 3}
 	principal := types.BytesToAddress(signer.PublicKey().Bytes())
 	applied := txs[numTXs-1]
-	require.NoError(t, st.ApplyLayer(lid, bid, principal, map[uint64]types.TransactionID{nonce: applied.ID()}))
+	require.NoError(t, st.ApplyLayer(lid, bid, principal, map[uint64]types.TransactionID{nonce: applied.ID}))
 
 	for _, tx := range txs {
-		mtx, err := st.Get(tx.ID())
+		mtx, err := st.Get(tx.ID)
 		require.NoError(t, err)
-		if tx.Origin() != principal {
+		if tx.Principal != principal {
 			require.Equal(t, types.MEMPOOL, mtx.State)
 			continue
 		}
@@ -137,7 +137,7 @@ func TestStore_UndoLayers_Simple(t *testing.T) {
 			tx := newTx(t, nnc, defaultAmount, defaultFee, signer)
 			require.NoError(t, st.Add(tx, time.Now()))
 			txs = append(txs, tx)
-			require.NoError(t, st.ApplyLayer(lyr, types.RandomBlockID(), principal, map[uint64]types.TransactionID{nnc: tx.ID()}))
+			require.NoError(t, st.ApplyLayer(lyr, types.RandomBlockID(), principal, map[uint64]types.TransactionID{nnc: tx.ID}))
 		}
 	}
 	got, err := st.GetAllPending()
@@ -145,7 +145,7 @@ func TestStore_UndoLayers_Simple(t *testing.T) {
 	require.Len(t, got, 0)
 
 	for i, tx := range txs {
-		mtx, err := st.Get(tx.ID())
+		mtx, err := st.Get(tx.ID)
 		require.NoError(t, err)
 		require.Equal(t, lid.Add(uint32(i%numLayers)), mtx.LayerID)
 		require.Equal(t, types.APPLIED, mtx.State)
@@ -179,43 +179,43 @@ func TestStore_UndoLayers_TXsInMultipleLayers(t *testing.T) {
 	lid1 := lid0.Add(1)
 	pid0 := types.ProposalID{1, 2, 3}
 	pid1 := types.ProposalID{2, 3, 4}
-	require.NoError(t, st.AddToProposal(lid0, pid0, []types.TransactionID{txA0.ID(), txA1.ID(), txA2.ID(), txB0.ID()}))
-	require.NoError(t, st.AddToProposal(lid1, pid1, []types.TransactionID{txA1.ID(), txA2.ID(), txB1.ID()}))
+	require.NoError(t, st.AddToProposal(lid0, pid0, []types.TransactionID{txA0.ID, txA1.ID, txA2.ID, txB0.ID}))
+	require.NoError(t, st.AddToProposal(lid1, pid1, []types.TransactionID{txA1.ID, txA2.ID, txB1.ID}))
 
 	bid0 := types.BlockID{5, 6, 7}
 	// for some reason txA1 and txA2 were not included in the block
-	require.NoError(t, st.AddToBlock(lid0, bid0, []types.TransactionID{txA0.ID(), txB0.ID()}))
+	require.NoError(t, st.AddToBlock(lid0, bid0, []types.TransactionID{txA0.ID, txB0.ID}))
 	require.NoError(t, st.ApplyLayer(lid0, bid0, principalA, map[uint64]types.TransactionID{
-		txA0.AccountNonce: txA0.ID(),
+		txA0.Nonce.Counter: txA0.ID,
 	}))
 	require.NoError(t, st.ApplyLayer(lid0, bid0, principalB, map[uint64]types.TransactionID{
-		txB0.AccountNonce: txB0.ID(),
+		txB0.Nonce.Counter: txB0.ID,
 	}))
 
 	bid1 := types.BlockID{6, 7, 8}
-	require.NoError(t, st.AddToBlock(lid1, bid1, []types.TransactionID{txA1.ID(), txA2.ID(), txB1.ID()}))
+	require.NoError(t, st.AddToBlock(lid1, bid1, []types.TransactionID{txA1.ID, txA2.ID, txB1.ID}))
 	require.NoError(t, st.ApplyLayer(lid1, bid1, principalA, map[uint64]types.TransactionID{
-		txA1.AccountNonce: txA1.ID(),
-		txA2.AccountNonce: txA2.ID(),
+		txA1.Nonce.Counter: txA1.ID,
+		txA2.Nonce.Counter: txA2.ID,
 	}))
 	require.NoError(t, st.ApplyLayer(lid1, bid1, principalB, map[uint64]types.TransactionID{
-		txB1.AccountNonce: txB1.ID(),
+		txB1.Nonce.Counter: txB1.ID,
 	}))
 
 	require.NoError(t, st.UndoLayers(lid0))
 	for _, tx := range []*types.Transaction{txA0, txB0} {
-		got, err := st.Get(tx.ID())
+		got, err := st.Get(tx.ID)
 		require.NoError(t, err)
 		require.Equal(t, types.BLOCK, got.State)
 		require.Equal(t, lid0, got.LayerID)
 	}
 	for _, tx := range []*types.Transaction{txA1, txA2} {
-		got, err := st.Get(tx.ID())
+		got, err := st.Get(tx.ID)
 		require.NoError(t, err)
 		require.Equal(t, types.PROPOSAL, got.State)
 		require.Equal(t, lid0, got.LayerID)
 	}
-	got, err := st.Get(txB1.ID())
+	got, err := st.Get(txB1.ID)
 	require.NoError(t, err)
 	require.Equal(t, types.BLOCK, got.State)
 	require.Equal(t, lid1, got.LayerID)

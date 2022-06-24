@@ -453,7 +453,7 @@ func (h *Handler) checkTransactions(ctx context.Context, p *types.Proposal) erro
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetTxs(ctx, p.TxIDs); err != nil {
+	if err := h.fetcher.GetProposalTxs(ctx, p.TxIDs); err != nil {
 		return fmt.Errorf("proposal get TXs: %w", err)
 	}
 	return nil
