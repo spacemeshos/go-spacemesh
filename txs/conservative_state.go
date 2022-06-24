@@ -169,8 +169,9 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		return nil, err
 	}
 
-	skipped, rsts, err := cs.vmState.Apply(vm.ApplyContext{
-		Layer: toApply.LayerIndex, Block: toApply.ID()}, raw, toApply.Rewards)
+	skipped, rsts, err := cs.vmState.Apply(
+		vm.ApplyContext{Layer: toApply.LayerIndex, Block: toApply.ID()},
+		raw, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
 			toApply.LayerIndex,

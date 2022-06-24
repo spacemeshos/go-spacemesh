@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestSubscribe(t *testing.T) {
@@ -27,7 +27,6 @@ func TestSubscribe(t *testing.T) {
 	case <-time.After(time.Second):
 		require.Fail(t, "timeout")
 	}
-
 }
 
 func TestSubscribeFull(t *testing.T) {

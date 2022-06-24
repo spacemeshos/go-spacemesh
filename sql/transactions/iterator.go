@@ -88,9 +88,8 @@ func (f *ResultsFilter) binding(stmt *sql.Statement) {
 func IterateResults(db sql.Executor, filter ResultsFilter, fn func(*types.TransactionWithResult) bool) error {
 	var ierr error
 	_, err := db.Exec(filter.query(), filter.binding, func(stmt *sql.Statement) bool {
-		var (
-			tx types.TransactionWithResult
-		)
+		var tx types.TransactionWithResult
+
 		stmt.ColumnBytes(0, tx.ID[:])
 		tx.Raw = make([]byte, stmt.ColumnLen(1))
 		stmt.ColumnBytes(1, tx.Raw)

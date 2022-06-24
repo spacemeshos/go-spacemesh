@@ -250,8 +250,11 @@ func TestApply_AlreadyApplied(t *testing.T) {
 
 	// different block applied again
 	require.Error(t,
-		AddResult(db, tx.ID, &types.TransactionResult{Layer: lid.Add(1),
-			Block: types.RandomBlockID()}))
+		AddResult(db, tx.ID,
+			&types.TransactionResult{
+				Layer: lid.Add(1),
+				Block: types.RandomBlockID(),
+			}))
 }
 
 func TestUndoLayers_Empty(t *testing.T) {

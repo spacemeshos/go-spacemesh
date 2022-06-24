@@ -6,7 +6,7 @@ import "github.com/spacemeshos/go-spacemesh/log"
 type TransactionStatus uint8
 
 const (
-	// TransactionSuccess is a status for succesfully applied transaction.
+	// TransactionSuccess is a status for successfully applied transaction.
 	TransactionSuccess TransactionStatus = iota
 	// TransactionFailure is a status for failed but consumed transaction.
 	TransactionFailure

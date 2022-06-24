@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
