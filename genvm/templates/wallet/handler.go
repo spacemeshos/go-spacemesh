@@ -17,6 +17,11 @@ const (
 	TotalGasSpend = 100
 )
 
+const (
+	methodSpawn = 0
+	methodSpend = 1
+)
+
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 1
 }
@@ -37,7 +42,7 @@ type handler struct{}
 // Parse header and arguments.
 func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
 	switch method {
-	case 0:
+	case methodSpawn:
 		var p SpawnPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
@@ -46,7 +51,7 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 		args = &p.Arguments
 		header.GasPrice = p.GasPrice
 		header.MaxGas = TotalGasSpawn
-	case 1:
+	case methodSpend:
 		var p SpendPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
@@ -79,14 +84,14 @@ func (*handler) Init(method uint8, args any, state []byte) (core.Template, error
 // Exec spawn or spend based on the method selector.
 func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
-	case 0:
+	case methodSpawn:
 		if err := ctx.Consume(TotalGasSpawn); err != nil {
 			return err
 		}
 		if err := ctx.Spawn(TemplateAddress, args); err != nil {
 			return err
 		}
-	case 1:
+	case methodSpend:
 		if err := ctx.Consume(TotalGasSpend); err != nil {
 			return err
 		}
