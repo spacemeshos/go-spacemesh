@@ -166,21 +166,6 @@ func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, e
 	return rst, nil
 }
 
-// Apply updates the applied field to `applied` for a transaction, along with the layer and block it is applied with.
-func Apply(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid types.BlockID) (int, error) {
-	rows, err := db.Exec(`update transactions set applied = ?2, layer = ?3, block = ?4 where id = ?1 and applied != ?2 returning id`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, tid.Bytes())
-			stmt.BindInt64(2, stateApplied)
-			stmt.BindInt64(3, int64(lid.Value))
-			stmt.BindBytes(4, bid.Bytes())
-		}, nil)
-	if err != nil {
-		return 0, fmt.Errorf("apply %s/%s/%s: %w", tid, lid, bid, err)
-	}
-	return rows, nil
-}
-
 // UndoLayers unset all transactions to `statePending` from `from` layer to the max layer with applied transactions.
 func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, error) {
 	_, err := db.Exec(`delete from transactions_results_addresses 
@@ -446,17 +431,16 @@ func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), e
 	return rst, err
 }
 
-// AddResult adds result for the transaction. It would make sense if it was atomic with
-// Apply.
+// AddResult adds result for the transaction.
 func AddResult(db sql.Executor, id types.TransactionID, rst *types.TransactionResult) error {
 	buf, err := codec.Encode(rst)
 	if err != nil {
 		return fmt.Errorf("encode %w", err)
 	}
 
-	if _, err := db.Exec(`update transactions 
+	if rows, err := db.Exec(`update transactions
 		set result = ?2, applied = ?3, layer = ?4, block = ?5 
-		where id = ?1`,
+		where id = ?1 and applied != ?3 returning id;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
 			stmt.BindBytes(2, buf)
@@ -468,7 +452,9 @@ func AddResult(db sql.Executor, id types.TransactionID, rst *types.TransactionRe
 			return false
 		},
 	); err != nil {
-		return fmt.Errorf("insert result for %s: %w", id[:], err)
+		return fmt.Errorf("insert result for %s: %w", id, err)
+	} else if rows == 0 {
+		return fmt.Errorf("invalid state for %s", id)
 	}
 	for i := range rst.Addresses {
 		if _, err := db.Exec(`insert into transactions_results_addresses 

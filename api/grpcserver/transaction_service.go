@@ -321,14 +321,8 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		}
 	}
 
-	dtx, err := s.db.Tx(stream.Context())
-	if err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	defer dtx.Release()
-
 	var ierr error
-	err = transactions.IterateResults(dtx, filter, func(rst *types.TransactionWithResult) bool {
+	err = transactions.IterateResults(s.db, filter, func(rst *types.TransactionWithResult) bool {
 		if rst.Layer.After(persisted) {
 			persisted = rst.Layer
 		}
@@ -368,20 +362,22 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 }
 
 func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
-	addrs := make([][]byte, len(rst.Addresses))
-	for i := range rst.Addresses {
-		addrs[i] = rst.Addresses[i][:]
+	casted := &pb.TransactionResult{
+		Tx:      convertTransaction(&rst.Transaction),
+		Status:  pb.TransactionResult_Status(rst.Status),
+		Message: rst.Message,
+		Gas:     rst.Gas,
+		Fee:     rst.Fee,
+		Block:   rst.Block[:],
+		Layer:   rst.Layer.Value,
 	}
-	return &pb.TransactionResult{
-		Tx:        convertTransaction(&rst.Transaction),
-		Status:    pb.TransactionResult_Status(rst.Status),
-		Message:   rst.Message,
-		Gas:       rst.Gas,
-		Fee:       rst.Fee,
-		Block:     rst.Block[:],
-		Layer:     rst.Layer.Value,
-		Addresses: addrs,
+	if len(rst.Addresses) > 0 {
+		casted.Addresses = make([][]byte, len(rst.Addresses))
+		for i := range rst.Addresses {
+			casted.Addresses[i] = rst.Addresses[i][:]
+		}
 	}
+	return casted
 }
 
 type resultsMatcher transactions.ResultsFilter

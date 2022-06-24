@@ -63,21 +63,61 @@ func TestTransactionService_StreamResults(t *testing.T) {
 			start = 100
 			n     = 10
 		)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		stream, err := client.StreamResults(ctx,
-			&pb.TransactionResultsRequest{Start: start, Watch: true})
-		require.NoError(t, err)
-		_, err = stream.Header()
-		require.NoError(t, err)
-		gen = gen.WithLayers(start, 10)
+		gen = fixture.NewTransactionResultGenerator().
+			WithAddresses(2).WithLayers(start, 10)
+		var streamed []*types.TransactionWithResult
 		for i := 0; i < n; i++ {
-			events.ReportResult(*gen.Next())
+			streamed = append(streamed, gen.Next())
 		}
-		for i := 0; i < n; i++ {
-			received, err := stream.Recv()
-			require.NoError(t, err)
-			require.GreaterOrEqual(t, received.Layer, uint32(start))
+
+		for _, tc := range []struct {
+			desc    string
+			matcher resultsMatcher
+			request *pb.TransactionResultsRequest
+		}{
+			{
+				desc:    "ID",
+				matcher: resultsMatcher{TID: &streamed[3].ID},
+				request: &pb.TransactionResultsRequest{
+					Id:    streamed[3].ID[:],
+					Start: start,
+					Watch: true,
+				},
+			},
+			{
+				desc:    "Address",
+				matcher: resultsMatcher{Address: &gen.Addrs[0]},
+				request: &pb.TransactionResultsRequest{
+					Address: gen.Addrs[0][:],
+					Start:   start,
+					Watch:   true,
+				},
+			},
+		} {
+			tc := tc
+			t.Run(tc.desc, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				stream, err := client.StreamResults(ctx, tc.request)
+				require.NoError(t, err)
+				_, err = stream.Header()
+				require.NoError(t, err)
+
+				var expect []*types.TransactionWithResult
+				for _, rst := range streamed {
+					events.ReportResult(*rst)
+					if tc.matcher.match(rst) {
+						expect = append(expect, rst)
+					}
+				}
+				for _, rst := range expect {
+					received, err := stream.Recv()
+					require.NoError(t, err)
+					require.Equal(t, castResult(rst).String(), received.String(),
+						"0x%x != %s", received.Tx.Id, rst.ID.String())
+				}
+			})
 		}
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -700,7 +701,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []types.TransactionWithResult) ([]error, []error) {
+func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult) ([]error, []error) {
 	if err := c.CheckApplyOrder(lid); err != nil {
 		return nil, []error{err}
 	}
@@ -709,21 +710,23 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []types.Tra
 	defer c.mu.Unlock()
 
 	toCleanup := make(map[types.Address]struct{})
-	for _, tx := range txs {
-		toCleanup[tx.Principal] = struct{}{}
+	for _, rst := range results {
+		toCleanup[rst.Principal] = struct{}{}
 	}
 	defer c.cleanupAccounts(toCleanup)
 
 	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
-	for _, tx := range txs {
-		principal := tx.Principal
+	for _, rst := range results {
+		principal := rst.Principal
 		if _, ok := byPrincipal[principal]; !ok {
 			byPrincipal[principal] = make(map[uint64]types.TransactionWithResult)
 		}
-		if _, ok := byPrincipal[principal][tx.Nonce.Counter]; ok {
+		if _, ok := byPrincipal[principal][rst.Nonce.Counter]; ok {
 			return nil, []error{errDupNonceApplied}
 		}
-		byPrincipal[principal][tx.Nonce.Counter] = tx
+		byPrincipal[principal][rst.Nonce.Counter] = rst
+
+		events.ReportResult(rst)
 	}
 
 	errsApply := make([]error, 0, len(byPrincipal))
