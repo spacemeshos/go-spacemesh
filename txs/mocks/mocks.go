@@ -369,17 +369,17 @@ func (mr *MocktxProviderMockRecorder) AddToProposal(arg0, arg1, arg2 interface{}
 }
 
 // ApplyLayer mocks base method.
-func (m *MocktxProvider) ApplyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2 types.Address, arg3 map[uint64]types.TransactionWithResult) error {
+func (m *MocktxProvider) ApplyLayer(arg0 map[uint64]types.TransactionWithResult) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ApplyLayer", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ApplyLayer indicates an expected call of ApplyLayer.
-func (mr *MocktxProviderMockRecorder) ApplyLayer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MocktxProviderMockRecorder) ApplyLayer(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MocktxProvider)(nil).ApplyLayer), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MocktxProvider)(nil).ApplyLayer), arg0)
 }
 
 // DiscardNonceBelow mocks base method.

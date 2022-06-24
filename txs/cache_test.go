@@ -240,7 +240,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	ta.balance += income
 	applied := []*types.Transaction{&mtxs[0].Transaction, &mtxs[1].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{
+	appliedByNonce := map[uint64]types.TransactionWithResult{
 		mtxs[0].Nonce.Counter: mtxs[0].ID,
 		mtxs[1].Nonce.Counter: mtxs[1].ID,
 	}

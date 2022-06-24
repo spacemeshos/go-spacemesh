@@ -43,7 +43,7 @@ type txProvider interface {
 	AddToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
 	AddToBlock(types.LayerID, types.BlockID, []types.TransactionID) error
 	UndoLayers(types.LayerID) error
-	ApplyLayer(types.LayerID, types.BlockID, types.Address, map[uint64]types.TransactionWithResult) error
+	ApplyLayer(map[uint64]types.TransactionWithResult) error
 	DiscardNonceBelow(types.Address, uint64) error
 	SetNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
 	GetAllPending() ([]*types.MeshTransaction, error)

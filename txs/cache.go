@@ -416,7 +416,6 @@ func (ac *accountCache) applyLayer(
 	newNonce, newBalance uint64,
 	tp txProvider,
 	lid types.LayerID,
-	bid types.BlockID,
 	appliedByNonce map[uint64]types.TransactionWithResult,
 ) error {
 	nextNonce := ac.startNonce
@@ -464,7 +463,7 @@ func (ac *accountCache) applyLayer(
 		return errBadBalanceInCache
 	}
 
-	if err := tp.ApplyLayer(lid, bid, ac.addr, appliedByNonce); err != nil {
+	if err := tp.ApplyLayer(appliedByNonce); err != nil {
 		logger.With().Error("failed to set txs discarded for applied layer", lid, log.Err(err))
 		return err
 	}
@@ -739,7 +738,7 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 			principal,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
-		if err := c.pending[principal].applyLayer(logger, nextNonce, balance, c.tp, lid, bid, appliedByNonce); err != nil {
+		if err := c.pending[principal].applyLayer(logger, nextNonce, balance, c.tp, lid, appliedByNonce); err != nil {
 			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
 			errsApply = append(errsApply, err)
 		}
