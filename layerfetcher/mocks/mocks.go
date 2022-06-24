@@ -186,18 +186,32 @@ func (m *MocktxHandler) EXPECT() *MocktxHandlerMockRecorder {
 	return m.recorder
 }
 
-// HandleSyncTransaction mocks base method.
-func (m *MocktxHandler) HandleSyncTransaction(arg0 context.Context, arg1 []byte) error {
+// HandleBlockTransaction mocks base method.
+func (m *MocktxHandler) HandleBlockTransaction(arg0 context.Context, arg1 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncTransaction", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleBlockTransaction", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// HandleSyncTransaction indicates an expected call of HandleSyncTransaction.
-func (mr *MocktxHandlerMockRecorder) HandleSyncTransaction(arg0, arg1 interface{}) *gomock.Call {
+// HandleBlockTransaction indicates an expected call of HandleBlockTransaction.
+func (mr *MocktxHandlerMockRecorder) HandleBlockTransaction(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleSyncTransaction), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBlockTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleBlockTransaction), arg0, arg1)
+}
+
+// HandleProposalTransaction mocks base method.
+func (m *MocktxHandler) HandleProposalTransaction(arg0 context.Context, arg1 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleProposalTransaction", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleProposalTransaction indicates an expected call of HandleProposalTransaction.
+func (mr *MocktxHandlerMockRecorder) HandleProposalTransaction(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleProposalTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleProposalTransaction), arg0, arg1)
 }
 
 // MockpoetHandler is a mock of poetHandler interface.

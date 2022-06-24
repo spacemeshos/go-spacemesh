@@ -10,6 +10,7 @@ import (
 type nopTP struct{}
 
 func (ntp *nopTP) Add(*types.Transaction, time.Time) error                 { return nil }
+func (ntp *nopTP) AddHeader(types.TransactionID, *types.TxHeader) error    { return nil }
 func (ntp *nopTP) Has(types.TransactionID) (bool, error)                   { return false, nil }
 func (ntp *nopTP) Get(types.TransactionID) (*types.MeshTransaction, error) { return nil, nil }
 func (ntp *nopTP) GetBlob(types.TransactionID) ([]byte, error)             { return nil, nil }

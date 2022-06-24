@@ -11,43 +11,35 @@ import (
 
 // NanoTX represents minimal info about a transaction for the conservative cache/mempool.
 type NanoTX struct {
-	Tid       types.TransactionID
-	Principal types.Address
-	Fee       uint64 // TODO replace with gas price
-	MaxGas    uint64
-	Received  time.Time
+	types.TxHeader
+	ID types.TransactionID
 
-	Amount uint64
-	Nonce  uint64
-	Block  types.BlockID
-	Layer  types.LayerID
+	Received time.Time
+
+	Block types.BlockID
+	Layer types.LayerID
 }
 
 // NewNanoTX converts a NanoTX instance from a MeshTransaction.
 func NewNanoTX(mtx *types.MeshTransaction) *NanoTX {
 	return &NanoTX{
-		Tid:       mtx.ID(),
-		Principal: mtx.Origin(),
-		Fee:       mtx.GetFee(),
-		MaxGas:    mtx.MaxGas(),
-		Amount:    mtx.Amount,
-		Nonce:     mtx.AccountNonce,
-		Received:  mtx.Received,
-		Block:     mtx.BlockID,
-		Layer:     mtx.LayerID,
+		ID:       mtx.ID,
+		TxHeader: *mtx.TxHeader,
+		Received: mtx.Received,
+		Block:    mtx.BlockID,
+		Layer:    mtx.LayerID,
 	}
 }
 
 // MaxSpending returns the maximal amount a transaction can spend.
 func (n *NanoTX) MaxSpending() uint64 {
-	// TODO: create SVM methods to calculate these two fields
-	return n.Fee + n.Amount
+	return n.Spending()
 }
 
 func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
 	hash := hash.New()
 	hash.Write(blockSeed)
-	hash.Write(n.Tid.Bytes())
+	hash.Write(n.ID.Bytes())
 	return hash.Sum(nil)
 }
 
@@ -60,10 +52,10 @@ func (n *NanoTX) Better(other *NanoTX, blockSeed []byte) bool {
 		n.Nonce != other.Nonce {
 		log.Panic("invalid arguments")
 	}
-	if n.Fee > other.Fee {
+	if n.Fee() > other.Fee() {
 		return true
 	}
-	if n.Fee == other.Fee {
+	if n.Fee() == other.Fee() {
 		if len(blockSeed) > 0 {
 			return bytes.Compare(n.combinedHash(blockSeed), other.combinedHash(blockSeed)) < 0
 		}

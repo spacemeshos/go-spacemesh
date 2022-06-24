@@ -10,14 +10,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
 	errMalformedData = errors.New("malformed data")
 	errDuplicateTX   = errors.New("duplicate TxID in proposal")
-	errTXsOutOfOrder = errors.New("txs out of order")
 )
 
 // Handler processes Block fetched from peers during sync.
@@ -100,25 +98,8 @@ func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetTxs(ctx, b.TxIDs); err != nil {
-		return fmt.Errorf("block fetch TXs: %w", err)
-	}
-
-	byAddrAndNonce := make(map[types.Address]uint64)
-	for _, tid := range b.TxIDs {
-		mtx, err := transactions.Get(h.db, tid)
-		if err != nil {
-			return fmt.Errorf("block get tx: %w", err)
-		}
-		if _, ok := byAddrAndNonce[mtx.Origin()]; ok {
-			if mtx.AccountNonce == byAddrAndNonce[mtx.Origin()]+1 {
-				byAddrAndNonce[mtx.Origin()] = mtx.AccountNonce
-			} else {
-				return errTXsOutOfOrder
-			}
-		} else {
-			byAddrAndNonce[mtx.Origin()] = mtx.AccountNonce
-		}
+	if err := h.fetcher.GetBlockTxs(ctx, b.TxIDs); err != nil {
+		return fmt.Errorf("block get TXs: %w", err)
 	}
 	return nil
 }

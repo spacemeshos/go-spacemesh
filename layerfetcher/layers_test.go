@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	fmocks "github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -25,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/vm/transaction"
 )
 
 func randPeer(tb testing.TB) p2p.Peer {
@@ -71,6 +71,11 @@ func (m *mockNet) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler 
 }
 func (mockNet) Close() {}
 
+const (
+	txsForBlock    = iota
+	txsForProposal = iota
+)
+
 type testLogic struct {
 	*Logic
 	mMesh      *mocks.MockmeshProvider
@@ -78,9 +83,33 @@ type testLogic struct {
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
 	mProposalH *mocks.MockproposalHandler
+	method     int
 	mTxH       *mocks.MocktxHandler
 	mPoetH     *mocks.MockpoetHandler
 	mFetcher   *fmocks.MockFetcher
+}
+
+func (l *testLogic) withMethod(method int) *testLogic {
+	l.method = method
+	return l
+}
+
+func (l *testLogic) expectTransactionCall(data []byte) *gomock.Call {
+	if l.method == txsForBlock {
+		return l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data)
+	} else if l.method == txsForProposal {
+		return l.mTxH.EXPECT().HandleProposalTransaction(gomock.Any(), data)
+	}
+	return nil
+}
+
+func (l *testLogic) getTxs(tids []types.TransactionID) error {
+	if l.method == txsForBlock {
+		return l.GetBlockTxs(context.TODO(), tids)
+	} else if l.method == txsForProposal {
+		return l.GetProposalTxs(context.TODO(), tids)
+	}
+	return nil
 }
 
 func createTestLogic(t *testing.T) *testLogic {
@@ -869,46 +898,78 @@ func TestGetProposals(t *testing.T) {
 	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs))
 }
 
+func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
+	t.Helper()
+	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
+		types.Nonce{Counter: nonce},
+	)
+	tx := types.Transaction{
+		RawTx:    types.NewRawTx(raw),
+		TxHeader: &types.TxHeader{},
+	}
+	tx.MaxGas = 100
+	tx.MaxSpend = amount
+	tx.GasPrice = price
+	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	return tx
+}
+
 func genTransactions(t *testing.T, num int) []*types.Transaction {
 	t.Helper()
 	txs := make([]*types.Transaction, 0, num)
 	for i := 0; i < num; i++ {
-		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.Address{1, 2, 3}, 197, 991, 1, 10)
-		require.NoError(t, err)
-		txs = append(txs, tx)
+		tx := genTx(t, signing.NewEdSigner(), types.Address{1}, 1, 1, 1)
+		txs = append(txs, &tx)
 	}
 	return txs
 }
 
 func TestGetTxs_FetchSomeError(t *testing.T) {
-	l := createTestLogic(t)
-	txs := genTransactions(t, 19)
-	tids := types.ToTransactionIDs(txs)
-	hashes := types.TransactionIDsToHashes(tids)
+	for _, tc := range []struct {
+		desc   string
+		method int
+	}{
+		{
+			desc:   "proposal",
+			method: txsForProposal,
+		},
+		{
+			desc:   "block",
+			method: txsForBlock,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			l := createTestLogic(t).withMethod(tc.method)
+			txs := genTransactions(t, 19)
+			tids := types.ToTransactionIDs(txs)
+			hashes := types.TransactionIDsToHashes(tids)
 
-	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
-	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
-		if i == 0 {
-			ch <- fetch.HashDataPromiseResult{
-				Hash: h,
-				Err:  errUnknown,
+			errUnknown := errors.New("unknown")
+			results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+			for i, h := range hashes {
+				ch := make(chan fetch.HashDataPromiseResult, 1)
+				if i == 0 {
+					ch <- fetch.HashDataPromiseResult{
+						Hash: h,
+						Err:  errUnknown,
+					}
+				} else {
+					data, err := codec.Encode(tids[i])
+					require.NoError(t, err)
+					ch <- fetch.HashDataPromiseResult{
+						Hash: h,
+						Data: data,
+					}
+					l.expectTransactionCall(data).Return(nil).Times(1)
+				}
+				results[h] = ch
 			}
-		} else {
-			data, err := codec.Encode(tids[i])
-			require.NoError(t, err)
-			ch <- fetch.HashDataPromiseResult{
-				Hash: h,
-				Data: data,
-			}
-			l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
-		}
-		results[h] = ch
+
+			l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
+			assert.ErrorIs(t, l.getTxs(tids), errUnknown)
+		})
 	}
-
-	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetTxs(context.TODO(), tids), errUnknown)
 }
 
 func TestGetTxs_HandlerError(t *testing.T) {
@@ -928,11 +989,11 @@ func TestGetTxs_HandlerError(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(errUnknown).Times(1)
+		l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(errUnknown).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.ErrorIs(t, l.GetTxs(context.TODO(), tids), errUnknown)
+	assert.ErrorIs(t, l.GetBlockTxs(context.TODO(), tids), errUnknown)
 }
 
 func TestGetTxs(t *testing.T) {
@@ -951,11 +1012,11 @@ func TestGetTxs(t *testing.T) {
 			Data: data,
 		}
 		results[h] = ch
-		l.mTxH.EXPECT().HandleSyncTransaction(gomock.Any(), data).Return(nil).Times(1)
+		l.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(nil).Times(1)
 	}
 
 	l.mFetcher.EXPECT().GetHashes(hashes, datastore.TXDB, false).Return(results).Times(1)
-	assert.NoError(t, l.GetTxs(context.TODO(), tids))
+	assert.NoError(t, l.GetBlockTxs(context.TODO(), tids))
 }
 
 func genATXs(t *testing.T, num int) []*types.ActivationTx {

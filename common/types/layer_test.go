@@ -76,7 +76,7 @@ func TestLayerIDString(t *testing.T) {
 
 func TestLayerIDBinaryEncoding(t *testing.T) {
 	lid := NewLayerID(100)
-	buf, err := InterfaceToBytes(lid)
+	buf, err := InterfaceToBytes(&lid)
 	require.NoError(t, err)
 	decoded := LayerID{}
 	require.NoError(t, BytesToInterface(buf, &decoded))
