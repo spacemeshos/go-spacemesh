@@ -239,13 +239,10 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 		ta.balance -= mtx.Spending()
 	}
 	ta.balance += income
-	applied := []*types.Transaction{&mtxs[0].Transaction, &mtxs[1].Transaction}
-	appliedByNonce := map[uint64]types.TransactionWithResult{
-		mtxs[0].Nonce.Counter: mtxs[0].ID,
-		mtxs[1].Nonce.Counter: mtxs[1].ID,
-	}
+	applied := makeResults(lid, bid, mtxs[0].Transaction, mtxs[1].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs[2:], nil)
 	for _, mtx := range mtxs[2:] {
@@ -315,10 +312,10 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	income := defaultAmount * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
-	applied := []*types.Transaction{&mtxs[0].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].Nonce.Counter: mtxs[0].ID}
+	applied := makeResults(lid, bid0, mtxs[0].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid0, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs[1:], nil)
 	tc.mockTP.EXPECT().SetNextLayerBlock(mtxs[1].ID, lid).DoAndReturn(
@@ -603,18 +600,16 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 	// only add the first TX to cache
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs[:1])
 
-	applied := []*types.Transaction{&mtxs[0].Transaction, &mtxs[1].Transaction, &mtxs[2].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{
-		mtxs[0].Nonce.Counter: mtxs[0].ID,
-		mtxs[1].Nonce.Counter: mtxs[1].ID,
-		mtxs[2].Nonce.Counter: mtxs[2].ID,
-	}
-	ta.nonce = newNextNonce + 2
-	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+
+	applied := makeResults(lid, bid, mtxs[0].Transaction, mtxs[1].Transaction, mtxs[2].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+	ta.nonce = newNextNonce + 2
+	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
+
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
@@ -631,19 +626,19 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 	// build the cache with just one tx
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs[:1])
 
-	// apply the tx
-	applied := []*types.Transaction{&mtxs[0].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].Nonce.Counter: mtxs[0].ID}
-	ta.nonce = newNextNonce
 	ta.balance = newBalance
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtxs[0].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+	ta.nonce = newNextNonce
+
 	pending := mtxs[1:]
 	for _, p := range pending {
 		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID, lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
@@ -686,12 +681,14 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	income := defaultBalance * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending() + income
-	applied := []*types.Transaction{&mtx.Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtx.Nonce.Counter: mtx.ID}
+
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtx.Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
 	for _, p := range pending {
@@ -735,12 +732,12 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	income := mtxs[0].Spending()
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
-	applied := []*types.Transaction{&mtxs[0].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].Nonce.Counter: mtxs[0].ID}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtxs[0].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	pending := append(mtxs[1:], better)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
@@ -765,12 +762,12 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending()
-	applied := []*types.Transaction{&mtx.Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtx.Nonce.Counter: mtx.ID}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtx.Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
@@ -791,13 +788,13 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending()
-	applied := []*types.Transaction{&mtx.Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtx.Nonce.Counter: mtx.ID}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtx.Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	pendingWithGap := generatePendingTXs(t, ta.signer, mtx.Nonce.Counter+2, mtx.Nonce.Counter+3)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pendingWithGap, nil)
 	for _, p := range pendingWithGap {
@@ -816,9 +813,9 @@ func TestCache_Account_TXsAppliedOutOfOrder(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+1)
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	applied := []*types.Transaction{&mtxs[1].Transaction}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtxs[1].Transaction)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs, nil)
 	for _, mtx := range mtxs {
@@ -1079,26 +1076,26 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
-	allApplied := make([]*types.Transaction, 0, len(mtxsByAccount)*2)
+	allApplied := make([]types.TransactionWithResult, 0, len(mtxsByAccount)*2)
 	for principal, mtxs := range mtxsByAccount {
 		lastNonce := mtxs[0].Nonce.Counter
 		newBalance := accounts[principal].balance
 		newBalance -= mtxs[0].Spending()
-		applied := []*types.Transaction{&mtxs[0].Transaction}
-		byNonce := map[uint64]types.TransactionID{mtxs[0].Nonce.Counter: mtxs[0].ID}
+		applied := makeResults(lid, bid, mtxs[0].Transaction)
+
 		var pending []*types.MeshTransaction
 		if len(mtxs) >= 2 {
-			applied = append(applied, &mtxs[1].Transaction)
-			byNonce[mtxs[1].Nonce.Counter] = mtxs[1].ID
+			applied = append(applied, makeResults(lid, bid, mtxs[1].Transaction)...)
 			lastNonce = mtxs[1].Nonce.Counter
 			newBalance -= mtxs[1].Spending()
 			pending = mtxs[2:]
 		}
+		appliedByNonce := makeResultsByNonce(applied)
 		// adjust state
 		accounts[principal].nonce = lastNonce + 1
 		accounts[principal].balance = newBalance
 		allApplied = append(allApplied, applied...)
-		tc.mockTP.EXPECT().ApplyLayer(lid, bid, principal, byNonce)
+		tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
 		tc.mockTP.EXPECT().DiscardNonceBelow(principal, mtxs[0].Nonce.Counter)
 		tc.mockTP.EXPECT().GetAcctPendingFromNonce(principal, lastNonce+1).Return(pending, nil)
 		for _, mtx := range pending {
