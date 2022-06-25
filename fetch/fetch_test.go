@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -171,10 +172,9 @@ func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
 
 	request1 := request{
 		hash:                 h1,
-		priority:             0,
 		validateResponseHash: false,
 		hint:                 datastore.POETDB,
-		returnChan:           make(chan HashDataPromiseResult, 6),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, 6),
 	}
 
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
@@ -224,10 +224,9 @@ func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
 
 	request1 := request{
 		hash:                 h1,
-		priority:             0,
 		validateResponseHash: false,
 		hint:                 datastore.POETDB,
-		returnChan:           make(chan HashDataPromiseResult, 3),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, 3),
 	}
 
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
@@ -265,10 +264,9 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 
 	request1 := request{
 		hash:                 h1,
-		priority:             0,
 		validateResponseHash: false,
 		hint:                 datastore.POETDB,
-		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
+		returnChan:           make(chan ftypes.HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
 	}
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
@@ -343,7 +341,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 		assert.Fail(t, "timeout getting")
 	}
 
-	responses := []chan HashDataPromiseResult{r1, r2, r3}
+	responses := []chan ftypes.HashDataPromiseResult{r1, r2, r3}
 	for _, res := range responses {
 		select {
 		case data := <-res:
@@ -358,137 +356,6 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	assert.Equal(t, 1, net.SendCalled[h1])
 	assert.Equal(t, 1, net.SendCalled[h2])
 	assert.Equal(t, 1, net.SendCalled[h3])
-	assert.Equal(t, 2, net.TotalBatchCalls)
-	net.Mu.RUnlock()
-}
-
-func makeRequest(h types.Hash32, p priority, hint datastore.Hint) *request {
-	return &request{
-		hash:                 h,
-		priority:             p,
-		validateResponseHash: false,
-		hint:                 hint,
-		returnChan:           make(chan HashDataPromiseResult, 1),
-	}
-}
-
-func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T) {
-	hint := datastore.POETDB
-	hash1 := randomHash()
-	req1 := makeRequest(hash1, High, hint)
-	req2 := makeRequest(hash1, High, hint)
-	hash3 := randomHash()
-	req3 := makeRequest(hash3, High, hint)
-	req4 := makeRequest(hash3, Low, hint)
-	req5 := makeRequest(hash3, High, hint)
-	f, net := customFetch(t, Config{
-		BatchTimeout:      1,
-		MaxRetriesForPeer: 2,
-		BatchSize:         2,
-	})
-
-	// set response
-	resp1 := responseMessage{
-		Hash: hash1,
-		Data: []byte("a"),
-	}
-	resp3 := responseMessage{
-		Hash: hash3,
-		Data: []byte("d"),
-	}
-
-	net.Mu.Lock()
-	net.Responses[hash1] = resp1
-	net.Responses[req3.hash] = resp3
-	net.AckChannel = make(chan struct{}, 2)
-	net.AsyncChannel = make(chan struct{}, 2)
-	net.Mu.Unlock()
-
-	// req1 is high priority and will cause a send right away
-	assert.True(t, f.handleNewRequest(req1))
-
-	net.Mu.RLock()
-	ackCh := net.AckChannel
-	net.Mu.RUnlock()
-
-	select {
-	case <-ackCh:
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout sending req1")
-	}
-
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[hash1])
-	net.Mu.RUnlock()
-
-	// each high priority request should cause a send immediately, but because req1 has not received response yet
-	// req2 will not cause another send and will be notified after req1 receives a response.
-	assert.False(t, f.handleNewRequest(req2))
-
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[hash1])
-	net.Mu.RUnlock()
-
-	// req3 is high priority and has a different hash. it causes a send right away
-	assert.True(t, f.handleNewRequest(req3))
-
-	net.Mu.RLock()
-	ackCh = net.AckChannel
-	net.Mu.RUnlock()
-
-	select {
-	case <-ackCh:
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout sending req3")
-	}
-
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[req3.hash])
-	net.Mu.RUnlock()
-
-	// req4 is the same hash as req3. it won't cause a send
-	assert.False(t, f.handleNewRequest(req4))
-
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[req3.hash])
-	net.Mu.RUnlock()
-
-	// req5 is high priority, but has the same hash as req3h. it won't cause a send either
-	assert.False(t, f.handleNewRequest(req5))
-
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[req3.hash])
-	net.Mu.RUnlock()
-
-	// let both hashes receives response
-	net.Mu.RLock()
-	asyncCh := net.AsyncChannel
-	net.Mu.RUnlock()
-
-	asyncCh <- struct{}{}
-
-	net.Mu.RLock()
-	asyncCh = net.AsyncChannel
-	net.Mu.RUnlock()
-
-	asyncCh <- struct{}{}
-
-	for i, req := range []*request{req1, req2, req3, req4, req5} {
-		select {
-		case resp := <-req.returnChan:
-			if i < 2 {
-				assert.Equal(t, resp1.Data, resp.Data)
-			} else {
-				assert.Equal(t, resp3.Data, resp.Data)
-			}
-		case <-time.After(2 * time.Second):
-			assert.Fail(t, "timeout getting resp for %v", req)
-		}
-	}
-
-	net.Mu.RLock()
 	assert.Equal(t, 2, net.TotalBatchCalls)
 	net.Mu.RUnlock()
 }

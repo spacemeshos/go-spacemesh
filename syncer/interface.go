@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -14,7 +14,7 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayerContent(context.Context, types.LayerID) chan layerfetcher.LayerPromiseResult
+	PollLayerContent(context.Context, types.LayerID) chan fetch.LayerPromiseResult
 	GetEpochATXs(context.Context, types.EpochID) error
 }
 
