@@ -6,7 +6,8 @@ import "go.uber.org/zap/zapcore"
 type LogEncoder = string
 
 const (
-	defaultLoggingLevel = zapcore.InfoLevel
+	// Info level causes too much of logs produced (400+ Mb for ~2 hours)
+	defaultLoggingLevel = zapcore.WarnLevel
 	// ConsoleLogEncoder represents logging with plain text.
 	ConsoleLogEncoder LogEncoder = "console"
 	// JSONLogEncoder represents logging with JSON.
