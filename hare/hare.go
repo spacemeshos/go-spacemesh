@@ -494,7 +494,7 @@ func (h *Hare) Start(ctx context.Context) error {
 		return fmt.Errorf("start broker: %w", err)
 	}
 
-	h.wg.Add(3)
+	h.wg.Add(2)
 	go h.tickLoop(ctxTickLoop)
 	go h.outputCollectionLoop(ctxOutputLoop)
 
