@@ -190,7 +190,9 @@ type consensusProcess struct {
 // newConsensusProcess creates a new consensus process instance.
 func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
-	terminationReport chan TerminationOutput, ev roleValidator, clock RoundClock, logger log.Log) *consensusProcess {
+	terminationReport chan TerminationOutput,
+	ev roleValidator, clock RoundClock, logger log.Log,
+) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{preRound, preRound, s.Clone(), nil},
@@ -324,17 +326,23 @@ PreRound:
 
 	// start first iteration
 	proc.onRoundBegin(ctx)
-	endOfRound = proc.clock.AwaitEndOfRound(proc.k)
+	endOfRound = proc.clock.AwaitEndOfRound(proc.getK())
 
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
-			proc.handleMessage(ctx, msg)
 			if proc.terminating {
+				proc.Close()
 				return
 			}
+			proc.handleMessage(ctx, msg)
+
 		case <-endOfRound: // next round event
 			proc.onRoundEnd(ctx)
+			if proc.terminating {
+				proc.Close()
+				return
+			}
 			proc.advanceToNextRound(ctx)
 
 			// exit if we reached the limit on number of iterations
@@ -345,16 +353,15 @@ PreRound:
 					log.Uint32("current_k", k),
 					proc.instanceID)
 				proc.report(notCompleted)
-				return
+				proc.Close()
 			}
-
 			proc.onRoundBegin(ctx)
-			endOfRound = proc.clock.AwaitEndOfRound(proc.k)
+			endOfRound = proc.clock.AwaitEndOfRound(k)
+
 		case <-proc.CloseChannel(): // close event
 			logger.With().Info("terminating: received termination signal",
 				log.Uint32("current_k", proc.getK()),
 				proc.instanceID)
-			proc.report(notCompleted)
 			return
 		}
 	}
@@ -779,7 +786,6 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		log.Int("set_size", proc.s.Size()), log.Uint32("K", proc.getK()))
 	proc.report(completed)
 	proc.terminating = true
-	close(proc.CloseChannel())
 }
 
 func (proc *consensusProcess) currentRound() uint32 {
