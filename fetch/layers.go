@@ -1,5 +1,4 @@
-// Package layerfetcher fetches layers from remote peers
-package layerfetcher
+package fetch
 
 import (
 	"context"
@@ -11,10 +10,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/fetch"
+	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -22,50 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
-
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./layers.go
-
-// atxHandler defines handling function for incoming ATXs.
-type atxHandler interface {
-	HandleAtxData(context.Context, []byte) error
-}
-
-// blockHandler defines handling function for blocks.
-type blockHandler interface {
-	HandleBlockData(context.Context, []byte) error
-}
-
-// ballotHandler defines handling function for ballots.
-type ballotHandler interface {
-	HandleBallotData(context.Context, []byte) error
-}
-
-// proposalHandler defines handling function for proposals.
-type proposalHandler interface {
-	HandleProposalData(context.Context, []byte) error
-}
-
-// txHandler is an interface for handling TX data received in sync.
-type txHandler interface {
-	HandleBlockTransaction(context.Context, []byte) error
-	HandleProposalTransaction(context.Context, []byte) error
-}
-
-// poetHandler is an interface to reading and storing poet proofs.
-type poetHandler interface {
-	ValidateAndStoreMsg(data []byte) error
-}
-
-// meshProvider is an interface that returns layer data and blocks.
-type meshProvider interface {
-	ProcessedLayer() types.LayerID
-	SetZeroBlockLayer(types.LayerID) error
-}
-
-type network interface {
-	bootstrap.Provider
-	server.Host
-}
 
 var (
 	// ErrNoPeers is returned when node has no peers.
@@ -104,7 +58,7 @@ type LayerPromiseResult struct {
 type Logic struct {
 	log              log.Log
 	db               *sql.Database
-	fetcher          fetch.Fetcher
+	fetcher          fetcher
 	atxsrv, blocksrv server.Requestor
 	host             network
 	mutex            sync.Mutex
@@ -117,18 +71,6 @@ type Logic struct {
 	proposalHandler  proposalHandler
 	txHandler        txHandler
 	msh              meshProvider
-}
-
-// Config defines configuration for layer fetching logic.
-type Config struct {
-	fetch.Config
-}
-
-// DefaultConfig returns default configuration for layer fetching logic.
-func DefaultConfig() Config {
-	return Config{
-		Config: fetch.DefaultConfig(),
-	}
 }
 
 const (
@@ -147,17 +89,19 @@ type DataHandlers struct {
 }
 
 // NewLogic creates a new instance of layer fetching logic.
-func NewLogic(cfg Config, db *sql.Database, layers meshProvider,
+// TODO clean up the tangle between Logic and Fetch. ideally Logic should only care about layer data and epoch ATX
+// and leave the actual request sending to Fetch. this will improve testing as well.
+func NewLogic(cfg Config, db *sql.Database, msh meshProvider,
 	host *p2p.Host, handlers DataHandlers, log log.Log,
 ) *Logic {
 	l := &Logic{
 		log:             log,
-		fetcher:         fetch.NewFetch(cfg.Config, host, datastore.NewBlobStore(db), log.WithName("fetch")),
+		fetcher:         NewFetch(cfg, host, datastore.NewBlobStore(db), log.WithName("fetch")),
 		host:            host,
 		layerBlocksRes:  make(map[types.LayerID]*layerResult),
 		layerBlocksChs:  make(map[types.LayerID][]chan LayerPromiseResult),
 		poetHandler:     handlers.Poet,
-		msh:             layers,
+		msh:             msh,
 		db:              db,
 		atxHandler:      handlers.ATX,
 		ballotHandler:   handlers.Ballot,
@@ -500,7 +444,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if l.host.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
-	peer := fetch.GetRandomPeer(l.host.GetPeers())
+	peer := GetRandomPeer(l.host.GetPeers())
 	if err := l.atxsrv.Request(ctx, peer, id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
 		return fmt.Errorf("failed to send request to the peer: %w", err)
 	}
@@ -552,12 +496,12 @@ func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byt
 // Future is a preparation for using actual futures in the code, this will allow to truly execute
 // asynchronous reads and receive result only when needed.
 type Future struct {
-	res chan fetch.HashDataPromiseResult
-	ret *fetch.HashDataPromiseResult
+	res chan ftypes.HashDataPromiseResult
+	ret *ftypes.HashDataPromiseResult
 }
 
 // Result actually evaluates the result of the fetch task.
-func (f *Future) Result() fetch.HashDataPromiseResult {
+func (f *Future) Result() ftypes.HashDataPromiseResult {
 	if f.ret == nil {
 		ret := <-f.res
 		f.ret = &ret

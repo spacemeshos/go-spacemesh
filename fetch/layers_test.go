@@ -1,4 +1,4 @@
-package layerfetcher
+package fetch
 
 import (
 	"context"
@@ -12,10 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	fmocks "github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -36,7 +35,7 @@ func randPeer(tb testing.TB) p2p.Peer {
 	return p2p.Peer(buf)
 }
 
-type mockNet struct {
+type mockNetwork struct {
 	server.Host
 	peers     []p2p.Peer
 	layerData map[p2p.Peer][]byte
@@ -44,21 +43,21 @@ type mockNet struct {
 	timeouts  map[p2p.Peer]struct{}
 }
 
-func newMockNet(tb testing.TB) *mockNet {
+func newMockNet(tb testing.TB) *mockNetwork {
 	ctrl := gomock.NewController(tb)
 	h := srvmocks.NewMockHost(ctrl)
 	h.EXPECT().SetStreamHandler(gomock.Any(), gomock.Any()).AnyTimes()
-	return &mockNet{
+	return &mockNetwork{
 		Host:      h,
 		layerData: make(map[p2p.Peer][]byte),
 		errors:    make(map[p2p.Peer]error),
 		timeouts:  make(map[p2p.Peer]struct{}),
 	}
 }
-func (m *mockNet) GetPeers() []p2p.Peer { return m.peers }
-func (m *mockNet) PeerCount() uint64    { return uint64(len(m.peers)) }
+func (m *mockNetwork) GetPeers() []p2p.Peer { return m.peers }
+func (m *mockNetwork) PeerCount() uint64    { return uint64(len(m.peers)) }
 
-func (m *mockNet) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler func(msg []byte), errorHandler func(err error)) error {
+func (m *mockNetwork) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler func(msg []byte), errorHandler func(err error)) error {
 	if _, ok := m.timeouts[pid]; ok {
 		errorHandler(errors.New("peer timeout"))
 		return nil
@@ -69,7 +68,7 @@ func (m *mockNet) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler 
 	}
 	return m.errors[pid]
 }
-func (mockNet) Close() {}
+func (mockNetwork) Close() {}
 
 const (
 	txsForBlock    = iota
@@ -86,7 +85,7 @@ type testLogic struct {
 	method     int
 	mTxH       *mocks.MocktxHandler
 	mPoetH     *mocks.MockpoetHandler
-	mFetcher   *fmocks.MockFetcher
+	mFetcher   *mocks.Mockfetcher
 }
 
 func (l *testLogic) withMethod(method int) *testLogic {
@@ -122,7 +121,7 @@ func createTestLogic(t *testing.T) *testLogic {
 		mProposalH: mocks.NewMockproposalHandler(ctrl),
 		mTxH:       mocks.NewMocktxHandler(ctrl),
 		mPoetH:     mocks.NewMockpoetHandler(ctrl),
-		mFetcher:   fmocks.NewMockFetcher(ctrl),
+		mFetcher:   mocks.NewMockfetcher(ctrl),
 	}
 	tl.Logic = &Logic{
 		log:             logtest.New(t),
@@ -141,7 +140,7 @@ func createTestLogic(t *testing.T) *testLogic {
 	return tl
 }
 
-func createTestLogicWithMocknet(t *testing.T, net *mockNet) *testLogic {
+func createTestLogicWithMocknet(t *testing.T, net *mockNetwork) *testLogic {
 	tl := createTestLogic(t)
 	tl.host = net
 	tl.blocksrv = net
@@ -340,12 +339,12 @@ func TestPollLayerBlocks_FetchLayerBallotsError(t *testing.T) {
 	}
 
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).DoAndReturn(
-		func([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
-			ch := make(chan fetch.HashDataPromiseResult, 1)
-			ch <- fetch.HashDataPromiseResult{
+		func([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan ftypes.HashDataPromiseResult {
+			ch := make(chan ftypes.HashDataPromiseResult, 1)
+			ch <- ftypes.HashDataPromiseResult{
 				Err: ErrInternal,
 			}
-			return map[types.Hash32]chan fetch.HashDataPromiseResult{types.RandomHash(): ch}
+			return map[types.Hash32]chan ftypes.HashDataPromiseResult{types.RandomHash(): ch}
 		}).Times(numPeers)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -371,12 +370,12 @@ func TestPollLayerBlocks_FetchLayerBlocksErrorIgnored(t *testing.T) {
 	}
 
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).DoAndReturn(
-		func([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
-			ch := make(chan fetch.HashDataPromiseResult, 1)
-			ch <- fetch.HashDataPromiseResult{
+		func([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan ftypes.HashDataPromiseResult {
+			ch := make(chan ftypes.HashDataPromiseResult, 1)
+			ch <- ftypes.HashDataPromiseResult{
 				Err: ErrInternal,
 			}
-			return map[types.Hash32]chan fetch.HashDataPromiseResult{types.RandomHash(): ch}
+			return map[types.Hash32]chan ftypes.HashDataPromiseResult{types.RandomHash(): ch}
 		}).Times(numPeers)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -488,11 +487,11 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 		tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 	}
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).DoAndReturn(
-		func(hashes []types.Hash32, _ datastore.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
-			rst := map[types.Hash32]chan fetch.HashDataPromiseResult{}
+		func(hashes []types.Hash32, _ datastore.Hint, _ bool) map[types.Hash32]chan ftypes.HashDataPromiseResult {
+			rst := map[types.Hash32]chan ftypes.HashDataPromiseResult{}
 			for _, hash := range hashes {
-				rst[hash] = make(chan fetch.HashDataPromiseResult, 1)
-				rst[hash] <- fetch.HashDataPromiseResult{
+				rst[hash] = make(chan ftypes.HashDataPromiseResult, 1)
+				rst[hash] <- ftypes.HashDataPromiseResult{
 					Hash: hash,
 					Err:  errors.New("failed request"),
 				}
@@ -501,7 +500,7 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 		},
 	).Times(1)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).DoAndReturn(
-		func(hashes []types.Hash32, _ datastore.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+		func(hashes []types.Hash32, _ datastore.Hint, _ bool) map[types.Hash32]chan ftypes.HashDataPromiseResult {
 			return nil
 		},
 	).AnyTimes()
@@ -596,10 +595,10 @@ func TestGetBlocks_FetchAllError(t *testing.T) {
 	hashes := types.BlockIDsToHashes(blockIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for _, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
-		ch <- fetch.HashDataPromiseResult{
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Err:  errUnknown,
 		}
@@ -620,18 +619,18 @@ func TestGetBlocks_FetchSomeError(t *testing.T) {
 	hashes := types.BlockIDsToHashes(blockIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		if i == 0 {
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Err:  errUnknown,
 			}
 		} else {
 			data, err := codec.Encode(blks[i])
 			require.NoError(t, err)
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Data: data,
 			}
@@ -655,12 +654,12 @@ func TestGetBlocks_HandlerError(t *testing.T) {
 	hashes := types.BlockIDsToHashes(blockIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(blks[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -681,12 +680,12 @@ func TestGetBlocks(t *testing.T) {
 	blockIDs := types.ToBlockIDs(blks)
 	hashes := types.BlockIDsToHashes(blockIDs)
 
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(blks[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -708,10 +707,10 @@ func TestGetBallots_FetchAllError(t *testing.T) {
 	hashes := types.BallotIDsToHashes(ballotIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for _, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
-		ch <- fetch.HashDataPromiseResult{
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Err:  errUnknown,
 		}
@@ -732,18 +731,18 @@ func TestGetBallots_FetchSomeError(t *testing.T) {
 	hashes := types.BallotIDsToHashes(ballotIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		if i == 0 {
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Err:  errUnknown,
 			}
 		} else {
 			data, err := codec.Encode(blts[i])
 			require.NoError(t, err)
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Data: data,
 			}
@@ -767,12 +766,12 @@ func TestGetBallots_HandlerError(t *testing.T) {
 	hashes := types.BallotIDsToHashes(ballotIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(blts[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -793,12 +792,12 @@ func TestGetBallots(t *testing.T) {
 	ballotIDs := types.ToBallotIDs(blts)
 	hashes := types.BallotIDsToHashes(ballotIDs)
 
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(blts[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -820,18 +819,18 @@ func TestGetProposals_FetchSomeError(t *testing.T) {
 	hashes := types.ProposalIDsToHashes(proposalIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		if i == 0 {
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Err:  errUnknown,
 			}
 		} else {
 			data, err := codec.Encode(proposals[i])
 			require.NoError(t, err)
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Data: data,
 			}
@@ -855,12 +854,12 @@ func TestGetProposals_HandlerError(t *testing.T) {
 	hashes := types.ProposalIDsToHashes(proposalIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(proposals[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -881,12 +880,12 @@ func TestGetProposals(t *testing.T) {
 	proposalIDs := types.ToProposalIDs(proposals)
 	hashes := types.ProposalIDsToHashes(proposalIDs)
 
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(proposals[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -946,18 +945,18 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 			hashes := types.TransactionIDsToHashes(tids)
 
 			errUnknown := errors.New("unknown")
-			results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+			results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 			for i, h := range hashes {
-				ch := make(chan fetch.HashDataPromiseResult, 1)
+				ch := make(chan ftypes.HashDataPromiseResult, 1)
 				if i == 0 {
-					ch <- fetch.HashDataPromiseResult{
+					ch <- ftypes.HashDataPromiseResult{
 						Hash: h,
 						Err:  errUnknown,
 					}
 				} else {
 					data, err := codec.Encode(tids[i])
 					require.NoError(t, err)
-					ch <- fetch.HashDataPromiseResult{
+					ch <- ftypes.HashDataPromiseResult{
 						Hash: h,
 						Data: data,
 					}
@@ -979,12 +978,12 @@ func TestGetTxs_HandlerError(t *testing.T) {
 	hashes := types.TransactionIDsToHashes(tids)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(tids[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -1002,12 +1001,12 @@ func TestGetTxs(t *testing.T) {
 	tids := types.ToTransactionIDs(txs)
 	hashes := types.TransactionIDsToHashes(tids)
 
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(tids[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -1036,18 +1035,18 @@ func TestGetAtxs_FetchSomeError(t *testing.T) {
 	hashes := types.ATXIDsToHashes(atxIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		if i == 0 {
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Err:  errUnknown,
 			}
 		} else {
 			data, err := codec.Encode(atxIDs[i])
 			require.NoError(t, err)
-			ch <- fetch.HashDataPromiseResult{
+			ch <- ftypes.HashDataPromiseResult{
 				Hash: h,
 				Data: data,
 			}
@@ -1067,12 +1066,12 @@ func TestGetAtxs_HandlerError(t *testing.T) {
 	hashes := types.ATXIDsToHashes(atxIDs)
 
 	errUnknown := errors.New("unknown")
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(atxs[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -1090,12 +1089,12 @@ func TestGetAtxs(t *testing.T) {
 	atxIDs := types.ToATXIDs(atxs)
 	hashes := types.ATXIDsToHashes(atxIDs)
 
-	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
-		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch := make(chan ftypes.HashDataPromiseResult, 1)
 		data, err := codec.Encode(atxIDs[i])
 		require.NoError(t, err)
-		ch <- fetch.HashDataPromiseResult{
+		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
@@ -1112,10 +1111,10 @@ func TestGetPoetProof(t *testing.T) {
 	proof := types.PoetProofMessage{}
 	h := types.RandomHash()
 
-	ch := make(chan fetch.HashDataPromiseResult, 1)
+	ch := make(chan ftypes.HashDataPromiseResult, 1)
 	data, err := codec.Encode(proof)
 	require.NoError(t, err)
-	ch <- fetch.HashDataPromiseResult{
+	ch <- ftypes.HashDataPromiseResult{
 		Hash: h,
 		Data: data,
 	}
@@ -1124,7 +1123,7 @@ func TestGetPoetProof(t *testing.T) {
 	l.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(nil).Times(1)
 	assert.NoError(t, l.GetPoetProof(context.TODO(), h))
 
-	ch <- fetch.HashDataPromiseResult{
+	ch <- ftypes.HashDataPromiseResult{
 		Hash: h,
 		Data: data,
 	}
@@ -1132,7 +1131,7 @@ func TestGetPoetProof(t *testing.T) {
 	l.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(sql.ErrObjectExists).Times(1)
 	assert.NoError(t, l.GetPoetProof(context.TODO(), h))
 
-	ch <- fetch.HashDataPromiseResult{
+	ch <- ftypes.HashDataPromiseResult{
 		Hash: h,
 		Data: data,
 	}
