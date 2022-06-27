@@ -15,20 +15,29 @@ import (
 // HashPeersCache holds lru cache of peers to pull hash from.
 type HashPeersCache struct {
 	*lru.Cache
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	stats cacheStats
 }
 
 // HashPeers holds registered peers for a hash.
 type HashPeers map[p2p.Peer]struct{}
 
-// ToList converts hash peers map to a list.
-func (hp HashPeers) ToList() []p2p.Peer {
-	result := make([]p2p.Peer, 0, len(hp))
-	for k := range hp {
+// GetList returns hash peers as a list.
+func (hpc *HashPeersCache) GetList(hash types.Hash32) ([]p2p.Peer, bool) {
+	hpc.mu.RLock()
+	defer hpc.mu.RUnlock()
+
+	hashPeersMap, exists := hpc.Get(hash)
+	if !exists {
+		return nil, false
+	}
+	
+	result := make([]p2p.Peer, 0, len(hashPeersMap))
+	for k := range hashPeersMap {
 		result = append(result, k)
 	}
-	return result
+
+	return result, true
 }
 
 // NewHashPeersCache creates a new hash-to-peers cache.
@@ -42,17 +51,15 @@ func NewHashPeersCache(size int) *HashPeersCache {
 
 // Add adds peer to a hash.
 func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
-	hpc.mu.Lock()
-	defer hpc.mu.Unlock()
-
 	peers, exists := hpc.get(hash)
+	hpc.mu.Lock()
 	if !exists {
 		hpc.Cache.Add(hash, HashPeers{peer: {}})
-		return
+	} else {
+		peers[peer] = struct{}{}
+		hpc.Cache.Add(hash, peers)
 	}
-
-	peers[peer] = struct{}{}
-	hpc.Cache.Add(hash, peers)
+	hpc.mu.Unlock()
 }
 
 // Get returns hash peers, it also returns a boolean to indicate whether the item
@@ -69,6 +76,9 @@ func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 
 // get is the same as Get but doesn't affect cache stats.
 func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
+	hpc.mu.RLock()
+	defer hpc.mu.RUnlock()
+
 	item, found := hpc.Cache.Get(hash)
 	if !found {
 		return nil, false
