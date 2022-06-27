@@ -31,7 +31,7 @@ func (hpc *HashPeersCache) GetList(hash types.Hash32) ([]p2p.Peer, bool) {
 	if !exists {
 		return nil, false
 	}
-	
+
 	result := make([]p2p.Peer, 0, len(hashPeersMap))
 	for k := range hashPeersMap {
 		result = append(result, k)
