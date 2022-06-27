@@ -149,7 +149,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 
 // Apply transactions.
 func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
-	tx, err := v.db.Tx(context.Background())
+	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}

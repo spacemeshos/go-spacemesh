@@ -1,6 +1,7 @@
 package fixture
 
 import (
+	"encoding/binary"
 	"math/rand"
 	"time"
 
@@ -45,7 +46,9 @@ func (g *TransactionResultGenerator) WithBlocks(n int) *TransactionResultGenerat
 func (g *TransactionResultGenerator) WithAddresses(n int) *TransactionResultGenerator {
 	g.Addrs = nil
 	for i := 1; i <= n; i++ {
-		g.Addrs = append(g.Addrs, types.Address{byte(i)})
+		addr := types.Address{}
+		binary.BigEndian.PutUint64(addr[:], uint64(i))
+		g.Addrs = append(g.Addrs, addr)
 	}
 	return g
 }

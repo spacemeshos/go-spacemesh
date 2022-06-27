@@ -472,7 +472,7 @@ func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
 	return a.UpdatePoETErr
 }
 
-func launchServer(t *testing.T, services ...ServiceAPI) func() {
+func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 
@@ -498,7 +498,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	}
 
 	return func() {
-		require.NoError(t, jsonService.Close())
+		require.NoError(tb, jsonService.Close())
 		_ = grpcService.Close()
 	}
 }

@@ -363,18 +363,18 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 
 func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 	casted := &pb.TransactionResult{
-		Tx:      convertTransaction(&rst.Transaction),
-		Status:  pb.TransactionResult_Status(rst.Status),
-		Message: rst.Message,
-		Gas:     rst.Gas,
-		Fee:     rst.Fee,
-		Block:   rst.Block[:],
-		Layer:   rst.Layer.Value,
+		Tx:          convertTransaction(&rst.Transaction),
+		Status:      pb.TransactionResult_Status(rst.Status),
+		Message:     rst.Message,
+		GasConsumed: rst.Gas,
+		Fee:         rst.Fee,
+		Block:       rst.Block[:],
+		Layer:       rst.Layer.Value,
 	}
 	if len(rst.Addresses) > 0 {
-		casted.Addresses = make([][]byte, len(rst.Addresses))
+		casted.UpdatedAddresses = make([][]byte, len(rst.Addresses))
 		for i := range rst.Addresses {
-			casted.Addresses[i] = rst.Addresses[i][:]
+			casted.UpdatedAddresses[i] = rst.Addresses[i][:]
 		}
 	}
 	return casted

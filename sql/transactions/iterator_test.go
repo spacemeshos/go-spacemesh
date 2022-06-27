@@ -2,7 +2,9 @@ package transactions
 
 import (
 	"bytes"
+	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -131,5 +133,50 @@ func TestIterateResults(t *testing.T) {
 			}))
 			assert.Equal(t, len(expected), i)
 		})
+	}
+}
+
+func TestIterateSnapshot(t *testing.T) {
+	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	require.NoError(t, err)
+	gen := fixture.NewTransactionResultGenerator()
+	expect := 10
+	for i := 0; i < expect; i++ {
+		tx := gen.Next()
+
+		require.NoError(t, Add(db, &tx.Transaction, time.Time{}))
+		require.NoError(t, AddResult(db, tx.ID, &tx.TransactionResult))
+	}
+
+	var (
+		once        sync.Once
+		initialized = make(chan struct{})
+		wait        = make(chan struct{})
+		rst         = make(chan int)
+	)
+	go func() {
+		n := 0
+		assert.NoError(t, IterateResults(db, ResultsFilter{}, func(*types.TransactionWithResult) bool {
+			once.Do(func() { close(initialized) })
+			<-wait
+			n++
+			return true
+		}))
+		rst <- n
+	}()
+	<-initialized
+
+	for i := 0; i < 10; i++ {
+		tx := gen.Next()
+
+		require.NoError(t, Add(db, &tx.Transaction, time.Time{}))
+		require.NoError(t, AddResult(db, tx.ID, &tx.TransactionResult))
+	}
+	close(wait)
+	select {
+	case <-time.After(time.Second):
+		require.Fail(t, "failed on timeout")
+	case n := <-rst:
+		require.Equal(t, expect, n)
 	}
 }

@@ -136,7 +136,19 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 		return nil, ErrNoConnection
 	}
 	tx := &Tx{db: db, conn: conn}
-	return tx, tx.begin()
+	return tx, tx.deferred()
+}
+
+// TxImmediate creates immediate transaction.
+//
+// IMMEDIATE cause the database connection to start a new write immediately, without waiting // for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write //// transaction is already active on another database connection.
+func (db *Database) TxImmediate(ctx context.Context) (*Tx, error) {
+	conn := db.pool.Get(ctx)
+	if conn == nil {
+		return nil, ErrNoConnection
+	}
+	tx := &Tx{db: db, conn: conn}
+	return tx, tx.immediate()
 }
 
 // Exec statement using one of the connection from the pool.
@@ -209,13 +221,21 @@ type Tx struct {
 	err       error
 }
 
-func (tx *Tx) begin() error {
-	stmt := tx.conn.Prep("BEGIN;")
+func (tx *Tx) begin(query string) error {
+	stmt := tx.conn.Prep(query)
 	_, err := stmt.Step()
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}
 	return nil
+}
+
+func (tx *Tx) immediate() error {
+	return tx.begin("BEGIN IMMEDIATE;")
+}
+
+func (tx *Tx) deferred() error {
+	return tx.begin("BEGIN;")
 }
 
 // Commit transaction.

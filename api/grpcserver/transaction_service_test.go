@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -120,4 +122,66 @@ func TestTransactionService_StreamResults(t *testing.T) {
 			})
 		}
 	})
+}
+
+func BenchmarkStreamResults(b *testing.B) {
+	db, err := sql.Open("file:" + filepath.Join(b.TempDir(), "test.sql"))
+	require.NoError(b, err)
+	var (
+		gen      = fixture.NewTransactionResultGenerator().WithAddresses(10_000)
+		count    = map[types.Address]int{}
+		maxaddr  types.Address
+		maxcount int
+		start    = time.Now()
+	)
+	tx, err := db.Tx(context.Background())
+	require.NoError(b, err)
+	for i := 0; i < 1_000; i++ {
+		rst := gen.Next()
+		for _, addr := range rst.Addresses {
+			count[addr]++
+			if count[addr] > maxcount {
+				maxaddr = addr
+				maxcount = count[addr]
+			}
+		}
+		require.NoError(b, transactions.Add(tx, &rst.Transaction, time.Time{}))
+		require.NoError(b, transactions.AddResult(tx, rst.ID, &rst.TransactionResult))
+	}
+	require.NoError(b, tx.Commit())
+	require.NoError(b, tx.Release())
+	svc := NewTransactionService(db, nil, nil, nil, nil)
+	b.Cleanup(launchServer(b, svc))
+
+	conn, err := grpc.Dial("localhost:"+strconv.Itoa(cfg.GrpcServerPort),
+		grpc.WithInsecure())
+	require.NoError(b, err)
+	client := pb.NewTransactionServiceClient(conn)
+
+	b.Logf("setup took %s", time.Since(start))
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	stats := runtime.MemStats{}
+	for i := 0; i < b.N; i++ {
+		stream, err := client.StreamResults(context.TODO(), &pb.TransactionResultsRequest{Address: maxaddr[:]})
+		if err != nil {
+			b.Fatal(err)
+		}
+		n := 0
+		for {
+			_, err := stream.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				b.Fatal(err)
+			}
+			n++
+		}
+
+		runtime.ReadMemStats(&stats)
+		b.Logf("memory requested %v", stats.Sys)
+		require.Equal(b, maxcount, n)
+	}
 }
