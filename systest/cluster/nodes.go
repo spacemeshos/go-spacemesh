@@ -15,6 +15,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	appsv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -116,7 +117,10 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 			return nil, ctx.Err()
 		case ev, open := <-watcher.ResultChan():
 			if !open {
-				return nil, fmt.Errorf("watcher is terminated wile waiting for pod %v", name)
+				return nil, fmt.Errorf("watcher is terminated while waiting for pod %v", name)
+			}
+			if ev.Type == watch.Deleted {
+				return nil, nil
 			}
 			pod = ev.Object.(*v1.Pod)
 		}
@@ -153,9 +157,8 @@ func labelSelector(labels map[string]string) string {
 }
 
 func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
-	labels := nodeLabels(name)
-
 	var (
+		labels  = nodeLabels(name)
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
 	)
@@ -184,6 +187,25 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 		rst = append(rst, node)
 	}
 	return rst, nil
+}
+
+func deleteNodes(ctx *testcontext.Context, name string, from, to int) ([]*NodeClient, error) {
+	var eg errgroup.Group
+	for i := to; i < from; i++ {
+		i := i
+		eg.Go(func() error {
+			return deleteNode(ctx, fmt.Sprintf("%s-%d", name, i))
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	return discoverNodes(ctx, name)
+}
+
+func deleteNode(ctx *testcontext.Context, name string) error {
+	return ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
+		Delete(ctx, name, apimetav1.DeleteOptions{})
 }
 
 func deployNode(ctx *testcontext.Context, name string, applabels map[string]string, flags []DeploymentFlag) error {
@@ -276,6 +298,9 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 		pod, err := waitPod(tctx, name)
 		if err != nil {
 			return nil, err
+		}
+		if pod == nil {
+			return nil, nil
 		}
 		node := Node{
 			Name: name,

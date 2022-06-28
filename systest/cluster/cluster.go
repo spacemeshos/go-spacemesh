@@ -255,14 +255,19 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 }
 
 // DeleteSmeshers will remove n smeshers from the end.
-//
-// TODO in the current deployment model smeshers are managed by a single StatefulSet object.
-// therefore we can't support API to remove any specific smesher. such API would be useful
-// for tests that add/remove nodes periodically.
 func (c *Cluster) DeleteSmeshers(cctx *testcontext.Context, n int) error {
-	if n > c.smeshers {
+	if n > c.smeshers-c.bootnodes {
 		return fmt.Errorf("can't remove bootnodes. max number of removable smeshers is %d", c.smeshers)
 	}
+	clients, err := deleteNodes(cctx, "smesher", c.smeshers, c.smeshers-n)
+	if err != nil {
+		return err
+	}
+	bootnodes := c.clients[:c.bootnodes]
+	c.clients = nil
+	c.clients = append(c.clients, bootnodes...)
+	c.clients = append(c.clients, clients...)
+	c.smeshers = len(clients)
 	return nil
 }
 

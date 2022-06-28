@@ -64,13 +64,12 @@ func TestStepSubmitTransactions(t *testing.T) {
 	}
 }
 
-func TestStepManageNodes(t *testing.T) {
+func TestStepAddNodes(t *testing.T) {
 	cctx := testcontext.New(t)
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	delta := rng.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
+	delta := rand.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
 
 	log := cctx.Log.With(
 		"current", cl.Total(),
@@ -78,17 +77,25 @@ func TestStepManageNodes(t *testing.T) {
 		"delta", delta,
 	)
 
-	// TODO significant issue with this test, in case if node wasn't synced yet we may
-	// remove it before it will even participate in the protocol
-	// TODO doublecheck what will happen with persistent state for a pod in the stateful set
-	// after it was removed
-	if cl.Total() >= cctx.ClusterSize || rng.Intn(100) < 30 {
-		log.Info("reducing cluster size")
-		require.NoError(t, cl.DeleteSmeshers(cctx, delta))
-	} else {
-		log.Info("increasing cluster size")
-		require.NoError(t, cl.AddSmeshers(cctx, delta))
-	}
+	log.Info("increasing cluster size")
+	require.NoError(t, cl.AddSmeshers(cctx, delta))
+}
+
+func TestStepDeleteNodes(t *testing.T) {
+	cctx := testcontext.New(t)
+	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	delta := rand.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
+
+	log := cctx.Log.With(
+		"current", cl.Total(),
+		"max", cctx.ClusterSize,
+		"delta", delta,
+	)
+
+	log.Info("increasing cluster size")
+	require.NoError(t, cl.DeleteSmeshers(cctx, delta))
 }
 
 func TestStepVerifyBalances(t *testing.T) {
