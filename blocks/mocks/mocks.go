@@ -12,44 +12,6 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MockatxProvider is a mock of atxProvider interface.
-type MockatxProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockatxProviderMockRecorder
-}
-
-// MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
-type MockatxProviderMockRecorder struct {
-	mock *MockatxProvider
-}
-
-// NewMockatxProvider creates a new mock instance.
-func NewMockatxProvider(ctrl *gomock.Controller) *MockatxProvider {
-	mock := &MockatxProvider{ctrl: ctrl}
-	mock.recorder = &MockatxProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
-	return m.recorder
-}
-
-// GetAtxHeader mocks base method.
-func (m *MockatxProvider) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockatxProviderMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxProvider)(nil).GetAtxHeader), arg0)
-}
-
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
@@ -87,54 +49,40 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
 }
 
-// HasBlock mocks base method.
-func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasBlock", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// HasBlock indicates an expected call of HasBlock.
-func (mr *MockmeshProviderMockRecorder) HasBlock(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBlock", reflect.TypeOf((*MockmeshProvider)(nil).HasBlock), arg0)
-}
-
-// MocktxProvider is a mock of txProvider interface.
-type MocktxProvider struct {
+// MockconservativeState is a mock of conservativeState interface.
+type MockconservativeState struct {
 	ctrl     *gomock.Controller
-	recorder *MocktxProviderMockRecorder
+	recorder *MockconservativeStateMockRecorder
 }
 
-// MocktxProviderMockRecorder is the mock recorder for MocktxProvider.
-type MocktxProviderMockRecorder struct {
-	mock *MocktxProvider
+// MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
+type MockconservativeStateMockRecorder struct {
+	mock *MockconservativeState
 }
 
-// NewMocktxProvider creates a new mock instance.
-func NewMocktxProvider(ctrl *gomock.Controller) *MocktxProvider {
-	mock := &MocktxProvider{ctrl: ctrl}
-	mock.recorder = &MocktxProviderMockRecorder{mock}
+// NewMockconservativeState creates a new mock instance.
+func NewMockconservativeState(ctrl *gomock.Controller) *MockconservativeState {
+	mock := &MockconservativeState{ctrl: ctrl}
+	mock.recorder = &MockconservativeStateMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktxProvider) EXPECT() *MocktxProviderMockRecorder {
+func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// GetMeshTransactions mocks base method.
-func (m *MocktxProvider) GetMeshTransactions(arg0 []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
+// SelectBlockTXs mocks base method.
+func (m *MockconservativeState) SelectBlockTXs(arg0 types.LayerID, arg1 []*types.Proposal) ([]types.TransactionID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMeshTransactions", arg0)
-	ret0, _ := ret[0].([]*types.MeshTransaction)
-	ret1, _ := ret[1].(map[types.TransactionID]struct{})
+	ret := m.ctrl.Call(m, "SelectBlockTXs", arg0, arg1)
+	ret0, _ := ret[0].([]types.TransactionID)
+	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetMeshTransactions indicates an expected call of GetMeshTransactions.
-func (mr *MocktxProviderMockRecorder) GetMeshTransactions(arg0 interface{}) *gomock.Call {
+// SelectBlockTXs indicates an expected call of SelectBlockTXs.
+func (mr *MockconservativeStateMockRecorder) SelectBlockTXs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransactions", reflect.TypeOf((*MocktxProvider)(nil).GetMeshTransactions), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBlockTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectBlockTXs), arg0, arg1)
 }

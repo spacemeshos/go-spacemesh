@@ -1,47 +1,67 @@
 package types
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // NanoTX represents minimal info about a transaction for the conservative cache/mempool.
 type NanoTX struct {
-	Tid       types.TransactionID
-	Principal types.Address
-	Fee       uint64
-	Received  time.Time
+	types.TxHeader
+	ID types.TransactionID
 
-	Amount uint64
-	Nonce  uint64
-	Block  types.BlockID
-	Layer  types.LayerID
+	Received time.Time
+
+	Block types.BlockID
+	Layer types.LayerID
 }
 
 // NewNanoTX converts a NanoTX instance from a MeshTransaction.
 func NewNanoTX(mtx *types.MeshTransaction) *NanoTX {
 	return &NanoTX{
-		Tid:       mtx.ID(),
-		Principal: mtx.Origin(),
-		Fee:       mtx.GetFee(),
-		Amount:    mtx.Amount,
-		Nonce:     mtx.AccountNonce,
-		Received:  mtx.Received,
-		Block:     mtx.BlockID,
-		Layer:     mtx.LayerID,
+		ID:       mtx.ID,
+		TxHeader: *mtx.TxHeader,
+		Received: mtx.Received,
+		Block:    mtx.BlockID,
+		Layer:    mtx.LayerID,
 	}
 }
 
 // MaxSpending returns the maximal amount a transaction can spend.
 func (n *NanoTX) MaxSpending() uint64 {
-	// TODO: create SVM methods to calculate these two fields
-	return n.Fee + n.Amount
+	return n.Spending()
+}
+
+func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
+	hash := hash.New()
+	hash.Write(blockSeed)
+	hash.Write(n.ID.Bytes())
+	return hash.Sum(nil)
 }
 
 // Better returns true if this transaction takes priority than `other`.
-func (n *NanoTX) Better(other *NanoTX) bool {
-	return n.Fee > other.Fee || n.Fee == other.Fee && n.Received.Before(other.Received)
+// when the block seed is non-empty, this tx is being considered for a block.
+// the block seed then is used to tie-break (deterministically) transactions for
+// the same account/nonce.
+func (n *NanoTX) Better(other *NanoTX, blockSeed []byte) bool {
+	if n.Principal != other.Principal ||
+		n.Nonce != other.Nonce {
+		log.Panic("invalid arguments")
+	}
+	if n.Fee() > other.Fee() {
+		return true
+	}
+	if n.Fee() == other.Fee() {
+		if len(blockSeed) > 0 {
+			return bytes.Compare(n.combinedHash(blockSeed), other.combinedHash(blockSeed)) < 0
+		}
+		return n.Received.Before(other.Received)
+	}
+	return false
 }
 
 // UpdateLayerMaybe updates the layer of a transaction if it's lower than the current value.

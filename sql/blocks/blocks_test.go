@@ -109,6 +109,11 @@ func TestLayerFilter(t *testing.T) {
 	for i, bid := range bids {
 		require.Equal(t, bid, blocks[i].ID())
 	}
+
+	blks, err := Layer(db, start)
+	require.NoError(t, err)
+	require.Len(t, blks, 2)
+	require.ElementsMatch(t, blocks[:2], blks)
 }
 
 func TestLayerOrdered(t *testing.T) {
@@ -180,5 +185,29 @@ func TestContextualValidity(t *testing.T) {
 	require.Len(t, validities, 3)
 	for _, validity := range validities {
 		require.True(t, validity.Validity)
+	}
+}
+
+func TestGetLayer(t *testing.T) {
+	db := sql.InMemory()
+	lid1 := types.NewLayerID(11)
+	block1 := types.NewExistingBlock(
+		types.BlockID{1, 1},
+		types.InnerBlock{LayerIndex: lid1},
+	)
+	lid2 := lid1.Add(1)
+	block2 := types.NewExistingBlock(
+		types.BlockID{2, 2},
+		types.InnerBlock{LayerIndex: lid2},
+	)
+
+	for _, b := range []*types.Block{block1, block2} {
+		require.NoError(t, Add(db, b))
+	}
+
+	for _, b := range []*types.Block{block1, block2} {
+		lid, err := GetLayer(db, b.ID())
+		require.NoError(t, err)
+		require.Equal(t, b.LayerIndex, lid)
 	}
 }

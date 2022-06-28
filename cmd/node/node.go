@@ -34,16 +34,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/errcode"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -52,6 +51,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -60,7 +60,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/go-spacemesh/txs"
-	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 const edKeyFileName = "key.bin"
@@ -72,11 +71,10 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
-	StoreLogger            = "store"
+	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
-	MeshDBLogger           = "meshDb"
 	TrtlLogger             = "trtl"
-	AtxDbLogger            = "atxDb"
+	ATXHandlerLogger       = "atxHandler"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
@@ -86,7 +84,6 @@ const (
 	TxHandlerLogger        = "txHandler"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
-	ProposalDBLogger       = "proposalStore"
 	PoetListenerLogger     = "poetListener"
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
@@ -262,6 +259,7 @@ type App struct {
 	*cobra.Command
 	nodeID           types.NodeID
 	Config           *config.Config
+	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
 	gatewaySvc       *grpcserver.GatewayService
@@ -275,8 +273,7 @@ type App struct {
 	hare             HareService
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
-	atxDb            *activation.DB
-	proposalDB       *proposals.DB
+	atxHandler       *activation.Handler
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	beaconProtocol   *beacon.ProtocolDriver
@@ -297,34 +294,6 @@ type App struct {
 
 func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
-}
-
-type clockErrorDetails struct {
-	Drift time.Duration
-}
-
-func (c *clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddDuration("drift", c.Drift)
-	return nil
-}
-
-type clockError struct {
-	err     error
-	details clockErrorDetails
-}
-
-func (c *clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("code", errcode.ErrClockDrift)
-	encoder.AddString("errmsg", c.err.Error())
-	if err := encoder.AddObject("details", &c.details); err != nil {
-		return fmt.Errorf("add object: %w", err)
-	}
-
-	return nil
-}
-
-func (c *clockError) Error() string {
-	return c.err.Error()
 }
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
@@ -459,23 +428,19 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create IDs DB: %w", err)
-	}
-	app.closers = append(app.closers, idDBStore)
-
-	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create store DB: %w", err)
-	}
-	app.closers = append(app.closers, store)
-
 	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
+	app.db = sqlDB
+	if app.Config.CollectMetrics {
+		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+		if dbCollector != nil {
+			app.closers = append(app.closers, dbCollector)
+		}
+	}
 
+	cdb := datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 
@@ -483,13 +448,26 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.addLogger(MeshDBLogger, lg))
+	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(SVMLogger, lg)))
+	app.conState = txs.NewConservativeState(state, sqlDB,
+		txs.WithCSConfig(txs.CSConfig{
+			BlockGasLimit:      app.Config.BlockGasLimit,
+			NumTXsPerProposal:  app.Config.TxsPerProposal,
+			OptFilterThreshold: app.Config.OptFilterThreshold,
+		}),
+		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
+
+	var verifier blockValidityVerifier
+	msh, recovered, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
-		return fmt.Errorf("create mesh DB: %w", err)
+		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	state := vm.New(app.addLogger(SVMLogger, lg), sqlDB)
-	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
+	if !recovered {
+		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
+			return fmt.Errorf("setup genesis: %w", err)
+		}
+	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
@@ -497,31 +475,20 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(sqlDB, fetcherWrapped, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
 
-	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	processed, err := mdb.GetProcessedLayer()
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
+	processed, err := msh.GetProcessedLayer()
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	verified, err := mdb.GetVerifiedLayer()
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
+	verified, err := msh.GetVerifiedLayer()
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load verified layer: %w", err)
-	}
-
-	var verifier blockValidityVerifier
-	var msh *mesh.Mesh
-	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-	} else {
-		msh = mesh.NewMesh(mdb, atxDB, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
-		}
 	}
 
 	trtlCfg := app.Config.Tortoise
@@ -529,18 +496,12 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	trtlCfg.MeshProcessed = processed
 	trtlCfg.MeshVerified = verified
-	trtl := tortoise.New(mdb, atxDB, beaconProtocol, msh,
+	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
 	verifier.Tortoise = trtl
-
-	proposalDB, err := proposals.NewProposalDB(sqlDB, app.addLogger(ProposalDBLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create proposal DB: %w", err)
-	}
-	app.proposalDB = proposalDB
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -549,34 +510,30 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(fetcherWrapped, beaconProtocol, atxDB, msh, proposalDB,
+	proposalListener := proposals.NewHandler(cdb, fetcherWrapped, beaconProtocol, msh,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithLayerPerEpoch(layersPerEpoch),
-		proposals.WithLayerSize(layerSize),
-		proposals.WithGoldenATXID(goldenATXID),
-		proposals.WithMaxExceptions(trtlCfg.MaxExceptions))
+		proposals.WithConfig(proposals.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+			GoldenATXID:    goldenATXID,
+			MaxExceptions:  trtlCfg.MaxExceptions,
+			Hdist:          trtlCfg.Hdist,
+		}))
 
-	blockHandller := blocks.NewHandler(fetcherWrapped, msh,
+	blockHandller := blocks.NewHandler(fetcherWrapped, sqlDB, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	dbStores := fetch.LocalDataSource{
-		fetch.BallotDB:   msh.Ballots(),
-		fetch.BlockDB:    msh.Blocks(),
-		fetch.ProposalDB: proposalDB,
-		fetch.ATXDB:      atxDB.ATXs(),
-		fetch.TXDB:       app.conState.Transactions(),
-		fetch.POETDB:     poetDb.PoETs(),
-	}
 	dataHanders := layerfetcher.DataHandlers{
-		ATX:      atxDB,
+		ATX:      atxHandler,
 		Block:    blockHandller,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
+		Poet:     poetDb,
 	}
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, poetDb, atxDB, msh, app.host, dataHanders, dbStores, app.addLogger(LayerFetcher, lg))
+	layerFetch := layerfetcher.NewLogic(app.Config.FETCH, sqlDB, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -594,27 +551,31 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		hOracle = eligibility.New(beaconProtocol, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
+	blockGen := blocks.NewGenerator(cdb, app.conState,
+		blocks.WithConfig(blocks.Config{
+			LayerSize:      layerSize,
+			LayersPerEpoch: layersPerEpoch,
+		}),
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+	rabbit := app.HareFactory(sqlDB, sgn, blockGen, nodeID, patrol, newSyncer, msh, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		clock.Subscribe(),
 		sgn,
 		vrfSigner,
-		sqlDB,
-		atxDB,
+		cdb,
 		app.host,
 		trtl,
 		beaconProtocol,
 		newSyncer,
 		app.conState,
 		miner.WithMinerID(nodeID),
-		miner.WithTxsPerProposal(app.Config.TxsPerBlock),
+		miner.WithTxsPerProposal(app.Config.TxsPerProposal),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
@@ -626,7 +587,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
 	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 	if app.Config.SMESHING.Start {
@@ -640,8 +601,8 @@ func (app *App) initServices(ctx context.Context,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, cdb, atxHandler, app.host, nipostBuilder,
+		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
@@ -659,7 +620,7 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(beacon.FollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
+	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxHandler.HandleGossipAtx))
 	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	hareGossipHandler := rabbit.GetHareMsgHandler()
@@ -678,7 +639,7 @@ func (app *App) initServices(ctx context.Context,
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
-	app.atxDb = atxDB
+	app.atxHandler = atxHandler
 	app.layerFetch = layerFetch
 	app.beaconProtocol = beaconProtocol
 	app.tortoise = trtl
@@ -696,14 +657,13 @@ func (app *App) initServices(ctx context.Context,
 
 // HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
 func (app *App) HareFactory(
-	ctx context.Context,
+	sqlDB *sql.Database,
 	sgn hare.Signer,
 	blockGen *blocks.Generator,
 	nodeID types.NodeID,
 	patrol *layerpatrol.LayerPatrol,
 	syncer system.SyncStateProvider,
 	msh *mesh.Mesh,
-	proposalDB *proposals.DB,
 	beacons system.BeaconGetter,
 	pFetcher system.ProposalFetcher,
 	hOracle hare.Rolacle,
@@ -711,11 +671,12 @@ func (app *App) HareFactory(
 	lg log.Log,
 ) HareService {
 	if app.Config.HARE.SuperHare {
-		hr := turbohare.New(ctx, app.Config.HARE, msh, proposalDB, blockGen, clock.Subscribe(), app.addLogger(HareLogger, lg))
+		hr := turbohare.New(sqlDB, app.Config.HARE, msh, blockGen, clock.Subscribe(), app.addLogger(HareLogger, lg))
 		return hr
 	}
 
 	ha := hare.New(
+		sqlDB,
 		app.Config.HARE,
 		app.host.ID(),
 		app.host,
@@ -724,7 +685,6 @@ func (app *App) HareFactory(
 		blockGen,
 		syncer,
 		msh,
-		proposalDB,
 		beacons,
 		pFetcher,
 		hOracle,
@@ -777,7 +737,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 	// GRPC service.
 
 	// Make sure we only create the server once.
-	services := []grpcserver.ServiceAPI{}
+	var services []grpcserver.ServiceAPI
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
 			logger := app.addLogger(GRPCLogger, app.log).Zap()
@@ -806,7 +766,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
@@ -817,7 +777,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
@@ -887,15 +847,6 @@ func (app *App) stopServices() {
 	if app.syncer != nil {
 		app.log.Info("closing sync")
 		app.syncer.Close()
-	}
-
-	if app.proposalDB != nil {
-		app.log.Info("closing proposal db")
-	}
-
-	if app.mesh != nil {
-		app.log.Info("closing mesh")
-		app.mesh.Close()
 	}
 
 	if app.ptimesync != nil {

@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"time"
 
@@ -11,8 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
@@ -44,7 +45,7 @@ type Config struct {
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config            `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
-	REWARD          blocks.RewardConfig      `mapstructure:"reward"`
+	REWARD          vm.RewardConfig          `mapstructure:"reward"`
 	POST            activation.PostConfig    `mapstructure:"post"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
@@ -94,7 +95,11 @@ type BaseConfig struct {
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
-	TxsPerBlock int `mapstructure:"txs-per-block"`
+	TxsPerProposal int    `mapstructure:"txs-per-proposal"`
+	BlockGasLimit  uint64 `mapstructure:"block-gas-limit"`
+	// if the number of proposals with the same mesh state crosses this threshold (in percentage),
+	// then we optimistically filter out infeasible transactions before constructing the block.
+	OptFilterThreshold int `mapstructure:"optimistic-filtering-threshold"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -116,7 +121,7 @@ func DefaultConfig() Config {
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
-		REWARD:          blocks.DefaultRewardConfig(),
+		REWARD:          vm.DefaultRewardConfig(),
 		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           layerfetcher.DefaultConfig(),
@@ -153,7 +158,9 @@ func defaultBaseConfig() BaseConfig {
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		TxsPerBlock:         100,
+		TxsPerProposal:      100,
+		BlockGasLimit:       math.MaxUint64,
+		OptFilterThreshold:  90,
 	}
 }
 

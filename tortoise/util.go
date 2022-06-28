@@ -2,9 +2,9 @@ package tortoise
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -36,91 +36,11 @@ func (a sign) String() string {
 
 type votes map[types.BlockID]sign
 
-func weightFromInt64(value int64) weight {
-	return weight{Rat: new(big.Rat).SetInt64(value)}
-}
-
-func weightFromUint64(value uint64) weight {
-	return weight{Rat: new(big.Rat).SetUint64(value)}
-}
-
-func weightFromFloat64(value float64) weight {
-	return weight{Rat: new(big.Rat).SetFloat64(value)}
-}
-
-// weight represents any weight in the tortoise.
-type weight struct {
-	*big.Rat
-}
-
-func (w weight) add(other weight) weight {
-	w.Rat.Add(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) sub(other weight) weight {
-	if other.Rat == nil {
-		return w
-	}
-	w.Rat.Sub(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) div(other weight) weight {
-	w.Rat.Quo(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) mul(other weight) weight {
-	w.Rat.Mul(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) neg() weight {
-	w.Rat.Neg(w.Rat)
-	return w
-}
-
-func (w weight) copy() weight {
-	other := weight{Rat: new(big.Rat)}
-	other.Rat = other.Rat.Set(w.Rat)
-	return other
-}
-
-func (w weight) fraction(frac *big.Rat) weight {
-	w.Rat = w.Rat.Mul(w.Rat, frac)
-	return w
-}
-
-func (w weight) cmp(other weight) sign {
-	if w.Rat.Sign() == 1 && w.Rat.Cmp(other.Rat) == 1 {
-		return support
-	}
-	if w.Rat.Sign() == -1 && new(big.Rat).Abs(w.Rat).Cmp(other.Rat) == 1 {
-		return against
-	}
-	return abstain
-}
-
-func (w weight) String() string {
-	if w.isNil() {
-		return "0"
-	}
-	if w.Rat.IsInt() {
-		return w.Rat.Num().String()
-	}
-	return w.Rat.FloatString(2)
-}
-
-func (w weight) isNil() bool {
-	return w.Rat == nil
-}
-
 type tortoiseBallot struct {
 	id, base types.BallotID
 	votes    votes
 	abstain  map[types.LayerID]struct{}
-	weight   weight
+	weight   util.Weight
 }
 
 func persistContextualValidity(logger log.Log,

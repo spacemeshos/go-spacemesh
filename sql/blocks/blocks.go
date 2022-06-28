@@ -109,6 +109,43 @@ func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
 	return rst, err
 }
 
+// GetLayer returns the layer of a block.
+func GetLayer(db sql.Executor, id types.BlockID) (types.LayerID, error) {
+	var lid types.LayerID
+	if rows, err := db.Exec("select layer from blocks where id = ?1;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}, func(stmt *sql.Statement) bool {
+		lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+		return true
+	}); err != nil {
+		return lid, fmt.Errorf("get block layer %s: %w", id, err)
+	} else if rows == 0 {
+		return lid, fmt.Errorf("%w block %s not in db", sql.ErrNotFound, err)
+	}
+	return lid, nil
+}
+
+// Layer returns full body blocks for layer.
+func Layer(db sql.Executor, lid types.LayerID) ([]*types.Block, error) {
+	var (
+		blk *types.Block
+		rst []*types.Block
+		err error
+	)
+	if _, err = db.Exec("select id, block from blocks where layer = ?1;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Uint32()))
+	}, func(stmt *sql.Statement) bool {
+		id := types.BlockID{}
+		stmt.ColumnBytes(0, id[:])
+		blk, err = decodeBlock(stmt.ColumnReader(1), id)
+		rst = append(rst, blk)
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("select blocks in layer %s: %w", lid, err)
+	}
+	return rst, nil
+}
+
 // IDsInLayer returns list of block ids in the layer.
 func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID
@@ -120,7 +157,7 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 		rst = append(rst, id)
 		return true
 	}); err != nil {
-		return nil, fmt.Errorf("select in layer %s: %w", lid, err)
+		return nil, fmt.Errorf("select bids in layer %s: %w", lid, err)
 	}
 	return rst, nil
 }

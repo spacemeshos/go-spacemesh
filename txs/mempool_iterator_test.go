@@ -1,7 +1,6 @@
 package txs
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -16,14 +15,17 @@ import (
 
 func makeNanoTX(addr types.Address, fee uint64, received time.Time) *txtypes.NanoTX {
 	return &txtypes.NanoTX{
-		Tid:       types.RandomTransactionID(),
-		Principal: addr,
-		Fee:       fee,
-		Received:  received,
+		ID: types.RandomTransactionID(),
+		TxHeader: types.TxHeader{
+			Principal: addr,
+			GasPrice:  fee,
+			MaxGas:    1,
+		},
+		Received: received,
 	}
 }
 
-func makeMempool() (map[types.Address][]*txtypes.NanoTX, []types.TransactionID) {
+func makeMempool() (map[types.Address][]*txtypes.NanoTX, []*txtypes.NanoTX) {
 	// acct:   [(fee, received) ....]
 	// acct_0: [(4, 3), (4, 4), (4, 5)]
 	// acct_1: [(2, 0), (2, 3)]
@@ -49,43 +51,57 @@ func makeMempool() (map[types.Address][]*txtypes.NanoTX, []types.TransactionID) 
 			makeNanoTX(addr2, 5, now.Add(time.Second*3)),
 		},
 	}
-	expected := []types.TransactionID{
-		mempool[addr2][0].Tid, // (4, 0)
-		mempool[addr0][0].Tid, // (4, 3)
-		mempool[addr0][1].Tid, // (4, 4)
-		mempool[addr0][2].Tid, // (4, 5)
-		mempool[addr2][1].Tid, // (3, 0)
-		mempool[addr1][0].Tid, // (2, 0)
-		mempool[addr2][2].Tid, // (2, 1)
-		mempool[addr2][3].Tid, // (5, 3)
-		mempool[addr1][1].Tid, // (2, 3)
+	expected := []*txtypes.NanoTX{
+		mempool[addr2][0], // (4, 0)
+		mempool[addr0][0], // (4, 3)
+		mempool[addr0][1], // (4, 4)
+		mempool[addr0][2], // (4, 5)
+		mempool[addr2][1], // (3, 0)
+		mempool[addr1][0], // (2, 0)
+		mempool[addr2][2], // (2, 1)
+		mempool[addr2][3], // (5, 3)
+		mempool[addr1][1], // (2, 3)
 	}
 	return mempool, expected
 }
 
-func TestNewMempoolIterator(t *testing.T) {
-	mempool, _ := makeMempool()
-	ctrl := gomock.NewController(t)
-	mockCache := mocks.NewMockconStateCache(ctrl)
-	mockCache.EXPECT().GetMempool().Return(mempool, nil)
-	_, err := newMempoolIterator(logtest.New(t), mockCache, 100)
-	require.NoError(t, err)
-
-	errUnknown := errors.New("unknown")
-	mockCache.EXPECT().GetMempool().Return(nil, errUnknown)
-	_, err = newMempoolIterator(logtest.New(t), mockCache, 100)
-	require.ErrorIs(t, err, errUnknown)
+func testPopAll(t *testing.T, mi *mempoolIterator, expected []*txtypes.NanoTX) {
+	got, byAddrAndNonce := mi.PopAll()
+	require.Equal(t, expected, got)
+	for _, ntx := range got {
+		ntxs, ok := byAddrAndNonce[ntx.Principal]
+		require.True(t, ok)
+		if len(ntxs) > 1 {
+			byAddrAndNonce[ntx.Principal] = byAddrAndNonce[ntx.Principal][1:]
+		} else {
+			delete(byAddrAndNonce, ntx.Principal)
+		}
+	}
+	require.Empty(t, byAddrAndNonce)
 }
 
 func TestPopAll(t *testing.T) {
 	mempool, expected := makeMempool()
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockconStateCache(ctrl)
-	mockCache.EXPECT().GetMempool().Return(mempool, nil)
-	numTXs := 3
-	mi, err := newMempoolIterator(logtest.New(t), mockCache, numTXs)
-	require.NoError(t, err)
-	require.Equal(t, expected[0:numTXs], mi.PopAll())
+	mockCache.EXPECT().GetMempool().Return(mempool)
+	gasLimit := uint64(3)
+	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
+	testPopAll(t, mi, expected[:gasLimit])
+	require.NotEmpty(t, mempool)
+}
+
+func TestPopAll_SkipSomeGasTooHigh(t *testing.T) {
+	mempool, orderedByFee := makeMempool()
+	ctrl := gomock.NewController(t)
+	mockCache := mocks.NewMockconStateCache(ctrl)
+	mockCache.EXPECT().GetMempool().Return(mempool)
+	gasLimit := uint64(3)
+	// make the 2nd one too expensive to pick, therefore invalidated all txs from addr0
+	orderedByFee[1].MaxGas = 10
+	expected := []*txtypes.NanoTX{orderedByFee[0], orderedByFee[4], orderedByFee[5]}
+	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
+	testPopAll(t, mi, expected)
 	require.NotEmpty(t, mempool)
 }
 
@@ -93,10 +109,9 @@ func TestPopAll_ExhaustMempool(t *testing.T) {
 	mempool, expected := makeMempool()
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockconStateCache(ctrl)
-	mockCache.EXPECT().GetMempool().Return(mempool, nil)
-	numTXs := 100
-	mi, err := newMempoolIterator(logtest.New(t), mockCache, numTXs)
-	require.NoError(t, err)
-	require.Equal(t, expected, mi.PopAll())
+	mockCache.EXPECT().GetMempool().Return(mempool)
+	gasLimit := uint64(100)
+	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
+	testPopAll(t, mi, expected)
 	require.Empty(t, mempool)
 }

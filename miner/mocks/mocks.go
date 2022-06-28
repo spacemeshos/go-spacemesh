@@ -76,19 +76,18 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// SelectTXsForProposal mocks base method.
-func (m *MockconservativeState) SelectTXsForProposal(arg0 int) ([]types.TransactionID, error) {
+// SelectProposalTXs mocks base method.
+func (m *MockconservativeState) SelectProposalTXs(arg0 int) []types.TransactionID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectTXsForProposal", arg0)
+	ret := m.ctrl.Call(m, "SelectProposalTXs", arg0)
 	ret0, _ := ret[0].([]types.TransactionID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
-// SelectTXsForProposal indicates an expected call of SelectTXsForProposal.
-func (mr *MockconservativeStateMockRecorder) SelectTXsForProposal(arg0 interface{}) *gomock.Call {
+// SelectProposalTXs indicates an expected call of SelectProposalTXs.
+func (mr *MockconservativeStateMockRecorder) SelectProposalTXs(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTXsForProposal", reflect.TypeOf((*MockconservativeState)(nil).SelectTXsForProposal), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectProposalTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectProposalTXs), arg0)
 }
 
 // MockvotesEncoder is a mock of votesEncoder interface.
@@ -132,73 +131,4 @@ func (mr *MockvotesEncoderMockRecorder) EncodeVotes(arg0 interface{}, arg1 ...in
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeVotes", reflect.TypeOf((*MockvotesEncoder)(nil).EncodeVotes), varargs...)
-}
-
-// MockactivationDB is a mock of activationDB interface.
-type MockactivationDB struct {
-	ctrl     *gomock.Controller
-	recorder *MockactivationDBMockRecorder
-}
-
-// MockactivationDBMockRecorder is the mock recorder for MockactivationDB.
-type MockactivationDBMockRecorder struct {
-	mock *MockactivationDB
-}
-
-// NewMockactivationDB creates a new mock instance.
-func NewMockactivationDB(ctrl *gomock.Controller) *MockactivationDB {
-	mock := &MockactivationDB{ctrl: ctrl}
-	mock.recorder = &MockactivationDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockactivationDB) EXPECT() *MockactivationDBMockRecorder {
-	return m.recorder
-}
-
-// GetAtxHeader mocks base method.
-func (m *MockactivationDB) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockactivationDBMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockactivationDB)(nil).GetAtxHeader), arg0)
-}
-
-// GetEpochWeight mocks base method.
-func (m *MockactivationDB) GetEpochWeight(arg0 types.EpochID) (uint64, []types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEpochWeight", arg0)
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].([]types.ATXID)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetEpochWeight indicates an expected call of GetEpochWeight.
-func (mr *MockactivationDBMockRecorder) GetEpochWeight(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochWeight", reflect.TypeOf((*MockactivationDB)(nil).GetEpochWeight), arg0)
-}
-
-// GetNodeAtxIDForEpoch mocks base method.
-func (m *MockactivationDB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNodeAtxIDForEpoch", nodeID, targetEpoch)
-	ret0, _ := ret[0].(types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetNodeAtxIDForEpoch indicates an expected call of GetNodeAtxIDForEpoch.
-func (mr *MockactivationDBMockRecorder) GetNodeAtxIDForEpoch(nodeID, targetEpoch interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeAtxIDForEpoch", reflect.TypeOf((*MockactivationDB)(nil).GetNodeAtxIDForEpoch), nodeID, targetEpoch)
 }

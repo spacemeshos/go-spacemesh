@@ -7,8 +7,13 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
@@ -21,9 +26,8 @@ var (
 type turtle struct {
 	Config
 	logger log.Log
+	cdb    *datastore.CachedDB
 
-	atxdb   atxDataProvider
-	bdp     blockDataProvider
 	beacons system.BeaconGetter
 	updater blockValidityUpdater
 
@@ -37,8 +41,7 @@ type turtle struct {
 // newTurtle creates a new verifying tortoise algorithm instance.
 func newTurtle(
 	logger log.Log,
-	bdp blockDataProvider,
-	atxdb atxDataProvider,
+	cdb *datastore.CachedDB,
 	beacons system.BeaconGetter,
 	updater blockValidityUpdater,
 	config Config,
@@ -47,8 +50,7 @@ func newTurtle(
 		Config:      config,
 		commonState: newCommonState(),
 		logger:      logger,
-		bdp:         bdp,
-		atxdb:       atxdb,
+		cdb:         cdb,
 		beacons:     beacons,
 		updater:     updater,
 	}
@@ -61,8 +63,7 @@ func newTurtle(
 func (t *turtle) cloneTurtleParams() *turtle {
 	return newTurtle(
 		t.logger,
-		t.bdp,
-		t.atxdb,
+		t.cdb,
 		t.beacons,
 		t.updater,
 		t.Config,
@@ -85,7 +86,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
 		// needs to be not nil
-		t.ballotWeight[ballot.ID()] = weightFromFloat64(0)
+		t.ballotWeight[ballot.ID()] = util.WeightFromFloat64(0)
 		t.ballots[genesis] = []types.BallotID{ballot.ID()}
 		t.verifying.goodBallots[ballot.ID()] = good
 	}
@@ -204,7 +205,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.ballots[lid] {
 				weight := t.ballotWeight[ballotID]
-				if weight.isNil() {
+				if weight.IsNil() {
 					continue
 				}
 				dis, err := t.firstDisagreement(ctx, lid, ballotID, disagreements)
@@ -256,7 +257,7 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
 		for _, ballotID := range t.ballots[lid] {
-			if t.ballotWeight[ballotID].isNil() {
+			if t.ballotWeight[ballotID].IsNil() {
 				continue
 			}
 			if rst := t.verifying.goodBallots[ballotID]; rst == good {
@@ -268,7 +269,7 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 				return choices[i].Compare(choices[j])
 			})
 
-			t.logger.With().Info("considering good base ballot", choices[0], lid)
+			logger.With().Info("considering good base ballot", choices[0], lid)
 			return choices[0], lid
 		}
 	}
@@ -398,12 +399,12 @@ func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, bid types.B
 		return vote, reason, nil
 	}
 	sum := t.full.weights[bid]
-	vote = sum.cmp(t.localThreshold)
+	vote = sign(sum.Cmp(t.localThreshold))
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
-	coin, exist := t.bdp.GetCoinflip(ctx, t.last)
-	if !exist {
+	coin, err := layers.GetWeakCoin(t.cdb, t.last)
+	if err != nil {
 		return 0, "", fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
 			t.last, bid, lid)
 	}
@@ -464,7 +465,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 	} else if ballot.RefBallot == types.EmptyBallotID {
 		logger.With().Panic("ref ballot missing epoch data", ballot.ID())
 	} else {
-		refBallot, err := t.bdp.GetBallot(refBallotID)
+		refBallot, err := ballots.Get(t.cdb, refBallotID)
 		if err != nil {
 			return types.EmptyBeacon, fmt.Errorf("get ref ballot: %w", err)
 		}
@@ -486,7 +487,7 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
 	}
-	if err := t.loadConsesusData(lid); err != nil {
+	if err := t.loadConsensusData(lid); err != nil {
 		return err
 	}
 	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
@@ -607,12 +608,12 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.Layer
 }
 
 func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
-	ballots := t.ballots[lid]
-	if len(ballots) == 0 {
+	blts := t.ballots[lid]
+	if len(blts) == 0 {
 		return nil
 	}
-	tballots := make([]tortoiseBallot, 0, len(ballots))
-	for _, ballot := range ballots {
+	tballots := make([]tortoiseBallot, 0, len(blts))
+	for _, ballot := range blts {
 		tballots = append(tballots, tortoiseBallot{
 			id:      ballot,
 			base:    t.full.base[ballot],
@@ -624,13 +625,13 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	return tballots
 }
 
-func (t *turtle) loadConsesusData(lid types.LayerID) error {
-	blocks, err := t.bdp.LayerBlockIds(lid)
+func (t *turtle) loadConsensusData(lid types.LayerID) error {
+	bids, err := blocks.IDsInLayer(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}
-	for _, block := range blocks {
-		t.onBlock(lid, block)
+	for _, bid := range bids {
+		t.onBlock(lid, bid)
 	}
 
 	if err := t.loadHare(lid); err != nil {
@@ -640,7 +641,7 @@ func (t *turtle) loadConsesusData(lid types.LayerID) error {
 }
 
 func (t *turtle) loadHare(lid types.LayerID) error {
-	output, err := t.bdp.GetHareConsensusOutput(lid)
+	output, err := layers.GetHareOutput(t.cdb, lid)
 	if err == nil {
 		t.onHareOutput(lid, output)
 		return nil
@@ -655,7 +656,7 @@ func (t *turtle) loadHare(lid types.LayerID) error {
 func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 	// validities will be available only during rerun or
 	// if they are synced from peers, which we don't do currently
-	validities, err := t.bdp.LayerContextualValidity(lid)
+	validities, err := blocks.ContextualValidity(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("contextual validity %s: %w", lid, err)
 	}
@@ -682,14 +683,14 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 		if _, exist := t.epochWeight[epoch]; exist {
 			break
 		}
-		layerWeight, err := computeEpochWeight(t.atxdb, t.epochWeight, epoch)
+		layerWeight, err := computeEpochWeight(t.cdb, t.epochWeight, epoch)
 		if err != nil {
 			return err
 		}
 		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
 	}
 	window := getVerificationWindow(t.Config, t.mode, t.verified.Add(1), t.last)
-	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
+	if lastUpdated || window.Before(t.processed) || t.globalThreshold.IsNil() {
 		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
 			t.verified.Add(1), t.last, t.processed,
 			t.epochWeight,
@@ -701,14 +702,14 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 // loadBallots from database.
 // must be loaded in order, as base ballot information needs to be in the state.
 func (t *turtle) loadBallots(logger log.Log, lid types.LayerID) error {
-	ballots, err := t.bdp.LayerBallots(lid)
+	blts, err := ballots.Layer(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
 	}
 
-	for _, ballot := range ballots {
+	for _, ballot := range blts {
 		if err := t.onBallot(ballot); err != nil {
-			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
+			logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
 		}
 	}
 	return nil
@@ -760,11 +761,11 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		}
 	}
 
-	var ballotWeight weight
+	var ballotWeight util.Weight
 	if !ballot.IsMalicious() {
 		var err error
 		ballotWeight, err = computeBallotWeight(
-			t.atxdb, t.bdp, t.referenceWeight,
+			t.cdb, t.referenceWeight,
 			t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch(),
 		)
 		if err != nil {

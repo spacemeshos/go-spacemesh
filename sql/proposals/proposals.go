@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -21,7 +20,8 @@ func Get(db sql.Executor, id types.ProposalID) (proposal *types.Proposal, err er
 			proposals.id, 
 			proposals.ballot_id, 
 			proposals.tx_ids, 
-			proposals.signature 
+			proposals.mesh_hash,
+			proposals.signature
 		from proposals 
 		left join ballots on proposals.ballot_id = ballots.id 
 		left join identities using(pubkey)
@@ -68,7 +68,7 @@ func GetIDsByLayer(db sql.Executor, layer types.LayerID) (ids []types.ProposalID
 	if rows, err := db.Exec("select id from proposals where layer = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec layer %v: %w", layer, err)
 	} else if rows == 0 {
-		return []types.ProposalID{}, database.ErrNotFound
+		return []types.ProposalID{}, sql.ErrNotFound
 	}
 
 	return ids, nil
@@ -85,6 +85,7 @@ func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Prop
 			proposals.id, 
 			proposals.ballot_id, 
 			proposals.tx_ids, 
+			proposals.mesh_hash,
 			proposals.signature 
 		from proposals 
 		left join ballots on proposals.ballot_id = ballots.id 
@@ -145,13 +146,14 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindBytes(2, proposal.Ballot.ID().Bytes())
 		stmt.BindInt64(3, int64(proposal.LayerIndex.Uint32()))
 		stmt.BindBytes(4, txIDsBytes)
-		stmt.BindBytes(5, proposal.Signature)
-		stmt.BindBytes(6, encodedProposal)
+		stmt.BindBytes(5, proposal.MeshHash.Bytes())
+		stmt.BindBytes(6, proposal.Signature)
+		stmt.BindBytes(7, encodedProposal)
 	}
 
 	_, err = db.Exec(`
-		insert into proposals (id, ballot_id, layer, tx_ids, signature, proposal) 
-		values (?1, ?2, ?3, ?4, ?5, ?6);`, enc, nil)
+		insert into proposals (id, ballot_id, layer, tx_ids, mesh_hash, signature, proposal)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert proposal ID %v: %w", proposal.ID(), err)
 	}
@@ -188,8 +190,10 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	txIDsBytes := make([]byte, stmt.ColumnLen(6))
 	stmt.ColumnBytes(6, txIDsBytes)
 
-	signature := make([]byte, stmt.ColumnLen(7))
-	stmt.ColumnBytes(7, signature)
+	meshBytes := make([]byte, stmt.ColumnLen(7))
+	stmt.ColumnBytes(7, meshBytes)
+	signature := make([]byte, stmt.ColumnLen(8))
+	stmt.ColumnBytes(8, signature)
 
 	txIDs := make([]types.TransactionID, 0)
 	if err := codec.Decode(txIDsBytes, &txIDs); err != nil {
@@ -199,8 +203,9 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	}
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
-			Ballot: ballot,
-			TxIDs:  txIDs,
+			Ballot:   ballot,
+			TxIDs:    txIDs,
+			MeshHash: types.BytesToHash(meshBytes),
 		},
 		Signature: signature,
 	}

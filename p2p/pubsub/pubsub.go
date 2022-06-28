@@ -2,7 +2,6 @@ package pubsub
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -10,6 +9,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
@@ -100,7 +100,7 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 }
 
 func msgID(msg *pb.Message) string {
-	hasher := sha256.New()
+	hasher := hash.New()
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))
 	}

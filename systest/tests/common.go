@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
@@ -13,40 +12,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-type transaction struct {
-	Nonce     uint64
-	Recipient [20]byte
-	GasLimit  uint64
-	Fee       uint64
-	Amount    uint64
-}
-
-func encodeTx(tx transaction) (buf []byte) {
-	scratch := [8]byte{}
-	binary.BigEndian.PutUint64(scratch[:], tx.Nonce)
-	buf = append(buf, scratch[:]...)
-	buf = append(buf, tx.Recipient[:]...)
-	binary.BigEndian.PutUint64(scratch[:], tx.GasLimit)
-	buf = append(buf, scratch[:]...)
-	binary.BigEndian.PutUint64(scratch[:], tx.Fee)
-	buf = append(buf, scratch[:]...)
-	binary.BigEndian.PutUint64(scratch[:], tx.Amount)
-	buf = append(buf, scratch[:]...)
-	return buf
-}
-
-func submitTransacition(ctx context.Context, pk ed25519.PrivateKey, tx transaction, node *cluster.NodeClient) error {
+func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient) error {
 	txclient := spacemeshv1.NewTransactionServiceClient(node)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	encoded := encodeTx(tx)
-	encoded = append(encoded, ed25519.Sign2(pk, encoded)...)
-	response, err := txclient.SubmitTransaction(ctx, &spacemeshv1.SubmitTransactionRequest{Transaction: encoded})
+	response, err := txclient.SubmitTransaction(ctx, &spacemeshv1.SubmitTransactionRequest{Transaction: tx})
 	if err != nil {
 		return err
 	}
@@ -54,22 +32,6 @@ func submitTransacition(ctx context.Context, pk ed25519.PrivateKey, tx transacti
 		return fmt.Errorf("tx state should not be nil")
 	}
 	return nil
-}
-
-func newTransactionSubmitter(pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) func(context.Context) error {
-	return func(ctx context.Context) error {
-		if err := submitTransacition(ctx, pk, transaction{
-			GasLimit:  100,
-			Fee:       1,
-			Amount:    amount,
-			Recipient: receiver,
-			Nonce:     nonce,
-		}, client); err != nil {
-			return err
-		}
-		nonce++
-		return nil
-	}
 }
 
 func extractNames(nodes ...*cluster.NodeClient) []string {
@@ -80,8 +42,10 @@ func extractNames(nodes ...*cluster.NodeClient) []string {
 	return rst
 }
 
-func watchLayers(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient,
-	collector func(*spacemeshv1.LayerStreamResponse) (bool, error)) {
+func watchLayers(ctx context.Context, eg *errgroup.Group,
+	client *cluster.NodeClient,
+	collector func(*spacemeshv1.LayerStreamResponse) (bool, error),
+) {
 	eg.Go(func() error {
 		meshapi := spacemeshv1.NewMeshServiceClient(client)
 		layers, err := meshapi.LayerStream(ctx, &spacemeshv1.LayerStreamRequest{})
@@ -94,6 +58,29 @@ func watchLayers(ctx context.Context, eg *errgroup.Group, client *cluster.NodeCl
 				return err
 			}
 			if cont, err := collector(layer); !cont {
+				return err
+			}
+		}
+	})
+}
+
+func watchTransactionResults(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	collector func(*spacemeshv1.TransactionResult) (bool, error),
+) {
+	eg.Go(func() error {
+		api := spacemeshv1.NewTransactionServiceClient(client)
+		rsts, err := api.StreamResults(ctx, &spacemeshv1.TransactionResultsRequest{Watch: true})
+		if err != nil {
+			return err
+		}
+		for {
+			rst, err := rsts.Recv()
+			if err != nil {
+				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+			}
+			if cont, err := collector(rst); !cont {
 				return err
 			}
 		}
@@ -198,4 +185,21 @@ func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address 
 		return 0, err
 	}
 	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
+}
+
+func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return submitTransacition(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
+}
+
+func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return submitTransacition(ctx,
+		wallet.Spend(
+			signing.PrivateKey(pk), types.Address(receiver), amount,
+			types.Nonce{Counter: nonce},
+		),
+		client)
 }

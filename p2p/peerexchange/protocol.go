@@ -10,12 +10,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 )
 
 const (
@@ -28,12 +28,12 @@ type peerExchange struct {
 	listen *atomic.Uint32
 
 	h      host.Host
-	book   *addrBook
+	book   *addressbook.AddrBook
 	logger log.Log
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *addrBook, listen uint16, log log.Log) *peerExchange {
+func newPeerExchange(h host.Host, rt *addressbook.AddrBook, listen uint16, log log.Log) *peerExchange {
 	ga := &peerExchange{
 		h:      h,
 		book:   rt,
@@ -41,6 +41,7 @@ func newPeerExchange(h host.Host, rt *addrBook, listen uint16, log log.Log) *pee
 		listen: atomic.NewUint32(uint32(listen)),
 	}
 	h.SetStreamHandler(protocolName, ga.handler)
+	h.EventBus()
 	return ga
 }
 
@@ -71,7 +72,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 			return
 		}
 		raw := fmt.Sprintf("%s/p2p/%s", ma, stream.Conn().RemotePeer())
-		info, err := parseAddrInfo(raw)
+		info, err := addressbook.ParseAddrInfo(raw)
 		if err != nil {
 			logger.Error("failed to parse created address", log.String("address", raw), log.Err(err))
 			return
@@ -80,15 +81,11 @@ func (p *peerExchange) handler(stream network.Stream) {
 	}
 	results := p.book.AddressCache()
 
-	for i := range results {
-		if results[i].ID == stream.Conn().RemotePeer() {
-			results[i] = results[len(results)-1]
-			results = results[:len(results)-1]
-			break
-		}
-	}
 	response := make([]string, 0, len(results))
 	for _, addr := range results {
+		if addr.ID == stream.Conn().RemotePeer() {
+			continue
+		}
 		response = append(response, addr.RawAddr)
 	}
 	// todo: limit results to message size
@@ -104,7 +101,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 		return
 	}
 	logger.Debug("response is sent",
-		log.Int("size", len(results)),
+		log.Int("size", len(response)),
 		log.Duration("time_to_make", time.Since(t)))
 }
 
@@ -119,7 +116,7 @@ func (p *peerExchange) ExternalPort() uint16 {
 }
 
 // Request addresses from a remote node, it will block and return the results returned from the node.
-func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, error) {
+func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook.AddrInfo, error) {
 	logger := p.logger.WithContext(ctx).WithFields(
 		log.String("type", "getaddresses"),
 		log.String("to", pid.String())).With()
@@ -142,9 +139,9 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}
 
-	infos := make([]*addrInfo, 0, len(addrs))
+	infos := make([]*addressbook.AddrInfo, 0, len(addrs))
 	for _, raw := range addrs {
-		info, err := parseAddrInfo(raw)
+		info, err := addressbook.ParseAddrInfo(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed parsing: %w", err)
 		}
@@ -154,41 +151,4 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 		infos = append(infos, info)
 	}
 	return infos, nil
-}
-
-// parseAddrInfo parses required info from string in multiaddr format.
-func parseAddrInfo(raw string) (*addrInfo, error) {
-	addr, err := ma.NewMultiaddr(raw)
-	if err != nil {
-		return nil, fmt.Errorf("received invalid address %v: %w", raw, err)
-	}
-	_, pid := peer.SplitAddr(addr)
-	if len(pid) == 0 {
-		return nil, fmt.Errorf("address without peer id %v", raw)
-	}
-	if IsDNSAddress(raw) {
-		return &addrInfo{ID: pid, RawAddr: raw, addr: addr}, nil
-	}
-	ip, err := manet.ToIP(addr)
-	if err != nil {
-		return nil, fmt.Errorf("address without ip %v: %w", raw, err)
-	}
-	return &addrInfo{ID: pid, IP: ip, RawAddr: raw, addr: addr}, nil
-}
-
-// addrInfo stores relevant information for discovery.
-type addrInfo struct {
-	IP      net.IP
-	ID      peer.ID
-	RawAddr string
-	addr    ma.Multiaddr
-}
-
-func (a *addrInfo) String() string {
-	return a.RawAddr
-}
-
-// Addr returns pointeer to multiaddr.
-func (a *addrInfo) Addr() ma.Multiaddr {
-	return a.addr
 }

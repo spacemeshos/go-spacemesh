@@ -14,12 +14,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testHandler struct {
 	*Handler
-	ctrl        *gomock.Controller
 	mockFetcher *smocks.MockFetcher
 	mockMesh    *mocks.MockmeshProvider
 }
@@ -27,11 +28,10 @@ type testHandler struct {
 func createTestHandler(t *testing.T) *testHandler {
 	ctrl := gomock.NewController(t)
 	th := &testHandler{
-		ctrl:        ctrl,
 		mockFetcher: smocks.NewMockFetcher(ctrl),
 		mockMesh:    mocks.NewMockmeshProvider(ctrl),
 	}
-	th.Handler = NewHandler(th.mockFetcher, th.mockMesh, WithLogger(logtest.New(t)))
+	th.Handler = NewHandler(th.mockFetcher, sql.InMemory(), th.mockMesh, WithLogger(logtest.New(t)))
 	return th
 }
 
@@ -52,7 +52,7 @@ func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.Transact
 func Test_HandleBlockData_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	_, data := createBlockData(t, layerID, txIDs)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data[1:]), errMalformedData)
@@ -61,33 +61,31 @@ func Test_HandleBlockData_MalformedData(t *testing.T) {
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
-	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(true).Times(1)
+	require.NoError(t, blocks.Add(th.db, block))
 	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
 }
 
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
-	block, data := createBlockData(t, layerID, txIDs)
-	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
+	_, data := createBlockData(t, layerID, txIDs)
 	errUnknown := errors.New("unknown")
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
+	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
 }
 
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
-	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
+	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
@@ -96,11 +94,10 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 func Test_HandleBlockData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
-	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
-	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
+	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
 }

@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 func newCommonState() commonState {
@@ -12,9 +13,9 @@ func newCommonState() commonState {
 		blockLayer:       map[types.BlockID]types.LayerID{},
 		refBallotBeacons: map[types.EpochID]map[types.BallotID]types.Beacon{},
 		badBeaconBallots: map[types.BallotID]struct{}{},
-		epochWeight:      map[types.EpochID]weight{},
-		referenceWeight:  map[types.BallotID]weight{},
-		ballotWeight:     map[types.BallotID]weight{},
+		epochWeight:      map[types.EpochID]util.Weight{},
+		referenceWeight:  map[types.BallotID]util.Weight{},
+		ballotWeight:     map[types.BallotID]util.Weight{},
 		decided:          map[types.LayerID]struct{}{},
 		hareOutput:       votes{},
 		validity:         votes{},
@@ -39,10 +40,10 @@ type commonState struct {
 	// computed as config.LocalThreshold * epochWeights[last].
 	//
 	// used as a part of threshold and for voting when block is undecided and outside of hdist.
-	localThreshold weight
+	localThreshold util.Weight
 	// globalThreshold is changed when the last or verified layer is updated.
 	// computed as - sum of all layers between verified + 1 up to last * config.GlobalThreshold + local threshold.
-	globalThreshold weight
+	globalThreshold util.Weight
 
 	blocks      map[types.LayerID][]types.BlockID
 	ballots     map[types.LayerID][]types.BallotID
@@ -56,14 +57,14 @@ type commonState struct {
 	badBeaconBallots map[types.BallotID]struct{}
 
 	// epochWeight average weight per layer of atx's that target keyed epoch
-	epochWeight map[types.EpochID]weight
+	epochWeight map[types.EpochID]util.Weight
 
 	// referenceWeight stores atx weight divided by the total number of eligibilities.
 	// it is computed together with refBallot weight. it is not equal to refBallot
 	// only if refBallot has more than 1 eligibility proof.
-	referenceWeight map[types.BallotID]weight
+	referenceWeight map[types.BallotID]util.Weight
 	// ballotWeight is referenceWeight multiplied by the number of eligibilities
-	ballotWeight map[types.BallotID]weight
+	ballotWeight map[types.BallotID]util.Weight
 
 	decided    map[types.LayerID]struct{}
 	hareOutput votes

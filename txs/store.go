@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
+var _ txProvider = (*store)(nil)
+
 type store struct {
-	logger log.Log
-	db     *sql.Database
+	db *sql.Database
 }
 
 func newStore(db *sql.Database) *store {
@@ -30,6 +30,11 @@ func (s *store) LastAppliedLayer() (types.LayerID, error) {
 	return layers.GetLastApplied(s.db)
 }
 
+// GetMeshHash gets the aggregated layer hash at the specified layer.
+func (s *store) GetMeshHash(lid types.LayerID) (types.Hash32, error) {
+	return layers.GetAggregatedHash(s.db, lid)
+}
+
 // Add adds a transaction to the database.
 func (s *store) Add(tx *types.Transaction, received time.Time) error {
 	return transactions.Add(s.db, tx, received)
@@ -43,11 +48,6 @@ func (s *store) Has(tid types.TransactionID) (bool, error) {
 // Get returns a transaction from the database.
 func (s *store) Get(tid types.TransactionID) (*types.MeshTransaction, error) {
 	return transactions.Get(s.db, tid)
-}
-
-// GetBlob returns a transaction as a byte array.
-func (s *store) GetBlob(tid types.TransactionID) ([]byte, error) {
-	return transactions.GetBlob(s.db, tid)
 }
 
 // GetByAddress returns a list of transactions from `address` with layers in [from, to].
@@ -130,23 +130,20 @@ func addToBlock(dbtx *sql.Tx, lid types.LayerID, bid types.BlockID, tids []types
 
 // ApplyLayer sets transactions to applied and discarded accordingly, and sets the layer at which the
 // transactions are applied/discarded.
-func (s *store) ApplyLayer(lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionID) error {
+func (s *store) ApplyLayer(appliedByNonce map[uint64]types.TransactionWithResult) error {
 	return s.runInDBTransaction(func(dbtx *sql.Tx) error {
-		return applyLayer(dbtx, lid, bid, addr, appliedByNonce)
+		return applyLayer(dbtx, appliedByNonce)
 	})
 }
 
-func applyLayer(dbtx *sql.Tx, lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionID) error {
+func applyLayer(dbtx *sql.Tx, appliedByNonce map[uint64]types.TransactionWithResult) error {
 	// nonce order doesn't matter here
-	for nonce, tid := range appliedByNonce {
-		updated, err := transactions.Apply(dbtx, tid, lid, bid)
+	for nonce, tx := range appliedByNonce {
+		err := transactions.AddResult(dbtx, tx.ID, &tx.TransactionResult)
 		if err != nil {
 			return fmt.Errorf("apply %w", err)
 		}
-		if updated == 0 {
-			return fmt.Errorf("tx not applied %v", tid)
-		}
-		if err = transactions.DiscardByAcctNonce(dbtx, tid, lid, addr, nonce); err != nil {
+		if err = transactions.DiscardByAcctNonce(dbtx, tx.ID, tx.Layer, tx.Principal, nonce); err != nil {
 			return fmt.Errorf("apply discard %w", err)
 		}
 	}
@@ -172,4 +169,9 @@ func undoLayers(dbtx *sql.Tx, from types.LayerID) error {
 		}
 	}
 	return nil
+}
+
+// AddHeader to previously stored tx.
+func (s *store) AddHeader(tid types.TransactionID, header *types.TxHeader) error {
+	return transactions.AddHeader(s.db, tid, header)
 }

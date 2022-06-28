@@ -7,7 +7,14 @@ import (
 	"sync"
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-scale"
 )
+
+func init() {
+	// xdr will fail with overflow if slice size is larger than 1mb
+	// see BenchmarkInvalidLength
+	xdr.SliceLimit = 1 << 20
+}
 
 // Encodable is an interface that must be implemented by a struct to be encoded.
 type Encodable interface{}
@@ -17,6 +24,9 @@ type Decodable interface{}
 
 // EncodeTo encodes value to a writer stream.
 func EncodeTo(w io.Writer, value Encodable) (int, error) {
+	if encodable, ok := value.(scale.Encodable); ok {
+		return encodable.EncodeScale(scale.NewEncoder(w))
+	}
 	v, err := xdr.Marshal(w, value)
 	if err != nil {
 		return v, fmt.Errorf("marshal XDR: %w", err)
@@ -27,6 +37,9 @@ func EncodeTo(w io.Writer, value Encodable) (int, error) {
 
 // DecodeFrom decodes a value using data from a reader stream.
 func DecodeFrom(r io.Reader, value Decodable) (int, error) {
+	if decodable, ok := value.(scale.Decodable); ok {
+		return decodable.DecodeScale(scale.NewDecoder(r))
+	}
 	v, err := xdr.Unmarshal(r, value)
 	if err != nil {
 		return v, fmt.Errorf("unmarshal XDR: %w", err)

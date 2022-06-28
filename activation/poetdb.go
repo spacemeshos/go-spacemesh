@@ -5,19 +5,18 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/hash"
+	phash "github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
-	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
 
-type poetProofKey [sha256.Size]byte
+type poetProofKey [hash.Size]byte
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
@@ -27,7 +26,7 @@ type PoetDb struct {
 	mu                        sync.Mutex
 }
 
-// NewPoetDb returns a new PoET DB.
+// NewPoetDb returns a new PoET handler.
 func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
 	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
@@ -185,7 +184,7 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 }
 
 func makeKey(poetID []byte, roundID string) poetProofKey {
-	sum := sha256.Sum256(append(poetID[:], []byte(roundID)...))
+	sum := hash.Sum(append(poetID[:], []byte(roundID)...))
 	return sum
 }
 
@@ -212,30 +211,11 @@ func calcRoot(leaves [][]byte) ([]byte, error) {
 }
 
 func validatePoet(membershipRoot []byte, merkleProof shared.MerkleProof, leafCount uint64) error {
-	labelHashFunc := hash.GenLabelHashFunc(membershipRoot)
-	merkleHashFunc := hash.GenMerkleHashFunc(membershipRoot)
+	labelHashFunc := phash.GenLabelHashFunc(membershipRoot)
+	merkleHashFunc := phash.GenMerkleHashFunc(membershipRoot)
 	if err := verifier.Validate(merkleProof, labelHashFunc, merkleHashFunc, leafCount, shared.T); err != nil {
 		return fmt.Errorf("validate PoET: %w", err)
 	}
 
 	return nil
-}
-
-// PoETs exports the PoETs database.
-func (db *PoetDb) PoETs() database.Getter {
-	return newPoETFetcherDB(db)
-}
-
-func newPoETFetcherDB(db *PoetDb) *PoETFetcher {
-	return &PoETFetcher{DB: db}
-}
-
-// PoETFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
-type PoETFetcher struct {
-	DB *PoetDb
-}
-
-// Get gets an PoET as bytes by an PoET ID as bytes.
-func (f *PoETFetcher) Get(key []byte) ([]byte, error) {
-	return poets.Get(f.DB.sqlDB, key)
 }

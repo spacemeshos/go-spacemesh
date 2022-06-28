@@ -3,23 +3,29 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
+	db        *sql.Database
 	publisher api.Publisher // P2P Swarm
 	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
@@ -33,12 +39,14 @@ func (s TransactionService) RegisterService(server *Server) {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
+	db *sql.Database,
 	publisher api.Publisher,
 	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
+		db:        db,
 		publisher: publisher,
 		mesh:      msh,
 		conState:  conState,
@@ -59,22 +67,16 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
-	tx, err := types.BytesToTransaction(in.Transaction)
-	if err != nil {
-		log.Error("failed to deserialize tx, error: %v", err)
-		return nil, status.Error(codes.InvalidArgument,
-			"`Transaction` must contain a valid, serialized transaction")
-	}
-
 	if err := s.publisher.Publish(ctx, txs.IncomingTxProtocol, in.Transaction); err != nil {
 		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
+	raw := types.NewRawTx(in.Transaction)
 
 	return &pb.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		Txstate: &pb.TransactionState{
-			Id:    &pb.TransactionId{Id: tx.ID().Bytes()},
+			Id:    &pb.TransactionId{Id: raw.ID[:]},
 			State: pb.TransactionState_TRANSACTION_STATE_MEMPOOL,
 		},
 	}, nil
@@ -176,12 +178,12 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 			// Filter
 			for _, txid := range in.TransactionId {
-				if bytes.Equal(tx.Transaction.ID().Bytes(), txid.Id) {
+				if bytes.Equal(tx.Transaction.ID.Bytes(), txid.Id) {
 					// If the tx was just invalidated, we already know its state.
 					// If not, read it from the database.
 					var txstate pb.TransactionState_TransactionState
 					if tx.Valid {
-						_, txstate = s.getTransactionAndStatus(tx.Transaction.ID())
+						_, txstate = s.getTransactionAndStatus(tx.Transaction.ID)
 					} else {
 						txstate = pb.TransactionState_TRANSACTION_STATE_CONFLICTING
 					}
@@ -277,4 +279,136 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
 	}
+}
+
+// StreamResults allows to query historical results and subscribe to live data using the same filter.
+func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stream pb.TransactionService_StreamResultsServer) error {
+	var (
+		filter    transactions.ResultsFilter
+		sub       *events.BufferedSubscription[types.TransactionWithResult]
+		err       error
+		persisted types.LayerID
+	)
+	if len(in.Address) > 0 {
+		addr := types.BytesToAddress(in.Address)
+		filter.Address = &addr
+	}
+	if len(in.Id) > 0 {
+		var id types.TransactionID
+		copy(id[:], in.Id)
+		filter.TID = &id
+	}
+	if in.Start > 0 {
+		lid := types.NewLayerID(in.Start)
+		filter.Start = &lid
+	}
+	if in.End > 0 {
+		if in.Watch {
+			return status.Error(codes.InvalidArgument, "watch stream should have an empty End argument")
+		}
+		lid := types.NewLayerID(in.End)
+		filter.End = &lid
+	}
+
+	if in.Watch {
+		sub, err = events.SubscribeMatched(resultsMatcher(filter).match)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return status.Errorf(codes.Unavailable, "can't send header")
+		}
+	}
+
+	var ierr error
+	err = transactions.IterateResults(s.db, filter, func(rst *types.TransactionWithResult) bool {
+		if rst.Layer.After(persisted) {
+			persisted = rst.Layer
+		}
+		ierr = stream.Send(castResult(rst))
+		return ierr == nil
+	})
+	if err == nil {
+		err = ierr
+	}
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return status.Error(codes.Internal, err.Error())
+	}
+	if sub == nil {
+		return nil
+	}
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-sub.Full():
+			return status.Error(codes.Canceled, "buffer overflow")
+		case rst := <-sub.Out():
+			if !rst.Layer.After(persisted) {
+				break
+			}
+			if err := stream.Send(castResult(&rst)); err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
+}
+
+func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
+	casted := &pb.TransactionResult{
+		Tx:          convertTransaction(&rst.Transaction),
+		Status:      pb.TransactionResult_Status(rst.Status),
+		Message:     rst.Message,
+		GasConsumed: rst.Gas,
+		Fee:         rst.Fee,
+		Block:       rst.Block[:],
+		Layer:       rst.Layer.Value,
+	}
+	if len(rst.Addresses) > 0 {
+		casted.UpdatedAddresses = make([][]byte, len(rst.Addresses))
+		for i := range rst.Addresses {
+			casted.UpdatedAddresses[i] = rst.Addresses[i][:]
+		}
+	}
+	return casted
+}
+
+type resultsMatcher transactions.ResultsFilter
+
+func (m resultsMatcher) match(rst *types.TransactionWithResult) bool {
+	if m.Address != nil {
+		found := false
+		for i := range rst.Addresses {
+			if rst.Addresses[i] == *m.Address {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if m.Start != nil {
+		if rst.Layer.Before(*m.Start) {
+			return false
+		}
+	}
+	if m.End != nil {
+		if rst.Layer.After(*m.End) {
+			return false
+		}
+	}
+	if m.TID != nil {
+		if rst.ID != *m.TID {
+			return false
+		}
+	}
+	return true
 }

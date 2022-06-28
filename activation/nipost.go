@@ -8,6 +8,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
 //go:generate mockgen -package=activation -destination=./poet_client_mock_test.go -source=./nipost.go PoetProvingServiceClient
@@ -43,7 +45,7 @@ func nipostBuildStateKey() []byte {
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
-	if bts, err := nb.store.Get(nipostBuildStateKey()); err != nil {
+	if bts, err := niposts.Get(nb.db, nipostBuildStateKey()); err != nil {
 		nb.log.With().Warning("cannot load nipost state", log.Err(err))
 		return
 	} else if len(bts) > 0 {
@@ -63,7 +65,7 @@ func (nb *NIPostBuilder) persist() {
 	if bts, err := types.InterfaceToBytes(&nb.state); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 		return
-	} else if err := nb.store.Put(nipostBuildStateKey(), bts); err != nil {
+	} else if err := niposts.Add(nb.db, nipostBuildStateKey(), bts); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 	}
 }
@@ -71,11 +73,11 @@ func (nb *NIPostBuilder) persist() {
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
 	minerID           []byte
+	db                *sql.Database
 	postSetupProvider PostSetupProvider
 	poetProver        PoetProvingServiceClient
 	poetDB            poetDbAPI
 	state             *builderState
-	store             bytesStore
 	log               log.Log
 }
 
@@ -91,7 +93,7 @@ func NewNIPostBuilder(
 	postSetupProvider PostSetupProvider,
 	poetProver PoetProvingServiceClient,
 	poetDB poetDbAPI,
-	store bytesStore,
+	db *sql.Database,
 	log log.Log,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
@@ -100,7 +102,7 @@ func NewNIPostBuilder(
 		poetProver:        poetProver,
 		poetDB:            poetDB,
 		state:             &builderState{NIPost: &types.NIPost{}},
-		store:             store,
+		db:                db,
 		log:               log,
 	}
 }

@@ -43,23 +43,28 @@ func createTestCache(t *testing.T, sf stateFunc) *testCache {
 	}
 }
 
+func newMeshTX(t *testing.T, nonce uint64, signer *signing.EdSigner, amt uint64, received time.Time) *types.MeshTransaction {
+	t.Helper()
+	return &types.MeshTransaction{
+		Transaction: *newTx(t, nonce, amt, defaultFee, signer),
+		Received:    received,
+	}
+}
+
 func generatePendingTXs(t *testing.T, signer *signing.EdSigner, from, to uint64) []*types.MeshTransaction {
 	t.Helper()
 	now := time.Now()
 	txs := make([]*types.MeshTransaction, 0, int(to-from+1))
 	for i := from; i <= to; i++ {
-		txs = append(txs, &types.MeshTransaction{
-			Transaction: *newTx(t, i, amount, fee, signer),
-			Received:    now.Add(time.Second * time.Duration(i)),
-		})
+		txs = append(txs, newMeshTX(t, i, signer, defaultAmount, now.Add(time.Second*time.Duration(i))))
 	}
 	return txs
 }
 
 func checkTX(t *testing.T, c *cache, mtx *types.MeshTransaction) {
-	got := c.Get(mtx.ID())
+	got := c.Get(mtx.ID)
 	require.NotNil(t, got)
-	require.Equal(t, mtx.ID(), got.Tid)
+	require.Equal(t, mtx.ID, got.ID)
 	require.Equal(t, mtx.LayerID, got.Layer)
 	require.Equal(t, mtx.BlockID, got.Block)
 }
@@ -71,8 +76,7 @@ func checkNoTX(t *testing.T, c *cache, tid types.TransactionID) {
 
 func checkMempool(t *testing.T, c *cache, expected map[types.Address][]*txtypes.NanoTX) {
 	t.Helper()
-	mempool, err := c.GetMempool()
-	require.NoError(t, err)
+	mempool := c.GetMempool()
 	require.Len(t, mempool, len(expected))
 	for addr := range mempool {
 		require.EqualValues(t, expected[addr], mempool[addr])
@@ -94,7 +98,7 @@ func toNanoTXs(mtxs []*types.MeshTransaction) []*txtypes.NanoTX {
 	return ntxs
 }
 
-func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*testAcct) {
+func createState(t *testing.T, numAccounts int) map[types.Address]*testAcct {
 	t.Helper()
 	accounts := make(map[types.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
@@ -104,9 +108,15 @@ func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*
 			signer:    signer,
 			principal: principal,
 			nonce:     uint64(rand.Int63n(1000)),
-			balance:   rand.Uint64(),
+			balance:   uint64(rand.Int63n(100000000)),
 		}
 	}
+	return accounts
+}
+
+func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*testAcct) {
+	t.Helper()
+	accounts := createState(t, numAccounts)
 	return createTestCache(t, getStateFunc(accounts)), accounts
 }
 
@@ -202,12 +212,12 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	lid := types.NewLayerID(97)
 	pid := types.ProposalID{1, 2, 3}
 	bid := types.BlockID{3, 2, 1}
-	addedToBlock := []types.TransactionID{mtxs[0].ID(), mtxs[1].ID()}
+	addedToBlock := []types.TransactionID{mtxs[0].ID, mtxs[1].ID}
 	for _, mtx := range mtxs[:2] {
 		mtx.LayerID = lid
 		mtx.BlockID = bid
 	}
-	addedToProposal := []types.TransactionID{mtxs[1].ID(), mtxs[2].ID()}
+	addedToProposal := []types.TransactionID{mtxs[1].ID, mtxs[2].ID}
 	mtxs[2].LayerID = lid.Add(1)
 	tc.mockTP.EXPECT().AddToBlock(lid, bid, addedToBlock).Return(nil)
 	tc.mockTP.EXPECT().AddToProposal(lid.Add(1), pid, addedToProposal).Return(nil)
@@ -223,29 +233,26 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 
 	// the block with tx0 and tx1 is applied.
 	// there is also an incoming fund of `income` to the principal's account
-	income := amount * 100
+	income := defaultAmount * 100
 	ta.nonce += 2
 	for _, mtx := range mtxs[:2] {
 		ta.balance -= mtx.Spending()
 	}
 	ta.balance += income
-	applied := []*types.Transaction{&mtxs[0].Transaction, &mtxs[1].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{
-		mtxs[0].AccountNonce: mtxs[0].ID(),
-		mtxs[1].AccountNonce: mtxs[1].ID(),
-	}
+	applied := makeResults(lid, bid, mtxs[0].Transaction, mtxs[1].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs[2:], nil)
 	for _, mtx := range mtxs[2:] {
-		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(mtx.LayerID, mtx.BlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID, lid).Return(mtx.LayerID, mtx.BlockID, nil)
 	}
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	for _, mtx := range mtxs[:2] {
-		checkNoTX(t, tc.cache, mtx.ID())
+		checkNoTX(t, tc.cache, mtx.ID)
 	}
 	for _, mtx := range mtxs[2:] {
 		checkTX(t, tc.cache, mtx)
@@ -278,10 +285,10 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	// tx1 got packed into block1 at lid and a proposal at lid+1
 	bid0 := types.BlockID{1, 2, 3}
 	bid1 := types.BlockID{3, 2, 1}
-	addedToBlock0 := []types.TransactionID{mtxs[0].ID()}
+	addedToBlock0 := []types.TransactionID{mtxs[0].ID}
 	mtxs[0].LayerID = lid
 	mtxs[0].BlockID = bid0
-	addedToBlock1 := []types.TransactionID{mtxs[1].ID()}
+	addedToBlock1 := []types.TransactionID{mtxs[1].ID}
 	mtxs[1].LayerID = lid
 	mtxs[1].BlockID = bid1
 	tc.mockTP.EXPECT().AddToBlock(lid, bid0, addedToBlock0).Return(nil)
@@ -302,27 +309,27 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 
 	// block0 is applied.
 	// there is also an incoming fund of `income` to the principal's account
-	income := amount * 100
+	income := defaultAmount * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
-	applied := []*types.Transaction{&mtxs[0].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].AccountNonce: mtxs[0].ID()}
+	applied := makeResults(lid, bid0, mtxs[0].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid0, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs[1:], nil)
-	tc.mockTP.EXPECT().SetNextLayerBlock(mtxs[1].ID(), lid).DoAndReturn(
+	tc.mockTP.EXPECT().SetNextLayerBlock(mtxs[1].ID, lid).DoAndReturn(
 		func(tid types.TransactionID, lid types.LayerID) (types.LayerID, types.BlockID, error) {
 			mtxs[1].LayerID = lid.Add(1)
 			return lid.Add(1), types.EmptyBlockID, nil
 		})
 	for _, mtx := range mtxs[2:] {
-		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID, lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
 	warns, errs := tc.ApplyLayer(lid, bid0, applied)
 	require.Empty(t, warns)
 	require.Empty(t, errs)
-	checkNoTX(t, tc.cache, mtxs[0].ID())
+	checkNoTX(t, tc.cache, mtxs[0].ID)
 	for _, mtx := range mtxs[1:] {
 		checkTX(t, tc.cache, mtx)
 	}
@@ -346,7 +353,7 @@ func TestCache_Account_TooManyNonce(t *testing.T) {
 		checkTX(t, tc.cache, mtx)
 	}
 	// the last one is not in the cache
-	checkNoTX(t, tc.cache, mtxs[last].ID())
+	checkNoTX(t, tc.cache, mtxs[last].ID)
 
 	newNextNonce := ta.nonce + maxTXsPerAcct
 	newBalance := ta.balance
@@ -366,8 +373,9 @@ func TestCache_Account_TooManySameNonceTXs(t *testing.T) {
 
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+maxTXsPerNonce)
 	for i, mtx := range mtxs {
-		mtx.Fee = fee + uint64(i)
-		mtx.AccountNonce = ta.nonce
+		mtx.GasPrice = defaultFee + uint64(i)
+		mtx.MaxGas = 1
+		mtx.Nonce.Counter = ta.nonce
 	}
 	// the last one has the highest fee but not considered
 	tc.mockTP.EXPECT().GetAllPending().Return(mtxs, nil)
@@ -389,7 +397,7 @@ func TestCache_Account_NonceTooSmall_AllPendingTXs(t *testing.T) {
 	tc.mockTP.EXPECT().GetAllPending().Return(mtxs, nil)
 	require.NoError(t, tc.BuildFromScratch())
 	for _, mtx := range mtxs {
-		checkNoTX(t, tc.cache, mtx.ID())
+		checkNoTX(t, tc.cache, mtx.ID)
 	}
 
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
@@ -405,12 +413,12 @@ func TestCache_Account_InsufficientBalance_AllPendingTXs(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+2)
 	for _, mtx := range mtxs {
 		// make it so none of the txs is feasible
-		mtx.Amount = ta.balance
+		mtx.MaxSpend = ta.balance
 	}
 	tc.mockTP.EXPECT().GetAllPending().Return(mtxs, nil)
 	require.NoError(t, tc.BuildFromScratch())
 	for _, mtx := range mtxs {
-		checkNoTX(t, tc.cache, mtx.ID())
+		checkNoTX(t, tc.cache, mtx.ID)
 	}
 
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
@@ -425,12 +433,12 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
 	oneTooMany := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(&oneTooMany.Transaction, oneTooMany.Received))
+	require.NoError(t, tc.Add(&oneTooMany.Transaction, oneTooMany.Received, nil))
 	require.True(t, tc.MoreInDB(ta.principal))
-	checkNoTX(t, tc.cache, oneTooMany.ID())
+	checkNoTX(t, tc.cache, oneTooMany.ID)
 
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
@@ -440,20 +448,20 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 func TestCache_Account_Add_SuperiorReplacesInferior(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	oldOne := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{oldOne})
 
 	// now add a superior tx
-	higherFee := fee + 1
+	higherFee := defaultFee + 1
 	better := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, higherFee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(&better.Transaction, better.Received))
+	require.NoError(t, tc.Add(&better.Transaction, better.Received, nil))
 	checkTX(t, tc.cache, better)
-	checkNoTX(t, tc.cache, oldOne.ID())
+	checkNoTX(t, tc.cache, oldOne.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-better.Spending())
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -465,16 +473,16 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 	buildSingleAccountCache(t, tc, ta, mtxs)
 
 	// now add a tx at the next nonce that cause all later nonce transactions to be infeasible
-	higherFee := fee + 1
-	bigAmount := ta.balance - higherFee
+	higherFee := defaultFee + 1
+	bigAmount := ta.balance - higherFee*defaultGas
 	better := &types.MeshTransaction{
 		Transaction: *newTx(t, ta.nonce, bigAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(&better.Transaction, better.Received))
+	require.NoError(t, tc.Add(&better.Transaction, better.Received, nil))
 	checkTX(t, tc.cache, better)
 	for _, mtx := range mtxs {
-		checkNoTX(t, tc.cache, mtx.ID())
+		checkNoTX(t, tc.cache, mtx.ID)
 	}
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, 0)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
@@ -486,9 +494,9 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
 
-	tx := newTx(t, ta.nonce-1, amount, fee, ta.signer)
-	require.ErrorIs(t, tc.Add(tx, time.Now()), errBadNonce)
-	checkNoTX(t, tc.cache, tx.ID())
+	tx := newTx(t, ta.nonce-1, defaultAmount, defaultFee, ta.signer)
+	require.ErrorIs(t, tc.Add(tx, time.Now(), nil), errBadNonce)
+	checkNoTX(t, tc.cache, tx.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -500,15 +508,15 @@ func TestCache_Account_Add_NonceTooBig(t *testing.T) {
 
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+1)
 	// adding the larger nonce tx first
-	require.ErrorIs(t, tc.Add(&mtxs[1].Transaction, mtxs[1].Received), errNonceTooBig)
-	checkNoTX(t, tc.cache, mtxs[1].ID())
+	require.ErrorIs(t, tc.Add(&mtxs[1].Transaction, mtxs[1].Received, nil), errNonceTooBig)
+	checkNoTX(t, tc.cache, mtxs[1].ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
 	require.True(t, tc.MoreInDB(ta.principal))
 
 	// now add the tx that bridge the nonce gap
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce+1).Return([]*types.MeshTransaction{mtxs[1]}, nil)
-	require.NoError(t, tc.Add(&mtxs[0].Transaction, mtxs[0].Received))
+	require.NoError(t, tc.Add(&mtxs[0].Transaction, mtxs[0].Received, nil))
 	for _, mtx := range mtxs {
 		checkTX(t, tc.cache, mtx)
 	}
@@ -525,9 +533,9 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
 
-	tx := newTx(t, ta.nonce, defaultBalance, fee, ta.signer)
-	require.ErrorIs(t, tc.Add(tx, time.Now()), errInsufficientBalance)
-	checkNoTX(t, tc.cache, tx.ID())
+	tx := newTx(t, ta.nonce, defaultBalance, defaultFee, ta.signer)
+	require.ErrorIs(t, tc.Add(tx, time.Now(), nil), errInsufficientBalance)
+	checkNoTX(t, tc.cache, tx.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
 	require.True(t, tc.MoreInDB(ta.principal))
@@ -536,17 +544,17 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
 
 	spender := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, ta.balance, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.ErrorIs(t, tc.Add(&spender.Transaction, spender.Received), errInsufficientBalance)
-	checkNoTX(t, tc.cache, spender.ID())
+	require.ErrorIs(t, tc.Add(&spender.Transaction, spender.Received, nil), errInsufficientBalance)
+	checkNoTX(t, tc.cache, spender.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -557,23 +565,23 @@ func TestCache_Account_Add_OutOfOrder(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+2)
 
 	// txs were received via gossip in this order: mtxs[2], mtxs[0], mtxs[1]
-	require.ErrorIs(t, tc.Add(&mtxs[2].Transaction, mtxs[2].Received), errNonceTooBig)
-	checkNoTX(t, tc.cache, mtxs[2].ID())
+	require.ErrorIs(t, tc.Add(&mtxs[2].Transaction, mtxs[2].Received, nil), errNonceTooBig)
+	checkNoTX(t, tc.cache, mtxs[2].ID)
 	require.True(t, tc.cache.MoreInDB(ta.principal))
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 
 	pending := []*types.MeshTransaction{mtxs[2]}
-	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[0].AccountNonce+1).Return(pending, nil)
-	require.NoError(t, tc.Add(&mtxs[0].Transaction, mtxs[0].Received))
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[0].Nonce.Counter+1).Return(pending, nil)
+	require.NoError(t, tc.Add(&mtxs[0].Transaction, mtxs[0].Received, nil))
 	checkTX(t, tc.cache, mtxs[0])
-	checkNoTX(t, tc.cache, mtxs[2].ID())
+	checkNoTX(t, tc.cache, mtxs[2].ID)
 	require.True(t, tc.cache.MoreInDB(ta.principal))
-	checkProjection(t, tc.cache, ta.principal, mtxs[0].AccountNonce+1, ta.balance-mtxs[0].Spending())
+	checkProjection(t, tc.cache, ta.principal, mtxs[0].Nonce.Counter+1, ta.balance-mtxs[0].Spending())
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtxs[0])}}
 	checkMempool(t, tc.cache, expectedMempool)
 
-	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[1].AccountNonce+1).Return(pending, nil)
-	require.NoError(t, tc.Add(&mtxs[1].Transaction, mtxs[1].Received))
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[1].Nonce.Counter+1).Return(pending, nil)
+	require.NoError(t, tc.Add(&mtxs[1].Transaction, mtxs[1].Received, nil))
 	checkTX(t, tc.cache, mtxs[1])
 	checkTX(t, tc.cache, mtxs[2])
 	require.False(t, tc.cache.MoreInDB(ta.principal))
@@ -592,19 +600,17 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 	// only add the first TX to cache
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs[:1])
 
-	applied := []*types.Transaction{&mtxs[0].Transaction, &mtxs[1].Transaction, &mtxs[2].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{
-		mtxs[0].AccountNonce: mtxs[0].ID(),
-		mtxs[1].AccountNonce: mtxs[1].ID(),
-		mtxs[2].AccountNonce: mtxs[2].ID(),
-	}
-	ta.nonce = newNextNonce + 2
-	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+
+	applied := makeResults(lid, bid, mtxs[0].Transaction, mtxs[1].Transaction, mtxs[2].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+	ta.nonce = newNextNonce + 2
+	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
+
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
@@ -620,20 +626,20 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 	// build the cache with just one tx
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs[:1])
 
-	// apply the tx
-	applied := []*types.Transaction{&mtxs[0].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].AccountNonce: mtxs[0].ID()}
-	ta.nonce = newNextNonce
 	ta.balance = newBalance
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtxs[0].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+	ta.nonce = newNextNonce
+
 	pending := mtxs[1:]
 	for _, p := range pending {
-		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID, lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
@@ -653,7 +659,7 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
@@ -661,9 +667,9 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	pending := generatePendingTXs(t, ta.signer, ta.nonce+1, ta.nonce+4)
 	largeAmount := defaultBalance
 	for _, p := range pending {
-		p.Amount = largeAmount
-		require.Error(t, tc.Add(&p.Transaction, p.Received))
-		checkNoTX(t, tc.cache, p.ID())
+		p.MaxSpend = largeAmount
+		require.Error(t, tc.Add(&p.Transaction, p.Received, nil))
+		checkNoTX(t, tc.cache, p.ID)
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
@@ -675,16 +681,17 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	income := defaultBalance * 100
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending() + income
-	applied := []*types.Transaction{&mtx.Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtx.AccountNonce: mtx.ID()}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtx.Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
 	for _, p := range pending {
-		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID, lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
@@ -705,15 +712,15 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+4)
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	higherFee := fee + 1
-	largeAmount := defaultBalance - higherFee
+	higherFee := defaultFee + 1
+	largeAmount := defaultBalance - higherFee*defaultGas
 	better := &types.MeshTransaction{
 		Transaction: *newTx(t, ta.nonce+1, largeAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
 
-	require.ErrorIs(t, tc.Add(&better.Transaction, better.Received), errInsufficientBalance)
-	checkNoTX(t, tc.cache, better.ID())
+	require.ErrorIs(t, tc.Add(&better.Transaction, better.Received, nil), errInsufficientBalance)
+	checkNoTX(t, tc.cache, better.ID)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -724,17 +731,17 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	income := mtxs[0].Spending()
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
-	applied := []*types.Transaction{&mtxs[0].Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtxs[0].AccountNonce: mtxs[0].ID()}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtxs[0].Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].Nonce.Counter)
 	pending := append(mtxs[1:], better)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pending, nil)
 	for _, p := range pending {
-		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID, lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
@@ -747,20 +754,20 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 func TestCache_Account_EvictedAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
 
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending()
-	applied := []*types.Transaction{&mtx.Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtx.AccountNonce: mtx.ID()}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtx.Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
@@ -773,24 +780,24 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtx := &types.MeshTransaction{
-		Transaction: *newTx(t, ta.nonce, amount, fee, ta.signer),
+		Transaction: *newTx(t, ta.nonce, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, []*types.MeshTransaction{mtx})
 
 	ta.nonce++
 	ta.balance = ta.balance - mtx.Spending()
-	applied := []*types.Transaction{&mtx.Transaction}
-	appliedByNonce := map[uint64]types.TransactionID{mtx.AccountNonce: mtx.ID()}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
-	pendingWithGap := generatePendingTXs(t, ta.signer, mtx.AccountNonce+2, mtx.AccountNonce+3)
+	applied := makeResults(lid, bid, mtx.Transaction)
+	appliedByNonce := makeResultsByNonce(applied)
+	pendingWithGap := generatePendingTXs(t, ta.signer, mtx.Nonce.Counter+2, mtx.Nonce.Counter+3)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
-	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
-	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.AccountNonce)
+	tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtx.Nonce.Counter)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(pendingWithGap, nil)
 	for _, p := range pendingWithGap {
-		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID(), lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(p.ID, lid).Return(types.LayerID{}, types.EmptyBlockID, nil)
 	}
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.Empty(t, warns)
@@ -805,13 +812,13 @@ func TestCache_Account_TXsAppliedOutOfOrder(t *testing.T) {
 	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+1)
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
-	applied := []*types.Transaction{&mtxs[1].Transaction}
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
+	applied := makeResults(lid, bid, mtxs[1].Transaction)
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(mtxs, nil)
 	for _, mtx := range mtxs {
-		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(mtx.LayerID, mtx.BlockID, nil)
+		tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID, lid).Return(mtx.LayerID, mtx.BlockID, nil)
 	}
 	warns, errs := tc.ApplyLayer(lid, bid, applied)
 	require.NotEmpty(t, warns)
@@ -831,7 +838,7 @@ func TestCache_BuildFromScratch(t *testing.T) {
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (amount + fee)
+		minBalance := numTXs * (defaultAmount + defaultFee*defaultGas)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -849,7 +856,7 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 	totalNumTXs := numAccounts * numTXsEach
 	byAddrAndNonce := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
-		minBalance := uint64(numTXsEach) * (amount + fee)
+		minBalance := uint64(numTXsEach) * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -871,7 +878,7 @@ func TestCache_Add(t *testing.T) {
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (amount + fee)
+		minBalance := numTXs * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -880,7 +887,7 @@ func TestCache_Add(t *testing.T) {
 		newNextNonce := ta.nonce + uint64(len(mtxs))
 		newBalance := ta.balance
 		for _, mtx := range mtxs {
-			require.NoError(t, tc.Add(&mtx.Transaction, mtx.Received))
+			require.NoError(t, tc.Add(&mtx.Transaction, mtx.Received, nil))
 			checkTX(t, tc.cache, mtx)
 			newBalance -= mtx.Spending()
 		}
@@ -899,7 +906,7 @@ func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*te
 		if numTXs == 0 {
 			continue
 		}
-		minBalance := numTXs * (amount + fee)
+		minBalance := numTXs * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
@@ -912,8 +919,7 @@ func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*te
 
 func checkMempoolSize(t *testing.T, c *cache, expected int) {
 	t.Helper()
-	mempool, err := c.GetMempool()
-	require.NoError(t, err)
+	mempool := c.GetMempool()
 	numTXs := 0
 	for _, ntxs := range mempool {
 		numTXs += len(ntxs)
@@ -931,7 +937,7 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 	totalNumTXs := 0
 	for _, mtxs := range mtxsByAccount {
 		totalNumTXs += len(mtxs)
-		tids0 = append(tids0, mtxs[0].ID())
+		tids0 = append(tids0, mtxs[0].ID)
 		mtxs[0].LayerID = lid0
 	}
 	tc.mockTP.EXPECT().AddToProposal(lid0, pid0, tids0).Return(nil)
@@ -946,7 +952,7 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 	tids1 := make([]types.TransactionID, 0, len(mtxsByAccount))
 	for _, mtxs := range mtxsByAccount {
 		if len(mtxs) > 1 {
-			tids1 = append(tids1, mtxs[1].ID())
+			tids1 = append(tids1, mtxs[1].ID)
 			mtxs[1].LayerID = lid1
 		}
 	}
@@ -970,7 +976,7 @@ func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 	totalNumTXs := 0
 	for _, mtxs := range mtxsByAccount {
 		totalNumTXs += len(mtxs)
-		tids0 = append(tids0, mtxs[0].ID())
+		tids0 = append(tids0, mtxs[0].ID)
 		mtxs[0].LayerID = lid0
 	}
 	tc.mockTP.EXPECT().AddToProposal(lid0, pid0, tids0).Return(nil)
@@ -1001,7 +1007,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 	totalNumTXs := 0
 	for _, mtxs := range mtxsByAccount {
 		totalNumTXs += len(mtxs)
-		tids0 = append(tids0, mtxs[0].ID())
+		tids0 = append(tids0, mtxs[0].ID)
 		mtxs[0].LayerID = lid0
 		mtxs[0].BlockID = bid0
 	}
@@ -1017,7 +1023,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 	tids1 := make([]types.TransactionID, 0, len(mtxsByAccount))
 	for _, mtxs := range mtxsByAccount {
 		if len(mtxs) > 1 {
-			tids1 = append(tids1, mtxs[1].ID())
+			tids1 = append(tids1, mtxs[1].ID)
 			mtxs[1].LayerID = lid1
 			mtxs[1].BlockID = bid1
 		}
@@ -1042,7 +1048,7 @@ func TestCache_LinkTXsWithBlock_MultipleLayers(t *testing.T) {
 	totalNumTXs := 0
 	for _, mtxs := range mtxsByAccount {
 		totalNumTXs += len(mtxs)
-		tids0 = append(tids0, mtxs[0].ID())
+		tids0 = append(tids0, mtxs[0].ID)
 		mtxs[0].LayerID = lid0
 		mtxs[0].BlockID = bid0
 	}
@@ -1069,30 +1075,30 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 	mtxsByAccount := buildSmallCache(t, tc, accounts, 10)
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{1, 2, 3}
-	allApplied := make([]*types.Transaction, 0, len(mtxsByAccount)*2)
+	allApplied := make([]types.TransactionWithResult, 0, len(mtxsByAccount)*2)
 	for principal, mtxs := range mtxsByAccount {
-		lastNonce := mtxs[0].AccountNonce
+		lastNonce := mtxs[0].Nonce.Counter
 		newBalance := accounts[principal].balance
 		newBalance -= mtxs[0].Spending()
-		applied := []*types.Transaction{&mtxs[0].Transaction}
-		byNonce := map[uint64]types.TransactionID{mtxs[0].AccountNonce: mtxs[0].ID()}
+		applied := makeResults(lid, bid, mtxs[0].Transaction)
+
 		var pending []*types.MeshTransaction
 		if len(mtxs) >= 2 {
-			applied = append(applied, &mtxs[1].Transaction)
-			byNonce[mtxs[1].AccountNonce] = mtxs[1].ID()
-			lastNonce = mtxs[1].AccountNonce
+			applied = append(applied, makeResults(lid, bid, mtxs[1].Transaction)...)
+			lastNonce = mtxs[1].Nonce.Counter
 			newBalance -= mtxs[1].Spending()
 			pending = mtxs[2:]
 		}
+		appliedByNonce := makeResultsByNonce(applied)
 		// adjust state
 		accounts[principal].nonce = lastNonce + 1
 		accounts[principal].balance = newBalance
 		allApplied = append(allApplied, applied...)
-		tc.mockTP.EXPECT().ApplyLayer(lid, bid, principal, byNonce)
-		tc.mockTP.EXPECT().DiscardNonceBelow(principal, mtxs[0].AccountNonce)
+		tc.mockTP.EXPECT().ApplyLayer(appliedByNonce)
+		tc.mockTP.EXPECT().DiscardNonceBelow(principal, mtxs[0].Nonce.Counter)
 		tc.mockTP.EXPECT().GetAcctPendingFromNonce(principal, lastNonce+1).Return(pending, nil)
 		for _, mtx := range pending {
-			tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID(), lid).Return(mtx.LayerID, mtx.BlockID, nil)
+			tc.mockTP.EXPECT().SetNextLayerBlock(mtx.ID, lid).Return(mtx.LayerID, mtx.BlockID, nil)
 		}
 	}
 	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
@@ -1139,7 +1145,7 @@ func TestCache_GetMempool(t *testing.T) {
 	bid := types.BlockID{1, 2, 3}
 	tids0 := make([]types.TransactionID, 0, len(mtxsByAccount))
 	for _, mtxs := range mtxsByAccount {
-		tids0 = append(tids0, mtxs[0].ID())
+		tids0 = append(tids0, mtxs[0].ID)
 		mtxs[0].LayerID = lid0
 		mtxs[0].BlockID = bid
 	}
@@ -1155,7 +1161,7 @@ func TestCache_GetMempool(t *testing.T) {
 	tids1 := make([]types.TransactionID, 0, len(mtxsByAccount))
 	for _, mtxs := range mtxsByAccount {
 		if len(mtxs) >= 3 {
-			tids1 = append(tids1, mtxs[2].ID())
+			tids1 = append(tids1, mtxs[2].ID)
 			mtxs[2].LayerID = lid1
 		}
 	}

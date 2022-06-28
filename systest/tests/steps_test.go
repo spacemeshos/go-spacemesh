@@ -60,40 +60,7 @@ func TestStepSubmitTransactions(t *testing.T) {
 
 	// this test expected to tolerate clients failures.
 	for i := 0; i < n; i++ {
-		sender := cl.Address(i)
-		private := cl.Private(i)
-		client := cl.Client(i % cl.Total())
 
-		log := tctx.Log.With(
-			"origin", hex.EncodeToString(sender[:]),
-			"client", client.Name,
-		)
-
-		for j := 0; j < rng.Intn(3)+1; j++ { // send between [1,3] transactions
-			nonce, err := getNonce(tctx, client, sender)
-			if err != nil {
-				log.Errorw("failed to get nonce", "error", err)
-				continue
-			}
-			var receiver [20]byte
-			copy(receiver[:], cl.Address(rng.Intn(cl.Accounts())))
-			amount := rng.Intn(10000)
-
-			txlog := log.With(
-				"nonce", nonce,
-				"receiver", hex.EncodeToString(receiver[:]),
-				"amount", amount,
-			)
-
-			submitter := newTransactionSubmitter(private, receiver, uint64(amount), nonce, client)
-			ctx, cancel := context.WithTimeout(tctx, 3*time.Second)
-			defer cancel()
-			if err := submitter(ctx); err != nil {
-				txlog.Error("failed to submit tx", "error", err)
-				continue
-			}
-			txlog.Info("submitted tx")
-		}
 	}
 }
 

@@ -3,14 +3,17 @@ package tortoise
 import (
 	mrand "math/rand"
 	"testing"
+	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/tortoise/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func TestFullBallotFilter(t *testing.T) {
@@ -96,7 +99,7 @@ func TestFullCountVotes(t *testing.T) {
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
-		expect       weight
+		expect       util.Weight
 	}{
 		{
 			desc:      "TwoLayersSupport",
@@ -119,7 +122,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(15),
+			expect: util.WeightFromFloat64(15),
 		},
 		{
 			desc:      "ConflictWithBase",
@@ -154,7 +157,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(0),
+			expect: util.WeightFromFloat64(0),
 		},
 		{
 			desc:      "UnequalWeights",
@@ -184,7 +187,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(140),
+			expect: util.WeightFromFloat64(140),
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
@@ -211,7 +214,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(100),
+			expect: util.WeightFromFloat64(100),
 		},
 		{
 			desc:      "OneLayerSupport",
@@ -227,7 +230,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(7.5),
+			expect: util.WeightFromFloat64(7.5),
 		},
 		{
 			desc:      "OneBlockAbstain",
@@ -244,7 +247,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(5),
+			expect: util.WeightFromFloat64(5),
 		},
 		{
 			desc:      "OneBlockAagaisnt",
@@ -261,7 +264,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(2.5),
+			expect: util.WeightFromFloat64(2.5),
 		},
 		{
 			desc:      "MajorityAgainst",
@@ -278,7 +281,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(-2.5),
+			expect: util.WeightFromFloat64(-2.5),
 		},
 		{
 			desc:      "NoVotes",
@@ -290,39 +293,37 @@ func TestFullCountVotes(t *testing.T) {
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 			},
 			target: [2]int{0, 0},
-			expect: weightFromFloat64(0),
+			expect: util.WeightFromFloat64(0),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
-			ctrl := gomock.NewController(t)
-			atxdb := mocks.NewMockatxDataProvider(ctrl)
-			activeset := []types.ATXID{}
+			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+			var activeset []types.ATXID
 			for i, weight := range tc.activeset {
 				header := makeAtxHeaderWithWeight(weight)
-				atxid := types.ATXID{byte(i)}
-				header.SetID(&atxid)
-				atxdb.EXPECT().GetAtxHeader(atxid).Return(header, nil).AnyTimes()
+				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
+				atxid := types.ATXID{byte(i + 1)}
+				atx.SetID(&atxid)
+				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 				activeset = append(activeset, atxid)
 			}
 
-			tortoise := defaultAlgorithm(t, getInMemMesh(t))
-			tortoise.trtl.atxdb = atxdb
+			tortoise := defaultAlgorithm(t, cdb)
+			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
 
-			blocks := [][]types.BlockID{}
+			var blocks [][]types.BlockID
 			for i, layer := range tc.layerBlocks {
-				layerBlocks := []types.BlockID{}
+				var layerBlocks []types.BlockID
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
-					p := &types.Proposal{}
-					p.EligibilityProofs = []types.VotingEligibilityProof{{J: uint32(j)}}
-					p.LayerIndex = lid
-					p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
-					p.Signature = signer.Sign(p.Bytes())
-					require.NoError(t, p.Initialize())
-					layerBlocks = append(layerBlocks, types.BlockID(p.ID()))
+					b := &types.Block{}
+					b.LayerIndex = lid
+					b.TxIDs = types.RandomTXSet(j)
+					b.Initialize()
+					layerBlocks = append(layerBlocks, b.ID())
 				}
 
 				for _, block := range layerBlocks {
@@ -331,9 +332,9 @@ func TestFullCountVotes(t *testing.T) {
 				blocks = append(blocks, layerBlocks)
 			}
 
-			ballots := [][]*types.Ballot{}
+			var ballotsList [][]*types.Ballot
 			for i, layer := range tc.layerBallots {
-				layerBallots := []*types.Ballot{}
+				var layerBallots []*types.Ballot
 				lid := genesis.Add(uint32(i) + 1)
 				for j, b := range layer {
 					ballot := &types.Ballot{}
@@ -349,13 +350,13 @@ func TestFullCountVotes(t *testing.T) {
 						for _, layerNumber := range b.Abstain {
 							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
 						}
-						ballot.Votes.Base = ballots[b.Base[0]][b.Base[1]].ID()
+						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
 					ballot.Signature = signer.Sign(ballot.Bytes())
 					require.NoError(t, ballot.Initialize())
 					layerBallots = append(layerBallots, ballot)
 				}
-				ballots = append(ballots, layerBallots)
+				ballotsList = append(ballotsList, layerBallots)
 
 				consensus.processed = lid
 				consensus.last = lid

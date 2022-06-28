@@ -15,6 +15,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -61,6 +64,7 @@ type LayerClock interface {
 type Hare struct {
 	util.Closer
 	log.Log
+	db            *sql.Database
 	config        config.Config
 	publisher     pubsub.Publisher
 	layerClock    LayerClock
@@ -68,7 +72,6 @@ type Hare struct {
 	sign          Signer
 	blockGen      blockGenerator
 	mesh          meshProvider
-	pdb           proposalProvider
 	beacons       system.BeaconGetter
 	fetcher       system.ProposalFetcher
 	rolacle       Rolacle
@@ -91,6 +94,7 @@ type Hare struct {
 
 // New returns a new Hare struct.
 func New(
+	db *sql.Database,
 	conf config.Config,
 	peer p2p.Peer,
 	publisher pubsub.PublishSubsciber,
@@ -99,7 +103,6 @@ func New(
 	blockGen blockGenerator,
 	syncState system.SyncStateProvider,
 	mesh meshProvider,
-	ppp proposalProvider,
 	beacons system.BeaconGetter,
 	fetch system.ProposalFetcher,
 	rolacle Rolacle,
@@ -110,6 +113,7 @@ func New(
 	logger log.Log,
 ) *Hare {
 	h := new(Hare)
+	h.db = db
 
 	h.Closer = util.NewCloser()
 
@@ -134,7 +138,6 @@ func New(
 	h.blockGen = blockGen
 
 	h.mesh = mesh
-	h.pdb = ppp
 	h.beacons = beacons
 	h.fetcher = fetch
 	h.rolacle = rolacle
@@ -203,6 +206,21 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 // ErrTooLate means that the consensus was terminated too late.
 var ErrTooLate = errors.New("consensus process finished too late")
 
+func (h *Hare) getProposals(pids []types.ProposalID) ([]*types.Proposal, error) {
+	result := make([]*types.Proposal, 0, len(pids))
+	var (
+		p   *types.Proposal
+		err error
+	)
+	for _, pid := range pids {
+		if p, err = proposals.Get(h.db, pid); err != nil {
+			return nil, err
+		}
+		result = append(result, p)
+	}
+	return result, nil
+}
+
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	layerID := output.ID()
@@ -228,13 +246,13 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 			return fmt.Errorf("hare fetch proposals: %w", err)
 		}
 		// now all proposals should be in local DB
-		proposals, err := h.pdb.GetProposals(pids)
+		props, err := h.getProposals(pids)
 		if err != nil {
 			h.WithContext(ctx).With().Warning("failed to get proposals locally", log.Err(err))
 			return fmt.Errorf("hare get proposals: %w", err)
 		}
 
-		if block, err := h.blockGen.GenerateBlock(ctx, layerID, proposals); err != nil {
+		if block, err := h.blockGen.GenerateBlock(ctx, layerID, props); err != nil {
 			return fmt.Errorf("hare gen block: %w", err)
 		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
 			return fmt.Errorf("hare save block: %w", err)
@@ -359,9 +377,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
 func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.ProposalID {
-	proposals, err := h.pdb.LayerProposals(lyrID)
+	props, err := proposals.GetByLayer(h.db, lyrID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNotFound) {
+		if errors.Is(err, sql.ErrNotFound) {
 			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
 		} else {
 			logger.With().Error("failed to get proposals for hare", log.Err(err))
@@ -373,13 +391,13 @@ func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, lo
 		beacon        types.Beacon
 		goodProposals []types.ProposalID
 	)
-	for _, p := range proposals {
+	for _, p := range props {
 		if p.EpochData != nil {
 			beacon = p.EpochData.Beacon
 		} else if p.RefBallot == types.EmptyBallotID {
 			logger.With().Error("proposal missing ref ballot", p.ID())
 			return []types.ProposalID{}
-		} else if refBallot, err := h.mesh.GetBallot(p.RefBallot); err != nil {
+		} else if refBallot, err := ballots.Get(h.db, p.RefBallot); err != nil {
 			logger.With().Error("failed to get ref ballot", p.ID(), p.RefBallot, log.Err(err))
 			return []types.ProposalID{}
 		} else if refBallot.EpochData == nil {
@@ -435,10 +453,11 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			logger := h.WithContext(ctx).WithFields(layerID)
 
 			// collect coinflip, regardless of success
-			logger.With().Info("recording weak coinflip result for layer",
-				log.Bool("coinflip", coin))
-			h.mesh.RecordCoinflip(ctx, layerID, coin)
-
+			logger.With().Info("recording weak coin result for layer",
+				log.Bool("weak_coin", coin))
+			if err := layers.SetWeakCoin(h.db, layerID, coin); err != nil {
+				logger.With().Error("failed to set weak coin for layer", log.Err(err))
+			}
 			if err := h.collectOutput(ctx, out); err != nil {
 				logger.With().Warning("error collecting output from hare", log.Err(err))
 			}

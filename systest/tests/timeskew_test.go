@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestShortTimeskew(t *testing.T) {
@@ -21,7 +21,7 @@ func TestShortTimeskew(t *testing.T) {
 	var (
 		enableSkew = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
 		stopSkew   = enableSkew + 2
-		stopTest   = stopSkew + 5
+		stopTest   = stopSkew + 10
 		skewOffset = "-3s" // hare round is 2s
 	)
 	tctx.Log.Debugw("running timeskew test",
@@ -43,7 +43,7 @@ func TestShortTimeskew(t *testing.T) {
 
 	// hare round is 2s, including time when nodes wait for proposals
 	// those nodes where clock is adjusted won't be able to reach consensus,
-	// because they rounds time will not intersect with the rest of the cluster
+	// because the rounds time will not intersect with the rest of the cluster
 	//
 	// there are two possible failure scenarios:
 	// in 1st 20% of the skewed nodes are not leaders, and they will simply cast abstain
@@ -62,6 +62,9 @@ func TestShortTimeskew(t *testing.T) {
 				"hash", prettyHex(layer.Layer.Hash),
 			)
 			confirmed = layer.Layer.Number.Number
+			if confirmed >= stopSkew {
+				return false, nil
+			}
 		}
 		return true, nil
 	})

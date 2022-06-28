@@ -8,15 +8,10 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
-type atxProvider interface {
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-}
-
 type meshProvider interface {
-	HasBlock(types.BlockID) bool
 	AddBlockWithTXs(context.Context, *types.Block) error
 }
 
-type txProvider interface {
-	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
+type conservativeState interface {
+	SelectBlockTXs(types.LayerID, []*types.Proposal) ([]types.TransactionID, error)
 }

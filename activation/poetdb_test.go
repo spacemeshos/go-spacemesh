@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -45,7 +45,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	proofBytes, err := types.InterfaceToBytes(msg.PoetProof)
 	require.NoError(t, err)
-	expectedRef := sha256.Sum256(proofBytes)
+	expectedRef := hash.Sum(proofBytes)
 	require.Equal(t, types.CalcHash32(expectedRef[:]).Bytes(), ref)
 
 	require.NoError(t, poetDb.StoreProof(ref, msg))
@@ -98,11 +98,11 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	_, err := poetDb.getProofRef(msg.PoetServiceID, "0")
-	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: leveldb: not found", msg.PoetServiceID[:5], "0"))
+	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
 
 	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
-	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: leveldb: not found", ref[:5]))
+	require.EqualError(t, err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: database: not found", ref[:5]))
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
