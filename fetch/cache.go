@@ -32,7 +32,7 @@ func NewHashPeersCache(size int) *HashPeersCache {
 	return &HashPeersCache{Cache: cache}
 }
 
-// get is the same as Get but doesn't affect cache stats.
+// get returns peers for a given hash (non-thread-safe).
 func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 	item, found := hpc.Cache.Get(hash)
 	if !found {
@@ -41,11 +41,27 @@ func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 	return item.(HashPeers), true
 }
 
-// Add adds peer to a hash.
-func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
+// Get is a thread-safe version of get.
+func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
+	return hpc.get(hash)
+}
+
+// getWithStats is the same as get but also updates cache stats (still non-thread-safe).
+func (hpc *HashPeersCache) getWithStats(hash types.Hash32) (HashPeers, bool) {
+	hashPeers, found := hpc.get(hash)
+	if !found {
+		hpc.miss()
+		return nil, false
+	}
+	hpc.hit()
+	return hashPeers, true
+}
+
+// add adds a peer to a hash (non-thread-safe).
+func (hpc *HashPeersCache) add(hash types.Hash32, peer p2p.Peer) {
 	peers, exists := hpc.get(hash)
 	if !exists {
 		hpc.Cache.Add(hash, HashPeers{peer: {}})
@@ -56,24 +72,20 @@ func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
 	hpc.Cache.Add(hash, peers)
 }
 
-// Get returns hash peers, it also returns a boolean to indicate whether the item
-// was found in cache.
-func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
-	hashPeers, found := hpc.get(hash)
-	if !found {
-		hpc.miss()
-		return nil, false
-	}
-	hpc.hit()
-	return hashPeers, true
+// Add is a thread-safe version of add.
+func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
+	hpc.mu.Lock()
+	defer hpc.mu.Unlock()
+
+	hpc.add(hash, peer)
 }
 
-// GetRandom returns random peer for a given hash.
+// GetRandom returns a random peer for a given hash.
 func (hpc *HashPeersCache) GetRandom(hash types.Hash32, rng *rand.Rand) (p2p.Peer, bool) {
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
-	hashPeersMap, exists := hpc.Get(hash)
+	hashPeersMap, exists := hpc.getWithStats(hash)
 	if !exists {
 		return p2p.NoPeer, false
 	}
@@ -107,12 +119,14 @@ func (hpc *HashPeersCache) AddPeersFromHash(fromHash types.Hash32, toHashes []ty
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
-	peers, exists := hpc.Get(fromHash)
+	peers, exists := hpc.getWithStats(fromHash)
 	if !exists {
 		return
 	}
 	for peer := range peers {
-		hpc.RegisterPeerHashes(peer, toHashes)
+		for _, hash := range toHashes {
+			hpc.add(hash, peer)
+		}
 	}
 	return
 }
