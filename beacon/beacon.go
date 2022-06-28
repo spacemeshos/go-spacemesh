@@ -30,7 +30,7 @@ import (
 
 const (
 	proposalPrefix  = "BP"
-	numEpochsToKeep = 10
+	numEpochsToKeep = 3
 )
 
 var (
