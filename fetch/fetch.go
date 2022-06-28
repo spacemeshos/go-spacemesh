@@ -452,12 +452,8 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 	peer2requests := make(map[p2p.Peer][]requestMessage)
 
 	for _, req := range requests {
-		hashPeers, exists := f.hashToPeers.GetList(req.Hash)
-
-		var p p2p.Peer
-		if exists {
-			p = hashPeers[rng.Intn(len(hashPeers))]
-		} else {
+		p, exists := f.hashToPeers.GetRandom(req.Hash, rng)
+		if !exists {
 			p = GetRandomPeer(f.net.GetPeers())
 		}
 
@@ -644,6 +640,9 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 
 // AddPeersFromHash adds peers from one hash to others.
 func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	f.hashToPeers.Mu.Lock()
+	defer f.hashToPeers.Mu.Unlock()
+
 	peers, exists := f.hashToPeers.Get(fromHash)
 	if !exists {
 		return

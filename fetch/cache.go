@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"math/rand"
 	"sync"
 	"sync/atomic"
 
@@ -15,30 +16,12 @@ import (
 // HashPeersCache holds lru cache of peers to pull hash from.
 type HashPeersCache struct {
 	*lru.Cache
-	mu    sync.RWMutex
+	Mu    sync.Mutex
 	stats cacheStats
 }
 
 // HashPeers holds registered peers for a hash.
 type HashPeers map[p2p.Peer]struct{}
-
-// GetList returns hash peers as a list.
-func (hpc *HashPeersCache) GetList(hash types.Hash32) ([]p2p.Peer, bool) {
-	hpc.mu.RLock()
-	defer hpc.mu.RUnlock()
-
-	hashPeersMap, exists := hpc.Get(hash)
-	if !exists {
-		return nil, false
-	}
-
-	result := make([]p2p.Peer, 0, len(hashPeersMap))
-	for k := range hashPeersMap {
-		result = append(result, k)
-	}
-
-	return result, true
-}
 
 // NewHashPeersCache creates a new hash-to-peers cache.
 func NewHashPeersCache(size int) *HashPeersCache {
@@ -49,17 +32,28 @@ func NewHashPeersCache(size int) *HashPeersCache {
 	return &HashPeersCache{Cache: cache}
 }
 
+// get is the same as Get but doesn't affect cache stats.
+func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
+	item, found := hpc.Cache.Get(hash)
+	if !found {
+		return nil, false
+	}
+	return item.(HashPeers), true
+}
+
 // Add adds peer to a hash.
 func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
+	hpc.Mu.Lock()
+	defer hpc.Mu.Unlock()
+
 	peers, exists := hpc.get(hash)
-	hpc.mu.Lock()
 	if !exists {
 		hpc.Cache.Add(hash, HashPeers{peer: {}})
-	} else {
-		peers[peer] = struct{}{}
-		hpc.Cache.Add(hash, peers)
+		return
 	}
-	hpc.mu.Unlock()
+
+	peers[peer] = struct{}{}
+	hpc.Cache.Add(hash, peers)
 }
 
 // Get returns hash peers, it also returns a boolean to indicate whether the item
@@ -74,16 +68,21 @@ func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 	return hashPeers, true
 }
 
-// get is the same as Get but doesn't affect cache stats.
-func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
-	hpc.mu.RLock()
-	defer hpc.mu.RUnlock()
-
-	item, found := hpc.Cache.Get(hash)
-	if !found {
-		return nil, false
+// GetRandom returns random peer for a given hash.
+func (hpc *HashPeersCache) GetRandom(hash types.Hash32, rng *rand.Rand) (p2p.Peer, bool) {
+	hashPeersMap, exists := hpc.Get(hash)
+	if !exists {
+		return p2p.NoPeer, false
 	}
-	return item.(HashPeers), true
+	n := rng.Intn(len(hashPeersMap))
+	i := 0
+	for peer := range hashPeersMap {
+		i++
+		if i == n {
+			return peer, true
+		}
+	}
+	return p2p.NoPeer, false
 }
 
 // cacheStats stores hash-to-peers cache hits & misses.
