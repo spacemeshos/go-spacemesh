@@ -45,8 +45,9 @@ func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error)
 }
 
 func decodeOrdinal(name string) int {
+	// expected name is boot-1-0
 	parts := strings.Split(name, "-")
-	if len(parts) != 2 {
+	if len(parts) != 3 {
 		panic(fmt.Sprintf("unexpected name format %s", name))
 	}
 	ord, err := strconv.Atoi(parts[1])

@@ -4,7 +4,8 @@ version_info ?= $(shell git rev-parse --short HEAD)
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
-test_pod_name ?= systest-$(version_info)
+test_id ?= systest-$(version_info)
+test_pod_name ?= systest-$(version_info)-$(shell date +'%S')
 keep ?= false
 clusters ?= 1
 size ?= 10
@@ -12,7 +13,6 @@ level ?= debug
 bootstrap ?= 5m
 node_selector ?=
 namespace ?=
-schedule ?= "* * * * *"
 
 .PHONY: docker
 docker:
@@ -27,11 +27,12 @@ run: launch watch
 
 .PHONY: launch
 launch:
+	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--restart=Never \
-	--labels="testid=$(test_pod_name)" \
+	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
-    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_pod_name)
+    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id)
 
 .PHONY: watch
 watch:
@@ -40,22 +41,12 @@ watch:
 
 .PHONY: clean
 clean:
-	@echo "deleting test pods with testid=$(test_pod_name)"
-	@kubectl delete pod --selector=testid=$(test_pod_name)
-	@echo "deleting namespaces without keep with testid=$(test_pod_name)"
-	@kubectl delete ns --selector=testid=$(test_pod_name),keep=false
-
-.PHONY: cleancron
-cleancron:
-	@echo "deleting cronjobs with testid=$(test_pod_name)"
-	@kubectl delete cronjob --selector=testid=$(test_pod_name)
-
+	@echo "deleting test pods with testid=$(test_id)"
+	@kubectl delete pod --selector=testid=$(test_id)
+	@echo "deleting ephemeral namespaces with testid=$(test_id)"
+	@kubectl delete ns --selector=testid=$(test_id),keep=false
 
 .PHONY: cleanall
-cleanall: clean cleancron
-	@echo "deleting all namespaces with testid=$(test_pod_name)"
-	@kubectl delete ns --selector=testid=$(test_pod_name)
-
-.PHONY: cron
-cron:
-	@cron_name=$(cron_name) test_name=$(test_name) namespace=$(namespace) size=$(size) smesher_image=$(smesher_image) level=$(level) node_selector=$(node_selector) keep=true testid=$(test_pod_name) image_name=$(image_name) schedule=$(schedule) envsubst < ./templates/cronjob.yaml | kubectl create -f -
+cleanall: clean
+	@echo "deleting all namespaces with testid=$(test_id)"
+	@kubectl delete ns --selector=testid=$(test_id)

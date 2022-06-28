@@ -152,8 +152,47 @@ func labelSelector(labels map[string]string) string {
 	return buf.String()
 }
 
-func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []DeploymentFlag) ([]*NodeClient, error) {
+func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
 	labels := nodeLabels(name)
+
+	var (
+		eg      errgroup.Group
+		clients = make(chan *NodeClient, to-from)
+	)
+	for i := from; i < to; i++ {
+		i := i
+		eg.Go(func() error {
+			setname := fmt.Sprintf("%s-%d", name, i)
+			if err := deployNode(ctx, setname, labels, flags); err != nil {
+				return err
+			}
+			podname := fmt.Sprintf("%s-0", setname)
+			node, err := waitSmesher(ctx, podname)
+			if err != nil {
+				return err
+			}
+			clients <- node
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	close(clients)
+	var rst []*NodeClient
+	for node := range clients {
+		rst = append(rst, node)
+	}
+	return rst, nil
+}
+
+func deployNode(ctx *testcontext.Context, name string, applabels map[string]string, flags []DeploymentFlag) error {
+	labels := map[string]string{
+		"smesher": name,
+	}
+	for label, value := range applabels {
+		labels[label] = value
+	}
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -166,7 +205,7 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 
 	_, err := ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return nil, fmt.Errorf("apply headless service: %w", err)
+		return fmt.Errorf("apply headless service: %w", err)
 	}
 	cmd := []string{
 		"/bin/go-spacemesh",
@@ -184,7 +223,7 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 		WithSpec(appsv1.StatefulSetSpec().
 			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).
 			WithPodManagementPolicy(apiappsv1.ParallelPodManagement).
-			WithReplicas(int32(replicas)).
+			WithReplicas(1).
 			WithServiceName(*svc.Name).
 			WithVolumeClaimTemplates(
 				corev1.PersistentVolumeClaim("data", ctx.Namespace).
@@ -227,25 +266,9 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 	_, err = ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
 		Apply(ctx, sset, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return nil, fmt.Errorf("apply statefulset: %w", err)
+		return fmt.Errorf("apply statefulset: %w", err)
 	}
-	result := make([]*NodeClient, replicas)
-	var eg errgroup.Group
-	for i := 0; i < replicas; i++ {
-		i := i
-		eg.Go(func() error {
-			nc, err := waitSmesher(ctx, fmt.Sprintf("%s-%d", *sset.Name, i))
-			if err != nil {
-				return err
-			}
-			result[i] = nc
-			return nil
-		})
-	}
-	if err := eg.Wait(); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return nil
 }
 
 func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {

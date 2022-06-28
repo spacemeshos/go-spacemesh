@@ -26,8 +26,12 @@ const (
 	defaultBootnodes = 2
 )
 
-func headlessSvc(name string) string {
-	return name + "-headless"
+func setName(podname string) string {
+	return podname[:len(podname)-2]
+}
+
+func headlessSvc(setname string) string {
+	return setname + "-headless"
 }
 
 func poetEndpoint() string {
@@ -183,7 +187,7 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 	gateways := []string{}
 	for _, bootnode := range c.clients[:c.bootnodes] {
-		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(bootnodesPrefix)))
+		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name))))
 	}
 	endpoint, err := deployPoet(cctx, gateways...)
 	if err != nil {
@@ -213,7 +217,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	for _, flag := range c.smesherFlags {
 		flags = append(flags, flag)
 	}
-	clients, err := deployNodes(cctx, bootnodesPrefix, c.bootnodes+n, flags)
+	clients, err := deployNodes(cctx, bootnodesPrefix, c.bootnodes, c.bootnodes+n, flags)
 	if err != nil {
 		return err
 	}
@@ -230,10 +234,6 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	if err := c.resourceControl(cctx, n); err != nil {
 		return err
 	}
-	return c.manageSmeshers(cctx, c.smeshers+n)
-}
-
-func (c *Cluster) manageSmeshers(cctx *testcontext.Context, replicas int) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (c *Cluster) manageSmeshers(cctx *testcontext.Context, replicas int) error 
 		flags = append(flags, flag)
 	}
 	flags = append(flags, Bootnodes(extractP2PEndpoints(c.clients[:c.bootnodes])...))
-	clients, err := deployNodes(cctx, "smesher", replicas, flags)
+	clients, err := deployNodes(cctx, "smesher", c.smeshers, c.smeshers+n, flags)
 	if err != nil {
 		return err
 	}
@@ -263,7 +263,7 @@ func (c *Cluster) DeleteSmeshers(cctx *testcontext.Context, n int) error {
 	if n > c.smeshers {
 		return fmt.Errorf("can't remove bootnodes. max number of removable smeshers is %d", c.smeshers)
 	}
-	return c.manageSmeshers(cctx, c.smeshers-n)
+	return nil
 }
 
 // Total returns total number of clients.
