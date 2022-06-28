@@ -8,10 +8,9 @@ import (
 // notifyTracker tracks notify messages.
 // It also provides the number of notifications tracked for a given set.
 type notifyTracker struct {
-	notifies             map[string]struct{}   // tracks PubKey->Notification
-	tracker              *RefCountTracker      // tracks ref count to each seen set
-	certificates         map[uint32]struct{}   // tracks Set->certificate
-	notificationMessages map[uint32][]*Message // tracks Set->Messages
+	notifies     map[string]struct{} // tracks PubKey->Notification
+	tracker      *RefCountTracker    // tracks ref count to each seen set
+	certificates map[uint32]struct{} // tracks Set->certificate
 }
 
 func newNotifyTracker(expectedSize int) *notifyTracker {
@@ -19,7 +18,7 @@ func newNotifyTracker(expectedSize int) *notifyTracker {
 	nt.notifies = make(map[string]struct{}, expectedSize)
 	nt.tracker = NewRefCountTracker()
 	nt.certificates = make(map[uint32]struct{}, expectedSize)
-	nt.notificationMessages = make(map[uint32][]*Message)
+
 	return nt
 }
 
@@ -37,33 +36,10 @@ func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 
 	// track that set
 	s := NewSet(msg.InnerMsg.Values)
-	setID := s.ID()
 	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K, s)
-	nt.tracker.Track(setID, eligibilityCount)
-
-	// store the message to create a certificate for the certification messages
-	if _, exists := nt.notificationMessages[setID]; !exists {
-		nt.notificationMessages[setID] = make([]*Message, 0)
-	}
-	nt.notificationMessages[setID] = append(nt.notificationMessages[setID], msg.Message)
+	nt.tracker.Track(s.ID(), eligibilityCount)
 
 	return false
-}
-
-// BuildCertificate builds a certificate of all the notify messages to send as part of the termination certification.
-func (nt *notifyTracker) BuildCertificate(s *Set) *certificate {
-	// assume for now that you'll always be able to make a valid certificate
-	c := &certificate{}
-	c.Values = s.ToSlice()
-	c.AggMsgs = &aggregatedMessages{}
-	c.AggMsgs.Messages = nt.notificationMessages[s.ID()]
-
-	// figure out if any further optimizations have to occur
-	for _, commit := range c.AggMsgs.Messages {
-		commit.InnerMsg.Values = nil
-	}
-
-	return c
 }
 
 // NotificationsCount returns the number of notifications tracked for the provided set.
