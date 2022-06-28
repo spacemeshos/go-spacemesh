@@ -626,29 +626,10 @@ func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) 
 
 // RegisterPeerHashes registers provided peer for a list of hashes.
 func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
-	if len(hashes) == 0 {
-		return
-	}
-	if p2p.IsNoPeer(peer) {
-		return
-	}
-	for _, hash := range hashes {
-		f.hashToPeers.Add(hash, peer)
-	}
-	return
+	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 
 // AddPeersFromHash adds peers from one hash to others.
 func (f *Fetch) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
-	f.hashToPeers.Mu.Lock()
-	defer f.hashToPeers.Mu.Unlock()
-
-	peers, exists := f.hashToPeers.Get(fromHash)
-	if !exists {
-		return
-	}
-	for peer := range peers {
-		f.RegisterPeerHashes(peer, toHashes)
-	}
-	return
+	f.hashToPeers.AddPeersFromHash(fromHash, toHashes)
 }

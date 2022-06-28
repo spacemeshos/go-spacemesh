@@ -16,7 +16,7 @@ import (
 // HashPeersCache holds lru cache of peers to pull hash from.
 type HashPeersCache struct {
 	*lru.Cache
-	Mu    sync.Mutex
+	mu    sync.Mutex
 	stats cacheStats
 }
 
@@ -43,8 +43,8 @@ func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 
 // Add adds peer to a hash.
 func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
-	hpc.Mu.Lock()
-	defer hpc.Mu.Unlock()
+	hpc.mu.Lock()
+	defer hpc.mu.Unlock()
 
 	peers, exists := hpc.get(hash)
 	if !exists {
@@ -70,6 +70,9 @@ func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
 
 // GetRandom returns random peer for a given hash.
 func (hpc *HashPeersCache) GetRandom(hash types.Hash32, rng *rand.Rand) (p2p.Peer, bool) {
+	hpc.mu.Lock()
+	defer hpc.mu.Unlock()
+
 	hashPeersMap, exists := hpc.Get(hash)
 	if !exists {
 		return p2p.NoPeer, false
@@ -83,6 +86,35 @@ func (hpc *HashPeersCache) GetRandom(hash types.Hash32, rng *rand.Rand) (p2p.Pee
 		}
 	}
 	return p2p.NoPeer, false
+}
+
+// RegisterPeerHashes registers provided peer for a list of hashes.
+func (hpc *HashPeersCache) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	if len(hashes) == 0 {
+		return
+	}
+	if p2p.IsNoPeer(peer) {
+		return
+	}
+	for _, hash := range hashes {
+		hpc.Add(hash, peer)
+	}
+	return
+}
+
+// AddPeersFromHash adds peers from one hash to others.
+func (hpc *HashPeersCache) AddPeersFromHash(fromHash types.Hash32, toHashes []types.Hash32) {
+	hpc.mu.Lock()
+	defer hpc.mu.Unlock()
+
+	peers, exists := hpc.Get(fromHash)
+	if !exists {
+		return
+	}
+	for peer := range peers {
+		hpc.RegisterPeerHashes(peer, toHashes)
+	}
+	return
 }
 
 // cacheStats stores hash-to-peers cache hits & misses.
