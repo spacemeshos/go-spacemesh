@@ -520,6 +520,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 
 func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	defer pd.cleanupEpoch(epoch)
 
 	if epoch.IsGenesis() {
 		logger.Info("not running beacon protocol: genesis epochs")
@@ -546,7 +547,6 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 		logger.With().Error("epoch not setup correctly", log.Err(err))
 		return
 	}
-	defer pd.cleanupEpoch(epoch)
 
 	logger.With().Info("participating beacon protocol with ATX", atxID, log.Uint64("epoch_weight", epochWeight))
 	pd.runProtocol(ctx, epoch, atxs)

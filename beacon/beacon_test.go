@@ -167,6 +167,29 @@ func TestBeaconNotSynced(t *testing.T) {
 	tpd.Close()
 }
 
+func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
+	tpd := setUpProtocolDriver(t)
+	tpd.config.BeaconSyncNumBallots = 1
+	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+
+	tpd.mClock.EXPECT().Subscribe().Times(1)
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(1)).Times(1)
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.Start(context.TODO())
+
+	start := types.EpochID(2)
+	end := start + numEpochsToKeep + 10
+	for eid := start; eid <= end; eid++ {
+		tpd.ReportBeaconFromBallot(eid, types.RandomBallotID(), types.RandomBeacon(), 1000)
+		tpd.onNewEpoch(context.TODO(), eid)
+	}
+	require.Len(t, tpd.beacons, numEpochsToKeep)
+	require.Len(t, tpd.beaconsFromBallots, numEpochsToKeep)
+
+	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
+	tpd.Close()
+}
+
 func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
