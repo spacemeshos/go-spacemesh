@@ -17,47 +17,32 @@ type ResultsFilter struct {
 	TID        *types.TransactionID
 }
 
-func (f *ResultsFilter) hasWhere() bool {
-	return f.Address != nil || f.Start != nil || f.End != nil || f.TID != nil
-}
-
 func (f *ResultsFilter) query() string {
 	var q strings.Builder
 	q.WriteString(`
 		select distinct id, tx, header, result 
 		from transactions
 		left join transactions_results_addresses on id=tid
+		where result is not null
 	`)
-	if f.hasWhere() {
-		q.WriteString(" where")
-	}
 	i := 1
 	if f.Address != nil {
-		q.WriteString(" address = ?")
+		q.WriteString(" and address = ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
 	if f.Start != nil {
-		if i != 1 {
-			q.WriteString(" and")
-		}
-		q.WriteString(" layer >= ?")
+		q.WriteString(" and layer >= ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
 	if f.End != nil {
-		if i != 1 {
-			q.WriteString(" and")
-		}
-		q.WriteString(" layer <= ?")
+		q.WriteString(" and layer <= ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
 	if f.TID != nil {
-		if i != 1 {
-			q.WriteString(" and")
-		}
-		q.WriteString(" id = ?")
+		q.WriteString(" and id = ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
