@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -49,18 +51,44 @@ func TestStepChaos(t *testing.T) {
 }
 
 func TestStepSubmitTransactions(t *testing.T) {
+	const (
+		// concurrently sent transactions from the same account
+		batch        = 100
+		amount_limit = 100_000
+	)
+	rng := rand.New(rand.NewSource(time.Now().Unix()))
+
 	tctx := testcontext.New(t)
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	n := rng.Intn(cl.Accounts()-4) + 2 // send transaction from [2, 5] accounts
-
-	tctx.Log.Debugw("submitting transactions", "accounts", n)
-
-	// this test expected to tolerate clients failures.
-	for i := 0; i < n; i++ {
-
+	clients := make([]*txClient, cl.Accounts())
+	// TODO filter out node clients that are are not yet synced
+	for i := range clients {
+		clients[i] = &txClient{
+			account: cl.Account(i),
+			node:    cl.Client(i % cl.Total()),
+		}
+	}
+	for _, client := range clients {
+		nonce, err := client.nonce(tctx)
+		require.NoError(t, err)
+		if nonce == 0 {
+			req, err := client.submit(tctx, wallet.SelfSpawn(client.account.PrivateKey))
+			require.NoError(t, err)
+			require.NoError(t, req.wait(tctx))
+			nonce++
+		}
+		for i := 0; i < batch; i++ {
+			receiver := types.Address{}
+			rng.Read(receiver[:])
+			_, err := client.submit(tctx, wallet.Spend(
+				client.account.PrivateKey, types.Address(receiver), rng.Uint64()%amount_limit,
+				types.Nonce{Counter: nonce},
+			))
+			require.NoError(t, err)
+			nonce++
+		}
 	}
 }
 

@@ -297,9 +297,22 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 	return nil
 }
 
+// Account contains address and private key.
+type Account struct {
+	PrivateKey ed25519.PrivateKey
+	Address    []byte
+}
+
 type accounts struct {
 	keys      []*signer
 	persisted bool
+}
+
+func (a *accounts) Account(i int) Account {
+	return Account{
+		PrivateKey: a.Private(i),
+		Address:    a.Address(i),
+	}
 }
 
 func (a *accounts) Accounts() int {
