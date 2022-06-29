@@ -41,14 +41,6 @@ func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 	return item.(HashPeers), true
 }
 
-// Get is a thread-safe version of get.
-func (hpc *HashPeersCache) Get(hash types.Hash32) (HashPeers, bool) {
-	hpc.mu.Lock()
-	defer hpc.mu.Unlock()
-
-	return hpc.get(hash)
-}
-
 // getWithStats is the same as get but also updates cache stats (still non-thread-safe).
 func (hpc *HashPeersCache) getWithStats(hash types.Hash32) (HashPeers, bool) {
 	hashPeers, found := hpc.get(hash)
@@ -89,7 +81,7 @@ func (hpc *HashPeersCache) GetRandom(hash types.Hash32, rng *rand.Rand) (p2p.Pee
 	if !exists {
 		return p2p.NoPeer, false
 	}
-	n := rng.Intn(len(hashPeersMap))
+	n := rng.Intn(len(hashPeersMap)) + 1
 	i := 0
 	for peer := range hashPeersMap {
 		i++
