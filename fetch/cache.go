@@ -16,7 +16,9 @@ import (
 // HashPeersCache holds lru cache of peers to pull hash from.
 type HashPeersCache struct {
 	*lru.Cache
-	mu    sync.Mutex
+	// mu protects cache update for the same key.
+	mu sync.Mutex
+	// stats holds cache hits/misses stats.
 	stats cacheStats
 }
 
