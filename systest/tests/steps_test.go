@@ -50,7 +50,7 @@ func TestStepChaos(t *testing.T) {
 	})
 }
 
-func TestStepSubmitTransactions(t *testing.T) {
+func TestStepTransactions(t *testing.T) {
 	const (
 		// concurrently sent transactions from the same account
 		batch        = 100

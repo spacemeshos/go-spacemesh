@@ -220,7 +220,7 @@ func (c *txClient) nonce(ctx context.Context) (uint64, error) {
 func (c *txClient) submit(ctx context.Context, tx []byte) (*txRequest, error) {
 	txid, err := submitTransacition(ctx, tx, c.node)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("submit to node %s: %w", c.node.Name, err)
 	}
 	return &txRequest{
 		node: c.node,

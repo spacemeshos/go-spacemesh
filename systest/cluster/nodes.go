@@ -29,6 +29,8 @@ func persistentVolumeClaim(podname string) string {
 	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
 }
 
+const prometheusScrapePort = 9216
+
 // Node ...
 type Node struct {
 	Name      string
@@ -250,6 +252,8 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data/state",
 		"--log-encoder=json",
+		"--metrics",
+		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 	}
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
@@ -280,6 +284,12 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 			).
 			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
 			WithTemplate(corev1.PodTemplateSpec().
+				WithAnnotations(
+					map[string]string{
+						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape": "true",
+					},
+				).
 				WithLabels(labels).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
@@ -290,6 +300,7 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
+							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
