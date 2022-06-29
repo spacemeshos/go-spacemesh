@@ -2,109 +2,37 @@ package fetch
 
 import (
 	"context"
-	"fmt"
-	"sync"
+	"errors"
 	"testing"
-	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
+	smocks "github.com/spacemeshos/go-spacemesh/p2p/server/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func randomHash() (hash types.Hash32) {
-	hash.SetBytes([]byte(rand.String(32)))
-	return
+type testFetch struct {
+	*Fetch
+	mh     *mocks.Mockhost
+	mAtxS  *smocks.MockRequestor
+	mLyrS  *smocks.MockRequestor
+	mHashS *smocks.MockRequestor
 }
 
-type mockNet struct {
-	Mu              sync.RWMutex
-	SendCalled      map[types.Hash32]int
-	TotalBatchCalls int
-	ReturnError     bool
-	Responses       map[types.Hash32]responseMessage
-	AckChannel      chan struct{}
-	AsyncChannel    chan struct{}
-}
-
-func (m *mockNet) GetPeers() []p2p.Peer {
-	return []p2p.Peer{"test"}
-}
-
-func (m *mockNet) PeerCount() uint64 {
-	return 1
-}
-
-func (m *mockNet) Close() error {
-	return nil
-}
-
-func (m *mockNet) Request(_ context.Context, _ p2p.Peer, payload []byte, resHandler func(msg []byte), _ func(err error)) error {
-	m.Mu.Lock()
-	m.TotalBatchCalls++
-	retErr := m.ReturnError
-	m.Mu.Unlock()
-
-	if retErr {
-		m.Mu.RLock()
-		ackCh := m.AckChannel
-		m.Mu.RUnlock()
-
-		if ackCh != nil {
-			ackCh <- struct{}{}
-		}
-		return fmt.Errorf("mock error")
-	}
-
-	var r requestBatch
-	err := types.BytesToInterface(payload, &r)
-	if err != nil {
-		panic("invalid message")
-	}
-
-	var res responseBatch
-	for _, req := range r.Requests {
-		m.Mu.Lock()
-		m.SendCalled[req.Hash]++
-		if r, ok := m.Responses[req.Hash]; ok {
-			res.Responses = append(res.Responses, r)
-		}
-		m.Mu.Unlock()
-	}
-	res.ID = r.ID
-	bts, _ := types.InterfaceToBytes(res)
-
-	m.Mu.RLock()
-	asyncCh := m.AsyncChannel
-	m.Mu.RUnlock()
-
-	if asyncCh != nil {
-		go func(data []byte) {
-			<-asyncCh
-			resHandler(data)
-		}(bts)
-	} else {
-		resHandler(bts)
-	}
-
-	m.Mu.RLock()
-	ackCh := m.AckChannel
-	m.Mu.RUnlock()
-
-	if ackCh != nil {
-		ackCh <- struct{}{}
-	}
-	return nil
-}
-
-func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
+func createFetch(tb testing.TB) *testFetch {
+	ctrl := gomock.NewController(tb)
+	mh := mocks.NewMockhost(ctrl)
+	msAtx := smocks.NewMockRequestor(ctrl)
+	msLyr := smocks.NewMockRequestor(ctrl)
+	msHash := smocks.NewMockRequestor(ctrl)
 	cfg := Config{
 		2000, // make sure we never hit the batch timeout
 		3,
@@ -112,34 +40,21 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 		3,
 		3,
 	}
-
-	mckNet := &mockNet{
-		SendCalled: make(map[types.Hash32]int),
-		Responses:  make(map[types.Hash32]responseMessage),
+	return &testFetch{
+		Fetch:  newFetch(cfg, mh, datastore.NewBlobStore(sql.InMemory()), msAtx, msLyr, msHash, logtest.New(tb)),
+		mh:     mh,
+		mAtxS:  msAtx,
+		mLyrS:  msLyr,
+		mHashS: msHash,
 	}
-	lg := logtest.New(tb)
-	f := NewFetch(cfg, nil, datastore.NewBlobStore(sql.InMemory()), lg)
-	f.net = mckNet
-
-	return f, mckNet
-}
-
-func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
-	mckNet := &mockNet{
-		SendCalled: make(map[types.Hash32]int),
-		Responses:  make(map[types.Hash32]responseMessage),
-	}
-	lg := logtest.New(tb)
-	f := NewFetch(cfg, nil, datastore.NewBlobStore(sql.InMemory()), lg)
-	f.net = mckNet
-	return f, mckNet
 }
 
 func TestFetch_GetHash(t *testing.T) {
-	f, _ := defaultFetch(t)
-	defer f.Stop()
+	f := createFetch(t)
+	f.mh.EXPECT().Close()
 	f.Start()
-	h1 := randomHash()
+	defer f.Stop()
+	h1 := types.RandomHash()
 	hint := datastore.POETDB
 	hint2 := datastore.BallotDB
 
@@ -147,7 +62,7 @@ func TestFetch_GetHash(t *testing.T) {
 	f.GetHash(h1, hint, false)
 	f.GetHash(h1, hint, false)
 
-	h2 := randomHash()
+	h2 := types.RandomHash()
 	f.GetHash(h2, hint2, false)
 
 	// test aggregation by hint
@@ -156,222 +71,150 @@ func TestFetch_GetHash(t *testing.T) {
 	f.activeReqM.RUnlock()
 }
 
-func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
-	h1 := randomHash()
-	f, net := defaultFetch(t)
-
-	// set response mock
-	res := responseMessage{
-		Hash: h1,
-		Data: []byte("a"),
+func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
+	tt := []struct {
+		name     string
+		validate bool
+		err      error
+	}{
+		{
+			name:     "request batch hash aggregated",
+			validate: false,
+		},
+		{
+			name:     "request batch hash aggregated and validated",
+			validate: true,
+		},
+		{
+			name: "request batch hash aggregated network failure",
+			err:  errors.New("network failure"),
+		},
 	}
 
-	net.Mu.Lock()
-	net.Responses[h1] = res
-	net.Mu.Unlock()
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	request1 := request{
-		hash:                 h1,
-		validateResponseHash: false,
-		hint:                 datastore.POETDB,
-		returnChan:           make(chan ftypes.HashDataPromiseResult, 6),
+			f := createFetch(t)
+			f.cfg.MaxRetriesForRequest = 0
+			f.cfg.MaxRetriesForPeer = 0
+			peer := p2p.Peer("buddy")
+			f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
+
+			hsh := types.RandomHash()
+			res := responseMessage{
+				Hash: hsh,
+				Data: []byte("a"),
+			}
+			f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+					if tc.err != nil {
+						return tc.err
+					}
+					var rb requestBatch
+					err := types.BytesToInterface(req, &rb)
+					require.NoError(t, err)
+					resBatch := responseBatch{
+						ID:        rb.ID,
+						Responses: []responseMessage{res},
+					}
+					bts, err := types.InterfaceToBytes(&resBatch)
+					require.NoError(t, err)
+					okFunc(bts)
+					return nil
+				})
+
+			req := request{
+				hash:                 hsh,
+				validateResponseHash: tc.validate,
+				hint:                 datastore.POETDB,
+				returnChan:           make(chan ftypes.HashDataPromiseResult, 3),
+			}
+
+			f.activeReqM.Lock()
+			f.activeRequests[hsh] = []*request{&req, &req, &req}
+			f.activeReqM.Unlock()
+			f.requestHashBatchFromPeers()
+			close(req.returnChan)
+			for x := range req.returnChan {
+				if tc.err != nil {
+					require.ErrorIs(t, x.Err, tc.err)
+				} else if tc.validate {
+					require.ErrorIs(t, x.Err, errWrongHash)
+				} else {
+					require.NoError(t, x.Err)
+				}
+			}
+		})
 	}
-
-	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
-	f.requestHashBatchFromPeers()
-
-	net.Mu.RLock()
-	// test aggregation of messages before calling fetch from peer
-	assert.Equal(t, 1, net.SendCalled[h1])
-	net.Mu.RUnlock()
-
-	// test incorrect hash fail
-	request1.validateResponseHash = true
-	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
-	f.requestHashBatchFromPeers()
-
-	close(request1.returnChan)
-	okCount, notOk := 0, 0
-	for x := range request1.returnChan {
-		if x.Err != nil {
-			notOk++
-		} else {
-			okCount++
-		}
-	}
-
-	net.Mu.RLock()
-	assert.Equal(t, 2, net.SendCalled[h1])
-	net.Mu.RUnlock()
-	assert.Equal(t, 3, notOk)
-	assert.Equal(t, 3, okCount)
-}
-
-func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
-	h1 := randomHash()
-	f, net := defaultFetch(t)
-
-	// set response mock
-	res := responseMessage{
-		Hash: h1,
-		Data: []byte("a"),
-	}
-
-	net.Mu.Lock()
-	net.Responses[h1] = res
-	net.AsyncChannel = make(chan struct{})
-	net.Mu.Unlock()
-
-	request1 := request{
-		hash:                 h1,
-		validateResponseHash: false,
-		hint:                 datastore.POETDB,
-		returnChan:           make(chan ftypes.HashDataPromiseResult, 3),
-	}
-
-	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
-	f.requestHashBatchFromPeers()
-	f.requestHashBatchFromPeers()
-
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[h1])
-	asyncCh := net.AsyncChannel
-	net.Mu.RUnlock()
-
-	close(asyncCh)
 }
 
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
-	f, _ := defaultFetch(t)
+	f := createFetch(t)
+	f.mh.EXPECT().Close()
 	f.Start()
 	f.Stop()
 }
 
-func TestFetch_GetHash_failNetwork(t *testing.T) {
-	h1 := randomHash()
-	f, net := defaultFetch(t)
-
-	// set response mock
-	bts := responseMessage{
-		Hash: h1,
-		Data: []byte("a"),
-	}
-
-	net.Mu.Lock()
-	net.Responses[h1] = bts
-	net.ReturnError = true
-	net.Mu.Unlock()
-
-	request1 := request{
-		hash:                 h1,
-		validateResponseHash: false,
-		hint:                 datastore.POETDB,
-		returnChan:           make(chan ftypes.HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
-	}
-	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
-	f.requestHashBatchFromPeers()
-
-	// test aggregation of messages before calling fetch from peer
-	assert.Equal(t, 3, len(request1.returnChan))
-	net.Mu.RLock()
-	assert.Equal(t, 0, net.SendCalled[h1])
-	net.Mu.RUnlock()
-}
-
 func TestFetch_Loop_BatchRequestMax(t *testing.T) {
-	h1 := randomHash()
-	h2 := randomHash()
-	h3 := randomHash()
-	f, net := customFetch(t, Config{
-		BatchTimeout:      1,
-		MaxRetriesForPeer: 2,
-		BatchSize:         2,
-	})
+	f := createFetch(t)
+	f.cfg.BatchTimeout = 1
+	f.cfg.MaxRetriesForPeer = 2
+	f.cfg.BatchSize = 2
+	peer := p2p.Peer("buddy")
+	f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
 
-	// set response mock
-	bts := responseMessage{
-		Hash: h1,
-		Data: []byte("a"),
-	}
-	bts2 := responseMessage{
-		Hash: h2,
-		Data: []byte("a"),
-	}
-	bts3 := responseMessage{
-		Hash: h3,
-		Data: []byte("a"),
-	}
-
-	net.Mu.Lock()
-	net.Responses[h1] = bts
-	net.Responses[h2] = bts2
-	net.Responses[h3] = bts3
-	net.AckChannel = make(chan struct{})
-	net.Mu.Unlock()
+	h1 := types.RandomHash()
+	h2 := types.RandomHash()
+	h3 := types.RandomHash()
+	f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+			var rb requestBatch
+			err := types.BytesToInterface(req, &rb)
+			require.NoError(t, err)
+			resps := make([]responseMessage, 0, len(rb.Requests))
+			for _, r := range rb.Requests {
+				resps = append(resps, responseMessage{
+					Hash: r.Hash,
+					Data: []byte("a"),
+				})
+			}
+			resBatch := responseBatch{
+				ID:        rb.ID,
+				Responses: resps,
+			}
+			bts, err := types.InterfaceToBytes(&resBatch)
+			require.NoError(t, err)
+			okFunc(bts)
+			return nil
+		}).Times(2) // 3 requests with batch size 2 -> 2 sends
 
 	hint := datastore.POETDB
 
+	f.mh.EXPECT().Close()
 	defer f.Stop()
 	f.Start()
-	// test hash aggregation
 	r1 := f.GetHash(h1, hint, false)
 	r2 := f.GetHash(h2, hint, false)
 	r3 := f.GetHash(h3, hint, false)
-
-	// since we have a batch of 2 we should call send twice - of not we should fail
-	net.Mu.RLock()
-	ackCh := net.AckChannel
-	net.Mu.RUnlock()
-
-	select {
-	case <-ackCh:
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting")
+	for _, ch := range []chan ftypes.HashDataPromiseResult{r1, r2, r3} {
+		res := <-ch
+		require.NoError(t, res.Err)
+		require.NotEmpty(t, res.Data)
+		require.False(t, res.IsLocal)
 	}
-
-	net.Mu.RLock()
-	ackCh = net.AckChannel
-	net.Mu.RUnlock()
-
-	select {
-	case <-ackCh:
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting")
-	}
-
-	responses := []chan ftypes.HashDataPromiseResult{r1, r2, r3}
-	for _, res := range responses {
-		select {
-		case data := <-res:
-			assert.NoError(t, data.Err)
-		case <-time.After(1 * time.Second):
-			assert.Fail(t, "timeout getting")
-		}
-	}
-
-	// test aggregation of messages before calling fetch from peer
-	net.Mu.RLock()
-	assert.Equal(t, 1, net.SendCalled[h1])
-	assert.Equal(t, 1, net.SendCalled[h2])
-	assert.Equal(t, 1, net.SendCalled[h3])
-	assert.Equal(t, 2, net.TotalBatchCalls)
-	net.Mu.RUnlock()
 }
 
 func TestFetch_GetRandomPeer(t *testing.T) {
 	myPeers := make([]p2p.Peer, 1000)
 	for i := 0; i < len(myPeers); i++ {
-		buf := make([]byte, 20)
-		_, err := rand.Read(buf)
-		require.NoError(t, err)
-		myPeers[i] = p2p.Peer(buf)
+		myPeers[i] = p2p.Peer(types.RandomBytes(20))
 	}
 	allTheSame := true
 	for i := 0; i < 20; i++ {
-		peer1 := GetRandomPeer(myPeers)
-		peer2 := GetRandomPeer(myPeers)
+		peer1 := randomPeer(myPeers)
+		peer2 := randomPeer(myPeers)
 		if peer1 != peer2 {
 			allTheSame = false
 		}
