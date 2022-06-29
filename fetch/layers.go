@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -50,6 +52,7 @@ type LayerPromiseResult struct {
 // Logic is the struct containing components needed to follow layer fetching logic.
 type Logic struct {
 	log     log.Log
+	eg      errgroup.Group
 	db      *sql.Database
 	msh     meshProvider
 	fetcher fetcher
@@ -116,6 +119,7 @@ func (l *Logic) Start() {
 // Close closes all running workers.
 func (l *Logic) Close() {
 	l.fetcher.Stop()
+	_ = l.eg.Wait()
 }
 
 // initLayerPolling returns false if there is an ongoing polling of the given layer content,
@@ -275,7 +279,11 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	}
 
 	// make a copy of data and channels to avoid holding a lock while notifying
-	go notifyLayerDataResult(l.db, layerID, l.msh, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
+	chs := l.layerBlocksChs[layerID]
+	l.eg.Go(func() error {
+		notifyLayerDataResult(l.db, layerID, l.msh, chs, result, l.log.WithContext(ctx).WithFields(layerID))
+		return nil
+	})
 	delete(l.layerBlocksChs, layerID)
 	delete(l.layerBlocksRes, layerID)
 }

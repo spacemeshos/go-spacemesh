@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
@@ -128,6 +130,7 @@ func randomPeer(peers []p2p.Peer) p2p.Peer {
 type Fetch struct {
 	cfg     Config
 	log     log.Log
+	eg      errgroup.Group
 	bs      *datastore.BlobStore
 	host    host
 	atxSrv  server.Requestor
@@ -139,17 +142,14 @@ type Fetch struct {
 	// pendingRequests contains requests that have been processed and are waiting for responses
 	pendingRequests map[types.Hash32][]*request
 	// activeBatches contains batches of requests in pendingRequests.
-	activeBatches        map[types.Hash32]batchInfo
-	requestReceiver      chan request
-	batchRequestReceiver chan []request
-	batchTimeout         *time.Ticker
-	stop                 chan struct{}
-	activeReqM           sync.RWMutex
-	activeBatchM         sync.RWMutex
-	onlyOnce             sync.Once
-	doneChan             chan struct{}
-	dbLock               sync.RWMutex
-	hashToPeers          *HashPeersCache
+	activeBatches   map[types.Hash32]batchInfo
+	requestReceiver chan request
+	batchTimeout    *time.Ticker
+	stop            chan struct{}
+	activeReqM      sync.RWMutex
+	activeBatchM    sync.RWMutex
+	onlyOnce        sync.Once
+	hashToPeers     *HashPeersCache
 }
 
 // newFetch creates a new Fetch struct.
@@ -168,7 +168,6 @@ func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, hashS ser
 		batchTimeout:    time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]batchInfo),
-		doneChan:        make(chan struct{}),
 		hashToPeers:     NewHashPeersCache(cacheSize),
 	}
 	return f
@@ -177,7 +176,10 @@ func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, hashS ser
 // Start starts handling fetch requests.
 func (f *Fetch) Start() {
 	f.onlyOnce.Do(func() {
-		go f.loop()
+		f.eg.Go(func() error {
+			f.loop()
+			return nil
+		})
 	})
 }
 
@@ -186,7 +188,9 @@ func (f *Fetch) Stop() {
 	f.log.Info("stopping fetch")
 	f.batchTimeout.Stop()
 	close(f.stop)
-	f.host.Close()
+	if err := f.host.Close(); err != nil {
+		f.log.With().Warning("error closing host", log.Err(err))
+	}
 	f.activeReqM.Lock()
 	for _, batch := range f.activeRequests {
 		for _, req := range batch {
@@ -200,8 +204,7 @@ func (f *Fetch) Stop() {
 	}
 	f.activeReqM.Unlock()
 
-	// wait for close to end
-	<-f.doneChan
+	_ = f.eg.Wait()
 	f.log.Info("stopped fetch")
 }
 
@@ -232,7 +235,10 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	f.activeReqM.Unlock()
 	f.log.With().Debug("request added to queue", log.String("hash", req.hash.ShortString()))
 	if rLen > batchMaxSize {
-		go f.requestHashBatchFromPeers() // Process the batch.
+		f.eg.Go(func() error {
+			f.requestHashBatchFromPeers() // Process the batch.
+			return nil
+		})
 		return true
 	}
 	return false
@@ -247,9 +253,11 @@ func (f *Fetch) loop() {
 		case req := <-f.requestReceiver:
 			f.handleNewRequest(&req)
 		case <-f.batchTimeout.C:
-			go f.requestHashBatchFromPeers() // Process the batch.
+			f.eg.Go(func() error {
+				f.requestHashBatchFromPeers() // Process the batch.
+				return nil
+			})
 		case <-f.stop:
-			close(f.doneChan)
 			return
 		}
 	}
