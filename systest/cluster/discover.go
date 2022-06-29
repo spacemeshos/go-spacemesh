@@ -20,28 +20,33 @@ func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error)
 	}
 	var (
 		eg      errgroup.Group
-		clients = make([]*NodeClient, len(pods.Items))
+		clients = make(chan *NodeClient, len(pods.Items))
+		rst     []*NodeClient
 	)
-	for i, pod := range pods.Items {
-		i := i
+	for _, pod := range pods.Items {
 		pod := pod
 		eg.Go(func() error {
 			client, err := waitSmesher(ctx, pod.Name)
 			if err != nil {
 				return err
 			}
-			clients[i] = client
-			ctx.Log.Debugw("discovered existing smesher", "name", pod.Name)
+			if client != nil {
+				clients <- client
+			}
 			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
-	sort.Slice(clients, func(i, j int) bool {
-		return decodeOrdinal(clients[i].Name) < decodeOrdinal(clients[j].Name)
+	close(clients)
+	for node := range clients {
+		rst = append(rst, node)
+	}
+	sort.Slice(rst, func(i, j int) bool {
+		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)
 	})
-	return clients, nil
+	return rst, nil
 }
 
 func decodeOrdinal(name string) int {

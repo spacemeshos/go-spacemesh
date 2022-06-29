@@ -157,12 +157,18 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	if len(clients) == 0 {
 		return errNotInitialized
 	}
+	for _, node := range clients {
+		cctx.Log.Debugw("discovered existing bootnode", "name", node.Name)
+	}
 	c.clients = append(c.clients, clients...)
 	c.bootnodes = len(clients)
 
 	clients, err = discoverNodes(cctx, smesherPrefix)
 	if err != nil {
 		return err
+	}
+	for _, node := range clients {
+		cctx.Log.Debugw("discovered existing smesher", "name", node.Name)
 	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
@@ -257,7 +263,7 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 // DeleteSmeshers will remove n smeshers from the end.
 func (c *Cluster) DeleteSmeshers(cctx *testcontext.Context, n int) error {
 	if n > c.smeshers-c.bootnodes {
-		return fmt.Errorf("can't remove bootnodes. max number of removable smeshers is %d", c.smeshers)
+		return fmt.Errorf("can't remove bootnodes. max number of removable smeshers is %d", c.smeshers-c.bootnodes)
 	}
 	clients, err := deleteNodes(cctx, "smesher", c.smeshers, c.smeshers-n)
 	if err != nil {

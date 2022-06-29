@@ -23,6 +23,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+const persistentVolumeName = "data"
+
+func persistentVolumeClaim(podname string) string {
+	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
+}
+
 // Node ...
 type Node struct {
 	Name      string
@@ -203,9 +209,17 @@ func deleteNodes(ctx *testcontext.Context, name string, from, to int) ([]*NodeCl
 	return discoverNodes(ctx, name)
 }
 
-func deleteNode(ctx *testcontext.Context, name string) error {
-	return ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
-		Delete(ctx, name, apimetav1.DeleteOptions{})
+func deleteNode(ctx *testcontext.Context, setname string) error {
+	if err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
+		Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
+		return err
+	}
+	pvcname := persistentVolumeClaim(fmt.Sprintf("%s-0", setname))
+	if err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).Delete(ctx,
+		pvcname, apimetav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("failed deleting pvc %s: %w", pvcname, err)
+	}
+	return nil
 }
 
 func deployNode(ctx *testcontext.Context, name string, applabels map[string]string, flags []DeploymentFlag) error {
@@ -247,8 +261,17 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 			WithPodManagementPolicy(apiappsv1.ParallelPodManagement).
 			WithReplicas(1).
 			WithServiceName(*svc.Name).
+			WithPersistentVolumeClaimRetentionPolicy(
+				appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy().
+					WithWhenDeleted(
+						apiappsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+					).
+					WithWhenScaled(
+						apiappsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+					),
+			).
 			WithVolumeClaimTemplates(
-				corev1.PersistentVolumeClaim("data", ctx.Namespace).
+				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
 						WithAccessModes(v1.ReadWriteOnce).
 						WithStorageClassName("standard").

@@ -70,12 +70,16 @@ func TestStepAddNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	delta := rand.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
-
+	delta = min(delta, cctx.ClusterSize-cl.Total())
 	log := cctx.Log.With(
 		"current", cl.Total(),
 		"max", cctx.ClusterSize,
 		"delta", delta,
 	)
+	if cl.Total()+delta > cctx.ClusterSize {
+		log.Error("reached cluster limit. delete nodes before adding them")
+		return
+	}
 
 	log.Info("increasing cluster size")
 	require.NoError(t, cl.AddSmeshers(cctx, delta))
@@ -94,7 +98,7 @@ func TestStepDeleteNodes(t *testing.T) {
 		"delta", delta,
 	)
 
-	log.Info("increasing cluster size")
+	log.Info("deleting smeshers")
 	require.NoError(t, cl.DeleteSmeshers(cctx, delta))
 }
 
