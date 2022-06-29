@@ -32,26 +32,17 @@ func (f *ResultsFilter) query() string {
 		i++
 	}
 	if f.Start != nil {
-		if i != 1 {
-			q.WriteString(" and")
-		}
-		q.WriteString(" layer >= ?")
+		q.WriteString(" and layer >= ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
 	if f.End != nil {
-		if i != 1 {
-			q.WriteString(" and")
-		}
-		q.WriteString(" layer <= ?")
+		q.WriteString(" and layer <= ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
 	if f.TID != nil {
-		if i != 1 {
-			q.WriteString(" and")
-		}
-		q.WriteString(" id = ?")
+		q.WriteString(" and id = ?")
 		q.WriteString(strconv.Itoa(i))
 		i++
 	}
