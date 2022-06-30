@@ -141,7 +141,9 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 
 // TxImmediate creates immediate transaction.
 //
-// IMMEDIATE cause the database connection to start a new write immediately, without waiting // for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write //// transaction is already active on another database connection.
+// IMMEDIATE cause the database connection to start a new write immediately, without waiting
+// for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write
+// transaction is already active on another database connection.
 func (db *Database) TxImmediate(ctx context.Context) (*Tx, error) {
 	conn := db.pool.Get(ctx)
 	if conn == nil {
