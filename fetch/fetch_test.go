@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -220,4 +221,113 @@ func TestFetch_GetRandomPeer(t *testing.T) {
 		}
 	}
 	assert.False(t, allTheSame)
+}
+
+func TestFetch_GetLayerData(t *testing.T) {
+	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
+	errUnknown := errors.New("unknown")
+	tt := []struct {
+		name string
+		errs []error
+	}{
+		{
+			name: "all peers returns",
+			errs: []error{nil, nil, nil, nil},
+		},
+		{
+			name: "some peers errors",
+			errs: []error{nil, errUnknown, nil, errUnknown},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, len(peers), len(tc.errs))
+			f := createFetch(t)
+			f.mh.EXPECT().GetPeers().Return(peers)
+			resPeers := make([]p2p.Peer, 0, len(peers))
+			resErrs := make([]error, 0, len(peers))
+			var wg sync.WaitGroup
+			wg.Add(len(peers))
+			okFunc := func(data []byte, peer p2p.Peer, numPeers int) {
+				require.Equal(t, len(peers), numPeers)
+				resPeers = append(resPeers, peer)
+				resErrs = append(resErrs, nil)
+				wg.Done()
+			}
+			errFunc := func(err error, peer p2p.Peer, numPeers int) {
+				require.Equal(t, len(peers), numPeers)
+				resPeers = append(resPeers, peer)
+				resErrs = append(resErrs, err)
+				wg.Done()
+			}
+			for i, p := range peers {
+				idx := i
+				f.mLyrS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p p2p.Peer, req []byte, okFunc func([]byte), errFunc func(error)) error {
+						if tc.errs[idx] == nil {
+							go okFunc(generateLayerContent(false))
+						} else {
+							go errFunc(tc.errs[idx])
+						}
+						return nil
+					})
+			}
+			require.NoError(t, f.GetLayerData(context.TODO(), types.NewLayerID(111), okFunc, errFunc))
+			wg.Wait()
+			require.ElementsMatch(t, resPeers, peers)
+			require.ElementsMatch(t, resErrs, tc.errs)
+		})
+	}
+}
+
+func TestFetch_GetEpochATXIDs(t *testing.T) {
+	peers := []p2p.Peer{"p0"}
+	errUnknown := errors.New("unknown")
+	tt := []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "success",
+		},
+		{
+			name: "fail",
+			err:  errUnknown,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := createFetch(t)
+			f.mh.EXPECT().GetPeers().Return(peers)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			okFunc := func(_ []byte, p p2p.Peer) {
+				require.Equal(t, peers[0], p)
+				wg.Done()
+			}
+			errFunc := func(err error) {
+				require.ErrorIs(t, err, errUnknown)
+				wg.Done()
+			}
+			f.mAtxS.EXPECT().Request(gomock.Any(), peers[0], gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, p p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+					if tc.err == nil {
+						go okFunc([]byte("a"))
+					} else {
+						go errFunc(tc.err)
+					}
+					return nil
+				})
+			require.NoError(t, f.GetEpochATXIDs(context.TODO(), types.EpochID(111), okFunc, errFunc))
+			wg.Wait()
+		})
+	}
 }
