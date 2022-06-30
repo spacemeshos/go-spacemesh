@@ -7,42 +7,56 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// CertifiedBlockService allows a node to participate in the building of certified blocks.
-// This includes gossiping block signatures and verifying gossiped block signatures upon
-// hare termination of every layer.
-type BlockCertifiyingService struct {
+type BlockCertificate struct {
+	blockID               types.BlockID
+	terminationSignatures []terminationSignature
 }
 
-func NewBlockCertifiyingService() (*BlockCertifiyingService, error) {
+func (bCert *BlockCertificate) IsValid() bool {
+	panic("not yet implemented")
+}
+
+// BlockCertifyingService allows a node to participate in the building of
+// certified blocks. This includes verifying & caching gossiped block signatures
+// and, if chosen by the oracle, participating in block-signing upon termination
+// of a given layer.
+type BlockCertifyingService struct {
+}
+
+func NewBlockCertifyingService() (*BlockCertifyingService, error) {
 	return nil, fmt.Errorf("not yet implemented")
 }
 
-func (bcs *BlockCertifiyingService) Start(ctx context.Context) error {
+func (bcs *BlockCertifyingService) Start(ctx context.Context) error {
+
 	return fmt.Errorf("not yet implemented")
+}
+
+// CertifiedBlockProvider is an object designed to retrieve a single CertifiedBlock
+// from a BlockCertifyingService.
+type CertifiedBlockProvider struct {
+}
+
+func NewCertifiedBlockProvider(service *BlockCertifyingService, store *CertifiedBlockStore, bID types.BlockID) (*CertifiedBlockProvider, error) {
+	return nil, fmt.Errorf("not yet implemented")
+}
+
+// GetBlockCertificateChannel returns a BlockCertificate channel. A
+// BlockCertificate can be received once enough block signatures have been
+// gathered.
+func (cbp *CertifiedBlockProvider) GetBlockCertificateChannel() <-chan *BlockCertificate {
+	panic("not implemented")
 }
 
 type CertifiedBlockStore struct {
 }
 
-func (cbs *CertifiedBlockStore) StoreCertifiedBlock(cBlock []byte) error {
-	return fmt.Errorf("not yet implemented")
-}
-
-// CertifiedBlockProvider is an object designed to retrieve one CertifiedBlock
-// from a BlockCertifiyingService.
-type CertifiedBlockProvider struct {
-}
-
-func NewCertifiedBlockProvider(s BlockCertifiyingService, bID types.BlockID) (*CertifiedBlockProvider, error) {
+func NewCertifiedBlockStore() (*CertifiedBlockStore, error) {
 	return nil, fmt.Errorf("not yet implemented")
 }
 
-func (cbp *CertifiedBlockProvider) WaitForCertifiedBlock() (<-chan struct{}, error) {
-	return nil, fmt.Errorf("not implemented yet")
-}
-
-func (cbp *CertifiedBlockProvider) GetCertifiedBlock() {
-
+func (cbs *CertifiedBlockStore) StoreCertifiedBlock(cBlock []byte) error {
+	return fmt.Errorf("not yet implemented")
 }
 
 // Implementation details below ----
@@ -52,16 +66,11 @@ type terminationSignature struct {
 	blockSignature   [80]byte
 }
 
-type certifiedBlock struct {
-	blockID               types.BlockID
-	terminationSignatures []terminationSignature
-}
-
 func (cbs *CertifiedBlockStore) storeBlockSignature(blockID types.BlockID, sig terminationSignature) error {
 	return fmt.Errorf("not yet implemented")
 }
 
-// BlockSignatureCollector collects gossiped block signatures and groups them by
+// blockSignatureCollector collects gossiped block signatures and groups them by
 // block.
 type blockSignatureCollectionService struct {
 }
