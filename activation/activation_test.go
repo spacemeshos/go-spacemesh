@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
-	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 // ========== Vars / Consts ==========
@@ -868,47 +866,6 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	}
 }
 */
-
-// Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
-func TestHandler_FetchAtxReferences(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-	r := require.New(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockFetch := mocks.NewMockFetcher(ctrl)
-
-	atxHdlr := NewHandler(newCachedDB(t), mockFetch, layersPerEpoch,
-		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB"))
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-
-	atx1 := newAtx(challenge, nipost)
-	atx1.PositioningATX = prevAtxID // should be fetched
-	atx1.PrevATXID = prevAtxID      // should be fetched
-
-	atx2 := newAtx(challenge, nipost)
-	atx2.PositioningATX = goldenATXID // should *NOT* be fetched
-	atx2.PrevATXID = prevAtxID        // should be fetched
-
-	atx3 := newAtx(challenge, nipost)
-	atx3.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
-	atx3.PrevATXID = prevAtxID              // should be fetched
-
-	atx4 := newAtx(challenge, nipost)
-	atx4.PositioningATX = prevAtxID    // should be fetched
-	atx4.PrevATXID = *types.EmptyATXID // should *NOT* be fetched
-
-	atx5 := newAtx(challenge, nipost)
-	atx5.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
-	atx5.PrevATXID = *types.EmptyATXID      // should *NOT* be fetched
-
-	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
-
-	mockFetch.EXPECT().FetchAtx(gomock.Any(), prevAtxID).Return(nil).Times(5)
-	for _, atx := range atxList {
-		r.NoError(atxHdlr.FetchAtxReferences(context.TODO(), atx))
-	}
-}
 
 func newActivationTx(
 	nodeID types.NodeID,
