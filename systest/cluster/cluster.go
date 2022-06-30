@@ -123,7 +123,7 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 	if c.persistedFlags {
 		return nil
 	}
-	ctx.Log.Debugw("persisting flags")
+	ctx.Log.Debugf("persisting flags %+v", c.smesherFlags)
 	if err := persistFlags(ctx, c.smesherFlags); err != nil {
 		return err
 	}
@@ -301,6 +301,10 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 type Account struct {
 	PrivateKey ed25519.PrivateKey
 	Address    []byte
+}
+
+func (a Account) String() string {
+	return "0x" + hex.EncodeToString(a.Address)
 }
 
 type accounts struct {
