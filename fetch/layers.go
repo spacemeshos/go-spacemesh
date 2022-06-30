@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -385,60 +384,6 @@ func (l *Logic) GetEpochATXs(ctx context.Context, eid types.EpochID) error {
 	return nil
 }
 
-// getAtxResults is called when an ATX result is received.
-func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).With().Debug("got response for ATX",
-		log.String("hash", hash.ShortString()),
-		log.Int("dataSize", len(data)))
-
-	if err := l.atxHandler.HandleAtxData(ctx, data); err != nil {
-		return fmt.Errorf("handle ATX data %s len %d: %w", hash, len(data), err)
-	}
-
-	return nil
-}
-
-// getPoetResult is handler function to poet proof fetch result.
-func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).Debug("got poet ref",
-		log.String("hash", hash.ShortString()),
-		log.Int("dataSize", len(data)))
-
-	if err := l.poetHandler.ValidateAndStoreMsg(data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-		return fmt.Errorf("validate and store message: %w", err)
-	}
-
-	return nil
-}
-
-// Future is a preparation for using actual futures in the code, this will allow to truly execute
-// asynchronous reads and receive result only when needed.
-type Future struct {
-	res chan ftypes.HashDataPromiseResult
-	ret *ftypes.HashDataPromiseResult
-}
-
-// Result actually evaluates the result of the fetch task.
-func (f *Future) Result() ftypes.HashDataPromiseResult {
-	if f.ret == nil {
-		ret := <-f.res
-		f.ret = &ret
-	}
-	return *f.ret
-}
-
-// FetchAtx returns error if ATX was not found.
-func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), datastore.ATXDB, false), nil}
-	if f.Result().Err != nil {
-		return f.Result().Err
-	}
-	if !f.Result().IsLocal {
-		return l.getAtxResults(ctx, f.Result().Hash, f.Result().Data)
-	}
-	return nil
-}
-
 // GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched.
 func (l *Logic) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	if len(ids) == 0 {
@@ -557,7 +502,13 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
-		return l.getPoetResult(ctx, res.Hash, res.Data)
+		l.log.WithContext(ctx).Debug("got poet ref",
+			log.String("hash", id.ShortString()),
+			log.Int("dataSize", len(res.Data)))
+
+		if err := l.poetHandler.ValidateAndStoreMsg(res.Data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("validate and store message: %w", err)
+		}
 	}
 	return nil
 }
