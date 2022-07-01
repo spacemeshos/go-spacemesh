@@ -9,6 +9,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -155,6 +156,10 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		layerCh, layerBufFull = consumeEvents(stream.Context(), layersSubscription)
+	}
+
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 
 	for {
