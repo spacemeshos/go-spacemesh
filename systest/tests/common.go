@@ -45,25 +45,52 @@ func extractNames(nodes ...*cluster.NodeClient) []string {
 }
 
 func watchLayers(ctx context.Context, eg *errgroup.Group,
-	client *cluster.NodeClient,
+	node *cluster.NodeClient,
 	collector func(*spacemeshv1.LayerStreamResponse) (bool, error),
 ) {
 	eg.Go(func() error {
-		meshapi := spacemeshv1.NewMeshServiceClient(client)
-		layers, err := meshapi.LayerStream(ctx, &spacemeshv1.LayerStreamRequest{})
+		return layersStream(ctx, node, collector)
+	})
+}
+
+func layersStream(ctx context.Context,
+	node *cluster.NodeClient,
+	collector func(*spacemeshv1.LayerStreamResponse) (bool, error),
+) error {
+	meshapi := spacemeshv1.NewMeshServiceClient(node)
+	layers, err := meshapi.LayerStream(ctx, &spacemeshv1.LayerStreamRequest{})
+	if err != nil {
+		return err
+	}
+	for {
+		layer, err := layers.Recv()
 		if err != nil {
 			return err
 		}
-		for {
-			layer, err := layers.Recv()
-			if err != nil {
-				return err
-			}
-			if cont, err := collector(layer); !cont {
-				return err
-			}
+		if cont, err := collector(layer); !cont {
+			return err
 		}
-	})
+	}
+}
+
+func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
+	svc := spacemeshv1.NewMeshServiceClient(node)
+	resp, err := svc.GenesisTime(ctx, &spacemeshv1.GenesisTimeRequest{})
+	if err != nil {
+		return err
+	}
+	genesis := time.Unix(int64(resp.Unixtime.Value), 0)
+	now := time.Now()
+	if !genesis.After(now) {
+		return nil
+	}
+	ctx.Log.Debugw("waiting for genesis", "now", now, "genesis", genesis)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(genesis.Sub(now)):
+		return nil
+	}
 }
 
 func watchTransactionResults(ctx context.Context,

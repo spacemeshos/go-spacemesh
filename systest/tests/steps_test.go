@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,7 @@ func TestStepTransactions(t *testing.T) {
 	tctx := testcontext.New(t)
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
+	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
 
 	clients := make([]*txClient, cl.Accounts())
 	synced := syncedNodes(tctx, cl)
@@ -235,5 +237,42 @@ func TestStepVerify(t *testing.T) {
 		require.Equal(t, reference.RootStateHash, layer.RootStateHash, "state hash on client %s",
 			synced[i].Name)
 	}
+}
 
+func TestScheduleBasicSteps(t *testing.T) {
+	var (
+		eg  errgroup.Group
+		mu  sync.RWMutex
+		rng = rand.New(rand.NewSource(time.Now().Unix()))
+	)
+	t.Run("create", TestStepCreate)
+	eg.Go(func() error {
+		for {
+			time.Sleep(30 * time.Second)
+			mu.RLock()
+			t.Run("txs", TestStepTransactions)
+			mu.RUnlock()
+		}
+	})
+	eg.Go(func() error {
+		for {
+			time.Sleep(10 * time.Minute)
+			mu.RLock()
+			t.Run("verify", TestStepVerify)
+			mu.RUnlock()
+		}
+	})
+	eg.Go(func() error {
+		for {
+			time.Sleep(60 * time.Hour)
+			mu.Lock()
+			if rng.Int()%2 == 0 {
+				t.Run("add", TestStepAddNodes)
+			} else {
+				t.Run("delete", TestStepDeleteNodes)
+			}
+			mu.Unlock()
+		}
+	})
+	require.NoError(t, eg.Wait())
 }

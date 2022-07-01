@@ -14,6 +14,8 @@ import (
 )
 
 func TestSmeshing(t *testing.T) {
+	t.Parallel()
+
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)

@@ -171,7 +171,6 @@ type cfg struct {
 
 // New creates context for the test.
 func New(t *testing.T, opts ...Opt) *Context {
-	t.Parallel()
 	initTokens.Do(func() {
 		tokens = make(chan struct{}, *clusters)
 	})
