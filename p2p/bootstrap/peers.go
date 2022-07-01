@@ -52,12 +52,6 @@ func StartPeers(h host.Host, opts ...Opt) *Peers {
 
 //go:generate mockgen -package=mocks -destination=./mocks/peers.go -source=./peers.go
 
-// Provider is an interface that provides peers.
-type Provider interface {
-	PeerCount() uint64
-	GetPeers() []peer.ID
-}
-
 // Waiter is an interface to wait for peers.
 type Waiter interface {
 	WaitPeers(context.Context, int) ([]peer.ID, error)

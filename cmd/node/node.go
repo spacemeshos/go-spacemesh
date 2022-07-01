@@ -36,11 +36,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -281,7 +281,7 @@ type App struct {
 	log              log.Log
 	svm              *vm.VM
 	conState         *txs.ConservativeState
-	layerFetch       *layerfetcher.Logic
+	layerFetch       *fetch.Logic
 	ptimesync        *peersync.Sync
 	tortoise         *tortoise.Tortoise
 
@@ -525,7 +525,7 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	dataHanders := layerfetcher.DataHandlers{
+	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
 		Ballot:   proposalListener,
@@ -533,7 +533,7 @@ func (app *App) initServices(ctx context.Context,
 		TX:       txHandler,
 		Poet:     poetDb,
 	}
-	layerFetch := layerfetcher.NewLogic(app.Config.FETCH, sqlDB, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
+	layerFetch := fetch.NewLogic(app.Config.FETCH, sqlDB, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -620,7 +620,14 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(beacon.FollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxHandler.HandleGossipAtx))
+	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(
+		func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+			if newSyncer.ListenToATXGossip() {
+				return pubsub.ValidationAccept
+			}
+			return pubsub.ValidationIgnore
+		},
+		atxHandler.HandleGossipAtx))
 	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	hareGossipHandler := rabbit.GetHareMsgHandler()
