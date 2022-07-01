@@ -372,9 +372,9 @@ func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 		Layer:       rst.Layer.Value,
 	}
 	if len(rst.Addresses) > 0 {
-		casted.UpdatedAddresses = make([][]byte, len(rst.Addresses))
+		casted.TouchedAddresses = make([][]byte, len(rst.Addresses))
 		for i := range rst.Addresses {
-			casted.UpdatedAddresses[i] = rst.Addresses[i][:]
+			casted.TouchedAddresses[i] = rst.Addresses[i][:]
 		}
 	}
 	return casted

@@ -27,13 +27,16 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	gen := fixture.NewTransactionResultGenerator().
 		WithAddresses(2)
 	txs := make([]types.TransactionWithResult, 100)
-	for i := range txs {
-		tx := gen.Next()
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		for i := range txs {
+			tx := gen.Next()
 
-		require.NoError(t, transactions.Add(db, &tx.Transaction, time.Time{}))
-		require.NoError(t, transactions.AddResult(db, tx.ID, &tx.TransactionResult))
-		txs[i] = *tx
-	}
+			require.NoError(t, transactions.Add(dtx, &tx.Transaction, time.Time{}))
+			require.NoError(t, transactions.AddResult(dtx, tx.ID, &tx.TransactionResult))
+			txs[i] = *tx
+		}
+		return nil
+	}))
 
 	svc := NewTransactionService(db, nil, nil, nil, nil)
 	t.Cleanup(launchServer(t, svc))

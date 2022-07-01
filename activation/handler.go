@@ -414,20 +414,25 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
 func (h *Handler) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := h.log.WithContext(ctx)
+	var atxIDs []types.ATXID
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		if err := h.fetcher.FetchAtx(ctx, atx.PositioningATX); err != nil {
-			return fmt.Errorf("fetch positioning ATX: %w", err)
-		}
+		atxIDs = append(atxIDs, atx.PositioningATX)
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if err := h.fetcher.FetchAtx(ctx, atx.PrevATXID); err != nil {
-			return fmt.Errorf("fetch previous ATX ID: %w", err)
+		if len(atxIDs) < 1 || atx.PrevATXID != atxIDs[0] {
+			atxIDs = append(atxIDs, atx.PrevATXID)
 		}
 	}
-	logger.With().Debug("done fetching references for atx", atx.ID())
+	if len(atxIDs) == 0 {
+		return nil
+	}
 
+	if err := h.fetcher.GetAtxs(ctx, atxIDs); err != nil {
+		return fmt.Errorf("fetch referenced atxs: %w", err)
+	}
+	logger.With().Debug("done fetching references for atx", atx.ID())
 	return nil
 }

@@ -12,11 +12,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -49,7 +49,7 @@ type Config struct {
 	POST            activation.PostConfig    `mapstructure:"post"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
-	FETCH           layerfetcher.Config      `mapstructure:"fetch"`
+	FETCH           fetch.Config             `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 		REWARD:          vm.DefaultRewardConfig(),
 		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
-		FETCH:           layerfetcher.DefaultConfig(),
+		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),
 	}
 }

@@ -34,7 +34,7 @@ require (
 	github.com/prometheus/common v0.32.1
 	github.com/pyroscope-io/pyroscope v0.0.30
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220627070211-f1d03b0466d3
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220701043434-46fb7f017a39
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/go-scale v0.0.0-20220608060210-3f1e2c40f8dd

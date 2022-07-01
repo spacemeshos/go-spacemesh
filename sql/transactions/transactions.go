@@ -432,7 +432,7 @@ func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), e
 }
 
 // AddResult adds result for the transaction.
-func AddResult(db sql.Executor, id types.TransactionID, rst *types.TransactionResult) error {
+func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult) error {
 	buf, err := codec.Encode(rst)
 	if err != nil {
 		return fmt.Errorf("encode %w", err)

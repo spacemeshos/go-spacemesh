@@ -6,11 +6,11 @@ package mocks
 
 import (
 	context "context"
+	layerfetcher "github.com/spacemeshos/go-spacemesh/fetch"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	layerfetcher "github.com/spacemeshos/go-spacemesh/layerfetcher"
 )
 
 // MocklayerTicker is a mock of layerTicker interface.

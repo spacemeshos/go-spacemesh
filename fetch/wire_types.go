@@ -1,4 +1,4 @@
-package layerfetcher
+package fetch
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"

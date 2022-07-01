@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -62,13 +63,17 @@ func TestIterateResults(t *testing.T) {
 
 	gen := fixture.NewTransactionResultGenerator()
 	txs := make([]types.TransactionWithResult, 100)
-	for i := range txs {
-		tx := gen.Next()
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		for i := range txs {
+			tx := gen.Next()
 
-		require.NoError(t, Add(db, &tx.Transaction, time.Time{}))
-		require.NoError(t, AddResult(db, tx.ID, &tx.TransactionResult))
-		txs[i] = *tx
-	}
+			require.NoError(t, Add(dtx, &tx.Transaction, time.Time{}))
+			require.NoError(t, AddResult(dtx, tx.ID, &tx.TransactionResult))
+			txs[i] = *tx
+		}
+		return nil
+	}))
+
 	sort.Slice(txs, func(i, j int) bool {
 		if txs[i].Layer == txs[j].Layer {
 			return bytes.Compare(txs[i].ID[:], txs[j].ID[:]) == -1
@@ -141,12 +146,15 @@ func TestIterateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	gen := fixture.NewTransactionResultGenerator()
 	expect := 10
-	for i := 0; i < expect; i++ {
-		tx := gen.Next()
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		for i := 0; i < expect; i++ {
+			tx := gen.Next()
 
-		require.NoError(t, Add(db, &tx.Transaction, time.Time{}))
-		require.NoError(t, AddResult(db, tx.ID, &tx.TransactionResult))
-	}
+			require.NoError(t, Add(dtx, &tx.Transaction, time.Time{}))
+			require.NoError(t, AddResult(dtx, tx.ID, &tx.TransactionResult))
+		}
+		return nil
+	}))
 
 	var (
 		once        sync.Once
@@ -166,12 +174,15 @@ func TestIterateSnapshot(t *testing.T) {
 	}()
 	<-initialized
 
-	for i := 0; i < 10; i++ {
-		tx := gen.Next()
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		for i := 0; i < 10; i++ {
+			tx := gen.Next()
 
-		require.NoError(t, Add(db, &tx.Transaction, time.Time{}))
-		require.NoError(t, AddResult(db, tx.ID, &tx.TransactionResult))
-	}
+			require.NoError(t, Add(dtx, &tx.Transaction, time.Time{}))
+			require.NoError(t, AddResult(dtx, tx.ID, &tx.TransactionResult))
+		}
+		return nil
+	}))
 	close(wait)
 	select {
 	case <-time.After(time.Second):
