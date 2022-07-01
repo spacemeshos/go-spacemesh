@@ -41,9 +41,8 @@ func createTestMesh(t *testing.T) *testMesh {
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: mocks.NewMocktortoise(ctrl),
 	}
-	msh, recovered, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockTortoise, tm.mockState, lg)
+	msh, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockTortoise, tm.mockState, lg)
 	require.NoError(t, err)
-	require.False(t, recovered)
 	tm.Mesh = msh
 	checkLastApplied(t, tm.Mesh, types.GetEffectiveGenesis())
 	return tm
@@ -103,9 +102,8 @@ func checkLastApplied(t *testing.T, mesh *Mesh, expected types.LayerID) {
 
 func TestMesh_FromGenesis(t *testing.T) {
 	tm := createTestMesh(t)
-	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
-	require.False(t, recovered)
 	gotP, err := msh.GetProcessedLayer()
 	require.NoError(t, err)
 	require.Equal(t, types.GetEffectiveGenesis(), gotP)
@@ -148,9 +146,8 @@ func TestMesh_WakeUp(t *testing.T) {
 	require.NoError(t, layers.SetStatus(tm.cdb, latestState, layers.Applied))
 
 	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
-	msh, recovered, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
-	require.True(t, recovered)
 	gotP, err := msh.GetProcessedLayer()
 	require.NoError(t, err)
 	require.Equal(t, latest, gotP)

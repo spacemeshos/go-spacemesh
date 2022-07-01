@@ -59,7 +59,7 @@ func newMesh(t *testing.T, lg log.Log, cdb *datastore.CachedDB, allMocked bool) 
 				return lid.Sub(1)
 			}).AnyTimes()
 	}
-	msh, _, err := mesh.NewMesh(cdb, mt, mcs, lg)
+	msh, err := mesh.NewMesh(cdb, mt, mcs, lg)
 	require.NoError(t, err)
 	return msh, mcs, mt
 }

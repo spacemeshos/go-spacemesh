@@ -458,15 +458,22 @@ func (app *App) initServices(ctx context.Context,
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
 	var verifier blockValidityVerifier
-	msh, recovered, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	if !recovered {
+	genesisAccts := app.Config.Genesis.ToAccounts()
+	if len(genesisAccts) == 0 {
+		return fmt.Errorf("missing genesis accounts in config")
+	}
+	_, err = state.GetBalance(genesisAccts[0].Address)
+	if errors.Is(err, sql.ErrNotFound) {
 		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check genesis accounts %v: %w", genesisAccts[0].Address, err)
 	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))

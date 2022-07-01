@@ -58,7 +58,7 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, bool, error) {
+func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
@@ -66,16 +66,19 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 	}
-	msh.initialize()
+	msh.latestLayer.Store(types.GetEffectiveGenesis())
+	msh.latestLayerInState.Store(types.GetEffectiveGenesis())
+	msh.processedLayer.Store(types.LayerID{})
+	msh.minUpdatedLayer.Store(types.LayerID{})
 
 	lid, err := layers.GetByStatus(cdb, layers.Latest)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return nil, false, fmt.Errorf("get latest layer %w", err)
+		return nil, fmt.Errorf("get latest layer %w", err)
 	}
 
 	if err == nil && lid != (types.LayerID{}) {
 		msh.recoverFromDB()
-		return msh, true, nil
+		return msh, nil
 	}
 
 	gLid := types.GetEffectiveGenesis()
@@ -113,14 +116,7 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 	if err = layers.SetHareOutput(msh.cdb, gLayer.Index(), types.GenesisBlockID); err != nil {
 		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
 	}
-	return msh, false, nil
-}
-
-func (msh *Mesh) initialize() {
-	msh.latestLayer.Store(types.GetEffectiveGenesis())
-	msh.latestLayerInState.Store(types.GetEffectiveGenesis())
-	msh.processedLayer.Store(types.LayerID{})
-	msh.minUpdatedLayer.Store(types.LayerID{})
+	return msh, nil
 }
 
 func (msh *Mesh) recoverFromDB() {
