@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -118,12 +119,13 @@ func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockvmState) Apply(arg0 types.LayerID, arg1 []types.RawTx, arg2 []types.AnyReward) ([]types.TransactionID, error) {
+func (m *MockvmState) Apply(arg0 vm.ApplyContext, arg1 []types.RawTx, arg2 []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]types.TransactionID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]types.TransactionWithResult)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // Apply indicates an expected call of Apply.
@@ -368,17 +370,17 @@ func (mr *MocktxProviderMockRecorder) AddToProposal(arg0, arg1, arg2 interface{}
 }
 
 // ApplyLayer mocks base method.
-func (m *MocktxProvider) ApplyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2 types.Address, arg3 map[uint64]types.TransactionID) error {
+func (m *MocktxProvider) ApplyLayer(arg0 map[uint64]types.TransactionWithResult) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ApplyLayer", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ApplyLayer indicates an expected call of ApplyLayer.
-func (mr *MocktxProviderMockRecorder) ApplyLayer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MocktxProviderMockRecorder) ApplyLayer(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MocktxProvider)(nil).ApplyLayer), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MocktxProvider)(nil).ApplyLayer), arg0)
 }
 
 // DiscardNonceBelow mocks base method.

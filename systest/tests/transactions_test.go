@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
+	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -21,11 +23,16 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		stopWaiting        = stopSending + 4
 		batch              = 3
 		amount             = 100
+
+		// each account creates spawn transaction in the first layer
+		// plus batch number of spend transactions in every layer after that
+		expectedCount = cl.Accounts() * (1 + int(sendFor-1)*batch)
 	)
 	tctx.Log.Debugw("running transactions test",
 		"from", first,
 		"stop sending", stopSending,
 		"stop waiting", stopWaiting,
+		"expected transactions", expectedCount,
 	)
 	receiver := [20]byte{11, 1, 1}
 	state := spacemeshv1.NewGlobalStateServiceClient(cl.Client(0))
@@ -45,6 +52,10 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 				layer.Layer.Number.Number < first {
 				return true, nil
 			}
+			// give some time for a previous layer to be applied
+			// TODO(dshulyak) introduce api that simply subscribes to internal clock
+			// and outputs events when the tick for the layer is available
+			time.Sleep(200 * time.Millisecond)
 			nonce, err := getNonce(tctx, client, cl.Address(i))
 			require.NoError(t, err)
 			if nonce == 0 {
@@ -61,39 +72,31 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 			)
 			for j := 0; j < batch; j++ {
 				if err := submitSpend(ctx, cl.Private(i), receiver, uint64(amount), nonce+uint64(j), client); err != nil {
-					return false, fmt.Errorf("spend failed %w", err)
+					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
 				}
 			}
 			return true, nil
 		})
 	}
 	txs := make([][]*spacemeshv1.Transaction, cl.Total())
+
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number == stopWaiting {
-				return false, nil
-			}
-			if layer.Layer.Status != spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
-				return true, nil
-			}
-			addtxs := []*spacemeshv1.Transaction{}
-			for _, block := range layer.Layer.Blocks {
-				addtxs = append(addtxs, block.Transactions...)
-			}
-			tctx.Log.Debugw("received transactions",
-				"layer", layer.Layer.Number.Number,
+		watchTransactionResults(ctx, eg, client, func(rst *spacemeshv1.TransactionResult) (bool, error) {
+			txs[i] = append(txs[i], rst.Tx)
+			count := len(txs[i])
+			tctx.Log.Debugw("received transaction client",
+				"layer", rst.Layer,
 				"client", client.Name,
-				"blocks", len(layer.Layer.Blocks),
-				"transactions", len(addtxs),
+				"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
+				"count", count,
 			)
-			txs[i] = append(txs[i], addtxs...)
-			return true, nil
+			return len(txs[i]) < expectedCount, nil
 		})
 	}
-
 	require.NoError(t, eg.Wait())
+
 	reference := txs[0]
 	for _, tested := range txs[1:] {
 		require.Len(t, tested, len(reference))

@@ -259,6 +259,7 @@ type App struct {
 	*cobra.Command
 	nodeID           types.NodeID
 	Config           *config.Config
+	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
 	gatewaySvc       *grpcserver.GatewayService
@@ -431,6 +432,7 @@ func (app *App) initServices(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
+	app.db = sqlDB
 	if app.Config.CollectMetrics {
 		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 		if dbCollector != nil {
@@ -782,7 +784,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
