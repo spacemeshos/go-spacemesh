@@ -66,8 +66,8 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 	}
-	msh.latestLayer.Store(types.GetEffectiveGenesis())
-	msh.latestLayerInState.Store(types.GetEffectiveGenesis())
+	msh.latestLayer.Store(types.LayerID{})
+	msh.latestLayerInState.Store(types.LayerID{})
 	msh.processedLayer.Store(types.LayerID{})
 	msh.minUpdatedLayer.Store(types.LayerID{})
 
@@ -95,27 +95,29 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 			msh.logger.With().Panic("failed to persist hashes for layer", i, log.Err(err))
 		}
 		msh.setProcessedLayer(i)
+		msh.setLatestLayerInState(i)
 	}
 
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
 		msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-		if err = ballots.Add(msh.cdb, b); err != nil {
+		if err = ballots.Add(msh.cdb, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			msh.logger.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
 	for _, b := range gLayer.Blocks() {
 		msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-		if err = blocks.Add(msh.cdb, b); err != nil {
+		if err = blocks.Add(msh.cdb, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 		if err = blocks.SetValid(msh.cdb, b.ID()); err != nil {
-			msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
+			msh.logger.With().Error("error setting genesis block valid", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
 	if err = layers.SetHareOutput(msh.cdb, gLayer.Index(), types.GenesisBlockID); err != nil {
 		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
 	}
+	msh.setLatestLayer(gLid)
 	return msh, nil
 }
 
@@ -140,9 +142,12 @@ func (msh *Mesh) recoverFromDB() {
 		msh.logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	root, err := msh.conState.RevertState(msh.LatestLayerInState())
-	if err != nil {
-		msh.logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+	root := types.Hash32{}
+	if verified.After(types.GetEffectiveGenesis()) {
+		root, err = msh.conState.RevertState(msh.LatestLayerInState())
+		if err != nil {
+			msh.logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+		}
 	}
 
 	msh.logger.With().Info("recovered mesh from disk",
