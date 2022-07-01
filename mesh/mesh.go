@@ -72,32 +72,48 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, false, fmt.Errorf("get latest layer %w", err)
 	}
-	recovered := false
+
 	if err == nil && lid != (types.LayerID{}) {
 		msh.recoverFromDB()
-		recovered = true
-	} else {
-		gLayer := types.GenesisLayer()
-		for _, b := range gLayer.Ballots() {
-			msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-			if err = ballots.Add(msh.cdb, b); err != nil {
-				msh.logger.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
+		return msh, true, nil
+	}
+
+	gLid := types.GetEffectiveGenesis()
+	for i := types.NewLayerID(1); !i.After(gLid); i = i.Add(1) {
+		if i.Before(gLid) {
+			if err = msh.SetZeroBlockLayer(i); err != nil {
+				msh.logger.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
 			}
 		}
-		for _, b := range gLayer.Blocks() {
-			msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-			if err = blocks.Add(msh.cdb, b); err != nil {
-				msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
-			}
-			if err = blocks.SetValid(msh.cdb, b.ID()); err != nil {
-				msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
-			}
+		if err = layers.SetApplied(msh.cdb, i, types.EmptyBlockID); err != nil {
+			msh.logger.With().Panic("failed to set applied layer", i, log.Err(err))
 		}
-		if err = layers.SetHareOutput(msh.cdb, gLayer.Index(), types.GenesisBlockID); err != nil {
-			log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
+		if err = msh.persistLayerHashes(context.Background(), i, []types.BlockID{types.EmptyBlockID}); err != nil {
+			msh.logger.With().Panic("failed to persist hashes for layer", i, log.Err(err))
+		}
+		msh.setProcessedLayer(i)
+	}
+
+	gLayer := types.GenesisLayer()
+	for _, b := range gLayer.Ballots() {
+		msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
+		if err = ballots.Add(msh.cdb, b); err != nil {
+			msh.logger.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
-	return msh, recovered, nil
+	for _, b := range gLayer.Blocks() {
+		msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
+		if err = blocks.Add(msh.cdb, b); err != nil {
+			msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
+		}
+		if err = blocks.SetValid(msh.cdb, b.ID()); err != nil {
+			msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
+		}
+	}
+	if err = layers.SetHareOutput(msh.cdb, gLayer.Index(), types.GenesisBlockID); err != nil {
+		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
+	}
+	return msh, false, nil
 }
 
 func (msh *Mesh) initialize() {
@@ -105,22 +121,6 @@ func (msh *Mesh) initialize() {
 	msh.latestLayerInState.Store(types.GetEffectiveGenesis())
 	msh.processedLayer.Store(types.LayerID{})
 	msh.minUpdatedLayer.Store(types.LayerID{})
-
-	gLyr := types.GetEffectiveGenesis()
-	for i := types.NewLayerID(1); !i.After(gLyr); i = i.Add(1) {
-		if i.Before(gLyr) {
-			if err := msh.SetZeroBlockLayer(i); err != nil {
-				msh.logger.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
-			}
-		}
-		if err := layers.SetApplied(msh.cdb, i, types.EmptyBlockID); err != nil {
-			msh.logger.With().Panic("failed to set applied layer", i, log.Err(err))
-		}
-		if err := msh.persistLayerHashes(context.Background(), i, []types.BlockID{types.EmptyBlockID}); err != nil {
-			msh.logger.With().Panic("failed to persist hashes for layer", i, log.Err(err))
-		}
-		msh.setProcessedLayer(i)
-	}
 }
 
 func (msh *Mesh) recoverFromDB() {
@@ -584,10 +584,6 @@ func (msh *Mesh) applyState(block *types.Block) error {
 			log.Int("num_failed_txs", len(failedTxs)),
 			log.Err(err))
 		return fmt.Errorf("apply layer: %w", err)
-	}
-
-	if err := layers.SetApplied(msh.cdb, block.LayerIndex, block.ID()); err != nil {
-		return fmt.Errorf("set applied block: %w", err)
 	}
 
 	msh.logger.With().Info("applied transactions",
