@@ -217,8 +217,9 @@ func TestUpdateIfBetter(t *testing.T) {
 	getAndCheckMeshTX(t, db, tx.ID, expected)
 
 	// apply the tx -> updated
-	err = AddResult(db, tx.ID, &types.TransactionResult{Layer: lower, Block: bid1})
-	require.NoError(t, err)
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lower, Block: bid1})
+	}))
 	expected.State = types.APPLIED
 	getAndCheckMeshTX(t, db, tx.ID, expected)
 
@@ -241,20 +242,19 @@ func TestApply_AlreadyApplied(t *testing.T) {
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	bid := types.RandomBlockID()
-	require.NoError(t,
-		AddResult(db, tx.ID, &types.TransactionResult{Layer: lid, Block: bid}))
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
+	}))
 
 	// same block applied again
-	require.Error(t,
-		AddResult(db, tx.ID, &types.TransactionResult{Layer: lid, Block: bid}))
+	require.Error(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
+	}))
 
 	// different block applied again
-	require.Error(t,
-		AddResult(db, tx.ID,
-			&types.TransactionResult{
-				Layer: lid.Add(1),
-				Block: types.RandomBlockID(),
-			}))
+	require.Error(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid.Add(1), Block: types.RandomBlockID()})
+	}))
 }
 
 func TestUndoLayers_Empty(t *testing.T) {
@@ -277,8 +277,10 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
 		require.NoError(t, Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
-		err := AddResult(db, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
-		require.NoError(t, err)
+
+		require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+			return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
+		}))
 		applied = append(applied, tx.ID)
 	}
 
@@ -332,8 +334,10 @@ func TestDiscardNonceBelow(t *testing.T) {
 	// apply nonce 0
 	lid := types.NewLayerID(71)
 	bid := types.RandomBlockID()
-	err := AddResult(db, txs[0].ID, &types.TransactionResult{Layer: lid, Block: bid})
-	require.NoError(t, err)
+
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		return AddResult(dtx, txs[0].ID, &types.TransactionResult{Layer: lid, Block: bid})
+	}))
 	cutoff := uint64(numTXs) / 2
 	require.NoError(t, DiscardNonceBelow(db, principal, cutoff))
 	for _, tx := range txs {
@@ -565,7 +569,9 @@ func TestGetAllPending(t *testing.T) {
 			require.NoError(t, Add(db, tx, received.Add(time.Duration(i+j))))
 			// causing some txs to be applied, some packed in a block, and some in mempool
 			if j < numApplied {
-				require.NoError(t, AddResult(db, tx.ID, &types.TransactionResult{Layer: lid, Block: bid}))
+				require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+					return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
+				}))
 			} else if j < numTXs-1 {
 				inBlock[tx.ID] = tx
 				updated, err := UpdateIfBetter(db, tx.ID, lid, bid)
@@ -635,7 +641,10 @@ func TestAppliedLayer(t *testing.T) {
 	for _, tx := range txs {
 		require.NoError(t, Add(db, tx, time.Now()))
 	}
-	require.NoError(t, AddResult(db, txs[0].ID, &types.TransactionResult{Layer: lid, Block: types.BlockID{1, 1}}))
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		return AddResult(dtx, txs[0].ID, &types.TransactionResult{Layer: lid, Block: types.BlockID{1, 1}})
+	}))
+
 	applied, err := GetAppliedLayer(db, txs[0].ID)
 	require.NoError(t, err)
 	require.Equal(t, lid, applied)
