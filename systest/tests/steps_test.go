@@ -192,9 +192,15 @@ func TestStepVerify(t *testing.T) {
 		"state hash", prettyHex(reference.RootStateHash),
 	)
 	layers := make([]*spacemeshv1.Layer, len(synced))
+
+	// eventually because we don't want to fail whole test
+	// if one of the nodes are slightly behind
 	assert.Eventually(t, func() bool {
 		var eg errgroup.Group
-		for i, node := range synced[1:] {
+		for i, node := range synced {
+			if i == 0 {
+				continue
+			}
 			i := i
 			node := node
 			eg.Go(func() error {
@@ -212,8 +218,12 @@ func TestStepVerify(t *testing.T) {
 				return nil
 			})
 		}
-		return eg.Wait() == nil
-	}, 30*time.Minute, time.Minute)
+		if err := eg.Wait(); err != nil {
+			cctx.Log.Warnw("inconsistent cluster state", "error", err)
+			return false
+		}
+		return true
+	}, 30*time.Minute, time.Second)
 	for i, layer := range layers {
 		if i == 0 {
 			continue
