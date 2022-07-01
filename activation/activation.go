@@ -4,22 +4,22 @@ package activation
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
+	"go.uber.org/atomic"
 	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/post/shared"
-	"go.uber.org/atomic"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/epoch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/post/shared"
 )
 
 var (
@@ -81,6 +81,7 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 	MinGas() uint64
 	SetMinGas(value uint64)
+	GetEpochStatus(epochList []types.EpochID) ([]types.EpochStatus, error)
 }
 
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
@@ -99,6 +100,7 @@ type Config struct {
 type Builder struct {
 	pendingPoetClient atomic.UnsafePointer
 	started           atomic.Bool
+	epochService      epoch.Epocher
 
 	signer
 	accountLock       sync.RWMutex
@@ -628,6 +630,26 @@ func (b *Builder) discardChallengeIfStale() bool {
 		return true
 	}
 	return false
+}
+
+func (b *Builder) GetEpochStatus(epochList []types.EpochID) ([]types.EpochStatus, error) {
+	if len(epochList) == 0 { // return default set - current, next and subsequent
+		epochList = []types.EpochID{b.currentEpoch(), b.currentEpoch() + 1, b.currentEpoch() + 2}
+	}
+	epochStatuses, err := b.epochService.GetEpochStatus(epochList)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get epoch status")
+	}
+	result := make([]types.EpochStatus, 0, len(epochStatuses))
+	for epochID, status := range epochStatuses {
+		println(epochID, status) // todo 3281
+		//epochStatus, err := epoch2.FillEpochData(e)
+		//if err != nil {
+		//	return nil, errors.Wrapf(err, "failed to fill epoch status `%s`", e.String())
+		//}
+		//result = append(result, *epochStatus)
+	}
+	return result, nil
 }
 
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate

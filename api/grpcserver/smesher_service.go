@@ -2,15 +2,14 @@ package grpcserver
 
 import (
 	"fmt"
-
 	"github.com/golang/protobuf/ptypes/empty"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -162,6 +161,17 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 
 	status := s.postSetupProvider.Status()
 	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
+}
+
+func (s SmesherService) SmeshingStatus(_ context.Context) (interface{}, error) {
+	log.Info("GRPC SmesherService.SmeshingStatus")
+	epochList := []types.EpochID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} // todo 3281
+	result, err := s.smeshingProvider.GetEpochStatus(epochList)
+	if err != nil {
+		log.Error("failed to get epoch statuses: %v", err)
+		return nil, status.Error(codes.Internal, "failed to get epoch statuses")
+	}
+	return result, nil
 }
 
 // PostSetupStatusStream exposes a stream of status updates during post setup.

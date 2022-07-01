@@ -3,11 +3,10 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
