@@ -1,17 +1,21 @@
 package tests
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
+	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
@@ -179,14 +183,47 @@ func TestStepVerify(t *testing.T) {
 	synced := syncedNodes(cctx, cl)
 	require.GreaterOrEqual(t, len(synced), cctx.ClusterSize/2)
 
-	require.Eventually(t, func() bool {
+	reference, err := getVerifiedLayer(cctx, synced[0])
+	require.NoError(t, err)
+	cctx.Log.Debugw("using verified layer as a reference",
+		"node", synced[0].Name,
+		"layer", reference.Number.Number,
+		"hash", prettyHex(reference.Hash),
+		"state hash", prettyHex(reference.RootStateHash),
+	)
+	layers := make([]*spacemeshv1.Layer, len(synced))
+	assert.Eventually(t, func() bool {
 		var eg errgroup.Group
-		for _, node := range synced {
+		for i, node := range synced[1:] {
+			i := i
 			node := node
 			eg.Go(func() error {
+				layer, err := getLayer(cctx, node, reference.Number.Number)
+				if err != nil {
+					return err
+				}
+				layers[i] = layer
+				if bytes.Compare(layer.Hash, reference.Hash) != 0 {
+					return fmt.Errorf("hash doesn't match reference")
+				}
+				if bytes.Compare(layer.RootStateHash, reference.RootStateHash) != 0 {
+					return fmt.Errorf("state hash doesn't match reference")
+				}
 				return nil
 			})
 		}
 		return eg.Wait() == nil
 	}, 30*time.Minute, time.Minute)
+	for i, layer := range layers {
+		if i == 0 {
+			continue
+		}
+		require.NotNil(t, layer, "client %s doesn't have layer %d",
+			synced[i].Name, reference.Number)
+		require.Equal(t, reference.Hash, layer.Hash, "consensus hash on client %s",
+			synced[i].Name)
+		require.Equal(t, reference.RootStateHash, layer.RootStateHash, "state hash on client %s",
+			synced[i].Name)
+	}
+
 }

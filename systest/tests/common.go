@@ -224,10 +224,36 @@ func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	defer cancel()
 	svc := spacemeshv1.NewNodeServiceClient(node)
 	resp, err := svc.Status(ctx, &spacemeshv1.StatusRequest{})
-	if err == nil {
+	if err != nil {
 		return false
 	}
 	return resp.Status.IsSynced
+}
+
+func getLayer(ctx context.Context, node *cluster.NodeClient, lid uint32) (*spacemeshv1.Layer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	layer := &spacemeshv1.LayerNumber{Number: lid}
+	msvc := spacemeshv1.NewMeshServiceClient(node)
+	lresp, err := msvc.LayersQuery(ctx, &spacemeshv1.LayersQueryRequest{StartLayer: layer, EndLayer: layer})
+	if err != nil {
+		return nil, err
+	}
+	if len(lresp.Layer) != 1 {
+		return nil, fmt.Errorf("request was made for one layer (%d)", layer.Number)
+	}
+	return lresp.Layer[0], nil
+}
+
+func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*spacemeshv1.Layer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	svc := spacemeshv1.NewNodeServiceClient(node)
+	resp, err := svc.Status(ctx, &spacemeshv1.StatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return getLayer(ctx, node, resp.Status.VerifiedLayer.Number)
 }
 
 type txClient struct {
