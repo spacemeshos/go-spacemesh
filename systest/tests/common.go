@@ -208,6 +208,28 @@ func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [20]byte, 
 	return err
 }
 
+func syncedNodes(ctx context.Context, cl *cluster.Cluster) []*cluster.NodeClient {
+	var synced []*cluster.NodeClient
+	for i := 0; i < cl.Total(); i++ {
+		if !isSynced(ctx, cl.Client(i)) {
+			continue
+		}
+		synced = append(synced, cl.Client(i))
+	}
+	return synced
+}
+
+func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	svc := spacemeshv1.NewNodeServiceClient(node)
+	resp, err := svc.Status(ctx, &spacemeshv1.StatusRequest{})
+	if err == nil {
+		return false
+	}
+	return resp.Status.IsSynced
+}
+
 type txClient struct {
 	account cluster.Account
 	node    *cluster.NodeClient
