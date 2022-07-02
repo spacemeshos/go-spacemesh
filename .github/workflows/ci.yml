@@ -207,7 +207,7 @@ jobs:
       run: cd systest && make push
 
     - name: Run tests
-      timeout-minutes: 1 # Times out after 1 minute
+      timeout-minutes: 1
       run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
 
     - name: Systemtest result
@@ -220,6 +220,7 @@ jobs:
       id: tests_logs
     
     - name: Delete pod
+      uses: webiny/action-post-run@2.0.1
       run: cd systest && make clean
 
     - name: Tests Passed or Failed
