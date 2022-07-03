@@ -208,7 +208,8 @@ jobs:
 
     - name: Delete pod
       uses: webiny/action-post-run@2.0.1
-      run: cd systest && make clean
+      with: 
+        run: cd systest && make clean
 
     - name: Run tests
       timeout-minutes: 1
