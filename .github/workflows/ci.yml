@@ -206,11 +206,6 @@ jobs:
     - name: Push tests docker images
       run: cd systest && make push
 
-    - name: Delete pod
-      uses: webiny/action-post-run@2.0.1
-      with: 
-        run: cd systest && make clean
-
     - name: Run tests
       timeout-minutes: 1
       run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
@@ -223,6 +218,10 @@ jobs:
         SUCCESS="${SUCCESS//$'\r'/'%0D'}"
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
+
+    - name: Delete pod
+      if: always()
+      run: cd systest && make clean
 
     - name: Tests Passed or Failed
       run: |
