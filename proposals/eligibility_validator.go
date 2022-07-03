@@ -134,7 +134,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 
 	v.logger.WithContext(ctx).With().Info("ballot eligibility verified",
-		ballot.ID(),
+		log.String("ballot_id", ballot.ID().AsHash32().ShortString()),
 		ballot.LayerIndex,
 		epoch,
 		beacon,

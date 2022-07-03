@@ -71,7 +71,8 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 		logger.Info("known block")
 		return nil
 	}
-	logger.With().Info("new block", log.Inline(&b))
+	logger.With().Info("new block ID", log.String("block_id", b.ID().AsHash32().ShortString()))
+	logger.With().Debug("new block", log.Inline(&b))
 
 	if err := h.checkTransactions(ctx, &b); err != nil {
 		logger.With().Warning("failed to fetch block TXs", log.Err(err))
