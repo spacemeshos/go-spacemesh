@@ -64,6 +64,29 @@ func watchLayers(ctx context.Context, eg *errgroup.Group,
 	})
 }
 
+func watchTransactionResults(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	collector func(*spacemeshv1.TransactionResult) (bool, error),
+) {
+	eg.Go(func() error {
+		api := spacemeshv1.NewTransactionServiceClient(client)
+		rsts, err := api.StreamResults(ctx, &spacemeshv1.TransactionResultsRequest{Watch: true})
+		if err != nil {
+			return err
+		}
+		for {
+			rst, err := rsts.Recv()
+			if err != nil {
+				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+			}
+			if cont, err := collector(rst); !cont {
+				return err
+			}
+		}
+	})
+}
+
 func watchProposals(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, collector func(*spacemeshv1.Proposal) (bool, error)) {
 	eg.Go(func() error {
 		dbg := spacemeshv1.NewDebugServiceClient(client)

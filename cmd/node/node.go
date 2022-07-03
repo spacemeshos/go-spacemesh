@@ -259,6 +259,7 @@ type App struct {
 	*cobra.Command
 	nodeID           types.NodeID
 	Config           *config.Config
+	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
 	gatewaySvc       *grpcserver.GatewayService
@@ -431,6 +432,7 @@ func (app *App) initServices(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
+	app.db = sqlDB
 	if app.Config.CollectMetrics {
 		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 		if dbCollector != nil {
@@ -618,7 +620,14 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(beacon.FollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxHandler.HandleGossipAtx))
+	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(
+		func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+			if newSyncer.ListenToATXGossip() {
+				return pubsub.ValidationAccept
+			}
+			return pubsub.ValidationIgnore
+		},
+		atxHandler.HandleGossipAtx))
 	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	hareGossipHandler := rabbit.GetHareMsgHandler()
@@ -775,7 +784,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.

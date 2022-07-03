@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const layersPerEpochBig = 1000
@@ -39,7 +41,7 @@ func processAtxs(db *Handler, atxs []*types.ActivationTx) error {
 	return nil
 }
 
-func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
+func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	r := require.New(t)
 
 	cdb := newCachedDB(t)
@@ -117,7 +119,7 @@ func assertEpochWeight(t *testing.T, cdb *datastore.CachedDB, epochID types.Epoc
 		fmt.Sprintf("expectedWeight (%d) != epochWeight (%d)", expectedWeight, epochWeight))
 }
 
-func TestActivationDB_ValidateAtx(t *testing.T) {
+func TestHandler_ValidateAtx(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
 
 	signer := signing.NewEdSigner()
@@ -162,7 +164,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestActivationDB_ValidateAtxErrors(t *testing.T) {
+func TestHandler_ValidateAtxErrors(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
 
 	cdb := newCachedDB(t)
@@ -331,7 +333,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "node ids don't match")
 }
 
-func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
+func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	cdb := newCachedDB(t)
@@ -411,7 +413,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestActivationDb_ProcessAtx(t *testing.T) {
+func TestHandler_ProcessAtx(t *testing.T) {
 	r := require.New(t)
 
 	atxHdlr := getATXHandler(t, newCachedDB(t))
@@ -530,7 +532,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	time.Sleep(1 * time.Second)
 }
 
-func TestActivationDb_TopAtx(t *testing.T) {
+func TestHandler_TopAtx(t *testing.T) {
 	r := require.New(t)
 
 	atxHdlr := getATXHandler(t, newCachedDB(t))
@@ -570,7 +572,7 @@ func createAndStoreAtx(atxHdlr *Handler, layer types.LayerID) (*types.Activation
 	return atx, nil
 }
 
-func TestActivationDb_AwaitAtx(t *testing.T) {
+func TestHandler_AwaitAtx(t *testing.T) {
 	r := require.New(t)
 
 	lg := logtest.New(t).WithName("sigValidation")
@@ -609,7 +611,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	r.Len(atxHdlr.atxChannels, 0) // last unsubscribe clears the channel
 }
 
-func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
+func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	r := require.New(t)
 
 	lg := logtest.New(t).WithName("sigValidation")
@@ -625,7 +627,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	r.ErrorIs(err, sql.ErrNotFound)
 }
 
-func TestActivationDB_HandleAtxNilNipst(t *testing.T) {
+func TestHandler_HandleAtxNilNipst(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
@@ -633,7 +635,7 @@ func TestActivationDB_HandleAtxNilNipst(t *testing.T) {
 	require.Error(t, atxHdlr.HandleAtxData(context.TODO(), buf))
 }
 
-func TestActivationDB_KnownATX(t *testing.T) {
+func TestHandler_KnownATX(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	require.NoError(t, atxHdlr.ProcessAtx(context.TODO(), atx))
@@ -677,4 +679,50 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	}
 	atomic.StoreUint64(&stop, 1)
 	wg.Wait()
+}
+
+// Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
+func TestHandler_FetchAtxReferences(t *testing.T) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	mockFetch := mocks.NewMockFetcher(gomock.NewController(t))
+	atxHdlr := NewHandler(newCachedDB(t), mockFetch, layersPerEpoch,
+		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxHandler"))
+	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+
+	atx1 := newAtx(challenge, nipost)
+	atx1.PositioningATX = types.ATXID{1, 2, 3} // should be fetched
+	atx1.PrevATXID = types.ATXID{4, 5, 6}      // should be fetched
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.PositioningATX, atx1.PrevATXID}).Return(nil)
+	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx1))
+
+	atx2 := newAtx(challenge, nipost)
+	atx2.PositioningATX = goldenATXID     // should *NOT* be fetched
+	atx2.PrevATXID = types.ATXID{2, 3, 4} // should be fetched
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx2.PrevATXID}).Return(nil)
+	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx2))
+
+	atx3 := newAtx(challenge, nipost)
+	atx3.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
+	atx3.PrevATXID = types.ATXID{3, 4, 5}   // should be fetched
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx3.PrevATXID}).Return(nil)
+	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx3))
+
+	atx4 := newAtx(challenge, nipost)
+	atx4.PositioningATX = types.ATXID{5, 6, 7} // should be fetched
+	atx4.PrevATXID = *types.EmptyATXID         // should *NOT* be fetched
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx4.PositioningATX}).Return(nil)
+	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx4))
+
+	atx5 := newAtx(challenge, nipost)
+	atx5.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
+	atx5.PrevATXID = *types.EmptyATXID      // should *NOT* be fetched
+	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx5))
+
+	atx6 := newAtx(challenge, nipost)
+	atxid := types.ATXID{1, 2, 3}
+	atx6.PositioningATX = atxid // should be fetched
+	atx6.PrevATXID = atxid      // should be fetched
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxid}).Return(nil)
+	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx6))
 }
