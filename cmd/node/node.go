@@ -464,16 +464,15 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	genesisAccts := app.Config.Genesis.ToAccounts()
-	if len(genesisAccts) == 0 {
-		return fmt.Errorf("missing genesis accounts in config")
-	}
-	_, err = state.GetBalance(genesisAccts[0].Address)
-	if errors.Is(err, sql.ErrNotFound) {
-		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
+	if len(genesisAccts) > 0 {
+		_, err = state.GetBalance(genesisAccts[0].Address)
+		if errors.Is(err, sql.ErrNotFound) {
+			if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
+				return fmt.Errorf("setup genesis: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed to check genesis accounts %v: %w", genesisAccts[0].Address, err)
 		}
-	} else if err != nil {
-		return fmt.Errorf("failed to check genesis accounts %v: %w", genesisAccts[0].Address, err)
 	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
