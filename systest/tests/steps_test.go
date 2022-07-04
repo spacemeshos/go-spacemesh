@@ -10,15 +10,15 @@ import (
 	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 )
 
 func TestStepCreate(t *testing.T) {
@@ -62,8 +62,8 @@ func TestStepShortDisconnect(t *testing.T) {
 
 func TestStepTransactions(t *testing.T) {
 	const (
-		batch        = 100
-		amount_limit = 100_000
+		batch       = 100
+		amountLimit = 100_000
 	)
 
 	tctx := testcontext.New(t)
@@ -121,7 +121,7 @@ func TestStepTransactions(t *testing.T) {
 				_, err := client.submit(tctx, wallet.Spend(
 					client.account.PrivateKey,
 					types.Address(receiver),
-					rng.Uint64()%amount_limit,
+					rng.Uint64()%amountLimit,
 					types.Nonce{Counter: nonce},
 				))
 				if err != nil {
