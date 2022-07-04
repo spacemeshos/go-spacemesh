@@ -1,9 +1,6 @@
-<h1 align="center">
-  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/05/black_logo_hp.png" alt="Spacemesh logo" /></a>
-  <p align="center">A Programmable Cryptocurrency</p>
+<h1>
+  <a href="https://spacemesh.io">Spacemesh: A Programmable Cryptocurrency</a>
 </h1>
-
-<p align="center">
 
 <a href="https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/></a>
 <a href="https://github.com/spacemeshos/go-spacemesh/releases"><img src="https://img.shields.io/github/v/release/spacemeshos/go-spacemesh?include_prereleases"/></a>
@@ -16,7 +13,6 @@
 [![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22421)
 <a href="https://godoc.org/github.com/spacemeshos/go-spacemesh"><img src="https://img.shields.io/badge/godoc-LGTM-blue.svg"/></a>
 [![CI: passing](https://img.shields.io/badge/CI-passing-success?logo=github&style=flat)](https://github.com/spacemeshos/go-spacemesh/blob/develop/ci.md#ci-status)
-</p>
 
 ## go-spacemesh
 💾⏰💪
