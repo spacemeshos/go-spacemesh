@@ -587,13 +587,18 @@ func TestGetAllPending(t *testing.T) {
 	got, err := GetAllPending(db)
 	require.NoError(t, err)
 	require.Len(t, got, numTXs*numAccts-totalApplied)
+	inB := 0
+	inM := 0
 	for _, mtx := range got {
 		if _, ok := inBlock[mtx.ID]; ok {
 			require.Equal(t, types.BLOCK, mtx.State)
+			inB++
 		} else if _, ok = inMempool[mtx.ID]; ok {
 			require.Equal(t, types.MEMPOOL, mtx.State)
+			inM++
 		}
 	}
+	require.Equal(t, len(got), inB+inM)
 }
 
 func TestGetAcctPendingFromNonce(t *testing.T) {
