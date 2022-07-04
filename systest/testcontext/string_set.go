@@ -5,6 +5,9 @@ import "bytes"
 type stringSet map[string]struct{}
 
 func (s stringSet) Set(val string) error {
+	if len(val) == 0 {
+		return nil
+	}
 	s[val] = struct{}{}
 	return nil
 }
