@@ -252,6 +252,7 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 	}
 	cmd := []string{
 		"/bin/go-spacemesh",
+		"--pprof-server",
 		"--preset=fastnet",
 		"--smeshing-start=true",
 		"--smeshing-opts-datadir=/data/post",

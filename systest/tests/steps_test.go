@@ -65,7 +65,6 @@ func TestStepTransactions(t *testing.T) {
 		batch        = 100
 		amount_limit = 100_000
 	)
-	rng := rand.New(rand.NewSource(time.Now().Unix()))
 
 	tctx := testcontext.New(t)
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
@@ -86,8 +85,9 @@ func TestStepTransactions(t *testing.T) {
 	var eg errgroup.Group
 	for _, client := range clients {
 		client := client
-		n := rng.Intn(batch) + batch
 		eg.Go(func() error {
+			rng := rand.New(rand.NewSource(time.Now().Unix()))
+			n := rng.Intn(batch) + batch
 			nonce, err := client.nonce(tctx)
 			require.NoError(t, err)
 			if nonce == 0 {
