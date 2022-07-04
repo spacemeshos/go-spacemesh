@@ -6,7 +6,6 @@
 <p align="center">
 
 <a href="https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/></a>
-<a href="https://github.com/avive"><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
 <a href="https://github.com/spacemeshos/go-spacemesh/releases"><img src="https://img.shields.io/github/v/release/spacemeshos/go-spacemesh?include_prereleases"/></a>
 <img src="https://img.shields.io/badge/platform-win--64 | macos--64 | linux--64 | freebsd-lightgrey.svg"/>
 <a href="https://golang.org/"><img src="https://img.shields.io/github/go-mod/go-version/spacemeshos/go-spacemesh?logo=go"/></a>
@@ -17,11 +16,6 @@
 [![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22421)
 <a href="https://godoc.org/github.com/spacemeshos/go-spacemesh"><img src="https://img.shields.io/badge/godoc-LGTM-blue.svg"/></a>
 [![CI: passing](https://img.shields.io/badge/CI-passing-success?logo=github&style=flat)](https://github.com/spacemeshos/go-spacemesh/blob/develop/ci.md#ci-status)
-</p>
-<p align="center">
-<a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
-    <img src="https://gitcoin.co/static/v2/images/promo_buttons/slice_02.png" width="267px" height="52px" alt="Browse Gitcoin Bounties"/>
-</a>
 </p>
 
 ## go-spacemesh
