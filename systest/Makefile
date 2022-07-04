@@ -1,5 +1,4 @@
 test_name ?= TestSmeshing
-cron_name ?= $(shell echo $(test_name) | tr A-Z a-z)
 version_info ?= $(shell git rev-parse --short HEAD)
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
@@ -13,6 +12,7 @@ level ?= debug
 bootstrap ?= 5m
 node_selector ?=
 namespace ?=
+label ?=
 
 
 .PHONY: docker
@@ -33,7 +33,7 @@ launch:
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
-    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id)
+    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id) -labels=$(label)
 
 .PHONY: watch
 watch:
