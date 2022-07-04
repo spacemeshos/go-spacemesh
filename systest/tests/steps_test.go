@@ -288,7 +288,7 @@ func TestScheduleBasic(t *testing.T) {
 	})
 	eg.Go(func() error {
 		for {
-			time.Sleep(60 * time.Hour)
+			time.Sleep(60 * time.Minute)
 			mu.Lock()
 			t.Run("replace nodes", TestStepReplaceNodes)
 			mu.Unlock()
