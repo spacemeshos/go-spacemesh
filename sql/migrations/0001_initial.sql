@@ -151,9 +151,3 @@ CREATE TABLE accounts
 );
 
 CREATE INDEX accounts_by_layer_udated ON accounts (layer_updated);
-
-CREATE TABLE epochs
-(
-    epoch_id      INT PRIMARY KEY,
-    epoch_status  INT NOT NULL
-);
