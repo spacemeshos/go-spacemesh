@@ -139,45 +139,34 @@ func TestStepTransactions(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func TestStepAddNodes(t *testing.T) {
+func TestStepReplaceNodes(t *testing.T) {
 	cctx := testcontext.New(t)
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
-	delta := rand.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
-	delta = min(delta, cctx.ClusterSize-cl.Total())
-	log := cctx.Log.With(
-		"current", cl.Total(),
-		"max", cctx.ClusterSize,
-		"delta", delta,
+	var (
+		max      = cctx.ClusterSize * 2 / 10
+		delete   = rand.New(rand.NewSource(time.Now().Unix())).Intn(max) + 1
+		deleting []*cluster.NodeClient
 	)
-	if cl.Total()+delta >= cctx.ClusterSize {
-		log.Warn("reached cluster limit. delete nodes before adding them")
-		return
+	for i := cl.Bootnodes(); i < cl.Total() && len(deleting) < delete; i++ {
+		node := cl.Client(i)
+		// don't replace non-synced nodes
+		if !isSynced(cctx, node) {
+			continue
+		}
+		deleting = append(deleting, node)
 	}
-
-	log.Info("increasing cluster size")
-	require.NoError(t, cl.AddSmeshers(cctx, delta))
+	for _, node := range deleting {
+		cctx.Log.Debugw("deleting smesher", "name", node.Name)
+		require.NoError(t, cl.DeleteSmesher(cctx, node))
+	}
+	if len(deleting) > 0 {
+		require.NoError(t, cl.AddSmeshers(cctx, len(deleting)))
+	}
 }
 
-func TestStepDeleteNodes(t *testing.T) {
-	cctx := testcontext.New(t)
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
-	require.NoError(t, err)
-
-	delta := rand.Intn((cctx.ClusterSize*2/10)+1) + 1 // [1, 20%]
-
-	log := cctx.Log.With(
-		"current", cl.Total(),
-		"max", cctx.ClusterSize,
-		"delta", delta,
-	)
-
-	log.Info("deleting smeshers")
-	require.NoError(t, cl.DeleteSmeshers(cctx, delta))
-}
-
-func TestStepVerify(t *testing.T) {
+func TestStepVerifyConsistency(t *testing.T) {
 	cctx := testcontext.New(t)
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
 	require.NoError(t, err)
@@ -239,11 +228,38 @@ func TestStepVerify(t *testing.T) {
 	}
 }
 
-func TestScheduleBasicSteps(t *testing.T) {
+func TestStepVerifySynced(t *testing.T) {
+	cctx := testcontext.New(t)
+	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		for i := 0; i < cl.Total(); i++ {
+			node := cl.Client(i)
+			if isSynced(cctx, node) {
+				continue
+			}
+			if time.Since(node.Restarted) < 30*time.Minute {
+				continue
+			}
+			if time.Since(node.Created) < 120*time.Minute {
+				continue
+			}
+			cctx.Log.Warnw("node is not synced",
+				"node", node.Name,
+				"created", node.Created,
+				"restarted", node.Restarted,
+			)
+			return false
+		}
+		return true
+	}, 20*time.Minute, 1*time.Minute)
+}
+
+func TestScheduleBasic(t *testing.T) {
 	var (
-		eg  errgroup.Group
-		mu  sync.RWMutex
-		rng = rand.New(rand.NewSource(time.Now().Unix()))
+		eg errgroup.Group
+		mu sync.RWMutex
 	)
 	t.Run("create", TestStepCreate)
 	eg.Go(func() error {
@@ -256,9 +272,17 @@ func TestScheduleBasicSteps(t *testing.T) {
 	})
 	eg.Go(func() error {
 		for {
-			time.Sleep(10 * time.Minute)
+			time.Sleep(5 * time.Minute)
 			mu.RLock()
-			t.Run("verify", TestStepVerify)
+			t.Run("verify", TestStepVerifyConsistency)
+			mu.RUnlock()
+		}
+	})
+	eg.Go(func() error {
+		for {
+			time.Sleep(5 * time.Minute)
+			mu.RLock()
+			t.Run("verify synced", TestStepVerifySynced)
 			mu.RUnlock()
 		}
 	})
@@ -266,11 +290,7 @@ func TestScheduleBasicSteps(t *testing.T) {
 		for {
 			time.Sleep(60 * time.Hour)
 			mu.Lock()
-			if rng.Int()%2 == 0 {
-				t.Run("add", TestStepAddNodes)
-			} else {
-				t.Run("delete", TestStepDeleteNodes)
-			}
+			t.Run("replace nodes", TestStepReplaceNodes)
 			mu.Unlock()
 		}
 	})

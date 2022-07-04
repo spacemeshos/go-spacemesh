@@ -37,6 +37,9 @@ type Node struct {
 	IP        string
 	P2P, GRPC uint16
 	ID        string
+
+	Created   time.Time
+	Restarted time.Time
 }
 
 // GRPCEndpoint returns grpc endpoint for the Node.
@@ -108,6 +111,14 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s:%d", *svc.Name, poetPort), nil
+}
+
+func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
+	set, err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return set, nil
 }
 
 func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
@@ -197,26 +208,20 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	return rst, nil
 }
 
-func deleteNodes(ctx *testcontext.Context, name string, from, to int) ([]*NodeClient, error) {
-	var eg errgroup.Group
-	for i := to; i < from; i++ {
-		i := i
-		eg.Go(func() error {
-			return deleteNode(ctx, fmt.Sprintf("%s-%d", name, i))
-		})
-	}
-	if err := eg.Wait(); err != nil {
+func deleteNodes(ctx *testcontext.Context, typename, podname string) ([]*NodeClient, error) {
+	if err := deleteNode(ctx, setName(podname)); err != nil {
 		return nil, err
 	}
-	return discoverNodes(ctx, name)
+	return discoverNodes(ctx, typename)
 }
 
-func deleteNode(ctx *testcontext.Context, setname string) error {
+func deleteNode(ctx *testcontext.Context, podname string) error {
+	setname := setName(podname)
 	if err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
 		Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
 		return err
 	}
-	pvcname := persistentVolumeClaim(fmt.Sprintf("%s-0", setname))
+	pvcname := persistentVolumeClaim(podname)
 	if err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).Delete(ctx,
 		pvcname, apimetav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed deleting pvc %s: %w", pvcname, err)
@@ -327,20 +332,26 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 	return nil
 }
 
-func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
+func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error) {
 	attempt := func() (*NodeClient, error) {
-		pod, err := waitPod(tctx, name)
+		pod, err := waitPod(tctx, podname)
 		if err != nil {
 			return nil, err
 		}
 		if pod == nil {
 			return nil, nil
 		}
+		set, err := getStatefulSet(tctx, setName(podname))
+		if err != nil {
+			return nil, err
+		}
 		node := Node{
-			Name: name,
-			IP:   pod.Status.PodIP,
-			P2P:  7513,
-			GRPC: 9092,
+			Name:      podname,
+			IP:        pod.Status.PodIP,
+			P2P:       7513,
+			GRPC:      9092,
+			Created:   set.CreationTimestamp.Time,
+			Restarted: pod.CreationTimestamp.Time,
 		}
 		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
 		defer cancel()

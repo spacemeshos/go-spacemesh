@@ -112,6 +112,13 @@ type Cluster struct {
 	poets     []string
 }
 
+func (c *Cluster) nextSmesher() int {
+	if c.smeshers <= c.bootnodes {
+		return 0
+	}
+	return decodeOrdinal(c.clients[len(c.clients)-1].Name) + 1
+}
+
 func (c *Cluster) persist(ctx *testcontext.Context) error {
 	if err := c.accounts.Persist(ctx); err != nil {
 		return err
@@ -248,7 +255,7 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 		flags = append(flags, flag)
 	}
 	flags = append(flags, Bootnodes(extractP2PEndpoints(c.clients[:c.bootnodes])...))
-	clients, err := deployNodes(cctx, "smesher", c.smeshers, c.smeshers+n, flags)
+	clients, err := deployNodes(cctx, "smesher", c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
 	}
@@ -260,21 +267,28 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	return nil
 }
 
-// DeleteSmeshers will remove n smeshers from the end.
-func (c *Cluster) DeleteSmeshers(cctx *testcontext.Context, n int) error {
-	if n > c.smeshers-c.bootnodes {
-		return fmt.Errorf("can't remove bootnodes. max number of removable smeshers is %d", c.smeshers-c.bootnodes)
-	}
-	clients, err := deleteNodes(cctx, "smesher", c.smeshers, c.smeshers-n)
+// DeleteSmesher will smesher i from the cluster.
+func (c *Cluster) DeleteSmesher(cctx *testcontext.Context, node *NodeClient) error {
+	err := deleteNode(cctx, node.Name)
 	if err != nil {
 		return err
 	}
-	bootnodes := c.clients[:c.bootnodes]
+
+	clients := c.clients
 	c.clients = nil
-	c.clients = append(c.clients, bootnodes...)
-	c.clients = append(c.clients, clients...)
-	c.smeshers = len(clients)
+	for _, n := range clients {
+		if n.Name == node.Name {
+			continue
+		}
+		c.clients = append(c.clients, n)
+	}
+	c.smeshers = len(c.clients)
 	return nil
+}
+
+// Bootnodes returns number of the bootnodes in the cluster.
+func (c *Cluster) Bootnodes() int {
+	return c.bootnodes
 }
 
 // Total returns total number of clients.
