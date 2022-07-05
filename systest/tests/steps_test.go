@@ -62,7 +62,7 @@ func TestStepShortDisconnect(t *testing.T) {
 
 func TestStepTransactions(t *testing.T) {
 	const (
-		batch       = 100
+		batch       = 10
 		amountLimit = 100_000
 	)
 
