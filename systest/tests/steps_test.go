@@ -83,10 +83,11 @@ func TestStepTransactions(t *testing.T) {
 	}
 
 	var eg errgroup.Group
-	for _, client := range clients {
+	for i, client := range clients {
+		i := i
 		client := client
 		eg.Go(func() error {
-			rng := rand.New(rand.NewSource(time.Now().Unix()))
+			rng := rand.New(rand.NewSource(time.Now().Unix() + int64(i)))
 			n := rng.Intn(batch) + batch
 			nonce, err := client.nonce(tctx)
 			require.NoError(t, err)
