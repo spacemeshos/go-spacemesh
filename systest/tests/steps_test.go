@@ -256,43 +256,74 @@ func TestStepVerifySynced(t *testing.T) {
 	}, 20*time.Minute, 1*time.Minute)
 }
 
+func newRunner() *runner {
+	return &runner{
+		failed: make(chan struct{}),
+	}
+}
+
+type runner struct {
+	eg     errgroup.Group
+	mu     sync.RWMutex
+	failed chan struct{}
+}
+
+func (r *runner) run(period time.Duration, fn func() bool) {
+	r.eg.Go(func() error {
+		ticker := time.NewTicker(period)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-r.failed:
+				return nil
+			case <-ticker.C:
+			}
+			success := fn()
+			if !success {
+				select {
+				case <-r.failed:
+				default:
+					close(r.failed)
+				}
+			}
+		}
+	})
+}
+
+func (r *runner) wait() {
+	r.eg.Wait()
+}
+
+func (r *runner) one(period time.Duration, fn func() bool) {
+	r.run(period, func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return fn()
+	})
+}
+
+func (r *runner) concurrent(period time.Duration, fn func() bool) {
+	r.run(period, func() bool {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
+		return fn()
+	})
+}
+
 func TestScheduleBasic(t *testing.T) {
-	var (
-		eg errgroup.Group
-		mu sync.RWMutex
-	)
 	t.Run("create", TestStepCreate)
-	eg.Go(func() error {
-		for {
-			time.Sleep(30 * time.Second)
-			mu.RLock()
-			t.Run("txs", TestStepTransactions)
-			mu.RUnlock()
-		}
+	rn := newRunner()
+	rn.concurrent(30*time.Second, func() bool {
+		return t.Run("txs", TestStepTransactions)
 	})
-	eg.Go(func() error {
-		for {
-			time.Sleep(5 * time.Minute)
-			mu.RLock()
-			t.Run("verify", TestStepVerifyConsistency)
-			mu.RUnlock()
-		}
+	rn.concurrent(5*time.Minute, func() bool {
+		return t.Run("verify", TestStepVerifyConsistency)
 	})
-	eg.Go(func() error {
-		for {
-			time.Sleep(5 * time.Minute)
-			mu.RLock()
-			t.Run("verify synced", TestStepVerifySynced)
-			mu.RUnlock()
-		}
+	rn.concurrent(5*time.Minute, func() bool {
+		return t.Run("verify synced", TestStepVerifySynced)
 	})
-	eg.Go(func() error {
-		for {
-			time.Sleep(60 * time.Minute)
-			mu.Lock()
-			t.Run("replace nodes", TestStepReplaceNodes)
-			mu.Unlock()
-		}
+	rn.one(60*time.Minute, func() bool {
+		return t.Run("replace nodes", TestStepReplaceNodes)
 	})
-	require.NoError(t, eg.Wait())
+	rn.wait()
 }
