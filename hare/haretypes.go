@@ -22,7 +22,13 @@ const (
 	pre      messageType = 10
 )
 
+// declare epi-round constants
 const preRound uint32 = math.MaxUint32
+
+// terminationRound is not actually a round. A UInt32, however, is required by
+// the Rolacle for the eligibility.buildKey function. Thus, we define a constant
+// that represents the termination certification process for every layer.
+const terminationRound uint32 = math.MaxUint32 - 1
 
 // declare round identifiers.
 const (

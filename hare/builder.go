@@ -79,7 +79,7 @@ func (im *innerMessage) String() string {
 	return fmt.Sprintf("Type: %v InstanceID: %v K: %v Ki: %v", im.Type, im.InstanceID, im.K, im.Ki)
 }
 
-// messageBuilder is the impl of the builder DP.
+// messageBuilder is the impl of the builder design pattern.
 // It allows the user to set the different fields of the builder and eventually Build the message.
 type messageBuilder struct {
 	msg   *Msg

@@ -15,7 +15,9 @@ type layerPatrol interface {
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error)
+	Validate(ctx context.Context, layerID types.LayerID,
+		round uint32, expectedCommitteeSize int, nodeID types.NodeID,
+		roleProof []byte, eligibilityCount uint16) (bool, error)
 	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error)
 	Proof(context.Context, types.LayerID, uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)

@@ -1,7 +1,8 @@
-package hare
+package hare_test
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/hare"
 	"sync"
 	"testing"
 
@@ -12,21 +13,22 @@ import (
 // Integration Tests
 
 func Test_WaitingForCertificate_SignaturesFromGossip(t *testing.T) {
-	service, err := NewBlockCertifyingService()
+	service, err := hare.NewBlockCertifyingService()
 	require.NoError(t, err)
-	store, err := NewCertifiedBlockStore()
+	store, err := hare.NewCertifiedBlockStore()
 	require.NoError(t, err)
 
 	// Wait until a block is certified:
 	bID := types.RandomBlockID()
-	cBlockProvider, _ := NewCertifiedBlockProvider(service, store, bID)
+	cBlockProvider, _ := hare.NewCertifiedBlockProvider(service, store, bID)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		certCh := make(chan *hare.BlockCertificate)
 		// Block until valid BlockCertificate is successfully built.
-		cert := <-cBlockProvider.GetBlockCertificateChannel()
-		if cert != nil {
+		cBlockProvider.RegisterBlockCertificateChannel(certCh)
+		if cert := <-certCh; cert == nil {
 
 		}
 		// Do something with the block certificate from the channel or just block and get
@@ -42,9 +44,9 @@ func Test_WaitingForCertificate_SignaturesAddedToStore(t *testing.T) {
 
 }
 
-func Test_CertifiedBlockStore_StoresBlock(t *testing.T) {
+func Test_CertifiedBlockStore_StoresValidBlocks(t *testing.T) {
 
 }
-func Test_CertifiedBlockProvider_ProvidesBlock(t *testing.T) {
+func Test_CertifiedBlockProvider_ProvidesValidBlocks(t *testing.T) {
 
 }
