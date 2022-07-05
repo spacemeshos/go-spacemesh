@@ -216,7 +216,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 			return false
 		}
 		return true
-	}, 30*time.Minute, time.Second)
+	}, 30*time.Minute, time.Minute)
 	for i, layer := range layers {
 		if i == 0 {
 			continue
