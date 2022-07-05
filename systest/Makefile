@@ -24,19 +24,13 @@ push:
 	docker push $(image_name)
 
 .PHONY: run
-run: launch watch
-
-.PHONY: launch
-launch:
+run:
 	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
     tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id) -labels=$(label)
-
-.PHONY: watch
-watch:
 	-@kubectl wait --timeout=5s --for=condition=ready pod/$(test_pod_name)
 	@kubectl logs $(test_pod_name) -f
 
