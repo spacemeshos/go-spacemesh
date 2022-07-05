@@ -392,7 +392,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 // GetAllPending get all transactions that are not yet applied.
 func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
-		select tx, header, layer, block, principal, timestamp, id from transactions
+		select tx, header, layer, block, timestamp, id from transactions
 		where applied = ?1 order by timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
