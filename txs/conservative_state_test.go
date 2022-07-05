@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -590,10 +591,20 @@ func TestApplyLayer(t *testing.T) {
 		tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance-(defaultAmount+defaultFee), nil)
 		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	}
-	tcs.mvm.EXPECT().Apply(lid, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ types.LayerID, got []types.RawTx, _ []types.AnyReward) ([]*types.Transaction, error) {
+	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
+		func(ctx vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
-			return nil, nil
+			var rst []types.TransactionWithResult
+			for _, tx := range txs {
+				rst = append(rst, types.TransactionWithResult{
+					Transaction: *tx,
+					TransactionResult: types.TransactionResult{
+						Layer: ctx.Layer,
+						Block: ctx.Block,
+					},
+				})
+			}
+			return nil, rst, nil
 		}).Times(1)
 	failed, err := tcs.ApplyLayer(block)
 	require.NoError(t, err)
@@ -641,10 +652,20 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			},
 			TxIDs: ids,
 		})
-	tcs.mvm.EXPECT().Apply(lid, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ types.LayerID, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, error) {
+	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
+		func(ctx vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
-			return txIds(got[:numFailed]), nil
+			var rst []types.TransactionWithResult
+			for _, tx := range txs[numFailed:] {
+				rst = append(rst, types.TransactionWithResult{
+					Transaction: *tx,
+					TransactionResult: types.TransactionResult{
+						Layer: ctx.Layer,
+						Block: ctx.Block,
+					},
+				})
+			}
+			return txIds(got[:numFailed]), rst, nil
 		}).Times(1)
 	failed, err := tcs.ApplyLayer(block)
 	require.NoError(t, err)
@@ -681,10 +702,10 @@ func TestApplyLayer_VMError(t *testing.T) {
 			TxIDs: ids,
 		})
 	errVM := errors.New("vm error")
-	tcs.mvm.EXPECT().Apply(lid, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ types.LayerID, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, error) {
+	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
+		func(_ vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
-			return nil, errVM
+			return nil, nil, errVM
 		}).Times(1)
 	failed, err := tcs.ApplyLayer(block)
 	require.ErrorIs(t, err, errVM)
@@ -747,8 +768,22 @@ func TestConsistentHandling(t *testing.T) {
 				TxIDs:      ids,
 			},
 		)
+		results := make([]types.TransactionWithResult, len(txs))
+		for i, tx := range txs {
+			results[i] = types.TransactionWithResult{
+				Transaction: *tx,
+				TransactionResult: types.TransactionResult{
+					Layer: block.LayerIndex,
+					Block: block.ID(),
+				},
+			}
+		}
+
 		for _, instance := range instances {
-			instance.mvm.EXPECT().Apply(block.LayerIndex, raw, block.Rewards).Return(nil, nil).Times(1)
+			instance.mvm.EXPECT().Apply(vm.ApplyContext{
+				Layer: block.LayerIndex,
+				Block: block.ID(),
+			}, raw, block.Rewards).Return(nil, results, nil).Times(1)
 			_, err := instance.ApplyLayer(block)
 			require.NoError(t, err)
 			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))

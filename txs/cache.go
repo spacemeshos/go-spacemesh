@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -415,8 +416,7 @@ func (ac *accountCache) applyLayer(
 	newNonce, newBalance uint64,
 	tp txProvider,
 	lid types.LayerID,
-	bid types.BlockID,
-	appliedByNonce map[uint64]types.TransactionID,
+	appliedByNonce map[uint64]types.TransactionWithResult,
 ) error {
 	nextNonce := ac.startNonce
 	for {
@@ -463,7 +463,7 @@ func (ac *accountCache) applyLayer(
 		return errBadBalanceInCache
 	}
 
-	if err := tp.ApplyLayer(lid, bid, ac.addr, appliedByNonce); err != nil {
+	if err := tp.ApplyLayer(appliedByNonce); err != nil {
 		logger.With().Error("failed to set txs discarded for applied layer", lid, log.Err(err))
 		return err
 	}
@@ -700,7 +700,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Transaction) ([]error, []error) {
+func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult) ([]error, []error) {
 	if err := c.CheckApplyOrder(lid); err != nil {
 		return nil, []error{err}
 	}
@@ -709,21 +709,23 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Tr
 	defer c.mu.Unlock()
 
 	toCleanup := make(map[types.Address]struct{})
-	for _, tx := range txs {
-		toCleanup[tx.Principal] = struct{}{}
+	for _, rst := range results {
+		toCleanup[rst.Principal] = struct{}{}
 	}
 	defer c.cleanupAccounts(toCleanup)
 
-	byPrincipal := make(map[types.Address]map[uint64]types.TransactionID)
-	for _, tx := range txs {
-		principal := tx.Principal
+	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
+	for _, rst := range results {
+		principal := rst.Principal
 		if _, ok := byPrincipal[principal]; !ok {
-			byPrincipal[principal] = make(map[uint64]types.TransactionID)
+			byPrincipal[principal] = make(map[uint64]types.TransactionWithResult)
 		}
-		if _, ok := byPrincipal[principal][tx.Nonce.Counter]; ok {
+		if _, ok := byPrincipal[principal][rst.Nonce.Counter]; ok {
 			return nil, []error{errDupNonceApplied}
 		}
-		byPrincipal[principal][tx.Nonce.Counter] = tx.ID
+		byPrincipal[principal][rst.Nonce.Counter] = rst
+
+		events.ReportResult(rst)
 	}
 
 	errsApply := make([]error, 0, len(byPrincipal))
@@ -736,7 +738,7 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Tr
 			principal,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
-		if err := c.pending[principal].applyLayer(logger, nextNonce, balance, c.tp, lid, bid, appliedByNonce); err != nil {
+		if err := c.pending[principal].applyLayer(logger, nextNonce, balance, c.tp, lid, appliedByNonce); err != nil {
 			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
 			errsApply = append(errsApply, err)
 		}

@@ -207,16 +207,14 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 	filterAccount := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT) != 0
 	filterReward := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD) != 0
-	filterReceipt := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
 
 	// Subscribe to the various streams
 	var (
-		accountCh       <-chan interface{}
-		rewardsCh       <-chan interface{}
-		receiptsCh      <-chan interface{}
-		accountBufFull  <-chan struct{}
-		rewardsBufFull  <-chan struct{}
-		receiptsBufFull <-chan struct{}
+		accountCh      <-chan interface{}
+		rewardsCh      <-chan interface{}
+		receiptsCh     <-chan interface{}
+		accountBufFull <-chan struct{}
+		rewardsBufFull <-chan struct{}
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
@@ -228,11 +226,6 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
 	}
-	if filterReceipt {
-		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
-			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription)
-		}
-	}
 
 	for {
 		select {
@@ -242,9 +235,6 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		case <-rewardsBufFull:
 			log.Info("rewards buffer is full, shutting down")
 			return status.Error(codes.Canceled, errRewardsBufferFull)
-		case <-receiptsBufFull:
-			log.Info("receipts buffer is full, shutting down")
-			return status.Error(codes.Canceled, errReceiptsBufferFull)
 		case updatedAccountEvent := <-accountCh:
 			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// Apply address filter
@@ -341,19 +331,16 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 
 	filterAccount := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT) != 0
 	filterReward := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD) != 0
-	filterReceipt := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_TRANSACTION_RECEIPT) != 0
 	filterState := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH) != 0
 
 	// Subscribe to the various streams
 	var (
-		accountCh       <-chan interface{}
-		rewardsCh       <-chan interface{}
-		receiptsCh      <-chan interface{}
-		layersCh        <-chan interface{}
-		accountBufFull  <-chan struct{}
-		rewardsBufFull  <-chan struct{}
-		receiptsBufFull <-chan struct{}
-		layersBufFull   <-chan struct{}
+		accountCh      <-chan interface{}
+		rewardsCh      <-chan interface{}
+		layersCh       <-chan interface{}
+		accountBufFull <-chan struct{}
+		rewardsBufFull <-chan struct{}
+		layersBufFull  <-chan struct{}
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
@@ -365,11 +352,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
 	}
-	if filterReceipt {
-		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
-			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription)
-		}
-	}
+
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
@@ -386,9 +369,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		case <-rewardsBufFull:
 			log.Info("rewards buffer is full, shutting down")
 			return status.Error(codes.Canceled, errRewardsBufferFull)
-		case <-receiptsBufFull:
-			log.Info("receipts buffer is full, shutting down")
-			return status.Error(codes.Canceled, errReceiptsBufferFull)
 		case <-layersBufFull:
 			log.Info("layers buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
@@ -420,23 +400,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
-				},
-			}}}
-			if err := stream.Send(resp); err != nil {
-				return fmt.Errorf("send to stream: %w", err)
-			}
-		case receiptEvent := <-receiptsCh:
-			receipt := receiptEvent.(events.TxReceipt)
-
-			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
-				Receipt: &pb.TransactionReceipt{
-					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
-					// Result:      receipt.Result,
-					GasUsed: receipt.GasUsed,
-					Fee:     &pb.Amount{Value: receipt.Fee},
-					Layer:   &pb.LayerNumber{Number: receipt.Layer.Uint32()},
-					Index:   receipt.Index,
-					// SvmData: nil,
 				},
 			}}}
 			if err := stream.Send(resp); err != nil {

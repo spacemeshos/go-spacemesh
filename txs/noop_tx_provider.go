@@ -23,7 +23,7 @@ func (ntp *nopTP) AddToProposal(types.LayerID, types.ProposalID, []types.Transac
 }
 func (ntp *nopTP) AddToBlock(types.LayerID, types.BlockID, []types.TransactionID) error { return nil }
 func (ntp *nopTP) UndoLayers(types.LayerID) error                                       { return nil }
-func (ntp *nopTP) ApplyLayer(types.LayerID, types.BlockID, types.Address, map[uint64]types.TransactionID) error {
+func (ntp *nopTP) ApplyLayer(map[uint64]types.TransactionWithResult) error {
 	return nil
 }
 func (ntp *nopTP) DiscardNonceBelow(types.Address, uint64) error { return nil }
