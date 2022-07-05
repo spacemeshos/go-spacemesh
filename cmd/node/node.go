@@ -88,7 +88,7 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-	SVMLogger              = "SVM"
+	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
@@ -448,7 +448,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(SVMLogger, lg)))
+	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,
