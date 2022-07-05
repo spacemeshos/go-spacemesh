@@ -1964,13 +1964,18 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
+			events.CloseEventReporter()
+			events.InitializeReporter()
+
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+			_, err = stream.Header()
+			require.NoError(t, err)
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
 
 				for i := 0; i < subscriptionChanBufSize; i++ {
 					_, err := stream.Recv()
@@ -1981,11 +1986,6 @@ func TestTransactionService(t *testing.T) {
 					}
 				}
 			}()
-
-			events.CloseEventReporter()
-			events.InitializeReporter()
-
-			time.Sleep(100 * time.Millisecond)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
 				events.ReportNewTx(types.LayerID{}, globalTx)
