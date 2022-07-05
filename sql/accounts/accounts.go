@@ -29,6 +29,19 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 	return account, nil
 }
 
+// Has the account in the database.
+func Has(db sql.Executor, address types.Address) (bool, error) {
+	rows, err := db.Exec("select 1 from accounts where address = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has address %v: %w", address, err)
+	}
+	return rows > 0, nil
+}
+
 // Latest latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	account, err := load(db, address, "select balance, initialized, nonce, layer_updated, template, state from accounts where address = ?1;", func(stmt *sql.Statement) {

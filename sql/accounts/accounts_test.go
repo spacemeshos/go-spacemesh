@@ -30,6 +30,21 @@ func TestUpdate(t *testing.T) {
 	require.Equal(t, seq[len(seq)-1], &latest)
 }
 
+func TestHas(t *testing.T) {
+	address := types.Address{1, 2, 3}
+	db := sql.InMemory()
+	has, err := Has(db, address)
+	require.NoError(t, err)
+	require.False(t, has)
+	seq := genSeq(address, 2)
+	for _, update := range seq {
+		require.NoError(t, Update(db, update))
+	}
+	has, err = Has(db, address)
+	require.NoError(t, err)
+	require.True(t, has)
+}
+
 func TestRevert(t *testing.T) {
 	address := types.Address{1, 1}
 	seq := genSeq(address, 10)
