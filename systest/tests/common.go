@@ -24,7 +24,7 @@ import (
 
 func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
 	txclient := spacemeshv1.NewTransactionServiceClient(node)
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	response, err := txclient.SubmitTransaction(ctx, &spacemeshv1.SubmitTransactionRequest{Transaction: tx})
 	if err != nil {
