@@ -271,15 +271,6 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 			WithPodManagementPolicy(apiappsv1.ParallelPodManagement).
 			WithReplicas(1).
 			WithServiceName(*svc.Name).
-			WithPersistentVolumeClaimRetentionPolicy(
-				appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy().
-					WithWhenDeleted(
-						apiappsv1.DeletePersistentVolumeClaimRetentionPolicyType,
-					).
-					WithWhenScaled(
-						apiappsv1.DeletePersistentVolumeClaimRetentionPolicyType,
-					),
-			).
 			WithVolumeClaimTemplates(
 				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
