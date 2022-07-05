@@ -27,6 +27,7 @@ type Config struct {
 }
 
 // New creates PubSub instance.
+// TODO: unexport or refactor away (only used in tests and host.go)
 func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
 	opts := []pubsub.Option{
