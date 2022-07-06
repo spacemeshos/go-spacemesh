@@ -212,7 +212,7 @@ jobs:
 
     - name: Systemtest result
       run: |
-        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }}  -ojson | jq .status.containerStatuses[].state.terminated.exitCode)
+        SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
         SUCCESS="${SUCCESS//'%'/'%25'}"
         SUCCESS="${SUCCESS//$'\n'/'%0A'}"
         SUCCESS="${SUCCESS//$'\r'/'%0D'}"
