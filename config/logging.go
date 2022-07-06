@@ -7,7 +7,7 @@ type LogEncoder = string
 
 const (
 	// Info level causes too much of logs produced (400+ Mb for ~2 hours).
-	defaultLoggingLevel = zapcore.WarnLevel
+	defaultLoggingLevel = zapcore.InfoLevel
 	// ConsoleLogEncoder represents logging with plain text.
 	ConsoleLogEncoder LogEncoder = "console"
 	// JSONLogEncoder represents logging with JSON.
