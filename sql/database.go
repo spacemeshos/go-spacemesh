@@ -263,14 +263,6 @@ func (tx *Tx) begin(initstmt string) error {
 	return nil
 }
 
-func (tx *Tx) immediate() error {
-	return tx.begin("BEGIN IMMEDIATE;")
-}
-
-func (tx *Tx) deferred() error {
-	return tx.begin("BEGIN;")
-}
-
 // Commit transaction.
 func (tx *Tx) Commit() error {
 	stmt := tx.conn.Prep("COMMIT;")
