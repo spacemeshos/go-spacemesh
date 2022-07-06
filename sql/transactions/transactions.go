@@ -393,7 +393,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
 		select tx, header, layer, block, timestamp, id from transactions
-		where applied = ?1 order by timestamp asc`,
+		where applied = ?1 and header is not null order by timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
 		}, "get all pending")

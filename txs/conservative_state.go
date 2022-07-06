@@ -126,22 +126,33 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 	return cs.vmState.Validation(raw)
 }
 
-// AddToCache adds the provided transaction to the conservative cache.
-func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
-	received := time.Now()
-	// save all new transactions as long as they are syntactically correct
-	if err := cs.cache.AddToDB(tx, received); err != nil {
-		return err
-	}
+func (cs *ConservativeState) addToCache(tx *types.Transaction, received time.Time) error {
 	events.ReportNewTx(types.LayerID{}, tx)
 	events.ReportAccountUpdate(tx.Principal)
 
 	return cs.cache.Add(tx, received, nil)
 }
 
+// AddToCache adds the provided transaction to the conservative cache.
+func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
+	received := time.Now()
+	if err := cs.tp.Add(tx, received); err != nil {
+		return err
+	}
+	return cs.addToCache(tx, received)
+}
+
+// AddHeader ...
+func (cs *ConservativeState) AddHeader(tx *types.Transaction, received time.Time) error {
+	if err := cs.tp.AddHeader(tx.ID, tx.TxHeader); err != nil {
+		return err
+	}
+	return cs.addToCache(tx, received)
+}
+
 // AddToDB ...
 func (cs *ConservativeState) AddToDB(tx *types.Transaction) error {
-	return cs.cache.AddToDB(tx, time.Now())
+	return cs.tp.Add(tx, time.Now())
 }
 
 // RevertState reverts the VM state and database to the given layer.

@@ -14,8 +14,10 @@ import (
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
 	Validation(types.RawTx) system.ValidationRequest
+	AddHeader(*types.Transaction, time.Time) error
 	AddToCache(*types.Transaction) error
 	AddToDB(*types.Transaction) error
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
 
 type vmState interface {

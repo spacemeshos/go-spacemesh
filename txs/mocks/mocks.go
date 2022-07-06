@@ -38,6 +38,20 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
+// AddHeader mocks base method.
+func (m *MockconservativeState) AddHeader(arg0 *types.Transaction, arg1 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddHeader", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddHeader indicates an expected call of AddHeader.
+func (mr *MockconservativeStateMockRecorder) AddHeader(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeader", reflect.TypeOf((*MockconservativeState)(nil).AddHeader), arg0, arg1)
+}
+
 // AddToCache mocks base method.
 func (m *MockconservativeState) AddToCache(arg0 *types.Transaction) error {
 	m.ctrl.T.Helper()
@@ -64,6 +78,21 @@ func (m *MockconservativeState) AddToDB(arg0 *types.Transaction) error {
 func (mr *MockconservativeStateMockRecorder) AddToDB(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToDB", reflect.TypeOf((*MockconservativeState)(nil).AddToDB), arg0)
+}
+
+// GetMeshTransaction mocks base method.
+func (m *MockconservativeState) GetMeshTransaction(arg0 types.TransactionID) (*types.MeshTransaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMeshTransaction", arg0)
+	ret0, _ := ret[0].(*types.MeshTransaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMeshTransaction indicates an expected call of GetMeshTransaction.
+func (mr *MockconservativeStateMockRecorder) GetMeshTransaction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransaction", reflect.TypeOf((*MockconservativeState)(nil).GetMeshTransaction), arg0)
 }
 
 // HasTx mocks base method.
@@ -440,21 +469,6 @@ func (m *MocktxProvider) GetAllPending() ([]*types.MeshTransaction, error) {
 func (mr *MocktxProviderMockRecorder) GetAllPending() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllPending", reflect.TypeOf((*MocktxProvider)(nil).GetAllPending))
-}
-
-// GetBlob mocks base method.
-func (m *MocktxProvider) GetBlob(arg0 types.TransactionID) ([]byte, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlob", arg0)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBlob indicates an expected call of GetBlob.
-func (mr *MocktxProviderMockRecorder) GetBlob(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlob", reflect.TypeOf((*MocktxProvider)(nil).GetBlob), arg0)
 }
 
 // GetByAddress mocks base method.
