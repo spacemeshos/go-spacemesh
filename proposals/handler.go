@@ -194,7 +194,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
 
-	logger.With().Debug("new proposal", p.ID())
+	logger.With().Info("new proposal", p.ID())
 
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(&p.Ballot))
 
@@ -215,8 +215,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		return fmt.Errorf("save proposal: %w", err)
 	}
 
-	logger.With().Info("added proposal ID to database", log.String("proposal_id", p.ID().AsHash32().ShortString()))
-	logger.With().Debug("added proposal to database", log.Inline(&p))
+	logger.With().Info("added proposal to database", p.ID())
 
 	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
 		return fmt.Errorf("proposal add TXs: %w", err)
@@ -234,8 +233,8 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		logger.Debug("known ballot", b.ID())
 		return nil
 	}
-	
-	logger.With().Debug("new ballot", b.ID())
+
+	logger.With().Info("new ballot", b.ID())
 
 	if err := h.checkBallotSyntacticValidity(ctx, b); err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))
