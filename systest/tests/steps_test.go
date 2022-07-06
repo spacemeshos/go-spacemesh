@@ -314,7 +314,7 @@ func (r *runner) concurrent(period time.Duration, fn func() bool) {
 }
 
 func TestScheduleBasic(t *testing.T) {
-	t.Run("create", TestStepCreate)
+	TestStepCreate(t)
 	rn := newRunner()
 	rn.concurrent(30*time.Second, func() bool {
 		return t.Run("txs", TestStepTransactions)
