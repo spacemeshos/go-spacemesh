@@ -156,6 +156,13 @@ func Labels(labels ...string) Opt {
 	}
 }
 
+// SkipClusterLimits will not block if there are no available tokens.
+func SkipClusterLimits() Opt {
+	return func(c *cfg) {
+		c.skipLimits = true
+	}
+}
+
 // Opt is for configuring Context.
 type Opt func(*cfg)
 
@@ -166,7 +173,8 @@ func newCfg() *cfg {
 }
 
 type cfg struct {
-	labels map[string]struct{}
+	labels     map[string]struct{}
+	skipLimits bool
 }
 
 // New creates context for the test.
@@ -184,9 +192,10 @@ func New(t *testing.T, opts ...Opt) *Context {
 			t.Skipf("not labeled with '%s'", label)
 		}
 	}
-	tokens <- struct{}{}
-	t.Cleanup(func() { <-tokens })
-
+	if !c.skipLimits {
+		tokens <- struct{}{}
+		t.Cleanup(func() { <-tokens })
+	}
 	config, err := rest.InClusterConfig()
 	require.NoError(t, err)
 

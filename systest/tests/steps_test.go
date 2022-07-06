@@ -22,13 +22,13 @@ import (
 )
 
 func TestStepCreate(t *testing.T) {
-	ctx := testcontext.New(t)
+	ctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	_, err := cluster.Reuse(ctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 }
 
 func TestStepShortDisconnect(t *testing.T) {
-	tctx := testcontext.New(t)
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
@@ -66,7 +66,7 @@ func TestStepTransactions(t *testing.T) {
 		amountLimit = 100_000
 	)
 
-	tctx := testcontext.New(t)
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
@@ -141,7 +141,7 @@ func TestStepTransactions(t *testing.T) {
 }
 
 func TestStepReplaceNodes(t *testing.T) {
-	cctx := testcontext.New(t)
+	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
@@ -168,7 +168,7 @@ func TestStepReplaceNodes(t *testing.T) {
 }
 
 func TestStepVerifyConsistency(t *testing.T) {
-	cctx := testcontext.New(t)
+	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
@@ -232,7 +232,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 }
 
 func TestStepVerifySynced(t *testing.T) {
-	cctx := testcontext.New(t)
+	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
