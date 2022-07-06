@@ -463,19 +463,10 @@ func (ac *accountCache) applyLayer(
 		return errBadBalanceInCache
 	}
 
-	if err := applyLayer(db, appliedByNonce); err != nil {
+	if err := applyLayer(logger, db, ac.addr, ac.startNonce, appliedByNonce); err != nil {
 		logger.With().Error("failed to apply layer", log.Err(err))
 		return err
 	}
-
-	// txs that were rejected from cache due to nonce too low are discarded here
-	if err := transactions.DiscardNonceBelow(db, ac.addr, ac.startNonce); err != nil {
-		logger.With().Error("failed to discard txs with lower nonce",
-			ac.addr,
-			log.Uint64("nonce", ac.startNonce))
-		return err
-	}
-
 	return nil
 }
 
@@ -875,7 +866,7 @@ func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []t
 	})
 }
 
-func applyLayer(db *sql.Database, appliedByNonce map[uint64]types.TransactionWithResult) error {
+func applyLayer(logger log.Log, db *sql.Database, addr types.Address, startNonce uint64, appliedByNonce map[uint64]types.TransactionWithResult) error {
 	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		// nonce order doesn't matter here
 		for nonce, tx := range appliedByNonce {
@@ -886,6 +877,12 @@ func applyLayer(db *sql.Database, appliedByNonce map[uint64]types.TransactionWit
 			if err = transactions.DiscardByAcctNonce(dbtx, tx.ID, tx.Layer, tx.Principal, nonce); err != nil {
 				return fmt.Errorf("apply discard %w", err)
 			}
+		}
+		// txs that were rejected from cache due to nonce too low are discarded here
+		if err := transactions.DiscardNonceBelow(dbtx, addr, startNonce); err != nil {
+			logger.With().Error("failed to discard txs with lower nonce",
+				log.Uint64("nonce", startNonce))
+			return err
 		}
 		return nil
 	})
