@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -16,7 +17,7 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 	t.Helper()
 	nonce := types.Nonce{Counter: 223}
 	amount := uint64(rand.Int())
-	tx := wallet.Spend(signer.PrivateKey(), types.Address{1, 2, 3}, amount, nonce)
+	tx := wallet.Spend(signer.PrivateKey(), address.Address{byte(address.TestnetID), 1, 2, 3}, amount, nonce)
 	parsed := types.Transaction{
 		RawTx:    types.NewRawTx(tx),
 		TxHeader: &types.TxHeader{},
@@ -25,7 +26,9 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 	parsed.GasPrice = 1
 	parsed.MaxSpend = amount
 	parsed.Nonce = nonce
-	parsed.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	var err error
+	parsed.Principal, err = address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	return &types.MeshTransaction{
 		Transaction: parsed,
 		LayerID:     lid,

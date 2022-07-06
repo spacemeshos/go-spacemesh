@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 )
 
 type (
@@ -12,7 +13,7 @@ type (
 	// Hash32 is an alias to types.Hash32.
 	Hash32 = types.Hash32
 	// Address is an alias to types.Address.
-	Address = types.Address
+	Address = address.Address
 	// Signature is an alias to types.Bytes64.
 	Signature = types.Bytes64
 

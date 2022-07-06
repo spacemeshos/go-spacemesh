@@ -3,7 +3,7 @@ package txs
 import (
 	"container/heap"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -68,7 +68,7 @@ type mempoolIterator struct {
 	logger       log.Log
 	gasRemaining uint64
 	pq           priorityQueue
-	txs          map[types.Address][]*txtypes.NanoTX
+	txs          map[address.Address][]*txtypes.NanoTX
 }
 
 // newMempoolIterator builds and returns a mempoolIterator.
@@ -111,7 +111,7 @@ func (mi *mempoolIterator) buildPQ() {
 	heap.Init(&mi.pq)
 }
 
-func (mi *mempoolIterator) getNext(addr types.Address) *txtypes.NanoTX {
+func (mi *mempoolIterator) getNext(addr address.Address) *txtypes.NanoTX {
 	if _, ok := mi.txs[addr]; !ok {
 		return nil
 	}
@@ -180,9 +180,9 @@ func (mi *mempoolIterator) pop() *txtypes.NanoTX {
 }
 
 // PopAll returns all the transaction in the mempoolIterator.
-func (mi *mempoolIterator) PopAll() ([]*txtypes.NanoTX, map[types.Address][]*txtypes.NanoTX) {
+func (mi *mempoolIterator) PopAll() ([]*txtypes.NanoTX, map[address.Address][]*txtypes.NanoTX) {
 	result := make([]*txtypes.NanoTX, 0)
-	byAddrAndNonce := make(map[types.Address][]*txtypes.NanoTX)
+	byAddrAndNonce := make(map[address.Address][]*txtypes.NanoTX)
 	for {
 		popped := mi.pop()
 		if popped == nil {

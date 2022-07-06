@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -42,19 +43,19 @@ type ConservativeState interface {
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetLayerApplied(types.TransactionID) (types.LayerID, error)
 	GetAllAccounts() ([]*types.Account, error)
-	GetBalance(types.Address) (uint64, error)
-	GetNonce(types.Address) (types.Nonce, error)
-	GetProjection(types.Address) (uint64, uint64)
+	GetBalance(address.Address) (uint64, error)
+	GetNonce(address.Address) (types.Nonce, error)
+	GetProjection(address.Address) (uint64, uint64)
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
-	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	GetTransactionsByAddress(types.LayerID, types.LayerID, address.Address) ([]*types.MeshTransaction, error)
 }
 
 // MeshAPI is an api for getting mesh status about layers/blocks/rewards.
 type MeshAPI interface {
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
-	GetRewards(types.Address) ([]*types.Reward, error)
+	GetRewards(address.Address) ([]*types.Reward, error)
 	LatestLayer() types.LayerID
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID

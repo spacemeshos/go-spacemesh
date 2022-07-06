@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -171,7 +172,7 @@ func ReportResult(rst types.TransactionWithResult) {
 }
 
 // ReportAccountUpdate reports an account whose data has been updated.
-func ReportAccountUpdate(a types.Address) {
+func ReportAccountUpdate(a address.Address) {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -359,7 +360,7 @@ type TxReceipt struct {
 	Fee     uint64
 	Layer   types.LayerID
 	Index   uint32
-	Address types.Address
+	Address address.Address
 }
 
 // Reward represents a reward object with extra data needed by the API.
@@ -367,7 +368,7 @@ type Reward struct {
 	Layer       types.LayerID
 	Total       uint64
 	LayerReward uint64
-	Coinbase    types.Address
+	Coinbase    address.Address
 }
 
 // Transaction wraps a tx with its layer ID and validity info.
@@ -387,7 +388,7 @@ type Status struct{}
 
 // Account wraps account address.
 type Account struct {
-	types.Address
+	address.Address
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them.

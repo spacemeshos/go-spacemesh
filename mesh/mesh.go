@@ -11,6 +11,7 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -790,6 +791,6 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 }
 
 // GetRewards retrieves account's rewards by the coinbase address.
-func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
+func (msh *Mesh) GetRewards(coinbase address.Address) ([]*types.Reward, error) {
 	return rewards.List(msh.cdb, coinbase)
 }

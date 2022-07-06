@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -52,7 +53,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	return tg
 }
 
-func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
+func genTx(t testing.TB, signer *signing.EdSigner, dest address.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
@@ -65,7 +66,9 @@ func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	var err error
+	tx.Principal, err = address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	return tx
 }
 
@@ -73,7 +76,9 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 	t.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
-		tx := genTx(t, signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100)
+		addr, err := address.GenerateAddress(address.TestnetID, []byte("1"))
+		require.NoError(t, err)
+		tx := genTx(t, signing.NewEdSigner(), addr, 1, 10, 100)
 		txIDs = append(txIDs, tx.ID)
 	}
 	return txIDs
@@ -86,14 +91,15 @@ func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATX
 	for i := 0; i < numATXs; i++ {
 		signer := signing.NewEdSigner()
 		signers = append(signers, signer)
-		address := types.BytesToAddress(signer.PublicKey().Bytes())
+		addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+		require.NoError(t, err)
 		nipostChallenge := types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			StartTick:  1,
 			EndTick:    2,
 			PubLayerID: lid,
 		}
-		atx := types.NewActivationTx(nipostChallenge, address, nil, numUint, nil)
+		atx := types.NewActivationTx(nipostChallenge, addr, nil, numUint, nil)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 		atxes = append(atxes, atx)
 	}
@@ -309,13 +315,17 @@ func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, block.Rewards, len(proposals))
 	sort.Slice(proposals, func(i, j int) bool {
-		cbi := types.BytesToAddress(proposals[i].SmesherID().Bytes())
-		cbj := types.BytesToAddress(proposals[j].SmesherID().Bytes())
+		cbi, err := address.GenerateAddress(address.TestnetID, proposals[i].SmesherID().Bytes())
+		require.NoError(t, err)
+		cbj, err := address.GenerateAddress(address.TestnetID, proposals[j].SmesherID().Bytes())
+		require.NoError(t, err)
 		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
 	})
 	totalWeight := util.WeightFromUint64(0)
 	for i, r := range block.Rewards {
-		require.Equal(t, types.BytesToAddress(proposals[i].SmesherID().Bytes()), r.Coinbase)
+		addrBytes, err := address.GenerateAddress(address.TestnetID, proposals[i].SmesherID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, addrBytes, r.Coinbase)
 		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3

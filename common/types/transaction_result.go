@@ -1,6 +1,9 @@
 package types
 
-import "github.com/spacemeshos/go-spacemesh/log"
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
+	"github.com/spacemeshos/go-spacemesh/log"
+)
 
 // TransactionStatus ...
 type TransactionStatus uint8
@@ -35,7 +38,7 @@ type TransactionResult struct {
 	Layer   LayerID
 	// Addresses contains all updated addresses.
 	// For genesis this will be either one or two addresses.
-	Addresses []Address
+	Addresses []address.Address
 }
 
 // MarshalLogObject implements encoding for the tx result.

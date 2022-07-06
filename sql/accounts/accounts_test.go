@@ -6,10 +6,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func genSeq(address types.Address, n int) []*types.Account {
+func genSeq(address address.Address, n int) []*types.Account {
 	seq := []*types.Account{}
 	for i := 1; i <= n; i++ {
 		seq = append(seq, &types.Account{Address: address, Layer: types.NewLayerID(uint32(i)), Balance: uint64(i)})
@@ -18,7 +19,7 @@ func genSeq(address types.Address, n int) []*types.Account {
 }
 
 func TestUpdate(t *testing.T) {
-	address := types.Address{1, 2, 3}
+	address := address.Address{1, 2, 3}
 	db := sql.InMemory()
 	seq := genSeq(address, 2)
 	for _, update := range seq {
@@ -31,7 +32,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestHas(t *testing.T) {
-	address := types.Address{1, 2, 3}
+	address := address.Address{1, 2, 3}
 	db := sql.InMemory()
 	has, err := Has(db, address)
 	require.NoError(t, err)
@@ -46,7 +47,7 @@ func TestHas(t *testing.T) {
 }
 
 func TestRevert(t *testing.T) {
-	address := types.Address{1, 1}
+	address := address.Address{1, 1}
 	seq := genSeq(address, 10)
 	db := sql.InMemory()
 	for _, update := range seq {
@@ -61,7 +62,7 @@ func TestRevert(t *testing.T) {
 
 func TestAll(t *testing.T) {
 	db := sql.InMemory()
-	addresses := []types.Address{{1, 1}, {2, 2}, {3, 3}}
+	addresses := []address.Address{{1, 1}, {2, 2}, {3, 3}}
 	n := []int{10, 7, 20}
 	for i, address := range addresses {
 		for _, update := range genSeq(address, n[i]) {

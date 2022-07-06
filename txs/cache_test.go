@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
@@ -22,12 +23,12 @@ type testCache struct {
 
 type testAcct struct {
 	signer         *signing.EdSigner
-	principal      types.Address
+	principal      address.Address
 	nonce, balance uint64
 }
 
-func getStateFunc(states map[types.Address]*testAcct) stateFunc {
-	return func(addr types.Address) (uint64, uint64) {
+func getStateFunc(states map[address.Address]*testAcct) stateFunc {
+	return func(addr address.Address) (uint64, uint64) {
 		st := states[addr]
 		return st.nonce, st.balance
 	}
@@ -74,7 +75,7 @@ func checkNoTX(t *testing.T, c *cache, tid types.TransactionID) {
 	require.Nil(t, c.Get(tid))
 }
 
-func checkMempool(t *testing.T, c *cache, expected map[types.Address][]*txtypes.NanoTX) {
+func checkMempool(t *testing.T, c *cache, expected map[address.Address][]*txtypes.NanoTX) {
 	t.Helper()
 	mempool := c.GetMempool()
 	require.Len(t, mempool, len(expected))
@@ -83,7 +84,7 @@ func checkMempool(t *testing.T, c *cache, expected map[types.Address][]*txtypes.
 	}
 }
 
-func checkProjection(t *testing.T, c *cache, addr types.Address, nonce, balance uint64) {
+func checkProjection(t *testing.T, c *cache, addr address.Address, nonce, balance uint64) {
 	t.Helper()
 	pNonce, pBalance := c.GetProjection(addr)
 	require.Equal(t, nonce, pNonce)
@@ -98,12 +99,13 @@ func toNanoTXs(mtxs []*types.MeshTransaction) []*txtypes.NanoTX {
 	return ntxs
 }
 
-func createState(t *testing.T, numAccounts int) map[types.Address]*testAcct {
+func createState(t *testing.T, numAccounts int) map[address.Address]*testAcct {
 	t.Helper()
-	accounts := make(map[types.Address]*testAcct)
+	accounts := make(map[address.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
 		signer := signing.NewEdSigner()
-		principal := types.GenerateAddress(signer.PublicKey().Bytes())
+		principal, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+		require.NoError(t, err)
 		accounts[principal] = &testAcct{
 			signer:    signer,
 			principal: principal,
@@ -114,7 +116,7 @@ func createState(t *testing.T, numAccounts int) map[types.Address]*testAcct {
 	return accounts
 }
 
-func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*testAcct) {
+func createCache(t *testing.T, numAccounts int) (*testCache, map[address.Address]*testAcct) {
 	t.Helper()
 	accounts := createState(t, numAccounts)
 	return createTestCache(t, getStateFunc(accounts)), accounts
@@ -123,13 +125,14 @@ func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*
 func createSingleAccountTestCache(t *testing.T) (*testCache, *testAcct) {
 	t.Helper()
 	signer := signing.NewEdSigner()
-	principal := types.GenerateAddress(signer.PublicKey().Bytes())
+	principal, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	ta := &testAcct{signer: signer, principal: principal, nonce: uint64(rand.Int63n(1000)), balance: defaultBalance}
-	states := map[types.Address]*testAcct{principal: ta}
+	states := map[address.Address]*testAcct{principal: ta}
 	return createTestCache(t, getStateFunc(states)), ta
 }
 
-func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, accountTXs map[types.Address][]*types.MeshTransaction, totalPending int) {
+func buildCache(t *testing.T, tc *testCache, accounts map[address.Address]*testAcct, accountTXs map[address.Address][]*types.MeshTransaction, totalPending int) {
 	t.Helper()
 	allPending := make([]*types.MeshTransaction, 0, totalPending)
 	for principal, ta := range accounts {
@@ -141,7 +144,7 @@ func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcc
 	tc.mockTP.EXPECT().GetAllPending().Return(allPending, nil)
 	require.NoError(t, tc.BuildFromScratch())
 
-	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
+	expectedMempool := make(map[address.Address][]*txtypes.NanoTX)
 	for principal, ta := range accounts {
 		if mtxs, ok := accountTXs[principal]; ok {
 			num := len(mtxs)
@@ -177,9 +180,9 @@ func buildSingleAccountCache(t *testing.T, tc *testCache, ta *testAcct, mtxs []*
 		checkTX(t, tc.cache, mtx)
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	var expectedMempool map[types.Address][]*txtypes.NanoTX
+	var expectedMempool map[address.Address][]*txtypes.NanoTX
 	if len(mtxs) > 0 {
-		expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+		expectedMempool = map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	}
 	checkMempool(t, tc.cache, expectedMempool)
 	return newNextNonce, newBalance
@@ -204,7 +207,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 		checkTX(t, tc.cache, mtx)
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
 
 	// tx0 and tx1 got packed into a block
@@ -228,7 +231,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	// mempool will only include transactions that are not in proposals/blocks
-	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[3:])}
+	expectedMempool = map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[3:])}
 	checkMempool(t, tc.cache, expectedMempool)
 
 	// the block with tx0 and tx1 is applied.
@@ -304,7 +307,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 
 	// mempool will only include transactions that are not in proposals/blocks
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[2:])}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[2:])}
 	checkMempool(t, tc.cache, expectedMempool)
 
 	// block0 is applied.
@@ -361,7 +364,7 @@ func TestCache_Account_TooManyNonce(t *testing.T) {
 		newBalance -= mtx.Spending()
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[:last])}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[:last])}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -384,7 +387,7 @@ func TestCache_Account_TooManySameNonceTXs(t *testing.T) {
 
 	best := mtxs[cutoff]
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-best.Spending())
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(best)}}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(best)}}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -441,7 +444,7 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 	checkNoTX(t, tc.cache, oneTooMany.ID)
 
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -463,7 +466,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior(t *testing.T) {
 	checkTX(t, tc.cache, better)
 	checkNoTX(t, tc.cache, oldOne.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-better.Spending())
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -485,7 +488,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 		checkNoTX(t, tc.cache, mtx.ID)
 	}
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, 0)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
 	checkMempool(t, tc.cache, expectedMempool)
 	require.True(t, tc.cache.MoreInDB(ta.principal))
 }
@@ -525,7 +528,7 @@ func TestCache_Account_Add_NonceTooBig(t *testing.T) {
 		newBalance -= mtx.Spending()
 	}
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+2, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -556,7 +559,7 @@ func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 	require.ErrorIs(t, tc.Add(&spender.Transaction, spender.Received, nil), errInsufficientBalance)
 	checkNoTX(t, tc.cache, spender.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -577,7 +580,7 @@ func TestCache_Account_Add_OutOfOrder(t *testing.T) {
 	checkNoTX(t, tc.cache, mtxs[2].ID)
 	require.True(t, tc.cache.MoreInDB(ta.principal))
 	checkProjection(t, tc.cache, ta.principal, mtxs[0].Nonce.Counter+1, ta.balance-mtxs[0].Spending())
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtxs[0])}}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtxs[0])}}
 	checkMempool(t, tc.cache, expectedMempool)
 
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[1].Nonce.Counter+1).Return(pending, nil)
@@ -590,7 +593,7 @@ func TestCache_Account_Add_OutOfOrder(t *testing.T) {
 		newBalance -= mtx.Spending()
 	}
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+uint64(len(mtxs)), newBalance)
-	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	expectedMempool = map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -651,7 +654,7 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 		newBalance -= pending[i].Spending()
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(pending[:maxTXsPerAcct])}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(pending[:maxTXsPerAcct])}
 	checkMempool(t, tc.cache, expectedMempool)
 	require.True(t, tc.MoreInDB(ta.principal))
 }
@@ -672,7 +675,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 		checkNoTX(t, tc.cache, p.ID)
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
 	checkMempool(t, tc.cache, expectedMempool)
 
 	// apply lid
@@ -703,7 +706,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 		newBalance -= p.Spending()
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(pending)}
+	expectedMempool = map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(pending)}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -722,7 +725,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	require.ErrorIs(t, tc.Add(&better.Transaction, better.Received, nil), errInsufficientBalance)
 	checkNoTX(t, tc.cache, better.ID)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
 
 	// apply lid
@@ -747,7 +750,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, 0)
-	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
+	expectedMempool = map[address.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
@@ -825,13 +828,13 @@ func TestCache_Account_TXsAppliedOutOfOrder(t *testing.T) {
 	require.ErrorIs(t, warns[0], errNonceNotInOrder)
 	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	expectedMempool := map[address.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
 func TestCache_BuildFromScratch(t *testing.T) {
 	tc, accounts := createCache(t, 1000)
-	mtxs := make(map[types.Address][]*types.MeshTransaction)
+	mtxs := make(map[address.Address][]*types.MeshTransaction)
 	totalNumTXs := 0
 	for principal, ta := range accounts {
 		numTXs := uint64(rand.Intn(100))
@@ -854,7 +857,7 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 	// create too many nonce for each account
 	numTXsEach := maxTXsPerAcct + 1
 	totalNumTXs := numAccounts * numTXsEach
-	byAddrAndNonce := make(map[types.Address][]*types.MeshTransaction)
+	byAddrAndNonce := make(map[address.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
 		minBalance := uint64(numTXsEach) * (defaultAmount + defaultFee)
 		if ta.balance < minBalance {
@@ -872,7 +875,7 @@ func TestCache_Add(t *testing.T) {
 	tc, accounts := createCache(t, 1000)
 	buildCache(t, tc, accounts, nil, 0)
 
-	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
+	expectedMempool := make(map[address.Address][]*txtypes.NanoTX)
 	for principal, ta := range accounts {
 		numTXs := uint64(rand.Intn(100))
 		if numTXs == 0 {
@@ -897,9 +900,9 @@ func TestCache_Add(t *testing.T) {
 	checkMempool(t, tc.cache, expectedMempool)
 }
 
-func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, maxTX int) map[types.Address][]*types.MeshTransaction {
+func buildSmallCache(t *testing.T, tc *testCache, accounts map[address.Address]*testAcct, maxTX int) map[address.Address][]*types.MeshTransaction {
 	t.Helper()
-	mtxsByAccount := make(map[types.Address][]*types.MeshTransaction)
+	mtxsByAccount := make(map[address.Address][]*types.MeshTransaction)
 	totalNumTXs := 0
 	for principal, ta := range accounts {
 		numTXs := uint64(rand.Intn(maxTX))
@@ -1108,7 +1111,7 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 
 	// now revert
 	allPending := make([]*types.MeshTransaction, 0, 10*len(mtxsByAccount))
-	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
+	expectedMempool := make(map[address.Address][]*txtypes.NanoTX)
 	for principal, mtxs := range mtxsByAccount {
 		allPending = append(allPending, mtxs...)
 		expectedMempool[principal] = toNanoTXs(mtxs)
@@ -1172,7 +1175,7 @@ func TestCache_GetMempool(t *testing.T) {
 			checkTX(t, tc.cache, mtxs[2])
 		}
 	}
-	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
+	expectedMempool := make(map[address.Address][]*txtypes.NanoTX)
 	for principal, mtxs := range mtxsByAccount {
 		if len(mtxs) > 1 {
 			expectedMempool[principal] = toNanoTXs(mtxs[1:])

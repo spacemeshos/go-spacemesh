@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -33,11 +34,11 @@ const (
 )
 
 func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	dest := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	dest := address.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
 	return newTxWthRecipient(t, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTxWthRecipient(t *testing.T, dest address.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
 		sdk.WithGasPrice(fee),
@@ -50,7 +51,9 @@ func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, f
 	tx.MaxSpend = amount
 	tx.GasPrice = fee
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	var err error
+	tx.Principal, err = address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	return &tx
 }
 
@@ -97,7 +100,8 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		addr := types.BytesToAddress(signer.PublicKey().Bytes())
+		addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+		require.NoError(t, err)
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -278,7 +282,8 @@ func TestSelectProposalTXs(t *testing.T) {
 	bid := types.BlockID{100}
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		addr := types.GenerateAddress(signer.PublicKey().Bytes())
+		addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+		require.NoError(t, err)
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
@@ -309,7 +314,8 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 	tcs := createTestState(t, gasLimit)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		addr := types.GenerateAddress(signer.PublicKey().Bytes())
+		addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+		require.NoError(t, err)
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
@@ -331,7 +337,8 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	expected := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		addr := types.GenerateAddress(signer.PublicKey().Bytes())
+		addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+		require.NoError(t, err)
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
@@ -354,7 +361,8 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.GenerateAddress(signer.PublicKey().Bytes())
+	addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	numTXs := numTXsInProposal * 2
 	numInBlock := numTXsInProposal
 	lid := types.NewLayerID(97)
@@ -386,9 +394,11 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	)
 	tcs := createConservativeState(t)
 	signer1 := signing.NewEdSigner()
-	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
+	addr1, err := address.GenerateAddress(address.TestnetID, signer1.PublicKey().Bytes())
+	require.NoError(t, err)
 	signer2 := signing.NewEdSigner()
-	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
+	addr2, err := address.GenerateAddress(address.TestnetID, signer2.PublicKey().Bytes())
+	require.NoError(t, err)
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
 	tcs.mvm.EXPECT().GetBalance(addr1).Return(defaultBalance*100, nil).Times(1)
@@ -416,7 +426,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	}
 	got := tcs.SelectProposalTXs(1)
 	// the odds of picking just one principal is 2^30
-	chosen := make(map[types.Address][]*types.Transaction)
+	chosen := make(map[address.Address][]*types.Transaction)
 	for _, tid := range got {
 		tx := allTXs[tid]
 		chosen[tx.Principal] = append(chosen[tx.Principal], tx)
@@ -436,7 +446,8 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 func TestGetProjection(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx1 := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -453,7 +464,8 @@ func TestGetProjection(t *testing.T) {
 func TestAddToCache(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -466,18 +478,20 @@ func TestAddToCache(t *testing.T) {
 func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	err := tcs.AddToCache(tx)
+	err = tcs.AddToCache(tx)
 	require.ErrorIs(t, err, errInsufficientBalance)
 }
 
 func TestGetMeshTransaction(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -521,11 +535,14 @@ func TestGetTransactionsByAddress(t *testing.T) {
 	tcs := createConservativeState(t)
 
 	signer1 := signing.NewEdSigner()
-	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
+	addr1, err := address.GenerateAddress(address.TestnetID, signer1.PublicKey().Bytes())
+	require.NoError(t, err)
 	signer2 := signing.NewEdSigner()
-	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
+	addr2, err := address.GenerateAddress(address.TestnetID, signer2.PublicKey().Bytes())
+	require.NoError(t, err)
 	signer3 := signing.NewEdSigner()
-	addr3 := types.GenerateAddress(signer3.PublicKey().Bytes())
+	addr3, err := address.GenerateAddress(address.TestnetID, signer3.PublicKey().Bytes())
+	require.NoError(t, err)
 
 	mtxs, err := tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(100), addr1)
 	require.NoError(t, err)
@@ -577,7 +594,8 @@ func TestApplyLayer(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase, err := address.GenerateAddress(address.TestnetID, types.RandomBytes(address.AddressLength))
+	require.NoError(t, err)
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -642,7 +660,8 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance-(tx.Spending()), nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)
 	}
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase, err := address.GenerateAddress(address.TestnetID, types.RandomBytes(address.AddressLength))
+	require.NoError(t, err)
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -691,7 +710,8 @@ func TestApplyLayer_VMError(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase, err := address.GenerateAddress(address.TestnetID, types.RandomBytes(address.AddressLength))
+	require.NoError(t, err)
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -789,10 +809,11 @@ func TestConsistentHandling(t *testing.T) {
 			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
 		}
 		for i, signer := range signers {
-			address := types.BytesToAddress(signer.PublicKey().Bytes())
+			addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+			require.NoError(t, err)
 			expect := nonces[i]
 			for i, instance := range instances {
-				nonce, _ := instance.GetProjection(address)
+				nonce, _ := instance.GetProjection(addr)
 				require.Equal(t, int(expect), int(nonce), "instance=%d", i)
 			}
 		}

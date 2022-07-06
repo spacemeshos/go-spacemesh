@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
@@ -20,16 +20,16 @@ type StagedCache struct {
 }
 
 // Get a copy of the Account state for the address.
-func (ss *StagedCache) Get(address Address) (Account, error) {
-	sacc, exist := ss.cache[address]
+func (ss *StagedCache) Get(addr Address) (Account, error) {
+	sacc, exist := ss.cache[addr]
 	if exist {
 		return sacc.Account, nil
 	}
-	account, err := accounts.Latest(ss.db, types.Address(address))
+	account, err := accounts.Latest(ss.db, address.Address(addr))
 	if err != nil {
 		return Account{}, err
 	}
-	ss.cache[address] = stagedAccount{Account: account}
+	ss.cache[addr] = stagedAccount{Account: account}
 	return account, nil
 }
 

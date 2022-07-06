@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -198,7 +199,7 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 }
 
 // DiscardNonceBelow sets the applied field to `stateDiscarded` for transactions with nonce lower than specified.
-func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) error {
+func DiscardNonceBelow(db sql.Executor, address address.Address, nonce uint64) error {
 	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where principal = ?1 and nonce < ?2 and applied != ?6`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
@@ -215,7 +216,7 @@ func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) err
 }
 
 // DiscardByAcctNonce sets the applied field to `stateDiscarded` and layer to `lid` for transactions with addr and nonce.
-func DiscardByAcctNonce(db sql.Executor, applied types.TransactionID, lid types.LayerID, addr types.Address, nonce uint64) error {
+func DiscardByAcctNonce(db sql.Executor, applied types.TransactionID, lid types.LayerID, addr address.Address, nonce uint64) error {
 	_, err := db.Exec(`update transactions set applied = ?4, layer = ?5, block = ?6 where principal = ?1 and nonce = ?2 and id != ?3`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, addr.Bytes())
@@ -359,7 +360,7 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 }
 
 // GetByAddress finds all transactions for an address.
-func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+func GetByAddress(db sql.Executor, from, to types.LayerID, address address.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
 	if _, err := db.Exec(`
 		select tx, header, layer, block, timestamp, applied, id from transactions
@@ -400,7 +401,7 @@ func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
 }
 
 // GetAcctPendingFromNonce get all pending transactions with nonce <= `from` for the given address.
-func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
+func GetAcctPendingFromNonce(db sql.Executor, address address.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
 		select tx, header, layer, block, timestamp, id from transactions
 		where applied = ?1 and principal = ?2 and nonce >= ?3 order by nonce asc`,

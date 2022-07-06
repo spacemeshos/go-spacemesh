@@ -6,7 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 )
 
 // Context serves 2 purposes:
@@ -125,8 +125,8 @@ func (c *Context) Fee() uint64 {
 }
 
 // Updated list of addresses.
-func (c *Context) Updated() []types.Address {
-	rst := make([]types.Address, len(c.touched)+1)
+func (c *Context) Updated() []address.Address {
+	rst := make([]address.Address, len(c.touched)+1)
 	rst = append(rst, c.Account.Address)
 	copy(rst[1:], c.touched)
 	return rst

@@ -10,6 +10,7 @@ import (
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
 
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -89,7 +90,7 @@ var EmptyATXID = &ATXID{}
 type ActivationTxHeader struct {
 	NIPostChallenge
 	id       *ATXID // non-exported cache of the ATXID
-	Coinbase Address
+	Coinbase address.Address
 	NumUnits uint
 }
 
@@ -185,7 +186,7 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase address.Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{

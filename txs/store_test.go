@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -101,7 +102,8 @@ func TestStore_ApplyLayer(t *testing.T) {
 
 	lid := types.NewLayerID(233)
 	bid := types.BlockID{1, 2, 3}
-	principal := types.BytesToAddress(signer.PublicKey().Bytes())
+	principal, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
+	require.NoError(t, err)
 	applied := txs[numTXs-1]
 	require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lid, bid, *applied))))
 

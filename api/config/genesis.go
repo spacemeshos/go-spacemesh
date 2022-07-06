@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -16,7 +17,7 @@ func (g *GenesisConfig) ToAccounts() []types.Account {
 	var rst []types.Account
 	for addr, balance := range g.Accounts {
 		rst = append(rst, types.Account{
-			Address: types.HexToAddress(addr),
+			Address: address.HexToAddress(addr),
 			Balance: balance,
 		})
 	}
@@ -63,12 +64,20 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	if err != nil {
 		panic("could not build ed signer")
 	}
+	addr1, err := address.GenerateAddress(address.TestnetID, acc1Signer.PublicKey().Bytes())
+	if err != nil {
+		panic("could not generate address: " + err.Error())
+	}
+	addr2, err := address.GenerateAddress(address.TestnetID, acc2Signer.PublicKey().Bytes())
+	if err != nil {
+		panic("could not generate address: " + err.Error())
+	}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
 	g.Accounts = map[string]uint64{
-		types.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
-		types.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		addr1.String(): 100000000000000000,
+		addr2.String(): 100000000000000000,
 	}
 
 	return &g

@@ -10,9 +10,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
+
+	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
+	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -74,11 +76,11 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(types.Address, PostSetupOpts) error
+	StartSmeshing(address.Address, PostSetupOpts) error
 	StopSmeshing(bool) error
 	SmesherID() types.NodeID
-	Coinbase() types.Address
-	SetCoinbase(coinbase types.Address)
+	Coinbase() address.Address
+	SetCoinbase(coinbase address.Address)
 	MinGas() uint64
 	SetMinGas(value uint64)
 }
@@ -88,7 +90,7 @@ var _ SmeshingProvider = (*Builder)(nil)
 
 // Config defines configuration for Builder.
 type Config struct {
-	CoinbaseAccount types.Address
+	CoinbaseAccount address.Address
 	GoldenATXID     types.ATXID
 	LayersPerEpoch  uint32
 }
@@ -103,7 +105,7 @@ type Builder struct {
 	signer
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
-	coinbaseAccount   types.Address
+	coinbaseAccount   address.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 	cdb               *datastore.CachedDB
@@ -193,7 +195,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase address.Address, opts PostSetupOpts) error {
 	b.mu.Lock()
 	if b.exited != nil {
 		select {
@@ -410,14 +412,14 @@ func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
 // the rewards for blocks made by this miner will go to this address.
-func (b *Builder) SetCoinbase(rewardAddress types.Address) {
+func (b *Builder) SetCoinbase(rewardAddress address.Address) {
 	b.accountLock.Lock()
 	defer b.accountLock.Unlock()
 	b.coinbaseAccount = rewardAddress
 }
 
 // Coinbase returns the current coinbase address.
-func (b *Builder) Coinbase() types.Address {
+func (b *Builder) Coinbase() address.Address {
 	b.accountLock.RLock()
 	defer b.accountLock.RUnlock()
 	return b.coinbaseAccount

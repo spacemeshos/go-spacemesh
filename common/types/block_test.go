@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
@@ -16,7 +17,8 @@ func TestBlock_IDSize(t *testing.T) {
 }
 
 func TestReward(t *testing.T) {
-	addr := BytesToAddress(RandomBytes(AddressLength))
+	addr, err := address.GenerateAddress(address.TestnetID, RandomBytes(address.AddressLength))
+	require.NoError(t, err)
 	weight := util.WeightFromUint64(1234).Div(util.WeightFromUint64(7))
 	r := AnyReward{
 		Coinbase: addr,

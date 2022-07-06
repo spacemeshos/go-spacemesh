@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -290,7 +291,11 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		persisted types.LayerID
 	)
 	if len(in.Address) > 0 {
-		addr := types.BytesToAddress(in.Address)
+		addr, err := address.BytesToAddress(in.Address) // todo 3315 replace to string
+		if err != nil {
+			log.Error(fmt.Sprintf("failed to parse in.Address address: %v", err))
+			return status.Error(codes.InvalidArgument, "invalid address")
+		}
 		filter.Address = &addr
 	}
 	if len(in.Id) > 0 {

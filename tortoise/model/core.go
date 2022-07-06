@@ -3,10 +3,12 @@ package model
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -23,16 +25,17 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger log.Log) *core {
+func newCore(rng *rand.Rand, id string, logger log.Log, networkID address.Network) *core {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 	c := &core{
-		id:      id,
-		logger:  logger,
-		rng:     rng,
-		cdb:     cdb,
-		beacons: newBeaconStore(),
-		units:   units,
-		signer:  signing.NewEdSignerFromRand(rng),
+		networkID: networkID,
+		id:        id,
+		logger:    logger,
+		rng:       rng,
+		cdb:       cdb,
+		beacons:   newBeaconStore(),
+		units:     units,
+		signer:    signing.NewEdSignerFromRand(rng),
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
@@ -52,6 +55,9 @@ type core struct {
 	cdb      *datastore.CachedDB
 	beacons  *beaconStore
 	tortoise *tortoise.Tortoise
+
+	// networkID which is used to generate the addresses.
+	networkID address.Network
 
 	// generated on setup
 	units  uint32
@@ -135,7 +141,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			EndTick:    2,
 			PubLayerID: ev.LayerID,
 		}
-		atx := types.NewActivationTx(nipost, types.BytesToAddress(c.signer.PublicKey().Bytes()), nil, uint(c.units), nil)
+		addr, err := address.GenerateAddress(c.networkID, c.signer.PublicKey().Bytes()) // todo 3315
+		if err != nil {
+			panic(fmt.Sprintf("failed to generate address on MessageLayerEnd: %v", err))
+		}
+		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
 
 		c.refBallot = nil
 		c.atx = atx.ID()

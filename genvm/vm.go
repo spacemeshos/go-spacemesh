@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
@@ -127,7 +128,7 @@ func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 }
 
 // GetBalance returns balance for an address.
-func (v *VM) GetBalance(address types.Address) (uint64, error) {
+func (v *VM) GetBalance(address address.Address) (uint64, error) {
 	account, err := accounts.Latest(v.db, address)
 	if err != nil {
 		return 0, err

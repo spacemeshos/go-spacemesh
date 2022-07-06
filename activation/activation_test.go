@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -34,7 +35,7 @@ var (
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.BytesToNodeID(pub)
 	otherNodeID = types.BytesToNodeID([]byte("00000"))
-	coinbase    = types.HexToAddress("33333")
+	coinbase, _ = address.GenerateAddress(address.TestnetID, []byte("33333"))
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
@@ -269,7 +270,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	builder := newBuilder(t, cdb, atxHdlr)
 
-	coinbase := types.Address{1, 1, 1}
+	coinbase := address.Address{byte(address.TestnetID), 1, 1, 1}
 	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
@@ -292,7 +293,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+		require.NoError(t, builder.StartSmeshing(address.Address{}, PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
@@ -627,7 +628,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	id := types.BytesToNodeID([]byte("aaaaaa"))
-	coinbase := types.HexToAddress("0xaaa")
+	coinbase, err := address.GenerateAddress(address.TestnetID, []byte("0xaaa"))
+	require.NoError(t, err)
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
@@ -652,7 +654,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	atx := newActivationTx(types.BytesToNodeID([]byte("aaaaaa")), 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
-	err := atxHdlr.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
+	err = atxHdlr.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{
@@ -874,7 +876,7 @@ func newActivationTx(
 	positioningATX types.ATXID,
 	pubLayerID types.LayerID,
 	startTick, numTicks uint64,
-	coinbase types.Address,
+	coinbase address.Address,
 	numUnints uint,
 	nipost *types.NIPost,
 ) *types.ActivationTx {

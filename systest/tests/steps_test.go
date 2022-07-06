@@ -10,6 +10,8 @@ import (
 	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -117,11 +119,11 @@ func TestStepTransactions(t *testing.T) {
 				"count", n,
 			)
 			for i := 0; i < n; i++ {
-				receiver := types.Address{}
+				receiver := address.Address{}
 				rng.Read(receiver[:])
 				_, err := client.submit(tctx, wallet.Spend(
 					client.account.PrivateKey,
-					types.Address(receiver),
+					address.Address(receiver),
 					rng.Uint64()%amountLimit,
 					types.Nonce{Counter: nonce},
 				))

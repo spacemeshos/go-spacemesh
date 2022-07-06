@@ -1,12 +1,15 @@
 package types
 
-import "github.com/spacemeshos/go-spacemesh/log"
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
+	"github.com/spacemeshos/go-spacemesh/log"
+)
 
 // TxHeader is a transaction header, with some of the fields defined directly in the tx
 // and the rest is computed by the template based on immutable state and method arguments.
 type TxHeader struct {
-	Principal   Address
-	Template    Address
+	Principal   address.Address
+	Template    address.Address
 	Method      uint8
 	Nonce       Nonce
 	LayerLimits LayerLimits

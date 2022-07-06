@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -54,7 +55,8 @@ func createTestMesh(t *testing.T) *testMesh {
 func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.NodeID, valid bool) *types.Block {
 	t.Helper()
 	txIDs := types.RandomTXSet(numTXs)
-	coinbase := types.BytesToAddress(nodeID[:])
+	coinbase, err := address.GenerateAddress(address.TestnetID, nodeID[:])
+	require.NoError(t, err)
 	weight := util.WeightFromFloat64(312.13)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{

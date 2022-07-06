@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
@@ -56,7 +57,7 @@ func (s *sameNonceTXs) maxSpending() uint64 {
 }
 
 type accountCache struct {
-	addr         types.Address
+	addr         address.Address
 	txsByNonce   []*sameNonceTXs
 	startNonce   uint64
 	startBalance uint64
@@ -500,7 +501,7 @@ func (ac *accountCache) shouldEvict() bool {
 	return len(ac.txsByNonce) == 0 && !ac.moreInDB
 }
 
-type stateFunc func(types.Address) (uint64, uint64)
+type stateFunc func(address.Address) (uint64, uint64)
 
 type cache struct {
 	logger log.Log
@@ -508,7 +509,7 @@ type cache struct {
 	stateF stateFunc
 
 	mu        sync.Mutex
-	pending   map[types.Address]*accountCache
+	pending   map[address.Address]*accountCache
 	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with accountCache instances
 }
 
@@ -517,13 +518,13 @@ func newCache(tp txProvider, s stateFunc, logger log.Log) *cache {
 		logger:    logger,
 		tp:        tp,
 		stateF:    s,
-		pending:   make(map[types.Address]*accountCache),
+		pending:   make(map[address.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
 	}
 }
 
-func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*txtypes.NanoTX {
-	byPrincipal := make(map[types.Address]map[uint64][]*txtypes.NanoTX)
+func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[address.Address]map[uint64][]*txtypes.NanoTX {
+	byPrincipal := make(map[address.Address]map[uint64][]*txtypes.NanoTX)
 	for _, mtx := range mtxs {
 		principal := mtx.Principal
 		if _, ok := byPrincipal[principal]; !ok {
@@ -560,8 +561,8 @@ func (c *cache) BuildFromTXs(mtxs []*types.MeshTransaction, blockSeed []byte) er
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.pending = make(map[types.Address]*accountCache)
-	toCleanup := make(map[types.Address]struct{})
+	c.pending = make(map[address.Address]*accountCache)
+	toCleanup := make(map[address.Address]struct{})
 	for _, tx := range mtxs {
 		toCleanup[tx.Principal] = struct{}{}
 	}
@@ -586,7 +587,7 @@ func (c *cache) BuildFromTXs(mtxs []*types.MeshTransaction, blockSeed []byte) er
 	return nil
 }
 
-func (c *cache) createAcctIfNotPresent(addr types.Address) {
+func (c *cache) createAcctIfNotPresent(addr address.Address) {
 	if _, ok := c.pending[addr]; !ok {
 		nextNonce, balance := c.stateF(addr)
 		c.logger.With().Debug("created account with nonce/balance",
@@ -603,7 +604,7 @@ func (c *cache) createAcctIfNotPresent(addr types.Address) {
 	}
 }
 
-func (c *cache) MoreInDB(addr types.Address) bool {
+func (c *cache) MoreInDB(addr address.Address) bool {
 	acct, ok := c.pending[addr]
 	if !ok {
 		return false
@@ -611,7 +612,7 @@ func (c *cache) MoreInDB(addr types.Address) bool {
 	return acct.moreInDB
 }
 
-func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
+func (c *cache) cleanupAccounts(accounts map[address.Address]struct{}) {
 	for addr := range accounts {
 		if _, ok := c.pending[addr]; ok && c.pending[addr].shouldEvict() {
 			delete(c.pending, addr)
@@ -625,7 +626,7 @@ func (c *cache) Add(tx *types.Transaction, received time.Time, blockSeed []byte)
 
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
-	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
+	defer c.cleanupAccounts(map[address.Address]struct{}{principal: {}})
 	if err := c.pending[principal].add(c.logger, c.tp, tx, received, blockSeed); err != nil {
 		return err
 	}
@@ -708,13 +709,13 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	toCleanup := make(map[types.Address]struct{})
+	toCleanup := make(map[address.Address]struct{})
 	for _, rst := range results {
 		toCleanup[rst.Principal] = struct{}{}
 	}
 	defer c.cleanupAccounts(toCleanup)
 
-	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
+	byPrincipal := make(map[address.Address]map[uint64]types.TransactionWithResult)
 	for _, rst := range results {
 		principal := rst.Principal
 		if _, ok := byPrincipal[principal]; !ok {
@@ -764,7 +765,7 @@ func (c *cache) RevertToLayer(revertTo types.LayerID) error {
 
 // GetProjection returns the projected nonce and balance for an account, including
 // pending transactions that are paced in proposals/blocks but not yet applied to the state.
-func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
+func (c *cache) GetProjection(addr address.Address) (uint64, uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -775,11 +776,11 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that eligible for a proposal/block.
-func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
+func (c *cache) GetMempool() map[address.Address][]*txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	all := make(map[types.Address][]*txtypes.NanoTX)
+	all := make(map[address.Address][]*txtypes.NanoTX)
 	for addr, accCache := range c.pending {
 		txs := accCache.getMempool(c.logger)
 		if len(txs) > 0 {
@@ -820,7 +821,7 @@ func (c *cache) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTra
 
 // GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
 // Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
-func (c *cache) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+func (c *cache) GetTransactionsByAddress(from, to types.LayerID, address address.Address) ([]*types.MeshTransaction, error) {
 	return c.tp.GetByAddress(from, to, address)
 }
 
