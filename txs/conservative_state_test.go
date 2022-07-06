@@ -153,7 +153,7 @@ func TestSelectBlockTXs(t *testing.T) {
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
 	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
 	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
 	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	// change proposal's mesh hash
 	for _, p := range proposals {
@@ -249,7 +249,7 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), types.RandomHash()))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), types.RandomHash()))
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.ErrorIs(t, err, errNodeHasBadMeshHash)
 	require.Nil(t, got)

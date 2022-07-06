@@ -489,11 +489,13 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	processed, err := msh.GetProcessedLayer()
+	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	verified, err := msh.GetVerifiedLayer()
+	// FIXME latest layer in state is not exactly the latest verified layer
+	// https://github.com/spacemeshos/go-spacemesh/issues/3318
+	verified := msh.LatestLayerInState()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
