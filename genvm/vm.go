@@ -112,6 +112,11 @@ func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 	return v.GetStateRoot()
 }
 
+// AccountExists returns true if the address exists, spawned or not.
+func (v *VM) AccountExists(address core.Address) (bool, error) {
+	return accounts.Has(v.db, address)
+}
+
 // GetNonce returns expected next nonce for the address.
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(v.db, address)

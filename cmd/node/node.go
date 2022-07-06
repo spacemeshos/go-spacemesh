@@ -458,14 +458,21 @@ func (app *App) initServices(ctx context.Context,
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
 	var verifier blockValidityVerifier
-	msh, recovered, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	if !recovered {
-		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
+	genesisAccts := app.Config.Genesis.ToAccounts()
+	if len(genesisAccts) > 0 {
+		exists, err := state.AccountExists(genesisAccts[0].Address)
+		if err != nil {
+			return fmt.Errorf("failed to check genesis account %v: %w", genesisAccts[0].Address, err)
+		}
+		if !exists {
+			if err = state.ApplyGenesis(genesisAccts); err != nil {
+				return fmt.Errorf("setup genesis: %w", err)
+			}
 		}
 	}
 

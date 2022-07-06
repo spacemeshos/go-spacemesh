@@ -137,7 +137,7 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 		t.trtl.verified = t.cfg.MeshVerified
 		t.trtl.historicallyVerified = t.cfg.MeshVerified
 
-		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
+		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last_layer", t.cfg.MeshProcessed),
 			log.Stringer("historically_verified", t.cfg.MeshVerified),
 		)
