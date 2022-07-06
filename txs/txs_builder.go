@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
@@ -168,7 +169,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 	// we do not want to access database here, as all transactions are already in memory.
 	dbLessCache := &cache{
 		logger:    logger,
-		tp:        &nopTP{},
+		db:        sql.InMemory(),
 		stateF:    stateF,
 		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),

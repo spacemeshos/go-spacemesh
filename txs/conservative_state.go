@@ -10,6 +10,7 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -65,7 +66,7 @@ func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeS
 	for _, opt := range opts {
 		opt(cs)
 	}
-	cs.cache = newCache(newStore(db), cs.getState, cs.logger)
+	cs.cache = newCache(db, cs.getState, cs.logger)
 	return cs
 }
 
@@ -159,11 +160,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	logger := cs.logger.WithFields(toApply.LayerIndex, toApply.ID())
 	logger.Info("applying layer to conservative state")
 
-	if err := cs.cache.CheckApplyOrder(toApply.LayerIndex); err != nil {
-		return nil, err
-	}
-
-	raw, err := cs.getTXsToApply(toApply)
+	raw, err := cs.getTXsToApply(logger, toApply)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +170,6 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 		raw, toApply.Rewards)
 	if err != nil {
 		logger.With().Error("failed to apply layer txs",
-			toApply.LayerIndex,
 			log.Int("num_failed_txs", len(skipped)),
 			log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
@@ -190,8 +186,8 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	return skipped, nil
 }
 
-func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]types.RawTx, error) {
-	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
+func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block) ([]types.RawTx, error) {
+	mtxs, missing := cs.cache.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
 	}
@@ -201,11 +197,10 @@ func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]types.RawTx,
 		if mtx.State == types.APPLIED {
 			continue
 		}
-		// txs without header were saved by syncer without validation
+		// txs without header were saved by syncing a block without validation
 		if mtx.TxHeader == nil {
-			cs.logger.With().Debug("verifying synced transaction",
+			logger.With().Debug("verifying synced transaction",
 				toApply.ID(),
-				toApply.LayerIndex,
 				mtx.ID,
 			)
 			req := cs.vmState.Validation(mtx.RawTx)
@@ -218,12 +213,12 @@ func (cs *ConservativeState) getTXsToApply(toApply *types.Block) ([]types.RawTx,
 			}
 			mtx.TxHeader = header
 			// updating header also updates principal/nonce indexes
-			if err := cs.tp.AddHeader(mtx.ID, header); err != nil {
+			if err = transactions.AddHeader(cs.db, mtx.ID, header); err != nil {
 				return nil, err
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
 			// transactions can be added successfully
-			if err := cs.cache.Add(&mtx.Transaction, mtx.Received, nil); err != nil {
+			if err = cs.cache.Add(&mtx.Transaction, mtx.Received, nil); err != nil {
 				return nil, err
 			}
 		}
