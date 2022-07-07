@@ -208,7 +208,7 @@ jobs:
 
     - name: Run tests
       timeout-minutes: 60
-      run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity
+      run: cd systest && make run test_name=. size=50 bootstrap=5m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity
 
     - name: Systemtest result
       run: |
