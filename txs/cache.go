@@ -496,17 +496,15 @@ type stateFunc func(types.Address) (uint64, uint64)
 type cache struct {
 	logger log.Log
 	stateF stateFunc
-	db     *sql.Database
 
 	mu        sync.Mutex
 	pending   map[types.Address]*accountCache
 	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with accountCache instances
 }
 
-func newCache(db *sql.Database, s stateFunc, logger log.Log) *cache {
+func newCache(s stateFunc, logger log.Log) *cache {
 	return &cache{
 		logger:    logger,
-		db:        db,
 		stateF:    s,
 		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
@@ -537,8 +535,8 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 }
 
 // buildFromScratch builds the cache from database.
-func (c *cache) buildFromScratch() error {
-	mtxs, err := transactions.GetAllPending(c.db)
+func (c *cache) buildFromScratch(db *sql.Database) error {
+	mtxs, err := transactions.GetAllPending(db)
 	if err != nil {
 		c.logger.Error("failed to get all pending txs", log.Err(err))
 		return err
@@ -610,14 +608,14 @@ func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	}
 }
 
-func (c *cache) Add(tx *types.Transaction, received time.Time, blockSeed []byte) error {
+func (c *cache) Add(db *sql.Database, tx *types.Transaction, received time.Time, blockSeed []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
-	if err := c.pending[principal].add(c.logger, c.db, tx, received, blockSeed); err != nil {
+	if err := c.pending[principal].add(c.logger, db, tx, received, blockSeed); err != nil {
 		return err
 	}
 	return nil
@@ -630,17 +628,9 @@ func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 	return c.cachedTXs[tid]
 }
 
-// HasTx returns true if transaction exists in the cache.
-func (c *cache) HasTx(tid types.TransactionID) (bool, error) {
-	if c.has(tid) {
-		return true, nil
-	}
-
-	has, err := transactions.Has(c.db, tid)
-	if err != nil {
-		return false, fmt.Errorf("has tx: %w", err)
-	}
-	return has, nil
+// Has returns true if transaction exists in the cache.
+func (c *cache) Has(tid types.TransactionID) bool {
+	return c.has(tid)
 }
 
 func (c *cache) has(tid types.TransactionID) bool {
@@ -650,11 +640,11 @@ func (c *cache) has(tid types.TransactionID) bool {
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
-func (c *cache) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+func (c *cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
 	if len(tids) == 0 {
 		return nil
 	}
-	if err := addToProposal(c.db, lid, pid, tids); err != nil {
+	if err := addToProposal(db, lid, pid, tids); err != nil {
 		c.logger.With().Error("failed to link txs to proposal in db", log.Err(err))
 		return err
 	}
@@ -662,11 +652,11 @@ func (c *cache) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, tid
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
-func (c *cache) LinkTXsWithBlock(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *cache) LinkTXsWithBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	if len(tids) == 0 {
 		return nil
 	}
-	if err := addToBlock(c.db, lid, bid, tids); err != nil {
+	if err := addToBlock(db, lid, bid, tids); err != nil {
 		return err
 	}
 	return c.updateLayer(lid, bid, tids)
@@ -691,8 +681,8 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult) ([]error, []error) {
-	if err := checkApplyOrder(c.logger, c.db, lid); err != nil {
+func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult) ([]error, []error) {
+	if err := checkApplyOrder(c.logger, db, lid); err != nil {
 		return nil, []error{err}
 	}
 
@@ -729,11 +719,11 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 			principal,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
-		if err := c.pending[principal].applyLayer(logger, c.db, nextNonce, balance, appliedByNonce); err != nil {
+		if err := c.pending[principal].applyLayer(logger, db, nextNonce, balance, appliedByNonce); err != nil {
 			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
 			warns = append(warns, err)
 		}
-		if err := c.pending[principal].resetAfterApply(logger, c.db, nextNonce, balance, lid); err != nil {
+		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
 			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
 			errs = append(errs, err)
 		}
@@ -741,12 +731,12 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 	return warns, errs
 }
 
-func (c *cache) RevertToLayer(revertTo types.LayerID) error {
-	if err := undoLayers(c.db, revertTo.Add(1)); err != nil {
+func (c *cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
+	if err := undoLayers(db, revertTo.Add(1)); err != nil {
 		return err
 	}
 
-	if err := c.buildFromScratch(); err != nil {
+	if err := c.buildFromScratch(db); err != nil {
 		c.logger.With().Error("failed to build from scratch after revert", log.Err(err))
 		return err
 	}
@@ -780,41 +770,6 @@ func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
 	return all
 }
 
-// AddToDB adds a transaction to the database.
-func (c *cache) AddToDB(tx *types.Transaction, received time.Time) error {
-	return transactions.Add(c.db, tx, received)
-}
-
-// GetMeshTransaction retrieves a tx by its id.
-func (c *cache) GetMeshTransaction(tid types.TransactionID) (*types.MeshTransaction, error) {
-	return transactions.Get(c.db, tid)
-}
-
-// GetMeshTransactions retrieves a list of txs by their id's.
-func (c *cache) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
-	missing := make(map[types.TransactionID]struct{})
-	mtxs := make([]*types.MeshTransaction, 0, len(ids))
-	for _, tid := range ids {
-		var (
-			mtx *types.MeshTransaction
-			err error
-		)
-		if mtx, err = transactions.Get(c.db, tid); err != nil {
-			c.logger.With().Warning("could not get tx", tid, log.Err(err))
-			missing[tid] = struct{}{}
-		} else {
-			mtxs = append(mtxs, mtx)
-		}
-	}
-	return mtxs, missing
-}
-
-// GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
-// Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
-func (c *cache) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return transactions.GetByAddress(c.db, from, to, address)
-}
-
 // checkApplyOrder returns an error if layers were not applied in order.
 func checkApplyOrder(logger log.Log, db *sql.Database, toApply types.LayerID) error {
 	lastApplied, err := layers.GetLastApplied(db)
@@ -829,11 +784,6 @@ func checkApplyOrder(logger log.Log, db *sql.Database, toApply types.LayerID) er
 		return errLayerNotInOrder
 	}
 	return nil
-}
-
-// GetMeshHash gets the aggregated layer hash at the specified layer.
-func (c *cache) GetMeshHash(lid types.LayerID) (types.Hash32, error) {
-	return layers.GetAggregatedHash(c.db, lid)
 }
 
 func addToProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {

@@ -461,9 +461,11 @@ func TestAddToCache(t *testing.T) {
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx))
-	got, err := tcs.HasTx(tx.ID)
+	has := tcs.cache.Has(tx.ID)
+	require.True(t, has)
+	got, err := transactions.Get(tcs.db, tx.ID)
 	require.NoError(t, err)
-	require.True(t, got)
+	require.Equal(t, *tx, got.Transaction)
 }
 
 func TestAddToCache_InsufficientBalance(t *testing.T) {
