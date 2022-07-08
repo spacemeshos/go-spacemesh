@@ -85,9 +85,13 @@ func extractProposalMetadata(
 	return &proposalMetadata{lid: lid, size: len(proposals), mtxs: mtxs, meshHashes: meshHashes}, nil
 }
 
-func getMajorityState(meshHashes map[string]*meshState, numProposals, threshold int) *meshState {
+func getMajorityState(logger log.Log, meshHashes map[string]*meshState, numProposals, threshold int) *meshState {
 	for _, ms := range meshHashes {
-		if ms.count*100 > numProposals*threshold {
+		logger.With().Debug("mesh hash", ms.hash,
+			log.Int("count", ms.count),
+			log.Int("threshold", threshold),
+			log.Int("num_proposals", numProposals))
+		if ms.count*100 >= numProposals*threshold {
 			return ms
 		}
 	}
@@ -108,7 +112,7 @@ func checkStateConsensus(
 		return nil, err
 	}
 
-	ms := getMajorityState(md.meshHashes, md.size, cfg.OptFilterThreshold)
+	ms := getMajorityState(logger, md.meshHashes, md.size, cfg.OptFilterThreshold)
 	if ms == nil {
 		logger.With().Warning("no consensus on mesh hash. NOT doing optimistic filtering", lid)
 		return md, nil
