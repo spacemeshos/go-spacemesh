@@ -22,13 +22,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
-var errMissingHareOutput = errors.New("missing hare output")
-
-// AtxDB holds logic for working with atxs.
-type AtxDB interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
-}
+var (
+	errMissingHareOutput = errors.New("missing hare output")
+	errLayerHasBlock     = errors.New("layer has block")
+)
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
@@ -71,79 +68,82 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 	msh.processedLayer.Store(types.LayerID{})
 	msh.minUpdatedLayer.Store(types.LayerID{})
 
-	lid, err := layers.GetByStatus(cdb, layers.Latest)
+	lid, err := ballots.LatestLayer(cdb)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("get latest layer %w", err)
 	}
 
 	if err == nil && lid != (types.LayerID{}) {
-		msh.recoverFromDB()
+		msh.recoverFromDB(lid)
 		return msh, nil
 	}
 
 	gLid := types.GetEffectiveGenesis()
-	for i := types.NewLayerID(1); !i.After(gLid); i = i.Add(1) {
-		if i.Before(gLid) {
-			if err = msh.SetZeroBlockLayer(i); err != nil {
-				msh.logger.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
+	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		for i := types.NewLayerID(1); !i.After(gLid); i = i.Add(1) {
+			if i.Before(gLid) {
+				if err = setZeroBlockLayer(msh.logger, dbtx, i); err != nil {
+					return err
+				}
+			}
+			if err = layers.SetProcessed(dbtx, i); err != nil {
+				return fmt.Errorf("mesh init: %w", err)
+			}
+			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
+				return fmt.Errorf("mesh init: %w", err)
+			}
+			if err = persistLayerHashes(msh.logger, dbtx, i, []types.BlockID{types.EmptyBlockID}); err != nil {
+				return err
 			}
 		}
-		if err = layers.SetApplied(msh.cdb, i, types.EmptyBlockID); err != nil {
-			msh.logger.With().Panic("failed to set applied layer", i, log.Err(err))
+
+		gLayer := types.GenesisLayer()
+		for _, b := range gLayer.Ballots() {
+			msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
+			if err = ballots.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+				return fmt.Errorf("mesh init: %w", err)
+			}
 		}
-		if err = msh.persistLayerHashes(context.Background(), i, []types.BlockID{types.EmptyBlockID}); err != nil {
-			msh.logger.With().Panic("failed to persist hashes for layer", i, log.Err(err))
+		for _, b := range gLayer.Blocks() {
+			msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
+			if err = blocks.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+				return fmt.Errorf("mesh init: %w", err)
+			}
+			if err = blocks.SetValid(dbtx, b.ID()); err != nil {
+				return fmt.Errorf("mesh init: %w", err)
+			}
 		}
-		msh.setProcessedLayer(i)
-		msh.setLatestLayerInState(i)
+		if err = layers.SetHareOutput(dbtx, gLayer.Index(), types.GenesisBlockID); err != nil {
+			return fmt.Errorf("mesh init: %w", err)
+		}
+		return nil
+	}); err != nil {
+		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
 
-	gLayer := types.GenesisLayer()
-	for _, b := range gLayer.Ballots() {
-		msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-		if err = ballots.Add(msh.cdb, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			msh.logger.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
-		}
-	}
-	for _, b := range gLayer.Blocks() {
-		msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-		if err = blocks.Add(msh.cdb, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			msh.logger.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
-		}
-		if err = blocks.SetValid(msh.cdb, b.ID()); err != nil {
-			msh.logger.With().Error("error setting genesis block valid", b.ID(), b.LayerIndex, log.Err(err))
-		}
-	}
-	if err = layers.SetHareOutput(msh.cdb, gLayer.Index(), types.GenesisBlockID); err != nil {
-		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
-	}
 	msh.setLatestLayer(gLid)
+	msh.processedLayer.Store(gLid)
+	msh.setLatestLayerInState(gLid)
 	return msh, nil
 }
 
-func (msh *Mesh) recoverFromDB() {
-	latest, err := layers.GetByStatus(msh.cdb, layers.Latest)
-	if err != nil {
-		msh.logger.With().Panic("failed to recover latest layer", log.Err(err))
-	}
+func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 	msh.setLatestLayer(latest)
 
-	lyr, err := layers.GetByStatus(msh.cdb, layers.Processed)
+	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
 		msh.logger.With().Panic("failed to recover processed layer", log.Err(err))
 	}
-	msh.setProcessedLayerFromRecoveredData(lyr)
+	msh.processedLayer.Store(lyr)
 
-	verified, err := layers.GetByStatus(msh.cdb, layers.Applied)
+	applied, err := layers.GetLastApplied(msh.cdb)
 	if err != nil {
-		msh.logger.With().Panic("failed to recover latest verified layer", log.Err(err))
+		msh.logger.With().Panic("failed to recover latest applied layer", log.Err(err))
 	}
-	if err = msh.setLatestLayerInState(verified); err != nil {
-		msh.logger.With().Panic("failed to recover latest layer in state", log.Err(err))
-	}
+	msh.setLatestLayerInState(applied)
 
 	root := types.Hash32{}
-	if verified.After(types.GetEffectiveGenesis()) {
+	if applied.After(types.GetEffectiveGenesis()) {
 		root, err = msh.conState.RevertState(msh.LatestLayerInState())
 		if err != nil {
 			msh.logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
@@ -243,24 +243,25 @@ func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 		if msh.latestLayer.CompareAndSwap(current, lid) {
 			events.ReportNodeStatusUpdate()
 			msh.logger.With().Info("set latest known layer", lid)
-			if err := layers.SetStatus(msh.cdb, lid, layers.Latest); err != nil {
-				msh.logger.With().Error("could not persist latest layer", lid)
-			}
 		}
 	}
 }
 
 // GetLayer returns GetLayer i from the database.
 func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
-	blts, err := ballots.Layer(msh.cdb, lid)
+	return getLayer(msh.cdb, lid)
+}
+
+func getLayer(db sql.Executor, lid types.LayerID) (*types.Layer, error) {
+	blts, err := ballots.Layer(db, lid)
 	if err != nil {
 		return nil, fmt.Errorf("layer ballots: %w", err)
 	}
-	blks, err := blocks.Layer(msh.cdb, lid)
+	blks, err := blocks.Layer(db, lid)
 	if err != nil {
 		return nil, fmt.Errorf("layer blks: %w", err)
 	}
-	hash, err := layers.GetHash(msh.cdb, lid)
+	hash, err := layers.GetHash(db, lid)
 	if err != nil {
 		hash = types.CalcBlockHash32Presorted(types.ToBlockIDs(blks), nil)
 	}
@@ -272,18 +273,13 @@ func (msh *Mesh) ProcessedLayer() types.LayerID {
 	return msh.processedLayer.Load().(types.LayerID)
 }
 
-func (msh *Mesh) setProcessedLayerFromRecoveredData(lid types.LayerID) {
-	msh.processedLayer.Store(lid)
-	msh.logger.Event().Info("processed layer set from recovered data", lid)
-}
-
-func (msh *Mesh) setProcessedLayer(layerID types.LayerID) {
+func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	processed := msh.ProcessedLayer()
 	if !layerID.After(processed) {
 		msh.logger.With().Info("trying to set processed layer to an older layer",
 			log.FieldNamed("processed", processed),
 			layerID)
-		return
+		return nil
 	}
 
 	if layerID.After(msh.maxProcessedLayer) {
@@ -295,7 +291,7 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) {
 			log.FieldNamed("processed", processed),
 			layerID)
 		msh.nextProcessedLayers[layerID] = struct{}{}
-		return
+		return nil
 	}
 
 	msh.nextProcessedLayers[layerID] = struct{}{}
@@ -307,15 +303,14 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) {
 		processed = i
 		delete(msh.nextProcessedLayers, i)
 	}
+
+	if err := layers.SetProcessed(msh.cdb, processed); err != nil {
+		return fmt.Errorf("failed to set processed layer %v: %w", processed, err)
+	}
 	msh.processedLayer.Store(processed)
 	events.ReportNodeStatusUpdate()
 	msh.logger.Event().Info("processed layer set", processed)
-
-	if err := layers.SetStatus(msh.cdb, processed, layers.Processed); err != nil {
-		msh.logger.With().Error("failed to persist processed layer",
-			log.FieldNamed("processed", processed),
-			log.Err(err))
-	}
+	return nil
 }
 
 func (msh *Mesh) revertMaybe(ctx context.Context, logger log.Log, newVerified types.LayerID) error {
@@ -333,7 +328,7 @@ func (msh *Mesh) revertMaybe(ctx context.Context, logger log.Log, newVerified ty
 
 	var revertTo types.LayerID
 	for lid := minUpdated; !lid.After(newVerified); lid = lid.Add(1) {
-		valids, err := msh.layerValidBlocks(ctx, lid, newVerified)
+		valids, err := layerValidBlocks(msh.logger.WithContext(ctx), msh.cdb, lid, newVerified)
 		if err != nil {
 			return err
 		}
@@ -358,19 +353,13 @@ func (msh *Mesh) revertMaybe(ctx context.Context, logger log.Log, newVerified ty
 		return nil
 	}
 
-	logger = logger.WithFields(log.Stringer("revert_to", revertTo))
+	logger = logger.WithContext(ctx).WithFields(log.Stringer("revert_to", revertTo))
 	logger.Info("reverting state to layer")
 	if err := msh.revertState(logger, revertTo); err != nil {
-		logger.With().Error("failed to revert state",
-			log.Uint32("revert_to", revertTo.Uint32()),
-			log.Err(err))
+		logger.With().Error("failed to revert state", log.Err(err))
 		return err
 	}
-	if err := msh.setLatestLayerInState(revertTo); err != nil {
-		return err
-	}
-
-	logger.With().Info("reverted state to layer", log.Uint32("revert_to", revertTo.Uint32()))
+	msh.setLatestLayerInState(revertTo)
 	return nil
 }
 
@@ -390,7 +379,9 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
-	msh.setProcessedLayer(layerID)
+	if err := msh.setProcessedLayer(layerID); err != nil {
+		return err
+	}
 
 	if err := msh.revertMaybe(ctx, logger, newVerified); err != nil {
 		return err
@@ -414,22 +405,16 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	return nil
 }
 
-func (msh *Mesh) persistLayerHashes(ctx context.Context, lid types.LayerID, bids []types.BlockID) error {
-	logger := msh.logger.WithContext(ctx)
+func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []types.BlockID) error {
 	logger.With().Debug("persisting layer hash", lid, log.Int("num_blocks", len(bids)))
 	types.SortBlockIDs(bids)
-	hash := types.CalcBlocksHash32(bids, nil)
-	if err := layers.SetHash(msh.cdb, lid, hash); err != nil {
-		logger.With().Error("failed to persist layer hash", lid, log.Err(err))
-		return err
-	}
-
 	var (
+		hash     = types.CalcBlocksHash32(bids, nil)
 		prevHash = types.EmptyLayerHash
 		err      error
 	)
 	if prevLid := lid.Sub(1); prevLid.Uint32() > 0 {
-		prevHash, err = layers.GetAggregatedHash(msh.cdb, prevLid)
+		prevHash, err = layers.GetAggregatedHash(dbtx, prevLid)
 		if err != nil {
 			logger.With().Error("failed to get previous aggregated hash", lid, log.Err(err))
 			return err
@@ -438,11 +423,11 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, lid types.LayerID, bids
 
 	logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prevHash.ShortString()))
 	newAggHash := types.CalcBlocksHash32(bids, prevHash.Bytes())
-	if err = layers.SetAggregatedHash(msh.cdb, lid, newAggHash); err != nil {
-		logger.With().Error("failed to persist aggregated layer hash", lid, log.Err(err))
+	if err = layers.SetHashes(dbtx, lid, hash, newAggHash); err != nil {
+		logger.With().Error("failed to set layer hashes", lid, log.Err(err))
 		return err
 	}
-	logger.With().Info("aggregated hash updated for layer",
+	logger.With().Info("layer hashes updated",
 		lid,
 		log.String("hash", hash.ShortString()),
 		log.String("agg_hash", newAggHash.ShortString()))
@@ -490,19 +475,19 @@ func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	return sorted[0]
 }
 
-func (msh *Mesh) layerValidBlocks(ctx context.Context, layerID, latestVerified types.LayerID) ([]*types.Block, error) {
-	lyrBlocks, err := blocks.Layer(msh.cdb, layerID)
+func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVerified types.LayerID) ([]*types.Block, error) {
+	lyrBlocks, err := blocks.Layer(cdb, layerID)
 	if err != nil {
-		msh.logger.WithContext(ctx).With().Error("failed to get layer blocks", layerID, log.Err(err))
+		logger.With().Error("failed to get layer blocks", layerID, log.Err(err))
 		return nil, fmt.Errorf("failed to get layer blocks %s: %w", layerID, err)
 	}
 	var validBlocks []*types.Block
 
 	if layerID.After(latestVerified) {
 		// tortoise has not verified this layer yet, simply apply the block that hare certified
-		bid, err := layers.GetHareOutput(msh.cdb, layerID)
+		bid, err := layers.GetHareOutput(cdb, layerID)
 		if err != nil {
-			msh.logger.WithContext(ctx).With().Error("failed to get hare output", layerID, log.Err(err))
+			logger.With().Error("failed to get hare output", layerID, log.Err(err))
 			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
 		}
 		// hare output an empty layer
@@ -519,11 +504,11 @@ func (msh *Mesh) layerValidBlocks(ctx context.Context, layerID, latestVerified t
 	}
 
 	for _, b := range lyrBlocks {
-		valid, err := blocks.IsValid(msh.cdb, b.ID())
+		valid, err := blocks.IsValid(cdb, b.ID())
 		// block contextual validity is determined by layer. if one block in the layer is not determined,
 		// the whole layer is not yet verified.
 		if err != nil {
-			msh.logger.With().Warning("block contextual validity not yet determined", b.ID(), b.LayerIndex, log.Err(err))
+			logger.With().Warning("block contextual validity not yet determined", b.ID(), b.LayerIndex, log.Err(err))
 			return nil, fmt.Errorf("get block validity: %w", err)
 		}
 		if valid {
@@ -533,35 +518,73 @@ func (msh *Mesh) layerValidBlocks(ctx context.Context, layerID, latestVerified t
 	return validBlocks, nil
 }
 
-func (msh *Mesh) pushLayer(ctx context.Context, layerID, latestVerified types.LayerID) error {
-	valids, err := msh.layerValidBlocks(ctx, layerID, latestVerified)
+func (msh *Mesh) pushLayer(ctx context.Context, lid, verified types.LayerID) error {
+	logger := msh.logger.WithContext(ctx).WithFields(lid)
+	if latest := msh.LatestLayerInState(); lid != latest.Add(1) {
+		logger.With().Panic("update state out-of-order",
+			log.Stringer("to_apply", lid),
+			log.Stringer("latest", latest))
+	}
+
+	valids, err := layerValidBlocks(logger, msh.cdb, lid, verified)
 	if err != nil {
 		return err
 	}
-	toApply := msh.getBlockToApply(valids)
-
-	if err = msh.updateStateWithLayer(ctx, layerID, toApply); err != nil {
-		return fmt.Errorf("failed to update state %s: %w", layerID, err)
+	if err = msh.applyState(logger, lid, valids); err != nil {
+		return err
 	}
+	msh.setLatestLayerInState(lid)
 
 	root, err := msh.conState.GetStateRoot()
 	if err != nil {
 		return fmt.Errorf("failed to oad state root after update: %w", err)
 	}
-
-	msh.logger.Event().Info("end of layer state root",
-		layerID,
-		log.Stringer("state_root", root),
-	)
-
-	if err = msh.persistLayerHashes(ctx, layerID, types.ToBlockIDs(valids)); err != nil {
-		msh.logger.With().Error("failed to persist layer hashes", layerID, log.Err(err))
-		return err
-	}
+	msh.logger.Event().Info("end of layer state root", lid, log.Stringer("state_root", root))
 	return nil
 }
 
-// revertState reverts to state as of a previous layer.
+// applyState applies the block to the conservative state / vm and updates mesh's internal state.
+// ideally everything happens here should be atomic.
+// see https://github.com/spacemeshos/go-spacemesh/issues/3333
+func (msh *Mesh) applyState(logger log.Log, lid types.LayerID, valids []*types.Block) error {
+	applied := types.EmptyBlockID
+	block := msh.getBlockToApply(valids)
+	if block != nil {
+		applied = block.ID()
+		failedTxs, err := msh.conState.ApplyLayer(block)
+		if err != nil {
+			logger.With().Error("failed to apply transactions",
+				log.Int("num_failed_txs", len(failedTxs)),
+				log.Err(err))
+			return fmt.Errorf("apply layer: %w", err)
+		}
+
+		logger.With().Info("applied transactions",
+			log.Int("valid_block_txs", len(block.TxIDs)),
+			log.Int("num_failed_txs", len(failedTxs)),
+		)
+	}
+
+	if err := msh.cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
+			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
+		}
+		if err := persistLayerHashes(logger, dbtx, lid, types.ToBlockIDs(valids)); err != nil {
+			logger.With().Error("failed to persist layer hashes", log.Err(err))
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	logger.Info("successfully applied state")
+	return nil
+}
+
+// revertState reverts the conservative state / vm and updates mesh's internal state.
+// ideally everything happens here should be atomic.
+// see https://github.com/spacemeshos/go-spacemesh/issues/3333
 func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
 	root, err := msh.conState.RevertState(revertTo)
 	if err != nil {
@@ -573,25 +596,7 @@ func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
 		logger.With().Error("failed to unset applied layer", log.Err(err))
 		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
-	logger.Info("successfully unset applied layer")
-	return nil
-}
-
-func (msh *Mesh) applyState(block *types.Block) error {
-	failedTxs, err := msh.conState.ApplyLayer(block)
-	if err != nil {
-		msh.logger.With().Error("failed to apply transactions",
-			block.LayerIndex,
-			log.Int("num_failed_txs", len(failedTxs)),
-			log.Err(err))
-		return fmt.Errorf("apply layer: %w", err)
-	}
-
-	msh.logger.With().Info("applied transactions",
-		block.LayerIndex,
-		log.Int("valid_block_txs", len(block.TxIDs)),
-		log.Int("num_failed_txs", len(failedTxs)),
-	)
+	logger.Info("successfully reverted state")
 	return nil
 }
 
@@ -622,69 +627,40 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 	return msh.ProcessLayer(ctx, layerID)
 }
 
-// apply the state for a single layer.
-func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID, block *types.Block) error {
-	if latest := msh.LatestLayerInState(); layerID != latest.Add(1) {
-		msh.logger.WithContext(ctx).With().Panic("update state out-of-order",
-			log.FieldNamed("verified", layerID),
-			log.FieldNamed("latest", latest))
-	}
-
-	applied := types.EmptyBlockID
-	if block != nil {
-		if err := msh.applyState(block); err != nil {
-			return err
-		}
-		applied = block.ID()
-	}
-
-	if err := layers.SetApplied(msh.cdb, layerID, applied); err != nil {
-		return fmt.Errorf("set applied for %v/%v: %w", layerID, applied, err)
-	}
-
-	if err := msh.setLatestLayerInState(layerID); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
-	// Update validated layer only after applying transactions since loading of
-	// state depends on processedLayer param.
-	if err := layers.SetStatus(msh.cdb, lyr, layers.Applied); err != nil {
-		// can happen if database already closed
-		msh.logger.With().Error("could not persist validated layer index %d: %v", lyr, log.Err(err))
-		return fmt.Errorf("put into DB: %w", err)
-	}
+func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	msh.latestLayerInState.Store(lyr)
-	return nil
 }
-
-var errLayerHasBlock = errors.New("layer has block")
 
 // SetZeroBlockLayer tags lyr as a layer without blocks.
-func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-	msh.logger.With().Info("tagging zero block layer", lyr)
+func (msh *Mesh) SetZeroBlockLayer(lid types.LayerID) error {
+	msh.logger.With().Info("tagging zero block layer", lid)
+	if err := setZeroBlockLayer(msh.logger, msh.cdb, lid); err != nil {
+		return err
+	}
+	msh.setLatestLayer(lid)
+	return nil
+}
+
+func setZeroBlockLayer(logger log.Log, db sql.Executor, lyr types.LayerID) error {
+	logger.With().Info("tagging zero block layer", lyr)
 	// check database for layer
-	if l, err := msh.GetLayer(lyr); err != nil {
+	if l, err := getLayer(db, lyr); err != nil {
 		// database error
 		if !errors.Is(err, sql.ErrNotFound) {
-			msh.logger.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
+			logger.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
 			return err
 		}
 	} else if len(l.Blocks()) != 0 {
 		// layer exists
-		msh.logger.With().Error("layer has blocks, cannot tag as zero block layer",
+		logger.With().Error("layer has blocks, cannot tag as zero block layer",
 			lyr,
 			l,
 			log.Int("num_blocks", len(l.Blocks())))
 		return errLayerHasBlock
 	}
 
-	msh.setLatestLayer(lyr)
-
 	// layer doesn't exist, need to insert new layer
-	return layers.SetHareOutput(msh.cdb, lyr, types.EmptyBlockID)
+	return layers.SetHareOutput(db, lyr, types.EmptyBlockID)
 }
 
 // AddTXsFromProposal adds the TXs in a Proposal into the database.
@@ -718,32 +694,28 @@ func (msh *Mesh) addBallot(b *types.Ballot) error {
 	}
 
 	// it is important to run add ballot and set identity to malicious atomically
-	tx, err := msh.cdb.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-	defer tx.Release()
-
-	if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-		return err
-	}
-	if !mal {
-		count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
-		if err != nil {
+	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
-		if count > 1 {
-			if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+		if !mal {
+			count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+			if err != nil {
 				return err
 			}
-			b.SetMalicious()
-			msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-				log.Stringer("smesher", b.SmesherID()),
-				log.Inline(b),
-			)
+			if count > 1 {
+				if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+					return err
+				}
+				b.SetMalicious()
+				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
+					log.Stringer("smesher", b.SmesherID()),
+					log.Inline(b),
+				)
+			}
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
 
 // AddBlockWithTXs adds the block and its TXs in into the database.
@@ -761,16 +733,6 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 	}
 	msh.trtl.OnBlock(block)
 	return nil
-}
-
-// GetProcessedLayer loads processed layer from database.
-func (msh *Mesh) GetProcessedLayer() (types.LayerID, error) {
-	return layers.GetByStatus(msh.cdb, layers.Processed)
-}
-
-// GetVerifiedLayer loads verified layer from database.
-func (msh *Mesh) GetVerifiedLayer() (types.LayerID, error) {
-	return layers.GetByStatus(msh.cdb, layers.Applied)
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.

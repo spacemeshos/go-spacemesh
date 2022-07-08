@@ -260,9 +260,11 @@ func TestApply_AlreadyApplied(t *testing.T) {
 func TestUndoLayers_Empty(t *testing.T) {
 	db := sql.InMemory()
 
-	undone, err := UndoLayers(db, types.NewLayerID(199))
-	require.NoError(t, err)
-	require.Len(t, undone, 0)
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		undone, err := UndoLayers(dtx, types.NewLayerID(199))
+		require.Len(t, undone, 0)
+		return err
+	}))
 }
 
 func TestApplyAndUndoLayers(t *testing.T) {
@@ -272,9 +274,10 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	firstLayer := types.NewLayerID(10)
 	numLayers := uint32(5)
 	applied := make([]types.TransactionID, 0, numLayers)
+	discarded := make([]types.TransactionID, 0, numLayers)
 	for lid := firstLayer; lid.Before(firstLayer.Add(numLayers)); lid = lid.Add(1) {
 		signer := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 2)
 		require.NoError(t, Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
 
@@ -282,6 +285,11 @@ func TestApplyAndUndoLayers(t *testing.T) {
 			return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
 		}))
 		applied = append(applied, tx.ID)
+
+		sameNonce := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
+		require.NoError(t, Add(db, sameNonce, time.Now()))
+		require.NoError(t, DiscardByAcctNonce(db, tx.ID, lid, tx.Principal, tx.Nonce.Counter))
+		discarded = append(discarded, sameNonce.ID)
 	}
 
 	for _, tid := range applied {
@@ -289,19 +297,35 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
 	}
+	for _, tid := range discarded {
+		mtx, err := Get(db, tid)
+		require.NoError(t, err)
+		require.Equal(t, types.DISCARDED, mtx.State)
+	}
 
 	// revert to firstLayer
-	numTXsUndone := int(numLayers - 1)
-	undone, err := UndoLayers(db, firstLayer.Add(1))
-	require.NoError(t, err)
-	require.Len(t, undone, numTXsUndone)
-	require.ElementsMatch(t, applied[1:], undone)
+	numTXsUndone := int(numLayers-1) * 2
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		undone, err := UndoLayers(dtx, firstLayer.Add(1))
+		require.Len(t, undone, numTXsUndone)
+		require.ElementsMatch(t, append(applied[1:], discarded[1:]...), undone)
+		return err
+	}))
 
 	for i, tid := range applied {
 		mtx, err := Get(db, tid)
 		require.NoError(t, err)
 		if i == 0 {
 			require.Equal(t, types.APPLIED, mtx.State)
+		} else {
+			require.Equal(t, types.MEMPOOL, mtx.State)
+		}
+	}
+	for i, tid := range discarded {
+		mtx, err := Get(db, tid)
+		require.NoError(t, err)
+		if i == 0 {
+			require.Equal(t, types.DISCARDED, mtx.State)
 		} else {
 			require.Equal(t, types.MEMPOOL, mtx.State)
 		}
@@ -657,10 +681,12 @@ func TestAppliedLayer(t *testing.T) {
 	_, err = GetAppliedLayer(db, txs[1].ID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	undone, err := UndoLayers(db, lid)
-	require.NoError(t, err)
-	require.Len(t, undone, 1)
-	require.Equal(t, txs[0].ID, undone[0])
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		undone, err := UndoLayers(dtx, lid)
+		require.Len(t, undone, 1)
+		require.Equal(t, txs[0].ID, undone[0])
+		return err
+	}))
 	_, err = GetAppliedLayer(db, txs[0].ID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }

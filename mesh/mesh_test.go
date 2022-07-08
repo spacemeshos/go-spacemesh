@@ -101,33 +101,28 @@ func checkLastAppliedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	lid, err := layers.GetLastApplied(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
-	lid, err = layers.GetByStatus(mesh.cdb, layers.Applied)
-	require.NoError(t, err)
-	require.Equal(t, expected, lid)
 }
 
 func checkLatestInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	t.Helper()
-	lid, err := layers.GetByStatus(mesh.cdb, layers.Latest)
+	lid, err := ballots.LatestLayer(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
 }
 
 func checkProcessedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	t.Helper()
-	lid, err := layers.GetByStatus(mesh.cdb, layers.Processed)
+	lid, err := layers.GetProcessed(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
 }
 
 func TestMesh_FromGenesis(t *testing.T) {
 	tm := createTestMesh(t)
-	gotP, err := tm.Mesh.GetProcessedLayer()
-	require.NoError(t, err)
+	gotP := tm.Mesh.ProcessedLayer()
 	require.Equal(t, types.GetEffectiveGenesis(), gotP)
-	gotV, err := tm.Mesh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, types.GetEffectiveGenesis(), gotV)
+	getLS := tm.Mesh.LatestLayerInState()
+	require.Equal(t, types.GetEffectiveGenesis(), getLS)
 	gotL := tm.Mesh.LatestLayer()
 	require.Equal(t, types.GetEffectiveGenesis(), gotL)
 
@@ -167,33 +162,30 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	checkLastAppliedInDB(t, msh, gLid)
 	gotL := msh.LatestLayer()
 	require.Equal(t, gLid, gotL)
+	gotP := msh.ProcessedLayer()
+	require.Equal(t, gLid, gotP)
 	gotLS := msh.LatestLayerInState()
 	require.Equal(t, gLid, gotLS)
-	gotP, err := msh.GetProcessedLayer()
-	require.NoError(t, err)
-	require.Equal(t, gLid, gotP)
-	gotV, err := msh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, gLid, gotV)
 }
 
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Latest))
-	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Processed))
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: latest})
+	require.NoError(t, ballots.Add(tm.cdb, &b))
+	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
-	require.NoError(t, layers.SetStatus(tm.cdb, latestState, layers.Applied))
+	require.NoError(t, layers.SetApplied(tm.cdb, latestState, types.RandomBlockID()))
 
 	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
 	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
-	gotP, err := msh.GetProcessedLayer()
-	require.NoError(t, err)
+	gotL := msh.LatestLayer()
+	require.Equal(t, latest, gotL)
+	gotP := msh.ProcessedLayer()
 	require.Equal(t, latest, gotP)
-	gotV, err := msh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, latestState, gotV)
+	gotLS := msh.LatestLayerInState()
+	require.Equal(t, latestState, gotLS)
 }
 
 func TestMesh_LayerHashes(t *testing.T) {
