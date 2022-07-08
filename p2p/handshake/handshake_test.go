@@ -9,7 +9,7 @@ import (
 )
 
 func TestHandshake(t *testing.T) {
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), 3)
+	mesh, err := mocknet.FullMeshConnected(3)
 	require.NoError(t, err)
 	const netid = 1001
 	hs1 := New(mesh.Hosts()[0], netid)

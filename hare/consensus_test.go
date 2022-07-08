@@ -177,7 +177,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	totalNodes := 20
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -213,7 +213,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -247,7 +247,7 @@ func TestAllDifferentSet(t *testing.T) {
 	totalNodes := 10
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -292,7 +292,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -346,7 +346,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
