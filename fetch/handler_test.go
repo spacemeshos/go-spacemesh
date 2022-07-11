@@ -43,9 +43,8 @@ func createTestHandler(t *testing.T) *testHandler {
 func createLayer(t *testing.T, db *sql.Database, lid types.LayerID) *lyrdata {
 	l := &lyrdata{}
 	l.hash = types.RandomHash()
-	require.NoError(t, layers.SetHash(db, lid, l.hash))
 	l.aggHash = types.RandomHash()
-	require.NoError(t, layers.SetAggregatedHash(db, lid, l.aggHash))
+	require.NoError(t, layers.SetHashes(db, lid, l.hash, l.aggHash))
 	for i := 0; i < 5; i++ {
 		b := types.RandomBallot()
 		b.LayerIndex = lid

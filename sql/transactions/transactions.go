@@ -167,7 +167,7 @@ func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, e
 }
 
 // UndoLayers unset all transactions to `statePending` from `from` layer to the max layer with applied transactions.
-func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, error) {
+func UndoLayers(db *sql.Tx, from types.LayerID) ([]types.TransactionID, error) {
 	_, err := db.Exec(`delete from transactions_results_addresses 
 		where tid in (select id from transactions where layer >= ?1);`,
 		func(stmt *sql.Statement) {
@@ -178,13 +178,12 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 	}
 	var updated []types.TransactionID
 	_, err = db.Exec(`
-		update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer >= ?1 and applied = ?5 returning id`,
+			update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer >= ?1 returning id`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Value))
 			stmt.BindInt64(2, statePending)
 			stmt.BindInt64(3, int64(types.LayerID{}.Value))
 			stmt.BindBytes(4, types.EmptyBlockID.Bytes())
-			stmt.BindInt64(5, stateApplied)
 		}, func(stmt *sql.Statement) bool {
 			var tid types.TransactionID
 			stmt.ColumnBytes(0, tid[:])

@@ -28,17 +28,13 @@ CREATE TABLE layers
     id              INT PRIMARY KEY DESC,
     weak_coin       SMALL INT,
     hare_output     VARCHAR,
+    processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
     hash            CHAR(32),
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
-
-CREATE TABLE mesh_status
-(
-    status SMALL INT PRIMARY KEY,
-    layer  INT NOT NULL
-) WITHOUT ROWID;
+CREATE INDEX layers_by_processed ON layers (processed);
 
 CREATE TABLE rewards
 (
