@@ -38,20 +38,6 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// AddHeader mocks base method.
-func (m *MockconservativeState) AddHeader(arg0 *types.Transaction, arg1 time.Time) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddHeader", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddHeader indicates an expected call of AddHeader.
-func (mr *MockconservativeStateMockRecorder) AddHeader(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeader", reflect.TypeOf((*MockconservativeState)(nil).AddHeader), arg0, arg1)
-}
-
 // AddToCache mocks base method.
 func (m *MockconservativeState) AddToCache(arg0 *types.Transaction) error {
 	m.ctrl.T.Helper()
@@ -78,6 +64,20 @@ func (m *MockconservativeState) AddToDB(arg0 *types.Transaction) error {
 func (mr *MockconservativeStateMockRecorder) AddToDB(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToDB", reflect.TypeOf((*MockconservativeState)(nil).AddToDB), arg0)
+}
+
+// AddWithHeader mocks base method.
+func (m *MockconservativeState) AddWithHeader(arg0 *types.Transaction, arg1 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddWithHeader", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddWithHeader indicates an expected call of AddWithHeader.
+func (mr *MockconservativeStateMockRecorder) AddWithHeader(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddWithHeader", reflect.TypeOf((*MockconservativeState)(nil).AddWithHeader), arg0, arg1)
 }
 
 // GetMeshTransaction mocks base method.

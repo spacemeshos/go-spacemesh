@@ -66,15 +66,21 @@ func Test_HandleBlock(t *testing.T) {
 	}
 }
 
-func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verify bool) (*TxHandler, *types.Transaction) {
+func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
-
-	cstate.EXPECT().HasTx(tx.ID).Return(has, hasErr).Times(1)
+	var rst *types.MeshTransaction
+	if has {
+		rst = &types.MeshTransaction{Transaction: *tx}
+		if noheader {
+			rst.TxHeader = nil
+		}
+	}
+	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(rst, hasErr).Times(1)
 	if hasErr == nil && !has {
 		req := smocks.NewMockValidationRequest(ctrl)
 		req.EXPECT().Parse().Times(1).Return(tx.TxHeader, parseErr)
@@ -98,6 +104,7 @@ func Test_HandleGossip(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
 		has                      bool
+		noheader                 bool
 		hasErr, addErr, parseErr error
 		verify                   bool
 		expect                   pubsub.ValidationResult
@@ -106,6 +113,12 @@ func Test_HandleGossip(t *testing.T) {
 			desc:   "Success",
 			verify: true,
 			expect: pubsub.ValidationAccept,
+		},
+		{
+			desc:     "SuccessNoHeader",
+			noheader: true,
+			verify:   true,
+			expect:   pubsub.ValidationAccept,
 		},
 		{
 			desc:   "Dup",
@@ -137,7 +150,7 @@ func Test_HandleGossip(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t,
 				tc.hasErr, tc.parseErr, tc.addErr,
-				tc.has, tc.verify,
+				tc.has, tc.verify, tc.noheader,
 			)
 			require.Equal(t,
 				tc.expect,
@@ -151,6 +164,7 @@ func Test_HandleProposal(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
 		has                      bool
+		noheader                 bool
 		hasErr, addErr, parseErr error
 		verify                   bool
 		fail                     bool
@@ -158,6 +172,11 @@ func Test_HandleProposal(t *testing.T) {
 		{
 			desc:   "Success",
 			verify: true,
+		},
+		{
+			desc:     "SuccessNoHeader",
+			noheader: true,
+			verify:   true,
 		},
 		{
 			desc: "Dup",
@@ -187,7 +206,7 @@ func Test_HandleProposal(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t,
 				tc.hasErr, tc.parseErr, tc.addErr,
-				tc.has, tc.verify,
+				tc.has, tc.verify, tc.noheader,
 			)
 			err := th.HandleProposalTransaction(context.TODO(), tx.Raw)
 			if tc.fail {

@@ -130,28 +130,16 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 	return cs.vmState.Validation(raw)
 }
 
-func (cs *ConservativeState) addToCache(tx *types.Transaction, received time.Time) error {
-	events.ReportNewTx(types.LayerID{}, tx)
-	events.ReportAccountUpdate(tx.Principal)
-
-	return cs.cache.Add(cs.db, tx, received, nil)
-}
-
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	received := time.Now()
 	if err := transactions.Add(cs.db, tx, received); err != nil {
 		return err
 	}
-	return cs.addToCache(tx, received)
-}
+	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportAccountUpdate(tx.Principal)
 
-// AddHeader if it was parsed separately.
-func (cs *ConservativeState) AddHeader(tx *types.Transaction, received time.Time) error {
-	if err := transactions.AddHeader(cs.db, tx.ID, tx.TxHeader); err != nil {
-		return err
-	}
-	return cs.addToCache(tx, received)
+	return cs.cache.Add(cs.db, tx, received, nil)
 }
 
 // RevertState reverts the VM state and database to the given layer.
@@ -221,8 +209,8 @@ func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block)
 				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
 			}
 			mtx.TxHeader = header
-			// updating header also updates principal/nonce indexes
-			if err = transactions.AddHeader(cs.db, mtx.ID, header); err != nil {
+			// add updates header
+			if err = transactions.Add(cs.db, &mtx.Transaction, mtx.Received); err != nil {
 				return nil, err
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped

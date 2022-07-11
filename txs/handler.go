@@ -72,14 +72,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if !req.Verify() {
 		return fmt.Errorf("failed to verify %s", raw.ID)
 	}
-
-	update := &types.Transaction{RawTx: raw, TxHeader: header}
-	if tx == nil {
-		err = th.state.AddToCache(update)
-	} else {
-		err = th.state.AddHeader(update, tx.Received)
-	}
-	if err != nil {
+	if err := th.state.AddToCache(&types.Transaction{RawTx: raw, TxHeader: header}); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err))

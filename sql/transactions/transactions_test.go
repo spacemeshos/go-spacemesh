@@ -125,6 +125,39 @@ func TestAddGetHas(t *testing.T) {
 	require.False(t, has)
 }
 
+func TestAddUpdatesHeader(t *testing.T) {
+	db := sql.InMemory()
+	txs := []*types.Transaction{
+		{
+			RawTx:    types.NewRawTx([]byte{1, 2, 3}),
+			TxHeader: &types.TxHeader{Principal: types.Address{1}},
+		},
+		{
+			RawTx: types.NewRawTx([]byte{4, 5, 6}),
+		},
+	}
+	require.NoError(t, Add(db, txs[1], time.Time{}))
+
+	require.NoError(t, Add(db, &types.Transaction{RawTx: txs[0].RawTx}, time.Time{}))
+	tx, err := Get(db, txs[0].ID)
+	require.NoError(t, err)
+	require.Nil(t, tx.TxHeader)
+
+	require.NoError(t, Add(db, txs[0], time.Time{}))
+	tx, err = Get(db, txs[0].ID)
+	require.NoError(t, err)
+	require.NotNil(t, tx.TxHeader)
+
+	require.NoError(t, Add(db, &types.Transaction{RawTx: txs[0].RawTx}, time.Time{}))
+	tx, err = Get(db, txs[0].ID)
+	require.NoError(t, err)
+	require.NotNil(t, tx.TxHeader)
+
+	tx, err = Get(db, txs[1].ID)
+	require.NoError(t, err)
+	require.Nil(t, tx.TxHeader)
+}
+
 func TestAddToProposal(t *testing.T) {
 	db := sql.InMemory()
 
