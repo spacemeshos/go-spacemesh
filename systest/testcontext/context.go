@@ -134,7 +134,7 @@ func updateContext(ctx *Context) error {
 	}
 	ctx.Keep = ctx.Keep || keep
 
-	sizeval, exists := ns.Labels[clusterSizeLabel]
+	sizeval, _ := ns.Labels[clusterSizeLabel]
 	if err != nil {
 		ctx.Log.Panic("invalid state. cluster size label should exist")
 	}
