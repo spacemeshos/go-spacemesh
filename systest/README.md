@@ -148,34 +148,46 @@ Note
 * If you are switching between remote and local k8s, you have to run `minikube start` before running the tests locally.
 * If you did `make clean`, you will have to install `loki` again for grafana to be installed.
 
-Testing approach
+Longevity testing
 ---
 
-Following list covers only tests that require to run some form of the network, it doesn't cover model based tests, fuzzing and any other in-memory testing that is required.
+### Manual mode
 
-- sanity tests
-  regular system tests that validate that every node received rewards from hare participation, that transactions are applied in the same order, no unexpected partitions caused by different beacon, new nodes can be synced, etc.
+Manual mode allows to setup a cluster as a separate step and apply tests on that cluster continuously.
 
-  must be done using API without log parsing or any weird stuff.
+The first step creates a cluster with 10 nodes.
+```bash
+export namespace=qqq
+make run test_name=TestStepCreate size=10 bootstrap=1m keep=true
+```
 
-  requirements: cluster automation, API 
+Once that step completes user is able to apply different tasks that either modify the cluster, asserts some expectations or enables chaos conditions.
 
-- longevity and crash-recovery testing
-  the purpose of the tests is to consistently validate that network performs all its functions in the realistic environment.
+For example creating a batch of transactions:
+```bash
+make run test_name=TestStepTransactions
+```
 
-  for example instead of 20us latency nodes should have latency close to 50-200ms. periodically some nodes may be disconnected temporarily. longer partitions will exist as well, and nodes are expected to recover from them gracefully. some clients will experience os or hardware failures and node is expected to recover.
+Or replacing a some part of nodes:
+```bash
+make run test_name=TestStepReplaceNodes
+```
 
-  additionally we may do more concrete crash-recovery testing, with [failure points](https://github.com/pingcap/failpoint). 
+Some steps may be executed concurrently with other steps. In manual mode this must be handled by the operator, for example creating transactions and setting up a short disconnect concurrent is safe:
 
-  in this case we will also want to peek inside the node performance, and for that we will have to validate metrics. also we will want to have much more nuanced validation, such as in jepsen. we can do it by collecting necessary history and verifying it with [porcupine](https://github.com/anishathalye/porcupine) or [elle](https://github.com/pingcap/tipocket/tree/master/pkg/elle)/[elle paper](https://raw.githubusercontent.com/jepsen-io/elle/master/paper/elle.pdf) for more details.  
+```bash
+make run test_name=TestStepTransactions &
+make run test_name=TestStepShortDisconnect & 
+```
 
-  this kind of tests will run for weeks instead of on-commit basis.
+All such individual steps can be found in `systest/steps_test.go`.
 
-  requirements: cluster automation, API, observability, chaos tooling
+### Scheduler
 
-- byzantine recovery testing 
-  this kind of testing will require significant effort, and should be mostly done in-memory using other techniques (model based tests, specifically crafted unit tests).
+Individual steps may be also scheduled by any software. For simplicity the first version of scheduler is implemented in golang (see TestScheduleBasic).
 
-  some test cases can be implemented by swapping implementation of the correct protocol with byzantine driver, or using other techniques. one low-effort example that provides good coverage is a [twins](https://arxiv.org/abs/2004.10617) method, which requires creating multiple nodes with the same signing key.
-
-  requirements: cluster automation, API, observability, chaos tooling, different client implementations  
+It launches a test that will execute subtests to create transactions, add nodes, verify consistency of the mesh and that nodes are eventually synced.
+```bash
+export namespace=qqq
+make run test_name=TestScheduleBasic size=10 bootstrap=1m keep=true
+```

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -43,6 +44,11 @@ var (
 	labels       = stringSet{}
 	tokens       chan struct{}
 	initTokens   sync.Once
+)
+
+const (
+	keepLabel        = "keep"
+	clusterSizeLabel = "size"
 )
 
 func init() {
@@ -97,13 +103,47 @@ func deleteNamespace(ctx *Context) error {
 
 func deployNamespace(ctx *Context) error {
 	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx, corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
-		"testid": ctx.TestID,
-		"keep":   strconv.FormatBool(ctx.Keep),
+		"testid":         ctx.TestID,
+		keepLabel:        strconv.FormatBool(ctx.Keep),
+		clusterSizeLabel: strconv.Itoa(ctx.ClusterSize),
 	}),
 		apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("create namespace %s: %w", ctx.Namespace, err)
 	}
+	return nil
+}
+
+func updateContext(ctx *Context) error {
+	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
+		apimetav1.GetOptions{})
+	if err != nil || ns == nil {
+		if kerrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	keepval, exists := ns.Labels[keepLabel]
+	if !exists {
+		ctx.Log.Panic("invalid state. keep label should exist")
+	}
+	keep, err := strconv.ParseBool(keepval)
+	if err != nil {
+		ctx.Log.Panicw("invalid state. keep label should be parsable as a boolean",
+			"keepval", keepval)
+	}
+	ctx.Keep = ctx.Keep || keep
+
+	sizeval, exists := ns.Labels[clusterSizeLabel]
+	if err != nil {
+		ctx.Log.Panic("invalid state. cluster size label should exist")
+	}
+	size, err := strconv.Atoi(sizeval)
+	if err != nil {
+		ctx.Log.Panicw("invalid state. size label should be parsable as an integer",
+			"sizeval", sizeval)
+	}
+	ctx.ClusterSize = size
 	return nil
 }
 
@@ -113,6 +153,13 @@ func Labels(labels ...string) Opt {
 		for _, label := range labels {
 			c.labels[label] = struct{}{}
 		}
+	}
+}
+
+// SkipClusterLimits will not block if there are no available tokens.
+func SkipClusterLimits() Opt {
+	return func(c *cfg) {
+		c.skipLimits = true
 	}
 }
 
@@ -126,12 +173,12 @@ func newCfg() *cfg {
 }
 
 type cfg struct {
-	labels map[string]struct{}
+	labels     map[string]struct{}
+	skipLimits bool
 }
 
 // New creates context for the test.
 func New(t *testing.T, opts ...Opt) *Context {
-	t.Parallel()
 	initTokens.Do(func() {
 		tokens = make(chan struct{}, *clusters)
 	})
@@ -145,9 +192,10 @@ func New(t *testing.T, opts ...Opt) *Context {
 			t.Skipf("not labeled with '%s'", label)
 		}
 	}
-	tokens <- struct{}{}
-	t.Cleanup(func() { <-tokens })
-
+	if !c.skipLimits {
+		tokens <- struct{}{}
+		t.Cleanup(func() { <-tokens })
+	}
 	config, err := rest.InClusterConfig()
 	require.NoError(t, err)
 
@@ -180,7 +228,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		NodeSelector:      nodeSelector,
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
 	}
-	if !*keep {
+	err = updateContext(cctx)
+	require.NoError(t, err)
+	if !cctx.Keep {
 		cleanup(t, func() {
 			if err := deleteNamespace(cctx); err != nil {
 				cctx.Log.Errorf("cleanup failed", "error", err)

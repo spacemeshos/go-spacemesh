@@ -26,8 +26,12 @@ const (
 	defaultBootnodes = 2
 )
 
-func headlessSvc(name string) string {
-	return name + "-headless"
+func setName(podname string) string {
+	return podname[:len(podname)-2]
+}
+
+func headlessSvc(setname string) string {
+	return setname + "-headless"
 }
 
 func poetEndpoint() string {
@@ -108,6 +112,13 @@ type Cluster struct {
 	poets     []string
 }
 
+func (c *Cluster) nextSmesher() int {
+	if c.smeshers <= c.bootnodes {
+		return 0
+	}
+	return decodeOrdinal(c.clients[len(c.clients)-1].Name) + 1
+}
+
 func (c *Cluster) persist(ctx *testcontext.Context) error {
 	if err := c.accounts.Persist(ctx); err != nil {
 		return err
@@ -119,7 +130,7 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 	if c.persistedFlags {
 		return nil
 	}
-	ctx.Log.Debugw("persisting flags")
+	ctx.Log.Debugf("persisting flags %+v", c.smesherFlags)
 	if err := persistFlags(ctx, c.smesherFlags); err != nil {
 		return err
 	}
@@ -153,12 +164,18 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	if len(clients) == 0 {
 		return errNotInitialized
 	}
+	for _, node := range clients {
+		cctx.Log.Debugw("discovered existing bootnode", "name", node.Name)
+	}
 	c.clients = append(c.clients, clients...)
 	c.bootnodes = len(clients)
 
 	clients, err = discoverNodes(cctx, smesherPrefix)
 	if err != nil {
 		return err
+	}
+	for _, node := range clients {
+		cctx.Log.Debugw("discovered existing smesher", "name", node.Name)
 	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
@@ -183,7 +200,7 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 	gateways := []string{}
 	for _, bootnode := range c.clients[:c.bootnodes] {
-		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(bootnodesPrefix)))
+		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name))))
 	}
 	endpoint, err := deployPoet(cctx, gateways...)
 	if err != nil {
@@ -213,7 +230,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	for _, flag := range c.smesherFlags {
 		flags = append(flags, flag)
 	}
-	clients, err := deployNodes(cctx, bootnodesPrefix, c.bootnodes+n, flags)
+	clients, err := deployNodes(cctx, bootnodesPrefix, c.bootnodes, c.bootnodes+n, flags)
 	if err != nil {
 		return err
 	}
@@ -238,7 +255,7 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 		flags = append(flags, flag)
 	}
 	flags = append(flags, Bootnodes(extractP2PEndpoints(c.clients[:c.bootnodes])...))
-	clients, err := deployNodes(cctx, "smesher", c.smeshers+n, flags)
+	clients, err := deployNodes(cctx, "smesher", c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
 	}
@@ -248,6 +265,30 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
 	return nil
+}
+
+// DeleteSmesher will smesher i from the cluster.
+func (c *Cluster) DeleteSmesher(cctx *testcontext.Context, node *NodeClient) error {
+	err := deleteNode(cctx, node.Name)
+	if err != nil {
+		return err
+	}
+
+	clients := c.clients
+	c.clients = nil
+	for _, n := range clients {
+		if n.Name == node.Name {
+			continue
+		}
+		c.clients = append(c.clients, n)
+	}
+	c.smeshers = len(c.clients)
+	return nil
+}
+
+// Bootnodes returns number of the bootnodes in the cluster.
+func (c *Cluster) Bootnodes() int {
+	return c.bootnodes
 }
 
 // Total returns total number of clients.
@@ -270,9 +311,26 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 	return nil
 }
 
+// Account contains address and private key.
+type Account struct {
+	PrivateKey ed25519.PrivateKey
+	Address    []byte
+}
+
+func (a Account) String() string {
+	return "0x" + hex.EncodeToString(a.Address)
+}
+
 type accounts struct {
 	keys      []*signer
 	persisted bool
+}
+
+func (a *accounts) Account(i int) Account {
+	return Account{
+		PrivateKey: a.Private(i),
+		Address:    a.Address(i),
+	}
 }
 
 func (a *accounts) Accounts() int {
@@ -306,6 +364,7 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 }
 
 func (a *accounts) Recover(ctx *testcontext.Context) error {
+	a.keys = nil
 	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "accounts", metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to fetch accounts %w", err)

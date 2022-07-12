@@ -15,7 +15,7 @@ const (
 	stateDiscarded = -1
 )
 
-// Add adds a transaction to the database.
+// Add transaction to the database or update the header if it wasn't set originally.
 func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 	var (
 		header []byte
@@ -29,7 +29,10 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 	}
 	if _, err = db.Exec(`
 		insert into transactions (id, tx, header, layer, block, principal, nonce, timestamp, applied)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+		on conflict(id) do update set 
+		header=?3, principal=?6, nonce=?7 
+		where header is null;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, tx.ID.Bytes())
 			stmt.BindBytes(2, tx.Raw)
@@ -46,30 +49,6 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 			stmt.BindInt64(9, statePending)
 		}, nil); err != nil {
 		return fmt.Errorf("insert %s: %w", tx.ID, err)
-	}
-	return nil
-}
-
-// AddHeader and derived fields to the existing transaction.
-func AddHeader(db sql.Executor, tid types.TransactionID, header *types.TxHeader) error {
-	buf, err := codec.Encode(header)
-	if err != nil {
-		return fmt.Errorf("encode %+v: %w", header, err)
-	}
-	rows, err := db.Exec(`update transactions 
-		set header = ?1, principal = ?2, nonce = ?3
-		where id = ?4 returning id;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, buf)
-			stmt.BindBytes(2, header.Principal[:])
-			stmt.BindInt64(3, int64(header.Nonce.Counter))
-			stmt.BindBytes(4, tid.Bytes())
-		}, nil)
-	if rows == 0 {
-		return fmt.Errorf("%w: %s", sql.ErrNotFound, err)
-	}
-	if err != nil {
-		return fmt.Errorf("add header %s: %w", tid, err)
 	}
 	return nil
 }
@@ -167,7 +146,7 @@ func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, e
 }
 
 // UndoLayers unset all transactions to `statePending` from `from` layer to the max layer with applied transactions.
-func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, error) {
+func UndoLayers(db *sql.Tx, from types.LayerID) ([]types.TransactionID, error) {
 	_, err := db.Exec(`delete from transactions_results_addresses 
 		where tid in (select id from transactions where layer >= ?1);`,
 		func(stmt *sql.Statement) {
@@ -178,13 +157,12 @@ func UndoLayers(db sql.Executor, from types.LayerID) ([]types.TransactionID, err
 	}
 	var updated []types.TransactionID
 	_, err = db.Exec(`
-		update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer >= ?1 and applied = ?5 returning id`,
+			update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer >= ?1 returning id`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Value))
 			stmt.BindInt64(2, statePending)
 			stmt.BindInt64(3, int64(types.LayerID{}.Value))
 			stmt.BindBytes(4, types.EmptyBlockID.Bytes())
-			stmt.BindInt64(5, stateApplied)
 		}, func(stmt *sql.Statement) bool {
 			var tid types.TransactionID
 			stmt.ColumnBytes(0, tid[:])
@@ -392,8 +370,8 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 // GetAllPending get all transactions that are not yet applied.
 func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
-		select tx, header, layer, block, principal, timestamp, id from transactions
-		where applied = ?1 order by timestamp asc`,
+		select tx, header, layer, block, timestamp, id from transactions
+		where applied = ?1 and header is not null order by timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
 		}, "get all pending")

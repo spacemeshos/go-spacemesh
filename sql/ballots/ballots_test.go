@@ -78,6 +78,27 @@ func TestHas(t *testing.T) {
 	require.True(t, exists)
 }
 
+func TestLatest(t *testing.T) {
+	db := sql.InMemory()
+	latest, err := LatestLayer(db)
+	require.NoError(t, err)
+	require.Equal(t, types.LayerID{}, latest)
+
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{},
+		types.InnerBallot{LayerIndex: types.NewLayerID(11)})
+	require.NoError(t, Add(db, &ballot))
+	latest, err = LatestLayer(db)
+	require.NoError(t, err)
+	require.Equal(t, ballot.LayerIndex, latest)
+
+	newBallot := types.NewExistingBallot(types.BallotID{2}, []byte{}, []byte{},
+		types.InnerBallot{LayerIndex: types.NewLayerID(12)})
+	require.NoError(t, Add(db, &newBallot))
+	latest, err = LatestLayer(db)
+	require.NoError(t, err)
+	require.Equal(t, newBallot.LayerIndex, latest)
+}
+
 func TestCountByPubkeyLayer(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.NewLayerID(1)

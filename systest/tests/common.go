@@ -2,7 +2,9 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -20,18 +22,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient) error {
+func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
 	txclient := spacemeshv1.NewTransactionServiceClient(node)
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	response, err := txclient.SubmitTransaction(ctx, &spacemeshv1.SubmitTransactionRequest{Transaction: tx})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if response.Txstate == nil {
-		return fmt.Errorf("tx state should not be nil")
+		return nil, fmt.Errorf("tx state should not be nil")
 	}
-	return nil
+	return response.Txstate.Id.Id, nil
 }
 
 func extractNames(nodes ...*cluster.NodeClient) []string {
@@ -43,25 +45,52 @@ func extractNames(nodes ...*cluster.NodeClient) []string {
 }
 
 func watchLayers(ctx context.Context, eg *errgroup.Group,
-	client *cluster.NodeClient,
+	node *cluster.NodeClient,
 	collector func(*spacemeshv1.LayerStreamResponse) (bool, error),
 ) {
 	eg.Go(func() error {
-		meshapi := spacemeshv1.NewMeshServiceClient(client)
-		layers, err := meshapi.LayerStream(ctx, &spacemeshv1.LayerStreamRequest{})
+		return layersStream(ctx, node, collector)
+	})
+}
+
+func layersStream(ctx context.Context,
+	node *cluster.NodeClient,
+	collector func(*spacemeshv1.LayerStreamResponse) (bool, error),
+) error {
+	meshapi := spacemeshv1.NewMeshServiceClient(node)
+	layers, err := meshapi.LayerStream(ctx, &spacemeshv1.LayerStreamRequest{})
+	if err != nil {
+		return err
+	}
+	for {
+		layer, err := layers.Recv()
 		if err != nil {
 			return err
 		}
-		for {
-			layer, err := layers.Recv()
-			if err != nil {
-				return err
-			}
-			if cont, err := collector(layer); !cont {
-				return err
-			}
+		if cont, err := collector(layer); !cont {
+			return err
 		}
-	})
+	}
+}
+
+func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
+	svc := spacemeshv1.NewMeshServiceClient(node)
+	resp, err := svc.GenesisTime(ctx, &spacemeshv1.GenesisTimeRequest{})
+	if err != nil {
+		return err
+	}
+	genesis := time.Unix(int64(resp.Unixtime.Value), 0)
+	now := time.Now()
+	if !genesis.After(now) {
+		return nil
+	}
+	ctx.Log.Debugw("waiting for genesis", "now", now, "genesis", genesis)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(genesis.Sub(now)):
+		return nil
+	}
 }
 
 func watchTransactionResults(ctx context.Context,
@@ -178,19 +207,147 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address []byte) (
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
 
+func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address []byte) (uint64, error) {
+	gstate := spacemeshv1.NewGlobalStateServiceClient(client)
+	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
+}
+
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	return submitTransacition(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
+	_, err := submitTransacition(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
+	return err
 }
 
 func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	return submitTransacition(ctx,
+	_, err := submitTransacition(ctx,
 		wallet.Spend(
 			signing.PrivateKey(pk), types.Address(receiver), amount,
 			types.Nonce{Counter: nonce},
 		),
 		client)
+	return err
+}
+
+func syncedNodes(ctx context.Context, cl *cluster.Cluster) []*cluster.NodeClient {
+	var synced []*cluster.NodeClient
+	for i := 0; i < cl.Total(); i++ {
+		if !isSynced(ctx, cl.Client(i)) {
+			continue
+		}
+		synced = append(synced, cl.Client(i))
+	}
+	return synced
+}
+
+func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	svc := spacemeshv1.NewNodeServiceClient(node)
+	resp, err := svc.Status(ctx, &spacemeshv1.StatusRequest{})
+	if err != nil {
+		return false
+	}
+	return resp.Status.IsSynced
+}
+
+func getLayer(ctx context.Context, node *cluster.NodeClient, lid uint32) (*spacemeshv1.Layer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	layer := &spacemeshv1.LayerNumber{Number: lid}
+	msvc := spacemeshv1.NewMeshServiceClient(node)
+	lresp, err := msvc.LayersQuery(ctx, &spacemeshv1.LayersQueryRequest{StartLayer: layer, EndLayer: layer})
+	if err != nil {
+		return nil, err
+	}
+	if len(lresp.Layer) != 1 {
+		return nil, fmt.Errorf("request was made for one layer (%d)", layer.Number)
+	}
+	return lresp.Layer[0], nil
+}
+
+func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*spacemeshv1.Layer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	svc := spacemeshv1.NewNodeServiceClient(node)
+	resp, err := svc.Status(ctx, &spacemeshv1.StatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return getLayer(ctx, node, resp.Status.VerifiedLayer.Number)
+}
+
+type txClient struct {
+	account cluster.Account
+	node    *cluster.NodeClient
+}
+
+func (c *txClient) nonce(ctx context.Context) (uint64, error) {
+	return getNonce(ctx, c.node, c.account.Address)
+}
+
+func (c *txClient) submit(ctx context.Context, tx []byte) (*txRequest, error) {
+	txid, err := submitTransacition(ctx, tx, c.node)
+	if err != nil {
+		return nil, fmt.Errorf("submit to node %s: %w", c.node.Name, err)
+	}
+	return &txRequest{
+		node: c.node,
+		txid: txid,
+	}, nil
+}
+
+type txRequest struct {
+	node *cluster.NodeClient
+	txid []byte
+
+	rst *spacemeshv1.TransactionResult
+}
+
+func (r *txRequest) wait(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	client := spacemeshv1.NewTransactionServiceClient(r.node)
+	stream, err := client.StreamResults(ctx, &spacemeshv1.TransactionResultsRequest{
+		Id:    r.txid,
+		Watch: true,
+	})
+	if err != nil {
+		return err
+	}
+	rst, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	r.rst = rst
+	return nil
+}
+
+func (r *txRequest) result(ctx context.Context) (*spacemeshv1.TransactionResult, error) {
+	if r.rst != nil {
+		return r.rst, nil
+	}
+	client := spacemeshv1.NewTransactionServiceClient(r.node)
+	stream, err := client.StreamResults(ctx, &spacemeshv1.TransactionResultsRequest{
+		Id: r.txid,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rst, err := stream.Recv()
+	if err != nil {
+		// eof without result - transaction wasn't applied yet
+		if errors.Is(err, io.EOF) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	r.rst = rst
+	return rst, nil
 }

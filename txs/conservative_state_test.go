@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 )
@@ -30,14 +31,18 @@ const (
 	defaultBalance   = uint64(10000000)
 	defaultAmount    = uint64(10)
 	defaultFee       = uint64(5)
+	numTXs           = 29
+	nonce            = uint64(1234)
 )
 
 func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+	t.Helper()
 	dest := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
 	return newTxWthRecipient(t, dest, nonce, amount, fee, signer)
 }
 
 func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
 		sdk.WithGasPrice(fee),
@@ -59,7 +64,6 @@ type testConState struct {
 	logger log.Log
 	db     *sql.Database
 	mvm    *mocks.MockvmState
-	ctrl   *gomock.Controller
 }
 
 func (t *testConState) handler() *TxHandler {
@@ -83,7 +87,6 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		logger: logger,
 		db:     db,
 		mvm:    mvm,
-		ctrl:   ctrl,
 	}
 }
 
@@ -153,7 +156,7 @@ func TestSelectBlockTXs(t *testing.T) {
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
 	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
@@ -161,6 +164,19 @@ func TestSelectBlockTXs(t *testing.T) {
 
 	// reverse the order of proposals. we should still have exactly the same ordered transactions
 	checkIsStable(t, got, proposals, tcs.ConservativeState)
+}
+
+func TestSelectBlockTxsMissingHeader(t *testing.T) {
+	tcs := createConservativeState(t)
+	tx := types.Transaction{
+		RawTx: types.NewRawTx([]byte{1, 1, 1}),
+	}
+	require.NoError(t, tcs.AddToDB(&tx))
+
+	_, err := tcs.SelectBlockTXs(types.NewLayerID(1), []*types.Proposal{
+		{InnerProposal: types.InnerProposal{TxIDs: []types.TransactionID{tx.ID}}},
+	})
+	require.Error(t, err)
 }
 
 func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
@@ -204,7 +220,7 @@ func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
 	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
@@ -224,7 +240,7 @@ func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), meshHash))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
 	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
 	// change proposal's mesh hash
 	for _, p := range proposals {
@@ -249,7 +265,7 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
-	require.NoError(t, layers.SetAggregatedHash(tcs.db, lid.Sub(1), types.RandomHash()))
+	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), types.RandomHash()))
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.ErrorIs(t, err, errNodeHasBadMeshHash)
 	require.Nil(t, got)
@@ -458,9 +474,11 @@ func TestAddToCache(t *testing.T) {
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, tcs.AddToCache(tx))
-	got, err := tcs.HasTx(tx.ID)
+	has := tcs.cache.Has(tx.ID)
+	require.True(t, has)
+	got, err := transactions.Get(tcs.db, tx.ID)
 	require.NoError(t, err)
-	require.True(t, got)
+	require.Equal(t, *tx, got.Transaction)
 }
 
 func TestAddToCache_InsufficientBalance(t *testing.T) {
@@ -500,79 +518,6 @@ func TestGetMeshTransaction(t *testing.T) {
 	require.Equal(t, types.BLOCK, mtx.State)
 }
 
-func TestGetMeshTransactions(t *testing.T) {
-	tcs := createConservativeState(t)
-	tids, txs := addBatch(t, tcs, numTXs)
-	badIDs := []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()}
-	allIDs := append(tids, badIDs...)
-
-	mtxs, missing := tcs.GetMeshTransactions(allIDs)
-	require.Len(t, tids, numTXs)
-	for i, mtx := range mtxs {
-		require.Equal(t, *txs[i], mtx.Transaction)
-	}
-	require.Len(t, missing, len(badIDs))
-	for _, id := range badIDs {
-		require.NotNil(t, missing[id])
-	}
-}
-
-func TestGetTransactionsByAddress(t *testing.T) {
-	tcs := createConservativeState(t)
-
-	signer1 := signing.NewEdSigner()
-	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
-	signer2 := signing.NewEdSigner()
-	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
-	signer3 := signing.NewEdSigner()
-	addr3 := types.GenerateAddress(signer3.PublicKey().Bytes())
-
-	mtxs, err := tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(100), addr1)
-	require.NoError(t, err)
-	require.Empty(t, mtxs)
-	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(100), addr2)
-	require.NoError(t, err)
-	require.Empty(t, mtxs)
-	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(100), addr3)
-	require.NoError(t, err)
-	require.Empty(t, mtxs)
-
-	tcs.mvm.EXPECT().GetBalance(addr1).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr1).Return(types.Nonce{Counter: nonce}, nil).Times(1)
-	tx0 := newTxWthRecipient(t, addr2, nonce, defaultAmount, defaultFee, signer1)
-	require.NoError(t, tcs.AddToCache(tx0))
-	tx1 := newTxWthRecipient(t, addr3, nonce+1, defaultAmount, defaultFee, signer1)
-	require.NoError(t, tcs.AddToCache(tx1))
-	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(5), types.BlockID{11}, []types.TransactionID{tx1.ID}))
-
-	tcs.mvm.EXPECT().GetBalance(addr2).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr2).Return(types.Nonce{Counter: nonce}, nil).Times(1)
-	tx2 := newTxWthRecipient(t, addr3, nonce, defaultAmount, defaultFee, signer2)
-	require.NoError(t, tcs.AddToCache(tx2))
-	tx3 := newTxWthRecipient(t, addr3, nonce+1, defaultAmount, defaultFee, signer2)
-	require.NoError(t, tcs.AddToCache(tx3))
-	require.NoError(t, tcs.LinkTXsWithBlock(types.NewLayerID(6), types.BlockID{12}, []types.TransactionID{tx3.ID}))
-
-	// nothing in the range of 1-4
-	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(4), addr1)
-	require.NoError(t, err)
-	require.Empty(t, mtxs)
-
-	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(5), addr1)
-	require.NoError(t, err)
-	require.Len(t, mtxs, 1)
-	require.Equal(t, mtxs[0].Transaction, *tx1)
-
-	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(6), addr2)
-	require.NoError(t, err)
-	require.Len(t, mtxs, 1)
-	require.Equal(t, mtxs[0].Transaction, *tx3)
-
-	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(6), addr3)
-	require.NoError(t, err)
-	require.Len(t, mtxs, 0)
-}
-
 func TestApplyLayer(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
@@ -606,30 +551,18 @@ func TestApplyLayer(t *testing.T) {
 			}
 			return nil, rst, nil
 		}).Times(1)
+
 	failed, err := tcs.ApplyLayer(block)
 	require.NoError(t, err)
 	require.Empty(t, failed)
 
 	for _, id := range ids {
-		mtx, err := tcs.GetMeshTransaction(id)
+		mtx, err := transactions.Get(tcs.db, id)
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
 		require.Equal(t, block.ID(), mtx.BlockID)
 		require.Equal(t, lid, mtx.LayerID)
 	}
-}
-
-func TestApplyLayer_OutOfOrder(t *testing.T) {
-	tcs := createConservativeState(t)
-	lid := types.NewLayerID(10)
-	ids, _ := addBatch(t, tcs, numTXs)
-	block := types.NewExistingBlock(types.BlockID{1},
-		types.InnerBlock{
-			LayerIndex: lid,
-			TxIDs:      ids,
-		})
-	_, err := tcs.ApplyLayer(block)
-	require.ErrorIs(t, err, errLayerNotInOrder)
 }
 
 func TestApplyLayer_TXsFailedVM(t *testing.T) {
@@ -667,12 +600,13 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			}
 			return txIds(got[:numFailed]), rst, nil
 		}).Times(1)
+
 	failed, err := tcs.ApplyLayer(block)
 	require.NoError(t, err)
 	require.Len(t, failed, numFailed)
 
 	for i, id := range ids {
-		mtx, err := tcs.GetMeshTransaction(id)
+		mtx, err := transactions.Get(tcs.db, id)
 		require.NoError(t, err)
 		if i < numFailed {
 			require.Equal(t, types.MEMPOOL, mtx.State)
@@ -687,7 +621,6 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 }
 
 func TestApplyLayer_VMError(t *testing.T) {
-	const numFailed = 2
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
@@ -707,12 +640,13 @@ func TestApplyLayer_VMError(t *testing.T) {
 			matchReceived(t, txs, got)
 			return nil, nil, errVM
 		}).Times(1)
+
 	failed, err := tcs.ApplyLayer(block)
 	require.ErrorIs(t, err, errVM)
 	require.Nil(t, failed)
 
 	for _, id := range ids {
-		mtx, err := tcs.GetMeshTransaction(id)
+		mtx, err := transactions.Get(tcs.db, id)
 		require.NoError(t, err)
 		require.Equal(t, types.MEMPOOL, mtx.State)
 		require.Equal(t, types.EmptyBlockID, mtx.BlockID)
@@ -753,7 +687,7 @@ func TestConsistentHandling(t *testing.T) {
 			ids[i] = txs[i].ID
 			raw[i] = txs[i].RawTx
 			for _, instance := range instances {
-				req := smocks.NewMockValidationRequest(instances[1].ctrl)
+				req := smocks.NewMockValidationRequest(gomock.NewController(t))
 				req.EXPECT().Parse().Times(1).Return(txs[i].TxHeader, nil)
 				req.EXPECT().Verify().Times(1).Return(true)
 				instance.mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(req)

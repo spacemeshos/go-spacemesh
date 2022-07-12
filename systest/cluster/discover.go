@@ -2,6 +2,9 @@ package cluster
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,23 +20,44 @@ func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error)
 	}
 	var (
 		eg      errgroup.Group
-		clients = make([]*NodeClient, len(pods.Items))
+		clients = make(chan *NodeClient, len(pods.Items))
+		rst     []*NodeClient
 	)
-	for i, pod := range pods.Items {
-		i := i
+	for _, pod := range pods.Items {
 		pod := pod
 		eg.Go(func() error {
 			client, err := waitSmesher(ctx, pod.Name)
 			if err != nil {
 				return err
 			}
-			clients[i] = client
-			ctx.Log.Debugw("discovered existing smesher", "name", pod.Name)
+			if client != nil {
+				clients <- client
+			}
 			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
-	return clients, nil
+	close(clients)
+	for node := range clients {
+		rst = append(rst, node)
+	}
+	sort.Slice(rst, func(i, j int) bool {
+		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)
+	})
+	return rst, nil
+}
+
+func decodeOrdinal(name string) int {
+	// expected name is boot-1-0
+	parts := strings.Split(name, "-")
+	if len(parts) != 3 {
+		panic(fmt.Sprintf("unexpected name format %s", name))
+	}
+	ord, err := strconv.Atoi(parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return ord
 }

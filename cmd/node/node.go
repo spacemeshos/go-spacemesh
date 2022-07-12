@@ -88,7 +88,7 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-	SVMLogger              = "SVM"
+	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
@@ -448,7 +448,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(SVMLogger, lg)))
+	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -458,14 +458,21 @@ func (app *App) initServices(ctx context.Context,
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
 	var verifier blockValidityVerifier
-	msh, recovered, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	if !recovered {
-		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
+	genesisAccts := app.Config.Genesis.ToAccounts()
+	if len(genesisAccts) > 0 {
+		exists, err := state.AccountExists(genesisAccts[0].Address)
+		if err != nil {
+			return fmt.Errorf("failed to check genesis account %v: %w", genesisAccts[0].Address, err)
+		}
+		if !exists {
+			if err = state.ApplyGenesis(genesisAccts); err != nil {
+				return fmt.Errorf("setup genesis: %w", err)
+			}
 		}
 	}
 
@@ -482,11 +489,13 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	processed, err := msh.GetProcessedLayer()
+	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	verified, err := msh.GetVerifiedLayer()
+	// FIXME latest layer in state is not exactly the latest verified layer
+	// https://github.com/spacemeshos/go-spacemesh/issues/3318
+	verified := msh.LatestLayerInState()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}

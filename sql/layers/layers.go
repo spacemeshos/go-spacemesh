@@ -12,31 +12,6 @@ const (
 	aggregatedHashField = "aggregated_hash"
 )
 
-// Status of the layer.
-type Status int8
-
-func (s Status) String() string {
-	switch s {
-	case Latest:
-		return "latest"
-	case Processed:
-		return "processed"
-	case Applied:
-		return "applied"
-	default:
-		panic(fmt.Sprintf("unknown status %d", s))
-	}
-}
-
-const (
-	// Latest layer that was added to db.
-	Latest Status = iota
-	// Processed layer is either synced from peers or updated by hare.
-	Processed
-	// Applied layer to the state.
-	Applied
-)
-
 // SetWeakCoin for the layer.
 func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
 	if _, err := db.Exec(`insert into layers (id, weak_coin) values (?1, ?2) 
@@ -125,7 +100,7 @@ func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error
 
 // UnsetAppliedFrom updates the applied block to nil for layer >= `lid`.
 func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
-	if _, err := db.Exec("update layers set applied_block = null, state_hash = null where id >= ?1;",
+	if _, err := db.Exec("update layers set applied_block = null, state_hash = null, hash = null, aggregated_hash = null where id >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 		}, nil); err != nil {
@@ -217,54 +192,46 @@ func GetLastApplied(db sql.Executor) (types.LayerID, error) {
 	return lid, nil
 }
 
-// SetStatus updates status of the layer.
-func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
-	if _, err := db.Exec(`insert into mesh_status (layer, status) values (?1, ?2) 
-					on conflict(status) do update set layer=max(?1, layer);`,
+// SetProcessed sets a layer processed.
+func SetProcessed(db sql.Executor, lid types.LayerID) error {
+	if _, err := db.Exec(
+		`insert into layers (id, processed) values (?1, 1) 
+         on conflict(id) do update set processed=1;`,
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
-			stmt.BindInt64(2, int64(status))
+			stmt.BindInt64(1, int64(lid.Uint32()))
 		}, nil); err != nil {
-		return fmt.Errorf("insert %s %s: %w", lid, status, err)
+		return fmt.Errorf("set processed %v: %w", lid, err)
 	}
 	return nil
 }
 
-// GetByStatus return latest layer with the status.
-func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) {
-	if _, err := db.Exec("select layer from mesh_status where status = ?1;",
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(status))
-		},
+// GetProcessed gets the highest layer processed.
+func GetProcessed(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	if _, err := db.Exec("select max(id) from layers where processed = 1;",
+		nil,
 		func(stmt *sql.Statement) bool {
-			rst = types.NewLayerID(uint32(stmt.ColumnInt(0)))
+			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
 			return true
 		}); err != nil {
-		return types.LayerID{}, fmt.Errorf("layer by status %s: %w", status, err)
+		return lid, fmt.Errorf("processed layer: %w", err)
 	}
-	return rst, nil
+	return lid, nil
 }
 
-func setHash(db sql.Executor, field string, lid types.LayerID, hash types.Hash32) error {
-	if _, err := db.Exec(fmt.Sprintf(`insert into layers (id, %[1]s) values (?1, ?2) 
-	on conflict(id) do update set %[1]s=?2;`, field),
+// SetHashes sets the layer hash and aggregated hash.
+func SetHashes(db sql.Executor, lid types.LayerID, hash, aggHash types.Hash32) error {
+	if _, err := db.Exec(
+		`insert into layers (id, hash, aggregated_hash) values (?1, ?2, ?3) 
+         on conflict(id) do update set hash=?2, aggregated_hash=?3;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
 			stmt.BindBytes(2, hash[:])
+			stmt.BindBytes(3, aggHash[:])
 		}, nil); err != nil {
-		return fmt.Errorf("update %s to %s: %w", field, hash, err)
+		return fmt.Errorf("set hashes %v: %w", lid, err)
 	}
 	return nil
-}
-
-// SetHash updates hash for layer.
-func SetHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	return setHash(db, hashField, lid, hash)
-}
-
-// SetAggregatedHash updates aggregated hash for layer.
-func SetAggregatedHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	return setHash(db, aggregatedHashField, lid, hash)
 }
 
 func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32, err error) {
