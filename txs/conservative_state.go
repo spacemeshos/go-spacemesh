@@ -133,8 +133,6 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	received := time.Now()
-
-	// save all new transactions as long as they are syntactically correct
 	if err := transactions.Add(cs.db, tx, received); err != nil {
 		return err
 	}
@@ -211,8 +209,8 @@ func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block)
 				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
 			}
 			mtx.TxHeader = header
-			// updating header also updates principal/nonce indexes
-			if err = transactions.AddHeader(cs.db, mtx.ID, header); err != nil {
+			// Add updates header
+			if err = transactions.Add(cs.db, &mtx.Transaction, mtx.Received); err != nil {
 				return nil, err
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
