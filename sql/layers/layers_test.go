@@ -147,8 +147,8 @@ func TestSetHashes(t *testing.T) {
 			got, err := GetHash(db, types.NewLayerID(lid))
 			require.NoError(t, err)
 			require.Equal(t, types.EmptyLayerHash, got)
-			got, _ = GetAggregatedHash(db, types.NewLayerID(lid))
-			require.NoError(t, nil)
+			got, err = GetAggregatedHash(db, types.NewLayerID(lid))
+			require.NoError(t, err)
 			require.Equal(t, types.EmptyLayerHash, got)
 		} else {
 			hash, err := GetHash(db, types.NewLayerID(lid))
