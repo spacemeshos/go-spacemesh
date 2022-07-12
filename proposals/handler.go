@@ -234,7 +234,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		return nil
 	}
 
-	logger.With().Info("new ballot", b.ID())
+	logger.With().Info("new ballot", log.Inline(b))
 
 	if err := h.checkBallotSyntacticValidity(ctx, b); err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))
