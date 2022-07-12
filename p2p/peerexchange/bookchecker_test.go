@@ -214,7 +214,7 @@ func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 	hosts := make([]host.Host, 0, nodesCount)
 	for i := 0; i < nodesCount; i++ {
 		cm := connmgr.NewConnManager(40, 100, 30*time.Second)
-		h, err := libp2p.New(context.Background(), libp2p.ConnectionManager(cm))
+		h, err := libp2p.New(libp2p.ConnectionManager(cm))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			require.NoError(t, h.Close())
@@ -226,7 +226,7 @@ func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 }
 
 func setupOverMockNet(t *testing.T, nodesCount int) (mocknet.Mocknet, []*Discovery) {
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), nodesCount)
+	mesh, err := mocknet.FullMeshConnected(nodesCount)
 	require.NoError(t, err)
 	instances := setup(t, mesh.Hosts())
 	wrapDiscovery(instances)
