@@ -77,6 +77,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err))
+		return err
 	}
 
 	return nil
