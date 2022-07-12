@@ -191,3 +191,19 @@ It launches a test that will execute subtests to create transactions, add nodes,
 export namespace=qqq
 make run test_name=TestScheduleBasic size=10 bootstrap=1m keep=true
 ```
+
+### Storage for longevity tests
+
+See available storage classes using:
+
+```bash
+kubectl get sc
+```
+
+For longevity tests standard storage class is not sufficiently fast, and has low amount of allocated resources (iops and throughput). Allocated resource also depend on the disk size.
+
+On gke for the network with a moderate load `premium-rwo` storage class with 10Gi disk size can be used. It will provision ssd disks.
+
+```bash
+export storage=premium-rwo=10Gi
+```
