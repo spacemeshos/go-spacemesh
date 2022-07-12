@@ -215,6 +215,8 @@ func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block)
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
 			// transactions can be added successfully
+
+			// TODO(dshulyak) this should overwrite cache state without possibility of the validation failure
 			if err = cs.cache.Add(cs.db, &mtx.Transaction, mtx.Received, nil); err != nil {
 				return nil, err
 			}
