@@ -209,7 +209,7 @@ func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block)
 				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
 			}
 			mtx.TxHeader = header
-			// add updates header
+			// Add updates header
 			if err = transactions.Add(cs.db, &mtx.Transaction, mtx.Received); err != nil {
 				return nil, err
 			}
