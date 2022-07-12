@@ -18,6 +18,7 @@ type conservativeState interface {
 	Validation(types.RawTx) system.ValidationRequest
 	AddToCache(*types.Transaction) error
 	AddToDB(*types.Transaction) error
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
 
 type vmState interface {
