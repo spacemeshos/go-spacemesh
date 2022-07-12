@@ -15,7 +15,7 @@ const (
 	stateDiscarded = -1
 )
 
-// Add adds a transaction to the database.
+// Add transaction to the database or update the header if it wasn't set originally.
 func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 	var (
 		header []byte
