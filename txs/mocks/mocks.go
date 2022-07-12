@@ -14,6 +14,44 @@ import (
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
+// MocktxGetter is a mock of txGetter interface.
+type MocktxGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxGetterMockRecorder
+}
+
+// MocktxGetterMockRecorder is the mock recorder for MocktxGetter.
+type MocktxGetterMockRecorder struct {
+	mock *MocktxGetter
+}
+
+// NewMocktxGetter creates a new mock instance.
+func NewMocktxGetter(ctrl *gomock.Controller) *MocktxGetter {
+	mock := &MocktxGetter{ctrl: ctrl}
+	mock.recorder = &MocktxGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxGetter) EXPECT() *MocktxGetterMockRecorder {
+	return m.recorder
+}
+
+// GetMeshTransaction mocks base method.
+func (m *MocktxGetter) GetMeshTransaction(arg0 types.TransactionID) (*types.MeshTransaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMeshTransaction", arg0)
+	ret0, _ := ret[0].(*types.MeshTransaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMeshTransaction indicates an expected call of GetMeshTransaction.
+func (mr *MocktxGetterMockRecorder) GetMeshTransaction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransaction", reflect.TypeOf((*MocktxGetter)(nil).GetMeshTransaction), arg0)
+}
+
 // MockconservativeState is a mock of conservativeState interface.
 type MockconservativeState struct {
 	ctrl     *gomock.Controller

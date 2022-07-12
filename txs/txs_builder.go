@@ -37,7 +37,7 @@ type meshState struct {
 type proposalMetadata struct {
 	lid        types.LayerID
 	size       int
-	meshHashes map[string]*meshState
+	meshHashes map[types.Hash32]*meshState
 	mtxs       []*types.MeshTransaction
 	optFilter  bool
 }
@@ -47,15 +47,15 @@ func extractProposalMetadata(
 	cfg CSConfig,
 	lid types.LayerID,
 	proposals []*types.Proposal,
-	getTx func(types.TransactionID) (*types.MeshTransaction, error),
+	gtx txGetter,
 ) (*proposalMetadata, error) {
 	var (
 		seen       = make(map[types.TransactionID]struct{})
 		mtxs       = make([]*types.MeshTransaction, 0, len(proposals)*cfg.NumTXsPerProposal)
-		meshHashes = make(map[string]*meshState)
+		meshHashes = make(map[types.Hash32]*meshState)
 	)
 	for _, p := range proposals {
-		key := p.MeshHash.ShortString()
+		key := p.MeshHash
 		if _, ok := meshHashes[key]; !ok {
 			meshHashes[key] = &meshState{
 				hash:  p.MeshHash,
@@ -69,10 +69,13 @@ func extractProposalMetadata(
 			if _, ok := seen[tid]; ok {
 				continue
 			}
-			mtx, err := getTx(tid)
+			mtx, err := gtx.GetMeshTransaction(tid)
 			if err != nil {
 				logger.With().Error("failed to find proposal tx", p.LayerIndex, p.ID(), tid, log.Err(err))
 				return nil, fmt.Errorf("get proposal tx: %w", err)
+			}
+			if mtx.TxHeader == nil {
+				return nil, fmt.Errorf("inconsistent state: tx %s is missing header", mtx.ID)
 			}
 			seen[tid] = struct{}{}
 			mtxs = append(mtxs, mtx)
@@ -85,7 +88,7 @@ func extractProposalMetadata(
 	return &proposalMetadata{lid: lid, size: len(proposals), mtxs: mtxs, meshHashes: meshHashes}, nil
 }
 
-func getMajorityState(meshHashes map[string]*meshState, numProposals, threshold int) *meshState {
+func getMajorityState(meshHashes map[types.Hash32]*meshState, numProposals, threshold int) *meshState {
 	for _, ms := range meshHashes {
 		if ms.count*100 > numProposals*threshold {
 			return ms
@@ -101,9 +104,9 @@ func checkStateConsensus(
 	lid types.LayerID,
 	proposals []*types.Proposal,
 	ownMeshHash types.Hash32,
-	getTx func(types.TransactionID) (*types.MeshTransaction, error),
+	gtx txGetter,
 ) (*proposalMetadata, error) {
-	md, err := extractProposalMetadata(logger, cfg, lid, proposals, getTx)
+	md, err := extractProposalMetadata(logger, cfg, lid, proposals, gtx)
 	if err != nil {
 		return nil, err
 	}
