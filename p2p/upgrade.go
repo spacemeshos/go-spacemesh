@@ -75,35 +75,36 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		opt(fh)
 	}
 	cfg := fh.cfg
-	var err error
-	fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
-		Flood:          cfg.Flood,
-		MaxMessageSize: cfg.MaxMessageSize,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
-	}
 	fh.Peers = bootstrap.StartPeers(h,
 		bootstrap.WithLog(fh.logger),
 		bootstrap.WithContext(fh.ctx),
 		bootstrap.WithNodeReporter(fh.nodeReporter),
 	)
-	fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
+	var (
+		err        error
+		isBootnode bool
+	)
+	if fh.discovery, isBootnode, err = peerexchange.New(fh.logger, h, peerexchange.Config{
 		DataDir:              cfg.DataDir,
 		Bootnodes:            cfg.Bootnodes,
 		CheckPeersNumber:     cfg.CheckPeersNumber,
 		CheckTimeout:         cfg.CheckTimeout,
 		CheckInterval:        cfg.CheckInterval,
 		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
+	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
+		Flood:          cfg.Flood,
+		IsBootnode:     isBootnode,
+		MaxMessageSize: cfg.MaxMessageSize,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
+	}
+	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
 		TargetOutbound: cfg.TargetOutbound,
 		Timeout:        cfg.BootstrapTimeout,
-	}, fh, fh.discovery)
-	if err != nil {
+	}, fh, fh.discovery); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
 	fh.hs = handshake.New(fh, cfg.NetworkID, handshake.WithLog(fh.logger))

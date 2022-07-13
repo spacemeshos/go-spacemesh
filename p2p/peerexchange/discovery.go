@@ -49,7 +49,7 @@ type Discovery struct {
 }
 
 // New creates a Discovery instance.
-func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
+func New(logger log.Log, h host.Host, config Config) (*Discovery, bool, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Discovery{
 		cfg:    config,
@@ -66,17 +66,21 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		return ctx.Err()
 	})
 
+	isBootnode := false
+	best, err := bestHostAddress(h)
+	if err != nil {
+		return nil, false, err
+	}
 	bootnodes := make([]*addressbook.AddrInfo, 0, len(config.Bootnodes))
 	for _, raw := range config.Bootnodes {
 		info, err := addressbook.ParseAddrInfo(raw)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)
+			return nil, false, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
 		bootnodes = append(bootnodes, info)
-	}
-	best, err := bestHostAddress(h)
-	if err != nil {
-		return nil, err
+		if best.ID == info.ID {
+			isBootnode = true
+		}
 	}
 	d.book.AddAddresses(bootnodes, best)
 
@@ -84,7 +88,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	d.crawl = newCrawler(h, d.book, protocol, logger)
 	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
 	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to eventbus: %w", err)
+		return nil, false, fmt.Errorf("failed to subscribe to eventbus: %w", err)
 	}
 	d.eg.Go(func() error {
 		defer sub.Close()
@@ -104,7 +108,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		d.CheckBook(ctx)
 		return ctx.Err()
 	})
-	return d, nil
+	return d, isBootnode, nil
 }
 
 // Stop stops the discovery service.

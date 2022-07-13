@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,9 +24,10 @@ func TestGossip(t *testing.T) {
 	count := n * n
 	received := make(chan []byte, count)
 
+	fmt.Printf("num in mesh %d\n", len(mesh.Hosts()))
 	for _, h := range mesh.Hosts() {
 		h := h
-		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true})
+		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
 		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) ValidationResult {
@@ -47,17 +49,10 @@ func TestGossip(t *testing.T) {
 	for i, ps := range pubsubs {
 		require.NoError(t, ps.Publish(ctx, topic, []byte(mesh.Hosts()[i].ID())))
 	}
-
-	go func() {
-		time.Sleep(5 * time.Second)
-		close(received)
-	}()
-	i := 0
-	for range received {
-		i++
-		if i == count {
-			break
+	require.Eventually(t, func() bool {
+		if len(received) == count {
+			return true
 		}
-	}
-	require.Equal(t, count, i)
+		return false
+	}, 5*time.Second, 10*time.Millisecond)
 }

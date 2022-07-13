@@ -255,8 +255,9 @@ func setup(t *testing.T, hosts []host.Host) []*Discovery {
 			cfg.Bootnodes = append(cfg.Bootnodes, bootnode.RawAddr)
 		}
 
-		instance, err := New(logger, h, cfg)
+		instance, isBoot, err := New(logger, h, cfg)
 		require.NoError(t, err)
+		require.False(t, isBoot)
 		t.Cleanup(instance.Stop)
 		instances = append(instances, instance)
 	}
