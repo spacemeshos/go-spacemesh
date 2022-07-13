@@ -166,6 +166,19 @@ func TestSelectBlockTXs(t *testing.T) {
 	checkIsStable(t, got, proposals, tcs.ConservativeState)
 }
 
+func TestSelectBlockTxsMissingHeader(t *testing.T) {
+	tcs := createConservativeState(t)
+	tx := types.Transaction{
+		RawTx: types.NewRawTx([]byte{1, 1, 1}),
+	}
+	require.NoError(t, tcs.AddToDB(&tx))
+
+	_, err := tcs.SelectBlockTXs(types.NewLayerID(1), []*types.Proposal{
+		{InnerProposal: types.InnerProposal{TxIDs: []types.TransactionID{tx.ID}}},
+	})
+	require.Error(t, err)
+}
+
 func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
 	tcs := createConservativeState(t)
 	totalNumTXs := 100

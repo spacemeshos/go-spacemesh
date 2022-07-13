@@ -247,7 +247,7 @@ func (pb *ProposalBuilder) createProposal(
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
-	logger.Event().Info("proposal created", log.Inline(p))
+	logger.Event().Info("proposal created", p.ID())
 	return p, nil
 }
 

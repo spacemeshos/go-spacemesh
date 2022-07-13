@@ -74,6 +74,9 @@ func extractProposalMetadata(
 				logger.With().Error("failed to find proposal tx", p.LayerIndex, p.ID(), tid, log.Err(err))
 				return nil, fmt.Errorf("get proposal tx: %w", err)
 			}
+			if mtx.TxHeader == nil {
+				return nil, fmt.Errorf("inconsistent state: tx %s is missing header", mtx.ID)
+			}
 			seen[tid] = struct{}{}
 			mtxs = append(mtxs, mtx)
 		}

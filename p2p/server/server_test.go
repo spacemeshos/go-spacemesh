@@ -14,7 +14,7 @@ func TestServer(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	mesh, err := mocknet.FullMeshConnected(ctx, 4)
+	mesh, err := mocknet.FullMeshConnected(4)
 	require.NoError(t, err)
 	proto := "test"
 	request := []byte("test request")

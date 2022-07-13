@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
@@ -55,9 +56,11 @@ func (th *TxHandler) HandleProposalTransaction(ctx context.Context, msg []byte) 
 
 func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	raw := types.NewRawTx(msg)
-	if exists, err := th.state.HasTx(raw.ID); err != nil {
-		return fmt.Errorf("has tx: %w", err)
-	} else if exists {
+	tx, err := th.state.GetMeshTransaction(raw.ID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return fmt.Errorf("get tx %w", err)
+	}
+	if tx != nil && tx.TxHeader != nil {
 		return errDuplicateTX
 	}
 
@@ -69,17 +72,12 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if !req.Verify() {
 		return fmt.Errorf("failed to verify %s", raw.ID)
 	}
-
-	if err := th.state.AddToCache(&types.Transaction{
-		RawTx:    raw,
-		TxHeader: header,
-	}); err != nil {
+	if err := th.state.AddToCache(&types.Transaction{RawTx: raw, TxHeader: header}); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err))
 		return err
 	}
-
 	return nil
 }
 
