@@ -121,7 +121,7 @@ endif
 test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 
 test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -v -p 1 -cpu=1 $(UNIT_TESTS)
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -v -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 test-tidy:
