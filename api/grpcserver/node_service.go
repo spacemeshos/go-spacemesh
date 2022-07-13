@@ -11,6 +11,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -203,6 +204,9 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
 		errorsCh, errorsBufFull = consumeEvents(stream.Context(), errorsSubscription)
+	}
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 
 	for {

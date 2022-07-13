@@ -165,6 +165,10 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		layerCh, layerBufFull = consumeEvents(stream.Context(), layersSubscription)
 	}
 
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
+	}
+
 	for {
 		select {
 		case <-txBufFull:
