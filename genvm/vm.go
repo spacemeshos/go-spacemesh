@@ -112,6 +112,11 @@ func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 	return v.GetStateRoot()
 }
 
+// AccountExists returns true if the address exists, spawned or not.
+func (v *VM) AccountExists(address core.Address) (bool, error) {
+	return accounts.Has(v.db, address)
+}
+
 // GetNonce returns expected next nonce for the address.
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(v.db, address)
@@ -148,10 +153,10 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, error) {
-	tx, err := v.db.Tx(context.Background())
+func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer tx.Release()
 	var (
@@ -161,6 +166,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 		skipped []types.TransactionID
 		start   = time.Now()
 		fees    uint64
+		results []types.TransactionWithResult
 	)
 	for i := range txs {
 		tx := &txs[i]
@@ -191,7 +197,11 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 			skipped = append(skipped, tx.ID)
 			continue
 		}
-		if err := ctx.Handler.Exec(ctx, ctx.Header.Method, args); err != nil {
+		rst := types.TransactionWithResult{}
+		rst.Layer = lctx.Layer
+		rst.Block = lctx.Block
+		err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
+		if err != nil {
 			v.logger.With().Debug("transaction failed",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
@@ -201,33 +211,45 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 			// internal errors are propagated upwards, but they are for fatal
 			// unrecovarable errors, such as disk problems
 			if errors.Is(err, core.ErrInternal) {
-				return nil, err
+				return nil, nil, err
 			}
 		}
-		fee, err := ctx.Apply(ss)
+		rst.RawTx = txs[i]
+		rst.TxHeader = &ctx.Header
+		rst.Status = types.TransactionSuccess
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			rst.Status = types.TransactionFailure
+			rst.Message = err.Error()
 		}
-		fees += fee
+		rst.Gas = ctx.Consumed()
+		rst.Fee = ctx.Fee()
+		rst.Addresses = ctx.Updated()
+
+		err = ctx.Apply(ss)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		fees += ctx.Fee()
+		results = append(results, rst)
 	}
 
 	// TODO(dshulyak) why it fails if there are no rewards?
 	if len(blockRewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, blockRewards)
+		finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		for _, reward := range finalRewards {
 			if err := rewards.Add(tx, reward); err != nil {
-				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 			}
 			account, err := ss.Get(reward.Coinbase)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 			}
 			account.Balance += reward.TotalReward
 			if err := ss.Update(account); err != nil {
-				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 			}
 		}
 	}
@@ -235,7 +257,7 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
 	ss.IterateChanged(func(account *core.Account) bool {
-		account.Layer = lid
+		account.Layer = lctx.Layer
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
 		if err != nil {
@@ -246,23 +268,24 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 		return true
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
 	var hash types.Hash32
 	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateHash(tx, lid, hash); err != nil {
-		return nil, err
+	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
+		return nil, nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
 	v.logger.With().Info("applied transactions",
-		lid,
+		lctx.Layer,
+		lctx.Block,
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(start)),
 		log.Stringer("state_hash", hash),
 	)
-	return skipped, nil
+	return skipped, results, nil
 }
 
 // Request used to implement 2-step validation flow.
@@ -364,4 +387,10 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 
 func verify(ctx *core.Context, raw []byte) bool {
 	return ctx.Template.Verify(ctx, raw)
+}
+
+// ApplyContext has information on layer and block id.
+type ApplyContext struct {
+	Layer types.LayerID
+	Block types.BlockID
 }

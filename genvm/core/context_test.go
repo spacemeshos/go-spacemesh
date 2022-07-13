@@ -96,7 +96,7 @@ func TestApply(t *testing.T) {
 			return scale.EncodeByteArray(encoder, rst)
 		})
 		ctx.Template = template
-		_, err := ctx.Apply(ss)
+		err := ctx.Apply(ss)
 		require.NoError(t, err)
 
 		account, err := ss.Get(ctx.Account.Address)
@@ -125,9 +125,9 @@ func TestApply(t *testing.T) {
 		ctx.Template = template
 		require.NoError(t, ctx.Consume(5))
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
-		fee, err := ctx.Apply(ss)
+		err := ctx.Apply(ss)
 		require.NoError(t, err)
-		require.Equal(t, fee, ctx.Header.MaxGas*ctx.Header.GasPrice)
+		require.Equal(t, ctx.Fee(), ctx.Header.MaxGas*ctx.Header.GasPrice)
 	})
 	t.Run("PreserveTransferOrder", func(t *testing.T) {
 		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}
@@ -156,7 +156,7 @@ func TestApply(t *testing.T) {
 			actual = append(actual, account.Address)
 			return nil
 		}).AnyTimes()
-		_, err := ctx.Apply(updater)
+		err := ctx.Apply(updater)
 		require.NoError(t, err)
 		require.Equal(t, order, actual)
 	})

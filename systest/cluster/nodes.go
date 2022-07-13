@@ -15,6 +15,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	appsv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -22,12 +23,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+const persistentVolumeName = "data"
+
+func persistentVolumeClaim(podname string) string {
+	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
+}
+
+const prometheusScrapePort = 9216
+
 // Node ...
 type Node struct {
 	Name      string
 	IP        string
 	P2P, GRPC uint16
 	ID        string
+
+	Created   time.Time
+	Restarted time.Time
 }
 
 // GRPCEndpoint returns grpc endpoint for the Node.
@@ -101,6 +113,14 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 	return fmt.Sprintf("%s:%d", *svc.Name, poetPort), nil
 }
 
+func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
+	set, err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return set, nil
+}
+
 func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 	watcher, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", name),
@@ -116,7 +136,10 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 			return nil, ctx.Err()
 		case ev, open := <-watcher.ResultChan():
 			if !open {
-				return nil, fmt.Errorf("watcher is terminated wile waiting for pod %v", name)
+				return nil, fmt.Errorf("watcher is terminated while waiting for pod %v", name)
+			}
+			if ev.Type == watch.Deleted {
+				return nil, nil
 			}
 			pod = ev.Object.(*v1.Pod)
 		}
@@ -152,8 +175,67 @@ func labelSelector(labels map[string]string) string {
 	return buf.String()
 }
 
-func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []DeploymentFlag) ([]*NodeClient, error) {
-	labels := nodeLabels(name)
+func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
+	var (
+		labels  = nodeLabels(name)
+		eg      errgroup.Group
+		clients = make(chan *NodeClient, to-from)
+	)
+	for i := from; i < to; i++ {
+		i := i
+		eg.Go(func() error {
+			setname := fmt.Sprintf("%s-%d", name, i)
+			if err := deployNode(ctx, setname, labels, flags); err != nil {
+				return err
+			}
+			podname := fmt.Sprintf("%s-0", setname)
+			node, err := waitSmesher(ctx, podname)
+			if err != nil {
+				return err
+			}
+			clients <- node
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	close(clients)
+	var rst []*NodeClient
+	for node := range clients {
+		rst = append(rst, node)
+	}
+	return rst, nil
+}
+
+func deleteNodes(ctx *testcontext.Context, typename, podname string) ([]*NodeClient, error) {
+	if err := deleteNode(ctx, setName(podname)); err != nil {
+		return nil, err
+	}
+	return discoverNodes(ctx, typename)
+}
+
+func deleteNode(ctx *testcontext.Context, podname string) error {
+	setname := setName(podname)
+	if err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
+		Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
+		return err
+	}
+	pvcname := persistentVolumeClaim(podname)
+	if err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).Delete(ctx,
+		pvcname, apimetav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("failed deleting pvc %s: %w", pvcname, err)
+	}
+	return nil
+}
+
+func deployNode(ctx *testcontext.Context, name string, applabels map[string]string, flags []DeploymentFlag) error {
+	labels := map[string]string{
+		"smesher": name,
+	}
+	for label, value := range applabels {
+		labels[label] = value
+	}
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -166,15 +248,18 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 
 	_, err := ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return nil, fmt.Errorf("apply headless service: %w", err)
+		return fmt.Errorf("apply headless service: %w", err)
 	}
 	cmd := []string{
 		"/bin/go-spacemesh",
+		"--pprof-server",
 		"--preset=fastnet",
 		"--smeshing-start=true",
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data/state",
 		"--log-encoder=json",
+		"--metrics",
+		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 	}
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
@@ -184,18 +269,24 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 		WithSpec(appsv1.StatefulSetSpec().
 			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).
 			WithPodManagementPolicy(apiappsv1.ParallelPodManagement).
-			WithReplicas(int32(replicas)).
+			WithReplicas(1).
 			WithServiceName(*svc.Name).
 			WithVolumeClaimTemplates(
-				corev1.PersistentVolumeClaim("data", ctx.Namespace).
+				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
 						WithAccessModes(v1.ReadWriteOnce).
-						WithStorageClassName("standard").
+						WithStorageClassName(ctx.Storage.Class).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")}))),
+							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
 			).
 			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
 			WithTemplate(corev1.PodTemplateSpec().
+				WithAnnotations(
+					map[string]string{
+						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape": "true",
+					},
+				).
 				WithLabels(labels).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
@@ -206,6 +297,7 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
+							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
@@ -227,40 +319,33 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 	_, err = ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
 		Apply(ctx, sset, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return nil, fmt.Errorf("apply statefulset: %w", err)
+		return fmt.Errorf("apply statefulset: %w", err)
 	}
-	result := make([]*NodeClient, replicas)
-	var eg errgroup.Group
-	for i := 0; i < replicas; i++ {
-		i := i
-		eg.Go(func() error {
-			nc, err := waitSmesher(ctx, fmt.Sprintf("%s-%d", *sset.Name, i))
-			if err != nil {
-				return err
-			}
-			result[i] = nc
-			return nil
-		})
-	}
-	if eg.Wait(); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return nil
 }
 
-func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
+func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error) {
 	attempt := func() (*NodeClient, error) {
-		pod, err := waitPod(tctx, name)
+		pod, err := waitPod(tctx, podname)
+		if err != nil {
+			return nil, err
+		}
+		if pod == nil {
+			return nil, nil
+		}
+		set, err := getStatefulSet(tctx, setName(podname))
 		if err != nil {
 			return nil, err
 		}
 		node := Node{
-			Name: name,
-			IP:   pod.Status.PodIP,
-			P2P:  7513,
-			GRPC: 9092,
+			Name:      podname,
+			IP:        pod.Status.PodIP,
+			P2P:       7513,
+			GRPC:      9092,
+			Created:   set.CreationTimestamp.Time,
+			Restarted: pod.CreationTimestamp.Time,
 		}
-		rctx, cancel := context.WithTimeout(tctx, 5*time.Second)
+		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
 		defer cancel()
 		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
 			grpc.WithInsecure(),
@@ -270,7 +355,7 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 			return nil, err
 		}
 		dbg := spacemeshv1.NewDebugServiceClient(conn)
-		info, err := dbg.NetworkInfo(tctx, &emptypb.Empty{})
+		info, err := dbg.NetworkInfo(rctx, &emptypb.Empty{})
 		if err != nil {
 			return nil, err
 		}

@@ -205,18 +205,20 @@ jobs:
       run: cd systest && make push
 
     - name: Run tests
-      run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
+      timeout-minutes: 60
+      run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity
 
     - name: Systemtest result
       run: |
-        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }}  -ojson | jq .status.containerStatuses[].state.terminated.exitCode)
+        SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
         SUCCESS="${SUCCESS//'%'/'%25'}"
         SUCCESS="${SUCCESS//$'\n'/'%0A'}"
         SUCCESS="${SUCCESS//$'\r'/'%0D'}"
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
-    
+
     - name: Delete pod
+      if: always()
       run: cd systest && make clean
 
     - name: Tests Passed or Failed

@@ -88,7 +88,7 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-	SVMLogger              = "SVM"
+	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
@@ -259,6 +259,7 @@ type App struct {
 	*cobra.Command
 	nodeID           types.NodeID
 	Config           *config.Config
+	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
 	gatewaySvc       *grpcserver.GatewayService
@@ -431,6 +432,7 @@ func (app *App) initServices(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
+	app.db = sqlDB
 	if app.Config.CollectMetrics {
 		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 		if dbCollector != nil {
@@ -446,7 +448,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(SVMLogger, lg)))
+	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -456,14 +458,21 @@ func (app *App) initServices(ctx context.Context,
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
 	var verifier blockValidityVerifier
-	msh, recovered, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	if !recovered {
-		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
+	genesisAccts := app.Config.Genesis.ToAccounts()
+	if len(genesisAccts) > 0 {
+		exists, err := state.AccountExists(genesisAccts[0].Address)
+		if err != nil {
+			return fmt.Errorf("failed to check genesis account %v: %w", genesisAccts[0].Address, err)
+		}
+		if !exists {
+			if err = state.ApplyGenesis(genesisAccts); err != nil {
+				return fmt.Errorf("setup genesis: %w", err)
+			}
 		}
 	}
 
@@ -480,11 +489,13 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	processed, err := msh.GetProcessedLayer()
+	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	verified, err := msh.GetVerifiedLayer()
+	// FIXME latest layer in state is not exactly the latest verified layer
+	// https://github.com/spacemeshos/go-spacemesh/issues/3318
+	verified := msh.LatestLayerInState()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
@@ -782,7 +793,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.

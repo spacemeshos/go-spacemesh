@@ -85,8 +85,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		require.Eventually(t, func() bool {
 			return d.book.NumAddresses() == 0
 		}, 2*time.Second, 100*time.Millisecond)
-		res := d.GetRandomPeers(10)
-		require.Equal(t, 0, len(res), "should return 2 peers")
+		require.Equal(t, 0, len(d.GetRandomPeers(10)), "should return zero peers")
 	})
 
 	best, err := bestHostAddress(d.host)
@@ -99,7 +98,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 
 	t.Run("check all nodes in book", func(t *testing.T) {
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 4
+			return d.book.NumAddresses() == 4
 		}, 4*time.Second, 100*time.Millisecond, "should return 4 peers")
 	})
 
@@ -215,7 +214,7 @@ func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 	hosts := make([]host.Host, 0, nodesCount)
 	for i := 0; i < nodesCount; i++ {
 		cm := connmgr.NewConnManager(40, 100, 30*time.Second)
-		h, err := libp2p.New(context.Background(), libp2p.ConnectionManager(cm))
+		h, err := libp2p.New(libp2p.ConnectionManager(cm))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			require.NoError(t, h.Close())
@@ -227,7 +226,7 @@ func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 }
 
 func setupOverMockNet(t *testing.T, nodesCount int) (mocknet.Mocknet, []*Discovery) {
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), nodesCount)
+	mesh, err := mocknet.FullMeshConnected(nodesCount)
 	require.NoError(t, err)
 	instances := setup(t, mesh.Hosts())
 	wrapDiscovery(instances)

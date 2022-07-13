@@ -59,7 +59,7 @@ func newMesh(t *testing.T, lg log.Log, cdb *datastore.CachedDB, allMocked bool) 
 				return lid.Sub(1)
 			}).AnyTimes()
 	}
-	msh, _, err := mesh.NewMesh(cdb, mt, mcs, lg)
+	msh, err := mesh.NewMesh(cdb, mt, mcs, lg)
 	require.NoError(t, err)
 	return msh, mcs, mt
 }
@@ -161,31 +161,31 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	gLayer := types.GetEffectiveGenesis()
 
 	ch := make(chan fetch.LayerPromiseResult)
+	started := make(chan struct{}, 1)
 	for lid := gLayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(ch)
+		if lid == gLayer.Add(1) {
+			ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).DoAndReturn(
+				func(context.Context, types.LayerID) chan fetch.LayerPromiseResult {
+					close(started)
+					return ch
+				},
+			)
+		} else {
+			ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(ch)
+		}
 	}
 	var wg sync.WaitGroup
-	wg.Add(2)
-	first, second := true, true
-	started := make(chan struct{}, 2)
+	wg.Add(1)
 	go func() {
-		started <- struct{}{}
-		first = ts.syncer.synchronize(context.TODO())
+		require.True(t, ts.syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
 	<-started
-	go func() {
-		started <- struct{}{}
-		second = ts.syncer.synchronize(context.TODO())
-		wg.Done()
-	}()
-	<-started
+	require.False(t, ts.syncer.synchronize(context.TODO()))
 	// allow synchronize to finish
 	close(ch)
 	wg.Wait()
 
-	// one of the synchronize calls should fail
-	require.False(t, first && second)
 	require.Equal(t, uint64(1), ts.syncer.run)
 	ts.syncer.Close()
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -39,10 +41,16 @@ var (
 	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
 	clusters     = flag.Int("clusters", 1, "controls how many clusters are deployed on k8s")
+	storage      = flag.String("storage", "standard=1Gi", "<class>=<size> for the storage")
 	nodeSelector = stringToString{}
 	labels       = stringSet{}
 	tokens       chan struct{}
 	initTokens   sync.Once
+)
+
+const (
+	keepLabel        = "keep"
+	clusterSizeLabel = "size"
 )
 
 func init() {
@@ -72,8 +80,12 @@ type Context struct {
 	Namespace         string
 	Image             string
 	PoetImage         string
-	NodeSelector      map[string]string
-	Log               *zap.SugaredLogger
+	Storage           struct {
+		Size  string
+		Class string
+	}
+	NodeSelector map[string]string
+	Log          *zap.SugaredLogger
 }
 
 func cleanup(tb testing.TB, f func()) {
@@ -97,13 +109,55 @@ func deleteNamespace(ctx *Context) error {
 
 func deployNamespace(ctx *Context) error {
 	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx, corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
-		"testid": ctx.TestID,
-		"keep":   strconv.FormatBool(ctx.Keep),
+		"testid":         ctx.TestID,
+		keepLabel:        strconv.FormatBool(ctx.Keep),
+		clusterSizeLabel: strconv.Itoa(ctx.ClusterSize),
 	}),
 		apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("create namespace %s: %w", ctx.Namespace, err)
 	}
+	return nil
+}
+
+func getStorage() (string, string, error) {
+	parts := strings.Split(*storage, "=")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("malformed storage %s. see default value for example", *storage)
+	}
+	return parts[0], parts[1], nil
+}
+
+func updateContext(ctx *Context) error {
+	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
+		apimetav1.GetOptions{})
+	if err != nil || ns == nil {
+		if kerrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	keepval, exists := ns.Labels[keepLabel]
+	if !exists {
+		ctx.Log.Panic("invalid state. keep label should exist")
+	}
+	keep, err := strconv.ParseBool(keepval)
+	if err != nil {
+		ctx.Log.Panicw("invalid state. keep label should be parsable as a boolean",
+			"keepval", keepval)
+	}
+	ctx.Keep = ctx.Keep || keep
+
+	sizeval, _ := ns.Labels[clusterSizeLabel]
+	if err != nil {
+		ctx.Log.Panic("invalid state. cluster size label should exist")
+	}
+	size, err := strconv.Atoi(sizeval)
+	if err != nil {
+		ctx.Log.Panicw("invalid state. size label should be parsable as an integer",
+			"sizeval", sizeval)
+	}
+	ctx.ClusterSize = size
 	return nil
 }
 
@@ -113,6 +167,13 @@ func Labels(labels ...string) Opt {
 		for _, label := range labels {
 			c.labels[label] = struct{}{}
 		}
+	}
+}
+
+// SkipClusterLimits will not block if there are no available tokens.
+func SkipClusterLimits() Opt {
+	return func(c *cfg) {
+		c.skipLimits = true
 	}
 }
 
@@ -126,15 +187,17 @@ func newCfg() *cfg {
 }
 
 type cfg struct {
-	labels map[string]struct{}
+	labels     map[string]struct{}
+	skipLimits bool
 }
 
 // New creates context for the test.
 func New(t *testing.T, opts ...Opt) *Context {
-	t.Parallel()
 	initTokens.Do(func() {
 		tokens = make(chan struct{}, *clusters)
 	})
+	class, size, err := getStorage()
+	require.NoError(t, err)
 
 	c := newCfg()
 	for _, opt := range opts {
@@ -145,9 +208,10 @@ func New(t *testing.T, opts ...Opt) *Context {
 			t.Skipf("not labeled with '%s'", label)
 		}
 	}
-	tokens <- struct{}{}
-	t.Cleanup(func() { <-tokens })
-
+	if !c.skipLimits {
+		tokens <- struct{}{}
+		t.Cleanup(func() { <-tokens })
+	}
 	config, err := rest.InClusterConfig()
 	require.NoError(t, err)
 
@@ -180,7 +244,11 @@ func New(t *testing.T, opts ...Opt) *Context {
 		NodeSelector:      nodeSelector,
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
 	}
-	if !*keep {
+	cctx.Storage.Class = class
+	cctx.Storage.Size = size
+	err = updateContext(cctx)
+	require.NoError(t, err)
+	if !cctx.Keep {
 		cleanup(t, func() {
 			if err := deleteNamespace(cctx); err != nil {
 				cctx.Log.Errorf("cleanup failed", "error", err)

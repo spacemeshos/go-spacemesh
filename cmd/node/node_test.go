@@ -556,7 +556,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
-	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
@@ -987,7 +987,7 @@ func activateGRPCServer(smApp *App) {
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
 	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.host)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.conState)
-	smApp.txService = grpcserver.NewTransactionService(smApp.host, smApp.mesh, smApp.conState, smApp.syncer)
+	smApp.txService = grpcserver.NewTransactionService(smApp.db, smApp.host, smApp.mesh, smApp.conState, smApp.syncer)
 	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
 	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
 	smApp.txService.RegisterService(smApp.grpcAPIService)

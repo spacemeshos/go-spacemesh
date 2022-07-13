@@ -227,7 +227,7 @@ func (a *AddrBook) pickTried(bucket int) *knownAddress {
 	return oldest
 }
 
-// NumAddresses returns the number of addresses known to the address manager.
+// numAddresses returns the number of addresses known to the address manager.
 func (a *AddrBook) numAddresses() int {
 	return a.nTried + a.nNew
 }

@@ -74,6 +74,9 @@ func extractProposalMetadata(
 				logger.With().Error("failed to find proposal tx", p.LayerIndex, p.ID(), tid, log.Err(err))
 				return nil, fmt.Errorf("get proposal tx: %w", err)
 			}
+			if mtx.TxHeader == nil {
+				return nil, fmt.Errorf("inconsistent state: tx %s is missing header", mtx.ID)
+			}
 			seen[tid] = struct{}{}
 			mtxs = append(mtxs, mtx)
 		}
@@ -142,14 +145,14 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		candidates = make([]*types.MeshTransaction, 0, len(pmd.mtxs))
 		for _, mtx := range pmd.mtxs {
 			if mtx.State != types.APPLIED {
-				mtx.LayerID = mempoolLayer // for dbLessCache.GetMempool
+				mtx.LayerID = mempoolLayer // for cache.GetMempool
 				candidates = append(candidates, mtx)
 			}
 		}
 	} else {
 		minNonceByAddr := make(map[types.Address]uint64)
 		for _, mtx := range pmd.mtxs {
-			mtx.LayerID = mempoolLayer // for dbLessCache.GetMempool
+			mtx.LayerID = mempoolLayer // for cache.GetMempool
 			principal := mtx.Principal
 			if _, ok := minNonceByAddr[principal]; !ok {
 				minNonceByAddr[principal] = mtx.Nonce.Counter
@@ -165,18 +168,16 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		}
 	}
 	// this cache is used for building the set of transactions in a block.
-	// we do not want to access database here, as all transactions are already in memory.
-	dbLessCache := &cache{
+	txCache := &cache{
 		logger:    logger,
-		tp:        &nopTP{},
 		stateF:    stateF,
 		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
 	}
-	if err := dbLessCache.BuildFromTXs(candidates, blockSeed); err != nil {
+	if err := txCache.BuildFromTXs(candidates, blockSeed); err != nil {
 		return nil, err
 	}
-	byAddrAndNonce := dbLessCache.GetMempool()
+	byAddrAndNonce := txCache.GetMempool()
 	ntxs := make([]*txtypes.NanoTX, 0, len(pmd.mtxs))
 	byTid := make(map[types.TransactionID]*txtypes.NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
