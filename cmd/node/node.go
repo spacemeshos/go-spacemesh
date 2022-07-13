@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
-	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
@@ -621,15 +620,15 @@ func (app *App) initServices(ctx context.Context,
 		return pubsub.ValidationIgnore
 	}
 
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(beacon.ProposalProtocol,
+	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
+	app.host.Register(pubsub.ProposalProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(beacon.FirstVotesProtocol,
+	app.host.Register(pubsub.BeaconFirstVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(beacon.FollowingVotesProtocol,
+	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
-	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(
+	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
+	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(
 		func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 			if newSyncer.ListenToATXGossip() {
 				return pubsub.ValidationAccept
@@ -637,13 +636,13 @@ func (app *App) initServices(ctx context.Context,
 			return pubsub.ValidationIgnore
 		},
 		atxHandler.HandleGossipAtx))
-	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
-	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
+	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
+	app.host.Register(pubsub.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	hareGossipHandler := rabbit.GetHareMsgHandler()
 	if hareGossipHandler == nil {
 		app.log.Panic("hare message handler missing")
 	}
-	app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
+	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener

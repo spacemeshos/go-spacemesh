@@ -153,7 +153,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
-	network.Register(ProtoName, broker.HandleMessage)
+	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	nid := types.BytesToNodeID(signing.PublicKey().Bytes())

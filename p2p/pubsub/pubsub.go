@@ -30,11 +30,44 @@ func init() {
 }
 
 const (
-	GossipScoreThreshold             = -500
-	PublishScoreThreshold            = -1000
-	GraylistScoreThreshold           = -2500
-	AcceptPXScoreThreshold           = 1000
+	// score thresholds.
+	// see details https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md#score-thresholds
+
+	// GossipScoreThreshold when a peer's score drops below this threshold, no gossip is emitted towards that peer
+	// and gossip from that peer is ignored.
+	GossipScoreThreshold = -500
+	// PublishScoreThreshold when a peer's score drops below this threshold, self published messages are not propagated
+	// towards this peer when (flood) publishing.
+	PublishScoreThreshold = -1000
+	// GraylistScoreThreshold when a peer's score drops below this threshold, the peer is graylisted and its RPCs are ignored.
+	GraylistScoreThreshold = -2500
+	// AcceptPXScoreThreshold when a peer sends us PX information with a prune, we only accept it and connect to the
+	// supplied peers if the originating peer's score exceeds this threshold.
+	AcceptPXScoreThreshold = 1000
+	// OpportunisticGraftScoreThreshold when the median peer score in the mesh drops below this value, the router
+	// may select more peers with score above the median to opportunistically graft on the mesh.
 	OpportunisticGraftScoreThreshold = 3.5
+
+	// AtxProtocol is the protocol id for ATXs.
+	AtxProtocol = "/sm/atx/1"
+	// PoetProofProtocol is the protocol id for PoetProof.
+	PoetProofProtocol = "/sm/poet/1"
+	// ProposalProtocol is the protocol id for block proposals.
+	ProposalProtocol = "/sm/prop/1"
+	// TxProtocol iis the protocol id for transactions.
+	TxProtocol = "/sm/tx/1"
+
+	// HareProtocol is the protocol id for hare messages.
+	HareProtocol = "/sm/hare/1"
+
+	// BeaconWeakCoinProtocol is the protocol id for beacon weak coin.
+	BeaconWeakCoinProtocol = "/sm/beaconwk/1"
+	// BeaconProposalProtocol is the protocol id for beacon proposals.
+	BeaconProposalProtocol = "/sm/beaconpr/1"
+	// BeaconFirstVotesProtocol is the protocol id for beacon first vote.
+	BeaconFirstVotesProtocol = "/sm/beaconfv/1"
+	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
+	BeaconFollowingVotesProtocol = "/sm/beaconfv/1"
 )
 
 // DefaultConfig for PubSub.
@@ -135,14 +168,14 @@ func getOptions(cfg Config) []pubsub.Option {
 			&pubsub.PeerScoreParams{
 				AppSpecificScore: func(p peer.ID) float64 {
 					// TODO: add application specific score to provide feedback to the pubsub system
-					//       based on observed behaviour
+					//       based on observed behavior
 					return 0
 				},
 				AppSpecificWeight: 1,
 
 				// TODO: consider setting IP co-location threshold before applying penalties
 
-				// P7: behavioural penalties, decay after 1hr
+				// P7: behavioral penalties, decay after 1hr
 				BehaviourPenaltyThreshold: 6,
 				BehaviourPenaltyWeight:    -10,
 				BehaviourPenaltyDecay:     pubsub.ScoreParameterDecay(time.Hour),
@@ -153,6 +186,11 @@ func getOptions(cfg Config) []pubsub.Option {
 				// this retains non-positive scores for 6 hours
 				RetainScore: 6 * time.Hour,
 
+				Topics: map[string]*pubsub.TopicScoreParams{
+					AtxProtocol:       defaultTopicParam(),
+					PoetProofProtocol: defaultTopicParam(),
+					ProposalProtocol:  defaultTopicParam(),
+				},
 				// TODO: add TopicScoreParams
 			},
 			&pubsub.PeerScoreThresholds{
@@ -185,4 +223,25 @@ func getOptions(cfg Config) []pubsub.Option {
 		options = append(options, pubsub.WithPeerExchange(true))
 	}
 	return options
+}
+
+func defaultTopicParam() *pubsub.TopicScoreParams {
+	return &pubsub.TopicScoreParams{
+		TopicWeight: 0.1, // max cap is 50, max mesh penalty is -10, single invalid message is -100
+
+		// 1 tick per second, maxes at 1 after 1 hour
+		TimeInMeshWeight:  0.00027, // ~1/3600
+		TimeInMeshQuantum: time.Second,
+		TimeInMeshCap:     1,
+
+		// deliveries decay after 1 hour, cap at 100 blocks
+		FirstMessageDeliveriesWeight: 5, // max value is 500
+		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+
+		// TODO: consider mesh delivery failure when the network grows and traffic becomes significant
+
+		// invalid messages decay after 1 hour
+		InvalidMessageDeliveriesWeight: -1000,
+		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	}
 }
