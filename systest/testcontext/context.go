@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -40,6 +41,7 @@ var (
 	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
 	clusters     = flag.Int("clusters", 1, "controls how many clusters are deployed on k8s")
+	storage      = flag.String("storage", "standard=1Gi", "<class>=<size> for the storage")
 	nodeSelector = stringToString{}
 	labels       = stringSet{}
 	tokens       chan struct{}
@@ -78,8 +80,12 @@ type Context struct {
 	Namespace         string
 	Image             string
 	PoetImage         string
-	NodeSelector      map[string]string
-	Log               *zap.SugaredLogger
+	Storage           struct {
+		Size  string
+		Class string
+	}
+	NodeSelector map[string]string
+	Log          *zap.SugaredLogger
 }
 
 func cleanup(tb testing.TB, f func()) {
@@ -114,6 +120,14 @@ func deployNamespace(ctx *Context) error {
 	return nil
 }
 
+func getStorage() (string, string, error) {
+	parts := strings.Split(*storage, "=")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("malformed storage %s. see default value for example", *storage)
+	}
+	return parts[0], parts[1], nil
+}
+
 func updateContext(ctx *Context) error {
 	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
 		apimetav1.GetOptions{})
@@ -134,7 +148,7 @@ func updateContext(ctx *Context) error {
 	}
 	ctx.Keep = ctx.Keep || keep
 
-	sizeval, exists := ns.Labels[clusterSizeLabel]
+	sizeval, _ := ns.Labels[clusterSizeLabel]
 	if err != nil {
 		ctx.Log.Panic("invalid state. cluster size label should exist")
 	}
@@ -182,6 +196,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 	initTokens.Do(func() {
 		tokens = make(chan struct{}, *clusters)
 	})
+	class, size, err := getStorage()
+	require.NoError(t, err)
 
 	c := newCfg()
 	for _, opt := range opts {
@@ -228,6 +244,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 		NodeSelector:      nodeSelector,
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
 	}
+	cctx.Storage.Class = class
+	cctx.Storage.Size = size
 	err = updateContext(cctx)
 	require.NoError(t, err)
 	if !cctx.Keep {

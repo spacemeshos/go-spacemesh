@@ -145,7 +145,7 @@ func Test_consensusIterations(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -395,7 +395,7 @@ func Test_multipleCPs(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -482,7 +482,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)

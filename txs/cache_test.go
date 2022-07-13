@@ -181,11 +181,9 @@ func createSingleAccountTestCache(t *testing.T) (*testCache, *testAcct) {
 
 func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, accountTXs map[types.Address][]*types.MeshTransaction, totalPending int) {
 	t.Helper()
-	allPending := make([]*types.MeshTransaction, 0, totalPending)
 	for principal, ta := range accounts {
-		if mtxs, ok := accountTXs[principal]; ok {
+		if _, ok := accountTXs[principal]; ok {
 			checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
-			allPending = append(allPending, mtxs...)
 		}
 	}
 	require.NoError(t, tc.cache.buildFromScratch(tc.db))

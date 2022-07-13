@@ -27,7 +27,7 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		n         = 20
 		rounds    = 5
 	)
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 
 	for _, h := range mesh.Hosts() {
@@ -103,10 +103,7 @@ func multiaddrFromString(tb testing.TB, raw string) ma.Multiaddr {
 }
 
 func TestDiscovery_PrefereRoutablePort(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	mesh, err := mocknet.WithNPeers(ctx, 1)
+	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	h := mesh.Hosts()[0]
 

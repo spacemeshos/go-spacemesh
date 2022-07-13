@@ -16,7 +16,7 @@ func TestGossip(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	n := 10
-	mesh, err := mocknet.FullMeshLinked(ctx, n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	topic := "test"
 	pubsubs := []*PubSub{}

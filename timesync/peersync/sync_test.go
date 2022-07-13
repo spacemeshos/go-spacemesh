@@ -36,7 +36,7 @@ func TestSyncGetOffset(t *testing.T) {
 	)
 
 	t.Run("Success", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+		mesh, err := mocknet.FullMeshConnected(4)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -56,7 +56,7 @@ func TestSyncGetOffset(t *testing.T) {
 	})
 
 	t.Run("Failure", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+		mesh, err := mocknet.FullMeshConnected(4)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -91,7 +91,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 		responseReceive = start.Add(30 * time.Second)
 	)
 
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+	mesh, err := mocknet.FullMeshConnected(4)
 	require.NoError(t, err)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -135,7 +135,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
 	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), len(delays))
+	mesh, err := mocknet.FullMeshLinked(len(delays))
 	require.NoError(t, err)
 	hosts := []*p2p.Host{}
 	for _, h := range mesh.Hosts() {

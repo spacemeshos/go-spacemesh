@@ -275,9 +275,9 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
 						WithAccessModes(v1.ReadWriteOnce).
-						WithStorageClassName("standard").
+						WithStorageClassName(ctx.Storage.Class).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")}))),
+							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
 			).
 			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
 			WithTemplate(corev1.PodTemplateSpec().

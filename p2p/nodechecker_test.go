@@ -213,7 +213,7 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 		mark:             make(chan struct{}),
 	}
 
-	node, err := libp2p.New(context.Background(),
+	node, err := libp2p.New(
 		libp2p.ListenAddrs(addr),
 		libp2p.DisableRelay(),
 		libp2p.NATPortMap(),

@@ -426,14 +426,15 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	// Give the services a few seconds to start running - this is important on CI.
-	time.Sleep(2 * time.Second)
-
-	// Try talking to the server
 	const message = "Hello World"
 
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+	var conn *grpc.ClientConn
+	require.Eventually(t, func() bool {
+		var err error
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		return err == nil
+	}, 2*time.Second, 100*time.Millisecond)
+
 	r.NoError(err)
 	c := pb.NewNodeServiceClient(conn)
 
@@ -456,14 +457,13 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.Equal(port, app.Config.API.GrpcServerPort)
 	r.Equal(true, app.Config.API.StartNodeService)
 
-	// Give the services a few seconds to start running - this is important on CI.
-	time.Sleep(2 * time.Second)
+	require.Eventually(t, func() bool {
+		var err error
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		return err == nil
+	}, 2*time.Second, 100*time.Millisecond)
+	defer conn.Close()
 
-	// Set up a new connection to the server
-	conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
-	defer func() {
-		r.NoError(conn.Close())
-	}()
 	r.NoError(err)
 	c = pb.NewNodeServiceClient(conn)
 
@@ -527,14 +527,17 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.Equal(true, app.Config.API.StartJSONServer)
 	r.Equal(true, app.Config.API.StartNodeService)
 
-	// Give the server a chance to start up
-	time.Sleep(2 * time.Second)
-
-	// We expect this one to succeed
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
+	var (
+		respBody   string
+		respStatus int
+	)
+	require.Eventually(t, func() bool {
+		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
+		return respStatus == http.StatusOK
+	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
-	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
-	r.Equal(message, msg.Msg.Value)
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
 	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
@@ -553,7 +556,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
-	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
@@ -599,18 +602,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	// Set up a new connection to the server
-	var (
-		conn *grpc.ClientConn
-	)
-	for start := time.Now(); time.Since(start) <= 10*time.Second; {
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure(), grpc.WithBlock())
-		if err == nil {
-			break
-		}
-	}
-	require.NotNil(t, conn)
-	require.NoError(t, err)
+	var conn *grpc.ClientConn
+	require.Eventually(t, func() bool {
+		var err error
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		return err == nil
+	}, 5*time.Second, 100*time.Millisecond)
 	t.Cleanup(func() {
 		require.NoError(t, conn.Close())
 	})
@@ -645,15 +642,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
 	require.NoError(t, err)
+	_, err = streamErr.Header()
+	require.NoError(t, err)
 
 	// Report two errors and make sure they're both received
 	go func() {
-		// Ensure order
-		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test123")
-		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test456")
-		time.Sleep(10 * time.Millisecond)
 		assert.Panics(t, func() {
 			errlog.Panic("testPANIC")
 		})
@@ -744,23 +739,26 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		wg.Done()
 	}()
 
-	// Wait for the app and services to start
-	// Strictly speaking, this does not indicate that all of the services
-	// have started, we could add separate channels for that, but it seems
-	// to work well enough for testing.
-	<-app.started
-	time.Sleep(2 * time.Second)
-
-	// Set up a new connection to the server
-	addr := fmt.Sprintf("localhost:%d", port)
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	var conn *grpc.ClientConn
+	require.Eventually(t, func() bool {
+		var err error
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		return err == nil
+	}, 5*time.Second, 100*time.Millisecond)
 	defer func() {
 		r.NoError(conn.Close())
 	}()
-	r.NoError(err)
 	c := pb.NewTransactionServiceClient(conn)
 
 	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey()))
+
+	stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
+		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
+		IncludeTransactions: true,
+	})
+	require.NoError(t, err)
+	_, err = stream.Header()
+	require.NoError(t, err)
 
 	// TODO(dshulyak) synchronization below is messed up
 	wg2 := sync.WaitGroup{}
@@ -771,13 +769,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		var once sync.Once
 		oncebody := func() { wg2.Done() }
 		defer once.Do(oncebody)
-
-		// Open a transaction stream
-		stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
-			TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
-			IncludeTransactions: true,
-		})
-		require.NoError(t, err)
 
 		// Now listen on the stream
 		res, err := stream.Recv()

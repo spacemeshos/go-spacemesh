@@ -28,7 +28,7 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := logtest.New(t)
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), n)
+	mesh, err := mocknet.FullMeshConnected(n)
 	require.NoError(t, err)
 	protocols := []*peerExchange{}
 
