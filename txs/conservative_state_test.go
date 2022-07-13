@@ -481,6 +481,22 @@ func TestAddToCache(t *testing.T) {
 	require.Equal(t, *tx, got.Transaction)
 }
 
+func TestAddToCache_FailedNotPersisted(t *testing.T) {
+	tcs := createConservativeState(t)
+	tx := &types.Transaction{
+		RawTx: types.NewRawTx([]byte{1, 1, 1}),
+		TxHeader: &types.TxHeader{
+			Principal: types.Address{1, 1},
+			Nonce:     types.Nonce{Counter: 100},
+		},
+	}
+	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{}, nil).Times(1)
+	require.Error(t, tcs.AddToCache(tx))
+	_, err := transactions.Get(tcs.db, tx.ID)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
 func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()

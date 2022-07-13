@@ -133,13 +133,15 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	received := time.Now()
+	if err := cs.cache.Add(cs.db, tx, received, nil); err != nil {
+		return err
+	}
 	if err := transactions.Add(cs.db, tx, received); err != nil {
 		return err
 	}
 	events.ReportNewTx(types.LayerID{}, tx)
 	events.ReportAccountUpdate(tx.Principal)
-
-	return cs.cache.Add(cs.db, tx, received, nil)
+	return nil
 }
 
 // RevertState reverts the VM state and database to the given layer.
