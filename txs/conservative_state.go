@@ -177,7 +177,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	logger.With().Info("applying layer to cache",
 		log.Int("num_txs_failed", len(skipped)),
 		log.Int("num_txs_final", len(rsts)))
-	if _, errs := cs.cache.ApplyLayer(cs.db, toApply.LayerIndex, toApply.ID(), rsts); len(errs) > 0 {
+	if _, errs := cs.cache.ApplyLayer(cs.db, toApply.LayerIndex, toApply.ID(), rsts, skipped); len(errs) > 0 {
 		return nil, errs[0]
 	}
 	return skipped, nil

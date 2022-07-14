@@ -570,7 +570,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	for _, tx := range txs[numFailed:] {
+	for _, tx := range txs {
 		principal := tx.Principal
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance-(tx.Spending()), nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)
