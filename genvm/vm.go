@@ -182,7 +182,9 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
+	total := 0
 	ss.IterateChanged(func(account *core.Account) bool {
+		total++
 		account.Layer = lctx.Layer
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
@@ -196,6 +198,8 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
+	writesPerBlock.Observe(float64(total))
+
 	var hash types.Hash32
 	hasher.Sum(hash[:0])
 	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
@@ -207,6 +211,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 	t5 := time.Now()
 	blockDurationPersist.Observe(float64(t5.Sub(t4)))
 	blockDuration.Observe(float64(t5.Sub(t1)))
+	transactionsPerBlock.Observe(float64(len(txs)))
 
 	v.logger.With().Info("applied layer",
 		lctx.Layer,
@@ -237,6 +242,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 		}
 		rewardsCount.Add(float64(reward.TotalReward))
 	}
+	feesCount.Add(float64(fees))
 	return nil
 }
 
@@ -249,14 +255,21 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 		results []types.TransactionWithResult
 	)
 	for i := range txs {
+		txCount.Inc()
+
+		t1 := time.Now()
 		tx := &txs[i]
 		rd.Reset(tx.Raw)
 		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
 		if err != nil {
 			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
 			continue
 		}
+		t2 := time.Now()
+		transactionDurationParse.Observe(float64(t2.Sub(t1)))
+
 		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
@@ -267,6 +280,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 				log.Object("account", &ctx.Account),
 			)
 			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
 			continue
 		}
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
@@ -275,6 +289,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 				log.Object("account", &ctx.Account),
 			)
 			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
 			continue
 		}
 		rst := types.TransactionWithResult{}
@@ -294,6 +309,9 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 				return nil, nil, 0, err
 			}
 		}
+		t3 := time.Now()
+		transactionDurationExecute.Observe(float64(t3.Sub(t2)))
+
 		rst.RawTx = txs[i]
 		rst.TxHeader = &ctx.Header
 		rst.Status = types.TransactionSuccess
@@ -311,6 +329,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 		}
 		fees += ctx.Fee()
 		results = append(results, rst)
+		transactionDuration.Observe(float64(time.Since(t1)))
 	}
 	return results, skipped, fees, nil
 }
@@ -328,11 +347,13 @@ type Request struct {
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
+	start := time.Now()
 	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
+	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }
 
@@ -341,7 +362,10 @@ func (r *Request) Verify() bool {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
 	}
-	return verify(r.ctx, r.raw.Raw)
+	start := time.Now()
+	rst := verify(r.ctx, r.raw.Raw)
+	transactionDurationExecute.Observe(float64(time.Since(start)))
+	return rst
 }
 
 func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {

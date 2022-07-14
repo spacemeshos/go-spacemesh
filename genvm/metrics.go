@@ -14,64 +14,66 @@ var (
 		namespace,
 		"Duration in ns without writing updated state on disk",
 		[]string{},
-		prometheus.LinearBuckets(100_000, 100_000, 10),
+		prometheus.ExponentialBuckets(10_000, 2, 10),
 	).WithLabelValues()
 	transactionDurationParse = metrics.NewHistogramWithBuckets(
 		"transaction_duration_parse",
 		namespace,
 		"Duration in ns for parsing a transaction",
 		[]string{},
-		prometheus.LinearBuckets(100_000, 100_000, 10),
+		prometheus.ExponentialBuckets(10_000, 2, 10),
 	).WithLabelValues()
 	transactionDurationVerify = metrics.NewHistogramWithBuckets(
 		"transaction_duration_verify",
 		namespace,
 		"Duration in ns for verifying a transaction",
 		[]string{},
-		prometheus.LinearBuckets(100_000, 100_000, 10),
+		prometheus.ExponentialBuckets(10_000, 2, 10),
 	).WithLabelValues()
 	transactionDurationExecute = metrics.NewHistogramWithBuckets(
 		"transaction_duration_execute",
 		namespace,
 		"Duration in ns for executing a transaction",
 		[]string{},
-		prometheus.LinearBuckets(100_000, 100_000, 10),
+		prometheus.ExponentialBuckets(10_000, 2, 10),
 	).WithLabelValues()
+)
 
+var (
 	blockDuration = metrics.NewHistogramWithBuckets(
 		"block_duration",
 		namespace,
 		"Duration in ns with update to disk",
 		[]string{},
-		prometheus.LinearBuckets(10_000_000, 100_000_000, 10),
+		prometheus.ExponentialBuckets(10_000_000, 2, 10),
 	).WithLabelValues()
 	blockDurationWait = metrics.NewHistogramWithBuckets(
 		"block_duration_wait",
 		namespace,
 		"Duration in ns for db to be ready to process transactions.",
 		[]string{},
-		prometheus.LinearBuckets(10_000_000, 100_000_000, 10),
+		prometheus.ExponentialBuckets(100_000, 2, 10),
 	).WithLabelValues()
 	blockDurationTxs = metrics.NewHistogramWithBuckets(
 		"block_duration_txs",
 		namespace,
 		"Duration in ns to parse and execute transactions.",
 		[]string{},
-		prometheus.LinearBuckets(10_000_000, 100_000_000, 10),
+		prometheus.ExponentialBuckets(1_000_000, 2, 10),
 	).WithLabelValues()
 	blockDurationRewards = metrics.NewHistogramWithBuckets(
 		"block_duration_rewards",
 		namespace,
 		"Duration in ns to compute and update rewards.",
 		[]string{},
-		prometheus.LinearBuckets(10_000_000, 100_000_000, 10),
+		prometheus.ExponentialBuckets(1_000_000, 2, 10),
 	).WithLabelValues()
 	blockDurationPersist = metrics.NewHistogramWithBuckets(
 		"block_duration_persist",
 		namespace,
 		"Duration in ns to write updates on disk.",
 		[]string{},
-		prometheus.LinearBuckets(10_000_000, 100_000_000, 10),
+		prometheus.ExponentialBuckets(10_000_000, 2, 10),
 	).WithLabelValues()
 )
 
@@ -102,24 +104,17 @@ var (
 		namespace,
 		"Number of transactions in the block",
 		[]string{},
-		prometheus.LinearBuckets(100, 1000, 10),
+		prometheus.ExponentialBuckets(100, 10, 10),
 	).WithLabelValues()
 )
 
 var (
-	touchedAccountsPerTx = metrics.NewHistogramWithBuckets(
-		"touched_accounts_per_tx",
-		namespace,
-		"Number of touched (updated) accounts in transaction",
-		[]string{},
-		prometheus.LinearBuckets(1, 1, 10),
-	).WithLabelValues()
-	touchedAccountsPerBlock = metrics.NewHistogramWithBuckets(
-		"touched_accounts_per_block",
+	writesPerBlock = metrics.NewHistogramWithBuckets(
+		"account_writes_per_block",
 		namespace,
 		"Number of touched (updated) accounts in the block",
 		[]string{},
-		prometheus.LinearBuckets(10, 100, 10),
+		prometheus.ExponentialBuckets(100, 10, 10),
 	).WithLabelValues()
 )
 
