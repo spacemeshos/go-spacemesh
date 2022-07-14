@@ -105,8 +105,6 @@ jobs:
         run: make
       - name: unit tests
         run: make test
-        env: 
-          TEST_LOG_LEVEL: debug
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
