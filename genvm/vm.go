@@ -364,7 +364,7 @@ func (r *Request) Verify() bool {
 	}
 	start := time.Now()
 	rst := verify(r.ctx, r.raw.Raw)
-	transactionDurationExecute.Observe(float64(time.Since(start)))
+	transactionDurationVerify.Observe(float64(time.Since(start)))
 	return rst
 }
 
