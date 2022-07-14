@@ -154,17 +154,97 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 
 // Apply transactions.
 func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
 	defer tx.Release()
+	t2 := time.Now()
+	blockDurationWait.Observe(float64(t2.Sub(t1)))
+
+	ss := core.NewStagedCache(tx)
+	results, skipped, fees, err := v.execute(lctx, ss, txs)
+	if err != nil {
+		return nil, nil, err
+	}
+	t3 := time.Now()
+	blockDurationTxs.Observe(float64(t3.Sub(t2)))
+
+	// TODO(dshulyak) why it fails if there are no rewards?
+	if len(blockRewards) > 0 {
+		if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
+			return nil, nil, err
+		}
+	}
+	t4 := time.Now()
+	blockDurationRewards.Observe(float64(t4.Sub(t3)))
+
+	hasher := hash.New()
+	encoder := scale.NewEncoder(hasher)
+	ss.IterateChanged(func(account *core.Account) bool {
+		account.Layer = lctx.Layer
+		v.logger.With().Debug("update account state", log.Inline(account))
+		err = accounts.Update(tx, account)
+		if err != nil {
+			return false
+		}
+		account.EncodeScale(encoder)
+		events.ReportAccountUpdate(account.Address)
+		return true
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	var hash types.Hash32
+	hasher.Sum(hash[:0])
+	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	t5 := time.Now()
+	blockDurationPersist.Observe(float64(t5.Sub(t4)))
+	blockDuration.Observe(float64(t5.Sub(t1)))
+
+	v.logger.With().Info("applied layer",
+		lctx.Layer,
+		lctx.Block,
+		log.Int("count", len(txs)-len(skipped)),
+		log.Duration("duration", time.Since(t1)),
+		log.Stringer("state_hash", hash),
+	)
+	return skipped, results, nil
+}
+
+func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fees uint64, blockRewards []types.AnyReward) error {
+	finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
+	if err != nil {
+		return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	for _, reward := range finalRewards {
+		if err := rewards.Add(tx, reward); err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		account, err := ss.Get(reward.Coinbase)
+		if err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		account.Balance += reward.TotalReward
+		if err := ss.Update(account); err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		rewardsCount.Add(float64(reward.TotalReward))
+	}
+	return nil
+}
+
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx) ([]types.TransactionWithResult, []types.TransactionID, uint64, error) {
 	var (
-		ss      = core.NewStagedCache(tx)
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
 		skipped []types.TransactionID
-		start   = time.Now()
 		fees    uint64
 		results []types.TransactionWithResult
 	)
@@ -211,7 +291,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 			// internal errors are propagated upwards, but they are for fatal
 			// unrecovarable errors, such as disk problems
 			if errors.Is(err, core.ErrInternal) {
-				return nil, nil, err
+				return nil, nil, 0, err
 			}
 		}
 		rst.RawTx = txs[i]
@@ -227,65 +307,12 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 
 		err = ctx.Apply(ss)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, nil, 0, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		fees += ctx.Fee()
 		results = append(results, rst)
 	}
-
-	// TODO(dshulyak) why it fails if there are no rewards?
-	if len(blockRewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		for _, reward := range finalRewards {
-			if err := rewards.Add(tx, reward); err != nil {
-				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-			account, err := ss.Get(reward.Coinbase)
-			if err != nil {
-				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-			account.Balance += reward.TotalReward
-			if err := ss.Update(account); err != nil {
-				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-		}
-	}
-
-	hasher := hash.New()
-	encoder := scale.NewEncoder(hasher)
-	ss.IterateChanged(func(account *core.Account) bool {
-		account.Layer = lctx.Layer
-		v.logger.With().Debug("update account state", log.Inline(account))
-		err = accounts.Update(tx, account)
-		if err != nil {
-			return false
-		}
-		account.EncodeScale(encoder)
-		events.ReportAccountUpdate(account.Address)
-		return true
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-	}
-	var hash types.Hash32
-	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
-		return nil, nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-	}
-	v.logger.With().Info("applied transactions",
-		lctx.Layer,
-		lctx.Block,
-		log.Int("count", len(txs)-len(skipped)),
-		log.Duration("duration", time.Since(start)),
-		log.Stringer("state_hash", hash),
-	)
-	return skipped, results, nil
+	return results, skipped, fees, nil
 }
 
 // Request used to implement 2-step validation flow.
