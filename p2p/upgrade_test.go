@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	connmgr "github.com/libp2p/go-libp2p-connmgr"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIsBootnode(t *testing.T) {
-	cm := connmgr.NewConnManager(40, 100, 30*time.Second)
+	cm, err := connmgr.NewConnManager(40, 100, connmgr.WithGracePeriod(30*time.Second))
+	require.NoError(t, err)
 	h, err := libp2p.New(libp2p.ConnectionManager(cm))
 	require.NoError(t, err)
 	bootnodes := []string{
