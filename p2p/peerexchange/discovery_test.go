@@ -33,18 +33,15 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 	for _, h := range mesh.Hosts() {
 		logger := logtest.New(t).Named(h.ID().Pretty())
 		cfg := Config{}
-		isBootnode := false
 
-		best, err := bestHostAddress(h)
+		best, err := BestHostAddress(h)
 		require.NoError(t, err)
 		if bootnode == nil {
 			bootnode = best
-			isBootnode = true
 		}
 		cfg.Bootnodes = append(cfg.Bootnodes, bootnode.RawAddr)
-		instance, isBoot, err := New(logger, h, cfg)
+		instance, err := New(logger, h, cfg)
 		require.NoError(t, err)
-		require.Equal(t, isBootnode, isBoot)
 		t.Cleanup(instance.Stop)
 		instances = append(instances, instance)
 	}
@@ -122,9 +119,8 @@ func TestDiscovery_PrefereRoutablePort(t *testing.T) {
 	addrmock.EXPECT().Addrs().DoAndReturn(func() []ma.Multiaddr {
 		return returned
 	}).AnyTimes()
-	discovery, isBoot, err := New(logtest.New(t), ph, Config{})
+	discovery, err := New(logtest.New(t), ph, Config{})
 	require.NoError(t, err)
-	require.False(t, isBoot)
 	t.Cleanup(discovery.Stop)
 
 	external := uint16(1010)

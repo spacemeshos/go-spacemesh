@@ -2,7 +2,6 @@ package pubsub
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -24,7 +23,6 @@ func TestGossip(t *testing.T) {
 	count := n * n
 	received := make(chan []byte, count)
 
-	fmt.Printf("num in mesh %d\n", len(mesh.Hosts()))
 	for _, h := range mesh.Hosts() {
 		h := h
 		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true})

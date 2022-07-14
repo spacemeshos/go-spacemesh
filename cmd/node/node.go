@@ -621,7 +621,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(pubsub.ProposalProtocol,
+	app.host.Register(pubsub.BeaconProposalProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
 	app.host.Register(pubsub.BeaconFirstVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))

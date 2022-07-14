@@ -88,7 +88,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		require.Equal(t, 0, len(d.GetRandomPeers(10)), "should return zero peers")
 	})
 
-	best, err := bestHostAddress(d.host)
+	best, err := BestHostAddress(d.host)
 	require.NoError(t, err)
 	// populate address book with some addresses.
 	d.book.AddAddress(bootNodeAddress, best)
@@ -191,7 +191,7 @@ func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
 		ids = append(ids, tmpAddr.ID)
 	}
 
-	best, err := bestHostAddress(nodeA.host)
+	best, err := BestHostAddress(nodeA.host)
 	require.NoError(t, err)
 	nodeA.book.AddAddresses(addrs, best)
 
@@ -247,7 +247,7 @@ func setup(t *testing.T, hosts []host.Host) []*Discovery {
 			CheckPeersNumber:     10,
 		}
 
-		best, err := bestHostAddress(h)
+		best, err := BestHostAddress(h)
 		require.NoError(t, err)
 		if bootnode == nil {
 			bootnode = best
@@ -255,9 +255,8 @@ func setup(t *testing.T, hosts []host.Host) []*Discovery {
 			cfg.Bootnodes = append(cfg.Bootnodes, bootnode.RawAddr)
 		}
 
-		instance, isBoot, err := New(logger, h, cfg)
+		instance, err := New(logger, h, cfg)
 		require.NoError(t, err)
-		require.False(t, isBoot)
 		t.Cleanup(instance.Stop)
 		instances = append(instances, instance)
 	}

@@ -17,6 +17,8 @@ import (
 
 func init() {
 	// configure larger overlay parameters
+	// these params are copied from FIL https://github.com/filecoin-project/lotus
+	// TODO: reevaluate these params for spacemesh network
 	pubsub.GossipSubD = 8
 	pubsub.GossipSubDscore = 6
 	pubsub.GossipSubDout = 3
@@ -65,9 +67,9 @@ const (
 	// BeaconProposalProtocol is the protocol id for beacon proposals.
 	BeaconProposalProtocol = "/sm/beaconpr/1"
 	// BeaconFirstVotesProtocol is the protocol id for beacon first vote.
-	BeaconFirstVotesProtocol = "/sm/beaconfv/1"
+	BeaconFirstVotesProtocol = "/sm/beaconfi/1"
 	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
-	BeaconFollowingVotesProtocol = "/sm/beaconfv/1"
+	BeaconFollowingVotesProtocol = "/sm/beaconfo/1"
 )
 
 // DefaultConfig for PubSub.
@@ -234,9 +236,10 @@ func defaultTopicParam() *pubsub.TopicScoreParams {
 		TimeInMeshQuantum: time.Second,
 		TimeInMeshCap:     1,
 
-		// deliveries decay after 1 hour, cap at 100 blocks
+		// deliveries decay after 1 hour, cap at 1000
 		FirstMessageDeliveriesWeight: 5, // max value is 500
 		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+		FirstMessageDeliveriesCap:    100,
 
 		// TODO: consider mesh delivery failure when the network grows and traffic becomes significant
 
