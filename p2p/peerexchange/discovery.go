@@ -74,7 +74,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		}
 		bootnodes = append(bootnodes, info)
 	}
-	best, err := BestHostAddress(h)
+	best, err := bestHostAddress(h)
 	if err != nil {
 		return nil, err
 	}
@@ -125,8 +125,8 @@ func (d *Discovery) ExternalPort() uint16 {
 
 var errNotFound = errors.New("not found")
 
-// BestHostAddress returns routable address if exists, otherwise it returns first available address.
-func BestHostAddress(h host.Host) (*addressbook.AddrInfo, error) {
+// bestHostAddress returns routable address if exists, otherwise it returns first available address.
+func bestHostAddress(h host.Host) (*addressbook.AddrInfo, error) {
 	best, err := bestNetAddress(h)
 	if err == nil {
 		ip, err := manet.ToIP(best)

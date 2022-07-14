@@ -36,7 +36,7 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 		require.NoError(t, err)
 		book := addressbook.NewAddrBook(addressbook.DefaultAddressBookConfigWithDataDir(""), logger)
 
-		best, err := BestHostAddress(h)
+		best, err := bestHostAddress(h)
 		require.NoError(t, err)
 		book.AddAddress(info, best)
 
@@ -51,7 +51,7 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 			}
 			_, err := proto.Request(context.TODO(), proto2.h.ID())
 			require.NoError(t, err)
-			best, err := BestHostAddress(proto.h)
+			best, err := bestHostAddress(proto.h)
 			require.NoError(t, err)
 			found := proto2.book.Lookup(proto.h.ID())
 			require.Equal(t, best, found)

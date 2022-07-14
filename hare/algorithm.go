@@ -23,8 +23,6 @@ import (
 const (
 	// RoundsPerIteration is the number of rounds per iteration in the hare protocol.
 	RoundsPerIteration = 4
-	// HareProtocol is the protocol indicator for hare gossip messages.
-
 )
 
 type role byte

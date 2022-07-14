@@ -65,16 +65,12 @@ type Host struct {
 }
 
 func isBootnode(h host.Host, bootnodes []string) (bool, error) {
-	best, err := peerexchange.BestHostAddress(h)
-	if err != nil {
-		return false, err
-	}
 	for _, raw := range bootnodes {
 		info, err := addressbook.ParseAddrInfo(raw)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
-		if best.ID == info.ID {
+		if h.ID() == info.ID {
 			return true, nil
 		}
 	}

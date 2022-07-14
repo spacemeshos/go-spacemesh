@@ -34,7 +34,7 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		logger := logtest.New(t).Named(h.ID().Pretty())
 		cfg := Config{}
 
-		best, err := BestHostAddress(h)
+		best, err := bestHostAddress(h)
 		require.NoError(t, err)
 		if bootnode == nil {
 			bootnode = best
