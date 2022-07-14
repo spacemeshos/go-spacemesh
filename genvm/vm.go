@@ -161,7 +161,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 	}
 	defer tx.Release()
 	t2 := time.Now()
-	blockDurationWait.Observe(float64(t2.Sub(t1)))
+	blockDurationWait.Observe(float64(time.Since(t1)))
 
 	ss := core.NewStagedCache(tx)
 	results, skipped, fees, err := v.execute(lctx, ss, txs)
@@ -169,7 +169,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 		return nil, nil, err
 	}
 	t3 := time.Now()
-	blockDurationTxs.Observe(float64(t3.Sub(t2)))
+	blockDurationTxs.Observe(float64(time.Since(t2)))
 
 	// TODO(dshulyak) why it fails if there are no rewards?
 	if len(blockRewards) > 0 {
@@ -178,7 +178,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 		}
 	}
 	t4 := time.Now()
-	blockDurationRewards.Observe(float64(t4.Sub(t3)))
+	blockDurationRewards.Observe(float64(time.Since(t3)))
 
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
@@ -208,9 +208,8 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
-	t5 := time.Now()
-	blockDurationPersist.Observe(float64(t5.Sub(t4)))
-	blockDuration.Observe(float64(t5.Sub(t1)))
+	blockDurationPersist.Observe(float64(time.Since(t4)))
+	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
 
 	v.logger.With().Info("applied layer",
@@ -268,7 +267,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 			continue
 		}
 		t2 := time.Now()
-		transactionDurationParse.Observe(float64(t2.Sub(t1)))
+		transactionDurationParse.Observe(float64(time.Since(t1)))
 
 		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
@@ -309,8 +308,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 				return nil, nil, 0, err
 			}
 		}
-		t3 := time.Now()
-		transactionDurationExecute.Observe(float64(t3.Sub(t2)))
+		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
 		rst.RawTx = txs[i]
 		rst.TxHeader = &ctx.Header
