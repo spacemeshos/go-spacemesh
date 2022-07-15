@@ -132,3 +132,10 @@ var (
 		[]string{},
 	).WithLabelValues()
 )
+
+var appliedLayer = metrics.NewGauge(
+	"applied_layer",
+	namespace,
+	"Applied layer",
+	[]string{},
+).WithLabelValues()
