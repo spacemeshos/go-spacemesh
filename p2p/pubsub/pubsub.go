@@ -51,25 +51,25 @@ const (
 	OpportunisticGraftScoreThreshold = 3.5
 
 	// AtxProtocol is the protocol id for ATXs.
-	AtxProtocol = "/sm/atx/1"
+	AtxProtocol = "/sm/ax/1"
 	// PoetProofProtocol is the protocol id for PoetProof.
-	PoetProofProtocol = "/sm/poet/1"
+	PoetProofProtocol = "/sm/pt/1"
 	// ProposalProtocol is the protocol id for block proposals.
-	ProposalProtocol = "/sm/prop/1"
+	ProposalProtocol = "/sm/pp/1"
 	// TxProtocol iis the protocol id for transactions.
 	TxProtocol = "/sm/tx/1"
 
 	// HareProtocol is the protocol id for hare messages.
-	HareProtocol = "/sm/hare/1"
+	HareProtocol = "/sm/hr/1"
 
 	// BeaconWeakCoinProtocol is the protocol id for beacon weak coin.
-	BeaconWeakCoinProtocol = "/sm/beaconwk/1"
+	BeaconWeakCoinProtocol = "/sm/bw/1"
 	// BeaconProposalProtocol is the protocol id for beacon proposals.
-	BeaconProposalProtocol = "/sm/beaconpr/1"
+	BeaconProposalProtocol = "/sm/bp/1"
 	// BeaconFirstVotesProtocol is the protocol id for beacon first vote.
-	BeaconFirstVotesProtocol = "/sm/beaconfi/1"
+	BeaconFirstVotesProtocol = "/sm/bf/1"
 	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
-	BeaconFollowingVotesProtocol = "/sm/beaconfo/1"
+	BeaconFollowingVotesProtocol = "/sm/bo/1"
 )
 
 // DefaultConfig for PubSub.
