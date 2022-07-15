@@ -481,6 +481,22 @@ func TestAddToCache(t *testing.T) {
 	require.Equal(t, *tx, got.Transaction)
 }
 
+func TestAddToCache_FailedNotPersisted(t *testing.T) {
+	tcs := createConservativeState(t)
+	tx := &types.Transaction{
+		RawTx: types.NewRawTx([]byte{1, 1, 1}),
+		TxHeader: &types.TxHeader{
+			Principal: types.Address{1, 1},
+			Nonce:     types.Nonce{Counter: 100},
+		},
+	}
+	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{}, nil).Times(1)
+	require.Error(t, tcs.AddToCache(tx))
+	_, err := transactions.Get(tcs.db, tx.ID)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
 func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
@@ -570,7 +586,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	for _, tx := range txs[numFailed:] {
+	for _, tx := range txs {
 		principal := tx.Principal
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance-(tx.Spending()), nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)

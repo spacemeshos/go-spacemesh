@@ -143,7 +143,7 @@ func Test_HandleGossip(t *testing.T) {
 			desc:   "AddFailed",
 			verify: true,
 			addErr: errors.New("test"),
-			expect: pubsub.ValidationAccept,
+			expect: pubsub.ValidationIgnore,
 		},
 	} {
 		tc := tc
@@ -200,6 +200,7 @@ func Test_HandleProposal(t *testing.T) {
 			desc:   "AddFailed",
 			verify: true,
 			addErr: errors.New("test"),
+			fail:   true,
 		},
 	} {
 		tc := tc

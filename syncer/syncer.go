@@ -339,6 +339,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.GetCurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
+		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
@@ -485,17 +486,29 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) e
 	return nil
 }
 
-func (s *Syncer) processLayers(ctx context.Context) error {
-	if !s.mesh.LatestLayerInState().Before(s.getLastSyncedLayer()) {
-		return nil
+func minLayer(a, b types.LayerID) types.LayerID {
+	if a.Before(b) {
+		return a
 	}
+	return b
+}
+
+func (s *Syncer) processLayers(ctx context.Context) error {
 	if !s.ListenToATXGossip() {
 		return errATXsNotSynced
 	}
+
 	s.logger.WithContext(ctx).With().Info("processing synced layers",
+		log.Stringer("processed", s.mesh.ProcessedLayer()),
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()))
-	for lid := s.mesh.LatestLayerInState().Add(1); !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
+
+	start := minLayer(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
+	if !start.Before(s.getLastSyncedLayer()) {
+		return nil
+	}
+
+	for lid := start.Add(1); !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
 		if s.isClosed() {
 			return errShuttingDown
 		}
