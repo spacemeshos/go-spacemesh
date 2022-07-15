@@ -105,7 +105,7 @@ func (r *failingRunner) isFailable(ev Message) bool {
 
 func (r *failingRunner) consume() {
 	for msg := r.messenger.PopMessage(); msg != nil; msg = r.messenger.PopMessage() {
-		if r.isFailable(msg) && r.probability[0] > rand.Intn(r.probability[1]) {
+		if r.isFailable(msg) && r.probability[0] > r.rng.Intn(r.probability[1]) {
 			continue
 		}
 		r.cluster.iterate(func(m model) {
