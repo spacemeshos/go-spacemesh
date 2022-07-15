@@ -681,7 +681,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult) ([]error, []error) {
+func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, skipped []types.TransactionID) ([]error, []error) {
 	if err := checkApplyOrder(c.logger, db, lid); err != nil {
 		return nil, []error{err}
 	}
@@ -692,6 +692,27 @@ func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockI
 	toCleanup := make(map[types.Address]struct{})
 	for _, rst := range results {
 		toCleanup[rst.Principal] = struct{}{}
+	}
+	skippedByPrincipal := make(map[types.Address]struct{})
+	for _, tid := range skipped {
+		var principal types.Address
+		ntx, ok := c.cachedTXs[tid]
+		if ok {
+			principal = ntx.Principal
+		} else {
+			mtx, err := transactions.Get(db, tid)
+			if err != nil {
+				c.logger.With().Warning("unable to find skipped tx in db", log.Err(err))
+				// nothing we can do
+				continue
+			} else if mtx.TxHeader == nil {
+				c.logger.With().Warning("tx header not parsed", tid)
+				continue
+			}
+			principal = mtx.Principal
+		}
+		toCleanup[principal] = struct{}{}
+		skippedByPrincipal[principal] = struct{}{}
 	}
 	defer c.cleanupAccounts(toCleanup)
 
@@ -723,6 +744,16 @@ func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockI
 			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
 			warns = append(warns, err)
 		}
+		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
+			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
+			errs = append(errs, err)
+		}
+	}
+	for principal := range skippedByPrincipal {
+		if _, ok := byPrincipal[principal]; ok {
+			continue
+		}
+		nextNonce, balance := c.stateF(principal)
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
 			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
 			errs = append(errs, err)

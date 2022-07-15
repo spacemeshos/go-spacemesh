@@ -169,6 +169,8 @@ func TestAddToProposal(t *testing.T) {
 	lid := types.NewLayerID(10)
 	pid := types.ProposalID{1, 1}
 	require.NoError(t, AddToProposal(db, tx.ID, lid, pid))
+	// do it again
+	require.NoError(t, AddToProposal(db, tx.ID, lid, pid))
 
 	has, err := HasProposalTX(db, pid, tx.ID)
 	require.NoError(t, err)
@@ -189,6 +191,8 @@ func TestAddToBlock(t *testing.T) {
 
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
+	require.NoError(t, AddToBlock(db, tx.ID, lid, bid))
+	// do it again
 	require.NoError(t, AddToBlock(db, tx.ID, lid, bid))
 
 	has, err := HasBlockTX(db, bid, tx.ID)

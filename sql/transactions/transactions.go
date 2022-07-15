@@ -55,7 +55,9 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 
 // AddToProposal associates a transaction with a proposal.
 func AddToProposal(db sql.Executor, tid types.TransactionID, lid types.LayerID, pid types.ProposalID) error {
-	if _, err := db.Exec(`insert into proposal_transactions (pid, tid, layer) values (?1, ?2, ?3)`,
+	if _, err := db.Exec(`
+		insert into proposal_transactions (pid, tid, layer) values (?1, ?2, ?3) 
+		on conflict(tid, pid) do nothing;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, pid.Bytes())
 			stmt.BindBytes(2, tid.Bytes())
@@ -81,7 +83,9 @@ func HasProposalTX(db sql.Executor, pid types.ProposalID, tid types.TransactionI
 
 // AddToBlock associates a transaction with a block.
 func AddToBlock(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid types.BlockID) error {
-	if _, err := db.Exec(`insert into block_transactions (bid, tid, layer) values (?1, ?2, ?3)`,
+	if _, err := db.Exec(`
+		insert into block_transactions (bid, tid, layer) values (?1, ?2, ?3)
+		on conflict(tid, bid) do nothing;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, bid.Bytes())
 			stmt.BindBytes(2, tid.Bytes())
