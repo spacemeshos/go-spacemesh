@@ -77,22 +77,13 @@ var (
 	).WithLabelValues()
 )
 
-var (
-	stagingCacheSize = metrics.NewGauge(
-		"staging_cache_size",
-		namespace,
-		"Number of loaded accounts into the cache",
-		[]string{},
-	).WithLabelValues()
-
-	writesPerBlock = metrics.NewHistogramWithBuckets(
-		"account_writes_per_block",
-		namespace,
-		"Number of touched (updated) accounts in the block",
-		[]string{},
-		prometheus.ExponentialBuckets(100, 10, 10),
-	).WithLabelValues()
-)
+var writesPerBlock = metrics.NewHistogramWithBuckets(
+	"account_writes_per_block",
+	namespace,
+	"Number of touched (updated) accounts in the block",
+	[]string{},
+	prometheus.ExponentialBuckets(100, 10, 10),
+).WithLabelValues()
 
 var (
 	txCount = metrics.NewCounter(
