@@ -1,6 +1,8 @@
 package txs
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -12,7 +14,7 @@ import (
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
 	Validation(types.RawTx) system.ValidationRequest
-	AddToCache(*types.Transaction) error
+	AddToCache(context.Context, *types.Transaction) error
 	AddToDB(*types.Transaction) error
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }

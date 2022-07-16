@@ -14,7 +14,7 @@ type proposalOracle interface {
 }
 
 type conservativeState interface {
-	SelectProposalTXs(int) []types.TransactionID
+	SelectProposalTXs(types.LayerID, int) []types.TransactionID
 }
 
 type votesEncoder interface {
