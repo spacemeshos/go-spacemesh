@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -305,8 +306,11 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 }
 
 // BootstrapAddressCache run AddressCache and add Config.AnchorPeersCount addresses from anchor peers.
-func (a *AddrBook) BootstrapAddressCache() []*AddrInfo {
-	addresses := a.AddressCache()
+func (a *AddrBook) BootstrapAddressCache() (addresses []*AddrInfo) {
+	addresses = a.AddressCache()
+	defer func() {
+		addresses = util.UniqueSliceStringer(addresses)
+	}()
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
@@ -322,8 +326,11 @@ func (a *AddrBook) BootstrapAddressCache() []*AddrInfo {
 		anchorPeers[i], anchorPeers[j] = anchorPeers[j], anchorPeers[i]
 	})
 
-	for _, ka := range anchorPeers[:a.cfg.AnchorPeersCount] {
+	for _, ka := range anchorPeers {
 		addresses = append(addresses, ka.Addr)
+		if len(addresses) >= a.cfg.AnchorPeersCount {
+			break
+		}
 	}
 	return addresses
 }

@@ -15,6 +15,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 )
 
@@ -29,6 +31,8 @@ type addressFactory struct {
 	blockAddresses   []string
 	closed           bool
 	mark             chan struct{}
+	traceAddr        map[string]struct{} // keep addresses which factory receive
+	traceAddrMu      *sync.RWMutex
 }
 
 func (t *addressFactory) addBlockList(blockAddress string) {
@@ -37,11 +41,24 @@ func (t *addressFactory) addBlockList(blockAddress string) {
 	t.blockAddressesMu.Unlock()
 }
 
+func (t *addressFactory) traceAddresses() []string {
+	t.traceAddrMu.RLock()
+	defer t.traceAddrMu.RUnlock()
+	result := make([]string, 0)
+	for addr := range t.traceAddr {
+		result = append(result, addr)
+	}
+	return result
+}
+
 func (t *addressFactory) addressFactory(addrs []ma.Multiaddr) []ma.Multiaddr {
 	t.blockAddressesMu.RLock()
 	defer t.blockAddressesMu.RUnlock()
 	result := make([]ma.Multiaddr, 0)
 	for _, addr := range addrs {
+		t.traceAddrMu.Lock()
+		t.traceAddr[addr.String()] = struct{}{}
+		t.traceAddrMu.Unlock()
 		blocked := false
 		for _, blockAddr := range t.blockAddresses {
 			if addr.String() == blockAddr {
@@ -61,8 +78,41 @@ func (t *addressFactory) addressFactory(addrs []ma.Multiaddr) []ma.Multiaddr {
 	return result
 }
 
+type hostAddressResolver struct {
+	createdAddresses   []ma.Multiaddr
+	createdAddressesMu *sync.RWMutex
+}
+
+func (h *hostAddressResolver) getAddress(t *testing.T) (addr ma.Multiaddr) {
+	for {
+		addr = generateAddressV4(t)
+		if !h.checkAddressExist(addr) {
+			break
+		}
+	}
+
+	h.createdAddressesMu.Lock()
+	defer h.createdAddressesMu.Unlock()
+	h.createdAddresses = append(h.createdAddresses, addr)
+	return addr
+}
+
+func (h *hostAddressResolver) checkAddressExist(checkAddr ma.Multiaddr) bool {
+	h.createdAddressesMu.RLock()
+	defer h.createdAddressesMu.RUnlock()
+	for _, addr := range h.createdAddresses {
+		if addr.Equal(checkAddr) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHost_LocalAddressChange(t *testing.T) {
-	t.Parallel()
+	addrResolve := hostAddressResolver{
+		createdAddresses:   make([]ma.Multiaddr, 0),
+		createdAddressesMu: &sync.RWMutex{},
+	}
 	const (
 		oldAddr = iota
 		newAddr
@@ -96,20 +146,22 @@ func TestHost_LocalAddressChange(t *testing.T) {
 	for _, tc := range table {
 		testCase := tc
 		t.Run(testCase.title, func(t *testing.T) {
-			t.Parallel()
-			addrAOld := generateAddressV4(t)
-			addrANew := generateAddressV4(t)
-			addrBOld := generateAddressV4(t)
+			addrAOld := addrResolve.getAddress(t)
+			addrANew := addrResolve.getAddress(t)
+			addrBOld := addrResolve.getAddress(t)
 
 			nodeA := generateNode(t, addrAOld, "")
 			nodeB := generateNode(t, addrBOld, nodeA.host.Addrs()[0].String()+"/p2p/"+nodeA.host.ID().String())
 
-			discoveryBootstrap(nodeA.host.discovery)
-			discoveryBootstrap(nodeB.host.discovery)
-
 			require.Eventually(t, func() bool {
+				discoveryBootstrap(nodeB.host.discovery)
 				return len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())) == 1
 			}, 4*time.Second, 100*time.Millisecond, "nodeB should have 1 address of nodeA")
+
+			require.Eventually(t, func() bool {
+				discoveryBootstrap(nodeA.host.discovery)
+				return len(nodeA.host.Peerstore().Addrs(nodeB.host.ID())) == 1
+			}, 4*time.Second, 100*time.Millisecond, "nodeA should have 1 address of nodeB")
 
 			// assing new address to nodeA, expect nodeB to be notified.
 			require.NoError(t, nodeA.host.Network().Listen(addrANew), "nodeA should be able to listen on new address")
@@ -134,6 +186,10 @@ func TestHost_LocalAddressChange(t *testing.T) {
 			if len(testCase.block) > 0 {
 				<-nodeA.transport.mark // wait until nodes internal ticker update addresses.
 			}
+			require.Eventually(t, func() bool {
+				return len(nodeA.transport.traceAddresses()) == 2
+			}, 4*time.Second, 100*time.Millisecond, "factory should have 2 addresses")
+
 			require.NoError(t, nodeA.host.Network().ClosePeer(nodeB.host.ID()), "nodeA should be able to close nodeB")
 			require.NoError(t, nodeB.host.Network().ClosePeer(nodeA.host.ID()), "nodeB should be able to close nodeA")
 
@@ -144,9 +200,10 @@ func TestHost_LocalAddressChange(t *testing.T) {
 					return len(nodeB.host.discovery.GetAddresses()) > 0
 				}, 4*time.Second, 100*time.Millisecond, "nodeB should have at least 1 address")
 			} else {
+				peersNum := len(nodeB.host.Peerstore().Addrs(nodeA.host.ID()))
 				require.Eventually(t, func() bool {
-					return len(testCase.expected) == len(nodeB.host.Peerstore().Addrs(nodeA.host.ID()))
-				}, 4*time.Second, 100*time.Millisecond, "nodeB peerstore should have %d addresses", len(testCase.expected))
+					return len(testCase.expected) == peersNum
+				}, 4*time.Second, 100*time.Millisecond, "nodeB peerstore should have %d addresses, got %d", len(testCase.expected), peersNum)
 
 				require.Eventually(t, func() bool {
 					return len(testCase.expected) == len(nodeB.host.discovery.GetAddresses())
@@ -209,8 +266,10 @@ func getFreePort() (int, error) {
 func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper {
 	addrFactory := &addressFactory{
 		blockAddressesMu: &sync.RWMutex{},
+		traceAddrMu:      &sync.RWMutex{},
 		blockAddresses:   []string{},
 		mark:             make(chan struct{}),
+		traceAddr:        make(map[string]struct{}),
 	}
 
 	node, err := libp2p.New(
@@ -221,16 +280,32 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 	)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		require.NoError(t, node.Close())
-	})
 	cnf := DefaultConfig()
 	cnf.CheckPeersUsedBefore = time.Millisecond * 1
 	if bootNode != "" {
+		// adding address to bootstrap list is has random part.
+		// for make it more predictable - create book object, set address as connected and persist peers.
+		// next time book will restore conf from this file and return this address for bootstrap.
+		cnf.DataDir = t.TempDir()
+		addrBookConf := addressbook.DefaultAddressBookConfigWithDataDir(cnf.DataDir)
+		book := addressbook.NewAddrBook(addrBookConf, logtest.New(t))
+		bootAddr, err := addressbook.ParseAddrInfo(bootNode)
+		require.NoError(t, err)
+		book.AddAddress(bootAddr, bootAddr)
+		book.Connected(bootAddr.ID)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		book.Persist(ctx)
 		cnf.Bootnodes = append(cnf.Bootnodes, bootNode)
 	}
 	host, err := Upgrade(node, WithConfig(cnf))
 	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		require.NoError(t, node.Close())
+		require.NoError(t, host.Stop())
+	})
 	return &hostWrapper{
 		host:      host,
 		transport: addrFactory,
