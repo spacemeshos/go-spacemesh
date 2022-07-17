@@ -154,29 +154,122 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 
 // Apply transactions.
 func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
 	defer tx.Release()
+	t2 := time.Now()
+	blockDurationWait.Observe(float64(time.Since(t1)))
+
+	ss := core.NewStagedCache(tx)
+	results, skipped, fees, err := v.execute(lctx, ss, txs)
+	if err != nil {
+		return nil, nil, err
+	}
+	t3 := time.Now()
+	blockDurationTxs.Observe(float64(time.Since(t2)))
+
+	// TODO(dshulyak) why it fails if there are no rewards?
+	if len(blockRewards) > 0 {
+		if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
+			return nil, nil, err
+		}
+	}
+	t4 := time.Now()
+	blockDurationRewards.Observe(float64(time.Since(t3)))
+
+	hasher := hash.New()
+	encoder := scale.NewEncoder(hasher)
+	total := 0
+	ss.IterateChanged(func(account *core.Account) bool {
+		total++
+		account.Layer = lctx.Layer
+		v.logger.With().Debug("update account state", log.Inline(account))
+		err = accounts.Update(tx, account)
+		if err != nil {
+			return false
+		}
+		account.EncodeScale(encoder)
+		events.ReportAccountUpdate(account.Address)
+		return true
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	writesPerBlock.Observe(float64(total))
+
+	var hash types.Hash32
+	hasher.Sum(hash[:0])
+	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	blockDurationPersist.Observe(float64(time.Since(t4)))
+	blockDuration.Observe(float64(time.Since(t1)))
+	transactionsPerBlock.Observe(float64(len(txs)))
+	appliedLayer.Set(float64(lctx.Layer.Value))
+
+	v.logger.With().Info("applied layer",
+		lctx.Layer,
+		lctx.Block,
+		log.Int("count", len(txs)-len(skipped)),
+		log.Duration("duration", time.Since(t1)),
+		log.Stringer("state_hash", hash),
+	)
+	return skipped, results, nil
+}
+
+func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fees uint64, blockRewards []types.AnyReward) error {
+	finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
+	if err != nil {
+		return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	for _, reward := range finalRewards {
+		if err := rewards.Add(tx, reward); err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		account, err := ss.Get(reward.Coinbase)
+		if err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		account.Balance += reward.TotalReward
+		if err := ss.Update(account); err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		rewardsCount.Add(float64(reward.TotalReward))
+	}
+	feesCount.Add(float64(fees))
+	return nil
+}
+
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx) ([]types.TransactionWithResult, []types.TransactionID, uint64, error) {
 	var (
-		ss      = core.NewStagedCache(tx)
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
 		skipped []types.TransactionID
-		start   = time.Now()
 		fees    uint64
 		results []types.TransactionWithResult
 	)
 	for i := range txs {
+		txCount.Inc()
+
+		t1 := time.Now()
 		tx := &txs[i]
 		rd.Reset(tx.Raw)
 		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
 		if err != nil {
 			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
 			continue
 		}
+		t2 := time.Now()
+		transactionDurationParse.Observe(float64(time.Since(t1)))
+
 		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
@@ -187,6 +280,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 				log.Object("account", &ctx.Account),
 			)
 			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
 			continue
 		}
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
@@ -195,6 +289,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 				log.Object("account", &ctx.Account),
 			)
 			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
 			continue
 		}
 		rst := types.TransactionWithResult{}
@@ -211,9 +306,11 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 			// internal errors are propagated upwards, but they are for fatal
 			// unrecovarable errors, such as disk problems
 			if errors.Is(err, core.ErrInternal) {
-				return nil, nil, err
+				return nil, nil, 0, err
 			}
 		}
+		transactionDurationExecute.Observe(float64(time.Since(t2)))
+
 		rst.RawTx = txs[i]
 		rst.TxHeader = &ctx.Header
 		rst.Status = types.TransactionSuccess
@@ -227,65 +324,13 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.An
 
 		err = ctx.Apply(ss)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, nil, 0, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		fees += ctx.Fee()
 		results = append(results, rst)
+		transactionDuration.Observe(float64(time.Since(t1)))
 	}
-
-	// TODO(dshulyak) why it fails if there are no rewards?
-	if len(blockRewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		for _, reward := range finalRewards {
-			if err := rewards.Add(tx, reward); err != nil {
-				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-			account, err := ss.Get(reward.Coinbase)
-			if err != nil {
-				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-			account.Balance += reward.TotalReward
-			if err := ss.Update(account); err != nil {
-				return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-		}
-	}
-
-	hasher := hash.New()
-	encoder := scale.NewEncoder(hasher)
-	ss.IterateChanged(func(account *core.Account) bool {
-		account.Layer = lctx.Layer
-		v.logger.With().Debug("update account state", log.Inline(account))
-		err = accounts.Update(tx, account)
-		if err != nil {
-			return false
-		}
-		account.EncodeScale(encoder)
-		events.ReportAccountUpdate(account.Address)
-		return true
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-	}
-	var hash types.Hash32
-	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
-		return nil, nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-	}
-	v.logger.With().Info("applied transactions",
-		lctx.Layer,
-		lctx.Block,
-		log.Int("count", len(txs)-len(skipped)),
-		log.Duration("duration", time.Since(start)),
-		log.Stringer("state_hash", hash),
-	)
-	return skipped, results, nil
+	return results, skipped, fees, nil
 }
 
 // Request used to implement 2-step validation flow.
@@ -301,11 +346,13 @@ type Request struct {
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
+	start := time.Now()
 	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
+	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }
 
@@ -314,7 +361,10 @@ func (r *Request) Verify() bool {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
 	}
-	return verify(r.ctx, r.raw.Raw)
+	start := time.Now()
+	rst := verify(r.ctx, r.raw.Raw)
+	transactionDurationVerify.Observe(float64(time.Since(start)))
+	return rst
 }
 
 func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
