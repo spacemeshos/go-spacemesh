@@ -23,8 +23,6 @@ import (
 const (
 	// RoundsPerIteration is the number of rounds per iteration in the hare protocol.
 	RoundsPerIteration = 4
-	// ProtoName is the protocol indicator for hare gossip messages.
-	ProtoName = "HARE_PROTOCOL/1"
 )
 
 type role byte
@@ -496,7 +494,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	)
 	logger := proc.WithContext(ctx)
 
-	if err := proc.publisher.Publish(ctx, ProtoName, msg.Bytes()); err != nil {
+	if err := proc.publisher.Publish(ctx, pubsub.HareProtocol, msg.Bytes()); err != nil {
 		logger.With().Error("could not broadcast round message", log.Err(err))
 		return false
 	}

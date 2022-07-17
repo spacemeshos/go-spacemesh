@@ -11,9 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// PoetProofProtocol is the name of the PoetProof gossip protocol.
-const PoetProofProtocol = "PoetProof/1"
-
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
 	log    log.Log
@@ -25,7 +22,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
 		l.log.WithContext(ctx).With().Error("failed to unmarshal poet membership proof", log.Err(err))
-		return pubsub.ValidationIgnore
+		return pubsub.ValidationReject
 	}
 
 	ref, err := proofMessage.Ref()

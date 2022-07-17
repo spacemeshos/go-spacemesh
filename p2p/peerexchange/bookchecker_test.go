@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -213,7 +213,8 @@ func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
 func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 	hosts := make([]host.Host, 0, nodesCount)
 	for i := 0; i < nodesCount; i++ {
-		cm := connmgr.NewConnManager(40, 100, 30*time.Second)
+		cm, err := connmgr.NewConnManager(40, 100, connmgr.WithGracePeriod(30*time.Second))
+		require.NoError(t, err)
 		h, err := libp2p.New(libp2p.ConnectionManager(cm))
 		require.NoError(t, err)
 		t.Cleanup(func() {

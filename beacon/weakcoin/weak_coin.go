@@ -17,9 +17,6 @@ import (
 const (
 	// Prefix defines weak coin proposal prefix.
 	proposalPrefix = "WeakCoin"
-	// GossipProtocol is weak coin Gossip protocol name.
-	GossipProtocol = "WeakCoinGossip/1"
-
 	// equal to 2^256 / 2.
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
@@ -257,7 +254,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 		return nil
 	}
 
-	if err := wc.publisher.Publish(ctx, GossipProtocol, msg); err != nil {
+	if err := wc.publisher.Publish(ctx, pubsub.BeaconWeakCoinProtocol, msg); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
 
