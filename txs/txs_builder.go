@@ -259,7 +259,7 @@ func shuffleWithNonceOrder(
 			byAddrAndNonce[p] = byAddrAndNonce[p][1:]
 		}
 	}
-	logger.With().Info("packed txs", log.Array("ranges", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	logger.With().Debug("packed txs", log.Array("ranges", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for addr, nonces := range packed {
 			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
 				encoder.AddString("addr", addr.String())
