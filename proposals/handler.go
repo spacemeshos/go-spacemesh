@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -110,8 +111,7 @@ func NewHandler(cdb *datastore.CachedDB, f system.Fetcher, bc system.BeaconColle
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
-	newCtx := log.WithNewRequestID(ctx)
-	err := h.handleProposalData(newCtx, msg, peer)
+	err := h.handleProposalData(ctx, msg, peer)
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
@@ -120,7 +120,7 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte)
 	case errors.Is(err, errKnownProposal) == true:
 		return pubsub.ValidationIgnore
 	default:
-		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
+		h.logger.WithContext(ctx).With().Error("failed to process proposal gossip", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 }
@@ -174,6 +174,7 @@ func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
 func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.Peer) error {
 	logger := h.logger.WithContext(ctx)
 
+	t0 := time.Now()
 	var p types.Proposal
 	if err := codec.Decode(data, &p); err != nil {
 		logger.With().Error("malformed proposal", log.Err(err))
@@ -185,9 +186,11 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.With().Warning("failed to initialize proposal", log.Err(err))
 		return errInitialize
 	}
+	metrics.ProposalDurationDecodeInit.Observe(float64(time.Since(t0)))
 
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.LayerIndex)
 
+	t1 := time.Now()
 	if has, err := proposals.Has(h.cdb, p.ID()); err != nil {
 		logger.With().Error("failed to look up proposal", p.ID(), log.Err(err))
 		return fmt.Errorf("lookup proposal %v: %w", p.ID(), err)
@@ -195,8 +198,9 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.Info("known proposal")
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
+	metrics.ProposalDurationDBLookup.Observe(float64(time.Since(t1)))
 
-	logger.With().Info("new proposal", p.ID())
+	logger.With().Info("new proposal", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(&p.Ballot))
 
@@ -205,17 +209,21 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		return err
 	}
 
+	t2 := time.Now()
 	if err := h.checkTransactions(ctx, &p); err != nil {
 		logger.With().Warning("failed to fetch proposal TXs", log.Err(err))
 		return err
 	}
+	metrics.ProposalDurationTXs.Observe(float64(time.Since(t2)))
 
 	logger.With().Debug("proposal is syntactically valid")
 
+	t3 := time.Now()
 	if err := proposals.Add(h.cdb, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
+	metrics.ProposalDurationDBSave.Observe(float64(time.Since(t3)))
 
 	logger.With().Info("added proposal to database", p.ID())
 
@@ -223,11 +231,13 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
 
+	metrics.ProposalDuration.Observe(float64(time.Since(t0)))
 	reportProposalMetrics(&p)
 	return nil
 }
 
 func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log.Log) error {
+	t0 := time.Now()
 	if has, err := ballots.Has(h.cdb, b.ID()); err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to look up ballot", b.ID(), log.Err(err))
 		return fmt.Errorf("lookup ballot %v: %w", b.ID(), err)
@@ -235,6 +245,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		logger.Debug("known ballot", b.ID())
 		return nil
 	}
+	metrics.BallotDurationDBLookup.Observe(float64(time.Since(t0)))
 
 	logger.With().Info("new ballot", log.Inline(b))
 
@@ -243,11 +254,15 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		return fmt.Errorf("syntactic-check ballot: %w", err)
 	}
 
+	t1 := time.Now()
 	if err := ballots.Add(h.cdb, b); err != nil {
 		return fmt.Errorf("save ballot: %w", err)
 	}
+	t2 := time.Now()
+	metrics.BallotDurationDBSave.Observe(float64(t2.Sub(t1)))
+	metrics.BallotDuration.Observe(float64(t2.Sub(t0)))
 
-	reportBallotMetrics(b)
+	reportVotesMetrics(b)
 	return nil
 }
 
@@ -259,20 +274,26 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 		return err
 	}
 
+	t0 := time.Now()
 	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot data availability check failed", log.Err(err))
 		return err
 	}
+	metrics.BallotDurationDataAvailability.Observe(float64(time.Since(t0)))
 
+	t1 := time.Now()
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot votes consistency check failed", log.Err(err))
 		return err
 	}
+	metrics.BallotDurationVotesConsistency.Observe(float64(time.Since(t1)))
 
+	t2 := time.Now()
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return errNotEligible
 	}
+	metrics.BallotDurationEligibility.Observe(float64(time.Since(t2)))
 
 	h.logger.WithContext(ctx).With().Debug("ballot is syntactically valid")
 	return nil
@@ -429,7 +450,6 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 			return fmt.Errorf("fetch blocks: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -467,7 +487,7 @@ func reportProposalMetrics(p *types.Proposal) {
 	metrics.NumTxsInProposal.WithLabelValues().Observe(float64(len(p.TxIDs)))
 }
 
-func reportBallotMetrics(b *types.Ballot) {
+func reportVotesMetrics(b *types.Ballot) {
 	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeAgainst}).Observe(float64(len(b.Votes.Against)))
 	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeFor}).Observe(float64(len(b.Votes.Support)))
 	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeNeutral}).Observe(float64(len(b.Votes.Abstain)))
