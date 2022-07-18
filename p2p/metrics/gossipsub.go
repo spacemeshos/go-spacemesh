@@ -84,16 +84,14 @@ func (g *GossipCollector) Prune(peer.ID, string) {}
 func (g *GossipCollector) ValidateMessage(*pubsub.Message) {}
 
 // DeliverMessage is invoked when a message is delivered.
-func (g *GossipCollector) DeliverMessage(msg *pubsub.Message) {}
+func (g *GossipCollector) DeliverMessage(*pubsub.Message) {}
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
 // The reason argument can be one of the named strings Reject*.
 func (g *GossipCollector) RejectMessage(*pubsub.Message, string) {}
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
-func (g *GossipCollector) DuplicateMessage(msg *pubsub.Message) {
-
-}
+func (g *GossipCollector) DuplicateMessage(*pubsub.Message) {}
 
 // ThrottlePeer is invoked when a peer is throttled by the peer gater.
 func (g *GossipCollector) ThrottlePeer(peer.ID) {}
