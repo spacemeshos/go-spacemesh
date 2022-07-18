@@ -111,7 +111,7 @@ func checkNoTX(t *testing.T, c *cache, tid types.TransactionID) {
 
 func checkMempool(t *testing.T, c *cache, expected map[types.Address][]*txtypes.NanoTX) {
 	t.Helper()
-	mempool := c.GetMempool()
+	mempool := c.GetMempool(c.logger)
 	require.Len(t, mempool, len(expected))
 	for addr := range mempool {
 		var exp, got txtypes.NanoTX
@@ -1001,7 +1001,7 @@ func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*te
 
 func checkMempoolSize(t *testing.T, c *cache, expected int) {
 	t.Helper()
-	mempool := c.GetMempool()
+	mempool := c.GetMempool(c.logger)
 	numTXs := 0
 	for _, ntxs := range mempool {
 		numTXs += len(ntxs)

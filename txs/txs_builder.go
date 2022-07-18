@@ -177,7 +177,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 	if err := txCache.BuildFromTXs(candidates, blockSeed); err != nil {
 		return nil, err
 	}
-	byAddrAndNonce := txCache.GetMempool()
+	byAddrAndNonce := txCache.GetMempool(logger)
 	ntxs := make([]*txtypes.NanoTX, 0, len(pmd.mtxs))
 	byTid := make(map[types.TransactionID]*txtypes.NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
@@ -259,9 +259,17 @@ func shuffleWithNonceOrder(
 			byAddrAndNonce[p] = byAddrAndNonce[p][1:]
 		}
 	}
-	for addr, nonces := range packed {
-		logger.With().Debug("packed txs", addr, log.Uint64("from", nonces[0]), log.Uint64("to", nonces[1]))
-	}
+	logger.With().Info("packed txs", log.Array("ranges", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for addr, nonces := range packed {
+			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+				encoder.AddString("addr", addr.String())
+				encoder.AddUint64("from", nonces[0])
+				encoder.AddUint64("to", nonces[1])
+				return nil
+			}))
+		}
+		return nil
+	})))
 	return result
 }
 

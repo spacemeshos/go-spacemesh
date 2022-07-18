@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	log "github.com/spacemeshos/go-spacemesh/log"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -292,15 +293,15 @@ func (m *MockconStateCache) EXPECT() *MockconStateCacheMockRecorder {
 }
 
 // GetMempool mocks base method.
-func (m *MockconStateCache) GetMempool() map[types.Address][]*types0.NanoTX {
+func (m *MockconStateCache) GetMempool(arg0 log.Log) map[types.Address][]*types0.NanoTX {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMempool")
+	ret := m.ctrl.Call(m, "GetMempool", arg0)
 	ret0, _ := ret[0].(map[types.Address][]*types0.NanoTX)
 	return ret0
 }
 
 // GetMempool indicates an expected call of GetMempool.
-func (mr *MockconStateCacheMockRecorder) GetMempool() *gomock.Call {
+func (mr *MockconStateCacheMockRecorder) GetMempool(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMempool", reflect.TypeOf((*MockconStateCache)(nil).GetMempool))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMempool", reflect.TypeOf((*MockconStateCache)(nil).GetMempool), arg0)
 }

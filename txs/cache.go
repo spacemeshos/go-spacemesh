@@ -800,13 +800,13 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that eligible for a proposal/block.
-func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
+func (c *cache) GetMempool(logger log.Log) map[types.Address][]*txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*txtypes.NanoTX)
 	for addr, accCache := range c.pending {
-		txs := accCache.getMempool(c.logger.WithFields(addr))
+		txs := accCache.getMempool(logger.WithFields(addr))
 		if len(txs) > 0 {
 			all[addr] = txs
 		}
