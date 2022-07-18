@@ -88,8 +88,8 @@ func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verif
 		if parseErr == nil {
 			req.EXPECT().Verify().Times(1).Return(verify)
 			if verify {
-				cstate.EXPECT().AddToCache(gomock.Any()).DoAndReturn(
-					func(got *types.Transaction) error {
+				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, got *types.Transaction) error {
 						assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
 						assert.Equal(t, tx, got)
 						return addErr

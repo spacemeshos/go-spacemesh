@@ -55,8 +55,6 @@ const (
 	labelsPerUnit    = 2048
 	bitsPerLabel     = 8
 	numUnits         = 2
-	defaultGasLimit  = 10
-	defaultFee       = 1
 	genTimeUnix      = 1000000
 	layerDurationSec = 10
 	layerAvgSize     = 10
@@ -2871,7 +2869,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(globalTx)
+	conState.AddToCache(context.TODO(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
