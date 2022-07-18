@@ -604,6 +604,26 @@ func TestProcessLayers_AllGood(t *testing.T) {
 	require.True(t, ts.syncer.stateSynced())
 }
 
+func TestProcessLayers_ProcessedLayerStuck(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	glayer := types.GetEffectiveGenesis()
+	current := glayer.Add(10)
+	ts.syncer.setLastSyncedLayer(current.Sub(1))
+	ts.mTicker.advanceToLayer(current)
+	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
+		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+	}
+	// cause the applied layer to advance but not processed layer
+	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), current, types.EmptyBlockID))
+	require.False(t, ts.syncer.stateSynced())
+
+	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
+	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
+	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.True(t, ts.syncer.stateSynced())
+}
+
 func TestProcessLayers_ATXsNotSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	glayer := types.GetEffectiveGenesis()

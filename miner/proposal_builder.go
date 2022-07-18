@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -319,7 +318,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		if err != nil {
 			logger.With().Panic("failed to serialize proposal", log.Err(err))
 		}
-		if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
+		if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, data); err != nil {
 			logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 		}
 		events.ReportProposal(events.ProposalCreated, p)

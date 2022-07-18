@@ -133,13 +133,15 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
 	received := time.Now()
+	if err := cs.cache.Add(cs.db, tx, received, nil); err != nil {
+		return err
+	}
 	if err := transactions.Add(cs.db, tx, received); err != nil {
 		return err
 	}
 	events.ReportNewTx(types.LayerID{}, tx)
 	events.ReportAccountUpdate(tx.Principal)
-
-	return cs.cache.Add(cs.db, tx, received, nil)
+	return nil
 }
 
 // RevertState reverts the VM state and database to the given layer.
@@ -177,7 +179,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	logger.With().Info("applying layer to cache",
 		log.Int("num_txs_failed", len(skipped)),
 		log.Int("num_txs_final", len(rsts)))
-	if _, errs := cs.cache.ApplyLayer(cs.db, toApply.LayerIndex, toApply.ID(), rsts); len(errs) > 0 {
+	if _, errs := cs.cache.ApplyLayer(cs.db, toApply.LayerIndex, toApply.ID(), rsts, skipped); len(errs) > 0 {
 		return nil, errs[0]
 	}
 	return skipped, nil
@@ -215,6 +217,8 @@ func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block)
 			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
 			// transactions can be added successfully
+
+			// TODO(dshulyak) this should overwrite cache state without possibility of the validation failure
 			if err = cs.cache.Add(cs.db, &mtx.Transaction, mtx.Received, nil); err != nil {
 				return nil, err
 			}

@@ -223,7 +223,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			// create an inner context object to handle this message
 			messageCtx := msg.Ctx
 
-			h := types.CalcMessageHash12(msg.Data, ProtoName)
+			h := types.CalcMessageHash12(msg.Data, pubsub.HareProtocol)
 			msgLogger := logger.WithContext(messageCtx).WithFields(h)
 			hareMsg, err := MessageFromBuffer(msg.Data)
 			if err != nil {

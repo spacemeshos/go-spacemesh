@@ -18,9 +18,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
@@ -67,7 +67,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
-	if err := s.publisher.Publish(ctx, txs.IncomingTxProtocol, in.Transaction); err != nil {
+	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, in.Transaction); err != nil {
 		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}

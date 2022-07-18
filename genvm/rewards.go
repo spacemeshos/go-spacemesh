@@ -48,7 +48,7 @@ func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, total
 	finalRewards := make([]*types.Reward, 0, len(rewards))
 	layerRewards := calculateLayerReward(cfg)
 	totalRewards := layerRewards + totalFees
-	logger.With().Info("rewards info for layer",
+	logger.With().Debug("rewards info for layer",
 		log.Uint64("layer_rewards", layerRewards),
 		log.Uint64("fee", totalFees))
 	rewardPer := util.WeightFromUint64(totalRewards).Div(totalWeight)

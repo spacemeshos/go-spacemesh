@@ -21,9 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// NewProposalProtocol is the protocol indicator for gossip Proposals.
-const NewProposalProtocol = "newProposal/1"
-
 var (
 	errMalformedData         = errors.New("malformed data")
 	errInitialize            = errors.New("failed to initialize")
@@ -114,13 +111,18 @@ func NewHandler(cdb *datastore.CachedDB, f system.Fetcher, bc system.BeaconColle
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
-	if err := h.handleProposalData(newCtx, msg, peer); errors.Is(err, errKnownProposal) {
+	err := h.handleProposalData(newCtx, msg, peer)
+	switch {
+	case err == nil:
+		return pubsub.ValidationAccept
+	case errors.Is(err, errMalformedData) == true:
+		return pubsub.ValidationReject
+	case errors.Is(err, errKnownProposal) == true:
 		return pubsub.ValidationIgnore
-	} else if err != nil {
+	default:
 		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
-	return pubsub.ValidationAccept
 }
 
 // HandleBallotData handles Ballot data from sync.

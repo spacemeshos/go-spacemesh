@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	errInvalidSig = errors.New("identity not found when validating signature, invalid atx")
-	errKnownAtx   = errors.New("known atx")
+	errKnownAtx      = errors.New("known atx")
+	errMalformedData = errors.New("malformed data")
 )
 
 type atxChan struct {
@@ -349,13 +349,18 @@ func (h *Handler) GetPosAtxID() (types.ATXID, error) {
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if err := h.handleAtxData(ctx, msg); errors.Is(err, errKnownAtx) {
+	err := h.handleAtxData(ctx, msg)
+	switch {
+	case err == nil:
+		return pubsub.ValidationAccept
+	case errors.Is(err, errMalformedData) == true:
+		return pubsub.ValidationReject
+	case errors.Is(err, errKnownAtx) == true:
 		return pubsub.ValidationIgnore
-	} else if err != nil {
-		h.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
+	default:
+		h.log.WithContext(ctx).With().Warning("failed to process atx gossip", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
-	return pubsub.ValidationAccept
 }
 
 // HandleAtxData handles atxs received either by gossip or sync.
@@ -370,7 +375,7 @@ func (h *Handler) HandleAtxData(ctx context.Context, data []byte) error {
 func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
-		return fmt.Errorf("cannot parse incoming atx")
+		return errMalformedData
 	}
 	atx.CalcAndSetID()
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())

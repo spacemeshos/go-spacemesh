@@ -12,15 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
-const IncomingTxProtocol = "TxGossip/1"
-
-var (
-	errMalformedMsg     = errors.New("malformed tx")
-	errDuplicateTX      = errors.New("tx already exists")
-	errAddrNotExtracted = errors.New("address not extracted")
-	errAddrNotFound     = errors.New("address not found")
-)
+var errDuplicateTX = errors.New("tx already exists")
 
 // TxHandler handles the transactions received via gossip or sync.
 type TxHandler struct {
@@ -76,6 +68,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err))
+		return err
 	}
 	return nil
 }

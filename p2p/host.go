@@ -7,10 +7,10 @@ import (
 
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
-	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
@@ -73,7 +73,10 @@ func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, err
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
 
-	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
+	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
+	if err != nil {
+		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
+	}
 	// TODO(dshulyak) remove this part
 	for _, p := range cfg.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
