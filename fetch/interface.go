@@ -7,13 +7,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type fetcher interface {
+	GetEpochATXIDs(context.Context, types.EpochID, func([]byte, p2p.Peer), func(error)) error
+	GetLayerData(context.Context, types.LayerID, func([]byte, p2p.Peer, int), func(error, p2p.Peer, int)) error
 	GetHash(types.Hash32, datastore.Hint, bool) chan ftypes.HashDataPromiseResult
 	GetHashes([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan ftypes.HashDataPromiseResult
 	Stop()
@@ -52,7 +52,7 @@ type meshProvider interface {
 	SetZeroBlockLayer(types.LayerID) error
 }
 
-type network interface {
-	bootstrap.Provider
-	server.Host
+type host interface {
+	GetPeers() []p2p.Peer
+	Close() error
 }

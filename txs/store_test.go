@@ -103,7 +103,7 @@ func TestStore_ApplyLayer(t *testing.T) {
 	bid := types.BlockID{1, 2, 3}
 	principal := types.BytesToAddress(signer.PublicKey().Bytes())
 	applied := txs[numTXs-1]
-	require.NoError(t, st.ApplyLayer(lid, bid, principal, map[uint64]types.TransactionID{nonce: applied.ID}))
+	require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lid, bid, *applied))))
 
 	for _, tx := range txs {
 		mtx, err := st.Get(tx.ID)
@@ -130,14 +130,13 @@ func TestStore_UndoLayers_Simple(t *testing.T) {
 	txs := make([]*types.Transaction, 0, numLayers*numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		principal := types.BytesToAddress(signer.PublicKey().Bytes())
 		for j := 0; j < numLayers; j++ {
 			lyr := lid.Add(uint32(j))
 			nnc := nonce + uint64(j)
 			tx := newTx(t, nnc, defaultAmount, defaultFee, signer)
 			require.NoError(t, st.Add(tx, time.Now()))
 			txs = append(txs, tx)
-			require.NoError(t, st.ApplyLayer(lyr, types.RandomBlockID(), principal, map[uint64]types.TransactionID{nnc: tx.ID}))
+			require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lyr, types.RandomBlockID(), *tx))))
 		}
 	}
 	got, err := st.GetAllPending()
@@ -163,9 +162,7 @@ func TestStore_UndoLayers_TXsInMultipleLayers(t *testing.T) {
 	db := sql.InMemory()
 	st := newStore(db)
 	signerA := signing.NewEdSigner()
-	principalA := types.BytesToAddress(signerA.PublicKey().Bytes())
 	signerB := signing.NewEdSigner()
-	principalB := types.BytesToAddress(signerB.PublicKey().Bytes())
 	txA0 := newTx(t, nonce, defaultAmount, defaultFee, signerA)
 	txA1 := newTx(t, nonce+1, defaultAmount, defaultFee, signerA)
 	txA2 := newTx(t, nonce+2, defaultAmount, defaultFee, signerA)
@@ -185,22 +182,14 @@ func TestStore_UndoLayers_TXsInMultipleLayers(t *testing.T) {
 	bid0 := types.BlockID{5, 6, 7}
 	// for some reason txA1 and txA2 were not included in the block
 	require.NoError(t, st.AddToBlock(lid0, bid0, []types.TransactionID{txA0.ID, txB0.ID}))
-	require.NoError(t, st.ApplyLayer(lid0, bid0, principalA, map[uint64]types.TransactionID{
-		txA0.Nonce.Counter: txA0.ID,
-	}))
-	require.NoError(t, st.ApplyLayer(lid0, bid0, principalB, map[uint64]types.TransactionID{
-		txB0.Nonce.Counter: txB0.ID,
-	}))
+	require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lid0, bid0, *txA0))))
+	require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lid0, bid0, *txB0))))
 
 	bid1 := types.BlockID{6, 7, 8}
 	require.NoError(t, st.AddToBlock(lid1, bid1, []types.TransactionID{txA1.ID, txA2.ID, txB1.ID}))
-	require.NoError(t, st.ApplyLayer(lid1, bid1, principalA, map[uint64]types.TransactionID{
-		txA1.Nonce.Counter: txA1.ID,
-		txA2.Nonce.Counter: txA2.ID,
-	}))
-	require.NoError(t, st.ApplyLayer(lid1, bid1, principalB, map[uint64]types.TransactionID{
-		txB1.Nonce.Counter: txB1.ID,
-	}))
+
+	require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lid1, bid1, *txA1, *txA2))))
+	require.NoError(t, st.ApplyLayer(makeResultsByNonce(makeResults(lid1, bid1, *txB1))))
 
 	require.NoError(t, st.UndoLayers(lid0))
 	for _, tx := range []*types.Transaction{txA0, txB0} {
@@ -219,4 +208,26 @@ func TestStore_UndoLayers_TXsInMultipleLayers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.BLOCK, got.State)
 	require.Equal(t, lid1, got.LayerID)
+}
+
+func makeResultsByNonce(rsts []types.TransactionWithResult) map[uint64]types.TransactionWithResult {
+	results := map[uint64]types.TransactionWithResult{}
+	for _, rst := range rsts {
+		results[rst.Nonce.Counter] = rst
+	}
+	return results
+}
+
+func makeResults(lid types.LayerID, bid types.BlockID, txs ...types.Transaction) []types.TransactionWithResult {
+	results := []types.TransactionWithResult{}
+	for _, tx := range txs {
+		results = append(results, types.TransactionWithResult{
+			Transaction: tx,
+			TransactionResult: types.TransactionResult{
+				Layer: lid,
+				Block: bid,
+			},
+		})
+	}
+	return results
 }

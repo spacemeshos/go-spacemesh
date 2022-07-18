@@ -48,20 +48,6 @@ func (mr *MockFetcherMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*MockFetcher)(nil).AddPeersFromHash), arg0, arg1)
 }
 
-// FetchAtx mocks base method.
-func (m *MockFetcher) FetchAtx(arg0 context.Context, arg1 types.ATXID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchAtx", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// FetchAtx indicates an expected call of FetchAtx.
-func (mr *MockFetcherMockRecorder) FetchAtx(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAtx", reflect.TypeOf((*MockFetcher)(nil).FetchAtx), arg0, arg1)
-}
-
 // GetAtxs mocks base method.
 func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
 	m.ctrl.T.Helper()
@@ -230,20 +216,6 @@ func NewMockAtxFetcher(ctrl *gomock.Controller) *MockAtxFetcher {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockAtxFetcher) EXPECT() *MockAtxFetcherMockRecorder {
 	return m.recorder
-}
-
-// FetchAtx mocks base method.
-func (m *MockAtxFetcher) FetchAtx(arg0 context.Context, arg1 types.ATXID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchAtx", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// FetchAtx indicates an expected call of FetchAtx.
-func (mr *MockAtxFetcherMockRecorder) FetchAtx(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAtx", reflect.TypeOf((*MockAtxFetcher)(nil).FetchAtx), arg0, arg1)
 }
 
 // GetAtxs mocks base method.

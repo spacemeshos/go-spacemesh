@@ -207,6 +207,7 @@ jobs:
       run: cd systest && make push
 
     - name: Run tests
+      timeout-minutes: 60
       run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
 
     - name: Systemtest result
@@ -217,8 +218,9 @@ jobs:
         SUCCESS="${SUCCESS//$'\r'/'%0D'}"
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
-    
+
     - name: Delete pod
+      if: always()
       run: cd systest && make clean
 
     - name: Tests Passed or Failed
