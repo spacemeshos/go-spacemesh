@@ -82,9 +82,11 @@ type Hare struct {
 
 	bufferSize uint32
 
-	outputChan chan TerminationOutput
-	mu         sync.RWMutex
-	outputs    map[types.LayerID][]types.ProposalID
+	hareOutputChan           chan TerminationOutput
+	terminationSubscriptions []<-chan TerminationOutput
+
+	mu      sync.RWMutex
+	outputs map[types.LayerID][]types.ProposalID
 
 	factory consensusFactory
 
@@ -148,7 +150,7 @@ func New(
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-	h.outputChan = make(chan TerminationOutput, h.bufferSize)
+	h.hareOutputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.bufferSize) // we keep results about LayerBuffer past layers
 	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
@@ -159,9 +161,39 @@ func New(
 	return h
 }
 
+// Start starts listening for layers and outputs.
+func (h *Hare) Start(ctx context.Context) error {
+	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", ProtoName))
+
+	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
+	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_broker"))
+	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_tickloop"))
+	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_outputloop"))
+
+	if err := h.broker.Start(ctxBroker); err != nil {
+		return fmt.Errorf("start broker: %w", err)
+	}
+
+	h.wg.Add(2)
+	go h.tickLoop(ctxTickLoop)
+	go h.outputCollectionLoop(ctxOutputLoop)
+
+	return nil
+}
+
+// Close sends a termination signal to hare goroutines and waits for their termination.
+func (h *Hare) Close() {
+	h.Closer.Close()
+	h.wg.Wait()
+}
+
 // GetHareMsgHandler returns the gossip handler for hare protocol message.
 func (h *Hare) GetHareMsgHandler() pubsub.GossipHandler {
 	return h.broker.HandleMessage
+}
+
+func (h *Hare) RegisterTerminationsCh(sub <-chan TerminationOutput) {
+	h.terminationSubscriptions = append(h.terminationSubscriptions, sub)
 }
 
 func (h *Hare) getLastLayer() types.LayerID {
@@ -239,7 +271,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
 
-	hareOutput := types.EmptyBlockID
+	hareOutputEmptyBlock := types.EmptyBlockID
 	if len(pids) > 0 {
 		// fetch proposals from peers if not locally available
 		if err := h.fetcher.GetProposals(ctx, pids); err != nil {
@@ -258,10 +290,10 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
 			return fmt.Errorf("hare save block: %w", err)
 		} else {
-			hareOutput = block.ID()
+			hareOutputEmptyBlock = block.ID()
 		}
 	}
-	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
+	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutputEmptyBlock); err != nil {
 		h.WithContext(ctx).With().Warning("mesh failed to process layer", layerID, log.Err(err))
 	}
 
@@ -305,7 +337,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
-			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
+			h.hareOutputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
 
@@ -346,7 +378,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
-	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
+	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.hareOutputChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
@@ -432,7 +464,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
-		case out := <-h.outputChan:
+		case out := <-h.hareOutputChan:
 			layerID := out.ID()
 			coin := out.Coinflip()
 			ctx := log.WithNewSessionID(ctx)
@@ -479,30 +511,4 @@ func (h *Hare) tickLoop(ctx context.Context) {
 			return
 		}
 	}
-}
-
-// Start starts listening for layers and outputs.
-func (h *Hare) Start(ctx context.Context) error {
-	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", ProtoName))
-
-	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
-	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_broker"))
-	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_tickloop"))
-	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", ProtoName+"_outputloop"))
-
-	if err := h.broker.Start(ctxBroker); err != nil {
-		return fmt.Errorf("start broker: %w", err)
-	}
-
-	h.wg.Add(2)
-	go h.tickLoop(ctxTickLoop)
-	go h.outputCollectionLoop(ctxOutputLoop)
-
-	return nil
-}
-
-// Close sends a termination signal to hare goroutines and waits for their termination.
-func (h *Hare) Close() {
-	h.Closer.Close()
-	h.wg.Wait()
 }

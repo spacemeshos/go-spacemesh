@@ -235,7 +235,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, types.EmptyBlockID).Times(1)
-	h.outputChan <- mo
+	h.hareOutputChan <- mo
 	time.Sleep(1 * time.Second)
 
 	h.broker.mu.RLock()
@@ -698,7 +698,7 @@ func TestHare_WeakCoin(t *testing.T) {
 			done <- struct{}{}
 			return nil
 		}).Times(1)
-	h.outputChan <- mockReport{layerID, set, true, true}
+	h.hareOutputChan <- mockReport{layerID, set, true, true}
 	waitForMsg()
 	wc, err := layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
@@ -710,7 +710,7 @@ func TestHare_WeakCoin(t *testing.T) {
 			done <- struct{}{}
 			return nil
 		}).Times(1)
-	h.outputChan <- mockReport{layerID, set, false, true}
+	h.hareOutputChan <- mockReport{layerID, set, false, true}
 	waitForMsg()
 	wc, err = layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
@@ -734,7 +734,7 @@ func TestHare_WeakCoin(t *testing.T) {
 			done <- struct{}{}
 			return nil
 		}).Times(1)
-	h.outputChan <- mockReport{layerID, set, true, false}
+	h.hareOutputChan <- mockReport{layerID, set, true, false}
 	waitForMsg()
 	wc, err = layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
@@ -746,7 +746,7 @@ func TestHare_WeakCoin(t *testing.T) {
 			done <- struct{}{}
 			return nil
 		}).Times(1)
-	h.outputChan <- mockReport{layerID, set, false, true}
+	h.hareOutputChan <- mockReport{layerID, set, false, true}
 	waitForMsg()
 
 	wc, err = layers.GetWeakCoin(h.db, layerID)

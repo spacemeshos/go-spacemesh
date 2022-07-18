@@ -1,12 +1,14 @@
-package hare
+package blockcert
 
 import (
 	"context"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -16,48 +18,72 @@ type BlockCertificate struct {
 	terminationSignatures []terminationSignature
 }
 
-func (bCert *BlockCertificate) IsValid() bool {
-	panic("not yet implemented")
+type HareTerminationConfig struct {
+	CommitteeSize int
 }
 
-// BlockCertifyingService allows a node to participate in the building of
-// certified blocks. This includes verifying & caching gossiped block signatures
-// and, if chosen by the oracle, participating in block-signing upon termination
-// of a given layer.
+// BlockCertifyingService is a long-lived service responsible for verifying &
+// caching gossiped block signatures and, when chosen by the oracle, participating
+// in block-signing upon hare termination.
 type BlockCertifyingService struct {
-	rolacle Rolacle
+	rolacle        hare.Rolacle
+	config         HareTerminationConfig
+	hareTerminated <-chan hare.TerminationOutput
+	blockSignersWg sync.WaitGroup
 }
 
 // NewBlockCertifyingService constructs a new BlockCertifyingService.
-// It expects to receive the same config as Hare.
-func NewBlockCertifyingService(rolacle Rolacle, config config.Config) (*BlockCertifyingService, error) {
-
+func NewBlockCertifyingService(
+	rolacle hare.Rolacle,
+	config HareTerminationConfig,
+	hareTerminations <-chan hare.TerminationOutput,
+) (*BlockCertifyingService, error) {
 	service := &BlockCertifyingService{}
 	service.rolacle = rolacle
+	service.config = config
+	service.hareTerminated = hareTerminations
+	service.blockSignersWg = sync.WaitGroup{}
 
 	return service, fmt.Errorf("not yet implemented")
 }
 
 func (s *BlockCertifyingService) Start(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			panic("cancel not yet implemented")
+		case output := <-s.hareTerminated:
+			s.blockSignersWg.Add(1)
+			if !output.Completed() {
 
-	return fmt.Errorf("not yet implemented")
+			}
+		}
+
+	}
 }
 
+// GossipHandler returns a function that
 func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
-	return func(ctx context.Context, peerID peer.ID, bytes []byte) pubsub.ValidationResult {
+	return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
+	) pubsub.ValidationResult {
 		// Decode message as BlockSignature
 		// TODO: Refactor main message logic in hare package to not have "optional fields"
 		msg := terminationSignature{}
 		err := codec.Decode(bytes, msg)
 		if err != nil {
-			// TODO: invalidate gossip message
+			return pubsub.ValidationReject
 		}
-
 		// Validate with oracle
 		// TODO: remove concept of "round" from oracle
 		// The issue is that the VRF "buildKey" method requires a "round number" (i.e. k) as input
-		// Maybe have separate oracles? Would probably want to run queries to them in separate goroutines anyways.
-		s.rolacle.Validate(ctx, msg.LayerID, terminationRound)
+		validRoleProof, err := s.rolacle.Validate(ctx, msg.LayerID, hare.terminationRound, s.config.CommitteeSize, msg.senderNodeID, msg.eligibilityProof, msg.eligibilityCount)
+		if err != nil {
+			go log.Error("hare termination gossip: %w", err)
+			return pubsub.ValidationReject
+		}
+		if !validRoleProof {
+			return pubsub.ValidationReject
+		}
 
 		// Extract public key from signature & validate
 
@@ -94,7 +120,7 @@ func (cbp *CertifiedBlockProvider) RegisterBlockCertificateChannel(certChannel c
 type CertifiedBlockStore struct {
 }
 
-func NewCertifiedBlockStore(s BlockCertifyingService) (*CertifiedBlockStore, error) {
+func NewCertifiedBlockStore(s *BlockCertifyingService) (*CertifiedBlockStore, error) {
 	return nil, fmt.Errorf("not yet implemented")
 }
 
@@ -107,7 +133,9 @@ func (cbs *CertifiedBlockStore) StoreCertifiedBlock(cBlock []byte) error {
 type terminationSignature struct {
 	types.BlockID
 	types.LayerID
-	eligibilityProof [64]byte
+	senderNodeID     types.NodeID
+	eligibilityProof []byte
+	eligibilityCount uint16
 	blockSignature   [80]byte
 }
 
