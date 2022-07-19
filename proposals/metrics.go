@@ -49,82 +49,35 @@ var numBlocksInException = metrics.NewHistogramWithBuckets(
 	prometheus.ExponentialBuckets(1, 2, 8),
 )
 
+const (
+	// labels for each step of proposal/ballot processing.
+	decodeInit = "decode"
+	dbLookup   = "db_r"
+	peerHashes = "hashes"
+	ballot     = "ballot"
+	fetchTXs   = "txs"
+	dbSave     = "db_w"
+	linkTxs    = "link"
+
+	dataCheck = "data"  // check data integrity
+	fetchRef  = "fetch" // check referenced ballots/atxs/blocks are available
+	votes     = "votes" // check votes are consistent
+	eligible  = "elig"  // check ballot eligibility
+)
+
 var (
 	proposalDuration = metrics.NewHistogramWithBuckets(
 		"proposal_duration",
 		subsystem,
 		"Duration in ns for processing a proposal",
-		[]string{},
+		[]string{"step"},
 		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	proposalDurationDecodeInit = metrics.NewHistogramWithBuckets(
-		"proposal_duration_decode_init",
-		subsystem,
-		"Duration in ns for decoding/initializing a proposal",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	proposalDurationTXs = metrics.NewHistogramWithBuckets(
-		"proposal_duration_txs",
-		subsystem,
-		"Duration in ns for fetching txs in a proposal",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	proposalDurationDBLookup = metrics.NewHistogramWithBuckets(
-		"proposal_duration_db_lookup",
-		subsystem,
-		"Duration in ns for looking up a proposal in db",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	proposalDurationDBSave = metrics.NewHistogramWithBuckets(
-		"proposal_duration_db_save",
-		subsystem,
-		"Duration in ns for saving a proposal in db",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
+	)
 	ballotDuration = metrics.NewHistogramWithBuckets(
 		"ballot_duration",
 		subsystem,
 		"Duration in ns for processing a ballot",
-		[]string{},
+		[]string{"step"},
 		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	ballotDurationDataAvailability = metrics.NewHistogramWithBuckets(
-		"ballot_duration_data_available",
-		subsystem,
-		"Duration in ns for checking data availability in a ballot",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	ballotDurationVotesConsistency = metrics.NewHistogramWithBuckets(
-		"ballot_duration_data_consistent",
-		subsystem,
-		"Duration in ns for checking data consistency in a ballot",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	ballotDurationEligibility = metrics.NewHistogramWithBuckets(
-		"ballot_duration_eligibility",
-		subsystem,
-		"Duration in ns for checking eligibility of a ballot",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	ballotDurationDBLookup = metrics.NewHistogramWithBuckets(
-		"ballot_duration_db_lookup",
-		subsystem,
-		"Duration in ns for looking up a ballot in db",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
-	ballotDurationDBSave = metrics.NewHistogramWithBuckets(
-		"ballot_duration_db_save",
-		subsystem,
-		"Duration in ns for saving up a ballot in db",
-		[]string{},
-		prometheus.ExponentialBuckets(1_000_000, 4, 10),
-	).WithLabelValues()
+	)
 )

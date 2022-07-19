@@ -130,6 +130,7 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(newCtx)
 
 	var b types.Ballot
+	t0 := time.Now()
 	if err := codec.Decode(data, &b); err != nil {
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
@@ -140,9 +141,12 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 		logger.With().Error("failed to initialize ballot", log.Err(err))
 		return errInitialize
 	}
+	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	bidHash := b.ID().AsHash32()
+	t1 := time.Now()
 	h.fetcher.AddPeersFromHash(bidHash, collectHashes(&b))
+	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
 	if err := h.processBallot(ctx, &b, logger); err != nil {
@@ -185,10 +189,9 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.With().Warning("failed to initialize proposal", log.Err(err))
 		return errInitialize
 	}
-	proposalDurationDecodeInit.Observe(float64(time.Since(t0)))
+	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.LayerIndex)
-
 	t1 := time.Now()
 	if has, err := proposals.Has(h.cdb, p.ID()); err != nil {
 		logger.With().Error("failed to look up proposal", p.ID(), log.Err(err))
@@ -197,40 +200,42 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.Info("known proposal")
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
-	proposalDurationDBLookup.Observe(float64(time.Since(t1)))
+	proposalDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t1)))
 
 	logger.With().Info("new proposal", p.ID(), log.Int("num_txs", len(p.TxIDs)))
-
+	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(&p.Ballot))
+	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
 
+	t3 := time.Now()
 	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
 		logger.With().Warning("failed to process ballot", log.Err(err))
 		return err
 	}
+	proposalDuration.WithLabelValues(ballot).Observe(float64(time.Since(t3)))
 
-	t2 := time.Now()
+	t4 := time.Now()
 	if err := h.checkTransactions(ctx, &p); err != nil {
 		logger.With().Warning("failed to fetch proposal TXs", log.Err(err))
 		return err
 	}
-	proposalDurationTXs.Observe(float64(time.Since(t2)))
+	proposalDuration.WithLabelValues(fetchTXs).Observe(float64(time.Since(t4)))
 
 	logger.With().Debug("proposal is syntactically valid")
-
-	t3 := time.Now()
+	t5 := time.Now()
 	if err := proposals.Add(h.cdb, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
-	proposalDurationDBSave.Observe(float64(time.Since(t3)))
-
+	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
 	logger.With().Info("added proposal to database", p.ID())
 
+	t6 := time.Now()
 	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
+	proposalDuration.WithLabelValues(linkTxs).Observe(float64(time.Since(t6)))
 
-	proposalDuration.Observe(float64(time.Since(t0)))
 	reportProposalMetrics(&p)
 	return nil
 }
@@ -244,7 +249,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		logger.Debug("known ballot", b.ID())
 		return nil
 	}
-	ballotDurationDBLookup.Observe(float64(time.Since(t0)))
+	ballotDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t0)))
 
 	logger.With().Info("new ballot", log.Inline(b))
 
@@ -257,9 +262,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 	if err := ballots.Add(h.cdb, b); err != nil {
 		return fmt.Errorf("save ballot: %w", err)
 	}
-	t2 := time.Now()
-	ballotDurationDBSave.Observe(float64(t2.Sub(t1)))
-	ballotDuration.Observe(float64(t2.Sub(t0)))
+	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
 
 	reportVotesMetrics(b)
 	return nil
@@ -268,31 +271,33 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot) error {
 	h.logger.WithContext(ctx).With().Debug("checking proposal syntactic validity")
 
+	t0 := time.Now()
 	if err := h.checkBallotDataIntegrity(b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot integrity check failed", log.Err(err))
 		return err
 	}
+	ballotDuration.WithLabelValues(dataCheck).Observe(float64(time.Since(t0)))
 
-	t0 := time.Now()
+	t1 := time.Now()
 	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot data availability check failed", log.Err(err))
 		return err
 	}
-	ballotDurationDataAvailability.Observe(float64(time.Since(t0)))
+	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
-	t1 := time.Now()
+	t2 := time.Now()
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot votes consistency check failed", log.Err(err))
 		return err
 	}
-	ballotDurationVotesConsistency.Observe(float64(time.Since(t1)))
+	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t2)))
 
-	t2 := time.Now()
+	t3 := time.Now()
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return errNotEligible
 	}
-	ballotDurationEligibility.Observe(float64(time.Since(t2)))
+	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t3)))
 
 	h.logger.WithContext(ctx).With().Debug("ballot is syntactically valid")
 	return nil
