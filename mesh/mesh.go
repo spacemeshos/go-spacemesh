@@ -375,7 +375,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 
 	// pass the layer to tortoise for processing
 	newVerified := msh.trtl.HandleIncomingLayer(ctx, layerID)
-	logger.With().Info("tortoise results", log.FieldNamed("verified", newVerified))
+	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
@@ -401,7 +401,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 		}
 	}
 
-	logger.Info("done processing layer")
+	logger.Debug("done processing layer")
 	return nil
 }
 
@@ -551,18 +551,12 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 	block := msh.getBlockToApply(valids)
 	if block != nil {
 		applied = block.ID()
-		failedTxs, err := msh.conState.ApplyLayer(ctx, block)
+		err := msh.conState.ApplyLayer(ctx, block)
 		if err != nil {
 			logger.With().Error("failed to apply transactions",
-				log.Int("num_failed_txs", len(failedTxs)),
 				log.Err(err))
 			return fmt.Errorf("apply layer: %w", err)
 		}
-
-		logger.With().Info("applied transactions",
-			log.Int("valid_block_txs", len(block.TxIDs)),
-			log.Int("num_failed_txs", len(failedTxs)),
-		)
 	}
 
 	if err := msh.cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
@@ -577,8 +571,6 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 	}); err != nil {
 		return err
 	}
-
-	logger.Info("successfully applied state")
 	return nil
 }
 

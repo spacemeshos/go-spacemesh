@@ -154,7 +154,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.VerifiedTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
@@ -247,7 +247,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	return nil
 }
 
-func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx) ([]types.TransactionWithResult, []types.TransactionID, uint64, error) {
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.VerifiedTx) ([]types.TransactionWithResult, []types.TransactionID, uint64, error) {
 	var (
 		rd      bytes.Reader
 		decoder = scale.NewDecoder(&rd)
@@ -264,7 +264,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 		req := &Request{
 			vm:      v,
 			cache:   ss,
-			raw:     txs[i],
+			raw:     txs[i].RawTx,
 			decoder: decoder,
 		}
 
@@ -296,7 +296,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 		}
 		// TODO should be executed only for transactions that weren't verified
 		// when accepted into mempool
-		if !req.Verify() {
+		if !tx.Verified && !req.Verify() {
 			v.logger.With().Warning("skipping transaction. failed verify",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
@@ -322,7 +322,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
-		rst.RawTx = txs[i]
+		rst.RawTx = txs[i].RawTx
 		rst.TxHeader = &ctx.Header
 		rst.Status = types.TransactionSuccess
 		if err != nil {

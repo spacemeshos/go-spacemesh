@@ -145,3 +145,9 @@ type RawTx struct {
 	ID  TransactionID
 	Raw []byte
 }
+
+// VerifiedTx ...
+type VerifiedTx struct {
+	RawTx
+	Verified bool
+}
