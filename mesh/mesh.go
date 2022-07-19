@@ -530,7 +530,7 @@ func (msh *Mesh) pushLayer(ctx context.Context, lid, verified types.LayerID) err
 	if err != nil {
 		return err
 	}
-	if err = msh.applyState(logger, lid, valids); err != nil {
+	if err = msh.applyState(ctx, logger, lid, valids); err != nil {
 		return err
 	}
 	msh.setLatestLayerInState(lid)
@@ -546,12 +546,12 @@ func (msh *Mesh) pushLayer(ctx context.Context, lid, verified types.LayerID) err
 // applyState applies the block to the conservative state / vm and updates mesh's internal state.
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
-func (msh *Mesh) applyState(logger log.Log, lid types.LayerID, valids []*types.Block) error {
+func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.LayerID, valids []*types.Block) error {
 	applied := types.EmptyBlockID
 	block := msh.getBlockToApply(valids)
 	if block != nil {
 		applied = block.ID()
-		failedTxs, err := msh.conState.ApplyLayer(block)
+		failedTxs, err := msh.conState.ApplyLayer(ctx, block)
 		if err != nil {
 			logger.With().Error("failed to apply transactions",
 				log.Int("num_failed_txs", len(failedTxs)),

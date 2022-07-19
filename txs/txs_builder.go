@@ -177,7 +177,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 	if err := txCache.BuildFromTXs(candidates, blockSeed); err != nil {
 		return nil, err
 	}
-	byAddrAndNonce := txCache.GetMempool()
+	byAddrAndNonce := txCache.GetMempool(logger)
 	ntxs := make([]*txtypes.NanoTX, 0, len(pmd.mtxs))
 	byTid := make(map[types.TransactionID]*txtypes.NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
@@ -207,7 +207,6 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, bloc
 	mt.SeedFromSlice(toUint64Slice(blockSeed))
 	rng := rand.New(mt)
 	ordered := shuffleWithNonceOrder(logger, rng, len(bmd.candidates), bmd.candidates, bmd.byAddrAndNonce)
-	logger.With().Debug("block txs after shuffle", log.Int("num_txs", len(ordered)))
 	return prune(logger, ordered, bmd.byTid, gasLimit), nil
 }
 
@@ -237,6 +236,7 @@ func shuffleWithNonceOrder(
 	rng.Shuffle(len(ntxs), func(i, j int) { ntxs[i], ntxs[j] = ntxs[j], ntxs[i] })
 	total := util.Min(len(ntxs), numTXs)
 	result := make([]types.TransactionID, 0, total)
+	packed := make(map[types.Address][]uint64)
 	for _, ntx := range ntxs[:total] {
 		// if a spot is taken by a principal, we add its TX for the next eligible nonce
 		p := ntx.Principal
@@ -246,13 +246,30 @@ func shuffleWithNonceOrder(
 		if len(byAddrAndNonce[p]) == 0 {
 			logger.With().Fatal("txs missing", p)
 		}
-		result = append(result, byAddrAndNonce[p][0].ID)
+		toAdd := byAddrAndNonce[p][0]
+		result = append(result, toAdd.ID)
+		if _, ok := packed[p]; !ok {
+			packed[p] = []uint64{toAdd.Nonce.Counter, toAdd.Nonce.Counter}
+		} else {
+			packed[p][1] = toAdd.Nonce.Counter
+		}
 		if len(byAddrAndNonce[p]) == 1 {
 			delete(byAddrAndNonce, p)
 		} else {
 			byAddrAndNonce[p] = byAddrAndNonce[p][1:]
 		}
 	}
+	logger.With().Debug("packed txs", log.Array("ranges", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for addr, nonces := range packed {
+			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+				encoder.AddString("addr", addr.String())
+				encoder.AddUint64("from", nonces[0])
+				encoder.AddUint64("to", nonces[1])
+				return nil
+			}))
+		}
+		return nil
+	})))
 	return result
 }
 
@@ -264,7 +281,7 @@ func prune(logger log.Log, tids []types.TransactionID, byTid map[types.Transacti
 	)
 	for idx, tid = range tids {
 		if gasRemaining < minTXGas {
-			logger.With().Debug("gas exhausted for block",
+			logger.With().Info("gas exhausted for block",
 				log.Int("num_txs", idx),
 				log.Uint64("gas_left", gasRemaining),
 				log.Uint64("gas_limit", gasLimit))

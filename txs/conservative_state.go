@@ -1,6 +1,7 @@
 package txs
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -118,11 +119,12 @@ func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*type
 }
 
 // SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
-func (cs *ConservativeState) SelectProposalTXs(numEligibility int) []types.TransactionID {
-	mi := newMempoolIterator(cs.logger, cs.cache, cs.cfg.BlockGasLimit)
+func (cs *ConservativeState) SelectProposalTXs(lid types.LayerID, numEligibility int) []types.TransactionID {
+	logger := cs.logger.WithFields(lid)
+	mi := newMempoolIterator(logger, cs.cache, cs.cfg.BlockGasLimit)
 	predictedBlock, byAddrAndNonce := mi.PopAll()
 	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
-	return getProposalTXs(cs.logger, numTXs, predictedBlock, byAddrAndNonce)
+	return getProposalTXs(logger.WithFields(lid), numTXs, predictedBlock, byAddrAndNonce)
 }
 
 // Validation initializes validation request.
@@ -131,12 +133,9 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 }
 
 // AddToCache adds the provided transaction to the conservative cache.
-func (cs *ConservativeState) AddToCache(tx *types.Transaction) error {
+func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transaction) error {
 	received := time.Now()
-	if err := cs.cache.Add(cs.db, tx, received, nil); err != nil {
-		return err
-	}
-	if err := transactions.Add(cs.db, tx, received); err != nil {
+	if err := cs.cache.Add(ctx, cs.db, tx, received, false, nil); err != nil {
 		return err
 	}
 	events.ReportNewTx(types.LayerID{}, tx)
@@ -155,11 +154,11 @@ func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, 
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
-func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.TransactionID, error) {
+func (cs *ConservativeState) ApplyLayer(ctx context.Context, toApply *types.Block) ([]types.TransactionID, error) {
 	logger := cs.logger.WithFields(toApply.LayerIndex, toApply.ID())
 	logger.Info("applying layer to conservative state")
 
-	raw, err := cs.getTXsToApply(logger, toApply)
+	raw, err := cs.getTXsToApply(ctx, logger, toApply)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +184,7 @@ func (cs *ConservativeState) ApplyLayer(toApply *types.Block) ([]types.Transacti
 	return skipped, nil
 }
 
-func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block) ([]types.RawTx, error) {
+func (cs *ConservativeState) getTXsToApply(ctx context.Context, logger log.Log, toApply *types.Block) ([]types.RawTx, error) {
 	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
@@ -211,15 +210,10 @@ func (cs *ConservativeState) getTXsToApply(logger log.Log, toApply *types.Block)
 				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
 			}
 			mtx.TxHeader = header
-			// Add updates header
-			if err = transactions.Add(cs.db, &mtx.Transaction, mtx.Received); err != nil {
-				return nil, err
-			}
 			// restore cache consistency (e.g nonce/balance) so that gossiped
 			// transactions can be added successfully
-
 			// TODO(dshulyak) this should overwrite cache state without possibility of the validation failure
-			if err = cs.cache.Add(cs.db, &mtx.Transaction, mtx.Received, nil); err != nil {
+			if err = cs.cache.Add(ctx, cs.db, &mtx.Transaction, mtx.Received, true, nil); err != nil {
 				return nil, err
 			}
 		}

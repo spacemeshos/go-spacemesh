@@ -5,12 +5,13 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
-	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	log "github.com/spacemeshos/go-spacemesh/log"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -77,17 +78,17 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // AddToCache mocks base method.
-func (m *MockconservativeState) AddToCache(arg0 *types.Transaction) error {
+func (m *MockconservativeState) AddToCache(arg0 context.Context, arg1 *types.Transaction) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddToCache", arg0)
+	ret := m.ctrl.Call(m, "AddToCache", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddToCache indicates an expected call of AddToCache.
-func (mr *MockconservativeStateMockRecorder) AddToCache(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) AddToCache(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToCache", reflect.TypeOf((*MockconservativeState)(nil).AddToCache), arg0, arg1)
 }
 
 // AddToDB mocks base method.
@@ -102,20 +103,6 @@ func (m *MockconservativeState) AddToDB(arg0 *types.Transaction) error {
 func (mr *MockconservativeStateMockRecorder) AddToDB(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToDB", reflect.TypeOf((*MockconservativeState)(nil).AddToDB), arg0)
-}
-
-// AddWithHeader mocks base method.
-func (m *MockconservativeState) AddWithHeader(arg0 *types.Transaction, arg1 time.Time) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddWithHeader", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddWithHeader indicates an expected call of AddWithHeader.
-func (mr *MockconservativeStateMockRecorder) AddWithHeader(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddWithHeader", reflect.TypeOf((*MockconservativeState)(nil).AddWithHeader), arg0, arg1)
 }
 
 // GetMeshTransaction mocks base method.
@@ -344,15 +331,15 @@ func (m *MockconStateCache) EXPECT() *MockconStateCacheMockRecorder {
 }
 
 // GetMempool mocks base method.
-func (m *MockconStateCache) GetMempool() map[types.Address][]*types0.NanoTX {
+func (m *MockconStateCache) GetMempool(arg0 log.Log) map[types.Address][]*types0.NanoTX {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMempool")
+	ret := m.ctrl.Call(m, "GetMempool", arg0)
 	ret0, _ := ret[0].(map[types.Address][]*types0.NanoTX)
 	return ret0
 }
 
 // GetMempool indicates an expected call of GetMempool.
-func (mr *MockconStateCacheMockRecorder) GetMempool() *gomock.Call {
+func (mr *MockconStateCacheMockRecorder) GetMempool(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMempool", reflect.TypeOf((*MockconStateCache)(nil).GetMempool))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMempool", reflect.TypeOf((*MockconStateCache)(nil).GetMempool), arg0)
 }

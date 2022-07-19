@@ -296,7 +296,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
-	txList := pb.conState.SelectProposalTXs(len(proofs))
+	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
 	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)
 	if err != nil {
 		logger.With().Error("failed to create new proposal", log.Err(err))
