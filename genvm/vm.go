@@ -61,6 +61,7 @@ type VM struct {
 func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
 		vm:      v,
+		cache:   core.NewStagedCache(v.db),
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
 		raw:     raw,
 	}
@@ -260,29 +261,30 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 		t1 := time.Now()
 		tx := &txs[i]
 		rd.Reset(tx.Raw)
-		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
+		req := &Request{
+			vm:      v,
+			cache:   ss,
+			raw:     txs[i],
+			decoder: decoder,
+		}
+
+		header, err := req.Parse()
 		if err != nil {
 			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
 			skipped = append(skipped, tx.ID)
 			invalidTxCount.Inc()
 			continue
 		}
-		t2 := time.Now()
-		transactionDurationParse.Observe(float64(time.Since(t1)))
+		ctx := req.ctx
+		args := req.args
 
+		t2 := time.Now()
 		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("skipping transaction. can't cover gas",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			skipped = append(skipped, tx.ID)
-			invalidTxCount.Inc()
-			continue
-		}
+		// TODO to be changed after nonces are defined
+		// https://github.com/spacemeshos/go-spacemesh/issues/3273
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
 			v.logger.With().Warning("skipping transaction. failed nonce check",
 				log.Object("header", header),
@@ -292,6 +294,18 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 			invalidTxCount.Inc()
 			continue
 		}
+		// TODO should be executed only for transactions that weren't verified
+		// when accepted into mempool
+		if !req.Verify() {
+			v.logger.With().Warning("skipping transaction. failed verify",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			skipped = append(skipped, tx.ID)
+			invalidTxCount.Inc()
+			continue
+		}
+
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
 		rst.Block = lctx.Block
@@ -302,9 +316,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 				log.Object("account", &ctx.Account),
 				log.Err(err),
 			)
-			// TODO anything but internal must be recorded in the execution result.
-			// internal errors are propagated upwards, but they are for fatal
-			// unrecovarable errors, such as disk problems
 			if errors.Is(err, core.ErrInternal) {
 				return nil, nil, 0, err
 			}
@@ -337,21 +348,24 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 // After Parse is executed - conservative cache may do validation and skip Verify
 // if transaction can't be executed.
 type Request struct {
-	vm *VM
+	vm    *VM
+	cache *core.StagedCache
 
 	raw     types.RawTx
 	ctx     *core.Context
+	args    scale.Encodable
 	decoder *scale.Decoder
 }
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.raw.ID, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
+	r.args = args
 	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }

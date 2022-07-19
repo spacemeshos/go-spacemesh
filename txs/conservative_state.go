@@ -154,72 +154,33 @@ func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, 
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
-func (cs *ConservativeState) ApplyLayer(ctx context.Context, toApply *types.Block) ([]types.TransactionID, error) {
-	logger := cs.logger.WithFields(toApply.LayerIndex, toApply.ID())
-	logger.Info("applying layer to conservative state")
+func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block) error {
+	logger := cs.logger.WithFields(block.LayerIndex, block.ID())
+	logger.Debug("applying layer to conservative state")
 
-	raw, err := cs.getTXsToApply(ctx, logger, toApply)
+	raw, err := cs.GetRawTransactions(block.TxIDs)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	skipped, rsts, err := cs.vmState.Apply(
-		vm.ApplyContext{Layer: toApply.LayerIndex, Block: toApply.ID()},
-		raw, toApply.Rewards)
+	skipped, results, err := cs.vmState.Apply(
+		vm.ApplyContext{Layer: block.LayerIndex, Block: block.ID()},
+		raw,
+		block.Rewards,
+	)
 	if err != nil {
-		logger.With().Error("failed to apply layer txs",
-			log.Int("num_failed_txs", len(skipped)),
-			log.Err(err))
-		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-		//  e.g. persist the last layer transactions were applied from and use that instead of `oldVerified`
-		return nil, fmt.Errorf("apply layer: %w", err)
+		return fmt.Errorf("apply layer: %w", err)
 	}
 
-	logger.With().Info("applying layer to cache",
-		log.Int("num_txs_failed", len(skipped)),
-		log.Int("num_txs_final", len(rsts)))
-	if _, errs := cs.cache.ApplyLayer(cs.db, toApply.LayerIndex, toApply.ID(), rsts, skipped); len(errs) > 0 {
-		return nil, errs[0]
+	logger.With().Debug("applying layer to cache",
+		log.Int("num_txs_skipped", len(skipped)),
+		log.Int("num_txs_applied", len(results)),
+	)
+	if _, errs := cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(),
+		results, skipped); len(errs) > 0 {
+		return errs[0]
 	}
-	return skipped, nil
-}
-
-func (cs *ConservativeState) getTXsToApply(ctx context.Context, logger log.Log, toApply *types.Block) ([]types.RawTx, error) {
-	mtxs, missing := cs.GetMeshTransactions(toApply.TxIDs)
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("find txs %v for applying layer %v", missing, toApply.LayerIndex)
-	}
-	raw := make([]types.RawTx, 0, len(toApply.TxIDs))
-	for _, mtx := range mtxs {
-		// some TXs in the block may be already applied previously
-		if mtx.State == types.APPLIED {
-			continue
-		}
-		// txs without header were saved by syncing a block without validation
-		if mtx.TxHeader == nil {
-			logger.With().Debug("verifying synced transaction",
-				toApply.ID(),
-				mtx.ID,
-			)
-			req := cs.vmState.Validation(mtx.RawTx)
-			header, err := req.Parse()
-			if err != nil {
-				return nil, fmt.Errorf("parsing %s: %w", mtx.ID, err)
-			}
-			if !req.Verify() {
-				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
-			}
-			mtx.TxHeader = header
-			// restore cache consistency (e.g nonce/balance) so that gossiped
-			// transactions can be added successfully
-			// TODO(dshulyak) this should overwrite cache state without possibility of the validation failure
-			if err = cs.cache.Add(ctx, cs.db, &mtx.Transaction, mtx.Received, true, nil); err != nil {
-				return nil, err
-			}
-		}
-		raw = append(raw, mtx.RawTx)
-	}
-	return raw, nil
+	return nil
 }
 
 // GetProjection returns the projected nonce and balance for an account, including
@@ -266,23 +227,17 @@ func (cs *ConservativeState) GetMeshTransaction(tid types.TransactionID) (*types
 	return transactions.Get(cs.db, tid)
 }
 
-// GetMeshTransactions retrieves a list of txs by their id's.
-func (cs *ConservativeState) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
-	missing := make(map[types.TransactionID]struct{})
-	mtxs := make([]*types.MeshTransaction, 0, len(ids))
+// GetRawTransactions retrieves a list of txs by their id's.
+func (cs *ConservativeState) GetRawTransactions(ids []types.TransactionID) ([]types.RawTx, error) {
+	txs := make([]types.RawTx, 0, len(ids))
 	for _, tid := range ids {
-		var (
-			mtx *types.MeshTransaction
-			err error
-		)
-		if mtx, err = transactions.Get(cs.db, tid); err != nil {
-			cs.logger.With().Warning("could not get tx", tid, log.Err(err))
-			missing[tid] = struct{}{}
+		if mtx, err := transactions.Get(cs.db, tid); err != nil {
+			return nil, err
 		} else {
-			mtxs = append(mtxs, mtx)
+			txs = append(txs, mtx.RawTx)
 		}
 	}
-	return mtxs, missing
+	return txs, nil
 }
 
 // GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
