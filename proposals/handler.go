@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/proposals/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -186,7 +185,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.With().Warning("failed to initialize proposal", log.Err(err))
 		return errInitialize
 	}
-	metrics.ProposalDurationDecodeInit.Observe(float64(time.Since(t0)))
+	proposalDurationDecodeInit.Observe(float64(time.Since(t0)))
 
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.LayerIndex)
 
@@ -198,7 +197,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.Info("known proposal")
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
-	metrics.ProposalDurationDBLookup.Observe(float64(time.Since(t1)))
+	proposalDurationDBLookup.Observe(float64(time.Since(t1)))
 
 	logger.With().Info("new proposal", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 
@@ -214,7 +213,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.With().Warning("failed to fetch proposal TXs", log.Err(err))
 		return err
 	}
-	metrics.ProposalDurationTXs.Observe(float64(time.Since(t2)))
+	proposalDurationTXs.Observe(float64(time.Since(t2)))
 
 	logger.With().Debug("proposal is syntactically valid")
 
@@ -223,7 +222,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
-	metrics.ProposalDurationDBSave.Observe(float64(time.Since(t3)))
+	proposalDurationDBSave.Observe(float64(time.Since(t3)))
 
 	logger.With().Info("added proposal to database", p.ID())
 
@@ -231,7 +230,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
 
-	metrics.ProposalDuration.Observe(float64(time.Since(t0)))
+	proposalDuration.Observe(float64(time.Since(t0)))
 	reportProposalMetrics(&p)
 	return nil
 }
@@ -245,7 +244,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		logger.Debug("known ballot", b.ID())
 		return nil
 	}
-	metrics.BallotDurationDBLookup.Observe(float64(time.Since(t0)))
+	ballotDurationDBLookup.Observe(float64(time.Since(t0)))
 
 	logger.With().Info("new ballot", log.Inline(b))
 
@@ -259,8 +258,8 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		return fmt.Errorf("save ballot: %w", err)
 	}
 	t2 := time.Now()
-	metrics.BallotDurationDBSave.Observe(float64(t2.Sub(t1)))
-	metrics.BallotDuration.Observe(float64(t2.Sub(t0)))
+	ballotDurationDBSave.Observe(float64(t2.Sub(t1)))
+	ballotDuration.Observe(float64(t2.Sub(t0)))
 
 	reportVotesMetrics(b)
 	return nil
@@ -279,21 +278,21 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 		h.logger.WithContext(ctx).With().Warning("ballot data availability check failed", log.Err(err))
 		return err
 	}
-	metrics.BallotDurationDataAvailability.Observe(float64(time.Since(t0)))
+	ballotDurationDataAvailability.Observe(float64(time.Since(t0)))
 
 	t1 := time.Now()
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		h.logger.WithContext(ctx).With().Warning("ballot votes consistency check failed", log.Err(err))
 		return err
 	}
-	metrics.BallotDurationVotesConsistency.Observe(float64(time.Since(t1)))
+	ballotDurationVotesConsistency.Observe(float64(time.Since(t1)))
 
 	t2 := time.Now()
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return errNotEligible
 	}
-	metrics.BallotDurationEligibility.Observe(float64(time.Since(t2)))
+	ballotDurationEligibility.Observe(float64(time.Since(t2)))
 
 	h.logger.WithContext(ctx).With().Debug("ballot is syntactically valid")
 	return nil
@@ -483,12 +482,12 @@ func (h *Handler) checkTransactions(ctx context.Context, p *types.Proposal) erro
 }
 
 func reportProposalMetrics(p *types.Proposal) {
-	metrics.ProposalSize.WithLabelValues().Observe(float64(len(p.Bytes())))
-	metrics.NumTxsInProposal.WithLabelValues().Observe(float64(len(p.TxIDs)))
+	proposalSize.WithLabelValues().Observe(float64(len(p.Bytes())))
+	numTxsInProposal.WithLabelValues().Observe(float64(len(p.TxIDs)))
 }
 
 func reportVotesMetrics(b *types.Ballot) {
-	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeAgainst}).Observe(float64(len(b.Votes.Against)))
-	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeFor}).Observe(float64(len(b.Votes.Support)))
-	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeNeutral}).Observe(float64(len(b.Votes.Abstain)))
+	numBlocksInException.With(prometheus.Labels{diffTypeLabel: diffTypeAgainst}).Observe(float64(len(b.Votes.Against)))
+	numBlocksInException.With(prometheus.Labels{diffTypeLabel: diffTypeFor}).Observe(float64(len(b.Votes.Support)))
+	numBlocksInException.With(prometheus.Labels{diffTypeLabel: diffTypeNeutral}).Observe(float64(len(b.Votes.Abstain)))
 }
