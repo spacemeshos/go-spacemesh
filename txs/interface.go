@@ -1,8 +1,11 @@
 package txs
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
@@ -12,7 +15,7 @@ import (
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
 	Validation(types.RawTx) system.ValidationRequest
-	AddToCache(*types.Transaction) error
+	AddToCache(context.Context, *types.Transaction) error
 	AddToDB(*types.Transaction) error
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
@@ -30,5 +33,5 @@ type vmState interface {
 }
 
 type conStateCache interface {
-	GetMempool() map[types.Address][]*txtypes.NanoTX
+	GetMempool(log.Log) map[types.Address][]*txtypes.NanoTX
 }
