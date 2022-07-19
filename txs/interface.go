@@ -10,6 +10,10 @@ import (
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
+type txGetter interface {
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
+}
+
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {

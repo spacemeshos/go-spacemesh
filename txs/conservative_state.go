@@ -104,7 +104,7 @@ func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*type
 		myHash = types.EmptyLayerHash
 	}
 
-	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs.GetMeshTransaction)
+	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs)
 	if err != nil {
 		return nil, err
 	}
