@@ -248,3 +248,16 @@ func defaultTopicParam() *pubsub.TopicScoreParams {
 		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
 	}
 }
+
+func castResult(rst ValidationResult) string {
+	switch rst {
+	case ValidationAccept:
+		return "accept"
+	case ValidationIgnore:
+		return "ignore"
+	case ValidationReject:
+		return "reject"
+	default:
+		panic(fmt.Sprintf("unknown result %d", rst))
+	}
+}
