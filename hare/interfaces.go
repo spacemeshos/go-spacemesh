@@ -20,11 +20,11 @@ type Rolacle interface {
 		nodeID types.NodeID, roleProof []byte, eligibilityCount uint16,
 	) (bool, error)
 	CalcEligibility(ctx context.Context,
-		layerID types.LayerID, opIndex uint32, committeeSize int,
+		layerID types.LayerID, roleIndex uint32, committeeSize int,
 		nodeID types.NodeID, vrfSig []byte,
 	) (uint16, error)
 	Proof(ctx context.Context,
-		layerID types.LayerID, opIndex uint32,
+		layerID types.LayerID, roleIndex uint32,
 	) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context,
 		nodeID types.NodeID, layerID types.LayerID,

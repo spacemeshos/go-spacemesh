@@ -43,6 +43,12 @@ type TerminationOutput interface {
 	Completed() bool
 }
 
+type TerminationBlockOutput interface {
+	TerminationOutput
+	BlockID() types.BlockID
+	TerminatingNode() types.NodeID
+}
+
 // RoundClock is a timer interface.
 type RoundClock interface {
 	AwaitWakeup() <-chan struct{}
@@ -82,8 +88,8 @@ type Hare struct {
 
 	bufferSize uint32
 
-	hareOutputChan           chan TerminationOutput
-	terminationSubscriptions []<-chan TerminationOutput
+	hareOutputChan       chan TerminationOutput
+	blockIDSubscriptions []<-chan TerminationOutput
 
 	mu      sync.RWMutex
 	outputs map[types.LayerID][]types.ProposalID
@@ -193,7 +199,7 @@ func (h *Hare) GetHareMsgHandler() pubsub.GossipHandler {
 }
 
 func (h *Hare) RegisterTerminationsCh(sub <-chan TerminationOutput) {
-	h.terminationSubscriptions = append(h.terminationSubscriptions, sub)
+	h.blockIDSubscriptions = append(h.blockIDSubscriptions, sub)
 }
 
 func (h *Hare) getLastLayer() types.LayerID {
@@ -271,7 +277,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
 
-	hareOutputEmptyBlock := types.EmptyBlockID
+	hareBlockIDOutput := types.EmptyBlockID
 	if len(pids) > 0 {
 		// fetch proposals from peers if not locally available
 		if err := h.fetcher.GetProposals(ctx, pids); err != nil {
@@ -290,10 +296,10 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
 			return fmt.Errorf("hare save block: %w", err)
 		} else {
-			hareOutputEmptyBlock = block.ID()
+			hareBlockIDOutput = block.ID()
 		}
 	}
-	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutputEmptyBlock); err != nil {
+	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareBlockIDOutput); err != nil {
 		h.WithContext(ctx).With().Warning("mesh failed to process layer", layerID, log.Err(err))
 	}
 
