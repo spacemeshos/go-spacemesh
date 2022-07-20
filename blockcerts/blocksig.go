@@ -2,7 +2,7 @@ package blockcerts
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
-type blockSignature struct {
+type BlockSignature struct {
 	// Eligibility Params
 	blockID          types.BlockID
 	layerID          types.LayerID
@@ -11,8 +11,4 @@ type blockSignature struct {
 	eligibilityCount uint16
 	// Content
 	blockSignature []byte
-}
-
-func blockSignEligibility() {
-
 }

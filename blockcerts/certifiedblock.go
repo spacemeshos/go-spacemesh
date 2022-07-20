@@ -6,8 +6,10 @@ import (
 )
 
 type BlockCertificate struct {
-	blockID               types.BlockID
-	terminationSignatures []blockSignature
+	blockID types.BlockID
+	layerID types.LayerID
+
+	terminationSignatures []BlockSignature
 }
 
 // CertifiedBlockProvider is an object designed to retrieve a single CertifiedBlock
@@ -40,7 +42,7 @@ func (cbs *CertifiedBlockStore) StoreCertifiedBlock(cBlock []byte) error {
 
 // Implementation details below ----
 
-func (cbs *CertifiedBlockStore) storeBlockSignature(blockID types.BlockID, sig blockSignature) error {
+func (cbs *CertifiedBlockStore) storeBlockSignature(blockID types.BlockID, sig BlockSignature) error {
 	return fmt.Errorf("not yet implemented")
 }
 

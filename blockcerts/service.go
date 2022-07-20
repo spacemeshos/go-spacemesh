@@ -24,16 +24,15 @@ type HareTerminationConfig struct {
 	CommitteeSize int
 }
 
-// BlockCertifyingService is a long-lived service responsible for verifying &
-// caching gossiped block signatures and, when chosen by the oracle,
-// participating in block-signing upon hare termination.
+// BlockCertifyingService is a long-lived service responsible for participating
+// in block-signing upon hare termination.
 type BlockCertifyingService struct {
-	rolacle         hare.Rolacle
-	config          HareTerminationConfig
-	hareTerminated  <-chan hare.TerminationBlockOutput
-	blockSignersWg  sync.WaitGroup
-	gossipPublisher pubsub.Publisher
-	blockSigner     signing.Signer
+	rolacle          hare.Rolacle
+	config           HareTerminationConfig
+	hareTerminations <-chan hare.TerminationBlockOutput
+	blockSignersWg   sync.WaitGroup
+	gossipPublisher  pubsub.Publisher
+	blockSigner      signing.Signer
 }
 
 // NewBlockCertifyingService constructs a new BlockCertifyingService.
@@ -47,7 +46,7 @@ func NewBlockCertifyingService(
 	service := &BlockCertifyingService{}
 	service.rolacle = rolacle
 	service.config = config
-	service.hareTerminated = hareTerminations
+	service.hareTerminations = hareTerminations
 	service.gossipPublisher = gossipPublisher
 	service.blockSigner = blockSigner
 	service.blockSignersWg = sync.WaitGroup{}
@@ -56,23 +55,22 @@ func NewBlockCertifyingService(
 
 func (s *BlockCertifyingService) Start(ctx context.Context) error {
 	go s.certifyBlockServiceLoop(ctx)
+	return nil
 }
 
-// GossipHandler returns a function that
+func (s *BlockCertifyingService) SignatureCacher() *SigCacher {
+
+}
+
+// GossipHandler returns a function that handles block value messages.
 func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
 	return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
 	) pubsub.ValidationResult {
-		// Decode message as BlockSignature
-		// TODO: Refactor main message logic in hare package to not have "optional fields"
-		msg := blockSignature{}
+		msg := BlockSignature{}
 		err := codec.Decode(bytes, msg)
 		if err != nil {
 			return pubsub.ValidationReject
 		}
-		// Validate with oracle
-		// TODO: remove concept of "round" from oracle
-		// The issue is that the VRF "buildKey" method requires a "round number"
-		// (i.e. k) as input
 		isValidProof, err := s.rolacle.Validate(ctx,
 			msg.layerID, blockCertifier, s.config.CommitteeSize, msg.senderNodeID,
 			msg.eligibilityProof, msg.eligibilityCount)
@@ -84,9 +82,9 @@ func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
 			return pubsub.ValidationReject
 		}
 
-		// Extract public key from signature & validate
+		// Extract public key from value & validate
 
-		// Store signature
+		// Store value
 		store, err := NewCertifiedBlockStore(s)
 		if err != nil {
 			panic("error not yet handled")
@@ -102,15 +100,19 @@ func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
 func (s BlockCertifyingService) certifyBlockServiceLoop(ctx context.Context) {
 	for {
 		select {
-
 		case <-ctx.Done():
 			panic("cancel not yet implemented")
 
-		case hareProcess := <-s.hareTerminated:
+		case hareTermination := <-s.hareTerminations:
+			if hareTermination == nil {
+				log.Debug("block certification service: " +
+					"hare termination channel closed.")
+				return
+			}
 			// 1. check readiness
 			ready, err := s.rolacle.IsIdentityActiveOnConsensusView(ctx,
-				hareProcess.TerminatingNode(),
-				hareProcess.ID(),
+				hareTermination.TerminatingNode(),
+				hareTermination.ID(),
 			)
 			if err != nil {
 				log.Error("error checking if active on consensus view")
@@ -121,29 +123,29 @@ func (s BlockCertifyingService) certifyBlockServiceLoop(ctx context.Context) {
 				break
 			}
 			// 2. calculate eligibility
-			proof, err := s.rolacle.Proof(ctx, hareProcess.ID(), blockCertifier)
+			proof, err := s.rolacle.Proof(ctx, hareTermination.ID(), blockCertifier)
 			if err != nil {
 				log.Err(errors.Wrap(err, "could not retrieve eligibility proof from oracle"))
 				break
 			}
 
-			committeeSeatCount, err := s.rolacle.CalcEligibility(ctx, hareProcess.ID(),
-				blockCertifier, s.config.CommitteeSize, hareProcess.TerminatingNode(), proof)
+			committeeSeatCount, err := s.rolacle.CalcEligibility(ctx, hareTermination.ID(),
+				blockCertifier, s.config.CommitteeSize, hareTermination.TerminatingNode(), proof)
 
-			blockIDBytes := hareProcess.BlockID().Bytes()
+			blockIDBytes := hareTermination.BlockID().Bytes()
 			blockIDSignature := s.blockSigner.Sign(blockIDBytes)
 
-			blockSig := blockSignature{
-				blockID:          hareProcess.BlockID(),
-				layerID:          hareProcess.ID(),
-				senderNodeID:     hareProcess.TerminatingNode(),
+			blockSig := BlockSignature{
+				blockID:          hareTermination.BlockID(),
+				layerID:          hareTermination.ID(),
+				senderNodeID:     hareTermination.TerminatingNode(),
 				eligibilityProof: proof,
 				eligibilityCount: committeeSeatCount,
 				blockSignature:   blockIDSignature,
 			}
 
 			s.blockSignersWg.Add(1)
-			if !hareProcess.Completed() {
+			if !hareTermination.Completed() {
 			}
 
 			msgBytes, err := codec.Encode(blockSig)
