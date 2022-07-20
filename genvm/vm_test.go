@@ -655,7 +655,7 @@ func TestWorkflow(t *testing.T) {
 				} else {
 					require.Len(tt, skipped, len(layer.skipped))
 					for i, pos := range layer.skipped {
-						require.Equal(t, txs[pos].ID, skipped[i])
+						require.Equal(t, txs[pos].ID, skipped[i].ID)
 					}
 				}
 				for account, changes := range layer.expected {

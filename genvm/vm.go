@@ -154,7 +154,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.VerifiedTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.VerifiedTx, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
@@ -247,31 +247,37 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	return nil
 }
 
-func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.VerifiedTx) ([]types.TransactionWithResult, []types.TransactionID, uint64, error) {
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.VerifiedTx) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
-		rd      bytes.Reader
-		decoder = scale.NewDecoder(&rd)
-		skipped []types.TransactionID
-		fees    uint64
-		results []types.TransactionWithResult
+		rd       bytes.Reader
+		decoder  = scale.NewDecoder(&rd)
+		fees     uint64
+		skipped  []types.Transaction
+		executed []types.TransactionWithResult
+		limit    = lctx.GasLimit
 	)
 	for i := range txs {
 		txCount.Inc()
 
 		t1 := time.Now()
 		tx := &txs[i]
+
 		rd.Reset(tx.Raw)
 		req := &Request{
 			vm:      v,
 			cache:   ss,
 			raw:     txs[i].RawTx,
 			decoder: decoder,
+			limit:   limit,
 		}
 
 		header, err := req.Parse()
 		if err != nil {
-			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
-			skipped = append(skipped, tx.ID)
+			v.logger.With().Warning("skipping transaction. failed to parse",
+				tx.ID,
+				log.Err(err),
+			)
+			skipped = append(skipped, types.Transaction{RawTx: tx.RawTx})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -290,7 +296,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			skipped = append(skipped, tx.ID)
+			skipped = append(skipped, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -301,7 +307,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			skipped = append(skipped, tx.ID)
+			skipped = append(skipped, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -318,6 +324,14 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 			)
 			if errors.Is(err, core.ErrInternal) {
 				return nil, nil, 0, err
+			}
+			if errors.Is(err, core.ErrBlockGas) && ctx.Consumed() == 0 {
+				v.logger.With().Warning("skipping transaction. failed verify",
+					log.Object("header", header),
+					log.Object("account", &ctx.Account),
+				)
+				skipped = append(skipped, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+				invalidTxCount.Inc()
 			}
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
@@ -338,10 +352,12 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 			return nil, nil, 0, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		fees += ctx.Fee()
-		results = append(results, rst)
+		limit -= ctx.Consumed()
+
+		executed = append(executed, rst)
 		transactionDuration.Observe(float64(time.Since(t1)))
 	}
-	return results, skipped, fees, nil
+	return executed, skipped, fees, nil
 }
 
 // Request used to implement 2-step validation flow.
@@ -355,6 +371,7 @@ type Request struct {
 	ctx     *core.Context
 	args    scale.Encodable
 	decoder *scale.Decoder
+	limit   uint64
 }
 
 // Parse header from the raw transaction.
@@ -455,6 +472,7 @@ func verify(ctx *core.Context, raw []byte) bool {
 
 // ApplyContext has information on layer and block id.
 type ApplyContext struct {
-	Layer types.LayerID
-	Block types.BlockID
+	Layer    types.LayerID
+	Block    types.BlockID
+	GasLimit uint64
 }
