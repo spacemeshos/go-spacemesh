@@ -88,9 +88,14 @@ func extractProposalMetadata(
 	return &proposalMetadata{lid: lid, size: len(proposals), mtxs: mtxs, meshHashes: meshHashes}, nil
 }
 
-func getMajorityState(meshHashes map[types.Hash32]*meshState, numProposals, threshold int) *meshState {
+func getMajorityState(logger log.Log, meshHashes map[types.Hash32]*meshState, numProposals, threshold int) *meshState {
 	for _, ms := range meshHashes {
-		if ms.count*100 > numProposals*threshold {
+		logger.With().Debug("mesh hash",
+			ms.hash,
+			log.Int("count", ms.count),
+			log.Int("threshold", threshold),
+			log.Int("num_proposals", numProposals))
+		if ms.hash != types.EmptyLayerHash && ms.count*100 >= numProposals*threshold {
 			return ms
 		}
 	}
@@ -111,7 +116,7 @@ func checkStateConsensus(
 		return nil, err
 	}
 
-	ms := getMajorityState(md.meshHashes, md.size, cfg.OptFilterThreshold)
+	ms := getMajorityState(logger, md.meshHashes, md.size, cfg.OptFilterThreshold)
 	if ms == nil {
 		logger.With().Warning("no consensus on mesh hash. NOT doing optimistic filtering", lid)
 		return md, nil
@@ -120,13 +125,14 @@ func checkStateConsensus(
 	if ownMeshHash != ms.hash {
 		logger.With().Error("node mesh hash differ from majority",
 			lid,
-			log.String("majority_hash", ms.hash.String()),
-			log.String("node_hash", ownMeshHash.String()))
+			log.Stringer("majority_hash", ms.hash),
+			log.Stringer("node_hash", ownMeshHash))
 		return nil, errNodeHasBadMeshHash
 	}
 	md.optFilter = true
 	logger.With().Info("consensus on mesh and state. doing optimistic filtering",
-		lid, log.Stringer("mesh_hash", ms.hash))
+		lid,
+		log.Stringer("mesh_hash", ms.hash))
 	return md, nil
 }
 
