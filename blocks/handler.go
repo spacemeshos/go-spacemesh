@@ -73,6 +73,7 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new block", b.ID())
 
+	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), types.TransactionIDsToHashes(b.TxIDs))
 	if err := h.checkTransactions(ctx, &b); err != nil {
 		logger.With().Warning("failed to fetch block TXs", log.Err(err))
 		return err
