@@ -32,7 +32,7 @@ run:
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
     tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id) -labels=$(label)
-	-@kubectl wait --timeout=5s --for=condition=ready pod/$(test_pod_name)
+	-@kubectl wait --timeout=10s --for=condition=ready pod/$(test_pod_name)
 	@kubectl logs $(test_pod_name) -f
 
 .PHONY: clean
