@@ -10,8 +10,12 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/transport"
 	p2putil "github.com/libp2p/go-libp2p-netutil"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
@@ -22,6 +26,7 @@ import (
 
 type hostWrapper struct {
 	host      *Host
+	addr      ma.Multiaddr
 	transport *addressFactory
 }
 
@@ -108,11 +113,13 @@ func (h *hostAddressResolver) checkAddressExist(checkAddr ma.Multiaddr) bool {
 	return false
 }
 
+var addrResolve = hostAddressResolver{
+	createdAddresses:   make([]ma.Multiaddr, 0),
+	createdAddressesMu: &sync.RWMutex{},
+}
+
 func TestHost_LocalAddressChange(t *testing.T) {
-	addrResolve := hostAddressResolver{
-		createdAddresses:   make([]ma.Multiaddr, 0),
-		createdAddressesMu: &sync.RWMutex{},
-	}
+	t.Parallel()
 	const (
 		oldAddr = iota
 		newAddr
@@ -146,12 +153,10 @@ func TestHost_LocalAddressChange(t *testing.T) {
 	for _, tc := range table {
 		testCase := tc
 		t.Run(testCase.title, func(t *testing.T) {
-			addrAOld := addrResolve.getAddress(t)
-			addrANew := addrResolve.getAddress(t)
-			addrBOld := addrResolve.getAddress(t)
+			t.Parallel()
 
-			nodeA := generateNode(t, addrAOld, "")
-			nodeB := generateNode(t, addrBOld, nodeA.host.Addrs()[0].String()+"/p2p/"+nodeA.host.ID().String())
+			nodeA := generateNode(t, "")
+			nodeB := generateNode(t, nodeA.host.Addrs()[0].String()+"/p2p/"+nodeA.host.ID().String())
 
 			require.Eventually(t, func() bool {
 				discoveryBootstrap(nodeB.host.discovery)
@@ -164,6 +169,7 @@ func TestHost_LocalAddressChange(t *testing.T) {
 			}, 4*time.Second, 100*time.Millisecond, "nodeA should have 1 address of nodeB")
 
 			// assing new address to nodeA, expect nodeB to be notified.
+			addrANew := addrResolve.getAddress(t)
 			require.NoError(t, nodeA.host.Network().Listen(addrANew), "nodeA should be able to listen on new address")
 
 			// wait for nodeB to be notified
@@ -171,13 +177,13 @@ func TestHost_LocalAddressChange(t *testing.T) {
 				return len(nodeB.host.Peerstore().Addrs(nodeA.host.ID())) == 2
 			}, 4*time.Second, 100*time.Millisecond, "nodeB should have 2 addresses of nodeA")
 			for _, addr := range nodeB.host.Peerstore().Addrs(nodeA.host.ID()) {
-				require.True(t, addr.String() == addrANew.String() || addr.String() == addrAOld.String())
+				require.True(t, addr.String() == addrANew.String() || addr.String() == nodeA.addr.String())
 			}
 
 			for _, addr := range testCase.block {
 				switch addr {
 				case oldAddr:
-					nodeA.transport.addBlockList(addrAOld.String())
+					nodeA.transport.addBlockList(nodeA.addr.String())
 				case newAddr:
 					nodeA.transport.addBlockList(addrANew.String())
 				}
@@ -213,7 +219,7 @@ func TestHost_LocalAddressChange(t *testing.T) {
 					var expectAddress string
 					switch addr {
 					case oldAddr:
-						expectAddress = addrAOld.String()
+						expectAddress = nodeA.addr.String()
 					case newAddr:
 						expectAddress = addrANew.String()
 					}
@@ -263,7 +269,7 @@ func getFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper {
+func generateNode(t *testing.T, bootNode string) *hostWrapper {
 	addrFactory := &addressFactory{
 		blockAddressesMu: &sync.RWMutex{},
 		traceAddrMu:      &sync.RWMutex{},
@@ -272,13 +278,34 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 		traceAddr:        make(map[string]struct{}),
 	}
 
-	node, err := libp2p.New(
-		libp2p.ListenAddrs(addr),
-		libp2p.DisableRelay(),
-		libp2p.NATPortMap(),
-		libp2p.AddrsFactory(addrFactory.addressFactory),
+	var (
+		node host.Host
+		err  error
+		addr ma.Multiaddr
 	)
-	require.NoError(t, err)
+
+	// try to create node on address several times.
+	// by default, node can start with other node on same port.
+	// when we run multiply tests in parallel on same machine - this can generate flaky tests
+	for i := 0; i < 5; i++ {
+		addr = addrResolve.getAddress(t)
+		node, err = libp2p.New(
+			libp2p.ListenAddrs(addr),
+			libp2p.DisableRelay(),
+			libp2p.NATPortMap(),
+			libp2p.Transport(func(upgrader transport.Upgrader, rcmgr network.ResourceManager, opts ...tcp.Option) (*tcp.TcpTransport, error) {
+				opts = append(opts, tcp.DisableReuseport())
+				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+			}),
+			libp2p.AddrsFactory(addrFactory.addressFactory),
+		)
+		if err == nil {
+			break
+		}
+	}
+	if node == nil {
+		t.Fatalf("can't create node after retry: %s", err)
+	}
 
 	cnf := DefaultConfig()
 	cnf.CheckPeersUsedBefore = time.Millisecond * 1
@@ -299,16 +326,18 @@ func generateNode(t *testing.T, addr ma.Multiaddr, bootNode string) *hostWrapper
 		book.Persist(ctx)
 		cnf.Bootnodes = append(cnf.Bootnodes, bootNode)
 	}
-	host, err := Upgrade(node, WithConfig(cnf))
+	h, err := Upgrade(node, WithConfig(cnf))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		require.NoError(t, node.Close())
-		require.NoError(t, host.Stop())
+		require.NoError(t, h.Stop())
 	})
+	println("start node on address:", addr.String())
 	return &hostWrapper{
-		host:      host,
+		host:      h,
 		transport: addrFactory,
+		addr:      addr,
 	}
 }
 
