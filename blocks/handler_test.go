@@ -73,9 +73,10 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	layerID := types.NewLayerID(99)
 	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
-	_, data := createBlockData(t, layerID, txIDs)
+	block, data := createBlockData(t, layerID, txIDs)
 	errUnknown := errors.New("unknown")
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
+	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
 }
 
@@ -88,6 +89,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
+	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
 }
 
@@ -99,6 +101,7 @@ func Test_HandleBlockData(t *testing.T) {
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
+	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
 	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
 }
 

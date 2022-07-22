@@ -143,9 +143,8 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	}
 	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
-	bidHash := b.ID().AsHash32()
 	t1 := time.Now()
-	h.fetcher.AddPeersFromHash(bidHash, collectHashes(&b))
+	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), collectHashes(b))
 	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
@@ -155,14 +154,24 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	return nil
 }
 
-// collectHashes gathers all hashes in the ballot.
-func collectHashes(b *types.Ballot) []types.Hash32 {
-	hashes := types.BlockIDsToHashes(ballotBlockView(b))
-	if b.RefBallot != types.EmptyBallotID {
-		hashes = append(hashes, b.RefBallot.AsHash32())
+// collectHashes gathers all hashes in a proposal or ballot.
+func collectHashes(a any) []types.Hash32 {
+	p, ok := a.(types.Proposal)
+	if ok {
+		hashes := collectHashes(p.Ballot)
+		return append(hashes, types.TransactionIDsToHashes(p.TxIDs)...)
 	}
-	hashes = append(hashes, b.Votes.Base.AsHash32())
-	return hashes
+
+	b, ok := a.(types.Ballot)
+	if ok {
+		hashes := types.BlockIDsToHashes(ballotBlockView(&b))
+		if b.RefBallot != types.EmptyBallotID {
+			hashes = append(hashes, b.RefBallot.AsHash32())
+		}
+		return append(hashes, b.Votes.Base.AsHash32())
+	}
+	log.Panic("unexpected type")
+	return nil
 }
 
 // HandleProposalData handles Proposal data from sync.
@@ -204,7 +213,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 
 	logger.With().Info("new proposal", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 	t2 := time.Now()
-	h.fetcher.RegisterPeerHashes(peer, collectHashes(&p.Ballot))
+	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
 
 	t3 := time.Now()

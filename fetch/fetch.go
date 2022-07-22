@@ -401,7 +401,7 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 	peers := f.host.GetPeers()
 
 	for _, req := range requests {
-		p, exists := f.hashToPeers.GetRandom(req.Hash, rng)
+		p, exists := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
 		if !exists {
 			p = randomPeer(peers)
 		}
