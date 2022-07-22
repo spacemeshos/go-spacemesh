@@ -91,7 +91,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, de
 	mf := mocks.NewMocklayerFetcher(ctrl)
 	mlp := mocks.NewMocklayerProcessor(ctrl)
 	return &testSyncer{
-		syncer:        NewSyncer(ctx, Configuration{SyncInterval: interval}, mt, mb, mm, mf, mp, lg.WithName("test_sync")),
+		syncer:        NewSyncer(ctx, lg, cdb.Database, Config{SyncInterval: interval}, mt, mb, mm, mf, mp),
 		cdb:           cdb,
 		msh:           mm,
 		mTicker:       mt,
@@ -533,11 +533,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		if lid == failed {
 			ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 			errMissingTXs := errors.New("missing TXs")
-			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).DoAndReturn(
-				func(_ context.Context, got *types.Block) ([]*types.Transaction, error) {
-					require.Equal(t, block.ID(), got.ID())
-					return nil, errMissingTXs
-				})
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).Return(nil, errMissingTXs)
 		}
 	}
 
@@ -554,11 +550,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := failed; lid.Before(last); lid = lid.Add(1) {
 		ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 		if lid == failed {
-			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).DoAndReturn(
-				func(_ context.Context, got *types.Block) ([]*types.Transaction, []*types.Reward, error) {
-					require.Equal(t, block.ID(), got.ID())
-					return nil, nil, nil
-				})
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).Return(nil, nil)
 		} else {
 			require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
 		}
@@ -571,16 +563,50 @@ func TestSyncMissingLayer(t *testing.T) {
 func TestSync_SkipProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	lyr := types.GetEffectiveGenesis().Add(1)
+	lyr := types.GetEffectiveGenesis().Add(10)
 	current := lyr.Add(1)
 	ts.mTicker.advanceToLayer(current)
 
 	// simulate hare advancing the mesh forward
-	require.NoError(t, ts.msh.SetZeroBlockLayer(lyr))
-	require.NoError(t, ts.msh.ProcessLayer(context.TODO(), lyr))
-	require.Equal(t, lyr, ts.msh.ProcessedLayer())
-
+	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		// make sure all layers has non-empty hare output
+		b := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
+		require.NoError(t, blocks.Add(ts.cdb, b))
+		require.NoError(t, layers.SetHareOutput(ts.cdb, lid, b.ID()))
+		ts.mConState.EXPECT().ApplyLayer(context.TODO(), b).Return(nil, nil)
+		require.NoError(t, ts.msh.ProcessLayer(context.TODO(), lid))
+		require.Equal(t, lid, ts.msh.ProcessedLayer())
+	}
 	// no data sync should happen
+	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
+	require.True(t, ts.syncer.synchronize(context.TODO()))
+	// but last synced is updated
+	require.Equal(t, lyr, ts.syncer.getLastSyncedLayer())
+}
+
+func TestSync_SyncOlderLayersWithEmptyHareOutput(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	lyr := types.GetEffectiveGenesis().Add(10)
+	current := lyr.Add(1)
+	ts.mTicker.advanceToLayer(current)
+
+	// simulate hare advancing the mesh forward
+	ch := make(chan fetch.LayerPromiseResult)
+	close(ch)
+	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		if lid.Uint32()%2 == 0 {
+			require.NoError(t, layers.SetHareOutput(ts.cdb, lid, types.EmptyBlockID))
+			ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(ch)
+		} else {
+			b := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
+			require.NoError(t, blocks.Add(ts.cdb, b))
+			require.NoError(t, layers.SetHareOutput(ts.cdb, lid, b.ID()))
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), b).Return(nil, nil)
+		}
+		require.NoError(t, ts.msh.ProcessLayer(context.TODO(), lid))
+		require.Equal(t, lid, ts.msh.ProcessedLayer())
+	}
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	// but last synced is updated

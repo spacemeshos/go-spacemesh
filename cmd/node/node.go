@@ -545,10 +545,10 @@ func (app *App) initServices(ctx context.Context,
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
-	syncerConf := syncer.Configuration{
+	syncerConf := syncer.Config{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, app.addLogger(SyncLogger, lg), sqlDB, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 

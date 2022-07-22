@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -14,11 +15,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// Configuration is the config params for syncer.
-type Configuration struct {
+// Config is the config params for syncer.
+type Config struct {
 	SyncInterval time.Duration
 }
 
@@ -68,8 +71,9 @@ var (
 // Syncer is responsible to keep the node in sync with the network.
 type Syncer struct {
 	logger log.Log
+	db     *sql.Database
 
-	conf          Configuration
+	conf          Config
 	ticker        layerTicker
 	beacons       system.BeaconGetter
 	mesh          *mesh.Mesh
@@ -102,10 +106,21 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons system.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(
+	ctx context.Context,
+	logger log.Log,
+	db *sql.Database,
+	conf Config,
+	ticker layerTicker,
+	beacons system.BeaconGetter,
+	mesh *mesh.Mesh,
+	fetcher layerFetcher,
+	patrol layerPatrol,
+) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
 		logger:        logger,
+		db:            db,
 		conf:          conf,
 		ticker:        ticker,
 		beacons:       beacons,
@@ -202,7 +217,7 @@ func (s *Syncer) Start(ctx context.Context) {
 				case <-s.shutdownCtx.Done():
 					return nil
 				case <-s.validateTimer.C:
-					s.processLayers(ctx)
+					_ = s.processLayers(ctx)
 				}
 			}
 		})
@@ -310,6 +325,27 @@ func (s *Syncer) getLastSyncedATXs() types.EpochID {
 	return s.lastATXsSynced.Load().(types.EpochID)
 }
 
+func (s *Syncer) olderLayersToSync(logger log.Log, lastSynced, processed types.LayerID) []types.LayerID {
+	var toSync []types.LayerID
+	if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
+		logger.With().Info("fetching data for missing layer", missing)
+		toSync = append(toSync, missing)
+	}
+	for lid := lastSynced.Add(1); !lid.After(processed); lid = lid.Add(1) {
+		// check if hare has output any block, or an empty block
+		bid, err := layers.GetHareOutput(s.db, lid)
+		if err != nil {
+			logger.Warning("failed to get hare output for layer", lid)
+		}
+		if bid == types.EmptyBlockID {
+			logger.With().Info("hare output empty layer. fetching data just in case", lid)
+			toSync = append(toSync, lid)
+		}
+	}
+	sort.Slice(toSync, func(i, j int) bool { return toSync[i].Before(toSync[j]) })
+	return toSync
+}
+
 // synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
 // it returns false if the data sync failed.
 func (s *Syncer) synchronize(ctx context.Context) bool {
@@ -358,15 +394,16 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			s.setATXSynced()
 		}
 
-		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
-			logger.With().Info("fetching data for missing layer", missing)
-			if err := s.syncLayer(ctx, missing); err != nil {
-				logger.With().Warning("failed to fetch missing layer", missing, log.Err(err))
+		processed := s.mesh.ProcessedLayer()
+		toSync := s.olderLayersToSync(logger, s.getLastSyncedLayer(), processed)
+		for _, lid := range toSync {
+			if err := s.syncLayer(ctx, lid); err != nil {
+				logger.With().Warning("failed to fetch older layer", lid, log.Err(err))
 				return false
 			}
 		}
+
 		// no need to sync a layer that's already processed (advanced by the hare)
-		processed := s.mesh.ProcessedLayer()
 		if s.getLastSyncedLayer().Before(processed) {
 			s.setLastSyncedLayer(processed)
 		}
