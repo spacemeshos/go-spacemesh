@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"sort"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -15,6 +17,8 @@ const (
 	BlockIDSize = Hash32Length
 )
 
+//go:generate scalegen
+
 // BlockID is a 20-byte sha256 sum of the serialized block used to identify a Block.
 type BlockID Hash20
 
@@ -24,6 +28,16 @@ var EmptyBlockID = BlockID{}
 // NewExistingBlock creates a block from existing data.
 func NewExistingBlock(id BlockID, inner InnerBlock) *Block {
 	return &Block{blockID: id, InnerBlock: inner}
+}
+
+// EncodeScale implements scale codec interface.
+func (id *BlockID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *BlockID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
 }
 
 // Block contains the content of a layer on the mesh history.
