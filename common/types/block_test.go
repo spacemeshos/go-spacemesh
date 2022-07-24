@@ -28,7 +28,7 @@ func TestRewardCodec(t *testing.T) {
 
 	var got AnyReward
 	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, *r, got)
+	require.Equal(t, r, &got)
 }
 
 func TestBlockIDCodec(t *testing.T) {
@@ -51,7 +51,7 @@ func TestRatNumCodec(t *testing.T) {
 
 	var got RatNum
 	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, *want, got)
+	require.Equal(t, want, &got)
 }
 
 func TestInnerBlockCodec(t *testing.T) {
@@ -110,5 +110,5 @@ func TestBlockContextualValidityCodec(t *testing.T) {
 
 	var got BlockContextualValidity
 	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, *want, got)
+	require.Equal(t, want, &got)
 }

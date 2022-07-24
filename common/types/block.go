@@ -72,7 +72,7 @@ func (b *Block) Initialize() {
 
 // Bytes returns the serialization of the InnerBlock.
 func (b *Block) Bytes() []byte {
-	data, err := codec.Encode(b.InnerBlock)
+	data, err := codec.Encode(&b.InnerBlock)
 	if err != nil {
 		log.Panic("failed to serialize block: %v", err)
 	}

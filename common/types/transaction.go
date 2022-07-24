@@ -12,8 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
-
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
 type TransactionID Hash32
 
@@ -111,7 +109,7 @@ func TransactionIDsToHashes(ids []TransactionID) []Hash32 {
 }
 
 // TXState describes the state of a transaction.
-type TXState uint32
+type TXState int
 
 const (
 	// PENDING represents the state when a transaction is syntactically valid, but its nonce and

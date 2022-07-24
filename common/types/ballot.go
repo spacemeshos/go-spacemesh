@@ -18,8 +18,6 @@ const (
 	BallotIDSize = Hash32Length
 )
 
-//go:generate scalegen
-
 // BallotID is a 20-byte sha256 sum of the serialized ballot used to identify a Ballot.
 type BallotID Hash20
 

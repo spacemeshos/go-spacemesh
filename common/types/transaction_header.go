@@ -2,8 +2,6 @@ package types
 
 import "github.com/spacemeshos/go-spacemesh/log"
 
-//go:generate scalegen
-
 // TxHeader is a transaction header, with some of the fields defined directly in the tx
 // and the rest is computed by the template based on immutable state and method arguments.
 type TxHeader struct {
@@ -44,6 +42,8 @@ func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
 type LayerLimits struct {
 	Min, Max uint32
 }
+
+//go:generate scalegen -types Nonce
 
 // Nonce is for ordering transactions.
 // TODO(dshulyak) we are using only counter until bitfield is defined.
