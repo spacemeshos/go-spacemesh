@@ -82,9 +82,16 @@ func (th *TxHandler) HandleBlockTransaction(ctx context.Context, data []byte) er
 	} else if exists {
 		return nil
 	}
-	err = th.state.AddToDB(&types.Transaction{RawTx: raw})
-	if err != nil {
-		return fmt.Errorf("add tx %w", err)
+	tx := &types.Transaction{RawTx: raw}
+	req := th.state.Validation(raw)
+	header, err := req.Parse()
+	if err == nil {
+		if req.Verify() {
+			tx.TxHeader = header
+		}
+	}
+	if err = th.state.AddToDB(tx); err != nil {
+		return fmt.Errorf("add block tx %w", err)
 	}
 	return nil
 }
