@@ -198,9 +198,9 @@ func Test_HandleProposal(t *testing.T) {
 			fail:   true,
 		},
 		{
-			desc:   "ParseFailed",
-			addErr: errors.New("test"),
-			fail:   true,
+			desc:     "ParseFailed",
+			parseErr: errors.New("test"),
+			fail:     true,
 		},
 		{
 			desc: "VerifyFalse",
