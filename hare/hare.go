@@ -229,13 +229,16 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	var pids []types.ProposalID
 	if output.Completed() {
+		consensusCount.WithLabelValues(success).Inc()
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
 		set := output.Set()
+		postNumProposals.Add(float64(set.len()))
 		pids = make([]types.ProposalID, 0, set.len())
 		for _, v := range set.elements() {
 			pids = append(pids, v)
 		}
 	} else {
+		consensusCount.WithLabelValues(failure).Inc()
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
 
@@ -243,23 +246,30 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if len(pids) > 0 {
 		// fetch proposals from peers if not locally available
 		if err := h.fetcher.GetProposals(ctx, pids); err != nil {
+			blockGenCount.WithLabelValues(failFetch).Inc()
 			h.WithContext(ctx).With().Warning("failed to fetch proposals", log.Err(err))
 			return fmt.Errorf("hare fetch proposals: %w", err)
 		}
 		// now all proposals should be in local DB
 		props, err := h.getProposals(pids)
 		if err != nil {
+			blockGenCount.WithLabelValues(internalErr).Inc()
 			h.WithContext(ctx).With().Warning("failed to get proposals locally", log.Err(err))
 			return fmt.Errorf("hare get proposals: %w", err)
 		}
 
 		if block, err := h.blockGen.GenerateBlock(ctx, layerID, props); err != nil {
+			blockGenCount.WithLabelValues(failGen).Inc()
 			return fmt.Errorf("hare gen block: %w", err)
 		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
+			blockGenCount.WithLabelValues(internalErr).Inc()
 			return fmt.Errorf("hare save block: %w", err)
 		} else {
+			blockGenCount.WithLabelValues(genBlock).Inc()
 			hareOutput = block.ID()
 		}
+	} else {
+		blockGenCount.WithLabelValues(empty).Inc()
 	}
 	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
 		h.WithContext(ctx).With().Warning("mesh failed to process layer", layerID, log.Err(err))
@@ -338,6 +348,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	proposals := h.getGoodProposal(h.lastLayer, beacon, logger)
 	h.layerLock.RUnlock()
 	logger.With().Info("starting hare consensus with proposals", log.Int("num_proposals", len(proposals)))
+	preNumProposals.Add(float64(len(proposals)))
 	set := NewSet(proposals)
 
 	instID := id
