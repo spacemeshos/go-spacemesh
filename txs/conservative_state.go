@@ -227,14 +227,18 @@ func (cs *ConservativeState) GetMeshTransaction(tid types.TransactionID) (*types
 	return transactions.Get(cs.db, tid)
 }
 
-// GetRawTransactions retrieves a list of txs by their id's.
-func (cs *ConservativeState) GetRawTransactions(ids []types.TransactionID) ([]types.RawTx, error) {
-	txs := make([]types.RawTx, 0, len(ids))
+// GetExecutableTxs retrieves a list of txs by their id's.
+func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]types.ExecutableTx, error) {
+	txs := make([]types.ExecutableTx, 0, len(ids))
 	for _, tid := range ids {
-		if mtx, err := transactions.Get(cs.db, tid); err != nil {
+		mtx, err := transactions.Get(cs.db, tid)
+		if err != nil {
 			return nil, err
-		} else {
+		}
+		if mtx.TxHeader == nil {
 			txs = append(txs, mtx.RawTx)
+		} else {
+			txs = append(txs, types.VerifiedTx(mtx.RawTx))
 		}
 	}
 	return txs, nil

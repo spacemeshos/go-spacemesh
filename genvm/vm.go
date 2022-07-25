@@ -154,7 +154,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.VerifiedTx, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.ExecutableTx, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
@@ -247,7 +247,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	return nil
 }
 
-func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.VerifiedTx) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.ExecutableTx) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
 		rd          bytes.Reader
 		decoder     = scale.NewDecoder(&rd)
@@ -260,13 +260,13 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 		txCount.Inc()
 
 		t1 := time.Now()
-		tx := &txs[i]
+		tx := txs[i]
 
-		rd.Reset(tx.Raw)
+		rd.Reset(tx.RawTx().Raw)
 		req := &Request{
 			vm:      v,
 			cache:   ss,
-			raw:     txs[i].RawTx,
+			raw:     txs[i].RawTx(),
 			decoder: decoder,
 			limit:   limit,
 		}
@@ -274,10 +274,10 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 		header, err := req.Parse()
 		if err != nil {
 			v.logger.With().Warning("innefective transaction. failed to parse",
-				tx.ID,
+				tx.RawTx().ID,
 				log.Err(err),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -294,7 +294,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -304,7 +304,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -315,18 +315,18 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
 		// NOTE this part is executed only for transactions that weren't verified
 		// when accepted into mempool
-		if !tx.Verified && !req.Verify() {
+		if !tx.Verified() && !req.Verify() {
 			v.logger.With().Warning("innefective transaction. failed verify",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -347,7 +347,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
-		rst.RawTx = txs[i].RawTx
+		rst.RawTx = txs[i].RawTx()
 		rst.TxHeader = &ctx.Header
 		rst.Status = types.TransactionSuccess
 		if err != nil {

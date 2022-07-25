@@ -938,18 +938,18 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 	}
 }
 
-func verified(raw ...types.RawTx) []types.VerifiedTx {
-	var rst []types.VerifiedTx
+func verified(raw ...types.RawTx) []types.ExecutableTx {
+	var rst []types.ExecutableTx
 	for _, tx := range raw {
-		rst = append(rst, types.VerifiedTx{RawTx: tx, Verified: true})
+		rst = append(rst, types.VerifiedTx(tx))
 	}
 	return rst
 }
 
-func notVerified(raw ...types.RawTx) []types.VerifiedTx {
-	var rst []types.VerifiedTx
+func notVerified(raw ...types.RawTx) []types.ExecutableTx {
+	var rst []types.ExecutableTx
 	for _, tx := range raw {
-		rst = append(rst, types.VerifiedTx{RawTx: tx})
+		rst = append(rst, tx)
 	}
 	return rst
 }

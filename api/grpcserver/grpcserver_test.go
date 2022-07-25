@@ -2874,7 +2874,8 @@ func TestEventsReceived(t *testing.T) {
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
-	svm.Apply(vm.ApplyContext{Layer: layerFirst}, []types.RawTx{globalTx.RawTx}, rewards)
+	svm.Apply(vm.ApplyContext{Layer: layerFirst, GasLimit: 100000}, []types.ExecutableTx{
+		types.VerifiedTx(globalTx.RawTx)}, rewards)
 
 	select {
 	case <-waiter:

@@ -146,8 +146,31 @@ type RawTx struct {
 	Raw []byte
 }
 
-// VerifiedTx ...
-type VerifiedTx struct {
-	RawTx
-	Verified bool
+// RawTx returns RawTx.
+func (r RawTx) RawTx() RawTx {
+	return r
+}
+
+// Verified is false for raw tx.
+func (r RawTx) Verified() bool {
+	return false
+}
+
+// VerifiedTx is raw but verified.
+type VerifiedTx RawTx
+
+// RawTx returns RawTx.
+func (r VerifiedTx) RawTx() RawTx {
+	return RawTx(r)
+}
+
+// Verified is true for verified tx.
+func (r VerifiedTx) Verified() bool {
+	return true
+}
+
+// ExecutableTx can be verified or not depending on the node state.
+type ExecutableTx interface {
+	RawTx() RawTx
+	Verified() bool
 }
