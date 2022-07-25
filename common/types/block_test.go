@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -15,17 +16,66 @@ func TestBlock_IDSize(t *testing.T) {
 	assert.Len(t, id.Bytes(), BlockIDSize)
 }
 
-func TestReward(t *testing.T) {
+func TestRewardCodec(t *testing.T) {
 	addr := BytesToAddress(RandomBytes(AddressLength))
 	weight := util.WeightFromUint64(1234).Div(util.WeightFromUint64(7))
-	r := AnyReward{
+	r := &AnyReward{
 		Coinbase: addr,
 		Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
+
 	data, err := codec.Encode(r)
 	require.NoError(t, err)
 
 	var got AnyReward
 	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, r, got)
+	require.Equal(t, r, &got)
+}
+
+func FuzzAnyRewardConsistency(f *testing.F) {
+	tester.FuzzConsistency[AnyReward](f)
+}
+
+func FuzzAnyRewardSafety(f *testing.F) {
+	tester.FuzzSafety[AnyReward](f)
+}
+
+func FuzzBlockIDConsistency(f *testing.F) {
+	tester.FuzzConsistency[BlockID](f)
+}
+
+func FuzzBlockIDSafety(f *testing.F) {
+	tester.FuzzSafety[BlockID](f)
+}
+
+func FuzzRatNumConsistency(f *testing.F) {
+	tester.FuzzConsistency[RatNum](f)
+}
+
+func FuzzRatNumSafety(f *testing.F) {
+	tester.FuzzSafety[RatNum](f)
+}
+
+func FuzzBlockConsistency(f *testing.F) {
+	tester.FuzzConsistency[Block](f)
+}
+
+func FuzzBlockSafety(f *testing.F) {
+	tester.FuzzSafety[Block](f)
+}
+
+func FuzzBlockContextualValidityConsistency(f *testing.F) {
+	tester.FuzzConsistency[BlockContextualValidity](f)
+}
+
+func FuzzBlockContextualValiditySafety(f *testing.F) {
+	tester.FuzzSafety[BlockContextualValidity](f)
+}
+
+func FuzzInnerBlockConsistency(f *testing.F) {
+	tester.FuzzConsistency[InnerBlock](f)
+}
+
+func FuzzInnerBlockSafety(f *testing.F) {
+	tester.FuzzSafety[InnerBlock](f)
 }

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -45,6 +47,16 @@ func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Ha
 // Compare returns true if other (the given TransactionID) is less than this TransactionID, by lexicographic comparison.
 func (id TransactionID) Compare(other TransactionID) bool {
 	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// EncodeScale implements scale codec interface.
+func (id *TransactionID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *TransactionID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
 }
 
 // TxIdsField returns a list of loggable fields for a given list of IDs.

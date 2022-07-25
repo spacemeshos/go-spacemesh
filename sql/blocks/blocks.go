@@ -25,7 +25,7 @@ func decodeBlock(reader io.Reader, id types.BlockID) (*types.Block, error) {
 
 // Add block to the database.
 func Add(db sql.Executor, block *types.Block) error {
-	bytes, err := codec.Encode(block.InnerBlock)
+	bytes, err := codec.Encode(&block.InnerBlock)
 	if err != nil {
 		return fmt.Errorf("encode %w", err)
 	}
