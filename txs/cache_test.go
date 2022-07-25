@@ -45,6 +45,9 @@ func makeResults(lid types.LayerID, bid types.BlockID, txs ...types.Transaction)
 func getStateFunc(states map[types.Address]*testAcct) stateFunc {
 	return func(addr types.Address) (uint64, uint64) {
 		st := states[addr]
+		if st == nil {
+			return 0, 0
+		}
 		return st.nonce, st.balance
 	}
 }

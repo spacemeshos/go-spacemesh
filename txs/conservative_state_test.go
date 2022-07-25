@@ -598,14 +598,10 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 			},
 			TxIDs: []types.TransactionID{tx.ID},
 		})
-	req := smocks.NewMockValidationRequest(gomock.NewController(t))
-	req.EXPECT().Parse().Times(1).Return(tx.TxHeader, nil)
-	req.EXPECT().Verify().Times(1).Return(true)
-	tcs.mvm.EXPECT().Validation(hdrless.RawTx).Times(1).Return(req)
 	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance-(defaultAmount+defaultFee), nil)
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(ctx vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+		func(ctx vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, []*types.Transaction{tx}, got)
 			rst := []types.TransactionWithResult{
 				{
@@ -645,7 +641,7 @@ func TestApplyLayer(t *testing.T) {
 		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	}
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(ctx vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+		func(ctx vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
 			var rst []types.TransactionWithResult
 			for _, tx := range txs {
@@ -692,19 +688,26 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			TxIDs: ids,
 		})
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(ctx vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+		func(ctx vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
-			var rst []types.TransactionWithResult
-			for _, tx := range txs[numFailed:] {
-				rst = append(rst, types.TransactionWithResult{
-					Transaction: *tx,
-					TransactionResult: types.TransactionResult{
-						Layer: ctx.Layer,
-						Block: ctx.Block,
-					},
-				})
+			var (
+				inefective []types.Transaction
+				rst        []types.TransactionWithResult
+			)
+			for i, tx := range txs {
+				if i < numFailed {
+					inefective = append(inefective, *tx)
+				} else {
+					rst = append(rst, types.TransactionWithResult{
+						Transaction: *tx,
+						TransactionResult: types.TransactionResult{
+							Layer: ctx.Layer,
+							Block: ctx.Block,
+						},
+					})
+				}
 			}
-			return txIds(got[:numFailed]), rst, nil
+			return inefective, rst, nil
 		}).Times(1)
 
 	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
@@ -740,7 +743,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 		})
 	errVM := errors.New("vm error")
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ vm.ApplyContext, got []types.RawTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+		func(_ vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
 			return nil, nil, errVM
 		}).Times(1)
@@ -781,19 +784,20 @@ func TestConsistentHandling(t *testing.T) {
 	for lid := 1; lid < 10; lid++ {
 		txs := make([]*types.Transaction, 100)
 		ids := make([]types.TransactionID, len(txs))
-		raw := make([]types.RawTx, len(txs))
+		raw := make([]types.ExecutableTx, len(txs))
+		verified := make([]types.ExecutableTx, len(txs))
 		for i := range txs {
 			signer := rng.Intn(len(signers))
 			txs[i] = newTx(t, nonces[signer], 1, 1, signers[signer])
 			nonces[signer]++
 			ids[i] = txs[i].ID
 			raw[i] = txs[i].RawTx
-			for _, instance := range instances {
-				req := smocks.NewMockValidationRequest(gomock.NewController(t))
-				req.EXPECT().Parse().Times(1).Return(txs[i].TxHeader, nil)
-				req.EXPECT().Verify().Times(1).Return(true)
-				instance.mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(req)
-			}
+			verified[i] = types.VerifiedTx(txs[i].RawTx)
+
+			req := smocks.NewMockValidationRequest(gomock.NewController(t))
+			req.EXPECT().Parse().Times(1).Return(txs[i].TxHeader, nil)
+			req.EXPECT().Verify().Times(1).Return(true)
+			instances[0].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(req)
 
 			require.Equal(t, pubsub.ValidationAccept, instances[0].handler().HandleGossipTransaction(context.TODO(), "", txs[i].Raw))
 			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.TODO(), txs[i].Raw))
@@ -814,12 +818,15 @@ func TestConsistentHandling(t *testing.T) {
 				},
 			}
 		}
-
+		instances[0].mvm.EXPECT().Apply(vm.ApplyContext{
+			Layer: block.LayerIndex,
+			Block: block.ID(),
+		}, verified, block.Rewards).Return(nil, results, nil).Times(1)
+		instances[1].mvm.EXPECT().Apply(vm.ApplyContext{
+			Layer: block.LayerIndex,
+			Block: block.ID(),
+		}, raw, block.Rewards).Return(nil, results, nil).Times(1)
 		for _, instance := range instances {
-			instance.mvm.EXPECT().Apply(vm.ApplyContext{
-				Layer: block.LayerIndex,
-				Block: block.ID(),
-			}, raw, block.Rewards).Return(nil, results, nil).Times(1)
 			require.NoError(t, instance.ApplyLayer(context.TODO(), block))
 			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
 		}
@@ -834,18 +841,10 @@ func TestConsistentHandling(t *testing.T) {
 	}
 }
 
-func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.RawTx) {
+func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.ExecutableTx) {
 	tb.Helper()
 	require.Len(tb, got, len(expected))
 	for i := range expected {
-		require.Equal(tb, expected[i].RawTx, got[i])
+		require.Equal(tb, expected[i].RawTx, got[i].RawTx())
 	}
-}
-
-func txIds(txs []types.RawTx) []types.TransactionID {
-	var rst []types.TransactionID
-	for i := range txs {
-		rst = append(rst, txs[i].ID)
-	}
-	return rst
 }

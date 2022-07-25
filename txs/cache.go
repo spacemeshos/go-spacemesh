@@ -614,7 +614,10 @@ func acceptable(err error) bool {
 func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool, blockSeed []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.add(ctx, db, tx, received, mustPersist, blockSeed)
+}
 
+func (c *cache) add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool, blockSeed []byte) error {
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
@@ -640,12 +643,12 @@ func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 
 // Has returns true if transaction exists in the cache.
 func (c *cache) Has(tid types.TransactionID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.has(tid)
 }
 
 func (c *cache) has(tid types.TransactionID) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	return c.cachedTXs[tid] != nil
 }
 
@@ -709,8 +712,8 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 			c.logger.With().Warning("tx header not parsed", tx.ID)
 			continue
 		}
-		if !c.Has(tx.ID) {
-			if err := c.Add(ctx, db, &tx, time.Now(), true, nil); err != nil {
+		if !c.has(tx.ID) {
+			if err := c.add(ctx, db, &tx, time.Now(), true, nil); err != nil {
 				return nil, []error{err}
 			}
 		}
@@ -721,8 +724,8 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 
 	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
 	for _, rst := range results {
-		if !c.Has(rst.ID) {
-			if err := c.Add(ctx, db, &rst.Transaction, time.Now(), true, nil); err != nil {
+		if !c.has(rst.ID) {
+			if err := c.add(ctx, db, &rst.Transaction, time.Now(), true, nil); err != nil {
 				return nil, []error{err}
 			}
 		}
