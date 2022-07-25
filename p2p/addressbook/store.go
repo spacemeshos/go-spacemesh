@@ -47,6 +47,9 @@ func (a *AddrBook) persistPeers() error {
 	for _, addr := range a.addrIndex {
 		sam.Addresses = append(sam.Addresses, addr)
 	}
+	for _, addr := range a.anchorPeers {
+		sam.AnchorAddresses = append(sam.AnchorAddresses, addr)
+	}
 	for i := range a.addrNew {
 		sam.NewBuckets[i] = make([]peer.ID, len(a.addrNew[i]))
 		j := 0

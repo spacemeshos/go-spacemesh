@@ -235,23 +235,54 @@ func TestAddrBook_BootstrapAddressCache(t *testing.T) {
 	book := NewAddrBook(cnf, logtest.New(t))
 	rng := rand.New(rand.NewSource(time.Now().Unix()))
 
-	expected := map[peer.ID]*AddrInfo{}
+	expected := make([]*AddrInfo, 0, 50)
 	for i := 0; i < 50; i++ {
 		info := genRandomInfo(t, rng)
-		expected[info.ID] = info
+		expected = append(expected, info)
 		book.AddAddress(info, info)
 	}
 
-	require.Equal(t, 50, len(book.BootstrapAddressCache()))
-
+	// as addresses append in random way, check that every bootstrap address is from generated list
+	require.True(t, checkAddressContains(expected, book.BootstrapAddressCache()), "bootstrap address cache should contain generated addresses")
+	var expectedAnchors []*AddrInfo
 	book.mu.Lock()
 	for i := 0; i < 10; i++ {
-		book.lastAnchorPeers = append(book.lastAnchorPeers, generateKnownAddress(t, rng, nil))
+		ka := generateKnownAddress(t, rng, nil)
+		book.lastAnchorPeers = append(book.lastAnchorPeers, ka)
+		expectedAnchors = append(expectedAnchors, ka.Addr)
 	}
 	book.mu.Unlock()
 
-	addresses := book.BootstrapAddressCache()
-	require.Equal(t, 60, len(addresses))
+	bootstrapAddr := book.BootstrapAddressCache()
+	var anchorsContains []bool
+	for _, ancAddr := range expectedAnchors {
+		var exist bool
+		for _, addr := range bootstrapAddr {
+			if addr.String() == ancAddr.String() {
+				exist = true
+				break
+			}
+		}
+		if exist {
+			anchorsContains = append(anchorsContains, true)
+		}
+	}
+	require.Contains(t, anchorsContains, true, "bootstrap address cache should contain anchors")
+}
+
+func checkAddressContains(expected, result []*AddrInfo) bool {
+	for _, addr := range result {
+		var match bool
+		for _, e := range expected {
+			if e.String() == addr.String() {
+				match = true
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	return true
 }
 
 func TestAddrBook_AddressCache(t *testing.T) {
