@@ -325,14 +325,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 			if errors.Is(err, core.ErrInternal) {
 				return nil, nil, 0, err
 			}
-			if errors.Is(err, core.ErrBlockGas) && ctx.Consumed() == 0 {
-				v.logger.With().Warning("skipping transaction. failed verify",
-					log.Object("header", header),
-					log.Object("account", &ctx.Account),
-				)
-				skipped = append(skipped, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
-				invalidTxCount.Inc()
-			}
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
