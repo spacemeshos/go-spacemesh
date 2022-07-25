@@ -338,7 +338,7 @@ func TestWorkflow(t *testing.T) {
 		rewards  []reward
 		expected map[int]change
 		skipped  []int
-		failed   []int
+		gasLimit uint64
 	}
 	for _, tc := range []struct {
 		desc   string
@@ -553,6 +553,47 @@ func TestWorkflow(t *testing.T) {
 			},
 		},
 		{
+			desc: "BlockGasLimit",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+						&spendWallet{0, 10, 100},
+						&spendWallet{0, 11, 100},
+						&spendWallet{0, 12, 100},
+					},
+					gasLimit: wallet.TotalGasSpawn + wallet.TotalGasSpend,
+					skipped:  []int{2, 3},
+					expected: map[int]change{
+						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
+						10: earned{amount: 100},
+						11: same{},
+						12: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "BlockGasLimitIsNotConsumedByInefective",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+						&spawnWallet{10},
+						&spendWallet{0, 10, 100},
+						&spendWallet{0, 11, 100},
+					},
+					gasLimit: wallet.TotalGasSpawn + wallet.TotalGasSpend,
+					skipped:  []int{1, 3},
+					expected: map[int]change{
+						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
+						10: earned{amount: 100},
+						11: same{},
+					},
+				},
+			},
+		},
+		{
 			desc: "BadNonceOrder",
 			layers: []layertc{
 				{
@@ -659,20 +700,18 @@ func TestWorkflow(t *testing.T) {
 					txs = append(txs, gen.gen(tt))
 				}
 				lid := types.NewLayerID(uint32(i + 1))
-				skipped, results, err := tt.Apply(testContext(lid), notVerified(txs...), tt.rewards(layer.rewards...))
+				ctx := testContext(lid)
+				if layer.gasLimit > 0 {
+					ctx.GasLimit = layer.gasLimit
+				}
+				ineffective, _, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
 				require.NoError(tt, err)
 				if layer.skipped == nil {
-					require.Empty(tt, skipped)
+					require.Empty(tt, ineffective)
 				} else {
-					require.Len(tt, skipped, len(layer.skipped))
+					require.Len(tt, ineffective, len(layer.skipped))
 					for i, pos := range layer.skipped {
-						require.Equal(t, txs[pos].ID, skipped[i].ID)
-					}
-				}
-				if layer.failed != nil {
-					for i, pos := range layer.failed {
-						require.Equal(t, txs[pos].ID, results[i].ID)
-						require.Equal(t, types.TransactionFailure, results[i].Status)
+						require.Equal(t, txs[pos].ID, ineffective[i].ID)
 					}
 				}
 				for account, changes := range layer.expected {
@@ -692,7 +731,7 @@ func TestRandomTransfers(t *testing.T) {
 		addAccounts(10).
 		applyGenesis()
 
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
 		notVerified(tt.spawnWalletAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -710,7 +749,7 @@ func TestValidation(t *testing.T) {
 		addAccounts(1).
 		applyGenesis().
 		addAccounts(1)
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
 		notVerified(tt.selfSpawnWallet(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)

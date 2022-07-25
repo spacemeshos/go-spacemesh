@@ -619,9 +619,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 			return nil, rst, nil
 		}).Times(1)
 
-	failed, err := tcs.ApplyLayer(context.TODO(), block)
-	require.NoError(t, err)
-	require.Empty(t, failed)
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
 
 	got, err = transactions.Get(tcs.db, tx.ID)
 	require.NoError(t, err)
@@ -662,9 +660,7 @@ func TestApplyLayer(t *testing.T) {
 			return nil, rst, nil
 		}).Times(1)
 
-	failed, err := tcs.ApplyLayer(context.TODO(), block)
-	require.NoError(t, err)
-	require.Empty(t, failed)
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
 
 	for _, id := range ids {
 		mtx, err := transactions.Get(tcs.db, id)
@@ -711,9 +707,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			return txIds(got[:numFailed]), rst, nil
 		}).Times(1)
 
-	failed, err := tcs.ApplyLayer(context.TODO(), block)
-	require.NoError(t, err)
-	require.Len(t, failed, numFailed)
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
 
 	for i, id := range ids {
 		mtx, err := transactions.Get(tcs.db, id)
@@ -751,9 +745,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 			return nil, nil, errVM
 		}).Times(1)
 
-	failed, err := tcs.ApplyLayer(context.TODO(), block)
-	require.ErrorIs(t, err, errVM)
-	require.Nil(t, failed)
+	require.ErrorIs(t, tcs.ApplyLayer(context.TODO(), block), errVM)
 
 	for _, id := range ids {
 		mtx, err := transactions.Get(tcs.db, id)
@@ -828,8 +820,7 @@ func TestConsistentHandling(t *testing.T) {
 				Layer: block.LayerIndex,
 				Block: block.ID(),
 			}, raw, block.Rewards).Return(nil, results, nil).Times(1)
-			_, err := instance.ApplyLayer(context.TODO(), block)
-			require.NoError(t, err)
+			require.NoError(t, instance.ApplyLayer(context.TODO(), block))
 			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
 		}
 		for i, signer := range signers {

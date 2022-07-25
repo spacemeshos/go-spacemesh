@@ -249,12 +249,12 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 
 func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.VerifiedTx) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
-		rd       bytes.Reader
-		decoder  = scale.NewDecoder(&rd)
-		fees     uint64
-		skipped  []types.Transaction
-		executed []types.TransactionWithResult
-		limit    = lctx.GasLimit
+		rd          bytes.Reader
+		decoder     = scale.NewDecoder(&rd)
+		fees        uint64
+		ineffective []types.Transaction
+		executed    []types.TransactionWithResult
+		limit       = lctx.GasLimit
 	)
 	for i := range txs {
 		txCount.Inc()
@@ -273,11 +273,11 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 
 		header, err := req.Parse()
 		if err != nil {
-			v.logger.With().Warning("skipping transaction. failed to parse",
+			v.logger.With().Warning("innefective transaction. failed to parse",
 				tx.ID,
 				log.Err(err),
 			)
-			skipped = append(skipped, types.Transaction{RawTx: tx.RawTx})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -289,25 +289,44 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
-		// TODO to be changed after nonces are defined
-		// https://github.com/spacemeshos/go-spacemesh/issues/3273
-		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
-			v.logger.With().Warning("skipping transaction. failed nonce check",
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice+ctx.Header.MaxSpend {
+			v.logger.With().Warning("innefective transaction. can't cover gas and max spend",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			skipped = append(skipped, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
-		// TODO should be executed only for transactions that weren't verified
-		// when accepted into mempool
-		if !tx.Verified && !req.Verify() {
-			v.logger.With().Warning("skipping transaction. failed verify",
+		if limit < ctx.Header.MaxGas {
+			v.logger.With().Warning("innefective transaction. out of block gas",
+				log.Uint64("block gas limit", lctx.GasLimit),
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			skipped = append(skipped, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			invalidTxCount.Inc()
+			continue
+		}
+		// TODO to be changed after nonces are defined
+		// https://github.com/spacemeshos/go-spacemesh/issues/3273
+		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
+			v.logger.With().Warning("innefective transaction. failed nonce check",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
+			invalidTxCount.Inc()
+			continue
+		}
+		// NOTE this part is executed only for transactions that weren't verified
+		// when accepted into mempool
+		if !tx.Verified && !req.Verify() {
+			v.logger.With().Warning("innefective transaction. failed verify",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx, TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -349,7 +368,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Verifi
 		executed = append(executed, rst)
 		transactionDuration.Observe(float64(time.Since(t1)))
 	}
-	return executed, skipped, fees, nil
+	return executed, ineffective, fees, nil
 }
 
 // Request used to implement 2-step validation flow.
