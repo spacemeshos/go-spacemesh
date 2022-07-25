@@ -108,7 +108,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) <= 3
+			return len(wrapperGetRandomPeers(d, 3)) == 3
 		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers")
 		require.NotContains(t, d.GetRandomPeers(10), connectedNodeAddress, "should not return connected node")
 	})
@@ -121,7 +121,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 2
+			return len(wrapperGetRandomPeers(d, 2)) == 2
 		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 		res := d.GetRandomPeers(10)
 		require.NotContains(t, res, connectedNodeAddress, "should not return connected node")
@@ -136,14 +136,14 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 2
+			return len(wrapperGetRandomPeers(d, 2)) == 2
 		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 
 		res := d.GetRandomPeers(10)
 		require.NotContains(t, res, oldNode, "should not return connected node")
 
 		require.Eventually(t, func() bool {
-			res = d.GetRandomPeers(10)
+			res = wrapperGetRandomPeers(d, 3)
 			if len(res) != 3 {
 				return false
 			}
@@ -155,6 +155,16 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 			return false
 		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers and contain old node")
 	})
+}
+
+func wrapperGetRandomPeers(d *Discovery, expectedNum int) (res []*addressbook.AddrInfo) {
+	for i := 0; i < 10; i++ {
+		res = d.GetRandomPeers(expectedNum)
+		if len(res) == expectedNum {
+			return res
+		}
+	}
+	return
 }
 
 func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
