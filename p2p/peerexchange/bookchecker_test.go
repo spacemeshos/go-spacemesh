@@ -64,8 +64,6 @@ func TestDiscovery_CheckBook(t *testing.T) {
 }
 
 func TestDiscovery_GetRandomPeers(t *testing.T) {
-	t.Parallel()
-
 	hosts, instances := setupOverNodes(t, 2)
 	d := instances[0]
 
@@ -110,7 +108,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 3
+			return len(wrapperGetRandomPeers(d, 3)) == 3
 		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers")
 		require.NotContains(t, d.GetRandomPeers(10), connectedNodeAddress, "should not return connected node")
 	})
@@ -123,7 +121,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 2
+			return len(wrapperGetRandomPeers(d, 2)) == 2
 		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 		res := d.GetRandomPeers(10)
 		require.NotContains(t, res, connectedNodeAddress, "should not return connected node")
@@ -138,14 +136,14 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 2
+			return len(wrapperGetRandomPeers(d, 2)) == 2
 		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 
 		res := d.GetRandomPeers(10)
 		require.NotContains(t, res, oldNode, "should not return connected node")
 
 		require.Eventually(t, func() bool {
-			res = d.GetRandomPeers(10)
+			res = wrapperGetRandomPeers(d, 3)
 			if len(res) != 3 {
 				return false
 			}
@@ -159,9 +157,18 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	})
 }
 
+func wrapperGetRandomPeers(d *Discovery, expectedNum int) (res []*addressbook.AddrInfo) {
+	for i := 0; i < 10; i++ {
+		res = d.GetRandomPeers(expectedNum)
+		if len(res) == expectedNum {
+			return res
+		}
+	}
+	return
+}
+
 func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
-	t.Parallel()
-	extraNodesCount := 120
+	extraNodesCount := 100
 
 	_, instances := setupOverNodes(t, 2)
 	nodeA, nodeB := instances[0], instances[1]
@@ -201,11 +208,11 @@ func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
 	nodeB.CheckPeers(context.Background())
 
 	// we can't know exact nodes count, cause on addrExchange handler we randomly return addresses from buckets
-	addresses := nodeB.book.GetAddresses()
-	require.True(t, len(addresses) > 1 && len(addresses) <= extraNodesCount+1, "nodeB should have some of additional addresses")
+	addresses := nodeB.book.NumAddresses()
+	require.True(t, addresses > 1 && addresses <= extraNodesCount+1, "nodeB should have some of additional addresses")
 
 	ids = append(ids, nodeA.host.ID())
-	for _, addr := range addresses {
+	for _, addr := range nodeB.book.GetAddresses() {
 		require.Subset(t, ids, []peer.ID{addr.ID}, "address should be one of known")
 	}
 }

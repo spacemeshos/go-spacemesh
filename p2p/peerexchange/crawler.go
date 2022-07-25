@@ -89,10 +89,16 @@ func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([
 				if err == nil {
 					// TODO(dshulyak) skip request if connection is inbound
 					err = r.host.Connect(ctx, *ainfo)
+					if err != nil {
+						r.logger.With().Error("failed to connect to peer", log.Stringer("peer", ainfo.ID), log.Err(err))
+					}
 				}
 				var res []*addressbook.AddrInfo
 				if err == nil {
 					res, err = r.disc.Request(gctx, addr.ID)
+					if err != nil {
+						r.logger.With().Error("failed request from peer", log.Stringer("peer", ainfo.ID), log.Err(err))
+					}
 				}
 				select {
 				case reschan <- queryResult{Src: addr, Result: res, Err: err}:
