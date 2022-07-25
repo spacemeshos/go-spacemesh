@@ -4,9 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/stretchr/testify/require"
 )
 
 func FuzzSpawnArgumentsConsistency(f *testing.F) {

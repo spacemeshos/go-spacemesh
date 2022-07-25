@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/spacemeshos/go-scale"
-
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
 
