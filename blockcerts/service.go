@@ -3,8 +3,8 @@ package blockcerts
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -15,24 +15,46 @@ import (
 )
 
 const (
-	blockCertifier = math.MaxInt - 2  // for Rolacle
-	blockSigTopic  = "BlockSignature" // for gossip
+	blockCertifierRole = math.MaxInt - 2  // for Rolacle
+	blockSigTopic      = "BlockSignature" // for gossip
 
 )
 
-type HareTerminationConfig struct {
+type BlockCertificateConfig struct {
 	CommitteeSize int
+}
+type BlockCertificate struct {
+	BlockID               types.BlockID
+	LayerID               types.LayerID
+	terminationSignatures []BlockCertificateSignature
+}
+type BlockSignature struct {
+	blockID types.BlockID
+	BlockCertificateSignature
+}
+type BlockCertificateSignature struct {
+	signerNodeID         types.NodeID
+	signerRoleProof      []byte
+	signerCommitteeSeats uint16
+
+	blockIDSignature []byte
+}
+type blockSignatureMsg struct {
+	layerID types.LayerID
+	BlockSignature
 }
 
 // BlockCertifyingService is a long-lived service responsible for participating
 // in block-signing upon hare termination.
 type BlockCertifyingService struct {
 	rolacle          hare.Rolacle
-	config           HareTerminationConfig
+	config           BlockCertificateConfig
 	hareTerminations <-chan hare.TerminationBlockOutput
-	blockSignersWg   sync.WaitGroup
 	gossipPublisher  pubsub.Publisher
 	blockSigner      signing.Signer
+	signatureCache   sigCache
+	completedCertsCh chan BlockCertificate
+	logger           log.Logger
 }
 
 // NewBlockCertifyingService constructs a new BlockCertifyingService.
@@ -41,7 +63,8 @@ func NewBlockCertifyingService(
 	rolacle hare.Rolacle,
 	gossipPublisher pubsub.Publisher,
 	blockSigner signing.Signer,
-	config HareTerminationConfig,
+	config BlockCertificateConfig,
+	logger log.Logger,
 ) (*BlockCertifyingService, error) {
 	service := &BlockCertifyingService{}
 	service.rolacle = rolacle
@@ -49,108 +72,55 @@ func NewBlockCertifyingService(
 	service.hareTerminations = hareTerminations
 	service.gossipPublisher = gossipPublisher
 	service.blockSigner = blockSigner
-	service.blockSignersWg = sync.WaitGroup{}
+
+	service.signatureCache = sigCache{
+		logger:             logger,
+		blockSigsByLayer:   sync.Map{},
+		cacheBoundary:      types.LayerID{},
+		cacheBoundaryMutex: sync.RWMutex{},
+		completedCertsCh:   service.completedCertsCh,
+	}
+	service.completedCertsCh = make(chan BlockCertificate, 100)
+	//TODO: empirically decide on adequate channel size
+
+	service.logger = logger
 	return service, fmt.Errorf("not yet implemented")
 }
 
 func (s *BlockCertifyingService) Start(ctx context.Context) error {
-	go s.certifyBlockServiceLoop(ctx)
+	go blockSigningLoop(ctx, s.hareTerminations,
+		s.blockSigner, s.config.CommitteeSize, s.rolacle,
+		s.gossipPublisher, &s.signatureCache, s.logger,
+	)
 	return nil
 }
 
-func (s *BlockCertifyingService) SignatureCacher() *SigCacher {
-
+func (s *BlockCertifyingService) SignatureCacher() SigCacher {
+	return &s.signatureCache // because exported functions are threadsafe
 }
 
-// GossipHandler returns a function that handles block value messages.
+// GossipHandler returns a function that handles blockSignatureMsg gossip.
 func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
 	return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
 	) pubsub.ValidationResult {
-		msg := BlockSignature{}
+		msg := blockSignatureMsg{}
 		err := codec.Decode(bytes, msg)
 		if err != nil {
 			return pubsub.ValidationReject
 		}
-		isValidProof, err := s.rolacle.Validate(ctx,
-			msg.layerID, blockCertifier, s.config.CommitteeSize, msg.senderNodeID,
-			msg.eligibilityProof, msg.eligibilityCount)
+		isValid, err := s.rolacle.Validate(ctx,
+			msg.layerID, blockCertifierRole, s.config.CommitteeSize,
+			msg.signerNodeID, msg.signerRoleProof, msg.signerCommitteeSeats)
 		if err != nil {
 			log.Error("hare termination gossip: %w", err)
 			return pubsub.ValidationReject
 		}
-		if !isValidProof {
+		if !isValid {
 			return pubsub.ValidationReject
 		}
 
-		// Extract public key from value & validate
-
-		// Store value
-		store, err := NewCertifiedBlockStore(s)
-		if err != nil {
-			panic("error not yet handled")
-		}
-		err = store.storeBlockSignature(msg.blockID, msg)
-		if err != nil {
-			panic("error not yet handled")
-		}
-		panic("not yet implemented")
-	}
-}
-
-func (s BlockCertifyingService) certifyBlockServiceLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			panic("cancel not yet implemented")
-
-		case hareTermination := <-s.hareTerminations:
-			if hareTermination == nil {
-				log.Debug("block certification service: " +
-					"hare termination channel closed.")
-				return
-			}
-			// 1. check readiness
-			ready, err := s.rolacle.IsIdentityActiveOnConsensusView(ctx,
-				hareTermination.TerminatingNode(),
-				hareTermination.ID(),
-			)
-			if err != nil {
-				log.Error("error checking if active on consensus view")
-			}
-			if !ready {
-				log.Debug("not active on consensus view: " +
-					"not eligible to get committee seats.")
-				break
-			}
-			// 2. calculate eligibility
-			proof, err := s.rolacle.Proof(ctx, hareTermination.ID(), blockCertifier)
-			if err != nil {
-				log.Err(errors.Wrap(err, "could not retrieve eligibility proof from oracle"))
-				break
-			}
-
-			committeeSeatCount, err := s.rolacle.CalcEligibility(ctx, hareTermination.ID(),
-				blockCertifier, s.config.CommitteeSize, hareTermination.TerminatingNode(), proof)
-
-			blockIDBytes := hareTermination.BlockID().Bytes()
-			blockIDSignature := s.blockSigner.Sign(blockIDBytes)
-
-			blockSig := BlockSignature{
-				blockID:          hareTermination.BlockID(),
-				layerID:          hareTermination.ID(),
-				senderNodeID:     hareTermination.TerminatingNode(),
-				eligibilityProof: proof,
-				eligibilityCount: committeeSeatCount,
-				blockSignature:   blockIDSignature,
-			}
-
-			s.blockSignersWg.Add(1)
-			if !hareTermination.Completed() {
-			}
-
-			msgBytes, err := codec.Encode(blockSig)
-			s.gossipPublisher.Publish(ctx, blockSigTopic, msgBytes)
-		}
-
+		s.SignatureCacher().CacheBlockSignature(ctx,
+			msg.layerID, msg.BlockSignature)
+		return pubsub.ValidationAccept
 	}
 }

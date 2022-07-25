@@ -5,13 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type BlockCertificate struct {
-	blockID types.BlockID
-	layerID types.LayerID
-
-	terminationSignatures []BlockSignature
-}
-
 // CertifiedBlockProvider is an object designed to retrieve a single CertifiedBlock
 // from a BlockCertifyingService.
 type CertifiedBlockProvider struct {
@@ -38,15 +31,4 @@ func NewCertifiedBlockStore(s *BlockCertifyingService) (*CertifiedBlockStore, er
 
 func (cbs *CertifiedBlockStore) StoreCertifiedBlock(cBlock []byte) error {
 	return fmt.Errorf("not yet implemented")
-}
-
-// Implementation details below ----
-
-func (cbs *CertifiedBlockStore) storeBlockSignature(blockID types.BlockID, sig BlockSignature) error {
-	return fmt.Errorf("not yet implemented")
-}
-
-// blockSignatureCollector collects gossiped block signatures and groups them by
-// block.
-type blockSignatureCollectionService struct {
 }

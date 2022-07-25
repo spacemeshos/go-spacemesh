@@ -17,7 +17,7 @@ func Test_ProducesValidBlockSignature_ChosenByOracle(t *testing.T) {
 	// Arrange
 	mockCtrler := gomock.NewController(t)
 	mockRolacle := mocks.NewMockRolacle(mockCtrler)
-	config := blockcerts.HareTerminationConfig{
+	config := blockcerts.BlockCertificateConfig{
 		CommitteeSize: 800,
 	}
 

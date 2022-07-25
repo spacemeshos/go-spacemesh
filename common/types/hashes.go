@@ -16,18 +16,18 @@ import (
 const (
 	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
-	hash20Length = 20
-	hash12Length = 12
+	Hash20Length = 20
+	Hash12Length = 12
 )
 
 // Hash12 represents the first 12 bytes of sha256, mostly used for internal caches.
-type Hash12 [hash12Length]byte
+type Hash12 [Hash12Length]byte
 
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 
 // Hash20 represents the 20-byte sha256 hash of arbitrary data.
-type Hash20 [hash20Length]byte
+type Hash20 [Hash20Length]byte
 
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }

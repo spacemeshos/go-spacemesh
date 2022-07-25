@@ -160,3 +160,10 @@ CREATE TABLE accounts
 );
 
 CREATE INDEX accounts_by_layer_udated ON accounts (layer_updated);
+
+CREATE TABLE certified_blocks
+(
+    block_id CHAR(20) PRIMARY KEY,
+    layer_id CHAR(32),
+    signatures VARCHAR
+) WITHOUT ROWID;
