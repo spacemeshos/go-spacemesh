@@ -3,6 +3,8 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,84 +33,50 @@ func TestRewardCodec(t *testing.T) {
 	require.Equal(t, r, &got)
 }
 
-func TestBlockIDCodec(t *testing.T) {
-	want := RandomBlockID()
-
-	data, err := codec.Encode(want)
-	require.NoError(t, err)
-
-	var got BlockID
-	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, want, got)
+func FuzzAnyRewardConsistency(f *testing.F) {
+	tester.FuzzConsistency[AnyReward](f)
 }
 
-func TestRatNumCodec(t *testing.T) {
-	weight := util.WeightFromFloat64(94.78)
-	want := &RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}
-
-	data, err := codec.Encode(want)
-	require.NoError(t, err)
-
-	var got RatNum
-	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, want, &got)
+func FuzzAnyRewardSafety(f *testing.F) {
+	tester.FuzzSafety[AnyReward](f)
 }
 
-func TestInnerBlockCodec(t *testing.T) {
-	weight := util.WeightFromFloat64(312.13)
-	want := &InnerBlock{
-		LayerIndex: NewLayerID(5),
-		Rewards: []AnyReward{
-			{
-				Coinbase: GenerateAddress(RandomBytes(20)),
-				Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
-			},
-		},
-		TxIDs: RandomTXSet(10),
-	}
-
-	data, err := codec.Encode(want)
-	require.NoError(t, err)
-
-	var got InnerBlock
-	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, want, &got)
+func FuzzBlockIDConsistency(f *testing.F) {
+	tester.FuzzConsistency[BlockID](f)
 }
 
-func TestBlockCodec(t *testing.T) {
-	weight := util.WeightFromFloat64(312.13)
-	want := NewExistingBlock(
-		EmptyBlockID,
-		InnerBlock{
-			LayerIndex: NewLayerID(1),
-			Rewards: []AnyReward{
-				{
-					Coinbase: GenerateAddress(RandomBytes(20)),
-					Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
-				},
-			},
-			TxIDs: RandomTXSet(3),
-		},
-	)
-
-	data, err := codec.Encode(want)
-	require.NoError(t, err)
-
-	var got Block
-	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, want, &got)
+func FuzzBlockIDSafety(f *testing.F) {
+	tester.FuzzSafety[BlockID](f)
 }
 
-func TestBlockContextualValidityCodec(t *testing.T) {
-	want := &BlockContextualValidity{
-		ID:       RandomBlockID(),
-		Validity: true,
-	}
+func FuzzRatNumConsistency(f *testing.F) {
+	tester.FuzzConsistency[RatNum](f)
+}
 
-	data, err := codec.Encode(want)
-	require.NoError(t, err)
+func FuzzRatNumSafety(f *testing.F) {
+	tester.FuzzSafety[RatNum](f)
+}
 
-	var got BlockContextualValidity
-	require.NoError(t, codec.Decode(data, &got))
-	require.Equal(t, want, &got)
+func FuzzBlockConsistency(f *testing.F) {
+	tester.FuzzConsistency[Block](f)
+}
+
+func FuzzBlockSafety(f *testing.F) {
+	tester.FuzzSafety[Block](f)
+}
+
+func FuzzBlockContextualValidityConsistency(f *testing.F) {
+	tester.FuzzConsistency[BlockContextualValidity](f)
+}
+
+func FuzzBlockContextualValiditySafety(f *testing.F) {
+	tester.FuzzSafety[BlockContextualValidity](f)
+}
+
+func FuzzInnerBlockConsistency(f *testing.F) {
+	tester.FuzzConsistency[InnerBlock](f)
+}
+
+func FuzzInnerBlockSafety(f *testing.F) {
+	tester.FuzzSafety[InnerBlock](f)
 }
