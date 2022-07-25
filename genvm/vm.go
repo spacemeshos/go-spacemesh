@@ -34,12 +34,19 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
+// WithConfig updates config on the vm.
+func WithConfig(cfg Config) Opt {
+	return func(vm *VM) {
+		vm.cfg = cfg
+	}
+}
+
 // New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   log.NewNop(),
 		db:       db,
-		cfg:      DefaultRewardConfig(),
+		cfg:      DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -53,7 +60,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 type VM struct {
 	logger   log.Log
 	db       *sql.Database
-	cfg      RewardConfig
+	cfg      Config
 	registry *registry.Registry
 }
 
@@ -254,7 +261,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		fees        uint64
 		ineffective []types.Transaction
 		executed    []types.TransactionWithResult
-		limit       = lctx.GasLimit
+		limit       = v.cfg.GasLimit
 	)
 	for i := range txs {
 		txCount.Inc()
@@ -300,7 +307,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		}
 		if limit < ctx.Header.MaxGas {
 			v.logger.With().Warning("innefective transaction. out of block gas",
-				log.Uint64("block gas limit", lctx.GasLimit),
+				log.Uint64("block gas limit", v.cfg.GasLimit),
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -483,7 +490,6 @@ func verify(ctx *core.Context, raw []byte) bool {
 
 // ApplyContext has information on layer and block id.
 type ApplyContext struct {
-	Layer    types.LayerID
-	Block    types.BlockID
-	GasLimit uint64
+	Layer types.LayerID
+	Block types.BlockID
 }

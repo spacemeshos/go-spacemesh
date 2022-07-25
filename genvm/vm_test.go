@@ -29,8 +29,7 @@ const (
 
 func testContext(lid types.LayerID) ApplyContext {
 	return ApplyContext{
-		Layer:    lid,
-		GasLimit: testGasLimit,
+		Layer: lid,
 	}
 }
 
@@ -63,6 +62,11 @@ func (t *tester) persistent() *tester {
 
 func (t *tester) withBaseReward(reward uint64) *tester {
 	t.VM.cfg.BaseReward = reward
+	return t
+}
+
+func (t *tester) withGasLimit(limit uint64) *tester {
+	t.VM.cfg.GasLimit = limit
 	return t
 }
 
@@ -702,7 +706,7 @@ func TestWorkflow(t *testing.T) {
 				lid := types.NewLayerID(uint32(i + 1))
 				ctx := testContext(lid)
 				if layer.gasLimit > 0 {
-					ctx.GasLimit = layer.gasLimit
+					tt = tt.withGasLimit(layer.gasLimit)
 				}
 				ineffective, _, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
 				require.NoError(tt, err)

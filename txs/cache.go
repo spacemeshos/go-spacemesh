@@ -691,7 +691,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, skipped []types.Transaction) ([]error, []error) {
+func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, inefective []types.Transaction) ([]error, []error) {
 	if err := checkApplyOrder(c.logger, db, lid); err != nil {
 		return nil, []error{err}
 	}
@@ -704,7 +704,7 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 		toCleanup[rst.Principal] = struct{}{}
 	}
 	skippedByPrincipal := make(map[types.Address]struct{})
-	for _, tx := range skipped {
+	for _, tx := range inefective {
 		if !c.Has(tx.ID) {
 			if err := c.Add(ctx, db, &tx, time.Now(), true, nil); err != nil {
 				return nil, []error{err}

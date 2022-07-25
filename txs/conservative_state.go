@@ -158,14 +158,14 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 	logger := cs.logger.WithFields(block.LayerIndex, block.ID())
 	logger.Debug("applying layer to conservative state")
 
-	raw, err := cs.GetRawTransactions(block.TxIDs)
+	executable, err := cs.GetExecutableTxs(block.TxIDs)
 	if err != nil {
 		return err
 	}
 
-	skipped, results, err := cs.vmState.Apply(
+	inefective, results, err := cs.vmState.Apply(
 		vm.ApplyContext{Layer: block.LayerIndex, Block: block.ID()},
-		raw,
+		executable,
 		block.Rewards,
 	)
 	if err != nil {
@@ -173,11 +173,11 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 	}
 
 	logger.With().Debug("applying layer to cache",
-		log.Int("num_txs_skipped", len(skipped)),
+		log.Int("num_txs_skipped", len(inefective)),
 		log.Int("num_txs_applied", len(results)),
 	)
 	if _, errs := cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(),
-		results, skipped); len(errs) > 0 {
+		results, inefective); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -225,6 +225,25 @@ func (cs *ConservativeState) GetMeshHash(lid types.LayerID) (types.Hash32, error
 // GetMeshTransaction retrieves a tx by its id.
 func (cs *ConservativeState) GetMeshTransaction(tid types.TransactionID) (*types.MeshTransaction, error) {
 	return transactions.Get(cs.db, tid)
+}
+
+// GetMeshTransactions retrieves a list of txs by their id's.
+func (cs *ConservativeState) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
+	missing := make(map[types.TransactionID]struct{})
+	mtxs := make([]*types.MeshTransaction, 0, len(ids))
+	for _, tid := range ids {
+		var (
+			mtx *types.MeshTransaction
+			err error
+		)
+		if mtx, err = transactions.Get(cs.db, tid); err != nil {
+			cs.logger.With().Warning("could not get tx", tid, log.Err(err))
+			missing[tid] = struct{}{}
+		} else {
+			mtxs = append(mtxs, mtx)
+		}
+	}
+	return mtxs, missing
 }
 
 // GetExecutableTxs retrieves a list of txs by their id's.
