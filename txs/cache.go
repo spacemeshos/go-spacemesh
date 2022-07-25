@@ -705,14 +705,14 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 	}
 	skippedByPrincipal := make(map[types.Address]struct{})
 	for _, tx := range inefective {
+		if tx.TxHeader == nil {
+			c.logger.With().Warning("tx header not parsed", tx.ID)
+			continue
+		}
 		if !c.Has(tx.ID) {
 			if err := c.Add(ctx, db, &tx, time.Now(), true, nil); err != nil {
 				return nil, []error{err}
 			}
-		}
-		if tx.TxHeader == nil {
-			c.logger.With().Warning("tx header not parsed", tx.ID)
-			continue
 		}
 		toCleanup[tx.Principal] = struct{}{}
 		skippedByPrincipal[tx.Principal] = struct{}{}
