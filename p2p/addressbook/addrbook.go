@@ -308,14 +308,11 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 // BootstrapAddressCache run AddressCache and add Config.AnchorPeersCount addresses from anchor peers.
 func (a *AddrBook) BootstrapAddressCache() (addresses []*AddrInfo) {
 	addresses = a.AddressCache()
-	defer func() {
-		addresses = util.UniqueSliceStringer(addresses)
-	}()
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
 	if len(a.lastAnchorPeers) == 0 {
-		return addresses
+		return util.UniqueSliceStringer(addresses)
 	}
 
 	anchorPeers := make([]*knownAddress, len(a.lastAnchorPeers))
@@ -332,7 +329,7 @@ func (a *AddrBook) BootstrapAddressCache() (addresses []*AddrInfo) {
 			break
 		}
 	}
-	return addresses
+	return util.UniqueSliceStringer(addresses)
 }
 
 // GetAddresses returns all the addresses currently found within the manager's address cache.
