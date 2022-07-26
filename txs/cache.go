@@ -694,7 +694,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, inefective []types.Transaction) ([]error, []error) {
+func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, ineffective []types.Transaction) ([]error, []error) {
 	if err := checkApplyOrder(c.logger, db, lid); err != nil {
 		return nil, []error{err}
 	}
@@ -707,7 +707,7 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 		toCleanup[rst.Principal] = struct{}{}
 	}
 	skippedByPrincipal := make(map[types.Address]struct{})
-	for _, tx := range inefective {
+	for _, tx := range ineffective {
 		if tx.TxHeader == nil {
 			c.logger.With().Warning("tx header not parsed", tx.ID)
 			continue

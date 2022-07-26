@@ -163,7 +163,7 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 		return err
 	}
 
-	inefective, results, err := cs.vmState.Apply(
+	ineffective, results, err := cs.vmState.Apply(
 		vm.ApplyContext{Layer: block.LayerIndex, Block: block.ID()},
 		executable,
 		block.Rewards,
@@ -173,11 +173,11 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 	}
 
 	logger.With().Debug("applying layer to cache",
-		log.Int("num_txs_skipped", len(inefective)),
+		log.Int("num_txs_skipped", len(ineffective)),
 		log.Int("num_txs_applied", len(results)),
 	)
 	if _, errs := cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(),
-		results, inefective); len(errs) > 0 {
+		results, ineffective); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
