@@ -769,7 +769,6 @@ func TestWorkflow(t *testing.T) {
 						} else {
 							require.Nil(t, ineffective[i].TxHeader)
 						}
-
 					}
 				}
 				for account, changes := range layer.expected {
