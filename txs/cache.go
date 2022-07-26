@@ -713,7 +713,7 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 			continue
 		}
 		if !c.has(tx.ID) {
-			if err := c.add(ctx, db, &tx, time.Now(), true, nil); err != nil {
+			if err := transactions.Add(db, &tx, time.Now()); err != nil {
 				return nil, []error{err}
 			}
 		}
@@ -725,7 +725,7 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
 	for _, rst := range results {
 		if !c.has(rst.ID) {
-			if err := c.add(ctx, db, &rst.Transaction, time.Now(), true, nil); err != nil {
+			if err := transactions.Add(db, &rst.Transaction, time.Now()); err != nil {
 				return nil, []error{err}
 			}
 		}
