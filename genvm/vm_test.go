@@ -244,6 +244,22 @@ func (tx spendWallet) withNonce(nonce core.Nonce) *spendWalletNonce {
 	return &spendWalletNonce{spendWallet: tx, nonce: nonce}
 }
 
+type corruptSig struct {
+	testTx
+}
+
+func (cs corruptSig) gen(t *tester) types.RawTx {
+	tx := cs.testTx.gen(t)
+	last := tx.Raw[len(tx.Raw)-1]
+	if last == 255 {
+		last--
+	} else {
+		last++
+	}
+	tx.Raw[len(tx.Raw)-1] = last
+	return tx
+}
+
 type spendWalletNonce struct {
 	spendWallet
 	nonce core.Nonce
@@ -341,8 +357,10 @@ func TestWorkflow(t *testing.T) {
 		txs      []testTx
 		rewards  []reward
 		expected map[int]change
-		skipped  []int
 		gasLimit uint64
+
+		ineffective []int            // list with references to ineffective txs
+		headers     map[int]struct{} // is vm expected to return the header
 	}
 	for _, tc := range []struct {
 		desc   string
@@ -516,7 +534,7 @@ func TestWorkflow(t *testing.T) {
 					txs: []testTx{
 						&spendWallet{0, 10, 1},
 					},
-					skipped: []int{0},
+					ineffective: []int{0},
 					expected: map[int]change{
 						0:  same{},
 						10: same{},
@@ -531,7 +549,8 @@ func TestWorkflow(t *testing.T) {
 					txs: []testTx{
 						&spawnWallet{11},
 					},
-					skipped: []int{0},
+					ineffective: []int{0},
+					headers:     map[int]struct{}{0: {}},
 					expected: map[int]change{
 						11: same{},
 					},
@@ -548,7 +567,8 @@ func TestWorkflow(t *testing.T) {
 						&spawnWallet{11},
 						&spendWallet{11, 12, 1},
 					},
-					skipped: []int{3},
+					ineffective: []int{3},
+					headers:     map[int]struct{}{3: {}},
 					expected: map[int]change{
 						11: spawned{template: wallet.TemplateAddress},
 						12: same{},
@@ -566,8 +586,9 @@ func TestWorkflow(t *testing.T) {
 						&spendWallet{0, 11, 100},
 						&spendWallet{0, 12, 100},
 					},
-					gasLimit: wallet.TotalGasSpawn + wallet.TotalGasSpend,
-					skipped:  []int{2, 3},
+					gasLimit:    wallet.TotalGasSpawn + wallet.TotalGasSpend,
+					ineffective: []int{2, 3},
+					headers:     map[int]struct{}{2: {}, 3: {}},
 					expected: map[int]change{
 						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
 						10: earned{amount: 100},
@@ -587,8 +608,9 @@ func TestWorkflow(t *testing.T) {
 						&spendWallet{0, 10, 100},
 						&spendWallet{0, 11, 100},
 					},
-					gasLimit: wallet.TotalGasSpawn + wallet.TotalGasSpend,
-					skipped:  []int{1, 3},
+					gasLimit:    wallet.TotalGasSpawn + wallet.TotalGasSpend,
+					ineffective: []int{1, 3},
+					headers:     map[int]struct{}{1: {}, 3: {}},
 					expected: map[int]change{
 						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
 						10: earned{amount: 100},
@@ -606,7 +628,10 @@ func TestWorkflow(t *testing.T) {
 						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
 						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
 					},
-					skipped: []int{1},
+					ineffective: []int{1},
+					headers: map[int]struct{}{
+						1: {},
+					},
 					expected: map[int]change{
 						0: spawned{
 							template: wallet.TemplateAddress,
@@ -679,14 +704,36 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
-						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
+						&spawnWallet{0},
 					},
-					skipped: []int{0, 1},
-					rewards: []reward{{address: 10, share: 1}},
+				},
+				{
+					txs: []testTx{
+						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
+						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 3}),
+					},
+					ineffective: []int{0, 1},
+					headers:     map[int]struct{}{0: {}, 1: {}},
+					rewards:     []reward{{address: 10, share: 1}},
 					expected: map[int]change{
 						10: earned{amount: testBaseReward},
 					},
+				},
+			},
+		},
+		{
+			desc: "FailVerify",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnWallet{0},
+					},
+				},
+				{
+					txs: []testTx{
+						corruptSig{&spendWallet{0, 10, 100}},
+					},
+					ineffective: []int{0},
 				},
 			},
 		},
@@ -710,12 +757,19 @@ func TestWorkflow(t *testing.T) {
 				}
 				ineffective, _, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
 				require.NoError(tt, err)
-				if layer.skipped == nil {
+				if layer.ineffective == nil {
 					require.Empty(tt, ineffective)
 				} else {
-					require.Len(tt, ineffective, len(layer.skipped))
-					for i, pos := range layer.skipped {
+					require.Len(tt, ineffective, len(layer.ineffective))
+					for i, pos := range layer.ineffective {
 						require.Equal(t, txs[pos].ID, ineffective[i].ID)
+						_, exist := layer.headers[pos]
+						if exist {
+							require.NotNil(t, ineffective[i].TxHeader)
+						} else {
+							require.Nil(t, ineffective[i].TxHeader)
+						}
+
 					}
 				}
 				for account, changes := range layer.expected {
