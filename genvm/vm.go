@@ -291,6 +291,18 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		ctx := req.ctx
 		args := req.args
 
+		// NOTE this part is executed only for transactions that weren't verified
+		// when accepted into mempool
+		if !tx.Verified() && !req.Verify() {
+			v.logger.With().Warning("innefective transaction. failed verify",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			invalidTxCount.Inc()
+			continue
+		}
+
 		t2 := time.Now()
 		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
@@ -319,17 +331,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		// https://github.com/spacemeshos/go-spacemesh/issues/3273
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
 			v.logger.With().Warning("innefective transaction. failed nonce check",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
-			invalidTxCount.Inc()
-			continue
-		}
-		// NOTE this part is executed only for transactions that weren't verified
-		// when accepted into mempool
-		if !tx.Verified() && !req.Verify() {
-			v.logger.With().Warning("innefective transaction. failed verify",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
