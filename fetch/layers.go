@@ -218,13 +218,27 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
-		// fail sync for the entire layer
-		return err
+		logger.With().Warning("failed fetching new ballots",
+			log.Array("ballot_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				for _, bid := range ballotsToFetch {
+					encoder.AppendString(bid.String())
+				}
+				return nil
+			})),
+			log.Err(err))
+		// syntactically invalid ballots are expected from malicious peers
 	}
 
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
-		logger.With().Warning("failed fetching new blocks", log.Err(err))
+		logger.With().Warning("failed fetching new blocks",
+			log.Array("block_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				for _, bid := range blocksToFetch {
+					encoder.AppendString(bid.String())
+				}
+				return nil
+			})),
+			log.Err(err))
 		// syntactically invalid blocks are expected from malicious peers
 	}
 	return nil
