@@ -40,7 +40,7 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious 
 
 // Add ballot to the database.
 func Add(db sql.Executor, ballot *types.Ballot) error {
-	bytes, err := codec.Encode(ballot.InnerBallot)
+	bytes, err := codec.Encode(&ballot.InnerBallot)
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}

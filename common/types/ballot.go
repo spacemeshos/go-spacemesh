@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -18,11 +20,23 @@ const (
 	BallotIDSize = Hash32Length
 )
 
+//go:generate scalegen
+
 // BallotID is a 20-byte sha256 sum of the serialized ballot used to identify a Ballot.
 type BallotID Hash20
 
 // EmptyBallotID is a canonical empty BallotID.
 var EmptyBallotID = BallotID{}
+
+// EncodeScale implements scale codec interface.
+func (id *BallotID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
+}
 
 // Ballot contains the smesher's signed vote on the mesh history.
 type Ballot struct {
@@ -170,7 +184,7 @@ func (b *Ballot) Initialize() error {
 
 // Bytes returns the serialization of the InnerBallot.
 func (b *Ballot) Bytes() []byte {
-	data, err := codec.Encode(b.InnerBallot)
+	data, err := codec.Encode(&b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
 	}

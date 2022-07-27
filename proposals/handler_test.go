@@ -155,7 +155,7 @@ func checkBallot(t *testing.T, cdb *datastore.CachedDB, b *types.Ballot, exist, 
 func TestBallot_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
-	data, err := codec.Encode(b.InnerBallot)
+	data, err := codec.Encode(&b.InnerBallot)
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMalformedData)
 }
@@ -523,7 +523,7 @@ func TestBallot_RefBallot(t *testing.T) {
 func TestProposal_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	p := createProposal(t)
-	data, err := codec.Encode(p.InnerProposal)
+	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errMalformedData)
 	require.Equal(t, pubsub.ValidationReject, th.HandleProposal(context.TODO(), "", data))
