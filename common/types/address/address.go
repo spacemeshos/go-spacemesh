@@ -64,18 +64,7 @@ func BytesToAddress(b []byte) (Address, error) {
 		return a, ErrWrongAddressLength
 	}
 	copy(a[:], b)
-	return a, nil // todo 3315
-}
-
-//// BigToAddress returns Address with byte values of b.
-//// If b is larger than len(h), b will be cropped from the left.
-//func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
-
-// HexToAddress returns Address with byte values of s.
-// If s is larger than len(h), s will be cropped from the left.
-func HexToAddress(s string) Address {
-	return Address{}
-	// todo 3315 return BytesToAddress(util.FromHex(s))
+	return a, nil
 }
 
 // Bytes gets the string representation of the underlying address.
@@ -83,9 +72,6 @@ func (a Address) Bytes() []byte { return a[:] }
 
 // Big converts an address to a big integer.
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
-
-//// Hash converts an address to a hash by left-padding it with zeros.
-//func (a Address) Hash() types.Hash32 { return types.CalcHash32(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
@@ -177,7 +163,7 @@ func GenerateAddress(networkID Network, publicKey []byte) (Address, error) {
 	if err := addr.setBytes(networkID, publicKey); err != nil {
 		return addr, fmt.Errorf("error generate address: %w", err)
 	}
-	return addr, nil // todo 3315
+	return addr, nil
 }
 
 // ByteToAddress converts a byte array to an address.

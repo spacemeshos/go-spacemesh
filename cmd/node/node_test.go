@@ -19,8 +19,6 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -31,6 +29,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
+	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
@@ -696,7 +698,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	app.Config = &cfg
 
 	signer := signing.NewEdSigner()
-	address := wallet.Address(signer.PublicKey().Bytes())
+	addrWallet := wallet.Address(signer.PublicKey().Bytes())
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
@@ -722,8 +724,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
 		app.Config.Genesis = &apiConfig.GenesisConfig{
+			NetworkID: address.TestnetID,
 			Accounts: map[string]uint64{
-				address.String(): 100_000_000,
+				addrWallet.String(): 100_000_000,
 			},
 		}
 
@@ -788,7 +791,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		inTx := res.Transaction
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
-		require.Equal(t, address.Bytes(), inTx.Principal)
+		require.Equal(t, addrWallet.Bytes(), inTx.Principal)
 		// Let the test end
 		once.Do(oncebody)
 

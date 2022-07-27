@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -9,15 +11,21 @@ import (
 
 // GenesisConfig defines accounts that will exist in state at genesis.
 type GenesisConfig struct {
-	Accounts map[string]uint64 `mapstructure:"accounts"`
+	NetworkID address.Network
+	Accounts  map[string]uint64 `mapstructure:"accounts"`
 }
 
 // ToAccounts creates list of types.Account instance from config.
 func (g *GenesisConfig) ToAccounts() []types.Account {
 	var rst []types.Account
 	for addr, balance := range g.Accounts {
+		addrBytes := util.FromHex(addr)
+		addrGenerated, err := address.GenerateAddress(g.NetworkID, addrBytes)
+		if err != nil {
+			panic(fmt.Sprintf("could not generate address from string `%s`: %s", addr, err.Error()))
+		}
 		rst = append(rst, types.Account{
-			Address: address.HexToAddress(addr),
+			Address: addrGenerated,
 			Balance: balance,
 		})
 	}
@@ -25,21 +33,23 @@ func (g *GenesisConfig) ToAccounts() []types.Account {
 }
 
 // Account1Address is the address from Account1Private.
-const Account1Address = "0x1b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
+const Account1Address = "0x0002abedccd3ffcbf46f35f11b314d17c05a2905f918d0d7"
 
 // Account1Private is the private key for test account.
-const Account1Private = "0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce57be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
+const Account1Private = "0x2dcddb8e0ddd2269f536da5768e890790f2b84366e0fb8396bdcd15c0d7c30b90002abedccd3ffcbf46f35f11b314d17c05a2905f918d0d72f2f6989640fbb43"
 
 // Account2Address is the address from Account2Address.
-const Account2Address = "0xe77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
+const Account2Address = "0xfeaf3d38b6ef430933ebedeb073af7bec018e8d2e379fa47"
 
 // Account2Private is the private key for secode test account.
-const Account2Private = "0x9d411020d46d3f4e1214f7b51052219737669f461ac9c9ac6ac49753926d0af222a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
+const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df4084d306b49feaf3d38b6ef430933ebedeb073af7bec018e8d2e379fa47df6a9fa07a6a8344"
 
 // DefaultGenesisConfig is the default configuration for the node.
 func DefaultGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	g := GenesisConfig{}
+	g := GenesisConfig{
+		NetworkID: address.MainnetID,
+	}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
@@ -53,7 +63,9 @@ func DefaultGenesisConfig() *GenesisConfig {
 // DefaultTestGenesisConfig is the default test configuration for the node.
 func DefaultTestGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	g := GenesisConfig{}
+	g := GenesisConfig{
+		NetworkID: address.TestnetID,
+	}
 
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(Account1Private))
 	if err != nil {

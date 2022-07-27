@@ -4,6 +4,7 @@ import (
 	"time"
 
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
 
@@ -34,7 +35,9 @@ func fastnet() config.Config {
 
 	conf.P2P.TargetOutbound = 10
 
-	conf.Genesis = &apiConfig.GenesisConfig{}
+	conf.Genesis = &apiConfig.GenesisConfig{
+		NetworkID: address.TestnetID,
+	}
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 1_000
@@ -48,7 +51,11 @@ func fastnet() config.Config {
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
-	conf.SMESHING.CoinbaseAccount = "1"
+	addr, err := address.GenerateAddress(conf.Genesis.NetworkID, []byte("1"))
+	if err != nil {
+		panic("error generate coinbase address for fastnet: " + err.Error())
+	}
+	conf.SMESHING.CoinbaseAccount = addr.String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
 	conf.SMESHING.Opts.NumFiles = 1
