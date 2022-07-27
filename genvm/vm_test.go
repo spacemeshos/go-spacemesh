@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -79,7 +78,7 @@ func (t *tester) applyGenesisWithBalance(amount uint64) *tester {
 	accounts := make([]core.Account, len(t.pks))
 	for i := range accounts {
 		accounts[i] = core.Account{
-			Address: address.Address(t.addresses[i]),
+			Address: types.Address(t.addresses[i]),
 			Balance: amount,
 		}
 	}

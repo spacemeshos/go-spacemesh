@@ -34,11 +34,11 @@ const (
 )
 
 func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	dest := address.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	dest := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
 	return newTxWthRecipient(t, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(t *testing.T, dest address.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
 		sdk.WithGasPrice(fee),
@@ -426,7 +426,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	}
 	got := tcs.SelectProposalTXs(1)
 	// the odds of picking just one principal is 2^30
-	chosen := make(map[address.Address][]*types.Transaction)
+	chosen := make(map[types.Address][]*types.Transaction)
 	for _, tid := range got {
 		tx := allTXs[tid]
 		chosen[tx.Principal] = append(chosen[tx.Principal], tx)

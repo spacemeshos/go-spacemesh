@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 )
 
 // NewTransactionResultGenerator with some random parameters.
@@ -24,7 +23,7 @@ type TransactionResultGenerator struct {
 	rng *rand.Rand
 
 	Blocks []types.BlockID
-	Addrs  []address.Address
+	Addrs  []types.Address
 	Layers []types.LayerID
 }
 
@@ -47,7 +46,7 @@ func (g *TransactionResultGenerator) WithBlocks(n int) *TransactionResultGenerat
 func (g *TransactionResultGenerator) WithAddresses(n int) *TransactionResultGenerator {
 	g.Addrs = nil
 	for i := 1; i <= n; i++ {
-		addr := address.Address{}
+		addr := types.Address{}
 		binary.BigEndian.PutUint64(addr[:], uint64(i))
 		g.Addrs = append(g.Addrs, addr)
 	}
@@ -72,7 +71,7 @@ func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
 	tx.Block = g.Blocks[g.rng.Intn(len(g.Blocks))]
 	tx.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
 	if lth := g.rng.Intn(len(g.Addrs)); lth > 0 {
-		tx.Addresses = make([]address.Address, lth)
+		tx.Addresses = make([]types.Address, lth)
 
 		g.rng.Shuffle(len(g.Addrs), func(i, j int) {
 			g.Addrs[i], g.Addrs[j] = g.Addrs[j], g.Addrs[i]

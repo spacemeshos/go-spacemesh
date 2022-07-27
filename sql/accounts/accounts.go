@@ -4,11 +4,10 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func load(db sql.Executor, addr address.Address, query string, enc sql.Encoder) (types.Account, error) {
+func load(db sql.Executor, address types.Address, query string, enc sql.Encoder) (types.Account, error) {
 	var account types.Account
 	_, err := db.Exec(query, enc, func(stmt *sql.Statement) bool {
 		account.Balance = uint64(stmt.ColumnInt64(0))
@@ -16,7 +15,7 @@ func load(db sql.Executor, addr address.Address, query string, enc sql.Encoder) 
 		account.Nonce = uint64(stmt.ColumnInt64(2))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
 		if stmt.ColumnLen(4) > 0 {
-			account.Template = &address.Address{}
+			account.Template = &types.Address{}
 			stmt.ColumnBytes(4, account.Template[:])
 			account.State = make([]byte, stmt.ColumnLen(5))
 			stmt.ColumnBytes(5, account.State)
@@ -26,12 +25,12 @@ func load(db sql.Executor, addr address.Address, query string, enc sql.Encoder) 
 	if err != nil {
 		return types.Account{}, err
 	}
-	account.Address = addr
+	account.Address = address
 	return account, nil
 }
 
 // Has the account in the database.
-func Has(db sql.Executor, address address.Address) (bool, error) {
+func Has(db sql.Executor, address types.Address) (bool, error) {
 	rows, err := db.Exec("select 1 from accounts where address = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
@@ -44,7 +43,7 @@ func Has(db sql.Executor, address address.Address) (bool, error) {
 }
 
 // Latest latest account data for an address.
-func Latest(db sql.Executor, address address.Address) (types.Account, error) {
+func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	account, err := load(db, address, "select balance, initialized, nonce, layer_updated, template, state from accounts where address = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
 	})
@@ -55,7 +54,7 @@ func Latest(db sql.Executor, address address.Address) (types.Account, error) {
 }
 
 // Get account data that was valid at the specified layer.
-func Get(db sql.Executor, address address.Address, layer types.LayerID) (types.Account, error) {
+func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	account, err := load(db, address, "select balance, initialized, nonce, layer_updated, template, state from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
 		stmt.BindInt64(2, int64(layer.Value))
@@ -77,7 +76,7 @@ func All(db sql.Executor) ([]*types.Account, error) {
 		account.Nonce = uint64(stmt.ColumnInt64(3))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(4)))
 		if stmt.ColumnLen(5) > 0 {
-			var template address.Address
+			var template types.Address
 			stmt.ColumnBytes(5, template[:])
 			account.Template = &template
 			account.State = make([]byte, stmt.ColumnLen(6))

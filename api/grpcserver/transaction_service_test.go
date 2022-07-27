@@ -11,8 +11,6 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -134,8 +132,8 @@ func BenchmarkStreamResults(b *testing.B) {
 	require.NoError(b, err)
 	var (
 		gen      = fixture.NewTransactionResultGenerator().WithAddresses(10_000)
-		count    = map[address.Address]int{}
-		maxaddr  address.Address
+		count    = map[types.Address]int{}
+		maxaddr  types.Address
 		maxcount int
 		start    = time.Now()
 	)

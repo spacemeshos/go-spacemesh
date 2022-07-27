@@ -23,11 +23,8 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
-
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -107,14 +104,14 @@ var (
 	conStateAPI = &ConStateAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
-		balances: map[address.Address]*big.Int{
+		balances: map[types.Address]*big.Int{
 			addr1: big.NewInt(int64(accountBalance)),
 			addr2: big.NewInt(int64(accountBalance)),
 		},
-		nonces: map[address.Address]uint64{
+		nonces: map[types.Address]uint64{
 			globalTx.Principal: uint64(accountCounter),
 		},
-		poolByAddress: make(map[address.Address]types.TransactionID),
+		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
 	stateRoot = types.HexToHash32("11111")
@@ -180,7 +177,7 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(address.Address) (rewards []*types.Reward, err error) {
+func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
 	return []*types.Reward{
 		{
 			Layer:       layerFirst,
@@ -216,13 +213,13 @@ func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*
 type ConStateAPIMock struct {
 	returnTx     map[types.TransactionID]*types.Transaction
 	layerApplied map[types.TransactionID]*types.LayerID
-	balances     map[address.Address]*big.Int
-	nonces       map[address.Address]uint64
+	balances     map[types.Address]*big.Int
+	nonces       map[types.Address]uint64
 	err          error
 
 	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
-	poolByAddress map[address.Address]types.TransactionID
+	poolByAddress map[types.Address]types.TransactionID
 	poolByTxid    map[types.TransactionID]*types.Transaction
 }
 
@@ -234,7 +231,7 @@ func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
 // unconfirmed or in the mempool that will update state.
-func (t *ConStateAPIMock) GetProjection(address.Address) (uint64, uint64) {
+func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64) {
 	return accountCounter + 1, accountBalance + 1
 }
 
@@ -269,7 +266,7 @@ func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.Mes
 	return nil, errors.New("it ain't there")
 }
 
-func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, account address.Address) ([]*types.MeshTransaction, error) {
+func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, account types.Address) ([]*types.MeshTransaction, error) {
 	if from.After(txReturnLayer) {
 		return nil, nil
 	}
@@ -297,15 +294,15 @@ func (t *ConStateAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	return stateRoot, nil
 }
 
-func (t *ConStateAPIMock) GetBalance(addr address.Address) (uint64, error) {
+func (t *ConStateAPIMock) GetBalance(addr types.Address) (uint64, error) {
 	return t.balances[addr].Uint64(), nil
 }
 
-func (t *ConStateAPIMock) GetNonce(addr address.Address) (types.Nonce, error) {
+func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
 	return types.Nonce{Counter: t.nonces[addr]}, nil
 }
 
-func NewTx(nonce uint64, recipient address.Address, signer *signing.EdSigner) *types.Transaction {
+func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
 	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
 	if nonce == 0 {
@@ -337,7 +334,7 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 	return challenge
 }
 
-func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase address.Address) *types.ActivationTx {
+func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: &types.ActivationTxHeader{
@@ -412,7 +409,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(address.Address, activation.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
 	return nil
 }
 
@@ -424,11 +421,11 @@ func (*SmeshingAPIMock) SmesherID() types.NodeID {
 	return nodeID
 }
 
-func (*SmeshingAPIMock) Coinbase() address.Address {
+func (*SmeshingAPIMock) Coinbase() types.Address {
 	return addr1
 }
 
-func (*SmeshingAPIMock) SetCoinbase(coinbase address.Address) {
+func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
 }
 
 func (*SmeshingAPIMock) MinGas() uint64 {

@@ -12,7 +12,6 @@ import (
 	"github.com/seehuhn/mt19937"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
@@ -26,7 +25,7 @@ var (
 
 type blockMetadata struct {
 	candidates     []*txtypes.NanoTX
-	byAddrAndNonce map[address.Address][]*txtypes.NanoTX
+	byAddrAndNonce map[types.Address][]*txtypes.NanoTX
 	byTid          map[types.TransactionID]*txtypes.NanoTX
 }
 
@@ -148,7 +147,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 			}
 		}
 	} else {
-		minNonceByAddr := make(map[address.Address]uint64)
+		minNonceByAddr := make(map[types.Address]uint64)
 		for _, mtx := range pmd.mtxs {
 			mtx.LayerID = mempoolLayer // for dbLessCache.GetMempool
 			principal := mtx.Principal
@@ -158,7 +157,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 				minNonceByAddr[principal] = mtx.Nonce.Counter
 			}
 		}
-		stateF = func(addr address.Address) (uint64, uint64) {
+		stateF = func(addr types.Address) (uint64, uint64) {
 			if _, ok := minNonceByAddr[addr]; !ok {
 				logger.With().Fatal("principal not found", addr)
 			}
@@ -171,7 +170,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		logger:    logger,
 		tp:        &nopTP{},
 		stateF:    stateF,
-		pending:   make(map[address.Address]*accountCache),
+		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
 	}
 	if err := dbLessCache.BuildFromTXs(candidates, blockSeed); err != nil {
@@ -211,7 +210,7 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, bloc
 	return prune(logger, ordered, bmd.byTid, gasLimit), nil
 }
 
-func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*txtypes.NanoTX, byAddrAndNonce map[address.Address][]*txtypes.NanoTX) []types.TransactionID {
+func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*txtypes.NanoTX, byAddrAndNonce map[types.Address][]*txtypes.NanoTX) []types.TransactionID {
 	if len(predictedBlock) <= numTXs {
 		result := make([]types.TransactionID, 0, len(predictedBlock))
 		for _, ntx := range predictedBlock {
@@ -232,7 +231,7 @@ func shuffleWithNonceOrder(
 	rng *rand.Rand,
 	numTXs int,
 	ntxs []*txtypes.NanoTX,
-	byAddrAndNonce map[address.Address][]*txtypes.NanoTX,
+	byAddrAndNonce map[types.Address][]*txtypes.NanoTX,
 ) []types.TransactionID {
 	rng.Shuffle(len(ntxs), func(i, j int) { ntxs[i], ntxs[j] = ntxs[j], ntxs[i] })
 	total := util.Min(len(ntxs), numTXs)

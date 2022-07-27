@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -130,7 +129,7 @@ type Reward struct {
 	Layer       LayerID
 	TotalReward uint64
 	LayerReward uint64
-	Coinbase    address.Address
+	Coinbase    Address
 }
 
 // NewRawTx computes id from raw bytes and returns the object.

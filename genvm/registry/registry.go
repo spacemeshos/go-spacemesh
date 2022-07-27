@@ -3,13 +3,13 @@ package registry
 import (
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
 // New creates Registry instance.
 func New() *Registry {
-	return &Registry{templates: map[address.Address]core.Handler{}}
+	return &Registry{templates: map[types.Address]core.Handler{}}
 }
 
 // Registry stores mapping from address to template handler.

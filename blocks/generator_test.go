@@ -53,7 +53,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	return tg
 }
 
-func genTx(t testing.TB, signer *signing.EdSigner, dest address.Address, amount, nonce, price uint64) types.Transaction {
+func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},

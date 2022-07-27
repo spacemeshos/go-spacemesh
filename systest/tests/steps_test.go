@@ -10,14 +10,13 @@ import (
 	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -119,16 +118,19 @@ func TestStepTransactions(t *testing.T) {
 				"count", n,
 			)
 			for i := 0; i < n; i++ {
-				receiver := address.Address{}
+				receiver := types.Address{}
 				rng.Read(receiver[:])
-				_, err := client.submit(tctx, wallet.Spend(
+				raw := wallet.Spend(
 					client.account.PrivateKey,
-					address.Address(receiver),
+					types.Address(receiver),
 					rng.Uint64()%amountLimit,
 					types.Nonce{Counter: nonce},
-				))
+				)
+				_, err := client.submit(tctx, raw)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to submit 0x%x from %s with nonce %d: %w",
+						hash.Sum(raw), client.account, nonce, err,
+					)
 				}
 				nonce++
 			}

@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -48,7 +47,7 @@ type RatNum struct {
 
 // AnyReward contains the rewards inforamtion.
 type AnyReward struct {
-	Coinbase address.Address
+	Coinbase Address
 	Weight   RatNum
 }
 

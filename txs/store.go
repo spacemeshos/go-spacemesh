@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -52,12 +51,12 @@ func (s *store) Get(tid types.TransactionID) (*types.MeshTransaction, error) {
 }
 
 // GetByAddress returns a list of transactions from `address` with layers in [from, to].
-func (s *store) GetByAddress(from, to types.LayerID, address address.Address) ([]*types.MeshTransaction, error) {
+func (s *store) GetByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	return transactions.GetByAddress(s.db, from, to, address)
 }
 
 // DiscardNonceBelow discards pending transactions with nonce lower than `nonce`.
-func (s *store) DiscardNonceBelow(addr address.Address, nonce uint64) error {
+func (s *store) DiscardNonceBelow(addr types.Address, nonce uint64) error {
 	return transactions.DiscardNonceBelow(s.db, addr, nonce)
 }
 
@@ -72,7 +71,7 @@ func (s *store) GetAllPending() ([]*types.MeshTransaction, error) {
 }
 
 // GetAcctPendingFromNonce gets all pending transactions with nonce <= `from` for an account.
-func (s *store) GetAcctPendingFromNonce(addr address.Address, from uint64) ([]*types.MeshTransaction, error) {
+func (s *store) GetAcctPendingFromNonce(addr types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return transactions.GetAcctPendingFromNonce(s.db, addr, from)
 }
 

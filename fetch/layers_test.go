@@ -612,7 +612,7 @@ func TestGetProposals(t *testing.T) {
 	}
 }
 
-func genTx(t *testing.T, signer *signing.EdSigner, dest address.Address, amount, nonce, price uint64) types.Transaction {
+func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
@@ -635,7 +635,7 @@ func genTransactions(t *testing.T, num int) []*types.Transaction {
 	t.Helper()
 	txs := make([]*types.Transaction, 0, num)
 	for i := 0; i < num; i++ {
-		tx := genTx(t, signing.NewEdSigner(), address.Address{1}, 1, 1, 1)
+		tx := genTx(t, signing.NewEdSigner(), types.Address{1}, 1, 1, 1)
 		txs = append(txs, &tx)
 	}
 	return txs
@@ -739,7 +739,7 @@ func genATXs(t *testing.T, num int) []*types.ActivationTx {
 	t.Helper()
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := 0; i < num; i++ {
-		atx := types.NewActivationTx(types.NIPostChallenge{}, address.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
+		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
 		atxs = append(atxs, atx)
 	}
 	return atxs

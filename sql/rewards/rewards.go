@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -39,7 +38,7 @@ func Revert(db sql.Executor, revertTo types.LayerID) error {
 }
 
 // List rewards from all layers for the coinbase address.
-func List(db sql.Executor, coinbase address.Address) (rst []*types.Reward, err error) {
+func List(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
 	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where coinbase = ?1 order by layer;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, coinbase[:])

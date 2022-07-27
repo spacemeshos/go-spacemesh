@@ -4,7 +4,6 @@ package types
 
 import (
 	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 )
 
 func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -75,7 +74,7 @@ func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 		t.Balance = field
 	}
-	if field, n, err := scale.DecodeOption[address.Address](dec); err != nil {
+	if field, n, err := scale.DecodeOption[Address](dec); err != nil {
 		return total, err
 	} else {
 		total += n

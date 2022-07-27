@@ -7,13 +7,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // ResultsFilter applies filter on transaction results query.
 type ResultsFilter struct {
-	Address    *address.Address
+	Address    *types.Address
 	Start, End *types.LayerID
 	TID        *types.TransactionID
 }

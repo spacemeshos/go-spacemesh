@@ -17,7 +17,7 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 	t.Helper()
 	nonce := types.Nonce{Counter: 223}
 	amount := uint64(rand.Int())
-	tx := wallet.Spend(signer.PrivateKey(), address.Address{byte(address.TestnetID), 1, 2, 3}, amount, nonce)
+	tx := wallet.Spend(signer.PrivateKey(), types.Address{byte(address.TestnetID), 1, 2, 3}, amount, nonce)
 	parsed := types.Transaction{
 		RawTx:    types.NewRawTx(tx),
 		TxHeader: &types.TxHeader{},

@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/cosmos/btcutil/bech32"
+
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"

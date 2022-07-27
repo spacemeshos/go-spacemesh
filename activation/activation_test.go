@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types/address"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -270,7 +271,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	builder := newBuilder(t, cdb, atxHdlr)
 
-	coinbase := address.Address{byte(address.TestnetID), 1, 1, 1}
+	coinbase := types.Address{byte(address.TestnetID), 1, 1, 1}
 	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
@@ -293,7 +294,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(address.Address{}, PostSetupOpts{}))
+		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
@@ -876,7 +877,7 @@ func newActivationTx(
 	positioningATX types.ATXID,
 	pubLayerID types.LayerID,
 	startTick, numTicks uint64,
-	coinbase address.Address,
+	coinbase types.Address,
 	numUnints uint,
 	nipost *types.NIPost,
 ) *types.ActivationTx {

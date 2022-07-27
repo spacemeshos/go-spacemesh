@@ -4,7 +4,6 @@ import (
 	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -189,7 +188,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
-		address := address.Address{}
+		address := types.Address{}
 		_, _ = g.rng.Read(address[:])
 
 		nipost := types.NIPostChallenge{

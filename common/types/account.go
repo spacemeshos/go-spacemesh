@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -10,11 +9,11 @@ import (
 // Account represents account state at a certain layer.
 type Account struct {
 	Layer       LayerID
-	Address     address.Address
+	Address     Address
 	Initialized bool
 	Nonce       uint64
 	Balance     uint64
-	Template    *address.Address
+	Template    *Address
 	State       []byte
 }
 

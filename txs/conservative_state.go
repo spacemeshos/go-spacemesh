@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -70,7 +69,7 @@ func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeS
 	return cs
 }
 
-func (cs *ConservativeState) getState(addr address.Address) (uint64, uint64) {
+func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	nonce, err := cs.vmState.GetNonce(addr)
 	if err != nil {
 		cs.logger.With().Fatal("failed to get nonce", log.Err(err))

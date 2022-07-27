@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -95,8 +94,8 @@ func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, pr
 }
 
 func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Proposal) ([]types.AnyReward, error) {
-	weights := make(map[address.Address]util.Weight)
-	coinbases := make([]address.Address, 0, len(props))
+	weights := make(map[types.Address]util.Weight)
+	coinbases := make([]types.Address, 0, len(props))
 	for _, p := range props {
 		if p.AtxID == *types.EmptyATXID {
 			// this proposal would not have been validated

@@ -9,9 +9,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
@@ -152,7 +150,7 @@ func (mr *MockvmStateMockRecorder) GetAllAccounts() *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockvmState) GetBalance(arg0 address.Address) (uint64, error) {
+func (m *MockvmState) GetBalance(arg0 types.Address) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
 	ret0, _ := ret[0].(uint64)
@@ -197,7 +195,7 @@ func (mr *MockvmStateMockRecorder) GetLayerStateRoot(arg0 interface{}) *gomock.C
 }
 
 // GetNonce mocks base method.
-func (m *MockvmState) GetNonce(arg0 address.Address) (types.Nonce, error) {
+func (m *MockvmState) GetNonce(arg0 types.Address) (types.Nonce, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNonce", arg0)
 	ret0, _ := ret[0].(types.Nonce)
@@ -279,10 +277,10 @@ func (m *MockconStateCache) EXPECT() *MockconStateCacheMockRecorder {
 }
 
 // GetMempool mocks base method.
-func (m *MockconStateCache) GetMempool() map[address.Address][]*types0.NanoTX {
+func (m *MockconStateCache) GetMempool() map[types.Address][]*types0.NanoTX {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMempool")
-	ret0, _ := ret[0].(map[address.Address][]*types0.NanoTX)
+	ret0, _ := ret[0].(map[types.Address][]*types0.NanoTX)
 	return ret0
 }
 
@@ -386,7 +384,7 @@ func (mr *MocktxProviderMockRecorder) ApplyLayer(arg0 interface{}) *gomock.Call 
 }
 
 // DiscardNonceBelow mocks base method.
-func (m *MocktxProvider) DiscardNonceBelow(arg0 address.Address, arg1 uint64) error {
+func (m *MocktxProvider) DiscardNonceBelow(arg0 types.Address, arg1 uint64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DiscardNonceBelow", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -415,7 +413,7 @@ func (mr *MocktxProviderMockRecorder) Get(arg0 interface{}) *gomock.Call {
 }
 
 // GetAcctPendingFromNonce mocks base method.
-func (m *MocktxProvider) GetAcctPendingFromNonce(arg0 address.Address, arg1 uint64) ([]*types.MeshTransaction, error) {
+func (m *MocktxProvider) GetAcctPendingFromNonce(arg0 types.Address, arg1 uint64) ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAcctPendingFromNonce", arg0, arg1)
 	ret0, _ := ret[0].([]*types.MeshTransaction)
@@ -444,23 +442,8 @@ func (mr *MocktxProviderMockRecorder) GetAllPending() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllPending", reflect.TypeOf((*MocktxProvider)(nil).GetAllPending))
 }
 
-// GetBlob mocks base method.
-func (m *MocktxProvider) GetBlob(arg0 types.TransactionID) ([]byte, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlob", arg0)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBlob indicates an expected call of GetBlob.
-func (mr *MocktxProviderMockRecorder) GetBlob(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlob", reflect.TypeOf((*MocktxProvider)(nil).GetBlob), arg0)
-}
-
 // GetByAddress mocks base method.
-func (m *MocktxProvider) GetByAddress(arg0, arg1 types.LayerID, arg2 address.Address) ([]*types.MeshTransaction, error) {
+func (m *MocktxProvider) GetByAddress(arg0, arg1 types.LayerID, arg2 types.Address) ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetByAddress", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*types.MeshTransaction)

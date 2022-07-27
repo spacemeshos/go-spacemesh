@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -31,7 +30,7 @@ func calculateLayerReward(cfg RewardConfig) uint64 {
 func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
 	logger = logger.WithFields(lid)
 	totalWeight := util.WeightFromUint64(0)
-	byCoinbase := make(map[address.Address]util.Weight)
+	byCoinbase := make(map[types.Address]util.Weight)
 	for _, reward := range rewards {
 		weight := util.WeightFromNumDenom(reward.Weight.Num, reward.Weight.Denom)
 		logger.With().Debug("coinbase weight", reward.Coinbase, log.Stringer("weight", weight))
@@ -54,7 +53,7 @@ func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, total
 		log.Uint64("fee", totalFees))
 	rewardPer := util.WeightFromUint64(totalRewards).Div(totalWeight)
 	lyrRewardPer := util.WeightFromUint64(layerRewards).Div(totalWeight)
-	seen := make(map[address.Address]struct{})
+	seen := make(map[types.Address]struct{})
 	for _, reward := range rewards {
 		if _, ok := seen[reward.Coinbase]; ok {
 			continue

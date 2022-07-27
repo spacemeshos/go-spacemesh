@@ -66,7 +66,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 	return pb
 }
 
-func genTX(tb testing.TB, nonce uint64, recipient address.Address, signer *signing.EdSigner) *types.Transaction {
+func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
 
 	raw := wallet.Spend(signer.PrivateKey(), recipient, defaultFee,
@@ -438,7 +438,7 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	require.NotEqual(t, b1.ID(), b2.ID())
 }
 
-func generateAddress(t *testing.T, bytes []byte) address.Address {
+func generateAddress(t *testing.T, bytes []byte) types.Address {
 	addr, err := address.GenerateAddress(address.TestnetID, bytes)
 	require.NoError(t, err)
 	return addr

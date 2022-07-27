@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types/address"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
@@ -229,7 +230,7 @@ func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [address.F
 	defer cancel()
 	_, err := submitTransacition(ctx,
 		wallet.Spend(
-			signing.PrivateKey(pk), address.Address(receiver), amount,
+			signing.PrivateKey(pk), types.Address(receiver), amount,
 			types.Nonce{Counter: nonce},
 		),
 		client)

@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
@@ -58,7 +57,7 @@ func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
 }
 
 // Spend creates spend transaction.
-func Spend(pk signing.PrivateKey, to address.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) []byte {
+func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) []byte {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)

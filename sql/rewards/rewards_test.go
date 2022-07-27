@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -16,8 +15,8 @@ func TestRewards(t *testing.T) {
 
 	var part uint64 = math.MaxUint64 / 2
 	lyrReward := part / 2
-	coinbase1 := address.Address{1}
-	coinbase2 := address.Address{2}
+	coinbase1 := types.Address{1}
+	coinbase2 := types.Address{2}
 
 	lid1 := types.NewLayerID(1)
 	rewards1 := []types.Reward{
@@ -73,7 +72,7 @@ func TestRewards(t *testing.T) {
 	require.Equal(t, part, got[1].TotalReward)
 	require.Equal(t, lyrReward, got[1].LayerReward)
 
-	unknownAddr := address.Address{1, 2, 3}
+	unknownAddr := types.Address{1, 2, 3}
 	got, err = List(db, unknownAddr)
 	require.NoError(t, err)
 	require.Len(t, got, 0)
