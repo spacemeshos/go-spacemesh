@@ -308,7 +308,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice+ctx.Header.MaxSpend {
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
 			v.logger.With().Warning("innefective transaction. can't cover gas and max spend",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
