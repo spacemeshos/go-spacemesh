@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
