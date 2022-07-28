@@ -550,7 +550,6 @@ func TestWorkflow(t *testing.T) {
 						&spawnWallet{11},
 					},
 					ineffective: []int{0},
-					headers:     map[int]struct{}{0: {}},
 					expected: map[int]change{
 						11: same{},
 					},
@@ -568,7 +567,6 @@ func TestWorkflow(t *testing.T) {
 						&spendWallet{11, 12, 1},
 					},
 					ineffective: []int{3},
-					headers:     map[int]struct{}{3: {}},
 					expected: map[int]change{
 						11: spawned{template: wallet.TemplateAddress},
 						12: same{},
@@ -588,7 +586,6 @@ func TestWorkflow(t *testing.T) {
 					},
 					gasLimit:    wallet.TotalGasSpawn + wallet.TotalGasSpend,
 					ineffective: []int{2, 3},
-					headers:     map[int]struct{}{2: {}, 3: {}},
 					expected: map[int]change{
 						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
 						10: earned{amount: 100},
@@ -610,7 +607,6 @@ func TestWorkflow(t *testing.T) {
 					},
 					gasLimit:    wallet.TotalGasSpawn + wallet.TotalGasSpend,
 					ineffective: []int{1, 3},
-					headers:     map[int]struct{}{1: {}, 3: {}},
 					expected: map[int]change{
 						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
 						10: earned{amount: 100},

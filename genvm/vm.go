@@ -291,6 +291,26 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		ctx := req.ctx
 		args := req.args
 
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
+			v.logger.With().Warning("innefective transaction. can't cover gas and max spend",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			invalidTxCount.Inc()
+			continue
+		}
+		if limit < ctx.Header.MaxGas {
+			v.logger.With().Warning("innefective transaction. out of block gas",
+				log.Uint64("block gas limit", v.cfg.GasLimit),
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			invalidTxCount.Inc()
+			continue
+		}
+
 		// NOTE this part is executed only for transactions that weren't verified
 		// when accepted into mempool
 		if !tx.Verified() && !req.Verify() {
@@ -308,25 +328,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("innefective transaction. can't cover gas and max spend",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
-			invalidTxCount.Inc()
-			continue
-		}
-		if limit < ctx.Header.MaxGas {
-			v.logger.With().Warning("innefective transaction. out of block gas",
-				log.Uint64("block gas limit", v.cfg.GasLimit),
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
-			invalidTxCount.Inc()
-			continue
-		}
 		// TODO to be changed after nonces are defined
 		// https://github.com/spacemeshos/go-spacemesh/issues/3273
 		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
