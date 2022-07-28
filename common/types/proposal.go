@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -19,11 +20,23 @@ const (
 	ProposalIDSize = Hash32Length
 )
 
+//go:generate scalegen
+
 // ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
 type ProposalID Hash20
 
 // EmptyProposalID is a canonical empty ProposalID.
 var EmptyProposalID = ProposalID{}
+
+// EncodeScale implements scale codec interface.
+func (id *ProposalID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *ProposalID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
+}
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
 // Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
@@ -80,7 +93,7 @@ func (p *Proposal) Initialize() error {
 
 // Bytes returns the serialization of the InnerProposal.
 func (p *Proposal) Bytes() []byte {
-	bytes, err := codec.Encode(p.InnerProposal)
+	bytes, err := codec.Encode(&p.InnerProposal)
 	if err != nil {
 		log.Panic("failed to serialize proposal: %v", err)
 	}

@@ -783,6 +783,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		proc.instanceID,
 		log.Int("set_size", proc.s.Size()), log.Uint32("K", proc.getK()))
 	proc.report(completed)
+	numIterations.Observe(float64(proc.getK()))
 	proc.terminating = true
 }
 

@@ -188,7 +188,7 @@ func createSingleAccountTestCache(t *testing.T) (*testCache, *testAcct) {
 	}, ta
 }
 
-func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, accountTXs map[types.Address][]*types.MeshTransaction, totalPending int) {
+func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, accountTXs map[types.Address][]*types.MeshTransaction) {
 	t.Helper()
 	for principal, ta := range accounts {
 		if _, ok := accountTXs[principal]; ok {
@@ -502,7 +502,7 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &oneTooMany.Transaction, oneTooMany.Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &oneTooMany.Transaction, oneTooMany.Received, false))
 	require.True(t, tc.MoreInDB(ta.principal))
 	checkNoTX(t, tc.cache, oneTooMany.ID)
 	checkTXStateFromDB(t, tc.db, append(mtxs, oneTooMany), types.MEMPOOL)
@@ -527,7 +527,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, defaultAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &better.Transaction, better.Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &better.Transaction, better.Received, false))
 	checkTX(t, tc.cache, better)
 	checkNoTX(t, tc.cache, oldOne.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-better.Spending())
@@ -548,7 +548,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 		Transaction: *newTx(t, ta.nonce, bigAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &better.Transaction, better.Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &better.Transaction, better.Received, false))
 	checkTX(t, tc.cache, better)
 	for _, mtx := range mtxs {
 		checkNoTX(t, tc.cache, mtx.ID)
@@ -575,7 +575,7 @@ func TestCache_Account_Add_UpdateHeader(t *testing.T) {
 	require.Nil(t, got.TxHeader)
 
 	// update header and cache during execution
-	require.ErrorIs(t, tc.Add(context.TODO(), tc.db, tx, time.Now(), true, nil), errBadNonce)
+	require.ErrorIs(t, tc.Add(context.TODO(), tc.db, tx, time.Now(), true), errBadNonce)
 	got, err = transactions.Get(tc.db, tx.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got.TxHeader)
@@ -586,7 +586,7 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	buildSingleAccountCache(t, tc, ta, nil)
 
 	tx := newTx(t, ta.nonce-1, defaultAmount, defaultFee, ta.signer)
-	require.ErrorIs(t, tc.Add(context.TODO(), tc.db, tx, time.Now(), false, nil), errBadNonce)
+	require.ErrorIs(t, tc.Add(context.TODO(), tc.db, tx, time.Now(), false), errBadNonce)
 	checkNoTX(t, tc.cache, tx.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
@@ -600,7 +600,7 @@ func TestCache_Account_Add_NonceTooBig(t *testing.T) {
 
 	mtxs := genTXs(t, ta.signer, ta.nonce, ta.nonce+1)
 	// adding the larger nonce tx first
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[1].Transaction, mtxs[1].Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[1].Transaction, mtxs[1].Received, false))
 	checkNoTX(t, tc.cache, mtxs[1].ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
@@ -608,7 +608,7 @@ func TestCache_Account_Add_NonceTooBig(t *testing.T) {
 	checkTXStateFromDB(t, tc.db, mtxs[1:], types.MEMPOOL)
 
 	// now add the tx that bridge the nonce gap
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[0].Transaction, mtxs[0].Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[0].Transaction, mtxs[0].Received, false))
 	for _, mtx := range mtxs {
 		checkTX(t, tc.cache, mtx)
 	}
@@ -630,7 +630,7 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, defaultBalance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx.Transaction, mtx.Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx.Transaction, mtx.Received, false))
 	checkNoTX(t, tc.cache, mtx.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
@@ -651,7 +651,7 @@ func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &spender.Transaction, spender.Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &spender.Transaction, spender.Received, false))
 	checkNoTX(t, tc.cache, spender.ID)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
@@ -664,13 +664,13 @@ func TestCache_Account_Add_OutOfOrder(t *testing.T) {
 	mtxs := genTXs(t, ta.signer, ta.nonce, ta.nonce+2)
 
 	// txs were received via gossip in this order: mtxs[2], mtxs[0], mtxs[1]
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[2].Transaction, mtxs[2].Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[2].Transaction, mtxs[2].Received, false))
 	checkNoTX(t, tc.cache, mtxs[2].ID)
 	require.True(t, tc.MoreInDB(ta.principal))
 	checkTXStateFromDB(t, tc.db, mtxs[2:], types.MEMPOOL)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[0].Transaction, mtxs[0].Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[0].Transaction, mtxs[0].Received, false))
 	checkTX(t, tc.cache, mtxs[0])
 	checkNoTX(t, tc.cache, mtxs[2].ID)
 	require.True(t, tc.MoreInDB(ta.principal))
@@ -679,7 +679,7 @@ func TestCache_Account_Add_OutOfOrder(t *testing.T) {
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtxs[0])}}
 	checkMempool(t, tc.cache, expectedMempool)
 
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[1].Transaction, mtxs[1].Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtxs[1].Transaction, mtxs[1].Received, false))
 	checkTX(t, tc.cache, mtxs[1])
 	checkTX(t, tc.cache, mtxs[2])
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -768,7 +768,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	largeAmount := defaultBalance
 	for _, p := range pending {
 		p.MaxSpend = largeAmount
-		require.NoError(t, tc.Add(context.TODO(), tc.db, &p.Transaction, p.Received, false, nil))
+		require.NoError(t, tc.Add(context.TODO(), tc.db, &p.Transaction, p.Received, false))
 		checkNoTX(t, tc.cache, p.ID)
 	}
 	checkTXStateFromDB(t, tc.db, pending, types.MEMPOOL)
@@ -814,7 +814,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 		Received:    time.Now(),
 	}
 
-	require.NoError(t, tc.Add(context.TODO(), tc.db, &better.Transaction, better.Received, false, nil))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &better.Transaction, better.Received, false))
 	checkNoTX(t, tc.cache, better.ID)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
@@ -926,15 +926,13 @@ func TestCache_BuildFromScratch(t *testing.T) {
 		mtxs[principal] = genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+numTXs-1)
 		totalNumTXs += int(numTXs)
 	}
-	buildCache(t, tc, accounts, mtxs, totalNumTXs)
+	buildCache(t, tc, accounts, mtxs)
 }
 
 func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
-	numAccounts := 10
 	tc, accounts := createCache(t, 10)
 	// create too many nonce for each account
 	numTXsEach := maxTXsPerAcct + 1
-	totalNumTXs := numAccounts * numTXsEach
 	byAddrAndNonce := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
 		minBalance := uint64(numTXsEach) * (defaultAmount + defaultFee)
@@ -943,7 +941,7 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 		}
 		byAddrAndNonce[principal] = genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+uint64(numTXsEach)-1)
 	}
-	buildCache(t, tc, accounts, byAddrAndNonce, totalNumTXs)
+	buildCache(t, tc, accounts, byAddrAndNonce)
 	for principal := range accounts {
 		require.True(t, tc.MoreInDB(principal))
 	}
@@ -951,7 +949,7 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 
 func TestCache_Add(t *testing.T) {
 	tc, accounts := createCache(t, 1000)
-	buildCache(t, tc, accounts, nil, 0)
+	buildCache(t, tc, accounts, nil)
 
 	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
 	for principal, ta := range accounts {
@@ -968,7 +966,7 @@ func TestCache_Add(t *testing.T) {
 		newNextNonce := ta.nonce + uint64(len(mtxs))
 		newBalance := ta.balance
 		for _, mtx := range mtxs {
-			require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx.Transaction, mtx.Received, false, nil))
+			require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx.Transaction, mtx.Received, false))
 			checkTX(t, tc.cache, mtx)
 			newBalance -= mtx.Spending()
 		}
@@ -982,7 +980,6 @@ func TestCache_Add(t *testing.T) {
 func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, maxTX int) map[types.Address][]*types.MeshTransaction {
 	t.Helper()
 	mtxsByAccount := make(map[types.Address][]*types.MeshTransaction)
-	totalNumTXs := 0
 	for principal, ta := range accounts {
 		numTXs := uint64(rand.Intn(maxTX))
 		if numTXs == 0 {
@@ -993,9 +990,8 @@ func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*te
 			ta.balance = minBalance
 		}
 		mtxsByAccount[principal] = genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+numTXs-1)
-		totalNumTXs += int(numTXs)
 	}
-	buildCache(t, tc, accounts, mtxsByAccount, totalNumTXs)
+	buildCache(t, tc, accounts, mtxsByAccount)
 	for _, mtxs := range mtxsByAccount {
 		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
 	}

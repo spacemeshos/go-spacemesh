@@ -281,7 +281,7 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, ntx *txtypes.NanoTX) 
 //   reject from cache for now but will retrieve it from DB when the nonce gap is closed
 // - nonce already exists in the cache:
 //   if it is better than the best candidate in that nonce group, swap
-func (ac *accountCache) add(logger log.Log, db *sql.Database, tx *types.Transaction, received time.Time, blockSeed []byte) error {
+func (ac *accountCache) add(logger log.Log, db *sql.Database, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce.Counter < ac.startNonce {
 		logger.With().Warning("nonce too small",
 			tx.ID,
@@ -296,6 +296,7 @@ func (ac *accountCache) add(logger log.Log, db *sql.Database, tx *types.Transact
 			tx.ID,
 			log.Uint64("next_nonce", next),
 			log.Uint64("tx_nonce", tx.Nonce.Counter))
+		mempoolTxCount.WithLabelValues(nonceTooBig).Inc()
 		ac.moreInDB = true
 		return errNonceTooBig
 	}
@@ -312,13 +313,17 @@ func (ac *accountCache) add(logger log.Log, db *sql.Database, tx *types.Transact
 	}
 
 	// transaction uses the next nonce
-	if err := ac.accept(logger, ntx, ac.availBalance(), blockSeed); err != nil {
+	err := ac.accept(logger, ntx, ac.availBalance(), nil)
+	if err != nil {
 		if errors.Is(err, errTooManyNonce) {
+			mempoolTxCount.WithLabelValues(tooManyNonce).Inc()
 			ac.moreInDB = true
-			return nil
+		} else if errors.Is(err, errInsufficientBalance) {
+			mempoolTxCount.WithLabelValues(balanceTooSmall).Inc()
 		}
 		return err
 	}
+	mempoolTxCount.WithLabelValues(mempool).Inc()
 
 	// adding a new nonce can bridge the nonce gap in db
 	// check DB for txs with higher nonce
@@ -611,20 +616,17 @@ func acceptable(err error) bool {
 	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errNonceTooBig) || errors.Is(err, errTooManyNonce)
 }
 
-func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool, blockSeed []byte) error {
+func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.add(ctx, db, tx, received, mustPersist, blockSeed)
-}
-
-func (c *cache) add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool, blockSeed []byte) error {
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
 	logger := c.logger.WithContext(ctx).WithFields(principal)
-	err := c.pending[principal].add(logger, db, tx, received, blockSeed)
+	err := c.pending[principal].add(logger, db, tx, received)
 	if acceptable(err) {
 		err = nil
+		mempoolTxCount.WithLabelValues(accepted).Inc()
 	}
 	if err == nil || mustPersist {
 		if dbErr := transactions.Add(db, tx, received); dbErr != nil {
@@ -713,6 +715,7 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 			continue
 		}
 		if !c.has(tx.ID) {
+			rawTxCount.WithLabelValues(updated).Inc()
 			if err := transactions.Add(db, &tx, time.Now()); err != nil {
 				return nil, []error{err}
 			}
@@ -725,6 +728,7 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
 	for _, rst := range results {
 		if !c.has(rst.ID) {
+			rawTxCount.WithLabelValues(updated).Inc()
 			if err := transactions.Add(db, &rst.Transaction, time.Now()); err != nil {
 				return nil, []error{err}
 			}
@@ -752,14 +756,18 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 			principal,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
+		t0 := time.Now()
 		if err := c.pending[principal].applyLayer(logger, db, nextNonce, balance, appliedByNonce); err != nil {
 			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
 			warns = append(warns, err)
 		}
+		acctApplyDuration.Observe(float64(time.Since(t0)))
+		t1 := time.Now()
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
 			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
 			errs = append(errs, err)
 		}
+		acctRestDuration.Observe(float64(time.Since(t1)))
 	}
 	for principal := range skippedByPrincipal {
 		if _, ok := byPrincipal[principal]; ok {
@@ -769,10 +777,12 @@ func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.Laye
 			continue
 		}
 		nextNonce, balance := c.stateF(principal)
+		t2 := time.Now()
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
 			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
 			errs = append(errs, err)
 		}
+		acctRestDuration.Observe(float64(time.Since(t2)))
 	}
 	return warns, errs
 }
@@ -807,6 +817,7 @@ func (c *cache) GetMempool(logger log.Log) map[types.Address][]*txtypes.NanoTX {
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*txtypes.NanoTX)
+	logger.With().Info("cache has pending accounts", log.Int("num_acct", len(c.pending)))
 	for addr, accCache := range c.pending {
 		txs := accCache.getMempool(logger.WithFields(addr))
 		if len(txs) > 0 {

@@ -135,7 +135,7 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transaction) error {
 	received := time.Now()
-	if err := cs.cache.Add(ctx, cs.db, tx, received, false, nil); err != nil {
+	if err := cs.cache.Add(ctx, cs.db, tx, received, false); err != nil {
 		return err
 	}
 	events.ReportNewTx(types.LayerID{}, tx)
@@ -258,6 +258,7 @@ func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]type
 			continue
 		}
 		if mtx.TxHeader == nil {
+			rawTxCount.WithLabelValues(rawFromDB).Inc()
 			txs = append(txs, mtx.RawTx)
 		} else {
 			txs = append(txs, types.VerifiedTx(mtx.RawTx))

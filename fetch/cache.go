@@ -3,12 +3,11 @@ package fetch
 import (
 	"math/rand"
 	"sync"
-	"sync/atomic"
 
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/fetch/metrics"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -18,8 +17,6 @@ type HashPeersCache struct {
 	*lru.Cache
 	// mu protects cache update for the same key.
 	mu sync.Mutex
-	// stats holds cache hits/misses stats.
-	stats cacheStats
 }
 
 // HashPeers holds registered peers for a hash.
@@ -44,13 +41,13 @@ func (hpc *HashPeersCache) get(hash types.Hash32) (HashPeers, bool) {
 }
 
 // getWithStats is the same as get but also updates cache stats (still non-thread-safe).
-func (hpc *HashPeersCache) getWithStats(hash types.Hash32) (HashPeers, bool) {
+func (hpc *HashPeersCache) getWithStats(hash types.Hash32, hint datastore.Hint) (HashPeers, bool) {
 	hashPeers, found := hpc.get(hash)
 	if !found {
-		hpc.miss()
+		logCacheMiss(hint)
 		return nil, false
 	}
-	hpc.hit()
+	logCacheHit(hint)
 	return hashPeers, true
 }
 
@@ -75,11 +72,11 @@ func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
 }
 
 // GetRandom returns a random peer for a given hash.
-func (hpc *HashPeersCache) GetRandom(hash types.Hash32, rng *rand.Rand) (p2p.Peer, bool) {
+func (hpc *HashPeersCache) GetRandom(hash types.Hash32, hint datastore.Hint, rng *rand.Rand) (p2p.Peer, bool) {
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
-	hashPeersMap, exists := hpc.getWithStats(hash)
+	hashPeersMap, exists := hpc.getWithStats(hash, hint)
 	if !exists {
 		return p2p.NoPeer, false
 	}
@@ -113,7 +110,7 @@ func (hpc *HashPeersCache) AddPeersFromHash(fromHash types.Hash32, toHashes []ty
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
-	peers, exists := hpc.getWithStats(fromHash)
+	peers, exists := hpc.get(fromHash)
 	if !exists {
 		return
 	}
@@ -123,22 +120,4 @@ func (hpc *HashPeersCache) AddPeersFromHash(fromHash types.Hash32, toHashes []ty
 		}
 	}
 	return
-}
-
-// cacheStats stores hash-to-peers cache hits & misses.
-type cacheStats struct {
-	hits   uint64
-	misses uint64
-}
-
-func (hpc *HashPeersCache) hit() {
-	atomic.AddUint64(&hpc.stats.hits, 1)
-	metrics.LogHit()
-	metrics.LogHitRate(atomic.LoadUint64(&hpc.stats.hits), atomic.LoadUint64(&hpc.stats.misses))
-}
-
-func (hpc *HashPeersCache) miss() {
-	atomic.AddUint64(&hpc.stats.misses, 1)
-	metrics.LogMiss()
-	metrics.LogHitRate(atomic.LoadUint64(&hpc.stats.hits), atomic.LoadUint64(&hpc.stats.misses))
 }

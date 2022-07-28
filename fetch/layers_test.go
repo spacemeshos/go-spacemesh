@@ -165,9 +165,8 @@ func TestPollLayerContent(t *testing.T) {
 			zeroBlock: true,
 		},
 		{
-			name:       "ballots error fails layer fetch",
+			name:       "ballots failure ignored",
 			ballotFail: true,
-			err:        errLayerDataNotFetched,
 		},
 		{
 			name:       "blocks failure ignored",
@@ -205,6 +204,7 @@ func TestPollLayerContent(t *testing.T) {
 						}
 						return map[types.Hash32]chan ftypes.HashDataPromiseResult{types.RandomHash(): ch}
 					}).Times(numPeers)
+				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).Return(nil).Times(numPeers)
 			} else if tc.blocksFail {
 				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).Return(nil).Times(numPeers)
 				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).DoAndReturn(
