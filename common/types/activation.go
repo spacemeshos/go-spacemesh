@@ -85,12 +85,12 @@ func (t ATXID) Compare(other ATXID) bool {
 }
 
 // EncodeScale implements scale codec interface.
-func (t ATXID) EncodeScale(e *scale.Encoder) (int, error) {
+func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, t[:])
 }
 
 // DecodeScale implements scale codec interface.
-func (t ATXID) DecodeScale(d *scale.Decoder) (int, error) {
+func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, t[:])
 }
 
