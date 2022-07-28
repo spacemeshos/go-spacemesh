@@ -15,7 +15,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
@@ -224,7 +223,7 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	return err
 }
 
-func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [address.AddressLength]byte, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [types.AddressLength]byte, amount uint64, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransacition(ctx,

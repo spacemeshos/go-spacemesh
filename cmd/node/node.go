@@ -31,7 +31,6 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -598,11 +597,12 @@ func (app *App) initServices(ctx context.Context,
 
 	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
-	coinbaseAddr, err := address.NewAddress(app.Config.SMESHING.CoinbaseAccount)
-	if err != nil {
-		app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
-	}
+	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
+		coinbaseAddr, err = types.FromString(app.Config.SMESHING.CoinbaseAccount)
+		if err != nil {
+			app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+		}
 		if coinbaseAddr.Big().Uint64() == 0 {
 			app.log.Panic("invalid coinbase account")
 		}
@@ -728,7 +728,7 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.Config.SMESHING.Start {
-		coinbaseAddr, err := address.NewAddress(app.Config.SMESHING.CoinbaseAccount)
+		coinbaseAddr, err := types.FromString(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 		}

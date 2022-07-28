@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -148,7 +147,7 @@ func createState(t *testing.T, numAccounts int) map[types.Address]*testAcct {
 	accounts := make(map[types.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
 		signer := signing.NewEdSigner()
-		principal := address.GenerateAddress(signer.PublicKey().Bytes())
+		principal := types.GenerateAddress(signer.PublicKey().Bytes())
 		bal := uint64(rand.Int63n(100_000_000))
 		if bal < minBalance {
 			bal = minBalance
@@ -176,7 +175,7 @@ func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*
 func createSingleAccountTestCache(t *testing.T) (*testCache, *testAcct) {
 	t.Helper()
 	signer := signing.NewEdSigner()
-	principal := address.GenerateAddress(signer.PublicKey().Bytes())
+	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	ta := &testAcct{signer: signer, principal: principal, nonce: uint64(rand.Int63n(1000)), balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
 	db := sql.InMemory()

@@ -37,7 +37,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -1180,7 +1179,7 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{
-									Address: make([]byte, address.AddressLength),
+									Address: make([]byte, types.AddressLength),
 								},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
@@ -1226,7 +1225,7 @@ func TestMeshService(t *testing.T) {
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{
-									Address: make([]byte, address.AddressLength),
+									Address: make([]byte, types.AddressLength),
 								},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},

@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -32,7 +31,7 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 		TxHeader: &types.TxHeader{},
 	}
 	// this is a fake principal for the purposes of testing.
-	addr := address.GenerateAddress(principal.PublicKey().Bytes())
+	addr := types.GenerateAddress(principal.PublicKey().Bytes())
 	copy(parsed.Principal[:], addr.Bytes())
 	parsed.Nonce = types.Nonce{Counter: nonce}
 	parsed.GasPrice = fee
@@ -376,7 +375,7 @@ func TestDiscardNonceBelow(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	principal := address.GenerateAddress(signer.PublicKey().Bytes())
+	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	numTXs := 10
 	received := time.Now()
 	txs := make([]*types.Transaction, 0, numTXs*2)
@@ -448,7 +447,7 @@ func TestDiscardByAcctNonce(t *testing.T) {
 		txs = append(txs, tx)
 	}
 
-	principal := address.GenerateAddress(signer.PublicKey().Bytes())
+	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	applied := txs[0].ID
 	lid := types.NewLayerID(99)
 	require.NoError(t, DiscardByAcctNonce(db, applied, lid, principal, nonce))
@@ -604,7 +603,7 @@ func TestGetByAddress(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	signer1 := signing.NewEdSignerFromRand(rng)
 	signer2 := signing.NewEdSignerFromRand(rng)
-	signer2Address := address.GenerateAddress(signer2.PublicKey().Bytes())
+	signer2Address := types.GenerateAddress(signer2.PublicKey().Bytes())
 	lid := types.NewLayerID(10)
 	pid := types.ProposalID{1, 1}
 	bid := types.BlockID{2, 2}
@@ -709,7 +708,7 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 		require.NoError(t, Add(db, tx, received))
 	}
 
-	principal := address.GenerateAddress(signer.PublicKey().Bytes())
+	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	for i := 0; i < numTXs; i++ {
 		got, err := GetAcctPendingFromNonce(db, principal, nonce+uint64(i))
 		require.NoError(t, err)

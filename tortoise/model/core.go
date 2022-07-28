@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -136,7 +135,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			EndTick:    2,
 			PubLayerID: ev.LayerID,
 		}
-		addr := address.GenerateAddress(c.signer.PublicKey().Bytes())
+		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
 
 		c.refBallot = nil

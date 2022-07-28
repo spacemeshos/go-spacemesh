@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -180,10 +178,9 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
 
 	// Gather transaction data
-	addr, err := address.BytesToAddress(in.Filter.AccountId.Address) // todo 3315 replace to string
+	addr, err := types.BytesToAddress(in.Filter.AccountId.Address)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to parse Filter.AccountId address: %v", err))
-		return nil, status.Errorf(codes.InvalidArgument, "`Filter.AccountId.Address` is not a valid address")
+		return nil, fmt.Errorf("failed to parse Filter.AccountId.Address: %w", err)
 	}
 	res := &pb.AccountMeshDataQueryResponse{}
 	if filterTx {
@@ -443,9 +440,9 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	if in.Filter.AccountMeshDataFlags == uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
 	}
-	addr, err := address.BytesToAddress(in.Filter.AccountId.Address) // todo 3315 replace to string
+	addr, err := types.BytesToAddress(in.Filter.AccountId.Address)
 	if err != nil {
-		return errors.Wrap(err, "invalid filter account address")
+		return fmt.Errorf("invalid in.Filter.AccountId.Address: %w", err)
 	}
 
 	// Read the filter flags

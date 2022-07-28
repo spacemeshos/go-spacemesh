@@ -13,7 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -71,10 +71,9 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		Throttle:          in.Opts.Throttle,
 	}
 
-	coinbaseAddr, err := address.BytesToAddress(in.Coinbase.Address) // todo 3315 replace to string
+	coinbaseAddr, err := types.BytesToAddress(in.Coinbase.Address)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to parse coinbase address: %v", err))
-		return nil, status.Error(codes.InvalidArgument, "`Coinbase` is not a valid address")
+		return nil, fmt.Errorf("failed to parse in.Coinbase.Address: %w", err)
 	}
 	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
@@ -134,10 +133,9 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
 	}
 
-	addr, err := address.BytesToAddress(in.Id.Address) // todo 3315 replace to string
+	addr, err := types.BytesToAddress(in.Id.Address)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to parse in.Id.Address address: %v", err))
-		return nil, status.Error(codes.InvalidArgument, "`Id` is not a valid address")
+		return nil, fmt.Errorf("failed to parse in.Id.Address: %w", err)
 	}
 	s.smeshingProvider.SetCoinbase(addr)
 

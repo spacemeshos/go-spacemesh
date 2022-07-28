@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -61,7 +60,7 @@ func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.N
 			LayerIndex: layerID,
 			Rewards: []types.AnyReward{
 				{
-					Coinbase: address.GenerateAddress(nodeID[:]),
+					Coinbase: types.GenerateAddress(nodeID[:]),
 					Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 				},
 			},

@@ -1,9 +1,11 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -16,9 +18,22 @@ type GenesisConfig struct {
 func (g *GenesisConfig) ToAccounts() []types.Account {
 	var rst []types.Account
 	for addr, balance := range g.Accounts {
-		addrBytes := util.FromHex(addr)
+		var (
+			err         error
+			genesisAddr types.Address
+		)
+		// this condition need in case address in config with specific hrp prefix, like stest1abc...
+		// in code we have constants which contain only bytes, without hrp prefix.
+		if strings.HasPrefix(addr, "0x") {
+			genesisAddr, err = types.BytesToAddress(util.FromHex(addr))
+		} else {
+			genesisAddr, err = types.FromString(addr)
+		}
+		if err != nil {
+			log.Panic("could not create address from genesis config `%s`: %s", addr, err.Error())
+		}
 		rst = append(rst, types.Account{
-			Address: address.GenerateAddress(addrBytes),
+			Address: genesisAddr,
 			Balance: balance,
 		})
 	}
@@ -69,8 +84,8 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
 	g.Accounts = map[string]uint64{
-		address.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
-		address.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		types.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		types.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
 	}
 
 	return &g

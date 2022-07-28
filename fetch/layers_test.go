@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
@@ -625,7 +624,7 @@ func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = address.GenerateAddress(signer.PublicKey().Bytes())
+	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
 

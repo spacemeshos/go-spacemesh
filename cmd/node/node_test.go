@@ -5,6 +5,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -38,7 +39,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -689,11 +689,10 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
-	cfg.SMESHING.CoinbaseAccount = address.ByteToAddress(byte(1)).String()
 	app.Config = &cfg
 
 	signer := signing.NewEdSigner()
-	addrWallet := wallet.Address(signer.PublicKey().Bytes())
+	address := wallet.Address(signer.PublicKey().Bytes())
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
@@ -720,7 +719,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
 		app.Config.Genesis = &apiConfig.GenesisConfig{
 			Accounts: map[string]uint64{
-				addrWallet.String(): 100_000_000,
+				address.String(): 100_000_000,
 			},
 		}
 
@@ -781,7 +780,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		inTx := res.Transaction
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
-		require.Equal(t, addrWallet.Bytes(), inTx.Principal)
+		require.Equal(t, address.Bytes(), inTx.Principal)
 		// Let the test end
 		once.Do(oncebody)
 
@@ -1022,7 +1021,9 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config = &cfg
 	smApp.Config.GenesisTime = genesisTime
 
-	smApp.Config.SMESHING.CoinbaseAccount = address.ByteToAddress(byte(i + 1)).String()
+	coinbaseAddressBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
+	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
 
 	smApp.host = host
