@@ -799,6 +799,10 @@ func TestConsistentHandling(t *testing.T) {
 			req.EXPECT().Verify().Times(1).Return(true)
 			instances[0].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(req)
 
+			failed := smocks.NewMockValidationRequest(gomock.NewController(t))
+			failed.EXPECT().Parse().Times(1).Return(nil, errors.New("test"))
+			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
+
 			require.Equal(t, pubsub.ValidationAccept, instances[0].handler().HandleGossipTransaction(context.TODO(), "", txs[i].Raw))
 			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.TODO(), txs[i].Raw))
 		}
