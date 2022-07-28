@@ -135,7 +135,7 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transaction) error {
 	received := time.Now()
-	if err := cs.cache.Add(ctx, cs.db, tx, received, false, nil); err != nil {
+	if err := cs.cache.Add(ctx, cs.db, tx, received, false); err != nil {
 		return err
 	}
 	events.ReportNewTx(types.LayerID{}, tx)
@@ -178,9 +178,11 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, toApply *types.Bloc
 	logger.With().Info("applying layer to cache",
 		log.Int("num_txs_failed", len(skipped)),
 		log.Int("num_txs_final", len(rsts)))
+	t0 := time.Now()
 	if _, errs := cs.cache.ApplyLayer(cs.db, toApply.LayerIndex, toApply.ID(), rsts, skipped); len(errs) > 0 {
 		return nil, errs[0]
 	}
+	cacheApplyDuration.Observe(float64(time.Since(t0)))
 	return skipped, nil
 }
 
@@ -197,6 +199,7 @@ func (cs *ConservativeState) getTXsToApply(ctx context.Context, logger log.Log, 
 		}
 		// txs without header were saved by syncing a block without validation
 		if mtx.TxHeader == nil {
+			rawTxCount.WithLabelValues(rawFromDB).Inc()
 			logger.With().Debug("verifying synced transaction",
 				toApply.ID(),
 				mtx.ID,
@@ -204,18 +207,21 @@ func (cs *ConservativeState) getTXsToApply(ctx context.Context, logger log.Log, 
 			req := cs.vmState.Validation(mtx.RawTx)
 			header, err := req.Parse()
 			if err != nil {
+				rawTxCount.WithLabelValues(cantParse).Inc()
 				return nil, fmt.Errorf("parsing %s: %w", mtx.ID, err)
 			}
 			if !req.Verify() {
+				rawTxCount.WithLabelValues(cantVerify).Inc()
 				return nil, fmt.Errorf("applying block %s with invalid tx %s", toApply.ID(), mtx.ID)
 			}
 			mtx.TxHeader = header
 			// restore cache consistency (e.g nonce/balance) so that gossiped
 			// transactions can be added successfully
 			// TODO(dshulyak) this should overwrite cache state without possibility of the validation failure
-			if err = cs.cache.Add(ctx, cs.db, &mtx.Transaction, mtx.Received, true, nil); err != nil {
+			if err = cs.cache.Add(ctx, cs.db, &mtx.Transaction, mtx.Received, true); err != nil {
 				return nil, err
 			}
+			rawTxCount.WithLabelValues(updated).Inc()
 		}
 		raw = append(raw, mtx.RawTx)
 	}
