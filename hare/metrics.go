@@ -10,7 +10,7 @@ const (
 	namespace = "hare"
 
 	// labels for hare consensus output.
-	success = "success"
+	success = "ok"
 	failure = "fail"
 
 	// labels for block generation.
@@ -42,6 +42,8 @@ var (
 		"number of hare consensus",
 		[]string{"outcome"},
 	)
+	consensusOkCnt   = consensusCount.WithLabelValues(success)
+	consensusFailCnt = consensusCount.WithLabelValues(failure)
 
 	blockGenCount = metrics.NewCounter(
 		"block",
@@ -49,6 +51,11 @@ var (
 		"number of block generation",
 		[]string{"outcome"},
 	)
+	blockOkCnt     = blockGenCount.WithLabelValues(genBlock)
+	emptyOutputCnt = blockGenCount.WithLabelValues(empty)
+	failFetchCnt   = blockGenCount.WithLabelValues(failFetch)
+	failGenCnt     = blockGenCount.WithLabelValues(failGen)
+	failErrCnt     = blockGenCount.WithLabelValues(internalErr)
 
 	numIterations = metrics.NewHistogramWithBuckets(
 		"num_iterations",

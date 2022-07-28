@@ -229,7 +229,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	var pids []types.ProposalID
 	if output.Completed() {
-		consensusCount.WithLabelValues(success).Inc()
+		consensusOkCnt.Inc()
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
 		set := output.Set()
 		postNumProposals.Add(float64(set.len()))
@@ -238,7 +238,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 			pids = append(pids, v)
 		}
 	} else {
-		consensusCount.WithLabelValues(failure).Inc()
+		consensusFailCnt.Inc()
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
 
@@ -246,30 +246,30 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if len(pids) > 0 {
 		// fetch proposals from peers if not locally available
 		if err := h.fetcher.GetProposals(ctx, pids); err != nil {
-			blockGenCount.WithLabelValues(failFetch).Inc()
+			failFetchCnt.Inc()
 			h.WithContext(ctx).With().Warning("failed to fetch proposals", log.Err(err))
 			return fmt.Errorf("hare fetch proposals: %w", err)
 		}
 		// now all proposals should be in local DB
 		props, err := h.getProposals(pids)
 		if err != nil {
-			blockGenCount.WithLabelValues(internalErr).Inc()
+			failErrCnt.Inc()
 			h.WithContext(ctx).With().Warning("failed to get proposals locally", log.Err(err))
 			return fmt.Errorf("hare get proposals: %w", err)
 		}
 
 		if block, err := h.blockGen.GenerateBlock(ctx, layerID, props); err != nil {
-			blockGenCount.WithLabelValues(failGen).Inc()
+			failGenCnt.Inc()
 			return fmt.Errorf("hare gen block: %w", err)
 		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
-			blockGenCount.WithLabelValues(internalErr).Inc()
+			failErrCnt.Inc()
 			return fmt.Errorf("hare save block: %w", err)
 		} else {
-			blockGenCount.WithLabelValues(genBlock).Inc()
+			blockOkCnt.Inc()
 			hareOutput = block.ID()
 		}
 	} else {
-		blockGenCount.WithLabelValues(empty).Inc()
+		emptyOutputCnt.Inc()
 	}
 	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
 		h.WithContext(ctx).With().Warning("mesh failed to process layer", layerID, log.Err(err))
