@@ -19,13 +19,17 @@ import (
 
 func Test_HandleBlock(t *testing.T) {
 	for _, tc := range []struct {
-		desc           string
-		has            bool
-		hasErr, addErr error
-		failed         bool
+		desc                     string
+		has                      bool
+		hasErr, parseErr, addErr error
+		failed                   bool
 	}{
 		{
 			desc: "Success",
+		},
+		{
+			desc:     "Success raw",
+			parseErr: errors.New("test"),
 		},
 		{
 			desc: "Dup",
@@ -50,11 +54,17 @@ func Test_HandleBlock(t *testing.T) {
 
 			signer := signing.NewEdSigner()
 			tx := newTx(t, 3, 10, 1, signer)
-
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
-				cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).
-					Times(1).Return(tc.addErr)
+				req := smocks.NewMockValidationRequest(ctrl)
+				req.EXPECT().Parse().Times(1).Return(tx.TxHeader, tc.parseErr)
+				cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+				if tc.parseErr == nil {
+					req.EXPECT().Verify().Times(1).Return(true)
+					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx, TxHeader: tx.TxHeader}).Return(tc.addErr)
+				} else {
+					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
+				}
 			}
 			err := th.HandleBlockTransaction(context.TODO(), tx.Raw)
 			if tc.failed {
@@ -188,9 +198,9 @@ func Test_HandleProposal(t *testing.T) {
 			fail:   true,
 		},
 		{
-			desc:   "ParseFailed",
-			addErr: errors.New("test"),
-			fail:   true,
+			desc:     "ParseFailed",
+			parseErr: errors.New("test"),
+			fail:     true,
 		},
 		{
 			desc: "VerifyFalse",
