@@ -254,6 +254,9 @@ func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]type
 		if err != nil {
 			return nil, err
 		}
+		if mtx.State == types.APPLIED {
+			continue
+		}
 		if mtx.TxHeader == nil {
 			txs = append(txs, mtx.RawTx)
 		} else {
