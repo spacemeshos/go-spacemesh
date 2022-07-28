@@ -66,9 +66,7 @@ func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	var err error
-	tx.Principal, err = address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	tx.Principal = address.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
 
@@ -76,8 +74,7 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 	t.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
-		addr, err := address.GenerateAddress(address.TestnetID, []byte("1"))
-		require.NoError(t, err)
+		addr := address.GenerateAddress([]byte("1"))
 		tx := genTx(t, signing.NewEdSigner(), addr, 1, 10, 100)
 		txIDs = append(txIDs, tx.ID)
 	}
@@ -91,8 +88,7 @@ func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATX
 	for i := 0; i < numATXs; i++ {
 		signer := signing.NewEdSigner()
 		signers = append(signers, signer)
-		addr, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-		require.NoError(t, err)
+		addr := address.GenerateAddress(signer.PublicKey().Bytes())
 		nipostChallenge := types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			StartTick:  1,
@@ -315,16 +311,13 @@ func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, block.Rewards, len(proposals))
 	sort.Slice(proposals, func(i, j int) bool {
-		cbi, err := address.GenerateAddress(address.TestnetID, proposals[i].SmesherID().Bytes())
-		require.NoError(t, err)
-		cbj, err := address.GenerateAddress(address.TestnetID, proposals[j].SmesherID().Bytes())
-		require.NoError(t, err)
+		cbi := address.GenerateAddress(proposals[i].SmesherID().Bytes())
+		cbj := address.GenerateAddress(proposals[j].SmesherID().Bytes())
 		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
 	})
 	totalWeight := util.WeightFromUint64(0)
 	for i, r := range block.Rewards {
-		addrBytes, err := address.GenerateAddress(address.TestnetID, proposals[i].SmesherID().Bytes())
-		require.NoError(t, err)
+		addrBytes := address.GenerateAddress(proposals[i].SmesherID().Bytes())
 		require.Equal(t, addrBytes, r.Coinbase)
 		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx

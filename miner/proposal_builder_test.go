@@ -80,9 +80,7 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	tx.MaxSpend = defaultFee
 	tx.GasPrice = 1
 	tx.Nonce = types.Nonce{Counter: nonce}
-	var err error
-	tx.Principal, err = address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-	require.NoError(tb, err)
+	tx.Principal = address.GenerateAddress(signer.PublicKey().Bytes())
 	return &tx
 }
 
@@ -131,7 +129,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	numSlots := 2
 	proofs := genProofs(t, numSlots)
 
-	tx1 := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx1 := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 	base := types.RandomBallotID()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -177,7 +175,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	activeSet := genActiveSet(t)
 	proofs := genProofs(t, 1)
 
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 	bb := types.RandomBallotID()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -283,7 +281,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	activeSet := genActiveSet(t)
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -312,7 +310,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 		types.BallotID{1}, nil, b.ProposalBuilder.signer.PublicKey().Bytes(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -340,7 +338,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -360,7 +358,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -382,7 +380,7 @@ func TestBuilder_HandleLayer_StateRootErrorOK(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -403,7 +401,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, generateAddress(t, []byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, address.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -436,10 +434,4 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotEqual(t, b1.ID(), b2.ID())
-}
-
-func generateAddress(t *testing.T, bytes []byte) types.Address {
-	addr, err := address.GenerateAddress(address.TestnetID, bytes)
-	require.NoError(t, err)
-	return addr
 }

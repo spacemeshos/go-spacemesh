@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -11,8 +9,7 @@ import (
 
 // GenesisConfig defines accounts that will exist in state at genesis.
 type GenesisConfig struct {
-	NetworkID address.Network
-	Accounts  map[string]uint64 `mapstructure:"accounts"`
+	Accounts map[string]uint64 `mapstructure:"accounts"`
 }
 
 // ToAccounts creates list of types.Account instance from config.
@@ -20,12 +17,8 @@ func (g *GenesisConfig) ToAccounts() []types.Account {
 	var rst []types.Account
 	for addr, balance := range g.Accounts {
 		addrBytes := util.FromHex(addr)
-		addrGenerated, err := address.GenerateAddress(g.NetworkID, addrBytes)
-		if err != nil {
-			panic(fmt.Sprintf("could not generate address from string `%s`: %s", addr, err.Error()))
-		}
 		rst = append(rst, types.Account{
-			Address: addrGenerated,
+			Address: address.GenerateAddress(addrBytes),
 			Balance: balance,
 		})
 	}
@@ -47,9 +40,7 @@ const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df
 // DefaultGenesisConfig is the default configuration for the node.
 func DefaultGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	g := GenesisConfig{
-		NetworkID: address.MainnetID,
-	}
+	g := GenesisConfig{}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
@@ -63,9 +54,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 // DefaultTestGenesisConfig is the default test configuration for the node.
 func DefaultTestGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	g := GenesisConfig{
-		NetworkID: address.TestnetID,
-	}
+	g := GenesisConfig{}
 
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(Account1Private))
 	if err != nil {
@@ -76,20 +65,12 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	if err != nil {
 		panic("could not build ed signer")
 	}
-	addr1, err := address.GenerateAddress(address.TestnetID, acc1Signer.PublicKey().Bytes())
-	if err != nil {
-		panic("could not generate address: " + err.Error())
-	}
-	addr2, err := address.GenerateAddress(address.TestnetID, acc2Signer.PublicKey().Bytes())
-	if err != nil {
-		panic("could not generate address: " + err.Error())
-	}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
 	g.Accounts = map[string]uint64{
-		addr1.String(): 100000000000000000,
-		addr2.String(): 100000000000000000,
+		address.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		address.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
 	}
 
 	return &g

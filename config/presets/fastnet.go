@@ -14,6 +14,7 @@ func init() {
 
 func fastnet() config.Config {
 	conf := config.DefaultConfig()
+	conf.Address = address.DefaultTestAddressConfig()
 
 	conf.API.StartGrpcServices = []string{
 		"gateway", "node", "mesh", "globalstate",
@@ -35,9 +36,7 @@ func fastnet() config.Config {
 
 	conf.P2P.TargetOutbound = 10
 
-	conf.Genesis = &apiConfig.GenesisConfig{
-		NetworkID: address.TestnetID,
-	}
+	conf.Genesis = &apiConfig.GenesisConfig{}
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 1_000
@@ -51,11 +50,7 @@ func fastnet() config.Config {
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
-	addr, err := address.GenerateAddress(conf.Genesis.NetworkID, []byte("1"))
-	if err != nil {
-		panic("error generate coinbase address for fastnet: " + err.Error())
-	}
-	conf.SMESHING.CoinbaseAccount = addr.String()
+	conf.SMESHING.CoinbaseAccount = address.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
 	conf.SMESHING.Opts.NumFiles = 1

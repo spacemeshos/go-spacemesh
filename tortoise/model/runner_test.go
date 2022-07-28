@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
@@ -19,7 +18,7 @@ func TestBasicModel(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	c := newCluster(logtest.New(t), rng)
 	for i := 0; i < numSmeshers; i++ {
-		c.addCore(address.TestnetID)
+		c.addCore()
 	}
 	c.addHare().addBeacon()
 

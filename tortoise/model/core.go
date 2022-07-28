@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -25,17 +24,16 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger log.Log, networkID address.Network) *core {
+func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 	c := &core{
-		networkID: networkID,
-		id:        id,
-		logger:    logger,
-		rng:       rng,
-		cdb:       cdb,
-		beacons:   newBeaconStore(),
-		units:     units,
-		signer:    signing.NewEdSignerFromRand(rng),
+		id:      id,
+		logger:  logger,
+		rng:     rng,
+		cdb:     cdb,
+		beacons: newBeaconStore(),
+		units:   units,
+		signer:  signing.NewEdSignerFromRand(rng),
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
@@ -55,9 +53,6 @@ type core struct {
 	cdb      *datastore.CachedDB
 	beacons  *beaconStore
 	tortoise *tortoise.Tortoise
-
-	// networkID which is used to generate the addresses.
-	networkID address.Network
 
 	// generated on setup
 	units  uint32
@@ -141,10 +136,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			EndTick:    2,
 			PubLayerID: ev.LayerID,
 		}
-		addr, err := address.GenerateAddress(c.networkID, c.signer.PublicKey().Bytes()) // todo 3315
-		if err != nil {
-			panic(fmt.Sprintf("failed to generate address on MessageLayerEnd: %v", err))
-		}
+		addr := address.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
 
 		c.refBallot = nil

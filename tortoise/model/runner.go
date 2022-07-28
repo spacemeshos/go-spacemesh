@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -33,9 +32,9 @@ func (r *cluster) add(m model) *cluster {
 	return r
 }
 
-func (r *cluster) addCore(networkID address.Network) *cluster {
+func (r *cluster) addCore() *cluster {
 	id := r.nextid()
-	return r.add(newCore(r.rng, id, r.logger.Named("core-"+id), networkID))
+	return r.add(newCore(r.rng, id, r.logger.Named("core-"+id)))
 }
 
 func (r *cluster) addHare() *cluster {

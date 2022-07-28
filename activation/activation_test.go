@@ -6,13 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -36,7 +35,7 @@ var (
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.BytesToNodeID(pub)
 	otherNodeID = types.BytesToNodeID([]byte("00000"))
-	coinbase, _ = address.GenerateAddress(address.TestnetID, []byte("33333"))
+	coinbase    = address.GenerateAddress([]byte("33333"))
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
@@ -271,7 +270,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	builder := newBuilder(t, cdb, atxHdlr)
 
-	coinbase := types.Address{byte(address.TestnetID), 1, 1, 1}
+	coinbase := types.Address{1, 1, 1}
 	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
@@ -629,8 +628,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	id := types.BytesToNodeID([]byte("aaaaaa"))
-	coinbase, err := address.GenerateAddress(address.TestnetID, []byte("0xaaa"))
-	require.NoError(t, err)
+	coinbase := address.GenerateAddress([]byte("0xaaa"))
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
@@ -655,7 +653,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	atx := newActivationTx(types.BytesToNodeID([]byte("aaaaaa")), 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
-	err = atxHdlr.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
+	err := atxHdlr.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{

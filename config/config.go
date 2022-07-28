@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -37,6 +38,7 @@ var (
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
+	Address         *address.Config          `mapstructure:"address"`
 	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
 	Tortoise        tortoise.Config          `mapstructure:"tortoise"`
 	P2P             p2p.Config               `mapstructure:"p2p"`
@@ -112,6 +114,7 @@ type SmeshingConfig struct {
 // DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
+		Address:         address.DefaultAddressConfig(),
 		BaseConfig:      defaultBaseConfig(),
 		Genesis:         apiConfig.DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
@@ -135,6 +138,7 @@ func DefaultTestConfig() Config {
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = apiConfig.DefaultTestConfig()
+	conf.Address = address.DefaultTestAddressConfig()
 	return conf
 }
 

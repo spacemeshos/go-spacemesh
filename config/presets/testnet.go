@@ -14,6 +14,7 @@ func init() {
 
 func testnet() config.Config {
 	conf := config.DefaultConfig()
+	conf.Address = address.DefaultTestAddressConfig()
 
 	conf.API.StartGrpcServices = []string{
 		"gateway", "node", "mesh", "globalstate",
@@ -34,7 +35,6 @@ func testnet() config.Config {
 	conf.P2P.TargetOutbound = 10
 
 	conf.Genesis = &apiConfig.GenesisConfig{
-		NetworkID: address.TestnetID,
 		Accounts: map[string]uint64{
 			"0x92e27bcd079ed0470307620f1425284c3b2b1a65749c3894": 100000000000000000,
 			"0xa64b188ac44b208b1a4f018262a720e6397b092a9abe242a": 100000000000000000,
@@ -56,11 +56,7 @@ func testnet() config.Config {
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
-	addr, err := address.GenerateAddress(conf.Genesis.NetworkID, []byte("1"))
-	if err != nil {
-		panic("error generate coinbase address for testnet: " + err.Error())
-	}
-	conf.SMESHING.CoinbaseAccount = addr.String()
+	conf.SMESHING.CoinbaseAccount = address.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
 	conf.SMESHING.Opts.NumFiles = 1

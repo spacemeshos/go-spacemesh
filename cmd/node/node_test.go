@@ -19,6 +19,8 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -30,16 +32,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
-	"github.com/spacemeshos/post/initialization"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -690,6 +689,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
+	cfg.SMESHING.CoinbaseAccount = address.ByteToAddress(byte(1)).String()
 	app.Config = &cfg
 
 	signer := signing.NewEdSigner()
@@ -719,7 +719,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
 		app.Config.Genesis = &apiConfig.GenesisConfig{
-			NetworkID: address.TestnetID,
 			Accounts: map[string]uint64{
 				addrWallet.String(): 100_000_000,
 			},
@@ -1023,7 +1022,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config = &cfg
 	smApp.Config.GenesisTime = genesisTime
 
-	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
+	smApp.Config.SMESHING.CoinbaseAccount = address.ByteToAddress(byte(i + 1)).String()
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
 
 	smApp.host = host

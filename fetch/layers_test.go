@@ -625,9 +625,7 @@ func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	var err error
-	tx.Principal, err = address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	tx.Principal = address.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
 

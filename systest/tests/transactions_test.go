@@ -7,11 +7,10 @@ import (
 	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
-
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -36,7 +35,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		"stop waiting", stopWaiting,
 		"expected transactions", expectedCount,
 	)
-	receiver := [address.FullAddressLength]byte{byte(address.TestnetID), 11, 1, 1}
+	receiver := [address.AddressLength]byte{11, 1, 1}
 	state := spacemeshv1.NewGlobalStateServiceClient(cl.Client(0))
 	response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver[:]}})
 	require.NoError(t, err)

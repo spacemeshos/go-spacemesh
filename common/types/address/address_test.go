@@ -9,6 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+func init() {
+	address.DefaultTestAddressConfig()
+}
+
 func TestAddress_NewAddress(t *testing.T) {
 	t.Parallel()
 	table := []struct {
@@ -18,7 +22,7 @@ func TestAddress_NewAddress(t *testing.T) {
 	}{
 		{
 			name: "correct",
-			src:  "sm1fejq2x3d79ukpkw06t7h6lndjuwzxdnj59npghs4qgrev",
+			src:  "smt1fejq2x3d79ukpkw06t7h6lndjuwzxdnj59npghsywyusj",
 		},
 		{
 			name: "wrong length",
@@ -47,7 +51,7 @@ func TestAddress_NewAddress(t *testing.T) {
 func TestAddress_SetBytes(t *testing.T) {
 	t.Parallel()
 	t.Run("generate from correct string", func(t *testing.T) {
-		srcAddr, err := address.NewAddress("sm1fejq2x3d79ukpkw06t7h6lndjuwzxdnj59npghs4qgrev")
+		srcAddr, err := address.NewAddress("smt1fejq2x3d79ukpkw06t7h6lndjuwzxdnj59npghsywyusj")
 		require.NoError(t, err)
 		newAddr, err := address.BytesToAddress(srcAddr.Bytes())
 		require.NoError(t, err)
@@ -62,11 +66,10 @@ func TestAddress_SetBytes(t *testing.T) {
 		require.Error(t, err)
 	})
 	t.Run("generate from correct byte slice", func(t *testing.T) {
-		data := make([]byte, address.AddressLength+address.HumanReadablePartLength)
+		data := make([]byte, address.AddressLength)
 		for i := range data {
 			data[i] = byte(i)
 		}
-		data[0] = byte(address.MainnetID)
 		newAddr, err := address.BytesToAddress(data)
 		require.NoError(t, err)
 		srcAddr, err := address.NewAddress(newAddr.String())
@@ -78,15 +81,16 @@ func TestAddress_SetBytes(t *testing.T) {
 func TestAddress_GenerateAddress(t *testing.T) {
 	t.Parallel()
 	t.Run("generate from public key", func(t *testing.T) {
-		srcAddr, err := address.GenerateAddress(address.TestnetID, generatePublicKey(t))
-		require.NoError(t, err)
+		srcAddr := address.GenerateAddress(generatePublicKey(t))
+		println(srcAddr.String())
+		println(srcAddr.String())
+		println(srcAddr.String())
 		newAddr, err := address.NewAddress(srcAddr.String())
 		require.NoError(t, err)
 		checkAddressesEqual(t, srcAddr, newAddr)
 	})
 	t.Run("generate from string", func(t *testing.T) {
-		srcAddr, err := address.GenerateAddress(address.TestnetID, []byte("some random very very long string"))
-		require.NoError(t, err)
+		srcAddr := address.GenerateAddress([]byte("some random very very long string"))
 		newAddr, err := address.NewAddress(srcAddr.String())
 		require.NoError(t, err)
 		checkAddressesEqual(t, srcAddr, newAddr)
@@ -95,11 +99,9 @@ func TestAddress_GenerateAddress(t *testing.T) {
 
 func TestAddress_ByteToAddress(t *testing.T) {
 	t.Parallel()
-	addr, err := address.ByteToAddress(address.TestnetID, 2)
-	require.NoError(t, err)
-	require.Equal(t, uint8(address.TestnetID), addr[0])
-	require.Equal(t, uint8(2), addr[1])
-	for _, b := range addr[2:] {
+	addr := address.ByteToAddress(2)
+	require.Equal(t, uint8(2), addr[0])
+	for _, b := range addr[1:] {
 		require.Equal(t, uint8(0), b)
 	}
 }

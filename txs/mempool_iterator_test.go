@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
@@ -32,9 +31,9 @@ func makeMempool() (map[types.Address][]*txtypes.NanoTX, []*txtypes.NanoTX) {
 	// acct_1: [(2, 0), (2, 3)]
 	// acct_2: [(4, 0), (3, 0), (2, 1), (5, 3)]
 	now := time.Now()
-	addr0 := types.Address{byte(address.TestnetID), 1, 2, 3}
-	addr1 := types.Address{byte(address.TestnetID), 2, 3, 4}
-	addr2 := types.Address{byte(address.TestnetID), 3, 4, 5}
+	addr0 := types.Address{1, 2, 3}
+	addr1 := types.Address{2, 3, 4}
+	addr2 := types.Address{3, 4, 5}
 	mempool := map[types.Address][]*txtypes.NanoTX{
 		addr0: {
 			makeNanoTX(addr0, 4, now.Add(time.Second*1)),

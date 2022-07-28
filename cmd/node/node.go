@@ -600,7 +600,7 @@ func (app *App) initServices(ctx context.Context,
 
 	coinbaseAddr, err := address.NewAddress(app.Config.SMESHING.CoinbaseAccount)
 	if err != nil {
-		app.log.Panic("failed to parse CoinbaseAccount address: %v", err)
+		app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 	}
 	if app.Config.SMESHING.Start {
 		if coinbaseAddr.Big().Uint64() == 0 {
@@ -730,7 +730,7 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err := address.NewAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
-			app.log.Panic("failed to parse CoinbaseAccount address on start: %v", err)
+			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 		}
 		go func() {
 			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {

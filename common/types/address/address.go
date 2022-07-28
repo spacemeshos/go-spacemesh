@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/cosmos/btcutil/bech32"
-
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -18,15 +17,13 @@ import (
 const (
 	// AddressLength is the expected length of the address.
 	AddressLength = 24
-	// FullAddressLength is the expected length of the full address.
-	FullAddressLength = HumanReadablePartLength + AddressLength
 )
 
 // ErrWrongAddressLength is returned when the length of the address is not correct.
 var ErrWrongAddressLength = errors.New("wrong address length")
 
 // Address represents the address of a spacemesh account with AddressLength length.
-type Address [HumanReadablePartLength + AddressLength]byte // contains slice 8 bytes unsigned integers
+type Address [AddressLength]byte // contains slice 8 bytes unsigned integers
 
 // NewAddress returns a new Address from a byte slice.
 func NewAddress(src string) (Address, error) {
@@ -47,13 +44,11 @@ func NewAddress(src string) (Address, error) {
 		return addr, fmt.Errorf("expected %d bytes, got %d: %w", AddressLength, len(data), ErrWrongAddressLength)
 	}
 
-	hrpID, err := NewHRPDataFromName(hrp)
-	if err != nil {
-		return addr, fmt.Errorf("error get network id: %w", err)
+	if conf.NetworkHRP != hrp {
+		return addr, fmt.Errorf("wrong network id: expected `%s`, got `%s`: %w", conf.NetworkHRP, hrp, ErrUnsupportedNetwork)
 	}
 
-	copy(addr[:HumanReadablePartLength], hrpID[:])
-	copy(addr[HumanReadablePartLength:], dataConverted[:])
+	copy(addr[:], dataConverted[:])
 	return addr, nil // todo 3315
 }
 
@@ -98,19 +93,14 @@ func (a Address) Hex() string {
 
 // String implements fmt.Stringer.
 func (a Address) String() string {
-	dataConverted, err := bech32.ConvertBits(a[HumanReadablePartLength:], 8, 5, true)
+	dataConverted, err := bech32.ConvertBits(a[:], 8, 5, true)
 	if err != nil {
-		panic(fmt.Errorf("error convert bits to 8 bits: %w", err))
+		log.Panic("error convert bits to 8 bits: ", err.Error())
 	}
 
-	hrp, err := NewHRPDataFromBytes(a[:HumanReadablePartLength])
+	result, err := bech32.Encode(conf.NetworkHRP, dataConverted)
 	if err != nil {
-		panic(fmt.Errorf("error get network id: %w", err))
-	}
-
-	result, err := bech32.Encode(hrp, dataConverted)
-	if err != nil {
-		panic(fmt.Errorf("error encode to bech32: %w", err))
+		log.Panic("error encode to bech32: ", err.Error())
 	}
 	return result
 }
@@ -122,7 +112,7 @@ func (a Address) Field() log.Field {
 
 // Short returns the first 7 characters of the address hex representation (incl. "0x"), for logging purposes.
 func (a Address) Short() string {
-	hx := a.Hex()
+	hx := a.String()
 	return hx[:util.Min(7, len(hx))]
 }
 
@@ -134,18 +124,11 @@ func (a Address) Format(s fmt.State, c rune) {
 
 // setBytes sets the address to the value of b.
 // If b is larger than len(a) it will panic.
-func (a *Address) setBytes(networkID Network, b []byte) error {
+func (a *Address) setBytes(b []byte) {
 	if len(b) > len(a) {
 		b = b[len(b)-AddressLength:]
 	}
-
-	hrpID, err := NewHRPDataFromNetwork(networkID)
-	if err != nil {
-		return fmt.Errorf("error get network id: %w", err)
-	}
-	copy(a[:HumanReadablePartLength], hrpID[:])
-	copy(a[HumanReadablePartLength+AddressLength-len(b):], b)
-	return nil
+	copy(a[AddressLength-len(b):], b)
 }
 
 // EncodeScale implements scale codec interface.
@@ -159,17 +142,15 @@ func (a *Address) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 // GenerateAddress generates an address from a public key.
-func GenerateAddress(networkID Network, publicKey []byte) (Address, error) {
+func GenerateAddress(publicKey []byte) Address {
 	var addr Address
-	if err := addr.setBytes(networkID, publicKey); err != nil {
-		return addr, fmt.Errorf("error generate address: %w", err)
-	}
-	return addr, nil
+	addr.setBytes(publicKey)
+	return addr
 }
 
 // ByteToAddress converts a byte array to an address.
-func ByteToAddress(networkID Network, b byte) (Address, error) {
+func ByteToAddress(b byte) Address {
 	var data [AddressLength]byte
 	data[0] = b
-	return GenerateAddress(networkID, data[:])
+	return GenerateAddress(data[:])
 }
