@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+//go:generate scalegen
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
@@ -79,6 +82,16 @@ func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
 func (t ATXID) Compare(other ATXID) bool {
 	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
+}
+
+// EncodeScale implements scale codec interface.
+func (t ATXID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, t[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (t ATXID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, t[:])
 }
 
 // EmptyATXID is a canonical empty ATXID.

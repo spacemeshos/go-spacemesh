@@ -161,31 +161,31 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	gLayer := types.GetEffectiveGenesis()
 
 	ch := make(chan fetch.LayerPromiseResult)
+	started := make(chan struct{}, 1)
 	for lid := gLayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(ch)
+		if lid == gLayer.Add(1) {
+			ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).DoAndReturn(
+				func(context.Context, types.LayerID) chan fetch.LayerPromiseResult {
+					close(started)
+					return ch
+				},
+			)
+		} else {
+			ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(ch)
+		}
 	}
 	var wg sync.WaitGroup
-	wg.Add(2)
-	first, second := true, true
-	started := make(chan struct{}, 2)
+	wg.Add(1)
 	go func() {
-		started <- struct{}{}
-		first = ts.syncer.synchronize(context.TODO())
+		require.True(t, ts.syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
 	<-started
-	go func() {
-		started <- struct{}{}
-		second = ts.syncer.synchronize(context.TODO())
-		wg.Done()
-	}()
-	<-started
+	require.False(t, ts.syncer.synchronize(context.TODO()))
 	// allow synchronize to finish
 	close(ch)
 	wg.Wait()
 
-	// one of the synchronize calls should fail
-	require.False(t, first && second)
 	require.Equal(t, uint64(1), ts.syncer.run)
 	ts.syncer.Close()
 }
@@ -533,8 +533,8 @@ func TestSyncMissingLayer(t *testing.T) {
 		if lid == failed {
 			ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 			errMissingTXs := errors.New("missing TXs")
-			ts.mConState.EXPECT().ApplyLayer(block).DoAndReturn(
-				func(got *types.Block) ([]*types.Transaction, error) {
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).DoAndReturn(
+				func(_ context.Context, got *types.Block) ([]*types.Transaction, error) {
 					require.Equal(t, block.ID(), got.ID())
 					return nil, errMissingTXs
 				})
@@ -554,8 +554,8 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := failed; lid.Before(last); lid = lid.Add(1) {
 		ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 		if lid == failed {
-			ts.mConState.EXPECT().ApplyLayer(block).DoAndReturn(
-				func(got *types.Block) ([]*types.Transaction, []*types.Reward, error) {
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).DoAndReturn(
+				func(_ context.Context, got *types.Block) ([]*types.Transaction, []*types.Reward, error) {
 					require.Equal(t, block.ID(), got.ID())
 					return nil, nil, nil
 				})
@@ -598,6 +598,26 @@ func TestProcessLayers_AllGood(t *testing.T) {
 		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
 	}
 	require.False(t, ts.syncer.stateSynced())
+	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
+	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
+	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.True(t, ts.syncer.stateSynced())
+}
+
+func TestProcessLayers_ProcessedLayerStuck(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	glayer := types.GetEffectiveGenesis()
+	current := glayer.Add(10)
+	ts.syncer.setLastSyncedLayer(current.Sub(1))
+	ts.mTicker.advanceToLayer(current)
+	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
+		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+	}
+	// cause the applied layer to advance but not processed layer
+	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), current, types.EmptyBlockID))
+	require.False(t, ts.syncer.stateSynced())
+
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))

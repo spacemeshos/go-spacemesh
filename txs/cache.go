@@ -1,6 +1,7 @@
 package txs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -10,6 +11,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
@@ -87,7 +91,6 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 	idx := getNonceOffset(ac.startNonce, ntx.Nonce.Counter)
 	if idx < 0 {
 		logger.With().Error("bad nonce",
-			ac.addr,
 			log.Uint64("acct_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", ntx.Nonce.Counter))
 		return errBadNonce
@@ -96,7 +99,6 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 	if balance < ntx.MaxSpending() {
 		ac.moreInDB = idx == len(ac.txsByNonce)
 		logger.With().Debug("insufficient balance",
-			ac.addr,
 			ntx.ID,
 			ntx.Principal,
 			log.Uint64("nonce", ntx.Nonce.Counter),
@@ -107,7 +109,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 
 	if idx == len(ac.txsByNonce) { // new nonce
 		if idx == maxTXsPerAcct {
-			logger.With().Warning("account reach nonce limit in cache", ac.addr)
+			logger.Debug("account reach nonce limit in cache")
 			return errTooManyNonce
 		}
 		ac.txsByNonce = append(ac.txsByNonce, &sameNonceTXs{
@@ -116,7 +118,6 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 		})
 		ac.cachedTXs[ntx.ID] = ntx
 		logger.With().Debug("new nonce added",
-			ac.addr,
 			log.Uint64("nonce", ntx.Nonce.Counter),
 			log.Uint64("max_spending", ntx.MaxSpending()),
 			log.Uint64("post_balance", ac.availBalance()))
@@ -130,7 +131,6 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 	}
 
 	logger.With().Debug("better transaction replaced for nonce",
-		ac.addr,
 		log.Stringer("better", ntx.ID),
 		log.Stringer("replaced", nonceTXs.best.ID),
 		log.Uint64("nonce", ntx.Nonce.Counter))
@@ -153,7 +153,6 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 	if toRemove < len(ac.txsByNonce) {
 		ac.moreInDB = true
 		logger.With().Debug("nonce made infeasible by new better transaction",
-			ac.addr,
 			log.Uint64("from_nonce", ac.startNonce+uint64(toRemove)))
 		ac.removeFromOffset(toRemove)
 	}
@@ -184,6 +183,7 @@ func nonceMarshaller(any interface{}) log.ArrayMarshaler {
 }
 
 func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes.NanoTX, blockSeed []byte) error {
+	logger.With().Debug("account has pending txs", log.Int("num_pending", len(nonce2TXs)))
 	var (
 		oldNonce  = ac.nextNonce()
 		nextNonce = oldNonce
@@ -192,7 +192,6 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 	for len(nonce2TXs) > 0 {
 		if _, ok := nonce2TXs[nextNonce]; !ok {
 			logger.With().Debug("batch does not contain the next nonce",
-				ac.addr,
 				log.Uint64("nonce", nextNonce),
 				log.Array("batch", nonceMarshaller(nonce2TXs)))
 			break
@@ -201,24 +200,16 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 		best := findBest(nonce2TXs[nextNonce], balance, blockSeed)
 		if best == nil {
 			logger.With().Warning("no feasible transactions at nonce",
-				ac.addr,
 				log.Uint64("nonce", nextNonce),
 				log.Uint64("balance", balance))
 			break
 		} else {
 			logger.With().Debug("found best in nonce txs",
-				ac.addr,
 				best.ID,
 				log.Uint64("nonce", nextNonce),
 				log.Uint64("fee", best.Fee()))
 		}
 		if err := ac.accept(logger, best, balance, blockSeed); err != nil {
-			logger.With().Warning("failed to add tx to account cache",
-				ac.addr,
-				best.ID,
-				log.Uint64("nonce", best.Nonce.Counter),
-				log.Uint64("amount", best.MaxSpend),
-				log.Err(err))
 			break
 		}
 		delete(nonce2TXs, nextNonce)
@@ -232,7 +223,6 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 		for nonce := range nonce2TXs {
 			if nonce >= nextNonce {
 				logger.With().Debug("transactions detected in higher nonce",
-					ac.addr,
 					log.Uint64("next_nonce", nextNonce),
 					log.Uint64("found_nonce", nonce))
 				ac.moreInDB = true
@@ -242,11 +232,10 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 	}
 	if nextNonce > oldNonce {
 		logger.With().Debug("added batch to account pool",
-			ac.addr,
 			log.Uint64("from_nonce", oldNonce),
 			log.Uint64("to_nonce", nextNonce-1))
 	} else {
-		logger.With().Debug("no feasible txs from batch", ac.addr, log.Array("batch", nonceMarshaller(nonce2TXs)))
+		logger.With().Debug("no feasible txs from batch", log.Array("batch", nonceMarshaller(nonce2TXs)))
 	}
 	return nil
 }
@@ -292,10 +281,9 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, ntx *txtypes.NanoTX) 
 //   reject from cache for now but will retrieve it from DB when the nonce gap is closed
 // - nonce already exists in the cache:
 //   if it is better than the best candidate in that nonce group, swap
-func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction, received time.Time, blockSeed []byte) error {
+func (ac *accountCache) add(logger log.Log, db *sql.Database, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce.Counter < ac.startNonce {
-		logger.With().Debug("nonce too small",
-			ac.addr,
+		logger.With().Warning("nonce too small",
 			tx.ID,
 			log.Uint64("next_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", tx.Nonce.Counter))
@@ -305,10 +293,10 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 	next := ac.nextNonce()
 	if tx.Nonce.Counter > next {
 		logger.With().Debug("nonce too large. will be loaded later",
-			tx.Principal,
 			tx.ID,
-			log.Uint64("next_nonce", ac.startNonce),
+			log.Uint64("next_nonce", next),
 			log.Uint64("tx_nonce", tx.Nonce.Counter))
+		mempoolTxCount.WithLabelValues(nonceTooBig).Inc()
 		ac.moreInDB = true
 		return errNonceTooBig
 	}
@@ -325,28 +313,32 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 	}
 
 	// transaction uses the next nonce
-	if err := ac.accept(logger, ntx, ac.availBalance(), blockSeed); err != nil {
+	err := ac.accept(logger, ntx, ac.availBalance(), nil)
+	if err != nil {
 		if errors.Is(err, errTooManyNonce) {
+			mempoolTxCount.WithLabelValues(tooManyNonce).Inc()
 			ac.moreInDB = true
-			return nil
+		} else if errors.Is(err, errInsufficientBalance) {
+			mempoolTxCount.WithLabelValues(balanceTooSmall).Inc()
 		}
 		return err
 	}
+	mempoolTxCount.WithLabelValues(mempool).Inc()
 
 	// adding a new nonce can bridge the nonce gap in db
 	// check DB for txs with higher nonce
 	if ac.moreInDB {
-		if err := ac.addPendingFromNonce(logger, tp, ac.nextNonce(), types.LayerID{}); err != nil {
+		if err := ac.addPendingFromNonce(logger, db, ac.nextNonce(), types.LayerID{}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce uint64, applied types.LayerID) error {
-	mtxs, err := tp.GetAcctPendingFromNonce(ac.addr, nonce)
+func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, nonce uint64, applied types.LayerID) error {
+	mtxs, err := transactions.GetAcctPendingFromNonce(db, ac.addr, nonce)
 	if err != nil {
-		logger.With().Error("failed to get more pending txs from db", ac.addr, log.Err(err))
+		logger.With().Error("failed to get more pending txs from db", log.Err(err))
 		return err
 	}
 
@@ -358,7 +350,7 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce
 	if applied != (types.LayerID{}) {
 		// we just applied a layer, need to update layer/block for the pending txs
 		for i, mtx := range mtxs {
-			nextLayer, nextBlock, err := tp.SetNextLayerBlock(mtx.ID, applied)
+			nextLayer, nextBlock, err := transactions.SetNextLayer(db, mtx.ID, applied)
 			if err != nil {
 				logger.With().Error("failed to reset layer",
 					mtx.ID,
@@ -369,14 +361,14 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce
 			mtxs[i].LayerID = nextLayer
 			mtxs[i].BlockID = nextBlock
 			if nextLayer != (types.LayerID{}) {
-				logger.With().Debug("next layer found", ac.addr, mtx.ID, nextLayer)
+				logger.With().Debug("next layer found", mtx.ID, nextLayer)
 			}
 		}
 	}
 
 	byPrincipal := groupTXsByPrincipal(logger, mtxs)
 	if _, ok := byPrincipal[ac.addr]; !ok {
-		logger.With().Panic("no txs for account after grouping", ac.addr)
+		logger.Panic("no txs for account after grouping")
 	}
 	return ac.addBatch(logger, byPrincipal[ac.addr], nil)
 }
@@ -408,14 +400,18 @@ func (ac *accountCache) getMempool(logger log.Log) []*txtypes.NanoTX {
 		}
 		bests = append(bests, nonceTXs.best)
 	}
+	logger.With().Debug("account in mempool",
+		log.Int("offset", offset),
+		log.Int("size", len(ac.txsByNonce)),
+		log.Uint64("from", bests[0].Nonce.Counter),
+		log.Uint64("to", bests[len(bests)-1].Nonce.Counter))
 	return bests
 }
 
 func (ac *accountCache) applyLayer(
 	logger log.Log,
+	db *sql.Database,
 	newNonce, newBalance uint64,
-	tp txProvider,
-	lid types.LayerID,
 	appliedByNonce map[uint64]types.TransactionWithResult,
 ) error {
 	nextNonce := ac.startNonce
@@ -426,10 +422,10 @@ func (ac *accountCache) applyLayer(
 		nextNonce++
 	}
 
+	logger = logger.WithFields(ac.addr)
 	numApplied := nextNonce - ac.startNonce
 	if numApplied != uint64(len(appliedByNonce)) {
 		logger.With().Error("account was not applied in nonce order",
-			ac.addr,
 			log.Array("state_applied", nonceMarshaller(appliedByNonce)),
 			log.Uint64("cache_start", ac.startNonce),
 			log.Uint64("cache_end", nextNonce-1))
@@ -438,7 +434,6 @@ func (ac *accountCache) applyLayer(
 
 	if nextNonce != newNonce {
 		logger.With().Error("unexpected next nonce",
-			ac.addr,
 			log.Uint64("cache_nonce", nextNonce),
 			log.Uint64("state_nonce", newNonce))
 		return errBadNonceInCache
@@ -451,42 +446,33 @@ func (ac *accountCache) applyLayer(
 	if offset > len(ac.txsByNonce) {
 		// some applied nonce are not in cache
 		logger.With().Warning("applied nonce not in cache",
-			ac.addr,
 			log.Uint64("cache_nonce", ac.nextNonce()-1),
 			log.Array("applied_nonce", nonceMarshaller(appliedByNonce)))
 	} else if offset > 1 && newBalance < ac.txsByNonce[offset-1].postBalance {
 		logger.With().Error("unexpected conservative balance",
-			ac.addr,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", newBalance),
 			log.Uint64("projected", ac.txsByNonce[offset-1].postBalance))
 		return errBadBalanceInCache
 	}
 
-	if err := tp.ApplyLayer(appliedByNonce); err != nil {
-		logger.With().Error("failed to set txs discarded for applied layer", lid, log.Err(err))
+	if err := applyLayer(logger, db, ac.addr, ac.startNonce, appliedByNonce); err != nil {
+		logger.With().Error("failed to apply layer", log.Err(err))
 		return err
 	}
-
-	// txs that were rejected from cache due to nonce too low are discarded here
-	if err := tp.DiscardNonceBelow(ac.addr, ac.startNonce); err != nil {
-		logger.With().Error("failed to discard txs with lower nonce",
-			ac.addr,
-			log.Uint64("nonce", ac.startNonce))
-		return err
-	}
-
 	return nil
 }
 
 // NOTE: this is the only point in time when we reconsider those previously rejected txs,
 // because applying a layer changes the conservative balance in the cache.
-func (ac *accountCache) resetAfterApply(logger log.Log, tp txProvider, nextNonce, newBalance uint64, applied types.LayerID) error {
+func (ac *accountCache) resetAfterApply(logger log.Log, db *sql.Database, nextNonce, newBalance uint64, applied types.LayerID) error {
+	logger = logger.WithFields(ac.addr)
+	logger.With().Debug("resetting to nonce", log.Uint64("nonce", nextNonce))
 	ac.removeFromOffset(0)
 	ac.txsByNonce = make([]*sameNonceTXs, 0, maxTXsPerAcct)
 	ac.startNonce = nextNonce
 	ac.startBalance = newBalance
-	return ac.addPendingFromNonce(logger, tp, ac.startNonce, applied)
+	return ac.addPendingFromNonce(logger, db, ac.startNonce, applied)
 }
 
 func (ac *accountCache) removeFromOffset(offset int) {
@@ -504,7 +490,6 @@ type stateFunc func(types.Address) (uint64, uint64)
 
 type cache struct {
 	logger log.Log
-	tp     txProvider
 	stateF stateFunc
 
 	mu        sync.Mutex
@@ -512,10 +497,9 @@ type cache struct {
 	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with accountCache instances
 }
 
-func newCache(tp txProvider, s stateFunc, logger log.Log) *cache {
+func newCache(s stateFunc, logger log.Log) *cache {
 	return &cache{
 		logger:    logger,
-		tp:        tp,
 		stateF:    s,
 		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
@@ -545,9 +529,9 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 	return byPrincipal
 }
 
-// BuildFromScratch builds the cache from database.
-func (c *cache) BuildFromScratch() error {
-	mtxs, err := c.tp.GetAllPending()
+// buildFromScratch builds the cache from database.
+func (c *cache) buildFromScratch(db *sql.Database) error {
+	mtxs, err := transactions.GetAllPending(db)
 	if err != nil {
 		c.logger.Error("failed to get all pending txs", log.Err(err))
 		return err
@@ -619,17 +603,38 @@ func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	}
 }
 
-func (c *cache) Add(tx *types.Transaction, received time.Time, blockSeed []byte) error {
+// - errInsufficientBalance:
+//   conservative cache is conservative in that it only counts principal's spending for pending transactions.
+//   a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
+//   received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
+//   re-evaluate it after each layer is applied.
+// - errNonceTooBig: transactions are gossiped/synced out of nonce order. when we receive a errNonceTooBig tx,
+//   we should store it in db and retrieve it when the nonce gap is filled in the cache.
+// - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
+//   be stored in db and retrieved after each earlier nonce is applied.
+func acceptable(err error) bool {
+	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errNonceTooBig) || errors.Is(err, errTooManyNonce)
+}
+
+func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
-	if err := c.pending[principal].add(c.logger, c.tp, tx, received, blockSeed); err != nil {
-		return err
+	logger := c.logger.WithContext(ctx).WithFields(principal)
+	err := c.pending[principal].add(logger, db, tx, received)
+	if acceptable(err) {
+		err = nil
+		mempoolTxCount.WithLabelValues(accepted).Inc()
 	}
-	return nil
+	if err == nil || mustPersist {
+		if dbErr := transactions.Add(db, tx, received); dbErr != nil {
+			return dbErr
+		}
+	}
+	return err
 }
 
 // Get gets a transaction from the cache.
@@ -639,17 +644,9 @@ func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 	return c.cachedTXs[tid]
 }
 
-// HasTx returns true if transaction exists in the cache.
-func (c *cache) HasTx(tid types.TransactionID) (bool, error) {
-	if c.has(tid) {
-		return true, nil
-	}
-
-	has, err := c.tp.Has(tid)
-	if err != nil {
-		return false, fmt.Errorf("has tx: %w", err)
-	}
-	return has, nil
+// Has returns true if transaction exists in the cache.
+func (c *cache) Has(tid types.TransactionID) bool {
+	return c.has(tid)
 }
 
 func (c *cache) has(tid types.TransactionID) bool {
@@ -659,11 +656,11 @@ func (c *cache) has(tid types.TransactionID) bool {
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
-func (c *cache) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+func (c *cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
 	if len(tids) == 0 {
 		return nil
 	}
-	if err := c.tp.AddToProposal(lid, pid, tids); err != nil {
+	if err := addToProposal(db, lid, pid, tids); err != nil {
 		c.logger.With().Error("failed to link txs to proposal in db", log.Err(err))
 		return err
 	}
@@ -671,11 +668,11 @@ func (c *cache) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, tid
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
-func (c *cache) LinkTXsWithBlock(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *cache) LinkTXsWithBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	if len(tids) == 0 {
 		return nil
 	}
-	if err := c.tp.AddToBlock(lid, bid, tids); err != nil {
+	if err := addToBlock(db, lid, bid, tids); err != nil {
 		return err
 	}
 	return c.updateLayer(lid, bid, tids)
@@ -700,8 +697,8 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult) ([]error, []error) {
-	if err := c.CheckApplyOrder(lid); err != nil {
+func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, skipped []types.TransactionID) ([]error, []error) {
+	if err := checkApplyOrder(c.logger, db, lid); err != nil {
 		return nil, []error{err}
 	}
 
@@ -711,6 +708,27 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 	toCleanup := make(map[types.Address]struct{})
 	for _, rst := range results {
 		toCleanup[rst.Principal] = struct{}{}
+	}
+	skippedByPrincipal := make(map[types.Address]struct{})
+	for _, tid := range skipped {
+		var principal types.Address
+		ntx, ok := c.cachedTXs[tid]
+		if ok {
+			principal = ntx.Principal
+		} else {
+			mtx, err := transactions.Get(db, tid)
+			if err != nil {
+				c.logger.With().Warning("unable to find skipped tx in db", log.Err(err))
+				// nothing we can do
+				continue
+			} else if mtx.TxHeader == nil {
+				c.logger.With().Warning("tx header not parsed", tid)
+				continue
+			}
+			principal = mtx.Principal
+		}
+		toCleanup[principal] = struct{}{}
+		skippedByPrincipal[principal] = struct{}{}
 	}
 	defer c.cleanupAccounts(toCleanup)
 
@@ -728,8 +746,8 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 		events.ReportResult(rst)
 	}
 
-	errsApply := make([]error, 0, len(byPrincipal))
-	errsReset := make([]error, 0, len(byPrincipal))
+	warns := make([]error, 0, len(byPrincipal))
+	errs := make([]error, 0, len(byPrincipal))
 	logger := c.logger.WithFields(lid, bid)
 	for principal, appliedByNonce := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
@@ -738,24 +756,43 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, results []types
 			principal,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
-		if err := c.pending[principal].applyLayer(logger, nextNonce, balance, c.tp, lid, appliedByNonce); err != nil {
+		t0 := time.Now()
+		if err := c.pending[principal].applyLayer(logger, db, nextNonce, balance, appliedByNonce); err != nil {
 			logger.With().Warning("failed to apply layer to principal", principal, log.Err(err))
-			errsApply = append(errsApply, err)
+			warns = append(warns, err)
 		}
-		if err := c.pending[principal].resetAfterApply(logger, c.tp, nextNonce, balance, lid); err != nil {
+		acctApplyDuration.Observe(float64(time.Since(t0)))
+		t1 := time.Now()
+		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
 			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
-			errsReset = append(errsReset, err)
+			errs = append(errs, err)
 		}
+		acctRestDuration.Observe(float64(time.Since(t1)))
 	}
-	return errsApply, errsReset
+	for principal := range skippedByPrincipal {
+		if _, ok := byPrincipal[principal]; ok {
+			continue
+		}
+		if _, ok := c.pending[principal]; !ok {
+			continue
+		}
+		nextNonce, balance := c.stateF(principal)
+		t2 := time.Now()
+		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
+			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
+			errs = append(errs, err)
+		}
+		acctRestDuration.Observe(float64(time.Since(t2)))
+	}
+	return warns, errs
 }
 
-func (c *cache) RevertToLayer(revertTo types.LayerID) error {
-	if err := c.tp.UndoLayers(revertTo.Add(1)); err != nil {
+func (c *cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
+	if err := undoLayers(db, revertTo.Add(1)); err != nil {
 		return err
 	}
 
-	if err := c.BuildFromScratch(); err != nil {
+	if err := c.buildFromScratch(db); err != nil {
 		c.logger.With().Error("failed to build from scratch after revert", log.Err(err))
 		return err
 	}
@@ -775,13 +812,14 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that eligible for a proposal/block.
-func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
+func (c *cache) GetMempool(logger log.Log) map[types.Address][]*txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*txtypes.NanoTX)
+	logger.With().Info("cache has pending accounts", log.Int("num_acct", len(c.pending)))
 	for addr, accCache := range c.pending {
-		txs := accCache.getMempool(c.logger)
+		txs := accCache.getMempool(logger.WithFields(addr))
 		if len(txs) > 0 {
 			all[addr] = txs
 		}
@@ -789,50 +827,15 @@ func (c *cache) GetMempool() map[types.Address][]*txtypes.NanoTX {
 	return all
 }
 
-// AddToDB adds a transaction to the database.
-func (c *cache) AddToDB(tx *types.Transaction, received time.Time) error {
-	return c.tp.Add(tx, received)
-}
-
-// GetMeshTransaction retrieves a tx by its id.
-func (c *cache) GetMeshTransaction(tid types.TransactionID) (*types.MeshTransaction, error) {
-	return c.tp.Get(tid)
-}
-
-// GetMeshTransactions retrieves a list of txs by their id's.
-func (c *cache) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
-	missing := make(map[types.TransactionID]struct{})
-	mtxs := make([]*types.MeshTransaction, 0, len(ids))
-	for _, tid := range ids {
-		var (
-			mtx *types.MeshTransaction
-			err error
-		)
-		if mtx, err = c.GetMeshTransaction(tid); err != nil {
-			c.logger.With().Warning("could not get tx", tid, log.Err(err))
-			missing[tid] = struct{}{}
-		} else {
-			mtxs = append(mtxs, mtx)
-		}
-	}
-	return mtxs, missing
-}
-
-// GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
-// Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
-func (c *cache) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return c.tp.GetByAddress(from, to, address)
-}
-
-// CheckApplyOrder returns an error if layers were not applied in order.
-func (c *cache) CheckApplyOrder(toApply types.LayerID) error {
-	lastApplied, err := c.tp.LastAppliedLayer()
+// checkApplyOrder returns an error if layers were not applied in order.
+func checkApplyOrder(logger log.Log, db *sql.Database, toApply types.LayerID) error {
+	lastApplied, err := layers.GetLastApplied(db)
 	if err != nil {
-		c.logger.With().Error("failed to get last applied layer", log.Err(err))
+		logger.With().Error("failed to get last applied layer", log.Err(err))
 		return fmt.Errorf("cache get last applied %w", err)
 	}
 	if toApply != lastApplied.Add(1) {
-		c.logger.With().Error("layer not applied in order",
+		logger.With().Error("layer not applied in order",
 			log.Stringer("expected", lastApplied.Add(1)),
 			log.Stringer("to_apply", toApply))
 		return errLayerNotInOrder
@@ -840,7 +843,69 @@ func (c *cache) CheckApplyOrder(toApply types.LayerID) error {
 	return nil
 }
 
-// GetMeshHash gets the aggregated layer hash at the specified layer.
-func (c *cache) GetMeshHash(lid types.LayerID) (types.Hash32, error) {
-	return c.tp.GetMeshHash(lid)
+func addToProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		for _, tid := range tids {
+			if err := transactions.AddToProposal(dbtx, tid, lid, pid); err != nil {
+				return fmt.Errorf("add2prop %w", err)
+			}
+			_, err := transactions.UpdateIfBetter(dbtx, tid, lid, types.EmptyBlockID)
+			if err != nil {
+				return fmt.Errorf("add2prop update %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		for _, tid := range tids {
+			if err := transactions.AddToBlock(dbtx, tid, lid, bid); err != nil {
+				return fmt.Errorf("add2block %w", err)
+			}
+			_, err := transactions.UpdateIfBetter(dbtx, tid, lid, bid)
+			if err != nil {
+				return fmt.Errorf("add2block update %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+func applyLayer(logger log.Log, db *sql.Database, addr types.Address, startNonce uint64, appliedByNonce map[uint64]types.TransactionWithResult) error {
+	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		// nonce order doesn't matter here
+		for nonce, tx := range appliedByNonce {
+			err := transactions.AddResult(dbtx, tx.ID, &tx.TransactionResult)
+			if err != nil {
+				return fmt.Errorf("apply %w", err)
+			}
+			if err = transactions.DiscardByAcctNonce(dbtx, tx.ID, tx.Layer, tx.Principal, nonce); err != nil {
+				return fmt.Errorf("apply discard %w", err)
+			}
+		}
+		// txs that were rejected from cache due to nonce too low are discarded here
+		if err := transactions.DiscardNonceBelow(dbtx, addr, startNonce); err != nil {
+			logger.With().Error("failed to discard txs with lower nonce",
+				log.Uint64("nonce", startNonce))
+			return err
+		}
+		return nil
+	})
+}
+
+func undoLayers(db *sql.Database, from types.LayerID) error {
+	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		tids, err := transactions.UndoLayers(dbtx, from)
+		if err != nil {
+			return fmt.Errorf("undo %w", err)
+		}
+		for _, tid := range tids {
+			if _, _, err = transactions.SetNextLayer(dbtx, tid, from.Sub(1)); err != nil {
+				return fmt.Errorf("reset for undo %w", err)
+			}
+		}
+		return nil
+	})
 }

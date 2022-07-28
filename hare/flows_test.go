@@ -145,7 +145,7 @@ func Test_consensusIterations(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -201,7 +201,7 @@ func createTestHare(t testing.TB, db *sql.Database, tcfg config.Config, clock *m
 
 	hare := New(db, tcfg, pid, p2p, ed, nodeID, mockBlockGen, mockSyncS, mockMeshDB, mockBeacons, mockFetcher, mockRoracle, patrol, 10,
 		mockStateQ, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
-	p2p.Register(ProtoName, hare.GetHareMsgHandler())
+	p2p.Register(pubsub.HareProtocol, hare.GetHareMsgHandler())
 
 	return &hareWithMocks{
 		Hare:         hare,
@@ -395,7 +395,7 @@ func Test_multipleCPs(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -453,7 +453,7 @@ func Test_multipleCPs(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(ProtoName)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(pubsub.HareProtocol)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}
@@ -482,7 +482,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -541,7 +541,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(ProtoName)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(pubsub.HareProtocol)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}

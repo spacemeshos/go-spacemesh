@@ -55,8 +55,6 @@ const (
 	labelsPerUnit    = 2048
 	bitsPerLabel     = 8
 	numUnits         = 2
-	defaultGasLimit  = 10
-	defaultFee       = 1
 	genTimeUnix      = 1000000
 	layerDurationSec = 10
 	layerAvgSize     = 10
@@ -1964,13 +1962,18 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
+			events.CloseEventReporter()
+			events.InitializeReporter()
+
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+			_, err = stream.Header()
+			require.NoError(t, err)
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
 
 				for i := 0; i < subscriptionChanBufSize; i++ {
 					_, err := stream.Recv()
@@ -1981,11 +1984,6 @@ func TestTransactionService(t *testing.T) {
 					}
 				}
 			}()
-
-			events.CloseEventReporter()
-			events.InitializeReporter()
-
-			time.Sleep(100 * time.Millisecond)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
 				events.ReportNewTx(types.LayerID{}, globalTx)
@@ -2871,7 +2869,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(globalTx)
+	conState.AddToCache(context.TODO(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)

@@ -75,7 +75,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, c
 		LimitConcurrent: maxLayers,
 	}
 
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), nodes)
+	mesh, err := mocknet.FullMeshLinked(nodes)
 	require.NoError(t, err)
 	dbs := make([]*sql.Database, 0, nodes)
 	for i := 0; i < nodes; i++ {

@@ -7,12 +7,12 @@ import (
 
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
-	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/peer"
-	noise "github.com/libp2p/go-libp2p-noise"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
-	yamux "github.com/libp2p/go-libp2p-yamux"
-	"github.com/libp2p/go-tcp-transport"
+	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
@@ -62,7 +62,7 @@ type Config struct {
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, error) {
+func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -73,7 +73,10 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
 
-	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
+	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
+	if err != nil {
+		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
+	}
 	// TODO(dshulyak) remove this part
 	for _, p := range cfg.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
@@ -83,6 +86,10 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		cm.Protect(addr.ID, peerexchange.BootNodeTag)
 	}
 	streamer := *yamux.DefaultTransport
+	ps, err := pstoremem.NewPeerstore()
+	if err != nil {
+		return nil, fmt.Errorf("can't create peer store: %w", err)
+	}
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
@@ -94,13 +101,13 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 
 		libp2p.ConnectionManager(cm),
-		libp2p.Peerstore(pstoremem.NewPeerstore()),
+		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 	}
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
 	}
-	h, err := libp2p.New(ctx, lopts...)
+	h, err := libp2p.New(lopts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}

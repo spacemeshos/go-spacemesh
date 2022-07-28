@@ -21,7 +21,7 @@ func sortPids(pids []peer.ID) []peer.ID {
 }
 
 func TestPeersAddRemove(t *testing.T) {
-	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 
 	h := mesh.Hosts()[0]

@@ -85,7 +85,7 @@ func TestPopAll(t *testing.T) {
 	mempool, expected := makeMempool()
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockconStateCache(ctrl)
-	mockCache.EXPECT().GetMempool().Return(mempool)
+	mockCache.EXPECT().GetMempool(gomock.Any()).Return(mempool)
 	gasLimit := uint64(3)
 	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
 	testPopAll(t, mi, expected[:gasLimit])
@@ -96,7 +96,7 @@ func TestPopAll_SkipSomeGasTooHigh(t *testing.T) {
 	mempool, orderedByFee := makeMempool()
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockconStateCache(ctrl)
-	mockCache.EXPECT().GetMempool().Return(mempool)
+	mockCache.EXPECT().GetMempool(gomock.Any()).Return(mempool)
 	gasLimit := uint64(3)
 	// make the 2nd one too expensive to pick, therefore invalidated all txs from addr0
 	orderedByFee[1].MaxGas = 10
@@ -110,7 +110,7 @@ func TestPopAll_ExhaustMempool(t *testing.T) {
 	mempool, expected := makeMempool()
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockconStateCache(ctrl)
-	mockCache.EXPECT().GetMempool().Return(mempool)
+	mockCache.EXPECT().GetMempool(gomock.Any()).Return(mempool)
 	gasLimit := uint64(100)
 	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
 	testPopAll(t, mi, expected)

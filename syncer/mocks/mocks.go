@@ -6,11 +6,11 @@ package mocks
 
 import (
 	context "context"
-	layerfetcher "github.com/spacemeshos/go-spacemesh/fetch"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 )
 
 // MocklayerTicker is a mock of layerTicker interface.
@@ -88,10 +88,10 @@ func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(arg0, arg1 interface{}) *go
 }
 
 // PollLayerContent mocks base method.
-func (m *MocklayerFetcher) PollLayerContent(arg0 context.Context, arg1 types.LayerID) chan layerfetcher.LayerPromiseResult {
+func (m *MocklayerFetcher) PollLayerContent(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PollLayerContent", arg0, arg1)
-	ret0, _ := ret[0].(chan layerfetcher.LayerPromiseResult)
+	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
 	return ret0
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
@@ -13,6 +14,15 @@ import (
 var (
 	totalPeers       = metrics.NewGauge("total_peers", subsystem, "Total number of peers", nil)
 	peersPerProtocol = metrics.NewGauge("peers_per_protocol", subsystem, "Number of peers per protocol", []string{"protocol"})
+)
+
+// ProcessedMessagesDuration in nanoseconds to process a message. Labeled by protocol and result.
+var ProcessedMessagesDuration = metrics.NewHistogramWithBuckets(
+	"processed_messages_duration",
+	subsystem,
+	"Duration in nanoseconds to process a message",
+	[]string{"protocol", "result"},
+	prometheus.ExponentialBuckets(1_000_000, 4, 10),
 )
 
 // GossipCollector pubsub.RawTracer implementation

@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/address"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -32,9 +31,7 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 		TxHeader: &types.TxHeader{},
 	}
 	// this is a fake principal for the purposes of testing.
-	addrBytes, err := address.GenerateAddress(address.TestnetID, principal.PublicKey().Bytes())
-	require.NoError(t, err)
-	copy(parsed.Principal[:], addrBytes.Bytes())
+	copy(parsed.Principal[:], types.BytesToAddress(principal.PublicKey().Bytes()).Bytes())
 	parsed.Nonce = types.Nonce{Counter: nonce}
 	parsed.GasPrice = fee
 	return &parsed
@@ -98,9 +95,9 @@ func TestAddGetHas(t *testing.T) {
 	signer1 := signing.NewEdSignerFromRand(rng)
 	signer2 := signing.NewEdSignerFromRand(rng)
 	txs := []*types.Transaction{
-		createTX(t, signer1, types.Address{byte(address.TestnetID), 1}, 1, 191, 1),
-		createTX(t, signer2, types.Address{byte(address.TestnetID), 2}, 1, 191, 1),
-		createTX(t, signer1, types.Address{byte(address.TestnetID), 3}, 1, 191, 1),
+		createTX(t, signer1, types.Address{1}, 1, 191, 1),
+		createTX(t, signer2, types.Address{2}, 1, 191, 1),
+		createTX(t, signer1, types.Address{3}, 1, 191, 1),
 	}
 
 	received := time.Now()
@@ -128,16 +125,51 @@ func TestAddGetHas(t *testing.T) {
 	require.False(t, has)
 }
 
+func TestAddUpdatesHeader(t *testing.T) {
+	db := sql.InMemory()
+	txs := []*types.Transaction{
+		{
+			RawTx:    types.NewRawTx([]byte{1, 2, 3}),
+			TxHeader: &types.TxHeader{Principal: types.Address{1}},
+		},
+		{
+			RawTx: types.NewRawTx([]byte{4, 5, 6}),
+		},
+	}
+	require.NoError(t, Add(db, txs[1], time.Time{}))
+
+	require.NoError(t, Add(db, &types.Transaction{RawTx: txs[0].RawTx}, time.Time{}))
+	tx, err := Get(db, txs[0].ID)
+	require.NoError(t, err)
+	require.Nil(t, tx.TxHeader)
+
+	require.NoError(t, Add(db, txs[0], time.Time{}))
+	tx, err = Get(db, txs[0].ID)
+	require.NoError(t, err)
+	require.NotNil(t, tx.TxHeader)
+
+	require.NoError(t, Add(db, &types.Transaction{RawTx: txs[0].RawTx}, time.Time{}))
+	tx, err = Get(db, txs[0].ID)
+	require.NoError(t, err)
+	require.NotNil(t, tx.TxHeader)
+
+	tx, err = Get(db, txs[1].ID)
+	require.NoError(t, err)
+	require.Nil(t, tx.TxHeader)
+}
+
 func TestAddToProposal(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	lid := types.NewLayerID(10)
 	pid := types.ProposalID{1, 1}
+	require.NoError(t, AddToProposal(db, tx.ID, lid, pid))
+	// do it again
 	require.NoError(t, AddToProposal(db, tx.ID, lid, pid))
 
 	has, err := HasProposalTX(db, pid, tx.ID)
@@ -154,11 +186,13 @@ func TestAddToBlock(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
+	require.NoError(t, AddToBlock(db, tx.ID, lid, bid))
+	// do it again
 	require.NoError(t, AddToBlock(db, tx.ID, lid, bid))
 
 	has, err := HasBlockTX(db, bid, tx.ID)
@@ -175,7 +209,7 @@ func TestUpdateIfBetter(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	received := time.Now()
 	require.NoError(t, Add(db, tx, received))
 	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
@@ -241,7 +275,7 @@ func TestApply_AlreadyApplied(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	lid := types.NewLayerID(10)
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	require.NoError(t, Add(db, tx, time.Now()))
 
 	bid := types.RandomBlockID()
@@ -263,9 +297,11 @@ func TestApply_AlreadyApplied(t *testing.T) {
 func TestUndoLayers_Empty(t *testing.T) {
 	db := sql.InMemory()
 
-	undone, err := UndoLayers(db, types.NewLayerID(199))
-	require.NoError(t, err)
-	require.Len(t, undone, 0)
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		undone, err := UndoLayers(dtx, types.NewLayerID(199))
+		require.Len(t, undone, 0)
+		return err
+	}))
 }
 
 func TestApplyAndUndoLayers(t *testing.T) {
@@ -275,9 +311,10 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	firstLayer := types.NewLayerID(10)
 	numLayers := uint32(5)
 	applied := make([]types.TransactionID, 0, numLayers)
+	discarded := make([]types.TransactionID, 0, numLayers)
 	for lid := firstLayer; lid.Before(firstLayer.Add(numLayers)); lid = lid.Add(1) {
 		signer := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, uint64(lid.Value), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 2)
 		require.NoError(t, Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
 
@@ -285,6 +322,11 @@ func TestApplyAndUndoLayers(t *testing.T) {
 			return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
 		}))
 		applied = append(applied, tx.ID)
+
+		sameNonce := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
+		require.NoError(t, Add(db, sameNonce, time.Now()))
+		require.NoError(t, DiscardByAcctNonce(db, tx.ID, lid, tx.Principal, tx.Nonce.Counter))
+		discarded = append(discarded, sameNonce.ID)
 	}
 
 	for _, tid := range applied {
@@ -292,19 +334,35 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
 	}
+	for _, tid := range discarded {
+		mtx, err := Get(db, tid)
+		require.NoError(t, err)
+		require.Equal(t, types.DISCARDED, mtx.State)
+	}
 
 	// revert to firstLayer
-	numTXsUndone := int(numLayers - 1)
-	undone, err := UndoLayers(db, firstLayer.Add(1))
-	require.NoError(t, err)
-	require.Len(t, undone, numTXsUndone)
-	require.ElementsMatch(t, applied[1:], undone)
+	numTXsUndone := int(numLayers-1) * 2
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		undone, err := UndoLayers(dtx, firstLayer.Add(1))
+		require.Len(t, undone, numTXsUndone)
+		require.ElementsMatch(t, append(applied[1:], discarded[1:]...), undone)
+		return err
+	}))
 
 	for i, tid := range applied {
 		mtx, err := Get(db, tid)
 		require.NoError(t, err)
 		if i == 0 {
 			require.Equal(t, types.APPLIED, mtx.State)
+		} else {
+			require.Equal(t, types.MEMPOOL, mtx.State)
+		}
+	}
+	for i, tid := range discarded {
+		mtx, err := Get(db, tid)
+		require.NoError(t, err)
+		if i == 0 {
+			require.Equal(t, types.DISCARDED, mtx.State)
 		} else {
 			require.Equal(t, types.MEMPOOL, mtx.State)
 		}
@@ -316,13 +374,12 @@ func TestDiscardNonceBelow(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	principal, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	principal := types.BytesToAddress(signer.PublicKey().Bytes())
 	numTXs := 10
 	received := time.Now()
 	txs := make([]*types.Transaction, 0, numTXs*2)
 	for nonce := uint64(0); nonce < uint64(numTXs); nonce++ {
-		tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, nonce, 191, 1)
+		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
@@ -330,7 +387,7 @@ func TestDiscardNonceBelow(t *testing.T) {
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
@@ -368,15 +425,15 @@ func TestDiscardByAcctNonce(t *testing.T) {
 	nonce := uint64(10000)
 	received := time.Now()
 	for i := 0; i < sameNonceTXs; i++ {
-		tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, nonce, 191, 1+uint64(i))
+		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1+uint64(i))
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
 	for i := 1; i <= numTXs/2; i++ {
-		tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, nonce-uint64(i), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
-		tx = createTX(t, signer, types.Address{byte(address.TestnetID), 1}, nonce+uint64(i), 191, 1)
+		tx = createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
@@ -384,13 +441,12 @@ func TestDiscardByAcctNonce(t *testing.T) {
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
 	}
 
-	principal, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	principal := types.BytesToAddress(signer.PublicKey().Bytes())
 	applied := txs[0].ID
 	lid := types.NewLayerID(99)
 	require.NoError(t, DiscardByAcctNonce(db, applied, lid, principal, nonce))
@@ -410,7 +466,7 @@ func TestSetNextLayer(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	received := time.Now()
 	require.NoError(t, Add(db, tx, received))
 	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
@@ -472,7 +528,7 @@ func TestSetNextLayerAndUpdate(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
-	tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	received := time.Now()
 	require.NoError(t, Add(db, tx, received))
 	expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
@@ -508,7 +564,7 @@ func TestGetBlob(t *testing.T) {
 	numTXs := 5
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		tx := createTX(t, signing.NewEdSignerFromRand(rng), types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+		tx := createTX(t, signing.NewEdSignerFromRand(rng), types.Address{1}, 1, 191, 1)
 		require.NoError(t, Add(db, tx, time.Now()))
 		txs = append(txs, tx)
 	}
@@ -519,21 +575,41 @@ func TestGetBlob(t *testing.T) {
 	}
 }
 
+func TestGetAllPendingHeaders(t *testing.T) {
+	db := sql.InMemory()
+	txs := []*types.Transaction{
+		{
+			RawTx:    types.NewRawTx([]byte{1, 2, 3}),
+			TxHeader: &types.TxHeader{Principal: types.Address{1}},
+		},
+		{
+			RawTx: types.NewRawTx([]byte{4, 5, 6}),
+		},
+	}
+	for _, tx := range txs {
+		require.NoError(t, Add(db, tx, time.Time{}))
+	}
+
+	pending, err := GetAllPending(db)
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	require.Equal(t, &pending[0].Transaction, txs[0])
+}
+
 func TestGetByAddress(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
 	signer1 := signing.NewEdSignerFromRand(rng)
 	signer2 := signing.NewEdSignerFromRand(rng)
-	signer2Address, err := address.GenerateAddress(address.TestnetID, signer2.PublicKey().Bytes())
-	require.NoError(t, err)
+	signer2Address := types.BytesToAddress(signer2.PublicKey().Bytes())
 	lid := types.NewLayerID(10)
 	pid := types.ProposalID{1, 1}
 	bid := types.BlockID{2, 2}
 
 	txs := []*types.Transaction{
-		createTX(t, signer1, types.Address{byte(address.TestnetID), 1}, 1, 191, 1),
-		createTX(t, signer2, types.Address{byte(address.TestnetID), 2}, 1, 191, 1),
+		createTX(t, signer1, types.Address{1}, 1, 191, 1),
+		createTX(t, signer2, types.Address{2}, 1, 191, 1),
 		createTX(t, signer1, signer2Address, 1, 191, 1),
 	}
 	received := time.Now()
@@ -571,7 +647,7 @@ func TestGetAllPending(t *testing.T) {
 		signer := signing.NewEdSignerFromRand(rng)
 		numApplied := rand.Intn(numTXs)
 		for j := 0; j < numTXs; j++ {
-			tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, uint64(j), 191, 1)
+			tx := createTX(t, signer, types.Address{1}, uint64(j), 191, 1)
 			require.NoError(t, Add(db, tx, received.Add(time.Duration(i+j))))
 			// causing some txs to be applied, some packed in a block, and some in mempool
 			if j < numApplied {
@@ -616,10 +692,10 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	nonce := uint64(987)
 	received := time.Now()
 	for i := 0; i < numTXs; i++ {
-		tx := createTX(t, signer, types.Address{byte(address.TestnetID), 1}, nonce+uint64(i), 191, 1)
+		tx := createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)
 		require.NoError(t, Add(db, tx, received.Add(time.Duration(i))))
 		if i > 0 {
-			tx = createTX(t, signer, types.Address{byte(address.TestnetID), 1}, nonce-uint64(i), 191, 1)
+			tx = createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1)
 			require.NoError(t, Add(db, tx, received.Add(time.Duration(i))))
 		}
 	}
@@ -627,12 +703,11 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
 		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{byte(address.TestnetID), 1}, 1, 191, 1)
+		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
 		require.NoError(t, Add(db, tx, received))
 	}
 
-	principal, err := address.GenerateAddress(address.TestnetID, signer.PublicKey().Bytes())
-	require.NoError(t, err)
+	principal := types.BytesToAddress(signer.PublicKey().Bytes())
 	for i := 0; i < numTXs; i++ {
 		got, err := GetAcctPendingFromNonce(db, principal, nonce+uint64(i))
 		require.NoError(t, err)
@@ -645,8 +720,8 @@ func TestAppliedLayer(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
 	txs := []*types.Transaction{
-		createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 1, 191, 1),
-		createTX(t, signer, types.Address{byte(address.TestnetID), 1}, 2, 191, 1),
+		createTX(t, signer, types.Address{1}, 1, 191, 1),
+		createTX(t, signer, types.Address{1}, 2, 191, 1),
 	}
 	lid := types.NewLayerID(10)
 
@@ -664,10 +739,12 @@ func TestAppliedLayer(t *testing.T) {
 	_, err = GetAppliedLayer(db, txs[1].ID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	undone, err := UndoLayers(db, lid)
-	require.NoError(t, err)
-	require.Len(t, undone, 1)
-	require.Equal(t, txs[0].ID, undone[0])
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+		undone, err := UndoLayers(dtx, lid)
+		require.Len(t, undone, 1)
+		require.Equal(t, txs[0].ID, undone[0])
+		return err
+	}))
 	_, err = GetAppliedLayer(db, txs[0].ID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }

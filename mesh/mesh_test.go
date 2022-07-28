@@ -103,33 +103,28 @@ func checkLastAppliedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	lid, err := layers.GetLastApplied(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
-	lid, err = layers.GetByStatus(mesh.cdb, layers.Applied)
-	require.NoError(t, err)
-	require.Equal(t, expected, lid)
 }
 
 func checkLatestInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	t.Helper()
-	lid, err := layers.GetByStatus(mesh.cdb, layers.Latest)
+	lid, err := ballots.LatestLayer(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
 }
 
 func checkProcessedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	t.Helper()
-	lid, err := layers.GetByStatus(mesh.cdb, layers.Processed)
+	lid, err := layers.GetProcessed(mesh.cdb)
 	require.NoError(t, err)
 	require.Equal(t, expected, lid)
 }
 
 func TestMesh_FromGenesis(t *testing.T) {
 	tm := createTestMesh(t)
-	gotP, err := tm.Mesh.GetProcessedLayer()
-	require.NoError(t, err)
+	gotP := tm.Mesh.ProcessedLayer()
 	require.Equal(t, types.GetEffectiveGenesis(), gotP)
-	gotV, err := tm.Mesh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, types.GetEffectiveGenesis(), gotV)
+	getLS := tm.Mesh.LatestLayerInState()
+	require.Equal(t, types.GetEffectiveGenesis(), getLS)
 	gotL := tm.Mesh.LatestLayer()
 	require.Equal(t, types.GetEffectiveGenesis(), gotL)
 
@@ -169,33 +164,30 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	checkLastAppliedInDB(t, msh, gLid)
 	gotL := msh.LatestLayer()
 	require.Equal(t, gLid, gotL)
+	gotP := msh.ProcessedLayer()
+	require.Equal(t, gLid, gotP)
 	gotLS := msh.LatestLayerInState()
 	require.Equal(t, gLid, gotLS)
-	gotP, err := msh.GetProcessedLayer()
-	require.NoError(t, err)
-	require.Equal(t, gLid, gotP)
-	gotV, err := msh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, gLid, gotV)
 }
 
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Latest))
-	require.NoError(t, layers.SetStatus(tm.cdb, latest, layers.Processed))
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: latest})
+	require.NoError(t, ballots.Add(tm.cdb, &b))
+	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
-	require.NoError(t, layers.SetStatus(tm.cdb, latestState, layers.Applied))
+	require.NoError(t, layers.SetApplied(tm.cdb, latestState, types.RandomBlockID()))
 
 	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
 	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
-	gotP, err := msh.GetProcessedLayer()
-	require.NoError(t, err)
+	gotL := msh.LatestLayer()
+	require.Equal(t, latest, gotL)
+	gotP := msh.ProcessedLayer()
 	require.Equal(t, latest, gotP)
-	gotV, err := msh.GetVerifiedLayer()
-	require.NoError(t, err)
-	require.Equal(t, latestState, gotV)
+	gotLS := msh.LatestLayerInState()
+	require.Equal(t, latestState, gotLS)
 }
 
 func TestMesh_LayerHashes(t *testing.T) {
@@ -219,7 +211,7 @@ func TestMesh_LayerHashes(t *testing.T) {
 
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(i.Sub(1)).Times(1)
 		blk := lyrBlocks[i]
-		tm.mockState.EXPECT().ApplyLayer(blk).Return(nil, nil).Times(1)
+		tm.mockState.EXPECT().ApplyLayer(context.TODO(), blk).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 
 		h, err := layers.GetHash(tm.cdb, i)
@@ -283,7 +275,7 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 	for i := gPlus1; !i.After(gPlus5); i = i.Add(1) {
 		toApply := layerBlocks[i]
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(i.Sub(1)).Times(1)
-		tm.mockState.EXPECT().ApplyLayer(toApply).Return(nil, nil).Times(1)
+		tm.mockState.EXPECT().ApplyLayer(context.TODO(), toApply).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 		require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), i, toApply.ID()))
 		got, err := layers.GetHareOutput(tm.cdb, i)
@@ -311,7 +303,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	// process order is  : gPlus1, gPlus3, gPlus5, gPlus2, gPlus4
 	// processed layer is: gPlus1, gPlus1, gPlus1, gPlus3, gPlus5
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus1).Return(gLyr).Times(1)
-	tm.mockState.EXPECT().ApplyLayer(blocks1[0]).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks1[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus1, blocks1[0].ID()))
 	got, err := layers.GetHareOutput(tm.cdb, gPlus1)
@@ -347,8 +339,8 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	// will try to apply state for gPlus2, gPlus3 and gPlus4
 	// since gPlus2 has been verified, we will apply the lowest order of contextually valid blocks
 	gPlus2Block := types.SortBlocks(blocks2)[0]
-	tm.mockState.EXPECT().ApplyLayer(gPlus2Block).Return(nil, nil).Times(1)
-	tm.mockState.EXPECT().ApplyLayer(blocks3[0]).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), gPlus2Block).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks3[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(2)
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, blocks2[0].ID())
 	assert.ErrorIs(t, err, errMissingHareOutput)
@@ -363,8 +355,8 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	// will try to apply state for gPlus4 and gPlus5
 	// since gPlus4 has been verified, we will apply the lowest order of contextually valid blocks
 	gPlus4Block := types.SortBlocks(blocks4)[0]
-	tm.mockState.EXPECT().ApplyLayer(gPlus4Block).Return(nil, nil).Times(1)
-	tm.mockState.EXPECT().ApplyLayer(blocks5[0]).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), gPlus4Block).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks5[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(2)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus4, blocks4[0].ID()))
 	got, err = layers.GetHareOutput(tm.cdb, gPlus4)
@@ -381,7 +373,7 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	gPlus1 := gLyr.Add(1)
 	blocks1 := createLayerBlocks(t, tm.Mesh, gPlus1, false)
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus1).Return(gLyr).Times(1)
-	tm.mockState.EXPECT().ApplyLayer(blocks1[0]).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks1[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus1, blocks1[0].ID()))
 	hareOutput, err := layers.GetHareOutput(tm.cdb, gPlus1)
@@ -431,7 +423,7 @@ func TestMesh_Revert(t *testing.T) {
 	for i := gPlus1; i.Before(gPlus4); i = i.Add(1) {
 		hareOutput := layerBlocks[i]
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(i.Sub(1)).Times(1)
-		tm.mockState.EXPECT().ApplyLayer(hareOutput).Return(nil, nil).Times(1)
+		tm.mockState.EXPECT().ApplyLayer(context.TODO(), hareOutput).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 		require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), i, hareOutput.ID()))
 	}
@@ -456,7 +448,7 @@ func TestMesh_Revert(t *testing.T) {
 	tm.mockState.EXPECT().RevertState(gPlus1).Return(types.Hash32{}, nil)
 	for i := gPlus2; !i.After(gPlus4); i = i.Add(1) {
 		hareOutput := layerBlocks[i]
-		tm.mockState.EXPECT().ApplyLayer(hareOutput).Return(nil, nil).Times(1)
+		tm.mockState.EXPECT().ApplyLayer(context.TODO(), hareOutput).Return(nil, nil).Times(1)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	}
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus4, blocks4[0].ID()))
@@ -476,7 +468,7 @@ func TestMesh_Revert(t *testing.T) {
 
 	// another new layer won't cause a revert
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus5).Return(gPlus4).Times(1)
-	tm.mockState.EXPECT().ApplyLayer(blocks5[0]).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks5[0]).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus5, blocks5[0].ID()))
 	require.Equal(t, gPlus5, tm.ProcessedLayer())
@@ -516,7 +508,7 @@ func TestMesh_pushLayersToState_verified(t *testing.T) {
 	valids := []*types.Block{block1, block2}
 	types.SortBlocks(valids)
 	toApply := valids[0]
-	tm.mockState.EXPECT().ApplyLayer(toApply).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), toApply).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.pushLayersToState(context.TODO(), layerID, layerID, layerID))
 	checkLastAppliedInDB(t, tm.Mesh, layerID)
@@ -537,7 +529,7 @@ func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	hareOutput := addBlockWithTXsToMesh(t, tm, layerID, true, txIDs[4:])
 	require.NoError(t, layers.SetHareOutput(tm.cdb, layerID, hareOutput.ID()))
 
-	tm.mockState.EXPECT().ApplyLayer(hareOutput).Return(nil, nil).Times(1)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), hareOutput).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
 	require.NoError(t, tm.pushLayersToState(context.TODO(), layerID, layerID, layerID.Sub(1)))
 	checkLastAppliedInDB(t, tm.Mesh, layerID)
@@ -600,7 +592,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	require.NoError(t, blocks.Add(tm.cdb, block))
 	require.NoError(t, layers.SetHareOutput(tm.cdb, last, block.ID()))
 	errTXMissing := errors.New("tx missing")
-	tm.mockState.EXPECT().ApplyLayer(block).Return(nil, errTXMissing)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), block).Return(nil, errTXMissing)
 	require.Error(t, tm.ProcessLayer(ctx, last))
 	require.Equal(t, last, tm.ProcessedLayer())
 	require.Equal(t, last, tm.MissingLayer())
@@ -609,7 +601,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 
 	last = last.Add(1)
 	require.NoError(t, tm.saveContextualValidity(block.ID(), last.Sub(1), true))
-	tm.mockState.EXPECT().ApplyLayer(block).Return(nil, nil)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), block).Return(nil, nil)
 	require.NoError(t, layers.SetHareOutput(tm.cdb, last, types.EmptyBlockID))
 	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(last.Sub(1))
@@ -636,7 +628,7 @@ func TestMesh_MissingTransactionsFailure(t *testing.T) {
 
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), last).Return(last.Sub(1))
 	errTXMissing := errors.New("tx missing")
-	tm.mockState.EXPECT().ApplyLayer(block).Return(nil, errTXMissing)
+	tm.mockState.EXPECT().ApplyLayer(context.TODO(), block).Return(nil, errTXMissing)
 	require.ErrorIs(t, tm.ProcessLayer(ctx, last), errTXMissing)
 
 	require.Equal(t, last, tm.ProcessedLayer())

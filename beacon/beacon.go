@@ -655,7 +655,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 		VRFSignature: proposedSignature,
 	}
 
-	pd.sendToGossip(ctx, ProposalProtocol, m)
+	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, m)
 	logger.With().Info("beacon proposal sent", log.String("message", m.String()))
 }
 
@@ -798,7 +798,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		types.FirstRound,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, FirstVotesProtocol, m)
+	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, m)
 	return nil
 }
 
@@ -836,7 +836,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		round,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, FollowingVotesProtocol, m)
+	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, m)
 	return nil
 }
 

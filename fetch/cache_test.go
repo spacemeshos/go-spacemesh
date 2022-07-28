@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -93,7 +94,7 @@ func TestGetRandom(t *testing.T) {
 		}()
 		wg.Wait()
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		peer, exists := cache.GetRandom(hash, rng)
+		peer, exists := cache.GetRandom(hash, datastore.TXDB, rng)
 		require.Equal(t, true, exists)
 		require.Contains(t, []p2p.Peer{peer1, peer2, peer3}, peer)
 	})
@@ -114,10 +115,10 @@ func TestGetRandom(t *testing.T) {
 		}()
 		wg.Wait()
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		randomPeer, exists := cache.GetRandom(hash1, rng)
+		randomPeer, exists := cache.GetRandom(hash1, datastore.TXDB, rng)
 		require.Equal(t, true, exists)
 		require.Equal(t, peer, randomPeer)
-		randomPeer, exists = cache.GetRandom(hash2, rng)
+		randomPeer, exists = cache.GetRandom(hash2, datastore.TXDB, rng)
 		require.Equal(t, true, exists)
 		require.Equal(t, peer, randomPeer)
 	})
@@ -182,7 +183,7 @@ func TestRace(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			cache.GetRandom(hash, rng)
+			cache.GetRandom(hash, datastore.TXDB, rng)
 		}()
 		go func() {
 			defer wg.Done()
@@ -190,7 +191,7 @@ func TestRace(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			cache.GetRandom(hash, rng)
+			cache.GetRandom(hash, datastore.TXDB, rng)
 		}()
 		wg.Wait()
 	})
@@ -213,7 +214,7 @@ func TestRace(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			cache.GetRandom(hash1, rng)
+			cache.GetRandom(hash1, datastore.TXDB, rng)
 		}()
 		go func() {
 			defer wg.Done()
@@ -221,7 +222,7 @@ func TestRace(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			cache.GetRandom(hash2, rng)
+			cache.GetRandom(hash2, datastore.TXDB, rng)
 		}()
 		go func() {
 			defer wg.Done()

@@ -248,18 +248,23 @@ func TestFetch_GetLayerData(t *testing.T) {
 			require.Equal(t, len(peers), len(tc.errs))
 			f := createFetch(t)
 			f.mh.EXPECT().GetPeers().Return(peers)
+			var mu sync.Mutex
 			resPeers := make([]p2p.Peer, 0, len(peers))
 			resErrs := make([]error, 0, len(peers))
 			var wg sync.WaitGroup
 			wg.Add(len(peers))
 			okFunc := func(data []byte, peer p2p.Peer, numPeers int) {
 				require.Equal(t, len(peers), numPeers)
+				mu.Lock()
+				defer mu.Unlock()
 				resPeers = append(resPeers, peer)
 				resErrs = append(resErrs, nil)
 				wg.Done()
 			}
 			errFunc := func(err error, peer p2p.Peer, numPeers int) {
 				require.Equal(t, len(peers), numPeers)
+				mu.Lock()
+				defer mu.Unlock()
 				resPeers = append(resPeers, peer)
 				resErrs = append(resErrs, err)
 				wg.Done()
@@ -267,7 +272,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 			for i, p := range peers {
 				idx := i
 				f.mLyrS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, p p2p.Peer, req []byte, okFunc func([]byte), errFunc func(error)) error {
+					func(_ context.Context, _ p2p.Peer, _ []byte, okFunc func([]byte), errFunc func(error)) error {
 						if tc.errs[idx] == nil {
 							go okFunc(generateLayerContent(false))
 						} else {

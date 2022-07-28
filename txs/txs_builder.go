@@ -37,7 +37,7 @@ type meshState struct {
 type proposalMetadata struct {
 	lid        types.LayerID
 	size       int
-	meshHashes map[string]*meshState
+	meshHashes map[types.Hash32]*meshState
 	mtxs       []*types.MeshTransaction
 	optFilter  bool
 }
@@ -47,15 +47,15 @@ func extractProposalMetadata(
 	cfg CSConfig,
 	lid types.LayerID,
 	proposals []*types.Proposal,
-	getTx func(types.TransactionID) (*types.MeshTransaction, error),
+	gtx txGetter,
 ) (*proposalMetadata, error) {
 	var (
 		seen       = make(map[types.TransactionID]struct{})
 		mtxs       = make([]*types.MeshTransaction, 0, len(proposals)*cfg.NumTXsPerProposal)
-		meshHashes = make(map[string]*meshState)
+		meshHashes = make(map[types.Hash32]*meshState)
 	)
 	for _, p := range proposals {
-		key := p.MeshHash.ShortString()
+		key := p.MeshHash
 		if _, ok := meshHashes[key]; !ok {
 			meshHashes[key] = &meshState{
 				hash:  p.MeshHash,
@@ -69,10 +69,13 @@ func extractProposalMetadata(
 			if _, ok := seen[tid]; ok {
 				continue
 			}
-			mtx, err := getTx(tid)
+			mtx, err := gtx.GetMeshTransaction(tid)
 			if err != nil {
 				logger.With().Error("failed to find proposal tx", p.LayerIndex, p.ID(), tid, log.Err(err))
 				return nil, fmt.Errorf("get proposal tx: %w", err)
+			}
+			if mtx.TxHeader == nil {
+				return nil, fmt.Errorf("inconsistent state: tx %s is missing header", mtx.ID)
 			}
 			seen[tid] = struct{}{}
 			mtxs = append(mtxs, mtx)
@@ -85,9 +88,14 @@ func extractProposalMetadata(
 	return &proposalMetadata{lid: lid, size: len(proposals), mtxs: mtxs, meshHashes: meshHashes}, nil
 }
 
-func getMajorityState(meshHashes map[string]*meshState, numProposals, threshold int) *meshState {
+func getMajorityState(logger log.Log, meshHashes map[types.Hash32]*meshState, numProposals, threshold int) *meshState {
 	for _, ms := range meshHashes {
-		if ms.count*100 > numProposals*threshold {
+		logger.With().Debug("mesh hash",
+			ms.hash,
+			log.Int("count", ms.count),
+			log.Int("threshold", threshold),
+			log.Int("num_proposals", numProposals))
+		if ms.hash != types.EmptyLayerHash && ms.count*100 >= numProposals*threshold {
 			return ms
 		}
 	}
@@ -101,14 +109,14 @@ func checkStateConsensus(
 	lid types.LayerID,
 	proposals []*types.Proposal,
 	ownMeshHash types.Hash32,
-	getTx func(types.TransactionID) (*types.MeshTransaction, error),
+	gtx txGetter,
 ) (*proposalMetadata, error) {
-	md, err := extractProposalMetadata(logger, cfg, lid, proposals, getTx)
+	md, err := extractProposalMetadata(logger, cfg, lid, proposals, gtx)
 	if err != nil {
 		return nil, err
 	}
 
-	ms := getMajorityState(md.meshHashes, md.size, cfg.OptFilterThreshold)
+	ms := getMajorityState(logger, md.meshHashes, md.size, cfg.OptFilterThreshold)
 	if ms == nil {
 		logger.With().Warning("no consensus on mesh hash. NOT doing optimistic filtering", lid)
 		return md, nil
@@ -117,13 +125,14 @@ func checkStateConsensus(
 	if ownMeshHash != ms.hash {
 		logger.With().Error("node mesh hash differ from majority",
 			lid,
-			log.String("majority_hash", ms.hash.String()),
-			log.String("node_hash", ownMeshHash.String()))
+			log.Stringer("majority_hash", ms.hash),
+			log.Stringer("node_hash", ownMeshHash))
 		return nil, errNodeHasBadMeshHash
 	}
 	md.optFilter = true
 	logger.With().Info("consensus on mesh and state. doing optimistic filtering",
-		lid, log.Stringer("mesh_hash", ms.hash))
+		lid,
+		log.Stringer("mesh_hash", ms.hash))
 	return md, nil
 }
 
@@ -142,14 +151,14 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		candidates = make([]*types.MeshTransaction, 0, len(pmd.mtxs))
 		for _, mtx := range pmd.mtxs {
 			if mtx.State != types.APPLIED {
-				mtx.LayerID = mempoolLayer // for dbLessCache.GetMempool
+				mtx.LayerID = mempoolLayer // for cache.GetMempool
 				candidates = append(candidates, mtx)
 			}
 		}
 	} else {
 		minNonceByAddr := make(map[types.Address]uint64)
 		for _, mtx := range pmd.mtxs {
-			mtx.LayerID = mempoolLayer // for dbLessCache.GetMempool
+			mtx.LayerID = mempoolLayer // for cache.GetMempool
 			principal := mtx.Principal
 			if _, ok := minNonceByAddr[principal]; !ok {
 				minNonceByAddr[principal] = mtx.Nonce.Counter
@@ -165,18 +174,16 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		}
 	}
 	// this cache is used for building the set of transactions in a block.
-	// we do not want to access database here, as all transactions are already in memory.
-	dbLessCache := &cache{
+	txCache := &cache{
 		logger:    logger,
-		tp:        &nopTP{},
 		stateF:    stateF,
 		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
 	}
-	if err := dbLessCache.BuildFromTXs(candidates, blockSeed); err != nil {
+	if err := txCache.BuildFromTXs(candidates, blockSeed); err != nil {
 		return nil, err
 	}
-	byAddrAndNonce := dbLessCache.GetMempool()
+	byAddrAndNonce := txCache.GetMempool(logger)
 	ntxs := make([]*txtypes.NanoTX, 0, len(pmd.mtxs))
 	byTid := make(map[types.TransactionID]*txtypes.NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
@@ -206,7 +213,6 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, bloc
 	mt.SeedFromSlice(toUint64Slice(blockSeed))
 	rng := rand.New(mt)
 	ordered := shuffleWithNonceOrder(logger, rng, len(bmd.candidates), bmd.candidates, bmd.byAddrAndNonce)
-	logger.With().Debug("block txs after shuffle", log.Int("num_txs", len(ordered)))
 	return prune(logger, ordered, bmd.byTid, gasLimit), nil
 }
 
@@ -236,6 +242,7 @@ func shuffleWithNonceOrder(
 	rng.Shuffle(len(ntxs), func(i, j int) { ntxs[i], ntxs[j] = ntxs[j], ntxs[i] })
 	total := util.Min(len(ntxs), numTXs)
 	result := make([]types.TransactionID, 0, total)
+	packed := make(map[types.Address][]uint64)
 	for _, ntx := range ntxs[:total] {
 		// if a spot is taken by a principal, we add its TX for the next eligible nonce
 		p := ntx.Principal
@@ -245,13 +252,30 @@ func shuffleWithNonceOrder(
 		if len(byAddrAndNonce[p]) == 0 {
 			logger.With().Fatal("txs missing", p)
 		}
-		result = append(result, byAddrAndNonce[p][0].ID)
+		toAdd := byAddrAndNonce[p][0]
+		result = append(result, toAdd.ID)
+		if _, ok := packed[p]; !ok {
+			packed[p] = []uint64{toAdd.Nonce.Counter, toAdd.Nonce.Counter}
+		} else {
+			packed[p][1] = toAdd.Nonce.Counter
+		}
 		if len(byAddrAndNonce[p]) == 1 {
 			delete(byAddrAndNonce, p)
 		} else {
 			byAddrAndNonce[p] = byAddrAndNonce[p][1:]
 		}
 	}
+	logger.With().Debug("packed txs", log.Array("ranges", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for addr, nonces := range packed {
+			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+				encoder.AddString("addr", addr.String())
+				encoder.AddUint64("from", nonces[0])
+				encoder.AddUint64("to", nonces[1])
+				return nil
+			}))
+		}
+		return nil
+	})))
 	return result
 }
 
@@ -263,7 +287,7 @@ func prune(logger log.Log, tids []types.TransactionID, byTid map[types.Transacti
 	)
 	for idx, tid = range tids {
 		if gasRemaining < minTXGas {
-			logger.With().Debug("gas exhausted for block",
+			logger.With().Info("gas exhausted for block",
 				log.Int("num_txs", idx),
 				log.Uint64("gas_left", gasRemaining),
 				log.Uint64("gas_limit", gasLimit))
