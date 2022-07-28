@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -56,4 +57,20 @@ func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
 	err := p.Initialize()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "inconsistent smesher in proposal")
+}
+
+func FuzzProposalConsistency(f *testing.F) {
+	tester.FuzzConsistency[Proposal](f)
+}
+
+func FuzzProposalSafety(f *testing.F) {
+	tester.FuzzSafety[Proposal](f)
+}
+
+func FuzzInnerProposalConsistency(f *testing.F) {
+	tester.FuzzConsistency[InnerProposal](f)
+}
+
+func FuzzInnerProposalSafety(f *testing.F) {
+	tester.FuzzSafety[InnerProposal](f)
 }

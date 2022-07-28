@@ -70,7 +70,7 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 			},
 		},
 	}
-	bytes, err := codec.Encode(ballot.InnerBallot)
+	bytes, err := codec.Encode(&ballot.InnerBallot)
 	require.NoError(tb, err)
 	ballot.Signature = signer.Sign(bytes)
 	require.NoError(tb, ballot.Initialize())
