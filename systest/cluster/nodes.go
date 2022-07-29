@@ -182,6 +182,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	)
 	for i := from; i < to; i++ {
 		i := i
+		flags := flags
 		eg.Go(func() error {
 			setname := fmt.Sprintf("%s-%d", name, i)
 			idx := i % ctx.PoetSize

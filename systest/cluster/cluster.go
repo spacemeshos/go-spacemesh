@@ -108,7 +108,6 @@ type Cluster struct {
 	bootnodes int
 	smeshers  int
 	clients   []*NodeClient
-	poets     []string
 }
 
 func (c *Cluster) nextSmesher() int {
