@@ -275,12 +275,11 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 			cache:   ss,
 			raw:     txs[i].RawTx(),
 			decoder: decoder,
-			limit:   limit,
 		}
 
 		header, err := req.Parse()
 		if err != nil {
-			v.logger.With().Warning("innefective transaction. failed to parse",
+			v.logger.With().Warning("ineffective transaction. failed to parse",
 				tx.RawTx().ID,
 				log.Err(err),
 			)
@@ -292,7 +291,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		args := req.args
 
 		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("innefective transaction. can't cover gas and max spend",
+			v.logger.With().Warning("ineffective transaction. can't cover gas and max spend",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -301,8 +300,9 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 			continue
 		}
 		if limit < ctx.Header.MaxGas {
-			v.logger.With().Warning("innefective transaction. out of block gas",
+			v.logger.With().Warning("ineffective transaction. out of block gas",
 				log.Uint64("block gas limit", v.cfg.GasLimit),
+				log.Uint64("current limit", limit),
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -312,13 +312,25 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		}
 
 		// NOTE this part is executed only for transactions that weren't verified
-		// when accepted into mempool
+		// when saved into database by txs module
 		if !tx.Verified() && !req.Verify() {
-			v.logger.With().Warning("innefective transaction. failed verify",
+			v.logger.With().Warning("ineffective transaction. failed verify",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		// TODO to be changed after nonces are defined
+		// https://github.com/spacemeshos/go-spacemesh/issues/3273
+		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
+			v.logger.With().Warning("ineffective transaction. failed nonce check",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -328,17 +340,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
-		// TODO to be changed after nonces are defined
-		// https://github.com/spacemeshos/go-spacemesh/issues/3273
-		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
-			v.logger.With().Warning("innefective transaction. failed nonce check",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
-			invalidTxCount.Inc()
-			continue
-		}
 
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
@@ -388,16 +389,17 @@ type Request struct {
 	cache *core.StagedCache
 
 	raw     types.RawTx
-	ctx     *core.Context
-	args    scale.Encodable
 	decoder *scale.Decoder
-	limit   uint64
+
+	// both ctx and args are set after succesful Parse
+	ctx  *core.Context
+	args scale.Encodable
 }
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.raw.ID, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +420,7 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
