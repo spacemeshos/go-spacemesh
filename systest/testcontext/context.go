@@ -38,6 +38,8 @@ var (
 	bootstrapDuration = flag.Duration("bootstrap", 30*time.Second,
 		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management")
 	clusterSize  = flag.Int("size", 10, "size of the cluster. all test must use at most this number of smeshers")
+	poetSize     = flag.Int("poet-size", 1, "size of the poet servers")
+	retries      = flag.Int("retries", 0, "number of times to retry RPC before failing a test")
 	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
 	clusters     = flag.Int("clusters", 1, "controls how many clusters are deployed on k8s")
@@ -74,6 +76,8 @@ type Context struct {
 	Client            *kubernetes.Clientset
 	BootstrapDuration time.Duration
 	ClusterSize       int
+	PoetSize          int
+	Attempts          int
 	Generic           client.Client
 	TestID            string
 	Keep              bool
@@ -239,6 +243,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 		TestID:            *testid,
 		Keep:              *keep,
 		ClusterSize:       *clusterSize,
+		PoetSize:          *poetSize,
+		Attempts:          *retries + 1,
 		Image:             *imageFlag,
 		PoetImage:         *poetImage,
 		NodeSelector:      nodeSelector,
@@ -251,7 +257,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	if !cctx.Keep {
 		cleanup(t, func() {
 			if err := deleteNamespace(cctx); err != nil {
-				cctx.Log.Errorf("cleanup failed", "error", err)
+				cctx.Log.Errorw("cleanup failed", "error", err)
 				return
 			}
 			cctx.Log.Infow("namespace was deleted", "namespace", cctx.Namespace)
