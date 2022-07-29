@@ -45,6 +45,9 @@ func makeResults(lid types.LayerID, bid types.BlockID, txs ...types.Transaction)
 func getStateFunc(states map[types.Address]*testAcct) stateFunc {
 	return func(addr types.Address) (uint64, uint64) {
 		st := states[addr]
+		if st == nil {
+			return 0, 0
+		}
 		return st.nonce, st.balance
 	}
 }
@@ -303,7 +306,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	ta.balance += income
 	applied := makeResults(lid, bid, mtxs[0].Transaction, mtxs[1].Transaction)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 
@@ -380,7 +383,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
 	applied := makeResults(lid, bid0, mtxs[0].Transaction)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid0, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid0, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkNoTX(t, tc.cache, mtxs[0].ID)
@@ -710,7 +713,7 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 	ta.nonce = newNextNonce + 2
 	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
 
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
@@ -734,7 +737,7 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
 	// more txs arrived
 	saveTXs(t, tc.db, mtxs[1:])
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 
@@ -783,7 +786,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	// all pending txs are added to cache now
@@ -828,7 +831,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, 0)
@@ -853,7 +856,7 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
@@ -878,7 +881,7 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
 	pendingWithGap := genAndSaveTXs(t, tc.db, ta.signer, mtx.Nonce.Counter+2, mtx.Nonce.Counter+3)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
@@ -897,7 +900,7 @@ func TestCache_Account_TXsAppliedOutOfOrder(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtxs[1].Transaction)
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, applied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{})
 	require.NotEmpty(t, warns)
 	require.ErrorIs(t, warns[0], errNonceNotInOrder)
 	require.Empty(t, errs)
@@ -1188,7 +1191,7 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 		accounts[principal].balance = newBalance
 		allApplied = append(allApplied, applied...)
 	}
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, allApplied, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, allApplied, []types.Transaction{})
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkTXStateFromDB(t, tc.db, appliedMTXs, types.APPLIED)
@@ -1220,7 +1223,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	lid := types.NewLayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
-	var allSkipped []types.TransactionID
+	var allSkipped []types.Transaction
 	var addrs []types.Address
 	allApplied := make([]types.TransactionWithResult, 0, len(mtxsByAccount)*2)
 	appliedMTXs := make([]*types.MeshTransaction, 0, len(mtxsByAccount)*2)
@@ -1233,7 +1236,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 		count++
 		if count%10 == 0 {
 			addrs = append(addrs, principal)
-			allSkipped = append(allSkipped, mtxs[0].ID)
+			allSkipped = append(allSkipped, mtxs[0].Transaction)
 			// effectively make all pending txs invalid
 			accounts[principal].nonce = mtxs[0].Nonce.Counter + uint64(len(mtxs))
 		} else {
@@ -1251,9 +1254,9 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	signer := signing.NewEdSigner()
 	skippedNotInCache := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, transactions.Add(tc.db, skippedNotInCache, time.Now()))
-	allSkipped = append(allSkipped, skippedNotInCache.ID)
+	allSkipped = append(allSkipped, *skippedNotInCache)
 
-	warns, errs := tc.ApplyLayer(tc.db, lid, bid, allApplied, allSkipped)
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, bid, allApplied, allSkipped)
 	require.Empty(t, warns)
 	require.Empty(t, errs)
 	checkTXStateFromDB(t, tc.db, appliedMTXs, types.APPLIED)
@@ -1273,7 +1276,7 @@ func TestCache_ApplyLayer_OutOfOrder(t *testing.T) {
 	buildSmallCache(t, tc, accounts, 10)
 	lid := types.NewLayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(2), types.RandomBlockID()))
-	warns, errs := tc.ApplyLayer(tc.db, lid, types.BlockID{1, 2, 3}, nil, []types.TransactionID{})
+	warns, errs := tc.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, []types.Transaction{})
 	require.Empty(t, warns)
 	require.NotEmpty(t, errs)
 	require.ErrorIs(t, errs[0], errLayerNotInOrder)

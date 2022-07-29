@@ -36,12 +36,11 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // ApplyLayer mocks base method.
-func (m *MockconservativeState) ApplyLayer(arg0 context.Context, arg1 *types.Block) ([]types.TransactionID, error) {
+func (m *MockconservativeState) ApplyLayer(arg0 context.Context, arg1 *types.Block) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1)
-	ret0, _ := ret[0].([]types.TransactionID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // ApplyLayer indicates an expected call of ApplyLayer.

@@ -34,12 +34,19 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
+// WithConfig updates config on the vm.
+func WithConfig(cfg Config) Opt {
+	return func(vm *VM) {
+		vm.cfg = cfg
+	}
+}
+
 // New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   log.NewNop(),
 		db:       db,
-		cfg:      DefaultRewardConfig(),
+		cfg:      DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -53,7 +60,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 type VM struct {
 	logger   log.Log
 	db       *sql.Database
-	cfg      RewardConfig
+	cfg      Config
 	registry *registry.Registry
 }
 
@@ -61,6 +68,7 @@ type VM struct {
 func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
 		vm:      v,
+		cache:   core.NewStagedCache(v.db),
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
 		raw:     raw,
 	}
@@ -153,7 +161,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
@@ -246,52 +254,93 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	return nil
 }
 
-func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx) ([]types.TransactionWithResult, []types.TransactionID, uint64, error) {
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transaction) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
-		rd      bytes.Reader
-		decoder = scale.NewDecoder(&rd)
-		skipped []types.TransactionID
-		fees    uint64
-		results []types.TransactionWithResult
+		rd          bytes.Reader
+		decoder     = scale.NewDecoder(&rd)
+		fees        uint64
+		ineffective []types.Transaction
+		executed    []types.TransactionWithResult
+		limit       = v.cfg.GasLimit
 	)
 	for i := range txs {
 		txCount.Inc()
 
 		t1 := time.Now()
-		tx := &txs[i]
-		rd.Reset(tx.Raw)
-		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
+		tx := txs[i]
+
+		rd.Reset(tx.GetRaw().Raw)
+		req := &Request{
+			vm:      v,
+			cache:   ss,
+			raw:     txs[i].GetRaw(),
+			decoder: decoder,
+		}
+
+		header, err := req.Parse()
 		if err != nil {
-			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
-			skipped = append(skipped, tx.ID)
+			v.logger.With().Warning("ineffective transaction. failed to parse",
+				tx.GetRaw().ID,
+				log.Err(err),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
-		t2 := time.Now()
-		transactionDurationParse.Observe(float64(time.Since(t1)))
+		ctx := req.ctx
+		args := req.args
 
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
+			v.logger.With().Warning("ineffective transaction. can't cover gas and max spend",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+		if limit < ctx.Header.MaxGas {
+			v.logger.With().Warning("ineffective transaction. out of block gas",
+				log.Uint64("block gas limit", v.cfg.GasLimit),
+				log.Uint64("current limit", limit),
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		// NOTE this part is executed only for transactions that weren't verified
+		// when saved into database by txs module
+		if !tx.Verified() && !req.Verify() {
+			v.logger.With().Warning("ineffective transaction. failed verify",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		// TODO to be changed after nonces are defined
+		// https://github.com/spacemeshos/go-spacemesh/issues/3273
+		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
+			v.logger.With().Warning("ineffective transaction. failed nonce check",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		t2 := time.Now()
 		v.logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("skipping transaction. can't cover gas",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			skipped = append(skipped, tx.ID)
-			invalidTxCount.Inc()
-			continue
-		}
-		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
-			v.logger.With().Warning("skipping transaction. failed nonce check",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			skipped = append(skipped, tx.ID)
-			invalidTxCount.Inc()
-			continue
-		}
+
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
 		rst.Block = lctx.Block
@@ -302,16 +351,13 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 				log.Object("account", &ctx.Account),
 				log.Err(err),
 			)
-			// TODO anything but internal must be recorded in the execution result.
-			// internal errors are propagated upwards, but they are for fatal
-			// unrecovarable errors, such as disk problems
 			if errors.Is(err, core.ErrInternal) {
 				return nil, nil, 0, err
 			}
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
-		rst.RawTx = txs[i]
+		rst.RawTx = txs[i].GetRaw()
 		rst.TxHeader = &ctx.Header
 		rst.Status = types.TransactionSuccess
 		if err != nil {
@@ -327,31 +373,38 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.RawTx)
 			return nil, nil, 0, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		fees += ctx.Fee()
-		results = append(results, rst)
+		limit -= ctx.Consumed()
+
+		executed = append(executed, rst)
 		transactionDuration.Observe(float64(time.Since(t1)))
 	}
-	return results, skipped, fees, nil
+	return executed, ineffective, fees, nil
 }
 
 // Request used to implement 2-step validation flow.
 // After Parse is executed - conservative cache may do validation and skip Verify
 // if transaction can't be executed.
 type Request struct {
-	vm *VM
+	vm    *VM
+	cache *core.StagedCache
 
 	raw     types.RawTx
-	ctx     *core.Context
 	decoder *scale.Decoder
+
+	// both ctx and args are set after successful Parse
+	ctx  *core.Context
+	args scale.Encodable
 }
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
+	r.args = args
 	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }
@@ -367,7 +420,7 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
