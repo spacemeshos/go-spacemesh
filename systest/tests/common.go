@@ -292,15 +292,20 @@ func (c *txClient) nonce(ctx context.Context) (uint64, error) {
 	return getNonce(ctx, c.node, c.account.Address)
 }
 
-func (c *txClient) submit(ctx context.Context, tx []byte) (*txRequest, error) {
-	txid, err := submitTransacition(ctx, tx, c.node)
-	if err != nil {
-		return nil, fmt.Errorf("submit to node %s: %w", c.node.Name, err)
+func (c *txClient) submit(ctx context.Context, tx []byte, tries int) (*txRequest, error) {
+	var (
+		txid []byte
+		err  error
+	)
+	for i := 0; i < tries; i++ {
+		if txid, err = submitTransacition(ctx, tx, c.node); err == nil {
+			return &txRequest{
+				node: c.node,
+				txid: txid,
+			}, nil
+		}
 	}
-	return &txRequest{
-		node: c.node,
-		txid: txid,
-	}, nil
+	return nil, fmt.Errorf("submit to node %s: %w", c.node.Name, err)
 }
 
 type txRequest struct {
