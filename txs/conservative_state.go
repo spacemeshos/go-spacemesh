@@ -248,9 +248,9 @@ func (cs *ConservativeState) GetMeshTransactions(ids []types.TransactionID) ([]*
 	return mtxs, missing
 }
 
-// GetExecutableTxs retrieves a list of txs by their id's.
-func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]types.ExecutableTx, error) {
-	txs := make([]types.ExecutableTx, 0, len(ids))
+// GetExecutableTxs retrieves a list of txs filtering transaction that were previously executed.
+func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]types.Transaction, error) {
+	txs := make([]types.Transaction, 0, len(ids))
 	for _, tid := range ids {
 		mtx, err := transactions.Get(cs.db, tid)
 		if err != nil {
@@ -261,10 +261,8 @@ func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]type
 		}
 		if mtx.TxHeader == nil {
 			rawTxCount.WithLabelValues(rawFromDB).Inc()
-			txs = append(txs, mtx.RawTx)
-		} else {
-			txs = append(txs, types.VerifiedTx(mtx.RawTx))
 		}
+		txs = append(txs, mtx.Transaction)
 	}
 	return txs, nil
 }

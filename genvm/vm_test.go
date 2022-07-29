@@ -971,9 +971,20 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
-	var layers [][]types.RawTx
+	var layers [][]types.Transaction
 	for i := 0; i < b.N; i++ {
-		layers = append(layers, tt.randSendWalletN(n, 10))
+		raw := tt.randSendWalletN(n, 10)
+		parsed := make([]types.Transaction, 0, len(raw))
+		for _, tx := range raw {
+			val := tt.Validation(tx)
+			header, err := val.Parse()
+			require.NoError(b, err)
+			parsed = append(parsed, types.Transaction{
+				RawTx:    tx,
+				TxHeader: header,
+			})
+		}
+		layers = append(layers, parsed)
 	}
 
 	b.ReportAllocs()
@@ -981,7 +992,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 
 	for _, txs := range layers {
 		lid = lid.Add(1)
-		skipped, _, err := tt.Apply(testContext(lid), verified(txs...), nil)
+		skipped, _, err := tt.Apply(testContext(lid), txs, nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -991,18 +1002,10 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 	}
 }
 
-func verified(raw ...types.RawTx) []types.ExecutableTx {
-	var rst []types.ExecutableTx
+func notVerified(raw ...types.RawTx) []types.Transaction {
+	var rst []types.Transaction
 	for _, tx := range raw {
-		rst = append(rst, types.VerifiedTx(tx))
-	}
-	return rst
-}
-
-func notVerified(raw ...types.RawTx) []types.ExecutableTx {
-	var rst []types.ExecutableTx
-	for _, tx := range raw {
-		rst = append(rst, tx)
+		rst = append(rst, types.Transaction{RawTx: tx})
 	}
 	return rst
 }

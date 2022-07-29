@@ -601,7 +601,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance-(defaultAmount+defaultFee), nil)
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(ctx vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+		func(ctx vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, []*types.Transaction{tx}, got)
 			rst := []types.TransactionWithResult{
 				{
@@ -641,7 +641,7 @@ func TestApplyLayer(t *testing.T) {
 		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	}
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(ctx vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
+		func(ctx vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
 			var rst []types.TransactionWithResult
 			for _, tx := range txs {
@@ -688,7 +688,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			TxIDs: ids,
 		})
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(ctx vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		func(ctx vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
 			var (
 				inefective []types.Transaction
@@ -743,7 +743,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 		})
 	errVM := errors.New("vm error")
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
-		func(_ vm.ApplyContext, got []types.ExecutableTx, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+		func(_ vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 			matchReceived(t, txs, got)
 			return nil, nil, errVM
 		}).Times(1)
@@ -784,15 +784,17 @@ func TestConsistentHandling(t *testing.T) {
 	for lid := 1; lid < 10; lid++ {
 		txs := make([]*types.Transaction, 100)
 		ids := make([]types.TransactionID, len(txs))
-		raw := make([]types.ExecutableTx, len(txs))
-		verified := make([]types.ExecutableTx, len(txs))
+		raw := make([]types.Transaction, len(txs))
+		verified := make([]types.Transaction, len(txs))
 		for i := range txs {
 			signer := rng.Intn(len(signers))
 			txs[i] = newTx(t, nonces[signer], 1, 1, signers[signer])
 			nonces[signer]++
+			noheader := *(txs[i])
+			noheader.TxHeader = nil
 			ids[i] = txs[i].ID
-			raw[i] = txs[i].RawTx
-			verified[i] = types.VerifiedTx(txs[i].RawTx)
+			raw[i] = noheader
+			verified[i] = *txs[i]
 
 			req := smocks.NewMockValidationRequest(gomock.NewController(t))
 			req.EXPECT().Parse().Times(1).Return(txs[i].TxHeader, nil)
@@ -845,10 +847,10 @@ func TestConsistentHandling(t *testing.T) {
 	}
 }
 
-func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.ExecutableTx) {
+func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.Transaction) {
 	tb.Helper()
 	require.Len(tb, got, len(expected))
 	for i := range expected {
-		require.Equal(tb, expected[i].RawTx, got[i].RawTx())
+		require.Equal(tb, expected[i].RawTx, got[i].GetRaw())
 	}
 }

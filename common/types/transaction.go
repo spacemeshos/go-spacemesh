@@ -76,6 +76,16 @@ type Transaction struct {
 	*TxHeader
 }
 
+// GetRaw returns raw bytes of the transaction with id.
+func (t Transaction) GetRaw() RawTx {
+	return t.RawTx
+}
+
+// Verified returns true if header is set.
+func (t Transaction) Verified() bool {
+	return t.TxHeader != nil
+}
+
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
 	return t.ID.Hash32()
@@ -158,33 +168,4 @@ func NewRawTx(raw []byte) RawTx {
 type RawTx struct {
 	ID  TransactionID
 	Raw []byte
-}
-
-// RawTx returns RawTx.
-func (r RawTx) RawTx() RawTx {
-	return r
-}
-
-// Verified is false for raw tx.
-func (r RawTx) Verified() bool {
-	return false
-}
-
-// VerifiedTx is raw but verified.
-type VerifiedTx RawTx
-
-// RawTx returns RawTx.
-func (r VerifiedTx) RawTx() RawTx {
-	return RawTx(r)
-}
-
-// Verified is true for verified tx.
-func (r VerifiedTx) Verified() bool {
-	return true
-}
-
-// ExecutableTx can be verified or not depending on the node state.
-type ExecutableTx interface {
-	RawTx() RawTx
-	Verified() bool
 }

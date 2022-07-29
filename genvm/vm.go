@@ -161,7 +161,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.ExecutableTx, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
@@ -254,7 +254,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	return nil
 }
 
-func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.ExecutableTx) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transaction) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
 		rd          bytes.Reader
 		decoder     = scale.NewDecoder(&rd)
@@ -269,21 +269,21 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		t1 := time.Now()
 		tx := txs[i]
 
-		rd.Reset(tx.RawTx().Raw)
+		rd.Reset(tx.GetRaw().Raw)
 		req := &Request{
 			vm:      v,
 			cache:   ss,
-			raw:     txs[i].RawTx(),
+			raw:     txs[i].GetRaw(),
 			decoder: decoder,
 		}
 
 		header, err := req.Parse()
 		if err != nil {
 			v.logger.With().Warning("ineffective transaction. failed to parse",
-				tx.RawTx().ID,
+				tx.GetRaw().ID,
 				log.Err(err),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -295,7 +295,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -306,7 +306,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -318,7 +318,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx()})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -330,7 +330,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.RawTx(), TxHeader: header})
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
 			invalidTxCount.Inc()
 			continue
 		}
@@ -357,7 +357,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Execut
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
-		rst.RawTx = txs[i].RawTx()
+		rst.RawTx = txs[i].GetRaw()
 		rst.TxHeader = &ctx.Header
 		rst.Status = types.TransactionSuccess
 		if err != nil {
@@ -391,7 +391,7 @@ type Request struct {
 	raw     types.RawTx
 	decoder *scale.Decoder
 
-	// both ctx and args are set after succesful Parse
+	// both ctx and args are set after successful Parse
 	ctx  *core.Context
 	args scale.Encodable
 }
