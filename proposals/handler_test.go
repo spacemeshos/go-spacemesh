@@ -3,6 +3,7 @@ package proposals
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -628,6 +629,73 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
+	checkProposal(t, th.cdb, p, true)
+}
+
+func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
+	th := createTestHandler(t)
+	p := createProposal(t)
+	for i, bid := range p.Votes.Support {
+		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		require.NoError(t, blocks.Add(th.cdb, blk))
+	}
+	data := encodeProposal(t, p)
+
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p)).MinTimes(1).MaxTimes(2)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).MinTimes(1).MaxTimes(2)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).MinTimes(1).MaxTimes(2)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil).MinTimes(1).MaxTimes(2)
+	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+			require.Equal(t, p.Ballot.ID(), ballot.ID())
+			return true, nil
+		}).MinTimes(1).MaxTimes(2)
+	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).MinTimes(1).MaxTimes(2)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var res1, res2 pubsub.ValidationResult
+	go func() {
+		res1 = th.HandleProposal(context.TODO(), p2p.NoPeer, data)
+		wg.Done()
+	}()
+	go func() {
+		res2 = th.HandleProposal(context.TODO(), p2p.NoPeer, data)
+		wg.Done()
+	}()
+	wg.Wait()
+	if res1 == pubsub.ValidationAccept {
+		require.Equal(t, pubsub.ValidationIgnore, res2)
+	} else {
+		require.Equal(t, pubsub.ValidationIgnore, res1)
+		require.Equal(t, pubsub.ValidationAccept, res2)
+	}
+	checkProposal(t, th.cdb, p, true)
+}
+
+func TestProposal_ProposalGossip_Fetched(t *testing.T) {
+	th := createTestHandler(t)
+	p := createProposal(t)
+	for i, bid := range p.Votes.Support {
+		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		require.NoError(t, blocks.Add(th.cdb, blk))
+	}
+	data := encodeProposal(t, p)
+
+	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil)
+	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+			require.Equal(t, p.Ballot.ID(), ballot.ID())
+			// a separate goroutine fetched the proposal and saved it to database
+			require.NoError(t, proposals.Add(th.cdb, p))
+			return true, nil
+		})
+	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
+	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
 	checkProposal(t, th.cdb, p, true)
 }
 

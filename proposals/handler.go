@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -203,15 +204,15 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.LayerIndex)
 	t1 := time.Now()
 	if has, err := proposals.Has(h.cdb, p.ID()); err != nil {
-		logger.With().Error("failed to look up proposal", p.ID(), log.Err(err))
+		logger.With().Error("failed to look up proposal", log.Err(err))
 		return fmt.Errorf("lookup proposal %v: %w", p.ID(), err)
 	} else if has {
-		logger.Info("known proposal")
+		logger.Debug("known proposal")
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
 	proposalDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t1)))
 
-	logger.With().Info("new proposal", p.ID(), log.Int("num_txs", len(p.TxIDs)))
+	logger.With().Info("new proposal", log.Int("num_txs", len(p.TxIDs)))
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
@@ -233,11 +234,14 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	logger.With().Debug("proposal is syntactically valid")
 	t5 := time.Now()
 	if err := proposals.Add(h.cdb, &p); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
+		}
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
 	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Info("added proposal to database", p.ID())
+	logger.With().Info("added proposal to database")
 
 	t6 := time.Now()
 	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
