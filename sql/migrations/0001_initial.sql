@@ -165,5 +165,5 @@ CREATE TABLE certified_blocks
 (
     block_id CHAR(20) PRIMARY KEY,
     layer_id CHAR(32),
-    signatures VARCHAR
+    cert BLOB
 ) WITHOUT ROWID;
