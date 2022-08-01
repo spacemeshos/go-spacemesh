@@ -3,7 +3,6 @@ package types
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/cosmos/btcutil/bech32"
 	"github.com/spacemeshos/go-scale"
@@ -25,6 +24,8 @@ var (
 	ErrUnsupportedNetwork = errors.New("unsupported network")
 	// ErrDecodeBech32 is returned when an error occurs during decoding bech32.
 	ErrDecodeBech32 = errors.New("error decode to bech32")
+	// ErrMissingReservedSpace is returned if top bytes of address is not 0.
+	ErrMissingReservedSpace = errors.New("missing reserved space")
 )
 
 // Config is the configuration of the address package.
@@ -50,10 +51,10 @@ func DefaultTestAddressConfig() *Config {
 }
 
 // Address represents the address of a spacemesh account with AddressLength length.
-type Address [AddressLength]byte // contains slice 8 bytes unsigned integers
+type Address [AddressLength]byte
 
-// FromString returns a new Address from a given string like `sm1abc...`.
-func FromString(src string) (Address, error) {
+// StringToAddress returns a new Address from a given string like `sm1abc...`.
+func StringToAddress(src string) (Address, error) {
 	var addr Address
 	hrp, data, err := bech32.DecodeNoLimit(src)
 	if err != nil {
@@ -73,6 +74,12 @@ func FromString(src string) (Address, error) {
 
 	if conf.NetworkHRP != hrp {
 		return addr, fmt.Errorf("wrong network id: expected `%s`, got `%s`: %w", conf.NetworkHRP, hrp, ErrUnsupportedNetwork)
+	}
+	// check that first 4 bytes are 0.
+	for i := 0; i < AddressReservedSpace; i++ {
+		if dataConverted[i] != 0 {
+			return addr, fmt.Errorf("expected first %d bytes to be 0, got %d: %w", AddressReservedSpace, dataConverted[i], ErrMissingReservedSpace)
+		}
 	}
 
 	copy(addr[:], dataConverted[:])
@@ -95,8 +102,15 @@ func BytesToAddress(b []byte) (Address, error) {
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
 
-// Big converts an address to a big integer.
-func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
+// IsEmpty checks if address is empty.
+func (a Address) IsEmpty() bool {
+	for i := AddressReservedSpace; i < AddressLength; i++ {
+		if a[i] != 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // String implements fmt.Stringer.
 func (a Address) String() string {
@@ -136,13 +150,10 @@ func (a *Address) DecodeScale(d *scale.Decoder) (int, error) {
 // GenerateAddress generates an address from a public key.
 func GenerateAddress(publicKey []byte) Address {
 	var addr Address
-	if len(publicKey) > len(addr) {
-		publicKey = publicKey[len(publicKey)-AddressLength:]
+	if len(publicKey) > len(addr)-AddressReservedSpace {
+		publicKey = publicKey[len(publicKey)-AddressLength+AddressReservedSpace:]
 	}
-	copy(addr[AddressLength-len(publicKey):], publicKey)
-	for i := 0; i < AddressReservedSpace; i++ {
-		addr[i] = 0
-	}
+	copy(addr[AddressReservedSpace:], publicKey[:])
 	return addr
 }
 

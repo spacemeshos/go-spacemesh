@@ -599,11 +599,11 @@ func (app *App) initServices(ctx context.Context,
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
-		coinbaseAddr, err = types.FromString(app.Config.SMESHING.CoinbaseAccount)
+		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 		}
-		if coinbaseAddr.Big().Uint64() == 0 {
+		if coinbaseAddr.IsEmpty() {
 			app.log.Panic("invalid coinbase account")
 		}
 	}
@@ -728,7 +728,7 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.Config.SMESHING.Start {
-		coinbaseAddr, err := types.FromString(app.Config.SMESHING.CoinbaseAccount)
+		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 		}

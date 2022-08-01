@@ -36,11 +36,11 @@ func testnet() config.Config {
 
 	conf.Genesis = &apiConfig.GenesisConfig{
 		Accounts: map[string]uint64{
-			"stest1rxklau52r6ygyxn2638e2vqu0qv98whcmftjvds0r3764": 100000000000000000,
-			"stest1jt38hng8nmgywqc8vg83gffgfsajkxn9wjwr39qka8kuj": 100000000000000000,
-			"stest15e933zkyfvsgkxj0qxpx9fequcuhkzf2n2lzg2spvwvlf": 100000000000000000,
-			"stest13zwpcc8z0z7xcnu3jm9fxkudvzk70e6d5zvnerqjhu96v": 100000000000000000,
-			"stest1ty8kqh4w58s9qyytp7lc6ddvc84wvsy4rcvjtas3w5rkm": 100000000000000000,
+			"stest1qqqqqqygdpsq62p4qxfyng8h2mm4f4d94vt7huqqu9mz3": 100000000000000000,
+			"stest1qqqqqqylzg8ypces4llx4gnat0dyntqfvr0h6mcprcz66": 100000000000000000,
+			"stest1qqqqqq90akdpc97206485eu4m0rmacd3mxfv0wsdrea6k": 100000000000000000,
+			"stest1qqqqqq9jpsarr7tnyv0qr0edddwqpg3vcya4cccauypts": 100000000000000000,
+			"stest1qqqqqq8lpq7f5ghqt569nvpl8kldv8r66ms2yzgudsd5t": 100000000000000000,
 		},
 	}
 
