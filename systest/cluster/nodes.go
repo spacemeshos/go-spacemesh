@@ -182,11 +182,12 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	)
 	for i := from; i < to; i++ {
 		i := i
-		flags := flags
+		finalFlags := make([]DeploymentFlag, len(flags)+1)
+		copy(finalFlags, flags)
 		eg.Go(func() error {
 			setname := fmt.Sprintf("%s-%d", name, i)
 			idx := i % ctx.PoetSize
-			flags = append(flags, PoetEndpoint(poetEndpoint(idx)))
+			finalFlags[len(finalFlags)-1] = PoetEndpoint(poetEndpoint(idx))
 			if err := deployNode(ctx, setname, labels, flags); err != nil {
 				return err
 			}
