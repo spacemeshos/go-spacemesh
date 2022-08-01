@@ -17,7 +17,7 @@ import (
 
 func TestBootstrapEmitEvents(t *testing.T) {
 	n := 3
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	h := mesh.Hosts()[0]
 
@@ -78,7 +78,7 @@ func TestBootstrapEmitEvents(t *testing.T) {
 
 func TestBootstrapCancelDiscoveryContext(t *testing.T) {
 	n := 3
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	h := mesh.Hosts()[0]
 

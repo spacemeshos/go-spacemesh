@@ -77,17 +77,17 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // SelectProposalTXs mocks base method.
-func (m *MockconservativeState) SelectProposalTXs(arg0 int) []types.TransactionID {
+func (m *MockconservativeState) SelectProposalTXs(arg0 types.LayerID, arg1 int) []types.TransactionID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectProposalTXs", arg0)
+	ret := m.ctrl.Call(m, "SelectProposalTXs", arg0, arg1)
 	ret0, _ := ret[0].([]types.TransactionID)
 	return ret0
 }
 
 // SelectProposalTXs indicates an expected call of SelectProposalTXs.
-func (mr *MockconservativeStateMockRecorder) SelectProposalTXs(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) SelectProposalTXs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectProposalTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectProposalTXs), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectProposalTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectProposalTXs), arg0, arg1)
 }
 
 // MockvotesEncoder is a mock of votesEncoder interface.

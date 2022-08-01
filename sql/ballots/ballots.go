@@ -40,7 +40,7 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious 
 
 // Add ballot to the database.
 func Add(db sql.Executor, ballot *types.Ballot) error {
-	bytes, err := codec.Encode(ballot.InnerBallot)
+	bytes, err := codec.Encode(&ballot.InnerBallot)
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
@@ -172,4 +172,18 @@ func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballot
 		return types.BallotID{}, fmt.Errorf("%w ref ballot epoch %s", sql.ErrNotFound, epochID)
 	}
 	return ballotID, nil
+}
+
+// LatestLayer gets the highest layer with ballots.
+func LatestLayer(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	if _, err := db.Exec("select max(layer) from ballots;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return lid, fmt.Errorf("latest layer: %w", err)
+	}
+	return lid, nil
 }

@@ -153,28 +153,17 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
-	network.Register(ProtoName, broker.HandleMessage)
-	output := make(chan TerminationOutput)
-	certs := make(chan CertificationOutput)
+	network.Register(pubsub.HareProtocol, broker.HandleMessage)
+	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	nid := types.BytesToNodeID(signing.PublicKey().Bytes())
 	oracle.Register(isHonest, nid)
 	proc := newConsensusProcess(cfg, layer, initialSet, oracle, broker.mockStateQ, 10, signing,
-		nid, network, output, certs, truer{},
+		nid, network, output, truer{},
 		newRoundClockFromCfg(logtest.New(tb), cfg), logtest.New(tb).WithName(signing.PublicKey().ShortString()))
 	c, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(c)
 
-	go func() {
-		// consume certifications output channel
-		for range certs {
-		}
-	}()
-	go func() {
-		// consume reports output channel
-		for range output {
-		}
-	}()
 	return proc, broker.Broker
 }
 
@@ -188,7 +177,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	totalNodes := 20
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -224,7 +213,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -258,7 +247,7 @@ func TestAllDifferentSet(t *testing.T) {
 	totalNodes := 10
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -303,7 +292,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
@@ -357,7 +346,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	mesh, err := mocknet.FullMeshLinked(totalNodes)
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)

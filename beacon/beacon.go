@@ -30,7 +30,7 @@ import (
 
 const (
 	proposalPrefix  = "BP"
-	numEpochsToKeep = 10
+	numEpochsToKeep = 3
 )
 
 var (
@@ -520,6 +520,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 
 func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	defer pd.cleanupEpoch(epoch)
 
 	if epoch.IsGenesis() {
 		logger.Info("not running beacon protocol: genesis epochs")
@@ -546,7 +547,6 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 		logger.With().Error("epoch not setup correctly", log.Err(err))
 		return
 	}
-	defer pd.cleanupEpoch(epoch)
 
 	logger.With().Info("participating beacon protocol with ATX", atxID, log.Uint64("epoch_weight", epochWeight))
 	pd.runProtocol(ctx, epoch, atxs)
@@ -655,7 +655,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 		VRFSignature: proposedSignature,
 	}
 
-	pd.sendToGossip(ctx, ProposalProtocol, m)
+	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, m)
 	logger.With().Info("beacon proposal sent", log.String("message", m.String()))
 }
 
@@ -798,7 +798,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		types.FirstRound,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, FirstVotesProtocol, m)
+	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, m)
 	return nil
 }
 
@@ -836,7 +836,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		round,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, FollowingVotesProtocol, m)
+	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, m)
 	return nil
 }
 

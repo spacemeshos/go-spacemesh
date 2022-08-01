@@ -5,29 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 var (
-	// ErrNoPeers is returned when node has no peers.
-	ErrNoPeers = errors.New("no peers")
-	// ErrInternal is returned from the peer when the peer encounters an internal error.
-	ErrInternal = errors.New("unspecified error returned by peer")
-	// ErrLayerDataNotFetched is returned when any layer data is not fetched successfully.
-	ErrLayerDataNotFetched = errors.New("layer data not fetched")
+	// errLayerDataNotFetched is returned when any layer data is not fetched successfully.
+	errLayerDataNotFetched = errors.New("layer data not fetched")
 
 	// errLayerNotProcessed is returned when requested layer was not yet processed.
 	errLayerNotProcessed = errors.New("requested layer is not yet processed")
@@ -56,27 +50,22 @@ type LayerPromiseResult struct {
 
 // Logic is the struct containing components needed to follow layer fetching logic.
 type Logic struct {
-	log              log.Log
-	db               *sql.Database
-	fetcher          fetcher
-	atxsrv, blocksrv server.Requestor
-	host             network
-	mutex            sync.Mutex
-	layerBlocksRes   map[types.LayerID]*layerResult
-	layerBlocksChs   map[types.LayerID][]chan LayerPromiseResult
-	poetHandler      poetHandler
-	atxHandler       atxHandler
-	ballotHandler    ballotHandler
-	blockHandler     blockHandler
-	proposalHandler  proposalHandler
-	txHandler        txHandler
-	msh              meshProvider
-}
+	log     log.Log
+	eg      errgroup.Group
+	db      *sql.Database
+	msh     meshProvider
+	fetcher fetcher
 
-const (
-	blockProtocol = "/block/1"
-	atxProtocol   = "/atx/1"
-)
+	mutex           sync.Mutex
+	layerBlocksRes  map[types.LayerID]*layerResult
+	layerBlocksChs  map[types.LayerID][]chan LayerPromiseResult
+	poetHandler     poetHandler
+	atxHandler      atxHandler
+	ballotHandler   ballotHandler
+	blockHandler    blockHandler
+	proposalHandler proposalHandler
+	txHandler       txHandler
+}
 
 // DataHandlers collects handlers for different data type.
 type DataHandlers struct {
@@ -89,28 +78,35 @@ type DataHandlers struct {
 }
 
 // NewLogic creates a new instance of layer fetching logic.
-// TODO clean up the tangle between Logic and Fetch. ideally Logic should only care about layer data and epoch ATX
-// and leave the actual request sending to Fetch. this will improve testing as well.
-func NewLogic(cfg Config, db *sql.Database, msh meshProvider,
-	host *p2p.Host, handlers DataHandlers, log log.Log,
-) *Logic {
+func NewLogic(cfg Config, db *sql.Database, msh meshProvider, host *p2p.Host, handlers DataHandlers, log log.Log) *Logic {
 	l := &Logic{
 		log:             log,
-		fetcher:         NewFetch(cfg, host, datastore.NewBlobStore(db), log.WithName("fetch")),
-		host:            host,
+		msh:             msh,
+		db:              db,
 		layerBlocksRes:  make(map[types.LayerID]*layerResult),
 		layerBlocksChs:  make(map[types.LayerID][]chan LayerPromiseResult),
 		poetHandler:     handlers.Poet,
-		msh:             msh,
-		db:              db,
 		atxHandler:      handlers.ATX,
 		ballotHandler:   handlers.Ballot,
 		blockHandler:    handlers.Block,
 		proposalHandler: handlers.Proposal,
 		txHandler:       handlers.TX,
 	}
-	l.atxsrv = server.New(host, atxProtocol, l.epochATXsReqReceiver, server.WithLog(log))
-	l.blocksrv = server.New(host, blockProtocol, l.layerContentReqReceiver, server.WithLog(log))
+	bs := datastore.NewBlobStore(db)
+	h := newHandler(db, bs, msh, log)
+	atxSrv := server.New(host, atxProtocol, h.handleEpochATXIDsReq,
+		server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
+		server.WithLog(log),
+	)
+	lyrSrv := server.New(host, lyrDataProtocol, h.handleLayerDataReq,
+		server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
+		server.WithLog(log),
+	)
+	hashSrv := server.New(host, fetchProtocol, h.handleHashReq,
+		server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
+		server.WithLog(log),
+	)
+	l.fetcher = newFetch(cfg, host, bs, atxSrv, lyrSrv, hashSrv, log.WithName("fetch"))
 	return l
 }
 
@@ -122,73 +118,7 @@ func (l *Logic) Start() {
 // Close closes all running workers.
 func (l *Logic) Close() {
 	l.fetcher.Stop()
-}
-
-// epochATXsReqReceiver returns the ATXs for the specified epoch.
-func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, error) {
-	epoch := types.EpochID(util.BytesToUint32(msg))
-	atxids, err := atxs.GetIDsByEpoch(l.db, epoch)
-	if err != nil {
-		return nil, fmt.Errorf("get epoch ATXs for epoch %v: %w", epoch, err)
-	}
-
-	l.log.WithContext(ctx).With().Debug("responded to epoch atx request",
-		epoch,
-		log.Int("count", len(atxids)))
-	bts, err := codec.Encode(atxids)
-	if err != nil {
-		l.log.WithContext(ctx).With().Panic("failed to serialize epoch atx", epoch, log.Err(err))
-		return bts, fmt.Errorf("serialize: %w", err)
-	}
-
-	return bts, nil
-}
-
-// layerContentReqReceiver returns the block IDs for the specified layer hash,
-// it also returns the validation vector for this data and the latest blocks received in gossip.
-func (l *Logic) layerContentReqReceiver(ctx context.Context, req []byte) ([]byte, error) {
-	lyrID := types.BytesToLayerID(req)
-	processed := l.msh.ProcessedLayer()
-	if lyrID.After(processed) {
-		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
-	}
-	ld := &layerData{ProcessedLayer: processed}
-	var err error
-	ld.Hash, err = layers.GetHash(l.db, lyrID)
-	if err != nil {
-		l.log.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
-		return nil, ErrInternal
-	}
-	ld.AggregatedHash, err = layers.GetAggregatedHash(l.db, lyrID)
-	if err != nil {
-		l.log.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lyrID, log.Err(err))
-		return nil, ErrInternal
-	}
-	ld.Ballots, err = ballots.IDsInLayer(l.db, lyrID)
-	if err != nil {
-		// sql.ErrNotFound should be considered a programming error since we are only responding for
-		// layers older than processed layer
-		l.log.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
-		return nil, ErrInternal
-	}
-	ld.Blocks, err = blocks.IDsInLayer(l.db, lyrID)
-	if err != nil {
-		// sql.ErrNotFound should be considered a programming error since we are only responding for
-		// layers older than processed layer
-		l.log.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
-		return nil, ErrInternal
-	}
-	if ld.HareOutput, err = layers.GetHareOutput(l.db, lyrID); err != nil {
-		l.log.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
-		return nil, ErrInternal
-	}
-
-	out, err := codec.Encode(ld)
-	if err != nil {
-		l.log.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
-	}
-
-	return out, nil
+	_ = l.eg.Wait()
 }
 
 // initLayerPolling returns false if there is an ongoing polling of the given layer content,
@@ -214,31 +144,18 @@ func (l *Logic) initLayerPolling(layerID types.LayerID, ch chan LayerPromiseResu
 // it returns a channel for the caller to be notified when responses are received from all peers.
 func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
 	resChannel := make(chan LayerPromiseResult, 1)
-
-	remotePeers := l.host.GetPeers()
-	numPeers := len(remotePeers)
-	if numPeers == 0 {
-		resChannel <- LayerPromiseResult{Layer: layerID, Err: ErrNoPeers}
-		return resChannel
-	}
-
 	if !l.initLayerPolling(layerID, resChannel) {
 		return resChannel
 	}
 
-	// send a request to the first peer of the list to get blocks data.
-	// todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
-	for _, p := range remotePeers {
-		peer := p
-		receiveForPeerFunc := func(data []byte) {
-			l.receiveLayerContent(ctx, layerID, peer, numPeers, data, nil)
-		}
-		errFunc := func(err error) {
-			l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
-		}
-		if err := l.blocksrv.Request(ctx, peer, layerID.Bytes(), receiveForPeerFunc, errFunc); err != nil {
-			errFunc(err)
-		}
+	okFunc := func(data []byte, peer p2p.Peer, numPeers int) {
+		l.receiveLayerContent(ctx, layerID, peer, numPeers, data, nil)
+	}
+	errFunc := func(err error, peer p2p.Peer, numPeers int) {
+		l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
+	}
+	if err := l.fetcher.GetLayerData(ctx, layerID, okFunc, errFunc); err != nil {
+		resChannel <- LayerPromiseResult{Layer: layerID, Err: err}
 	}
 	return resChannel
 }
@@ -264,7 +181,6 @@ func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
 	}
 
 	l.fetcher.RegisterPeerHashes(peer, layerHashes)
-
 	return
 }
 
@@ -302,13 +218,27 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 
 	logger.With().Debug("fetching new ballots", log.Int("to_fetch", len(ballotsToFetch)))
 	if err := l.GetBallots(ctx, ballotsToFetch); err != nil {
-		// fail sync for the entire layer
-		return err
+		logger.With().Warning("failed fetching new ballots",
+			log.Array("ballot_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				for _, bid := range ballotsToFetch {
+					encoder.AppendString(bid.String())
+				}
+				return nil
+			})),
+			log.Err(err))
+		// syntactically invalid ballots are expected from malicious peers
 	}
 
 	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(blocksToFetch)))
 	if err := l.GetBlocks(ctx, blocksToFetch); err != nil {
-		logger.With().Warning("failed fetching new blocks", log.Err(err))
+		logger.With().Warning("failed fetching new blocks",
+			log.Array("block_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				for _, bid := range blocksToFetch {
+					encoder.AppendString(bid.String())
+				}
+				return nil
+			})),
+			log.Err(err))
 		// syntactically invalid blocks are expected from malicious peers
 	}
 	return nil
@@ -344,7 +274,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 
 	if peerRes.err == nil {
 		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
-			peerRes.err = ErrLayerDataNotFetched
+			peerRes.err = errLayerDataNotFetched
 		}
 	}
 
@@ -362,7 +292,11 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	}
 
 	// make a copy of data and channels to avoid holding a lock while notifying
-	go notifyLayerDataResult(l.db, layerID, l.msh, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
+	chs := l.layerBlocksChs[layerID]
+	l.eg.Go(func() error {
+		notifyLayerDataResult(l.db, layerID, l.msh, chs, result, l.log.WithContext(ctx).WithFields(layerID))
+		return nil
+	})
 	delete(l.layerBlocksChs, layerID)
 	delete(l.layerBlocksRes, layerID)
 }
@@ -370,7 +304,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // notifyLayerDataResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, layerDB meshProvider, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
+func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
 	var (
 		missing, success bool
 		err              error
@@ -379,7 +313,7 @@ func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, layerDB mesh
 		if res.err == nil && res.data != nil {
 			success = true
 		}
-		if errors.Is(res.err, ErrLayerDataNotFetched) {
+		if errors.Is(res.err, errLayerDataNotFetched) {
 			// all fetches need to succeed
 			missing = true
 			err = res.err
@@ -404,7 +338,7 @@ func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, layerDB mesh
 			result.Err = err
 		}
 		if len(lyrResult.blocks) == 0 {
-			if err := layerDB.SetZeroBlockLayer(layerID); err != nil {
+			if err := msh.SetZeroBlockLayer(layerID); err != nil {
 				// this can happen when node actually had received blocks for this layer before. ok to ignore
 				logger.With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
 			}
@@ -418,16 +352,17 @@ func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, layerDB mesh
 }
 
 type epochAtxRes struct {
+	Peer  p2p.Peer
 	Error error
 	Atxs  []types.ATXID
 }
 
 // GetEpochATXs fetches all atxs received by peer for given layer.
-func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
+func (l *Logic) GetEpochATXs(ctx context.Context, eid types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
 
 	// build receiver function
-	receiveForPeerFunc := func(data []byte) {
+	okFunc := func(data []byte, peer p2p.Peer) {
 		var atxsIDs []types.ATXID
 		err := codec.Decode(data, &atxsIDs)
 		resCh <- epochAtxRes{
@@ -441,14 +376,10 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 			Atxs:  nil,
 		}
 	}
-	if l.host.PeerCount() == 0 {
-		return errors.New("no peers")
-	}
-	peer := GetRandomPeer(l.host.GetPeers())
-	if err := l.atxsrv.Request(ctx, peer, id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
+	if err := l.fetcher.GetEpochATXIDs(ctx, eid, okFunc, errFunc); err != nil {
 		return fmt.Errorf("failed to send request to the peer: %w", err)
 	}
-	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
+	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", eid)
 	res := <-resCh
 	if res.Error != nil {
 		return res.Error
@@ -456,68 +387,14 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 
 	l.log.WithContext(ctx).With().Debug("tracking peer for atxs",
 		log.Int("to_fetch", len(res.Atxs)),
-		log.String("peer", peer.String()))
+		log.Stringer("peer", res.Peer))
 	atxHashes := types.ATXIDsToHashes(res.Atxs)
-	l.fetcher.RegisterPeerHashes(peer, atxHashes)
+	l.fetcher.RegisterPeerHashes(res.Peer, atxHashes)
 
 	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
 	}
 
-	return nil
-}
-
-// getAtxResults is called when an ATX result is received.
-func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).With().Debug("got response for ATX",
-		log.String("hash", hash.ShortString()),
-		log.Int("dataSize", len(data)))
-
-	if err := l.atxHandler.HandleAtxData(ctx, data); err != nil {
-		return fmt.Errorf("handle ATX data %s len %d: %w", hash, len(data), err)
-	}
-
-	return nil
-}
-
-// getPoetResult is handler function to poet proof fetch result.
-func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).Debug("got poet ref",
-		log.String("hash", hash.ShortString()),
-		log.Int("dataSize", len(data)))
-
-	if err := l.poetHandler.ValidateAndStoreMsg(data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-		return fmt.Errorf("validate and store message: %w", err)
-	}
-
-	return nil
-}
-
-// Future is a preparation for using actual futures in the code, this will allow to truly execute
-// asynchronous reads and receive result only when needed.
-type Future struct {
-	res chan ftypes.HashDataPromiseResult
-	ret *ftypes.HashDataPromiseResult
-}
-
-// Result actually evaluates the result of the fetch task.
-func (f *Future) Result() ftypes.HashDataPromiseResult {
-	if f.ret == nil {
-		ret := <-f.res
-		f.ret = &ret
-	}
-	return *f.ret
-}
-
-// FetchAtx returns error if ATX was not found.
-func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), datastore.ATXDB, false), nil}
-	if f.Result().Err != nil {
-		return f.Result().Err
-	}
-	if !f.Result().IsLocal {
-		return l.getAtxResults(ctx, f.Result().Hash, f.Result().Data)
-	}
 	return nil
 }
 
@@ -639,7 +516,13 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
-		return l.getPoetResult(ctx, res.Hash, res.Data)
+		l.log.WithContext(ctx).Debug("got poet ref",
+			log.String("hash", id.ShortString()),
+			log.Int("dataSize", len(res.Data)))
+
+		if err := l.poetHandler.ValidateAndStoreMsg(res.Data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("validate and store message: %w", err)
+		}
 	}
 	return nil
 }

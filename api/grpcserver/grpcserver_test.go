@@ -55,8 +55,6 @@ const (
 	labelsPerUnit    = 2048
 	bitsPerLabel     = 8
 	numUnits         = 2
-	defaultGasLimit  = 10
-	defaultFee       = 1
 	genTimeUnix      = 1000000
 	layerDurationSec = 10
 	layerAvgSize     = 10
@@ -472,7 +470,7 @@ func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
 	return a.UpdatePoETErr
 }
 
-func launchServer(t *testing.T, services ...ServiceAPI) func() {
+func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 
@@ -498,7 +496,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	}
 
 	return func() {
-		require.NoError(t, jsonService.Close())
+		require.NoError(tb, jsonService.Close())
 		_ = grpcService.Close()
 	}
 }
@@ -1620,7 +1618,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, syncer)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1671,7 +1669,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		n++
 		return nil
 	})
-	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1704,7 +1702,7 @@ func TestTransactionService(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1964,13 +1962,18 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
+			events.CloseEventReporter()
+			events.InitializeReporter()
+
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+			_, err = stream.Header()
+			require.NoError(t, err)
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
 
 				for i := 0; i < subscriptionChanBufSize; i++ {
 					_, err := stream.Recv()
@@ -1981,11 +1984,6 @@ func TestTransactionService(t *testing.T) {
 					}
 				}
 			}()
-
-			events.CloseEventReporter()
-			events.InitializeReporter()
-
-			time.Sleep(100 * time.Millisecond)
 
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
 				events.ReportNewTx(types.LayerID{}, globalTx)
@@ -2204,10 +2202,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountDataItemReceipt(t, res.Datum.Datum)
-
-		res, err = stream.Recv()
-		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemReward(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
@@ -2238,15 +2232,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 
 	// Ensure receiving has started.
-	time.Sleep(10 * time.Millisecond)
-
-	// publish a receipt
-	events.ReportReceipt(events.TxReceipt{
-		Address: addr1,
-		Index:   receiptIndex,
-	})
-
-	// Wait before every event to ensure their ordering.
 	time.Sleep(10 * time.Millisecond)
 
 	// publish a reward
@@ -2299,8 +2284,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		GlobalStateDataFlags: uint32(
 			pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT |
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH |
-				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD |
-				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_TRANSACTION_RECEIPT),
+				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
 	}
 
 	// Synchronize the two routines
@@ -2314,10 +2298,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.GlobalStateStreamResponse
-
-		res, err = stream.Recv()
-		require.NoError(t, err, "got error from stream")
-		checkGlobalStateDataReceipt(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
@@ -2354,14 +2334,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	// initialize the streamer
 	events.CloseEventReporter()
 	events.InitializeReporter()
-
-	time.Sleep(10 * time.Millisecond)
-
-	// publish a receipt
-	events.ReportReceipt(events.TxReceipt{
-		Address: addr1,
-		Index:   receiptIndex,
-	})
 
 	time.Sleep(10 * time.Millisecond)
 	// publish a reward
@@ -2814,7 +2786,7 @@ func TestEventsReceived(t *testing.T) {
 		return nil
 	})
 
-	txService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	txService := NewTransactionService(sql.InMemory(), publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
 	gsService := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, txService, gsService)
 	defer shutDown()
@@ -2897,12 +2869,13 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(globalTx)
+	conState.AddToCache(context.TODO(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
-	svm.Apply(layerFirst, []types.RawTx{globalTx.RawTx}, rewards)
+	svm.Apply(vm.ApplyContext{Layer: layerFirst},
+		[]types.Transaction{*globalTx}, rewards)
 
 	select {
 	case <-waiter:

@@ -9,25 +9,27 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// RewardConfig defines the configuration options for Spacemesh rewards.
-type RewardConfig struct {
+// Config defines the configuration options for Spacemesh rewards.
+type Config struct {
+	GasLimit   uint64
 	BaseReward uint64 `mapstructure:"base-reward"`
 }
 
-// DefaultRewardConfig returns the default RewardConfig.
-func DefaultRewardConfig() RewardConfig {
-	return RewardConfig{
+// DefaultConfig returns the default RewardConfig.
+func DefaultConfig() Config {
+	return Config{
+		GasLimit:   100_000_000,
 		BaseReward: 50 * uint64(math.Pow10(12)),
 	}
 }
 
-func calculateLayerReward(cfg RewardConfig) uint64 {
+func calculateLayerReward(cfg Config) uint64 {
 	// todo: add inflation rules here
 	return cfg.BaseReward
 }
 
 // calculateRewards splits layer rewards and total fees fairly between coinbases recorded in rewards.
-func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
+func calculateRewards(logger log.Log, cfg Config, lid types.LayerID, totalFees uint64, rewards []types.AnyReward) ([]*types.Reward, error) {
 	logger = logger.WithFields(lid)
 	totalWeight := util.WeightFromUint64(0)
 	byCoinbase := make(map[types.Address]util.Weight)
@@ -48,7 +50,7 @@ func calculateRewards(logger log.Log, cfg RewardConfig, lid types.LayerID, total
 	finalRewards := make([]*types.Reward, 0, len(rewards))
 	layerRewards := calculateLayerReward(cfg)
 	totalRewards := layerRewards + totalFees
-	logger.With().Info("rewards info for layer",
+	logger.With().Debug("rewards info for layer",
 		log.Uint64("layer_rewards", layerRewards),
 		log.Uint64("fee", totalFees))
 	rewardPer := util.WeightFromUint64(totalRewards).Div(totalWeight)

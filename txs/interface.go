@@ -1,20 +1,27 @@
 package txs
 
 import (
-	"time"
+	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
+
+type txGetter interface {
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
+}
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
 	Validation(types.RawTx) system.ValidationRequest
-	AddToCache(*types.Transaction) error
+	AddToCache(context.Context, *types.Transaction) error
 	AddToDB(*types.Transaction) error
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
 
 type vmState interface {
@@ -26,27 +33,9 @@ type vmState interface {
 	GetBalance(types.Address) (uint64, error)
 	GetNonce(types.Address) (types.Nonce, error)
 	Revert(types.LayerID) (types.Hash32, error)
-	Apply(types.LayerID, []types.RawTx, []types.AnyReward) ([]types.TransactionID, error)
+	Apply(vm.ApplyContext, []types.Transaction, []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error)
 }
 
 type conStateCache interface {
-	GetMempool() map[types.Address][]*txtypes.NanoTX
-}
-
-type txProvider interface {
-	Add(*types.Transaction, time.Time) error
-	AddHeader(types.TransactionID, *types.TxHeader) error
-	Has(types.TransactionID) (bool, error)
-	Get(types.TransactionID) (*types.MeshTransaction, error)
-	GetByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
-	AddToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
-	AddToBlock(types.LayerID, types.BlockID, []types.TransactionID) error
-	UndoLayers(types.LayerID) error
-	ApplyLayer(types.LayerID, types.BlockID, types.Address, map[uint64]types.TransactionID) error
-	DiscardNonceBelow(types.Address, uint64) error
-	SetNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
-	GetAllPending() ([]*types.MeshTransaction, error)
-	GetAcctPendingFromNonce(types.Address, uint64) ([]*types.MeshTransaction, error)
-	LastAppliedLayer() (types.LayerID, error)
-	GetMeshHash(types.LayerID) (types.Hash32, error)
+	GetMempool(log.Log) map[types.Address][]*txtypes.NanoTX
 }

@@ -34,12 +34,19 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
+// WithConfig updates config on the vm.
+func WithConfig(cfg Config) Opt {
+	return func(vm *VM) {
+		vm.cfg = cfg
+	}
+}
+
 // New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   log.NewNop(),
 		db:       db,
-		cfg:      DefaultRewardConfig(),
+		cfg:      DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -53,7 +60,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 type VM struct {
 	logger   log.Log
 	db       *sql.Database
-	cfg      RewardConfig
+	cfg      Config
 	registry *registry.Registry
 }
 
@@ -61,6 +68,7 @@ type VM struct {
 func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
 		vm:      v,
+		cache:   core.NewStagedCache(v.db),
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
 		raw:     raw,
 	}
@@ -112,6 +120,11 @@ func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
 	return v.GetStateRoot()
 }
 
+// AccountExists returns true if the address exists, spawned or not.
+func (v *VM) AccountExists(address core.Address) (bool, error) {
+	return accounts.Has(v.db, address)
+}
+
 // GetNonce returns expected next nonce for the address.
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(v.db, address)
@@ -148,94 +161,39 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.AnyReward) ([]types.TransactionID, error) {
-	tx, err := v.db.Tx(context.Background())
+func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+	t1 := time.Now()
+	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer tx.Release()
-	var (
-		ss      = core.NewStagedCache(tx)
-		rd      bytes.Reader
-		decoder = scale.NewDecoder(&rd)
-		skipped []types.TransactionID
-		start   = time.Now()
-		fees    uint64
-	)
-	for i := range txs {
-		tx := &txs[i]
-		rd.Reset(tx.Raw)
-		header, ctx, args, err := parse(v.logger, v.registry, ss, tx.ID, decoder)
-		if err != nil {
-			v.logger.With().Warning("skipping transaction. failed to parse", log.Err(err))
-			skipped = append(skipped, tx.ID)
-			continue
-		}
-		v.logger.With().Debug("applying transaction",
-			log.Object("header", header),
-			log.Object("account", &ctx.Account),
-		)
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("skipping transaction. can't cover gas",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			skipped = append(skipped, tx.ID)
-			continue
-		}
-		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
-			v.logger.With().Warning("skipping transaction. failed nonce check",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			skipped = append(skipped, tx.ID)
-			continue
-		}
-		if err := ctx.Handler.Exec(ctx, ctx.Header.Method, args); err != nil {
-			v.logger.With().Debug("transaction failed",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-				log.Err(err),
-			)
-			// TODO anything but internal must be recorded in the execution result.
-			// internal errors are propagated upwards, but they are for fatal
-			// unrecovarable errors, such as disk problems
-			if errors.Is(err, core.ErrInternal) {
-				return nil, err
-			}
-		}
-		fee, err := ctx.Apply(ss)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		fees += fee
+	t2 := time.Now()
+	blockDurationWait.Observe(float64(time.Since(t1)))
+
+	ss := core.NewStagedCache(tx)
+	results, skipped, fees, err := v.execute(lctx, ss, txs)
+	if err != nil {
+		return nil, nil, err
 	}
+	t3 := time.Now()
+	blockDurationTxs.Observe(float64(time.Since(t2)))
 
 	// TODO(dshulyak) why it fails if there are no rewards?
 	if len(blockRewards) > 0 {
-		finalRewards, err := calculateRewards(v.logger, v.cfg, lid, fees, blockRewards)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		for _, reward := range finalRewards {
-			if err := rewards.Add(tx, reward); err != nil {
-				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-			account, err := ss.Get(reward.Coinbase)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
-			account.Balance += reward.TotalReward
-			if err := ss.Update(account); err != nil {
-				return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-			}
+		if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
+			return nil, nil, err
 		}
 	}
+	t4 := time.Now()
+	blockDurationRewards.Observe(float64(time.Since(t3)))
 
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
+	total := 0
 	ss.IterateChanged(func(account *core.Account) bool {
-		account.Layer = lid
+		total++
+		account.Layer = lctx.Layer
 		v.logger.With().Debug("update account state", log.Inline(account))
 		err = accounts.Update(tx, account)
 		if err != nil {
@@ -246,43 +204,208 @@ func (v *VM) Apply(lid types.LayerID, txs []types.RawTx, blockRewards []types.An
 		return true
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
+	writesPerBlock.Observe(float64(total))
+
 	var hash types.Hash32
 	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateHash(tx, lid, hash); err != nil {
-		return nil, err
+	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
+		return nil, nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
-	v.logger.With().Info("applied transactions",
-		lid,
+	blockDurationPersist.Observe(float64(time.Since(t4)))
+	blockDuration.Observe(float64(time.Since(t1)))
+	transactionsPerBlock.Observe(float64(len(txs)))
+	appliedLayer.Set(float64(lctx.Layer.Value))
+
+	v.logger.With().Info("applied layer",
+		lctx.Layer,
+		lctx.Block,
 		log.Int("count", len(txs)-len(skipped)),
-		log.Duration("duration", time.Since(start)),
+		log.Duration("duration", time.Since(t1)),
 		log.Stringer("state_hash", hash),
 	)
-	return skipped, nil
+	return skipped, results, nil
+}
+
+func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fees uint64, blockRewards []types.AnyReward) error {
+	finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
+	if err != nil {
+		return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+	}
+	for _, reward := range finalRewards {
+		if err := rewards.Add(tx, reward); err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		account, err := ss.Get(reward.Coinbase)
+		if err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		account.Balance += reward.TotalReward
+		if err := ss.Update(account); err != nil {
+			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		rewardsCount.Add(float64(reward.TotalReward))
+	}
+	feesCount.Add(float64(fees))
+	return nil
+}
+
+func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transaction) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
+	var (
+		rd          bytes.Reader
+		decoder     = scale.NewDecoder(&rd)
+		fees        uint64
+		ineffective []types.Transaction
+		executed    []types.TransactionWithResult
+		limit       = v.cfg.GasLimit
+	)
+	for i := range txs {
+		txCount.Inc()
+
+		t1 := time.Now()
+		tx := txs[i]
+
+		rd.Reset(tx.GetRaw().Raw)
+		req := &Request{
+			vm:      v,
+			cache:   ss,
+			raw:     txs[i].GetRaw(),
+			decoder: decoder,
+		}
+
+		header, err := req.Parse()
+		if err != nil {
+			v.logger.With().Warning("ineffective transaction. failed to parse",
+				tx.GetRaw().ID,
+				log.Err(err),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+		ctx := req.ctx
+		args := req.args
+
+		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
+			v.logger.With().Warning("ineffective transaction. can't cover gas and max spend",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+		if limit < ctx.Header.MaxGas {
+			v.logger.With().Warning("ineffective transaction. out of block gas",
+				log.Uint64("block gas limit", v.cfg.GasLimit),
+				log.Uint64("current limit", limit),
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		// NOTE this part is executed only for transactions that weren't verified
+		// when saved into database by txs module
+		if !tx.Verified() && !req.Verify() {
+			v.logger.With().Warning("ineffective transaction. failed verify",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		// TODO to be changed after nonces are defined
+		// https://github.com/spacemeshos/go-spacemesh/issues/3273
+		if ctx.Account.NextNonce() != ctx.Header.Nonce.Counter {
+			v.logger.With().Warning("ineffective transaction. failed nonce check",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
+			invalidTxCount.Inc()
+			continue
+		}
+
+		t2 := time.Now()
+		v.logger.With().Debug("applying transaction",
+			log.Object("header", header),
+			log.Object("account", &ctx.Account),
+		)
+
+		rst := types.TransactionWithResult{}
+		rst.Layer = lctx.Layer
+		rst.Block = lctx.Block
+		err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
+		if err != nil {
+			v.logger.With().Debug("transaction failed",
+				log.Object("header", header),
+				log.Object("account", &ctx.Account),
+				log.Err(err),
+			)
+			if errors.Is(err, core.ErrInternal) {
+				return nil, nil, 0, err
+			}
+		}
+		transactionDurationExecute.Observe(float64(time.Since(t2)))
+
+		rst.RawTx = txs[i].GetRaw()
+		rst.TxHeader = &ctx.Header
+		rst.Status = types.TransactionSuccess
+		if err != nil {
+			rst.Status = types.TransactionFailure
+			rst.Message = err.Error()
+		}
+		rst.Gas = ctx.Consumed()
+		rst.Fee = ctx.Fee()
+		rst.Addresses = ctx.Updated()
+
+		err = ctx.Apply(ss)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+		fees += ctx.Fee()
+		limit -= ctx.Consumed()
+
+		executed = append(executed, rst)
+		transactionDuration.Observe(float64(time.Since(t1)))
+	}
+	return executed, ineffective, fees, nil
 }
 
 // Request used to implement 2-step validation flow.
 // After Parse is executed - conservative cache may do validation and skip Verify
 // if transaction can't be executed.
 type Request struct {
-	vm *VM
+	vm    *VM
+	cache *core.StagedCache
 
 	raw     types.RawTx
-	ctx     *core.Context
 	decoder *scale.Decoder
+
+	// both ctx and args are set after successful Parse
+	ctx  *core.Context
+	args scale.Encodable
 }
 
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
-	header, ctx, _, err := parse(r.vm.logger, r.vm.registry, core.NewStagedCache(r.vm.db), r.raw.ID, r.decoder)
+	start := time.Now()
+	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
+	r.args = args
+	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }
 
@@ -291,10 +414,13 @@ func (r *Request) Verify() bool {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
 	}
-	return verify(r.ctx, r.raw.Raw)
+	start := time.Now()
+	rst := verify(r.ctx, r.raw.Raw)
+	transactionDurationVerify.Observe(float64(time.Since(start)))
+	return rst
 }
 
-func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id types.TransactionID, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
@@ -364,4 +490,10 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, id
 
 func verify(ctx *core.Context, raw []byte) bool {
 	return ctx.Template.Verify(ctx, raw)
+}
+
+// ApplyContext has information on layer and block id.
+type ApplyContext struct {
+	Layer types.LayerID
+	Block types.BlockID
 }

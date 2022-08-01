@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -64,8 +64,6 @@ func TestDiscovery_CheckBook(t *testing.T) {
 }
 
 func TestDiscovery_GetRandomPeers(t *testing.T) {
-	t.Parallel()
-
 	hosts, instances := setupOverNodes(t, 2)
 	d := instances[0]
 
@@ -85,8 +83,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		require.Eventually(t, func() bool {
 			return d.book.NumAddresses() == 0
 		}, 2*time.Second, 100*time.Millisecond)
-		res := d.GetRandomPeers(10)
-		require.Equal(t, 0, len(res), "should return 2 peers")
+		require.Equal(t, 0, len(d.GetRandomPeers(10)), "should return zero peers")
 	})
 
 	best, err := bestHostAddress(d.host)
@@ -99,7 +96,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 
 	t.Run("check all nodes in book", func(t *testing.T) {
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 4
+			return d.book.NumAddresses() == 4
 		}, 4*time.Second, 100*time.Millisecond, "should return 4 peers")
 	})
 
@@ -111,7 +108,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 3
+			return len(wrapperGetRandomPeers(d, 3)) == 3
 		}, 4*time.Second, 100*time.Millisecond, "should return 3 peers")
 		require.NotContains(t, d.GetRandomPeers(10), connectedNodeAddress, "should not return connected node")
 	})
@@ -124,7 +121,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 2
+			return len(wrapperGetRandomPeers(d, 2)) == 2
 		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 		res := d.GetRandomPeers(10)
 		require.NotContains(t, res, connectedNodeAddress, "should not return connected node")
@@ -139,14 +136,14 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 		}, 4*time.Second, 100*time.Millisecond)
 
 		require.Eventually(t, func() bool {
-			return len(d.GetRandomPeers(10)) == 2
+			return len(wrapperGetRandomPeers(d, 2)) == 2
 		}, 4*time.Second, 100*time.Millisecond, "should return 2 peers")
 
 		res := d.GetRandomPeers(10)
 		require.NotContains(t, res, oldNode, "should not return connected node")
 
 		require.Eventually(t, func() bool {
-			res = d.GetRandomPeers(10)
+			res = wrapperGetRandomPeers(d, 3)
 			if len(res) != 3 {
 				return false
 			}
@@ -160,9 +157,18 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	})
 }
 
+func wrapperGetRandomPeers(d *Discovery, expectedNum int) (res []*addressbook.AddrInfo) {
+	for i := 0; i < 10; i++ {
+		res = d.GetRandomPeers(expectedNum)
+		if len(res) == expectedNum {
+			return res
+		}
+	}
+	return
+}
+
 func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
-	t.Parallel()
-	extraNodesCount := 120
+	extraNodesCount := 100
 
 	_, instances := setupOverNodes(t, 2)
 	nodeA, nodeB := instances[0], instances[1]
@@ -202,11 +208,11 @@ func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
 	nodeB.CheckPeers(context.Background())
 
 	// we can't know exact nodes count, cause on addrExchange handler we randomly return addresses from buckets
-	addresses := nodeB.book.GetAddresses()
-	require.True(t, len(addresses) > 1 && len(addresses) <= extraNodesCount+1, "nodeB should have some of additional addresses")
+	addresses := nodeB.book.NumAddresses()
+	require.True(t, addresses > 1 && addresses <= extraNodesCount+1, "nodeB should have some of additional addresses")
 
 	ids = append(ids, nodeA.host.ID())
-	for _, addr := range addresses {
+	for _, addr := range nodeB.book.GetAddresses() {
 		require.Subset(t, ids, []peer.ID{addr.ID}, "address should be one of known")
 	}
 }
@@ -214,8 +220,9 @@ func TestHost_ReceiveAddressesOnCheck(t *testing.T) {
 func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 	hosts := make([]host.Host, 0, nodesCount)
 	for i := 0; i < nodesCount; i++ {
-		cm := connmgr.NewConnManager(40, 100, 30*time.Second)
-		h, err := libp2p.New(context.Background(), libp2p.ConnectionManager(cm))
+		cm, err := connmgr.NewConnManager(40, 100, connmgr.WithGracePeriod(30*time.Second))
+		require.NoError(t, err)
+		h, err := libp2p.New(libp2p.ConnectionManager(cm))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			require.NoError(t, h.Close())
@@ -227,7 +234,7 @@ func setupOverNodes(t *testing.T, nodesCount int) ([]host.Host, []*Discovery) {
 }
 
 func setupOverMockNet(t *testing.T, nodesCount int) (mocknet.Mocknet, []*Discovery) {
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), nodesCount)
+	mesh, err := mocknet.FullMeshConnected(nodesCount)
 	require.NoError(t, err)
 	instances := setup(t, mesh.Hosts())
 	wrapDiscovery(instances)

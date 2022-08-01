@@ -315,14 +315,13 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	nid := types.BytesToNodeID(edPubkey.Bytes())
 	oracle.Register(true, nid)
 	output := make(chan TerminationOutput, 1)
-	certs := make(chan CertificationOutput, 1)
 
 	ctrl := gomock.NewController(tb)
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
 		10, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
-		noopPubSub(tb), output, certs, truer{}, newRoundClockFromCfg(logger, cfg),
+		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
 }
 
@@ -508,27 +507,11 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 
-	proc.setK(notifyRound)
 	for i := 0; i < cfg.F+1; i++ {
 		proc.processNotifyMsg(context.TODO(), BuildNotifyMsg(signing.NewEdSigner(), s))
 	}
 
-	// certifyRound
-	proc.advanceToNextRound(context.TODO())
-
-	/*
-		 certification is not really required
-		 for i := 0; i < cfg.F+1; i++ {
-			proc.processCertificationMsg(context.TODO(), BuildCertifyMsg(signing.NewEdSigner(), s))
-		 }
-	*/
-
-	// terminating hare
-	proc.advanceToNextRound(context.TODO())
-
-	if !proc.completed {
-		t.Fatal("hare incomplete")
-	}
+	require.Equal(t, true, proc.terminating)
 }
 
 func TestConsensusProcess_currentRound(t *testing.T) {
@@ -617,7 +600,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	proc.advanceToNextRound(context.TODO())
 	network := &mockP2p{}
 	proc.publisher = network
-	proc.setK(1)
+	proc.k = 1
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)

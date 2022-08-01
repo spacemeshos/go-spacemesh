@@ -16,6 +16,8 @@ import (
 )
 
 func TestAddNodes(t *testing.T) {
+	t.Parallel()
+
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 
 	const (
@@ -101,6 +103,8 @@ func TestAddNodes(t *testing.T) {
 }
 
 func TestFailedNodes(t *testing.T) {
+	t.Parallel()
+
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 
 	const (

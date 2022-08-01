@@ -31,9 +31,6 @@ var (
 	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
 )
 
-// AtxProtocol is the protocol id for broadcasting atxs over gossip.
-const AtxProtocol = "AtxGossip/1"
-
 const defaultPoetRetryInterval = 5 * time.Second
 
 type poetNumberOfTickProvider struct{}
@@ -599,7 +596,7 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}
-	if err := b.publisher.Publish(ctx, AtxProtocol, buf); err != nil {
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, buf); err != nil {
 		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 	return len(buf), nil

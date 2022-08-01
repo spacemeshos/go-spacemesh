@@ -9,9 +9,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	network "github.com/libp2p/go-libp2p-core/network"
-	peer "github.com/libp2p/go-libp2p-core/peer"
-	protocol "github.com/libp2p/go-libp2p-core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	datastore "github.com/spacemeshos/go-spacemesh/datastore"
 	types0 "github.com/spacemeshos/go-spacemesh/fetch/types"
@@ -53,6 +50,20 @@ func (mr *MockfetcherMockRecorder) AddPeersFromHash(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeersFromHash", reflect.TypeOf((*Mockfetcher)(nil).AddPeersFromHash), arg0, arg1)
 }
 
+// GetEpochATXIDs mocks base method.
+func (m *Mockfetcher) GetEpochATXIDs(arg0 context.Context, arg1 types.EpochID, arg2 func([]byte, p2p.Peer), arg3 func(error)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEpochATXIDs", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetEpochATXIDs indicates an expected call of GetEpochATXIDs.
+func (mr *MockfetcherMockRecorder) GetEpochATXIDs(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXIDs", reflect.TypeOf((*Mockfetcher)(nil).GetEpochATXIDs), arg0, arg1, arg2, arg3)
+}
+
 // GetHash mocks base method.
 func (m *Mockfetcher) GetHash(arg0 types.Hash32, arg1 datastore.Hint, arg2 bool) chan types0.HashDataPromiseResult {
 	m.ctrl.T.Helper()
@@ -79,6 +90,20 @@ func (m *Mockfetcher) GetHashes(arg0 []types.Hash32, arg1 datastore.Hint, arg2 b
 func (mr *MockfetcherMockRecorder) GetHashes(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashes", reflect.TypeOf((*Mockfetcher)(nil).GetHashes), arg0, arg1, arg2)
+}
+
+// GetLayerData mocks base method.
+func (m *Mockfetcher) GetLayerData(arg0 context.Context, arg1 types.LayerID, arg2 func([]byte, p2p.Peer, int), arg3 func(error, p2p.Peer, int)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerData", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerData indicates an expected call of GetLayerData.
+func (mr *MockfetcherMockRecorder) GetLayerData(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*Mockfetcher)(nil).GetLayerData), arg0, arg1, arg2, arg3)
 }
 
 // RegisterPeerHashes mocks base method.
@@ -404,99 +429,53 @@ func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0)
 }
 
-// Mocknetwork is a mock of network interface.
-type Mocknetwork struct {
+// Mockhost is a mock of host interface.
+type Mockhost struct {
 	ctrl     *gomock.Controller
-	recorder *MocknetworkMockRecorder
+	recorder *MockhostMockRecorder
 }
 
-// MocknetworkMockRecorder is the mock recorder for Mocknetwork.
-type MocknetworkMockRecorder struct {
-	mock *Mocknetwork
+// MockhostMockRecorder is the mock recorder for Mockhost.
+type MockhostMockRecorder struct {
+	mock *Mockhost
 }
 
-// NewMocknetwork creates a new mock instance.
-func NewMocknetwork(ctrl *gomock.Controller) *Mocknetwork {
-	mock := &Mocknetwork{ctrl: ctrl}
-	mock.recorder = &MocknetworkMockRecorder{mock}
+// NewMockhost creates a new mock instance.
+func NewMockhost(ctrl *gomock.Controller) *Mockhost {
+	mock := &Mockhost{ctrl: ctrl}
+	mock.recorder = &MockhostMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mocknetwork) EXPECT() *MocknetworkMockRecorder {
+func (m *Mockhost) EXPECT() *MockhostMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *Mockhost) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockhostMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockhost)(nil).Close))
+}
+
 // GetPeers mocks base method.
-func (m *Mocknetwork) GetPeers() []peer.ID {
+func (m *Mockhost) GetPeers() []p2p.Peer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]peer.ID)
+	ret0, _ := ret[0].([]p2p.Peer)
 	return ret0
 }
 
 // GetPeers indicates an expected call of GetPeers.
-func (mr *MocknetworkMockRecorder) GetPeers() *gomock.Call {
+func (mr *MockhostMockRecorder) GetPeers() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mocknetwork)(nil).GetPeers))
-}
-
-// Network mocks base method.
-func (m *Mocknetwork) Network() network.Network {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Network")
-	ret0, _ := ret[0].(network.Network)
-	return ret0
-}
-
-// Network indicates an expected call of Network.
-func (mr *MocknetworkMockRecorder) Network() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Network", reflect.TypeOf((*Mocknetwork)(nil).Network))
-}
-
-// NewStream mocks base method.
-func (m *Mocknetwork) NewStream(arg0 context.Context, arg1 peer.ID, arg2 ...protocol.ID) (network.Stream, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "NewStream", varargs...)
-	ret0, _ := ret[0].(network.Stream)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// NewStream indicates an expected call of NewStream.
-func (mr *MocknetworkMockRecorder) NewStream(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewStream", reflect.TypeOf((*Mocknetwork)(nil).NewStream), varargs...)
-}
-
-// PeerCount mocks base method.
-func (m *Mocknetwork) PeerCount() uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PeerCount")
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// PeerCount indicates an expected call of PeerCount.
-func (mr *MocknetworkMockRecorder) PeerCount() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*Mocknetwork)(nil).PeerCount))
-}
-
-// SetStreamHandler mocks base method.
-func (m *Mocknetwork) SetStreamHandler(arg0 protocol.ID, arg1 network.StreamHandler) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetStreamHandler", arg0, arg1)
-}
-
-// SetStreamHandler indicates an expected call of SetStreamHandler.
-func (mr *MocknetworkMockRecorder) SetStreamHandler(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStreamHandler", reflect.TypeOf((*Mocknetwork)(nil).SetStreamHandler), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockhost)(nil).GetPeers))
 }

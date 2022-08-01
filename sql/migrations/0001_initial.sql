@@ -28,17 +28,13 @@ CREATE TABLE layers
     id              INT PRIMARY KEY DESC,
     weak_coin       SMALL INT,
     hare_output     VARCHAR,
+    processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
     hash            CHAR(32),
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
-
-CREATE TABLE mesh_status
-(
-    status SMALL INT PRIMARY KEY,
-    layer  INT NOT NULL
-) WITHOUT ROWID;
+CREATE INDEX layers_by_processed ON layers (processed);
 
 CREATE TABLE rewards
 (
@@ -56,6 +52,7 @@ CREATE TABLE transactions
     id          CHAR(32) PRIMARY KEY,
     tx          BLOB,
     header      BLOB,
+    result      BLOB,
     layer       INT,
     block       CHAR(20),
     principal   CHAR(20),
@@ -65,7 +62,15 @@ CREATE TABLE transactions
 ) WITHOUT ROWID;
 CREATE INDEX transaction_by_applied ON transactions (applied);
 CREATE INDEX transaction_by_principal_nonce ON transactions (principal, nonce);
-CREATE INDEX transaction_by_principal ON transactions (principal, layer);
+CREATE INDEX transaction_by_layer_principal ON transactions (layer asc, principal);
+
+CREATE TABLE transactions_results_addresses
+(
+    address CHAR(20),
+    tid     CHAR(32),
+    PRIMARY KEY (tid, address)
+) WITHOUT ROWID;
+CREATE INDEX transactions_results_addresses_by_address ON transactions_results_addresses(address);
 
 CREATE TABLE proposal_transactions
 (

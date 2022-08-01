@@ -6,9 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+//go:generate scalegen -types Transaction,Reward,RawTx
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
 type TransactionID Hash32
@@ -47,6 +51,16 @@ func (id TransactionID) Compare(other TransactionID) bool {
 	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
 }
 
+// EncodeScale implements scale codec interface.
+func (id *TransactionID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *TransactionID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
+}
+
 // TxIdsField returns a list of loggable fields for a given list of IDs.
 func TxIdsField(ids []TransactionID) log.Field {
 	strs := []string{}
@@ -60,6 +74,16 @@ func TxIdsField(ids []TransactionID) log.Field {
 type Transaction struct {
 	RawTx
 	*TxHeader
+}
+
+// GetRaw returns raw bytes of the transaction with id.
+func (t Transaction) GetRaw() RawTx {
+	return t.RawTx
+}
+
+// Verified returns true if header is set.
+func (t Transaction) Verified() bool {
+	return t.TxHeader != nil
 }
 
 // Hash32 returns the TransactionID as a Hash32.
@@ -97,7 +121,7 @@ func TransactionIDsToHashes(ids []TransactionID) []Hash32 {
 }
 
 // TXState describes the state of a transaction.
-type TXState int
+type TXState uint32
 
 const (
 	// PENDING represents the state when a transaction is syntactically valid, but its nonce and

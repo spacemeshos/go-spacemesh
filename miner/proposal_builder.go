@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -247,7 +246,7 @@ func (pb *ProposalBuilder) createProposal(
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
-	logger.Event().Info("proposal created", log.Inline(p))
+	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 	return p, nil
 }
 
@@ -297,7 +296,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
-	txList := pb.conState.SelectProposalTXs(len(proofs))
+	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
 	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)
 	if err != nil {
 		logger.With().Error("failed to create new proposal", log.Err(err))
@@ -319,7 +318,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		if err != nil {
 			logger.With().Panic("failed to serialize proposal", log.Err(err))
 		}
-		if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
+		if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, data); err != nil {
 			logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 		}
 		events.ReportProposal(events.ProposalCreated, p)

@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
-	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
@@ -88,7 +87,7 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-	SVMLogger              = "SVM"
+	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
@@ -259,6 +258,7 @@ type App struct {
 	*cobra.Command
 	nodeID           types.NodeID
 	Config           *config.Config
+	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
 	gatewaySvc       *grpcserver.GatewayService
@@ -431,6 +431,7 @@ func (app *App) initServices(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
+	app.db = sqlDB
 	if app.Config.CollectMetrics {
 		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 		if dbCollector != nil {
@@ -446,7 +447,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(SVMLogger, lg)))
+	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -456,14 +457,21 @@ func (app *App) initServices(ctx context.Context,
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
 	var verifier blockValidityVerifier
-	msh, recovered, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	if !recovered {
-		if err = state.ApplyGenesis(app.Config.Genesis.ToAccounts()); err != nil {
-			return fmt.Errorf("setup genesis: %w", err)
+	genesisAccts := app.Config.Genesis.ToAccounts()
+	if len(genesisAccts) > 0 {
+		exists, err := state.AccountExists(genesisAccts[0].Address)
+		if err != nil {
+			return fmt.Errorf("failed to check genesis account %v: %w", genesisAccts[0].Address, err)
+		}
+		if !exists {
+			if err = state.ApplyGenesis(genesisAccts); err != nil {
+				return fmt.Errorf("setup genesis: %w", err)
+			}
 		}
 	}
 
@@ -480,11 +488,13 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	processed, err := msh.GetProcessedLayer()
+	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	verified, err := msh.GetVerifiedLayer()
+	// FIXME latest layer in state is not exactly the latest verified layer
+	// https://github.com/spacemeshos/go-spacemesh/issues/3318
+	verified := msh.LatestLayerInState()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load verified layer: %w", err)
 	}
@@ -610,22 +620,29 @@ func (app *App) initServices(ctx context.Context,
 		return pubsub.ValidationIgnore
 	}
 
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(beacon.ProposalProtocol,
+	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
+	app.host.Register(pubsub.BeaconProposalProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(beacon.FirstVotesProtocol,
+	app.host.Register(pubsub.BeaconFirstVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(beacon.FollowingVotesProtocol,
+	app.host.Register(pubsub.BeaconFollowingVotesProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
-	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxHandler.HandleGossipAtx))
-	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
-	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
+	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
+	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(
+		func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
+			if newSyncer.ListenToATXGossip() {
+				return pubsub.ValidationAccept
+			}
+			return pubsub.ValidationIgnore
+		},
+		atxHandler.HandleGossipAtx))
+	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
+	app.host.Register(pubsub.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	hareGossipHandler := rabbit.GetHareMsgHandler()
 	if hareGossipHandler == nil {
 		app.log.Panic("hare message handler missing")
 	}
-	app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
+	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -775,7 +792,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
