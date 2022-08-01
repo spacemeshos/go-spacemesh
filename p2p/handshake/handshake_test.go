@@ -32,3 +32,11 @@ func FuzzHandshakeAckConsistency(f *testing.F) {
 func FuzzHandshakeAckSafety(f *testing.F) {
 	tester.FuzzSafety[handshakeAck](f)
 }
+
+func FuzzHandshakeMessageConsistency(f *testing.F) {
+	tester.FuzzConsistency[handshakeMessage](f)
+}
+
+func FuzzHandshakeMessageSafety(f *testing.F) {
+	tester.FuzzSafety[handshakeMessage](f)
+}

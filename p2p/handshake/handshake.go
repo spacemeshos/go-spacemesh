@@ -43,6 +43,27 @@ type handshakeMessage struct {
 	Network uint32
 }
 
+// EncodeScale implements scale codec interface.
+func (t *handshakeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	if n, err := scale.EncodeCompact32(enc, t.Network); err != nil {
+		return total, err // nolint
+	} else {
+		total += n
+	}
+	return total, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (t *handshakeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	if field, n, err := scale.DecodeCompact32(dec); err != nil {
+		return total, err // nolint
+	} else {
+		total += n
+		t.Network = field
+	}
+	return total, nil
+}
+
 type handshakeAck struct {
 	Error string
 }
