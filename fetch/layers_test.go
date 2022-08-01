@@ -459,7 +459,7 @@ func TestGetBlocks(t *testing.T) {
 						Hash: h,
 						Data: data,
 					}
-					l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(tc.hdlrErr)
+					l.mBlocksH.EXPECT().HandleSyncedBlock(gomock.Any(), data).Return(tc.hdlrErr)
 				} else {
 					ch <- ftypes.HashDataPromiseResult{
 						Hash: h,
@@ -527,7 +527,7 @@ func TestGetBallots(t *testing.T) {
 						Hash: h,
 						Data: data,
 					}
-					l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(tc.hdlrErr)
+					l.mBallotH.EXPECT().HandleSyncedBallot(gomock.Any(), data).Return(tc.hdlrErr)
 				} else {
 					ch <- ftypes.HashDataPromiseResult{
 						Hash: h,
@@ -595,7 +595,7 @@ func TestGetProposals(t *testing.T) {
 						Hash: h,
 						Data: data,
 					}
-					l.mProposalH.EXPECT().HandleProposalData(gomock.Any(), data).Return(tc.hdlrErr)
+					l.mProposalH.EXPECT().HandleSyncedProposal(gomock.Any(), data).Return(tc.hdlrErr)
 				} else {
 					ch <- ftypes.HashDataPromiseResult{
 						Hash: h,

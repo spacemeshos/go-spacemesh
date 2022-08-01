@@ -76,6 +76,16 @@ type Transaction struct {
 	*TxHeader
 }
 
+// GetRaw returns raw bytes of the transaction with id.
+func (t Transaction) GetRaw() RawTx {
+	return t.RawTx
+}
+
+// Verified returns true if header is set.
+func (t Transaction) Verified() bool {
+	return t.TxHeader != nil
+}
+
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
 	return t.ID.Hash32()

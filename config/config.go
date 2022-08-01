@@ -47,7 +47,7 @@ type Config struct {
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config            `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
-	REWARD          vm.RewardConfig          `mapstructure:"reward"`
+	VM              vm.Config                `mapstructure:"vm"`
 	POST            activation.PostConfig    `mapstructure:"post"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
-		REWARD:          vm.DefaultRewardConfig(),
+		VM:              vm.DefaultConfig(),
 		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),

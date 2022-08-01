@@ -619,7 +619,6 @@ func acceptable(err error) bool {
 func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
@@ -646,12 +645,12 @@ func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 
 // Has returns true if transaction exists in the cache.
 func (c *cache) Has(tid types.TransactionID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.has(tid)
 }
 
 func (c *cache) has(tid types.TransactionID) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	return c.cachedTXs[tid] != nil
 }
 
@@ -697,7 +696,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, skipped []types.TransactionID) ([]error, []error) {
+func (c *cache) ApplyLayer(ctx context.Context, db *sql.Database, lid types.LayerID, bid types.BlockID, results []types.TransactionWithResult, ineffective []types.Transaction) ([]error, []error) {
 	if err := checkApplyOrder(c.logger, db, lid); err != nil {
 		return nil, []error{err}
 	}
@@ -710,30 +709,31 @@ func (c *cache) ApplyLayer(db *sql.Database, lid types.LayerID, bid types.BlockI
 		toCleanup[rst.Principal] = struct{}{}
 	}
 	skippedByPrincipal := make(map[types.Address]struct{})
-	for _, tid := range skipped {
-		var principal types.Address
-		ntx, ok := c.cachedTXs[tid]
-		if ok {
-			principal = ntx.Principal
-		} else {
-			mtx, err := transactions.Get(db, tid)
-			if err != nil {
-				c.logger.With().Warning("unable to find skipped tx in db", log.Err(err))
-				// nothing we can do
-				continue
-			} else if mtx.TxHeader == nil {
-				c.logger.With().Warning("tx header not parsed", tid)
-				continue
-			}
-			principal = mtx.Principal
+	for _, tx := range ineffective {
+		if tx.TxHeader == nil {
+			c.logger.With().Warning("tx header not parsed", tx.ID)
+			continue
 		}
-		toCleanup[principal] = struct{}{}
-		skippedByPrincipal[principal] = struct{}{}
+		if !c.has(tx.ID) {
+			rawTxCount.WithLabelValues(updated).Inc()
+			if err := transactions.Add(db, &tx, time.Now()); err != nil {
+				return nil, []error{err}
+			}
+		}
+		toCleanup[tx.Principal] = struct{}{}
+		skippedByPrincipal[tx.Principal] = struct{}{}
 	}
 	defer c.cleanupAccounts(toCleanup)
 
 	byPrincipal := make(map[types.Address]map[uint64]types.TransactionWithResult)
 	for _, rst := range results {
+		if !c.has(rst.ID) {
+			rawTxCount.WithLabelValues(updated).Inc()
+			if err := transactions.Add(db, &rst.Transaction, time.Now()); err != nil {
+				return nil, []error{err}
+			}
+		}
+
 		principal := rst.Principal
 		if _, ok := byPrincipal[principal]; !ok {
 			byPrincipal[principal] = make(map[uint64]types.TransactionWithResult)
