@@ -38,6 +38,7 @@ var (
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
 	errKnownProposal         = errors.New("known proposal")
+	errKnownBallot           = errors.New("known ballot")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -127,8 +128,7 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte)
 
 // HandleBallotData handles Ballot data from sync.
 func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
-	newCtx := log.WithNewRequestID(ctx)
-	logger := h.logger.WithContext(newCtx)
+	logger := h.logger.WithContext(ctx)
 
 	var b types.Ballot
 	t0 := time.Now()
@@ -149,7 +149,10 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
-	if err := h.processBallot(ctx, &b, logger); err != nil {
+	if err := h.processBallot(ctx, logger, &b); err != nil {
+		if errors.Is(err, errKnownBallot) {
+			return nil
+		}
 		return err
 	}
 	return nil
@@ -218,7 +221,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
 
 	t3 := time.Now()
-	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
+	if err := h.processBallot(ctx, logger, &p.Ballot); err != nil && !errors.Is(err, errKnownBallot) {
 		logger.With().Warning("failed to process ballot", log.Err(err))
 		return err
 	}
@@ -253,26 +256,29 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	return nil
 }
 
-func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log.Log) error {
+func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ballot) error {
 	t0 := time.Now()
 	if has, err := ballots.Has(h.cdb, b.ID()); err != nil {
-		h.logger.WithContext(ctx).With().Error("failed to look up ballot", b.ID(), log.Err(err))
+		logger.With().Error("failed to look up ballot", log.Err(err))
 		return fmt.Errorf("lookup ballot %v: %w", b.ID(), err)
 	} else if has {
 		logger.Debug("known ballot", b.ID())
-		return nil
+		return fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 	}
 	ballotDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t0)))
 
 	logger.With().Info("new ballot", log.Inline(b))
 
-	if err := h.checkBallotSyntacticValidity(ctx, b); err != nil {
+	if err := h.checkBallotSyntacticValidity(ctx, logger, b); err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))
 		return fmt.Errorf("syntactic-check ballot: %w", err)
 	}
 
 	t1 := time.Now()
 	if err := ballots.Add(h.cdb, b); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
+		}
 		return fmt.Errorf("save ballot: %w", err)
 	}
 	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
@@ -281,26 +287,26 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 	return nil
 }
 
-func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot) error {
-	h.logger.WithContext(ctx).With().Debug("checking proposal syntactic validity")
+func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.Log, b *types.Ballot) error {
+	logger.With().Debug("checking proposal syntactic validity")
 
 	t0 := time.Now()
 	if err := h.checkBallotDataIntegrity(b); err != nil {
-		h.logger.WithContext(ctx).With().Warning("ballot integrity check failed", log.Err(err))
+		logger.With().Warning("ballot integrity check failed", log.Err(err))
 		return err
 	}
 	ballotDuration.WithLabelValues(dataCheck).Observe(float64(time.Since(t0)))
 
 	t1 := time.Now()
 	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
-		h.logger.WithContext(ctx).With().Warning("ballot data availability check failed", log.Err(err))
+		logger.With().Warning("ballot data availability check failed", log.Err(err))
 		return err
 	}
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
 	t2 := time.Now()
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
-		h.logger.WithContext(ctx).With().Warning("ballot votes consistency check failed", log.Err(err))
+		logger.With().Warning("ballot votes consistency check failed", log.Err(err))
 		return err
 	}
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t2)))
@@ -312,7 +318,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t3)))
 
-	h.logger.WithContext(ctx).With().Debug("ballot is syntactically valid")
+	logger.With().Debug("ballot is syntactically valid")
 	return nil
 }
 

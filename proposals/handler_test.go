@@ -675,28 +675,56 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 }
 
 func TestProposal_ProposalGossip_Fetched(t *testing.T) {
-	th := createTestHandler(t)
-	p := createProposal(t)
-	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
-		require.NoError(t, blocks.Add(th.cdb, blk))
+	tests := []struct {
+		name        string
+		propFetched bool
+	}{
+		{
+			name:        "proposal fetched",
+			propFetched: true,
+		},
+		{
+			name: "ballot fetched",
+		},
 	}
-	data := encodeProposal(t, p)
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			th := createTestHandler(t)
+			p := createProposal(t)
+			for i, bid := range p.Votes.Support {
+				blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+				require.NoError(t, blocks.Add(th.cdb, blk))
+			}
+			data := encodeProposal(t, p)
 
-	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
-	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil)
-	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil)
-	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil)
-	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
-			require.Equal(t, p.Ballot.ID(), ballot.ID())
-			// a separate goroutine fetched the proposal and saved it to database
-			require.NoError(t, proposals.Add(th.cdb, p))
-			return true, nil
+			th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
+			th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil)
+			th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil)
+			th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil)
+			th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+					require.Equal(t, p.Ballot.ID(), ballot.ID())
+					if tc.propFetched {
+						// a separate goroutine fetched the propFetched and saved it to database
+						require.NoError(t, proposals.Add(th.cdb, p))
+					} else {
+						// a separate goroutine fetched the ballot and saved it to database
+						require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
+					}
+					return true, nil
+				})
+			th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
+			if tc.propFetched {
+				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
+			} else {
+				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
+				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
+			}
+			checkProposal(t, th.cdb, p, true)
+			checkBallot(t, th.cdb, &p.Ballot, true, false)
 		})
-	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
-	checkProposal(t, th.cdb, p, true)
+	}
 }
 
 func TestProposal_ValidProposal(t *testing.T) {
