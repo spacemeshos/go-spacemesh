@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/spacemeshos/go-scale"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -44,6 +45,27 @@ type handshakeMessage struct {
 
 type handshakeAck struct {
 	Error string
+}
+
+// EncodeScale implements scale codec interface.
+func (t *handshakeAck) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	if n, err := scale.EncodeString(enc, t.Error); err != nil {
+		return total, err // nolint
+	} else {
+		total += n
+	}
+	return total, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (t *handshakeAck) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	if field, n, err := scale.DecodeString(dec); err != nil {
+		return total, err // nolint
+	} else {
+		total += n
+		t.Error = field
+	}
+	return total, nil
 }
 
 // New instantiates handshake protocol for the host.
