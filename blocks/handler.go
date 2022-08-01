@@ -51,10 +51,9 @@ func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt)
 	return h
 }
 
-// HandleBlockData handles Block data from sync.
-func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
+// HandleSyncedBlock handles Block data from sync.
+func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(ctx)
-	logger.Info("processing block")
 
 	var b types.Block
 	if err := codec.Decode(data, &b); err != nil {
@@ -64,14 +63,15 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 
 	// set the block ID when received
 	b.Initialize()
+	logger = logger.WithFields(b.ID())
 
 	if exists, err := blocks.Has(h.db, b.ID()); err != nil {
-		logger.With().Error("failed to check block exist", b.ID(), log.Err(err))
+		logger.With().Error("failed to check block exist", log.Err(err))
 	} else if exists {
-		logger.Info("known block")
+		logger.Debug("known block")
 		return nil
 	}
-	logger.With().Info("new block", b.ID())
+	logger.With().Info("new block")
 
 	h.fetcher.AddPeersFromHash(b.ID().AsHash32(), types.TransactionIDsToHashes(b.TxIDs))
 	if err := h.checkTransactions(ctx, &b); err != nil {

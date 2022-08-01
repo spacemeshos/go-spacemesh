@@ -126,8 +126,8 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte)
 	}
 }
 
-// HandleBallotData handles Ballot data from sync.
-func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
+// HandleSyncedBallot handles Ballot data from sync.
+func (h *Handler) HandleSyncedBallot(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Ballot
@@ -178,8 +178,8 @@ func collectHashes(a any) []types.Hash32 {
 	return nil
 }
 
-// HandleProposalData handles Proposal data from sync.
-func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
+// HandleSyncedProposal handles Proposal data from sync.
+func (h *Handler) HandleSyncedProposal(ctx context.Context, data []byte) error {
 	err := h.handleProposalData(ctx, data, p2p.NoPeer)
 	if errors.Is(err, errKnownProposal) {
 		return nil
