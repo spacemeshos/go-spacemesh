@@ -5,9 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/spacemeshos/go-scale"
-
 	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )

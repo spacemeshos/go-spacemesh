@@ -340,36 +340,6 @@ func (p Post) String() string {
 		p.Nonce, bytesToShortString(p.Indices))
 }
 
-func (t *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact32(enc, uint32(t.Nonce)); err != nil {
-		return total, err
-	} else {
-		total += n
-	}
-	if n, err := scale.EncodeByteSlice(enc, t.Indices); err != nil {
-		return total, err
-	} else {
-		total += n
-	}
-	return total, nil
-}
-
-func (t *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	if field, n, err := scale.DecodeCompact32(dec); err != nil {
-		return total, err
-	} else {
-		total += n
-		t.Nonce = uint32(field)
-	}
-	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
-		return total, err
-	} else {
-		total += n
-		t.Indices = field
-	}
-	return total, nil
-}
-
 func bytesToShortString(b []byte) string {
 	l := len(b)
 	if l == 0 {
