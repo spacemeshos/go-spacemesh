@@ -91,8 +91,6 @@ type Syncer struct {
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
-	forceSyncCh chan struct{}
-
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
 	eg          errgroup.Group
@@ -116,7 +114,6 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beac
 		syncTimer:     time.NewTicker(conf.SyncInterval),
 		validateTimer: time.NewTicker(conf.SyncInterval * 3),
 		awaitSyncedCh: make([]chan struct{}, 0),
-		forceSyncCh:   make(chan struct{}, 1),
 		shutdownCtx:   shutdownCtx,
 		cancelFunc:    cancel,
 	}
@@ -189,9 +186,6 @@ func (s *Syncer) Start(ctx context.Context) {
 				case <-s.syncTimer.C:
 					s.logger.WithContext(ctx).Debug("synchronize on tick")
 					s.synchronize(ctx)
-				case <-s.forceSyncCh:
-					s.logger.WithContext(ctx).Debug("force synchronize")
-					s.synchronize(ctx)
 				}
 			}
 		})
@@ -202,27 +196,11 @@ func (s *Syncer) Start(ctx context.Context) {
 				case <-s.shutdownCtx.Done():
 					return nil
 				case <-s.validateTimer.C:
-					s.processLayers(ctx)
+					_ = s.processLayers(ctx)
 				}
 			}
 		})
 	})
-}
-
-// ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
-// ForceSync will be ignored.
-func (s *Syncer) ForceSync(ctx context.Context) bool {
-	s.logger.WithContext(ctx).Debug("executing ForceSync")
-	if s.isClosed() {
-		s.logger.WithContext(ctx).Info("shutting down. dropping ForceSync request")
-		return false
-	}
-	if len(s.forceSyncCh) > 0 {
-		s.logger.WithContext(ctx).Info("another ForceSync already in progress. dropping this one")
-		return false
-	}
-	s.forceSyncCh <- struct{}{}
-	return true
 }
 
 func (s *Syncer) isClosed() bool {

@@ -466,43 +466,6 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
 }
 
-func TestForceSync(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
-	require.False(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.TODO()))
-	ts.syncer.Start(context.TODO())
-	t.Cleanup(func() {
-		ts.syncer.Close()
-	})
-	ts.syncer.ForceSync(context.TODO())
-	<-syncedCh
-	require.True(t, ts.syncer.dataSynced())
-	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
-	require.True(t, ts.syncer.IsSynced(context.TODO()))
-}
-
-func TestMultipleForceSync(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.TODO()))
-	lyr := types.NewLayerID(1)
-	ts.mTicker.advanceToLayer(lyr)
-	ts.syncer.Start(context.TODO())
-
-	require.True(t, true, ts.syncer.ForceSync(context.TODO()))
-	require.False(t, false, ts.syncer.ForceSync(context.TODO()))
-
-	// allow synchronize to finish
-	ts.syncer.Close()
-
-	// node already shutdown
-	require.False(t, false, ts.syncer.ForceSync(context.TODO()))
-}
-
 func TestSyncMissingLayer(t *testing.T) {
 	ts := newTestSyncer(context.TODO(), t, never, false)
 	genesis := types.GetEffectiveGenesis()
