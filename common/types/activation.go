@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
+//go:generate scalegen -types PoetProof
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
