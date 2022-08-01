@@ -452,7 +452,7 @@ func (l *Logic) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, datastore.BallotDB, l.ballotHandler.HandleBallotData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, datastore.BallotDB, l.ballotHandler.HandleSyncedBallot); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -465,7 +465,7 @@ func (l *Logic) GetProposals(ctx context.Context, ids []types.ProposalID) error 
 	}
 	l.log.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, datastore.ProposalDB, l.proposalHandler.HandleProposalData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, datastore.ProposalDB, l.proposalHandler.HandleSyncedProposal); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
@@ -478,7 +478,7 @@ func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	}
 	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
-	if errs := l.getHashes(ctx, hashes, datastore.BlockDB, l.blockHandler.HandleBlockData); len(errs) > 0 {
+	if errs := l.getHashes(ctx, hashes, datastore.BlockDB, l.blockHandler.HandleSyncedBlock); len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
