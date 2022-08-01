@@ -60,16 +60,15 @@ type NodeClient struct {
 
 // deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address)
 // and output ip of the poet.
-func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
+func deployPoet(ctx *testcontext.Context, gateways []string, flags ...DeploymentFlag) (string, error) {
 	args := []string{}
-	for _, gateway := range gateways {
-		args = append(args, "--gateway="+gateway)
+	for _, flag := range flags {
+		args = append(args, flag.Flag())
 	}
-	args = append(args,
-		"--restlisten=0.0.0.0:"+strconv.Itoa(poetPort),
-		"--duration=30s",
-		"--n=10",
-	)
+	for _, gw := range gateways {
+		args = append(args, "--gateway="+gw)
+	}
+	ctx.Log.Debugw("deploying poet pod", "args", args, "image", ctx.PoetImage)
 	labels := nodeLabels("poet")
 	pod := corev1.Pod("poet", ctx.Namespace).
 		WithLabels(labels).
@@ -435,4 +434,29 @@ func Accounts(accounts map[string]uint64) DeploymentFlag {
 		parts = append(parts, fmt.Sprintf("%s=%d", name, value))
 	}
 	return DeploymentFlag{Name: "--accounts", Value: strings.Join(parts, ",")}
+}
+
+// DurationFlag is a generic duration flag.
+func DurationFlag(flag string, d time.Duration) DeploymentFlag {
+	return DeploymentFlag{Name: flag, Value: d.String()}
+}
+
+// PoetRestListen socket pair with http api.
+func PoetRestListen(port int) DeploymentFlag {
+	return DeploymentFlag{Name: "--restlisten", Value: fmt.Sprintf("0.0.0.0:%d", port)}
+}
+
+// EpochDuration ...
+func EpochDuration(d time.Duration) DeploymentFlag {
+	return DurationFlag("--epoch-duration", d)
+}
+
+// CycleGap ...
+func CycleGap(d time.Duration) DeploymentFlag {
+	return DurationFlag("--cycle-gap", d)
+}
+
+// PhaseShift ...
+func PhaseShift(d time.Duration) DeploymentFlag {
+	return DurationFlag("--phase-shift", d)
 }
