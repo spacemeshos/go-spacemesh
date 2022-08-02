@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
@@ -45,7 +46,7 @@ type nipostBuilder interface {
 }
 
 type nipostValidator interface {
-	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error
+	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error)
 	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
 }
 
@@ -106,7 +107,6 @@ type Builder struct {
 	cdb               *datastore.CachedDB
 	atxHandler        atxHandler
 	publisher         pubsub.Publisher
-	tickProvider      poetNumberOfTickProvider
 	nipostBuilder     nipostBuilder
 	postSetupProvider PostSetupProvider
 	challenge         *types.NIPostChallenge
@@ -371,14 +371,12 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	case <-syncedCh:
 	}
 	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
-	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
+	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
 	}
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
-	challenge.StartTick = endTick
-	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
@@ -600,19 +598,22 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	return len(buf), nil
 }
 
-// GetPositioningAtxInfo return the following details about the latest atx, to be used as a positioning atx:
-// 	atxID, pubLayerID, endTick
-func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
-	if id, err := b.atxHandler.GetPosAtxID(); err != nil {
-		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("cannot find pos atx: %v", err)
-	} else if id == b.goldenATXID {
-		b.log.With().Info("using golden atx as positioning atx", id)
-		return id, types.LayerID{}, 0, nil
-	} else if atx, err := b.cdb.GetAtxHeader(id); err != nil {
-		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
-	} else {
-		return id, atx.PubLayerID, atx.EndTick, nil
+// GetPositioningAtxInfo returns id and publication layer from the best observed atx.
+func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
+	id, err := b.atxHandler.GetPosAtxID()
+	if err != nil {
+		if errors.Is(err, sql.ErrNotFound) {
+			b.log.With().Info("using golden atx as positioning atx", id)
+			return b.goldenATXID, types.LayerID{}, nil
+		}
+		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %v", err)
 	}
+	atx, err := b.cdb.GetAtxHeader(id)
+	if err != nil {
+		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+	}
+	return id, atx.PubLayerID, nil
+
 }
 
 func (b *Builder) discardChallengeIfStale() bool {

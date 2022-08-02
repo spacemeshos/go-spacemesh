@@ -28,7 +28,7 @@ import (
 const layersPerEpochBig = 1000
 
 func getATXHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
-	return NewHandler(cdb, nil, layersPerEpochBig, goldenATXID, &ValidatorMock{}, logtest.New(tb))
+	return NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(tb))
 }
 
 func processAtxs(db *Handler, atxs []*types.ActivationTx) error {
@@ -484,7 +484,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	lg := logtest.New(b)
 
 	cdb := newCachedDB(b)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
 	const (
 		numOfMiners = 300
@@ -576,7 +576,7 @@ func TestHandler_AwaitAtx(t *testing.T) {
 	r := require.New(t)
 
 	lg := logtest.New(t).WithName("sigValidation")
-	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
+	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 	id := types.NodeID{1, 1}
 	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
 
@@ -615,7 +615,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	r := require.New(t)
 
 	lg := logtest.New(t).WithName("sigValidation")
-	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
+	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
 	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), types.Address{}, nil, 0, nil)
 	err := atxHdlr.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
@@ -649,7 +649,7 @@ func TestHandler_KnownATX(t *testing.T) {
 func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	lg := logtest.New(b)
 	cdb := newCachedDB(b)
-	atxHdlr := NewHandler(cdb, nil, 288, types.ATXID{}, &Validator{}, lg)
+	atxHdlr := NewHandler(cdb, nil, 288, testTickSize, types.ATXID{}, &Validator{}, lg)
 
 	var (
 		stop uint64
@@ -686,7 +686,7 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	mockFetch := mocks.NewMockFetcher(gomock.NewController(t))
-	atxHdlr := NewHandler(newCachedDB(t), mockFetch, layersPerEpoch,
+	atxHdlr := NewHandler(newCachedDB(t), mockFetch, layersPerEpoch, testTickSize,
 		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxHandler"))
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 

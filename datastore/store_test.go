@@ -29,8 +29,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: types.NewLayerID(22),
-			StartTick:  0,
-			EndTick:    1,
 		},
 		NumUnits: 11,
 	}

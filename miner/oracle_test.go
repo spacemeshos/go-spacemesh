@@ -46,11 +46,10 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     nodeID,
 			PubLayerID: publishLayer,
-			StartTick:  0,
-			EndTick:    1,
 		},
 		NumUnits: defaultAtxWeight,
 	}
+	hdr.Verify(0, 1)
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&id)
 	require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
@@ -192,11 +191,10 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     o.nodeID,
 			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
-			StartTick:  0,
-			EndTick:    1,
 		},
 		NumUnits: 0,
 	}
+	hdr.Verify(0, 1)
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&atxID)
 	require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))

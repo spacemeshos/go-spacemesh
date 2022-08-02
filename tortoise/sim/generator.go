@@ -193,12 +193,10 @@ func (g *Generator) generateAtxs() {
 
 		nipost := types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(address.Bytes()),
-			StartTick:  1,
-			EndTick:    2,
 			PubLayerID: g.nextLayer.Sub(1),
 		}
 		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
-
+		atx.Verify(1, 2)
 		g.activations[i] = atx.ID()
 
 		for _, state := range g.states {

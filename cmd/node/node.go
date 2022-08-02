@@ -481,7 +481,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
+	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
 
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),

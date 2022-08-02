@@ -24,6 +24,8 @@ import (
 const (
 	layersPerEpoch   = 10
 	postGenesisEpoch = 2
+
+	testTickSize = 1
 )
 
 func init() {
@@ -117,8 +119,8 @@ type ValidatorMock struct{}
 // A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
 var _ nipostValidator = (*ValidatorMock)(nil)
 
-func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
-	return nil
+func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) (uint64, error) {
+	return 1, nil
 }
 
 func (*ValidatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
@@ -146,7 +148,7 @@ func newCachedDB(tb testing.TB) *datastore.CachedDB {
 }
 
 func newAtxHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
-	return NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxHandler"))
+	return NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxHandler"))
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
@@ -155,8 +157,6 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
-		StartTick:      100 * sequence,
-		EndTick:        100 * (sequence + 1),
 		PositioningATX: posAtxID,
 	}
 	return challenge
@@ -607,7 +607,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ed := signing.NewEdSigner()
 	nodeID := types.BytesToNodeID(ed.PublicKey().Bytes())
 	cdb := newCachedDB(t)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, nodeID, ed, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
@@ -633,7 +633,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	layersPerEpoch := uint32(10)
 	sig := &MockSigning{}
 	cdb := newCachedDB(t)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	net.atxHdlr = atxHdlr
 
 	cfg := Config{
@@ -660,8 +660,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		Sequence:       2,
 		PrevATXID:      atx.ID(),
 		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
-		StartTick:      atx.EndTick,
-		EndTick:        atx.EndTick + b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
 		PositioningATX: atx.ID(),
 	}
 
@@ -875,7 +873,7 @@ func newActivationTx(
 	pubLayerID types.LayerID,
 	startTick, numTicks uint64,
 	coinbase types.Address,
-	numUnints uint,
+	numUnits uint,
 	nipost *types.NIPost,
 ) *types.ActivationTx {
 	nipostChallenge := types.NIPostChallenge{
@@ -883,9 +881,7 @@ func newActivationTx(
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
 		PubLayerID:     pubLayerID,
-		StartTick:      startTick,
-		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnints, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnits, nil)
 }

@@ -28,11 +28,10 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		hdr := &types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				StartTick:  0,
-				EndTick:    1,
 			},
 			NumUnits: defaultATXUnit,
 		}
+		hdr.Verify(0, 1)
 		if id == rb.AtxID {
 			hdr.NodeID = types.BytesToNodeID(signer.PublicKey().Bytes())
 			hdr.NumUnits = testedATXUnit

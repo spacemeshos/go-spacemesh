@@ -534,9 +534,8 @@ func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
 	header := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
 	}
-	header.StartTick = 0
-	header.EndTick = 1
 	header.NumUnits = weight
+	header.Verify(0, 1)
 	return header
 }
 
@@ -1299,12 +1298,11 @@ func TestComputeExpectedWeight(t *testing.T) {
 				eid := first + types.EpochID(i)
 				header := &types.ActivationTxHeader{
 					NIPostChallenge: types.NIPostChallenge{
-						StartTick:  0,
-						EndTick:    1,
 						PubLayerID: (eid - 1).FirstLayer(),
 					},
 					NumUnits: uint(weight),
 				}
+				header.Verify(0, 1)
 				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
 				id := types.RandomATXID()
 				atx.SetID(&id)
