@@ -109,6 +109,35 @@ type PostSetupStatus struct {
 	NumLabelsWritten uint64
 	LastOpts         *PostSetupOpts
 	LastError        error
+	// info about post generation.
+	Processed           string // The processed size, like `176 GB`
+	PostTotalSize       string // Total size, that should be processed, like `256 GB`
+	ProcessedPercentage uint32 // The processed percentage, like `50`
+}
+
+// calculateLabels full additional labels for serve more info about postSetup process
+// fill info about completed percentage and how much size is left to process.
+func (p *PostSetupStatus) calculateLabels(cfg PostConfig) {
+	if p.State != postSetupStateInProgress || p.LastOpts.NumFiles == 0 {
+		return
+	}
+
+	totalFiles := p.LastOpts.NumFiles
+	numLabels := uint64(p.LastOpts.NumUnits) * uint64(cfg.LabelsPerUnit)
+	labelsPerFile := numLabels / uint64(p.LastOpts.NumFiles)
+	labelsPerFileInBytes := labelsPerFile * uint64(cfg.BitsPerLabel) / 8
+
+	writtenLabels := p.NumLabelsWritten // how much totally was written, included completed files.
+	writtenLabelsInBytes := writtenLabels * uint64(cfg.BitsPerLabel) / 8
+	// 176 GB of 256 GB
+	p.Processed = util.ByteCountHRPToSI(int64(writtenLabelsInBytes))
+	p.PostTotalSize = util.ByteCountHRPToSI(int64(totalFiles) * int64(labelsPerFileInBytes))
+
+	if labelsPerFile == 0 {
+		return
+	}
+	// percentage completed
+	p.ProcessedPercentage = uint32((float64(writtenLabels) * float64(100)) / float64(labelsPerFile*uint64(totalFiles)))
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
@@ -143,8 +172,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	status.NumLabelsWritten = init.SessionNumLabelsWritten()
 	status.LastOpts = mgr.LastOpts()
 	status.LastError = mgr.LastError()
-	percentage, htp := mgr.calculateLabels(status)
-	println(percentage, htp) // todo 3281
+	status.calculateLabels(mgr.cfg)
 
 	return status
 }
@@ -174,8 +202,7 @@ func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
 		for numLabelsWritten := range ch {
 			status := *initialStatus
 			status.NumLabelsWritten = numLabelsWritten
-			percentage, htp := mgr.calculateLabels(&status)
-			println(percentage, htp) // todo 3281
+			status.calculateLabels(mgr.cfg)
 			statusChan <- &status
 		}
 
@@ -185,30 +212,6 @@ func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
 	}()
 
 	return statusChan
-}
-
-// calculateLabels create additional labels for serve more info about postSetup process
-// percentage: string // like "176 GB of 256 GB"
-// hrp: string // like "86% completed"
-func (mgr *PostSetupManager) calculateLabels(status *PostSetupStatus) (percentage, hrp string) {
-	sessionOpts := mgr.LastOpts()
-
-	numLabels := uint64(sessionOpts.NumUnits) * uint64(mgr.cfg.LabelsPerUnit)
-	labelsPerFile := numLabels / uint64(sessionOpts.NumFiles)
-	labelsPerFileInBytes := labelsPerFile * uint64(mgr.cfg.BitsPerLabel) / 8
-
-	writtenLabels := status.NumLabelsWritten // how much totally was written, included completed files.
-	writtenLabelsInBytes := writtenLabels * uint64(mgr.cfg.BitsPerLabel) / 8
-
-	totalFiles := sessionOpts.NumFiles
-
-	// percentage completed
-	percentageCompleted := (float64(writtenLabels) * float64(100)) / float64(labelsPerFile*uint64(totalFiles))
-
-	// 176 GB of 256 GB
-	completed := util.ByteCountHRPToSI(int64(writtenLabelsInBytes))
-	total := util.ByteCountHRPToSI(int64(totalFiles) * int64(labelsPerFileInBytes))
-	return fmt.Sprintf("%.2f%% completed", percentageCompleted), fmt.Sprintf("%s of %s", completed, total)
 }
 
 // ComputeProviders returns a list of available compute providers for Post setup.
@@ -289,14 +292,6 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	/// tododo o
-	/// tododo o
-	/// tododo o
-	/// tododo o
-	/// tododo o
-	/// tododo o
-	/// tododo o
-	/// tododo o
 	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
 	if err != nil {
 		mgr.mu.Lock()

@@ -165,13 +165,14 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 
 func (s SmesherService) SmeshingStatus(_ context.Context) (interface{}, error) {
 	log.Info("GRPC SmesherService.SmeshingStatus")
-	epochList := []types.EpochID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} // todo 3281
-	result, err := s.smeshingProvider.GetEpochStatus(epochList)
-	if err != nil {
-		log.Error("failed to get epoch statuses: %v", err)
-		return nil, status.Error(codes.Internal, "failed to get epoch statuses")
-	}
-	return result, nil
+	//epochList := []types.EpochID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} // todo 3281
+	//result, err := s.smeshingProvider.GetEpochStatus(epochList)
+	//if err != nil {
+	//	log.Error("failed to get epoch statuses: %v", err)
+	//	return nil, status.Error(codes.Internal, "failed to get epoch statuses")
+	//}
+	// todo 3281
+	return nil, nil
 }
 
 // PostSetupStatusStream exposes a stream of status updates during post setup.
@@ -255,6 +256,7 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 			NumFiles:          uint32(status.LastOpts.NumFiles),
 			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
 			Throttle:          status.LastOpts.Throttle,
+			// todo 3281 fill info about processing
 		}
 	}
 
