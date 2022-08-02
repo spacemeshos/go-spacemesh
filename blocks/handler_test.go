@@ -55,7 +55,7 @@ func Test_HandleBlockData_MalformedData(t *testing.T) {
 	txIDs := createTransactions(t, max(10, rand.Intn(100)))
 
 	_, data := createBlockData(t, layerID, txIDs)
-	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data[1:]), errMalformedData)
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), data[1:]), errMalformedData)
 }
 
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
@@ -65,7 +65,7 @@ func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 
 	block, data := createBlockData(t, layerID, txIDs)
 	require.NoError(t, blocks.Add(th.db, block))
-	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
+	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), data))
 }
 
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
@@ -77,7 +77,7 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
 	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
-	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), data), errUnknown)
 }
 
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
@@ -90,7 +90,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
 	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
-	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), data), errUnknown)
 }
 
 func Test_HandleBlockData(t *testing.T) {
@@ -102,7 +102,7 @@ func Test_HandleBlockData(t *testing.T) {
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
-	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
+	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), data))
 }
 
 func max(i, j int) int {
