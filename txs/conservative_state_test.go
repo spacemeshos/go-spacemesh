@@ -31,8 +31,8 @@ const (
 	numTXsInProposal = 17
 	defaultGas       = uint64(100)
 	defaultBalance   = uint64(10000000)
-	defaultAmount    = uint64(10)
-	defaultFee       = uint64(5)
+	defaultAmount    = uint64(100)
+	defaultFee       = uint64(4)
 	numTXs           = 29
 	nonce            = uint64(1234)
 )
@@ -105,7 +105,7 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 		addr := types.BytesToAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
-		tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
+		tx := newTx(t, nonce+5, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 		ids = append(ids, tx.ID)
 		txs = append(txs, tx)
@@ -298,12 +298,12 @@ func TestSelectProposalTXs(t *testing.T) {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
-		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
+		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: 1}, nil).Times(1)
+		tx1 := newTx(t, 4, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx1))
-		// all the TXs with nonce 0 are pending in database
+		// all the TXs with nonce 1 are pending in database
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx1.ID}))
-		tx2 := newTx(t, 1, defaultAmount, defaultFee, signer)
+		tx2 := newTx(t, 6, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx2))
 	}
 
@@ -498,7 +498,7 @@ func TestAddToCache_BadNonceNotPersisted(t *testing.T) {
 	checkTXNotInDB(t, tcs.db, tx.ID)
 }
 
-func TestAddToCache_NonceTooHigh(t *testing.T) {
+func TestAddToCache_NonceGap(t *testing.T) {
 	tcs := createConservativeState(t)
 	tx := &types.Transaction{
 		RawTx: types.NewRawTx([]byte{1, 1, 1}),
@@ -510,8 +510,8 @@ func TestAddToCache_NonceTooHigh(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: tx.Nonce.Counter - 2}, nil).Times(1)
 	require.NoError(t, tcs.AddToCache(context.TODO(), tx))
-	checkNoTX(t, tcs.cache, tx.ID)
-	require.True(t, tcs.cache.MoreInDB(tx.Principal))
+	require.True(t, tcs.cache.Has(tx.ID))
+	require.False(t, tcs.cache.MoreInDB(tx.Principal))
 	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
 }
 
@@ -835,14 +835,6 @@ func TestConsistentHandling(t *testing.T) {
 		for _, instance := range instances {
 			require.NoError(t, instance.ApplyLayer(context.TODO(), block))
 			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
-		}
-		for i, signer := range signers {
-			address := types.BytesToAddress(signer.PublicKey().Bytes())
-			expect := nonces[i]
-			for i, instance := range instances {
-				nonce, _ := instance.GetProjection(address)
-				require.Equal(t, int(expect), int(nonce), "instance=%d", i)
-			}
 		}
 	}
 }

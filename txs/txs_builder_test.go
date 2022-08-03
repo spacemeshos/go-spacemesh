@@ -112,7 +112,7 @@ func TestGetBlockTXs_OptimisticFiltering_InsufficientBalance(t *testing.T) {
 	require.ElementsMatch(t, expected, got)
 }
 
-func TestGetBlockTXs_OptimisticFiltering_BadNonce(t *testing.T) {
+func TestGetBlockTXs_OptimisticFiltering_GapNonce(t *testing.T) {
 	accounts := createState(t, 100)
 	num := 3
 	mtxs := make([]*types.MeshTransaction, 0, num*len(accounts))
@@ -128,19 +128,17 @@ func TestGetBlockTXs_OptimisticFiltering_BadNonce(t *testing.T) {
 		}
 		amt := availPerTx - fee
 		for i := 0; i < num; i++ {
+			// every tx has nonce gap
+			nextNonce = nextNonce + 2
 			mtx := newMeshTX(t, nextNonce, ta.signer, amt, now)
 			mtxs = append(mtxs, mtx)
-			// cause the following transaction to fail the nonce check
-			nextNonce = nextNonce + 2
-			if i == 0 {
-				expected = append(expected, mtx.ID)
-			}
+			expected = append(expected, mtx.ID)
 		}
 	}
 	blockSeed := types.RandomHash().Bytes()
 	got, err := getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs, optFilter: true}, getStateFunc(accounts), blockSeed, math.MaxUint64)
 	require.NoError(t, err)
-	require.Less(t, len(expected), len(mtxs))
+	require.Equal(t, len(expected), len(mtxs))
 	require.ElementsMatch(t, expected, got)
 }
 

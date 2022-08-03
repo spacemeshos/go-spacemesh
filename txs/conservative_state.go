@@ -79,6 +79,7 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	if err != nil {
 		cs.logger.With().Fatal("failed to get nonce", log.Err(err))
 	}
+	cs.logger.With().Info("getState", addr, log.Uint64("got", nonce.Counter))
 	balance, err := cs.vmState.GetBalance(addr)
 	if err != nil {
 		cs.logger.With().Fatal("failed to get balance", log.Err(err))
@@ -177,9 +178,8 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 		log.Int("num_txs_applied", len(results)),
 	)
 	t0 := time.Now()
-	if _, errs := cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(),
-		results, ineffective); len(errs) > 0 {
-		return errs[0]
+	if err = cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(), results, ineffective); err != nil {
+		return err
 	}
 	cacheApplyDuration.Observe(float64(time.Since(t0)))
 	return nil
