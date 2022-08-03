@@ -44,7 +44,7 @@ go-spacemesh is designed to be installed and operated on users' home PCs to form
 
 ### Project Status
 
-We are working hard towards our first major milestone - a public permission-less testnet running the Spacemesh consensus protocol.
+We are working hard towards our first major milestone - a public permissionless testnet running the Spacemesh consensus protocol.
 
 ### Contributing
 
@@ -118,6 +118,21 @@ make darwin | linux | freebsd | windows
 
 Platform-specific binaries are saved to the `/build` directory.
 
+### Using `go build` and `go test` without `make`
+
+To build code without using `make` the `CGO_LDFLAGS` environment variable must be set
+appropriately. The required value can be obtained by running `make print-ldflags` or
+`make print-test-ldflags`.
+
+This can be done in 3 ways:
+
+1. Setting the variable in the shell environment (e.g., in bash run `CGO_LDFLAGS=$(make print-ldflags)`).
+2. Prefixing the key and value to the `go` command (e.g., `CGO_LDFLAGS=$(make print-ldflags) go build`).
+3. Using `go env -w CGO_LDFLAGS=$(make print-ldflags)`, which persistently adds this value to Go's
+   environment for any future runs.
+
+There's a handy shortcut for the 3rd method: `make go-env` or `make go-env-test`.
+
 ---
 
 ### Running
@@ -135,7 +150,7 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 3. Start go-spacemesh with the following arguments:
 
     ```bash
-    ./go-spacemesh --config [configFileLocation] -d [nodeDataFilesPath]
+    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath]
     ```
 
     **Example:**
@@ -143,7 +158,7 @@ You specify these parameters by providing go-spacemesh with a json config file. 
     Assuming `tn1.json` is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7513 and UDP port 7513 for p2p connections:
 
     ```bash
-    ./go-spacemesh --config ./tn1.json -d ./sm_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data
     ```
 
 4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
@@ -160,13 +175,13 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 3. Stop go-spacemesh and start it with the following params:
 
     ```bash
-    ./go-spacemesh --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
+    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
     ```
 
     **Example:**
 
     ```bash
-    ./go-spacemesh --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
     ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
