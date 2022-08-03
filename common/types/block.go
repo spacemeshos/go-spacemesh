@@ -50,6 +50,7 @@ type Block struct {
 // InnerBlock contains the transactions and rewards of a block.
 type InnerBlock struct {
 	LayerIndex LayerID
+	TickHeight uint64
 	Rewards    []AnyReward
 	TxIDs      []TransactionID
 }
@@ -88,6 +89,7 @@ func (b *Block) ID() BlockID {
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
 	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddUint64("tick_height", b.TickHeight)
 	encoder.AddInt("num_tx", len(b.TxIDs))
 	encoder.AddInt("num_rewards", len(b.Rewards))
 	return nil
@@ -156,9 +158,14 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// SortBlocks sort blocks by their IDs.
+// SortBlocks sort blocks tick height, if height is equal by lexicographic order.
 func SortBlocks(blks []*Block) []*Block {
-	sort.Slice(blks, func(i, j int) bool { return blks[i].ID().Compare(blks[j].ID()) })
+	sort.Slice(blks, func(i, j int) bool {
+		if blks[i].TickHeight < blks[j].TickHeight {
+			return true
+		}
+		return blks[i].ID().Compare(blks[j].ID())
+	})
 	return blks
 }
 

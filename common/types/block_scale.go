@@ -30,6 +30,11 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	} else {
 		total += n
 	}
+	if n, err := scale.EncodeCompact64(enc, t.TickHeight); err != nil {
+		return total, err
+	} else {
+		total += n
+	}
 	if n, err := scale.EncodeStructSlice(enc, t.Rewards); err != nil {
 		return total, err
 	} else {
@@ -49,6 +54,12 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	} else {
 		total += n
 	}
+	if field, n, err := scale.DecodeCompact64(dec); err != nil {
+		return total, err
+	} else {
+		total += n
+		t.TickHeight = field
+	}
 	if field, n, err := scale.DecodeStructSlice[AnyReward](dec); err != nil {
 		return total, err
 	} else {
@@ -65,12 +76,12 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 }
 
 func (t *RatNum) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact64(enc, uint64(t.Num)); err != nil {
+	if n, err := scale.EncodeCompact64(enc, t.Num); err != nil {
 		return total, err
 	} else {
 		total += n
 	}
-	if n, err := scale.EncodeCompact64(enc, uint64(t.Denom)); err != nil {
+	if n, err := scale.EncodeCompact64(enc, t.Denom); err != nil {
 		return total, err
 	} else {
 		total += n
@@ -83,13 +94,13 @@ func (t *RatNum) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		return total, err
 	} else {
 		total += n
-		t.Num = uint64(field)
+		t.Num = field
 	}
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
 	} else {
 		total += n
-		t.Denom = uint64(field)
+		t.Denom = field
 	}
 	return total, nil
 }
