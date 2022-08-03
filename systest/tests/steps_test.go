@@ -122,7 +122,7 @@ func TestStepTransactions(t *testing.T) {
 				rng.Read(receiver[:])
 				raw := wallet.Spend(
 					client.account.PrivateKey,
-					types.Address(receiver),
+					receiver,
 					rng.Uint64()%amountLimit,
 					types.Nonce{Counter: nonce},
 				)

@@ -34,8 +34,8 @@ func headlessSvc(setname string) string {
 	return setname + "-headless"
 }
 
-func poetEndpoint() string {
-	return fmt.Sprintf("%s:%d", poetSvc, poetPort)
+func poetEndpoint(ith int) string {
+	return fmt.Sprintf("%s-%d:%d", poetSvc, ith, poetPort)
 }
 
 // Opt is for configuring cluster.
@@ -89,7 +89,6 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(GenesisTime(time.Now().Add(cctx.BootstrapDuration)))
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
 	cluster.addFlag(NetworkID(defaultNetID))
-	cluster.addFlag(PoetEndpoint(poetEndpoint()))
 	for _, opt := range opts {
 		opt(cluster)
 	}
@@ -109,7 +108,6 @@ type Cluster struct {
 	bootnodes int
 	smeshers  int
 	clients   []*NodeClient
-	poets     []string
 }
 
 func (c *Cluster) nextSmesher() int {
@@ -193,20 +191,18 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 // AddPoet ...
 func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	if c.bootnodes == 0 {
-		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
-	}
-	if len(c.poets) == 1 {
-		return fmt.Errorf("only one poet is supported")
+		return fmt.Errorf("bootnodes are used as a gateways. create at least one before adding a poet server")
 	}
 	gateways := []string{}
 	for _, bootnode := range c.clients[:c.bootnodes] {
 		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name))))
 	}
-	endpoint, err := deployPoet(cctx, gateways...)
-	if err != nil {
-		return err
+	for i := 0; i < cctx.PoetSize; i++ {
+		name := fmt.Sprintf("%s-%d", poetSvc, i)
+		if err := deployPoet(cctx, name, gateways...); err != nil {
+			return err
+		}
 	}
-	c.poets = append(c.poets, endpoint)
 	return nil
 }
 
