@@ -11,7 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/spacemeshos/go-scale"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -39,54 +38,14 @@ const (
 	streamTimeout = 10 * time.Second
 )
 
-type handshakeMessage struct {
+//go:generate scalegen -types HandshakeMessage,HandshakeAck
+
+type HandshakeMessage struct {
 	Network uint32
 }
 
-// EncodeScale implements scale codec interface.
-func (t *handshakeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact32(enc, t.Network); err != nil {
-		return total, err // nolint
-	} else {
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (t *handshakeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	if field, n, err := scale.DecodeCompact32(dec); err != nil {
-		return total, err // nolint
-	} else {
-		total += n
-		t.Network = field
-	}
-	return total, nil
-}
-
-type handshakeAck struct {
+type HandshakeAck struct {
 	Error string
-}
-
-// EncodeScale implements scale codec interface.
-func (t *handshakeAck) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeString(enc, t.Error); err != nil {
-		return total, err // nolint
-	} else {
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (t *handshakeAck) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	if field, n, err := scale.DecodeString(dec); err != nil {
-		return total, err // nolint
-	} else {
-		total += n
-		t.Error = field
-	}
-	return total, nil
 }
 
 // New instantiates handshake protocol for the host.
@@ -176,10 +135,10 @@ func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err = codec.EncodeTo(stream, &handshakeMessage{Network: h.netid}); err != nil {
+	if _, err = codec.EncodeTo(stream, &HandshakeMessage{Network: h.netid}); err != nil {
 		return fmt.Errorf("failed to send handshake msg: %w", err)
 	}
-	var ack handshakeAck
+	var ack HandshakeAck
 	if _, err := codec.DecodeFrom(stream, &ack); err != nil {
 		return fmt.Errorf("failed to receive handshake ack: %w", err)
 	}
@@ -199,7 +158,7 @@ func (h *Handshake) handler(stream network.Stream) {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
-	var msg handshakeMessage
+	var msg HandshakeMessage
 	if _, err := codec.DecodeFrom(stream, &msg); err != nil {
 		return
 	}
@@ -212,7 +171,7 @@ func (h *Handshake) handler(stream network.Stream) {
 		)
 		return
 	}
-	if _, err := codec.EncodeTo(stream, &handshakeAck{}); err != nil {
+	if _, err := codec.EncodeTo(stream, &HandshakeAck{}); err != nil {
 		return
 	}
 }

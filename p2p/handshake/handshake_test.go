@@ -26,17 +26,17 @@ func TestHandshake(t *testing.T) {
 }
 
 func FuzzHandshakeAckConsistency(f *testing.F) {
-	tester.FuzzConsistency[handshakeAck](f)
+	tester.FuzzConsistency[HandshakeAck](f)
 }
 
 func FuzzHandshakeAckSafety(f *testing.F) {
-	tester.FuzzSafety[handshakeAck](f)
+	tester.FuzzSafety[HandshakeAck](f)
 }
 
 func FuzzHandshakeMessageConsistency(f *testing.F) {
-	tester.FuzzConsistency[handshakeMessage](f)
+	tester.FuzzConsistency[HandshakeMessage](f)
 }
 
 func FuzzHandshakeMessageSafety(f *testing.F) {
-	tester.FuzzSafety[handshakeMessage](f)
+	tester.FuzzSafety[HandshakeMessage](f)
 }
