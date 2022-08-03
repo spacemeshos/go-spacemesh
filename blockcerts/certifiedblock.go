@@ -26,15 +26,19 @@ const (
 // Inputs: hareTerminationsCh and GossipHandler.
 // Outputs: gossipPublisher and database
 type BlockCertifyingService struct {
-    rolacle            hare.Rolacle
-    config             certtypes.BlockCertificateConfig
+    // Inputs & Outputs
     hareTerminationsCh <-chan hare.TerminationBlockOutput
     gossipPublisher    pubsub.Publisher
-    blockSigner        signing.Signer
-    signatureCache     sigCache
-    completedCertsCh   chan certtypes.BlockCertificate
     db                 sql.Executor
-    logger             log.Logger
+    // Dependencies
+    rolacle     hare.Rolacle
+    config      certtypes.BlockCertificateConfig
+    blockSigner signing.Signer
+    // Internal
+    signatureCache   sigCache
+    completedCertsCh chan certtypes.BlockCertificate
+
+    logger log.Logger
 }
 
 // NewBlockCertifyingService constructs a new BlockCertifyingService.
@@ -58,7 +62,7 @@ func NewBlockCertifyingService(
     service.signatureCache = sigCache{
         logger:             logger,
         blockSigsByLayer:   sync.Map{},
-        cacheBoundary:      types.LayerID{},
+        cacheBoundary:      types.NewLayerID(0), // TODO: check this is okay
         cacheBoundaryMutex: sync.RWMutex{},
         completedCertsCh:   service.completedCertsCh,
     }
@@ -86,9 +90,12 @@ func (s *BlockCertifyingService) SignatureCacher() SigCacher {
 func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
     return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
     ) pubsub.ValidationResult {
+        logger := s.logger.WithContext(ctx)
         msg := certtypes.BlockSignatureMsg{}
-        err := codec.Decode(bytes, msg)
+        err := codec.Decode(bytes, &msg)
         if err != nil {
+            logger.Debug("certified block: gossip handler: failed to "+
+                "decode message from peer: %s", peerID)
             return pubsub.ValidationReject
         }
         isValid, err := s.rolacle.Validate(ctx,
@@ -99,6 +106,8 @@ func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
             return pubsub.ValidationReject
         }
         if !isValid {
+            logger.With().Debug("certified block: gossip hander: received "+
+                "invalid block signature", msg.BlockID, msg.LayerID, msg.SignerNodeID)
             return pubsub.ValidationReject
         }
 

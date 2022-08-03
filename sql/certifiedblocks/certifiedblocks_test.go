@@ -39,6 +39,7 @@ func TestHas(t *testing.T) {
                 SignerNodeID:         types.NodeID{},
                 SignerRoleProof:      []byte{1},
                 SignerCommitteeSeats: 8,
+                BlockIDSignature:     []byte{24},
             },
         },
     }

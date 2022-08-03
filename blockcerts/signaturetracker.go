@@ -24,19 +24,24 @@ type sigCache struct {
 }
 
 func (c *sigCache) CacheBlockSignature(ctx context.Context, sigMsg certtypes.BlockSignatureMsg) {
+    // TODO: decide on how to make this concurrent without asking the use to manage it
     logger := c.logger.WithContext(ctx)
     c.cacheBoundaryMutex.RLock()
+    logger.Debug("CacheBlockSignature: acquired Rlock on the cache boundary")
     defer c.cacheBoundaryMutex.RUnlock()
     if sigMsg.LayerID.Before(c.cacheBoundary) {
         logger.Error("block msg is from layer %d which is older "+
             "than cache boundary %d", sigMsg.LayerID.Value, c.cacheBoundary.Value)
         return
     }
-    tracker, _ := c.blockSigsByLayer.LoadOrStore(sigMsg.LayerID.Value,
-        newBlockSignatureTracker(sigMsg.LayerID, c.completedCertsCh, logger))
+    tracker, loaded := c.blockSigsByLayer.LoadOrStore(sigMsg.LayerID.Value,
+        newBlockSignatureTracker(sigMsg.LayerID, c.completedCertsCh, logger)) // TODO: fix memory issue (newBlockSig... called every time even if loading)
+    if !loaded {
+        logger.Debug("newBlockSignatureTracker: created tracker for block "+
+            "signatures for layer %v", sigMsg.LayerID.String())
+    }
     cert := tracker.(*blockSignatureTracker)
-    go cert.addSig(sigMsg) // queue up the msg and return
-    // ain't nobody got time for safe memory writes
+    cert.addSig(sigMsg)
 }
 
 // updateCacheBoundary updates the layer boundary. Block signatures aren't
@@ -80,7 +85,7 @@ type blockSignatureTracker struct {
     logger         log.Logger
 }
 
-func newBlockSignatureTracker(
+func newBlockSignatureTracker( // did I forget to pass in the threshold?
     layerID types.LayerID, completedCerts chan<- certtypes.BlockCertificate, logger log.Logger) *blockSignatureTracker {
     newTracker := blockSignatureTracker{
         layerID:        layerID,
@@ -91,25 +96,27 @@ func newBlockSignatureTracker(
         ifNotAlready:   sync.Once{},
         logger:         logger,
     }
-    logger.Debug("starting to track block signatures for layer %v", layerID.String())
+
     return &newTracker
 }
 
 // addSig doesn't do any validation or verification and is a blocking operation.
 // It should be run in its own goroutine.
 func (t *blockSignatureTracker) addSig(sig certtypes.BlockSignatureMsg) {
+    t.logger.Debug("addSig entry")
     t.Lock()
+    t.logger.Debug("addSig: acquired Write Lock on self (sigTracker)")
     defer t.Unlock()
     // check if a BlockID reached threshold # of signatures
     var majorityBlockID types.BlockID
-    var thresholdReached bool
+    var thresholdReached = false
     for blockID, threshold := range t.thresholdCount {
-        if len(t.signatures) == threshold {
+        if len(t.signatures) == threshold { // TODO: fix this, shouldn't be counting signatures here. Should depend on threshold count map
             majorityBlockID = blockID
             thresholdReached = true
             break
         } else if len(t.signatures) > threshold {
-            t.logger.Error("block certificate signatures: addSig atomicity" +
+            panic("block certificate signatures: addSig atomicity" +
                 "was not maintained.")
         }
     }
