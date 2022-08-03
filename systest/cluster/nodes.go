@@ -188,7 +188,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			setname := fmt.Sprintf("%s-%d", name, i)
 			idx := i % ctx.PoetSize
 			finalFlags[len(finalFlags)-1] = PoetEndpoint(poetEndpoint(idx))
-			if err := deployNode(ctx, setname, labels, flags); err != nil {
+			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
 			podname := fmt.Sprintf("%s-0", setname)
