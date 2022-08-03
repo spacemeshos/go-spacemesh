@@ -385,7 +385,9 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}
-
+	if !atx.Verified() {
+		logger.With().Panic("atx should have be changed by SyntacticallyValidateAtx. fix code", log.Inline(atx))
+	}
 	err = h.ProcessAtx(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)

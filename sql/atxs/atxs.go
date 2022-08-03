@@ -155,9 +155,6 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 
 // Add adds an ATX for a given ATX ID.
 func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
-	if !atx.Verified() {
-		return fmt.Errorf("saving unverified atx to the database %v", atx.ID())
-	}
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)

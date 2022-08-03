@@ -131,7 +131,9 @@ func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, e
 }
 
 func (p *poetDbMock) GetProof(poetRef []byte) (*types.PoetProof, error) {
-	return nil, nil
+	hash := types.BytesToHash([]byte("anton"))
+	hash2 := types.BytesToHash([]byte("anton1"))
+	return &types.PoetProof{Members: [][]byte{hash.Bytes(), hash2.Bytes()}}, nil
 }
 
 func TestNIPostBuilderWithMocks(t *testing.T) {

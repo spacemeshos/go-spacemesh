@@ -546,7 +546,7 @@ func TestHandler_TopAtx(t *testing.T) {
 	r.Equal(atx.ID(), id)
 
 	// higher-layer ATX stored should become new top ATX
-	atx, err = createAndStoreAtx(atxHdlr, types.LayerID{}.Add(3))
+	atx, err = createAndStoreAtx(atxHdlr, types.LayerID{}.Add(layersPerEpochBig))
 	r.NoError(err)
 
 	id, err = atxHdlr.GetPosAtxID()

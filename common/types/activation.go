@@ -108,12 +108,7 @@ type ActivationTxHeader struct {
 
 	// NOTE(dshulyak) this is important to prevent accidental state reads
 	// before this field is set. reading empty data could lead to disastrous bugs.
-	// whole "caching" pattern is a mistake, but refactoring it will introduce lots
-	// of changes
-	*verifiedHeaderExt
-}
-
-type verifiedHeaderExt struct {
+	verified       bool
 	baseTickHeight uint64
 	tickCount      uint64
 }
@@ -173,15 +168,14 @@ func (atxh *ActivationTxHeader) TickHeight() uint64 {
 
 // Verify sets field extract after verification.
 func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
-	atxh.verifiedHeaderExt = &verifiedHeaderExt{
-		tickCount:      tickCount,
-		baseTickHeight: baseTickHeight,
-	}
+	atxh.verified = true
+	atxh.baseTickHeight = baseTickHeight
+	atxh.tickCount = tickCount
 }
 
 // Verified is true after Verify was called.
 func (atxh *ActivationTxHeader) Verified() bool {
-	return atxh.verifiedHeaderExt != nil
+	return atxh.verified
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
