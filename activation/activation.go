@@ -496,7 +496,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return fmt.Errorf("sign and broadcast: %w", err)
 	}
 
-	b.log.Event().Info(fmt.Sprintf("atx published %v", atx.ID().ShortString()), atx.Fields(size)...)
+	b.log.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
 
 	select {
 	case <-atxReceived:

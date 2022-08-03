@@ -179,6 +179,11 @@ func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
 	}
 }
 
+// Verified is true after Verify was called.
+func (atxh *ActivationTxHeader) Verified() bool {
+	return atxh.verifiedHeaderExt != nil
+}
+
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
 // PoET membership proof. It includes the node ID, ATX sequence number, the previous ATX's ID (for all but the first in
 // the sequence), the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
@@ -252,36 +257,29 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
-// Fields returns an array of LoggableFields for logging.
-func (atx *ActivationTx) Fields(size int) []log.LoggableField {
-	initialPost := ""
+func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.InitialPost != nil {
-		initialPost = atx.InitialPost.String()
+		encoder.AddString("nipost", atx.InitialPost.String())
 	}
-
-	challenge := ""
 	h, err := atx.NIPostChallenge.Hash()
 	if err == nil && h != nil {
-		challenge = h.String()
+		encoder.AddString("challenge", h.String())
 	}
-
-	return []log.LoggableField{
-		atx.ID(),
-		log.FieldNamed("sender_id", atx.NodeID),
-		log.FieldNamed("prev_atx_id", atx.PrevATXID),
-		log.FieldNamed("pos_atx_id", atx.PositioningATX),
-		log.FieldNamed("coinbase", atx.Coinbase),
-		atx.PubLayerID,
-		atx.PubLayerID.GetEpoch(),
-		log.Uint64("num_units", uint64(atx.NumUnits)),
-		log.Uint64("base_tick_height", atx.baseTickHeight),
-		log.Uint64("tick_count", atx.tickCount),
-		log.Uint64("weight", atx.GetWeight()),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("NIPostChallenge", challenge),
-		log.String("initialPost", initialPost),
-		log.Int("atx_size", size),
+	encoder.AddString("id", atx.id.String())
+	encoder.AddString("sender_id", atx.NodeID.String())
+	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
+	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
+	encoder.AddString("coinbase", atx.Coinbase.String())
+	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
+	encoder.AddUint32("epoch", uint32(atx.PubLayerID.GetEpoch()))
+	encoder.AddUint64("num_units", uint64(atx.NumUnits))
+	encoder.AddUint64("sequence_number", atx.Sequence)
+	if atx.Verified() {
+		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
+		encoder.AddUint64("tick_count", atx.tickCount)
+		encoder.AddUint64("weight", atx.GetWeight())
 	}
+	return nil
 }
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.

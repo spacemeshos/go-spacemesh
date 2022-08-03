@@ -367,8 +367,6 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())
 	}
 
-	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
-
 	if atx.NIPost == nil {
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
@@ -394,7 +392,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		// TODO: blacklist peer
 	}
 
-	logger.With().Info("stored and propagated new syntactically valid atx", atx.ID())
+	logger.With().Info("got new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil
 }
 
