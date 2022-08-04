@@ -27,15 +27,15 @@ type atxHandler interface {
 }
 
 type blockHandler interface {
-	HandleBlockData(context.Context, []byte) error
+	HandleSyncedBlock(context.Context, []byte) error
 }
 
 type ballotHandler interface {
-	HandleBallotData(context.Context, []byte) error
+	HandleSyncedBallot(context.Context, []byte) error
 }
 
 type proposalHandler interface {
-	HandleProposalData(context.Context, []byte) error
+	HandleSyncedProposal(context.Context, []byte) error
 }
 
 type txHandler interface {
