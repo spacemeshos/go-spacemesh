@@ -183,7 +183,7 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 	return membershipSliceToMap(proofMessage.Members), nil
 }
 
-// HasMember validates that the proof includes provided member and retur
+// GetProof returns full proof.
 func (db *PoetDb) GetProof(proofRef []byte) (*types.PoetProof, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {

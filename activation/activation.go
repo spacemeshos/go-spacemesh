@@ -45,11 +45,6 @@ type nipostBuilder interface {
 	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
 }
 
-type nipostValidator interface {
-	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error)
-	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
-}
-
 type atxHandler interface {
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
@@ -613,7 +608,6 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	}
 	return id, atx.PubLayerID, nil
-
 }
 
 func (b *Builder) discardChallengeIfStale() bool {

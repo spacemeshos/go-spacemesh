@@ -145,7 +145,7 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 // GetWeight of the atx.
 // Will panic if read before Verify is called.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
-	return uint64(atxh.NumUnits) * (atxh.baseTickHeight + atxh.tickCount)
+	return uint64(atxh.NumUnits) * (atxh.tickCount)
 }
 
 // BaseTickHeight is a tick height of the positional atx.
@@ -251,6 +251,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
+// MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.InitialPost != nil {
 		encoder.AddString("nipost", atx.InitialPost.String())

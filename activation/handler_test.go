@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	amocks "github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -725,4 +726,96 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 	atx6.PrevATXID = atxid      // should be fetched
 	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxid}).Return(nil)
 	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx6))
+}
+
+func TestHandler_AtxWeight(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mfetch := mocks.NewMockFetcher(ctrl)
+	mvalidator := amocks.NewMocknipostValidator(ctrl)
+
+	const (
+		tickSize = 3
+		units    = 4
+		leaves   = uint64(11)
+	)
+
+	signer := signing.NewEdSigner()
+	nodeid := types.BytesToNodeID(signer.PublicKey().Bytes())
+
+	db := newCachedDB(t)
+	handler := NewHandler(db, mfetch, layersPerEpoch, tickSize,
+		goldenATXID, mvalidator, logtest.New(t))
+
+	atx1 := &types.ActivationTx{
+		InnerActivationTx: &types.InnerActivationTx{
+			ActivationTxHeader: &types.ActivationTxHeader{
+				NIPostChallenge: types.NIPostChallenge{
+					NodeID:             nodeid,
+					PositioningATX:     goldenATXID,
+					InitialPostIndices: []byte{1},
+					PubLayerID:         types.NewLayerID(1).Add(layersPerEpoch),
+				},
+				NumUnits: units,
+			},
+			NIPost: &types.NIPost{
+				Post:         &types.Post{},
+				PostMetadata: &types.PostMetadata{},
+			},
+			InitialPost: &types.Post{Indices: []byte{1}},
+		},
+	}
+	require.NoError(t, SignAtx(signer, atx1))
+	atx1.CalcAndSetID()
+
+	buf, err := codec.Encode(atx1)
+	require.NoError(t, err)
+
+	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
+
+	stored1, err := db.GetAtxHeader(atx1.ID())
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), stored1.BaseTickHeight())
+	require.Equal(t, leaves/tickSize, stored1.TickCount())
+	require.Equal(t, leaves/tickSize, stored1.TickHeight())
+	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
+
+	atx2 := &types.ActivationTx{
+		InnerActivationTx: &types.InnerActivationTx{
+			ActivationTxHeader: &types.ActivationTxHeader{
+				NIPostChallenge: types.NIPostChallenge{
+					NodeID:         nodeid,
+					Sequence:       1,
+					PositioningATX: atx1.ID(),
+					PrevATXID:      atx1.ID(),
+					PubLayerID:     types.NewLayerID(1).Add(2 * layersPerEpoch),
+				},
+				NumUnits: units,
+			},
+			NIPost: &types.NIPost{
+				Post:         &types.Post{},
+				PostMetadata: &types.PostMetadata{},
+			},
+		},
+	}
+	require.NoError(t, SignAtx(signer, atx2))
+	atx2.CalcAndSetID()
+
+	buf, err = codec.Encode(atx2)
+	require.NoError(t, err)
+
+	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
+	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
+
+	stored2, err := db.GetAtxHeader(atx2.ID())
+	require.NoError(t, err)
+	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight())
+	require.Equal(t, leaves/tickSize, stored2.TickCount())
+	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
+	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
 }
