@@ -613,7 +613,6 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	}
 	return id, atx.PubLayerID, nil
-
 }
 
 func (b *Builder) discardChallengeIfStale() bool {

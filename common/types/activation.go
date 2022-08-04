@@ -251,6 +251,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
+// MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.InitialPost != nil {
 		encoder.AddString("nipost", atx.InitialPost.String())
