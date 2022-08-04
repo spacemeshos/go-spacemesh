@@ -25,7 +25,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, ballots.Add(cdb, rb))
 	for _, id := range rb.EpochData.ActiveSet {
-		hdr := &types.ActivationTxHeader{
+		hdr := types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				StartTick:  0,
@@ -37,7 +37,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 			hdr.NodeID = types.BytesToNodeID(signer.PublicKey().Bytes())
 			hdr.NumUnits = testedATXUnit
 		}
-		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: hdr}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 		atx.SetID(&id)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 	}

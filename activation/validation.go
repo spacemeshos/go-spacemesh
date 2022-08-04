@@ -35,11 +35,11 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, ex
 		return fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
 
-	if nipost.PostMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
+	if uint(nipost.PostMetadata.BitsPerLabel) < v.cfg.BitsPerLabel {
 		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel)
 	}
 
-	if nipost.PostMetadata.LabelsPerUnit < v.cfg.LabelsPerUnit {
+	if uint(nipost.PostMetadata.LabelsPerUnit) < v.cfg.LabelsPerUnit {
 		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.cfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit)
 	}
 
@@ -51,11 +51,11 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, ex
 		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", v.cfg.MaxNumUnits, numUnits)
 	}
 
-	if nipost.PostMetadata.K1 > v.cfg.K1 {
+	if uint(nipost.PostMetadata.K1) > v.cfg.K1 {
 		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.cfg.K1, nipost.PostMetadata.K1)
 	}
 
-	if nipost.PostMetadata.K2 < v.cfg.K2 {
+	if uint(nipost.PostMetadata.K2) < v.cfg.K2 {
 		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.cfg.K2, nipost.PostMetadata.K2)
 	}
 
@@ -80,10 +80,10 @@ func (v *Validator) ValidatePost(id []byte, PoST *types.Post, PostMetadata *type
 	m.ID = id
 	m.NumUnits = numUnits
 	m.Challenge = PostMetadata.Challenge
-	m.BitsPerLabel = PostMetadata.BitsPerLabel
-	m.LabelsPerUnit = PostMetadata.LabelsPerUnit
-	m.K1 = PostMetadata.K1
-	m.K2 = PostMetadata.K2
+	m.BitsPerLabel = uint(PostMetadata.BitsPerLabel)
+	m.LabelsPerUnit = uint(PostMetadata.LabelsPerUnit)
+	m.K1 = uint(PostMetadata.K1)
+	m.K2 = uint(PostMetadata.K2)
 
 	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
