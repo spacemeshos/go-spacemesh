@@ -111,29 +111,30 @@ func (t *blockSignatureTracker) addSig(signature certtypes.BlockSignatureMsg) {
     t.logger.Debug("addSig: acquired lock on self (sigTracker)")
     defer t.Unlock()
     defer t.logger.Debug("addSig: released lock on self")
-    // add signature and increase count
-    t.signatures[signature.SignerNodeID] = trackableBlockSignature{
-        BlockID:        signature.BlockID,
-        BlockSignature: signature.BlockSignature,
-    }
-    t.signatureCount[signature.BlockID] += int(signature.SignerCommitteeSeats)
+    // add signature and increase count iff it's from a new node
+    if _, exists := t.signatures[signature.SignerNodeID]; !exists {
+        t.signatures[signature.SignerNodeID] = trackableBlockSignature{
+            BlockID:        signature.BlockID,
+            BlockSignature: signature.BlockSignature,
+        }
+        t.signatureCount[signature.BlockID] += int(signature.SignerCommitteeSeats)
 
-    if t.signatureCount[signature.BlockID] == t.signaturesRequired {
-        var sigs = make([]certtypes.BlockSignature, 0, t.signaturesRequired)
-        for _, sig := range t.signatures {
-            isMajorityBlockID := sig.BlockID.String() == signature.BlockID.String()
-            if isMajorityBlockID {
-                sigs = append(sigs, sig.BlockSignature)
+        if t.signatureCount[signature.BlockID] == t.signaturesRequired {
+            var sigs = make([]certtypes.BlockSignature, 0, t.signaturesRequired)
+            for _, sig := range t.signatures {
+                isMajorityBlockID := sig.BlockID.String() == signature.BlockID.String()
+                if isMajorityBlockID {
+                    sigs = append(sigs, sig.BlockSignature)
+                }
             }
+            blockCert := certtypes.BlockCertificate{
+                BlockID:               signature.BlockID,
+                LayerID:               t.layerID,
+                TerminationSignatures: sigs,
+            }
+            t.logger.Debug("addSig: about to add completed cert to channel")
+            t.completedCerts <- blockCert
+            t.logger.Debug("addSig: added certified block to channel")
         }
-        blockCert := certtypes.BlockCertificate{
-            BlockID:               signature.BlockID,
-            LayerID:               t.layerID,
-            TerminationSignatures: sigs,
-        }
-        t.logger.Debug("addSig: about to add completed cert to channel")
-        t.completedCerts <- blockCert
-        t.logger.Debug("addSig: added certified block to channel")
     }
-    return
 }

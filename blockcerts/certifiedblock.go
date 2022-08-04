@@ -19,7 +19,6 @@ import (
 const (
     blockCertifierRole uint32 = math.MaxUint32 - 2        // for Rolacle
     BlockSigTopic             = "trackableBlockSignature" // for gossip
-
 )
 
 // BlockCertifyingService is a long-lived service responsible for participating
@@ -27,7 +26,6 @@ const (
 // Inputs: hareTerminationsCh and GossipHandler.
 // Outputs: gossipPublisher and database
 type BlockCertifyingService struct {
-    // Inputs & Outputs
     hareTerminationsCh <-chan hare.TerminationBlockOutput
     gossipPublisher    pubsub.Publisher
     db                 sql.Executor
@@ -35,11 +33,10 @@ type BlockCertifyingService struct {
     rolacle     hare.Rolacle
     config      config.BlockCertificateConfig
     blockSigner signing.Signer
+    logger      log.Logger
     // Internal
     signatureCache   sigCache
     completedCertsCh chan certtypes.BlockCertificate
-
-    logger log.Logger
 }
 
 // NewBlockCertifyingService constructs a new BlockCertifyingService.
