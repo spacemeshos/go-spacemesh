@@ -186,12 +186,6 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
 
-#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet
-
-Find the latest Testnet release in the [releases](https://github.com/spacemeshos/go-spacemesh/releases/) and download the precompiled binary for your platform of choice (or you can compile `go-spacemesh` yourself, from source, using the release tag). The release notes contain a link to a `config.json` file that you'll need to join the testnet.
-
-Note that you must download (or build) precisely this version (latest Testnet release) of `go-spacemesh`, and the compatible config file, in order to join the current testnet. Older versions of the code may be incompatible with this testnet, and a different config file will not work.
-
 ---
 
 ### Testing
