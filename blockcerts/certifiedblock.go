@@ -2,6 +2,7 @@ package blockcerts
 
 import (
     "context"
+    "github.com/spacemeshos/go-spacemesh/blockcerts/config"
     certtypes "github.com/spacemeshos/go-spacemesh/blockcerts/types"
     "github.com/spacemeshos/go-spacemesh/codec"
     "github.com/spacemeshos/go-spacemesh/common/types"
@@ -32,7 +33,7 @@ type BlockCertifyingService struct {
     db                 sql.Executor
     // Dependencies
     rolacle     hare.Rolacle
-    config      certtypes.BlockCertificateConfig
+    config      config.BlockCertificateConfig
     blockSigner signing.Signer
     // Internal
     signatureCache   sigCache
@@ -48,7 +49,7 @@ func NewBlockCertifyingService(
     gossipPublisher pubsub.Publisher,
     blockSigner signing.Signer,
     db sql.Executor,
-    config certtypes.BlockCertificateConfig,
+    config config.BlockCertificateConfig,
     logger log.Logger,
 ) (*BlockCertifyingService, error) {
     service := &BlockCertifyingService{}
@@ -58,16 +59,16 @@ func NewBlockCertifyingService(
     service.gossipPublisher = gossipPublisher
     service.blockSigner = blockSigner
     service.db = db
+    service.completedCertsCh = make(chan certtypes.BlockCertificate, config.Hdist)
 
     service.signatureCache = sigCache{
         logger:             logger,
         blockSigsByLayer:   sync.Map{},
         cacheBoundary:      types.NewLayerID(0), // TODO: check this is okay
         cacheBoundaryMutex: sync.RWMutex{},
+        signaturesRequired: config.MaxAdversaries + 1,
         completedCertsCh:   service.completedCertsCh,
     }
-    service.completedCertsCh = make(chan certtypes.BlockCertificate, 100)
-    // TODO: empirically decide on adequate channel size
 
     service.logger = logger
     return service, nil

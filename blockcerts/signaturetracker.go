@@ -20,6 +20,7 @@ type sigCache struct {
     blockSigsByLayer   sync.Map // entries are written once but read many times
     cacheBoundary      types.LayerID
     cacheBoundaryMutex sync.RWMutex
+    signaturesRequired int
     completedCertsCh   chan<- certtypes.BlockCertificate
 }
 
@@ -35,7 +36,7 @@ func (c *sigCache) CacheBlockSignature(ctx context.Context, sigMsg certtypes.Blo
         return
     }
     tracker, loaded := c.blockSigsByLayer.LoadOrStore(sigMsg.LayerID.Value,
-        newBlockSignatureTracker(sigMsg.LayerID, c.completedCertsCh, logger)) // TODO: fix memory issue (newBlockSig... called every time even if loading)
+        newBlockSignatureTracker(sigMsg.LayerID, c.completedCertsCh, c.signaturesRequired, logger)) // TODO: fix memory issue (newBlockSig... called every time even if loading)
     if !loaded {
         logger.Debug("newBlockSignatureTracker: created tracker for block "+
             "signatures for layer %v", sigMsg.LayerID.String())
@@ -78,68 +79,61 @@ type trackableBlockSignature struct {
 type blockSignatureTracker struct {
     layerID        types.LayerID
     signatures     map[types.NodeID]trackableBlockSignature
-    thresholdCount map[types.BlockID]int
+    signatureCount map[types.BlockID]int
     sync.Mutex
-    completedCerts chan<- certtypes.BlockCertificate
-    ifNotAlready   sync.Once // completedCerts channel only gets one cert
-    logger         log.Logger
+    completedCerts     chan<- certtypes.BlockCertificate
+    signaturesRequired int
+    ifNotAlready       sync.Once // completedCerts channel only gets one cert
+    logger             log.Logger
 }
 
-func newBlockSignatureTracker( // did I forget to pass in the threshold?
-    layerID types.LayerID, completedCerts chan<- certtypes.BlockCertificate, logger log.Logger) *blockSignatureTracker {
+func newBlockSignatureTracker(layerID types.LayerID, completedCerts chan<- certtypes.BlockCertificate,
+    signaturesRequired int, logger log.Logger) *blockSignatureTracker {
     newTracker := blockSignatureTracker{
-        layerID:        layerID,
-        signatures:     map[types.NodeID]trackableBlockSignature{},
-        thresholdCount: map[types.BlockID]int{},
-        Mutex:          sync.Mutex{},
-        completedCerts: completedCerts,
-        ifNotAlready:   sync.Once{},
-        logger:         logger,
+        layerID:            layerID,
+        signatures:         map[types.NodeID]trackableBlockSignature{},
+        signatureCount:     map[types.BlockID]int{},
+        signaturesRequired: signaturesRequired,
+        Mutex:              sync.Mutex{},
+        completedCerts:     completedCerts,
+        ifNotAlready:       sync.Once{},
+        logger:             logger,
     }
 
     return &newTracker
 }
 
-// addSig doesn't do any validation or verification and is a blocking operation.
-// It should be run in its own goroutine.
-func (t *blockSignatureTracker) addSig(sig certtypes.BlockSignatureMsg) {
+// addSig doesn't do any validation or verification and is an atomic blocking operation.
+// It should be run in its own goroutine. // TODO: notify somehow if signature from node already exists
+func (t *blockSignatureTracker) addSig(signature certtypes.BlockSignatureMsg) {
     t.logger.Debug("addSig entry")
     t.Lock()
-    t.logger.Debug("addSig: acquired Write Lock on self (sigTracker)")
+    t.logger.Debug("addSig: acquired lock on self (sigTracker)")
     defer t.Unlock()
-    // check if a BlockID reached threshold # of signatures
-    var majorityBlockID types.BlockID
-    var thresholdReached = false
-    for blockID, threshold := range t.thresholdCount {
-        if len(t.signatures) == threshold { // TODO: fix this, shouldn't be counting signatures here. Should depend on threshold count map
-            majorityBlockID = blockID
-            thresholdReached = true
-            break
-        } else if len(t.signatures) > threshold {
-            panic("block certificate signatures: addSig atomicity" +
-                "was not maintained.")
-        }
+    defer t.logger.Debug("addSig: released lock on self")
+    // add signature and increase count
+    t.signatures[signature.SignerNodeID] = trackableBlockSignature{
+        BlockID:        signature.BlockID,
+        BlockSignature: signature.BlockSignature,
     }
-    if thresholdReached {
-        t.ifNotAlready.Do(func() {
-            var sigs []certtypes.BlockSignature
-            for _, sig := range t.signatures {
-                if sig.BlockID.Compare(majorityBlockID) {
-                    sigs = append(sigs, sig.BlockSignature)
-                }
-            }
-            blockCert := certtypes.BlockCertificate{
-                BlockID:               majorityBlockID,
-                TerminationSignatures: sigs,
-            }
-            t.completedCerts <- blockCert
-        })
-        return
-    }
+    t.signatureCount[signature.BlockID] += int(signature.SignerCommitteeSeats)
 
-    t.signatures[sig.SignerNodeID] = trackableBlockSignature{
-        BlockID:        sig.BlockID,
-        BlockSignature: sig.BlockSignature,
+    if t.signatureCount[signature.BlockID] == t.signaturesRequired {
+        var sigs = make([]certtypes.BlockSignature, 0, t.signaturesRequired)
+        for _, sig := range t.signatures {
+            isMajorityBlockID := sig.BlockID.String() == signature.BlockID.String()
+            if isMajorityBlockID {
+                sigs = append(sigs, sig.BlockSignature)
+            }
+        }
+        blockCert := certtypes.BlockCertificate{
+            BlockID:               signature.BlockID,
+            LayerID:               t.layerID,
+            TerminationSignatures: sigs,
+        }
+        t.logger.Debug("addSig: about to add completed cert to channel")
+        t.completedCerts <- blockCert
+        t.logger.Debug("addSig: added certified block to channel")
     }
-    t.thresholdCount[sig.BlockID] += int(sig.SignerCommitteeSeats)
+    return
 }

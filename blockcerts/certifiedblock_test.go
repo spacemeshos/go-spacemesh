@@ -6,6 +6,7 @@ import (
     "github.com/golang/mock/gomock"
     "github.com/libp2p/go-libp2p-core/peer"
     "github.com/spacemeshos/go-spacemesh/blockcerts"
+    "github.com/spacemeshos/go-spacemesh/blockcerts/config"
     certtypes "github.com/spacemeshos/go-spacemesh/blockcerts/types"
     "github.com/spacemeshos/go-spacemesh/codec"
     "github.com/spacemeshos/go-spacemesh/common/types"
@@ -35,7 +36,7 @@ type certServiceTestRig struct {
 }
 
 func newBlockCertifyingServiceTestRig(t *testing.T,
-    controller *gomock.Controller, config certtypes.BlockCertificateConfig) (testRig *certServiceTestRig, err error) {
+    controller *gomock.Controller, config config.BlockCertificateConfig) (testRig *certServiceTestRig, err error) {
 
     testRig = &certServiceTestRig{}
     testRig.signer = signingmocks.NewMockSigner(controller)
@@ -66,8 +67,10 @@ func newBlockCertifyingServiceTestRig(t *testing.T,
 
 func Test_ProducesExpectedBlockSignature_WhenChosenByOracle(t *testing.T) {
     mockCtrler := gomock.NewController(t)
-    config := certtypes.BlockCertificateConfig{
-        CommitteeSize: 800,
+    config := config.BlockCertificateConfig{
+        CommitteeSize:  10,
+        MaxAdversaries: 5,
+        Hdist:          10,
     }
     roundTerminationInfo := hare.TerminationBlockOutput{
         LayerID:           types.NewLayerID(64),
@@ -127,14 +130,14 @@ func setExpectations_ProducesExpectedBlockSignature_WhenChosenByOracle(
 
 func Test_WaitingForCertificate_SignaturesFromGossip(t *testing.T) {
     mockController := gomock.NewController(t)
-    config := certtypes.BlockCertificateConfig{CommitteeSize: 3}
-    testRig, err := newBlockCertifyingServiceTestRig(t, mockController, config)
-    setExpectations_WaitingForCertificate_SignaturesFromGossip(testRig, config.CommitteeSize)
+    conf := config.BlockCertificateConfig{CommitteeSize: 10, MaxAdversaries: 5, Hdist: 10}
+    testRig, err := newBlockCertifyingServiceTestRig(t, mockController, conf)
+    setExpectations_WaitingForCertificate_SignaturesFromGossip(testRig, conf.CommitteeSize)
     require.NoError(t, err)
     ctx := context.Background()
     gossipHandler := testRig.SUT.GossipHandler()
     gossiperWG := &sync.WaitGroup{}
-    gossipSignaturesFromUniqueNodesTo(ctx, gossipHandler, config.CommitteeSize,
+    gossipSignaturesFromUniqueNodesTo(ctx, gossipHandler, conf.CommitteeSize,
         types.NewLayerID(81), types.EmptyBlockID, gossiperWG, t)
 
     err = testRig.SUT.Start(context.Background())
@@ -145,7 +148,7 @@ func Test_WaitingForCertificate_SignaturesFromGossip(t *testing.T) {
         require.NoError(t, err)
         return certExists
     }
-    require.Eventually(t, certInDB, time.Second, time.Millisecond*100)
+    require.Eventually(t, certInDB, 5*time.Second, time.Millisecond*100)
 }
 func gossipSignaturesFromUniqueNodesTo(ctx context.Context,
     gossipHandler pubsub.GossipHandler, committeeThreshold int,

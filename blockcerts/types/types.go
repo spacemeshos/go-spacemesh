@@ -2,9 +2,6 @@ package types
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
-type BlockCertificateConfig struct {
-    CommitteeSize int
-}
 type BlockCertificate struct {
     BlockID               types.BlockID
     LayerID               types.LayerID
