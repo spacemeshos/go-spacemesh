@@ -38,6 +38,7 @@ var (
 	bootstrapDuration = flag.Duration("bootstrap", 30*time.Second,
 		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management")
 	clusterSize  = flag.Int("size", 10, "size of the cluster. all test must use at most this number of smeshers")
+	poetSize     = flag.Int("poet-size", 1, "size of the poet servers")
 	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
 	clusters     = flag.Int("clusters", 1, "controls how many clusters are deployed on k8s")
@@ -51,6 +52,7 @@ var (
 const (
 	keepLabel        = "keep"
 	clusterSizeLabel = "size"
+	poetSizeLabel    = "poet-size"
 )
 
 func init() {
@@ -74,6 +76,7 @@ type Context struct {
 	Client            *kubernetes.Clientset
 	BootstrapDuration time.Duration
 	ClusterSize       int
+	PoetSize          int
 	Generic           client.Client
 	TestID            string
 	Keep              bool
@@ -108,11 +111,13 @@ func deleteNamespace(ctx *Context) error {
 }
 
 func deployNamespace(ctx *Context) error {
-	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx, corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
-		"testid":         ctx.TestID,
-		keepLabel:        strconv.FormatBool(ctx.Keep),
-		clusterSizeLabel: strconv.Itoa(ctx.ClusterSize),
-	}),
+	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx,
+		corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
+			"testid":         ctx.TestID,
+			keepLabel:        strconv.FormatBool(ctx.Keep),
+			clusterSizeLabel: strconv.Itoa(ctx.ClusterSize),
+			poetSizeLabel:    strconv.Itoa(ctx.PoetSize),
+		}),
 		apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("create namespace %s: %w", ctx.Namespace, err)
@@ -158,6 +163,17 @@ func updateContext(ctx *Context) error {
 			"sizeval", sizeval)
 	}
 	ctx.ClusterSize = size
+
+	psizeval, _ := ns.Labels[poetSizeLabel]
+	if err != nil {
+		ctx.Log.Panic("invalid state. poet size label should exist")
+	}
+	psize, err := strconv.Atoi(psizeval)
+	if err != nil {
+		ctx.Log.Panicw("invalid state. poet size label should be parsable as an integer",
+			"psizeval", psizeval)
+	}
+	ctx.PoetSize = psize
 	return nil
 }
 
@@ -239,6 +255,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		TestID:            *testid,
 		Keep:              *keep,
 		ClusterSize:       *clusterSize,
+		PoetSize:          *poetSize,
 		Image:             *imageFlag,
 		PoetImage:         *poetImage,
 		NodeSelector:      nodeSelector,
@@ -251,7 +268,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	if !cctx.Keep {
 		cleanup(t, func() {
 			if err := deleteNamespace(cctx); err != nil {
-				cctx.Log.Errorf("cleanup failed", "error", err)
+				cctx.Log.Errorw("cleanup failed", "error", err)
 				return
 			}
 			cctx.Log.Infow("namespace was deleted", "namespace", cctx.Namespace)

@@ -22,7 +22,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
+const (
+	attempts = 3
+)
+
+func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
 	txclient := spacemeshv1.NewTransactionServiceClient(node)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -34,14 +38,6 @@ func submitTransacition(ctx context.Context, tx []byte, node *cluster.NodeClient
 		return nil, fmt.Errorf("tx state should not be nil")
 	}
 	return response.Txstate.Id.Id, nil
-}
-
-func extractNames(nodes ...*cluster.NodeClient) []string {
-	var rst []string
-	for _, n := range nodes {
-		rst = append(rst, n.Name)
-	}
-	return rst
 }
 
 func watchLayers(ctx context.Context, eg *errgroup.Group,
@@ -219,14 +215,14 @@ func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address 
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransacition(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
+	_, err := submitTransaction(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
 	return err
 }
 
 func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver types.Address, amount uint64, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransacition(ctx,
+	_, err := submitTransaction(ctx,
 		wallet.Spend(
 			signing.PrivateKey(pk), receiver, amount,
 			types.Nonce{Counter: nonce},
@@ -293,14 +289,19 @@ func (c *txClient) nonce(ctx context.Context) (uint64, error) {
 }
 
 func (c *txClient) submit(ctx context.Context, tx []byte) (*txRequest, error) {
-	txid, err := submitTransacition(ctx, tx, c.node)
-	if err != nil {
-		return nil, fmt.Errorf("submit to node %s: %w", c.node.Name, err)
+	var (
+		txid []byte
+		err  error
+	)
+	for i := 0; i < attempts; i++ {
+		if txid, err = submitTransaction(ctx, tx, c.node); err == nil {
+			return &txRequest{
+				node: c.node,
+				txid: txid,
+			}, nil
+		}
 	}
-	return &txRequest{
-		node: c.node,
-		txid: txid,
-	}, nil
+	return nil, fmt.Errorf("submit to node %s: %w", c.node.Name, err)
 }
 
 type txRequest struct {

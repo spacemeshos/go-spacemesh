@@ -58,9 +58,8 @@ type NodeClient struct {
 	*grpc.ClientConn
 }
 
-// deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address)
-// and output ip of the poet.
-func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
+// deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address).
+func deployPoet(ctx *testcontext.Context, name string, gateways ...string) error {
 	args := []string{}
 	for _, gateway := range gateways {
 		args = append(args, "--gateway="+gateway)
@@ -71,7 +70,7 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 		"--n=10",
 	)
 	labels := nodeLabels("poet")
-	pod := corev1.Pod("poet", ctx.Namespace).
+	pod := corev1.Pod(name, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
 			corev1.PodSpec().
@@ -91,9 +90,9 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 		)
 	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return "", fmt.Errorf("create poet: %w", err)
+		return fmt.Errorf("create poet: %w", err)
 	}
-	svc := corev1.Service(poetSvc, ctx.Namespace).
+	svc := corev1.Service(name, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
@@ -103,14 +102,14 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 		)
 	_, err = ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return "", fmt.Errorf("apply poet service: %w", err)
+		return fmt.Errorf("apply poet service: %w", err)
 	}
 
 	_, err = waitPod(ctx, *pod.Name)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return fmt.Sprintf("%s:%d", *svc.Name, poetPort), nil
+	return nil
 }
 
 func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
@@ -183,9 +182,13 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	)
 	for i := from; i < to; i++ {
 		i := i
+		finalFlags := make([]DeploymentFlag, len(flags)+1)
+		copy(finalFlags, flags)
 		eg.Go(func() error {
 			setname := fmt.Sprintf("%s-%d", name, i)
-			if err := deployNode(ctx, setname, labels, flags); err != nil {
+			idx := i % ctx.PoetSize
+			finalFlags[len(finalFlags)-1] = PoetEndpoint(poetEndpoint(idx))
+			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
 			podname := fmt.Sprintf("%s-0", setname)
