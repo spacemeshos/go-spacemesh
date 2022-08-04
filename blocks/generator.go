@@ -95,7 +95,6 @@ func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, pr
 }
 
 func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Proposal) (uint64, []types.AnyReward, error) {
-	// TODO(dshulyak) refactor this method
 	weights := make(map[types.Address]util.Weight)
 	coinbases := make([]types.Address, 0, len(props))
 	max := uint64(0)

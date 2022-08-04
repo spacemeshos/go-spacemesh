@@ -512,6 +512,48 @@ func TestMesh_pushLayersToState_verified(t *testing.T) {
 	checkLastAppliedInDB(t, tm.Mesh, layerID)
 }
 
+func TestMesh_ValidityOrder(t *testing.T) {
+	for _, tc := range []struct {
+		desc     string
+		blocks   []*types.Block
+		expected int
+	}{
+		{
+			desc: "tick height",
+			blocks: []*types.Block{
+				types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{TickHeight: 100}),
+				types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{TickHeight: 99}),
+			},
+			expected: 1,
+		},
+		{
+			desc: "lexic",
+			blocks: []*types.Block{
+				types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{TickHeight: 99}),
+				types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{TickHeight: 99}),
+			},
+			expected: 1,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			tm := createTestMesh(t)
+			tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
+			tm.mockState.EXPECT().LinkTXsWithBlock(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			lid := types.GetEffectiveGenesis().Add(1)
+			for _, block := range tc.blocks {
+				block.LayerIndex = lid
+				require.NoError(t, tm.Mesh.AddBlockWithTXs(context.TODO(), block))
+				require.NoError(t, tm.Mesh.saveContextualValidity(block.ID(), lid, true))
+			}
+
+			tm.mockState.EXPECT().ApplyLayer(context.TODO(), tc.blocks[tc.expected]).Return(nil).Times(1)
+			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(1)
+			require.NoError(t, tm.pushLayersToState(context.TODO(), lid, lid, lid))
+		})
+	}
+}
+
 func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()

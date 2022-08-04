@@ -466,7 +466,6 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to, latestVerified
 	return nil
 }
 
-// TODO: change this per conclusion in https://community.spacemesh.io/t/new-history-reversal-attack-and-mitigation/268
 func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	if len(validBlocks) == 0 {
 		return nil
