@@ -34,7 +34,7 @@ require (
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/go-scale v0.0.0-20220802134429-4200555824be
-	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
+	github.com/spacemeshos/merkle-tree v0.0.0-20200107164308-9dfa6f215af5
 	github.com/spacemeshos/poet v0.1.1-0.20220617165016-4e54cb497e8f
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
 	github.com/spf13/cobra v1.4.0
@@ -42,12 +42,12 @@ require (
 	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.19.1
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
+	go.uber.org/zap v1.21.0
+	golang.org/x/net v0.0.0-20220802222814-0bcc04d9c69b
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	google.golang.org/genproto v0.0.0-20220107163113-42d7afdf6368
-	google.golang.org/grpc v1.40.0
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/genproto v0.0.0-20220803205849-8f55acc8769f
+	google.golang.org/grpc v1.48.0
+	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.24.1
 	k8s.io/apimachinery v0.24.1
 	k8s.io/client-go v0.24.1
@@ -172,11 +172,11 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
-	go.uber.org/multierr v1.7.0 // indirect
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
+	go.uber.org/multierr v1.8.0 // indirect
+	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20220614162138-6c1b26c55098 // indirect
+	golang.org/x/sys v0.0.0-20220803195053-6e608f9ce704 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
