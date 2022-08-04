@@ -323,8 +323,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			continue
 		}
 
-		// TODO to be changed after nonces are defined
-		// https://github.com/spacemeshos/go-spacemesh/issues/3273
 		if ctx.Account.NextNonce() > ctx.Header.Nonce.Counter {
 			v.logger.With().Warning("ineffective transaction. failed nonce check",
 				log.Object("header", header),
