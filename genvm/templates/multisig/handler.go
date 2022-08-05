@@ -28,7 +28,7 @@ const (
 
 func init() {
 	TemplateAddress23[len(TemplateAddress23)-1] = 2
-	TemplateAddress35[len(TemplateAddress23)-1] = 3
+	TemplateAddress35[len(TemplateAddress35)-1] = 3
 }
 
 // Register template.
@@ -38,7 +38,7 @@ func Register(registry *registry.Registry) {
 		totalGasSpawn: TotalGasSpawn23,
 		totalGasSpend: TotalGasSpend23,
 	})
-	registry.Register(TemplateAddress23, &handler{
+	registry.Register(TemplateAddress35, &handler{
 		k: 3, n: 5, address: TemplateAddress35,
 		totalGasSpawn: TotalGasSpawn35,
 		totalGasSpend: TotalGasSpend35,
