@@ -5,7 +5,6 @@ replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
-	github.com/chaos-mesh/chaos-mesh/api/v1alpha1 v0.0.0-20220226050744-799408773657
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -24,7 +23,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.5.0
 	github.com/natefinch/atomic v1.0.1
 	github.com/nullstyle/go-xdr v0.1.0
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20220708102147-0a8a51822cae
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
