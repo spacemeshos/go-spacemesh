@@ -76,7 +76,7 @@ var (
 		[]string{},
 		prometheus.ExponentialBuckets(10_000_000, 2, 10),
 	).WithLabelValues()
-	acctRestDuration = metrics.NewHistogramWithBuckets(
+	acctResetDuration = metrics.NewHistogramWithBuckets(
 		"acct_reset_duration",
 		namespace,
 		"Duration in ns to apply an layer for an account",
