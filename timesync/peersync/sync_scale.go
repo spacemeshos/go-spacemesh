@@ -9,7 +9,7 @@ import (
 func (t *Request) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeCompact64(enc, uint64(t.ID)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -18,7 +18,7 @@ func (t *Request) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Request) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.ID = uint64(field)
 	}
@@ -28,12 +28,12 @@ func (t *Request) DecodeScale(dec *scale.Decoder) (total int, err error) {
 func (t *Response) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeCompact64(enc, uint64(t.ID)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeCompact64(enc, uint64(t.Timestamp)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -42,13 +42,13 @@ func (t *Response) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Response) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.ID = uint64(field)
 	}
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Timestamp = uint64(field)
 	}

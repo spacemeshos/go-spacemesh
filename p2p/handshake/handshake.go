@@ -40,11 +40,13 @@ const (
 
 //go:generate scalegen -types HandshakeMessage,HandshakeAck
 
-type HandshakeMessage struct {
+// HandshakeMessage is a handshake message.
+type HandshakeMessage struct { // nolint
 	Network uint32
 }
 
-type HandshakeAck struct {
+// HandshakeAck is a handshake ack.
+type HandshakeAck struct { // nolint
 	Error string
 }
 

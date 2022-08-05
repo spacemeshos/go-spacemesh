@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-scale/tester"
-
 	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"

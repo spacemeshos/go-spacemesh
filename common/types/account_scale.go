@@ -9,37 +9,37 @@ import (
 func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := t.Layer.EncodeScale(enc); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeByteArray(enc, t.Address[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeBool(enc, t.Initialized); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
-	if n, err := scale.EncodeCompact64(enc, t.Nonce); err != nil {
+	if n, err := scale.EncodeCompact64(enc, uint64(t.Nonce)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
-	if n, err := scale.EncodeCompact64(enc, t.Balance); err != nil {
+	if n, err := scale.EncodeCompact64(enc, uint64(t.Balance)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeOption(enc, t.Template); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeByteSlice(enc, t.State); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -48,41 +48,41 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := t.Layer.DecodeScale(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.DecodeByteArray(dec, t.Address[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if field, n, err := scale.DecodeBool(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Initialized = field
 	}
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
-		t.Nonce = field
+		t.Nonce = uint64(field)
 	}
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
-		t.Balance = field
+		t.Balance = uint64(field)
 	}
 	if field, n, err := scale.DecodeOption[Address](dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Template = field
 	}
 	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.State = field
 	}

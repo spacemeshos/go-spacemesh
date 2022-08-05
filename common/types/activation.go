@@ -324,32 +324,34 @@ type NIPost struct {
 // Post is an alias to postShared.Proof.
 type Post postShared.Proof
 
-func (t *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact32(enc, uint32(t.Nonce)); err != nil {
+// EncodeScale implements scale codec interface.
+func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	if n, err := scale.EncodeCompact32(enc, uint32(p.Nonce)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
-	if n, err := scale.EncodeByteSlice(enc, t.Indices); err != nil {
+	if n, err := scale.EncodeByteSlice(enc, p.Indices); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
 }
 
-func (t *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
+// DecodeScale implements scale codec interface.
+func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeCompact32(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
-		t.Nonce = uint32(field)
+		p.Nonce = uint32(field)
 	}
 	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
-		t.Indices = field
+		p.Indices = field
 	}
 	return total, nil
 }
@@ -365,7 +367,7 @@ type PostMetadata struct {
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
-func (p Post) String() string {
+func (p *Post) String() string {
 	return fmt.Sprintf("nonce: %v, indices: %v",
 		p.Nonce, bytesToShortString(p.Indices))
 }

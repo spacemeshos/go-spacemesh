@@ -4,9 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/spacemeshos/go-scale/tester"
-
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 )
 

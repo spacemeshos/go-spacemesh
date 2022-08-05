@@ -9,7 +9,7 @@ import (
 func (t *Wallet) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeByteArray(enc, t.PublicKey[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -18,7 +18,7 @@ func (t *Wallet) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Wallet) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := scale.DecodeByteArray(dec, t.PublicKey[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil

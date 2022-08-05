@@ -9,12 +9,12 @@ import (
 func (t *Response) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeByteSlice(enc, t.Data); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeString(enc, t.Error); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -23,13 +23,13 @@ func (t *Response) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Response) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Data = field
 	}
 	if field, n, err := scale.DecodeString(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Error = field
 	}

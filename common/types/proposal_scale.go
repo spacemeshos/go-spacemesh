@@ -9,12 +9,12 @@ import (
 func (t *Proposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := t.InnerProposal.EncodeScale(enc); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeByteSlice(enc, t.Signature); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -23,12 +23,12 @@ func (t *Proposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Proposal) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := t.InnerProposal.DecodeScale(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Signature = field
 	}
@@ -38,17 +38,17 @@ func (t *Proposal) DecodeScale(dec *scale.Decoder) (total int, err error) {
 func (t *InnerProposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := t.Ballot.EncodeScale(enc); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeStructSlice(enc, t.TxIDs); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeByteArray(enc, t.MeshHash[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -57,18 +57,18 @@ func (t *InnerProposal) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *InnerProposal) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := t.Ballot.DecodeScale(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if field, n, err := scale.DecodeStructSlice[TransactionID](dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.TxIDs = field
 	}
 	if n, err := scale.DecodeByteArray(dec, t.MeshHash[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil

@@ -44,10 +44,12 @@ func (s systemTime) Now() time.Time {
 
 //go:generate scalegen -types Request,Response
 
+// Request is a sync request.
 type Request struct {
 	ID uint64
 }
 
+// Response is a sync response.
 type Response struct {
 	ID        uint64
 	Timestamp uint64

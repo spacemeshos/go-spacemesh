@@ -7,9 +7,9 @@ import (
 )
 
 func (t *LayerID) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact32(enc, t.Value); err != nil {
+	if n, err := scale.EncodeCompact32(enc, uint32(t.Value)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -18,9 +18,9 @@ func (t *LayerID) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *LayerID) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeCompact32(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
-		t.Value = field
+		t.Value = uint32(field)
 	}
 	return total, nil
 }

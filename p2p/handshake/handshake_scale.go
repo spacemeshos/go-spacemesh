@@ -9,7 +9,7 @@ import (
 func (t *HandshakeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeCompact32(enc, uint32(t.Network)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -18,7 +18,7 @@ func (t *HandshakeMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 func (t *HandshakeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeCompact32(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Network = uint32(field)
 	}
@@ -28,7 +28,7 @@ func (t *HandshakeMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 func (t *HandshakeAck) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeString(enc, t.Error); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -37,7 +37,7 @@ func (t *HandshakeAck) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *HandshakeAck) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeString(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Error = field
 	}

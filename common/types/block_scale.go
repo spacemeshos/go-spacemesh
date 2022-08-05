@@ -9,7 +9,7 @@ import (
 func (t *Block) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := t.InnerBlock.EncodeScale(enc); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -18,7 +18,7 @@ func (t *Block) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *Block) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := t.InnerBlock.DecodeScale(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -27,17 +27,17 @@ func (t *Block) DecodeScale(dec *scale.Decoder) (total int, err error) {
 func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := t.LayerIndex.EncodeScale(enc); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeStructSlice(enc, t.Rewards); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeStructSlice(enc, t.TxIDs); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -46,18 +46,18 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := t.LayerIndex.DecodeScale(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if field, n, err := scale.DecodeStructSlice[AnyReward](dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Rewards = field
 	}
 	if field, n, err := scale.DecodeStructSlice[TransactionID](dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.TxIDs = field
 	}
@@ -67,12 +67,12 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 func (t *RatNum) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeCompact64(enc, uint64(t.Num)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeCompact64(enc, uint64(t.Denom)); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -81,13 +81,13 @@ func (t *RatNum) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *RatNum) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Num = uint64(field)
 	}
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Denom = uint64(field)
 	}
@@ -97,12 +97,12 @@ func (t *RatNum) DecodeScale(dec *scale.Decoder) (total int, err error) {
 func (t *AnyReward) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeByteArray(enc, t.Coinbase[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := t.Weight.EncodeScale(enc); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -111,12 +111,12 @@ func (t *AnyReward) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *AnyReward) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := scale.DecodeByteArray(dec, t.Coinbase[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := t.Weight.DecodeScale(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -125,12 +125,12 @@ func (t *AnyReward) DecodeScale(dec *scale.Decoder) (total int, err error) {
 func (t *BlockContextualValidity) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	if n, err := scale.EncodeByteArray(enc, t.ID[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if n, err := scale.EncodeBool(enc, t.Validity); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	return total, nil
@@ -139,12 +139,12 @@ func (t *BlockContextualValidity) EncodeScale(enc *scale.Encoder) (total int, er
 func (t *BlockContextualValidity) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	if n, err := scale.DecodeByteArray(dec, t.ID[:]); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 	}
 	if field, n, err := scale.DecodeBool(dec); err != nil {
 		return total, err
-	} else {
+	} else { // nolint
 		total += n
 		t.Validity = field
 	}
