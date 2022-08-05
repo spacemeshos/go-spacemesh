@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -263,7 +262,6 @@ func (m *mockClock) advanceLayer() {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	log.Info("sending for layer %v", m.currentLayer)
 	m.layerTime[m.currentLayer] = time.Now()
 	if ch, ok := m.channels[m.currentLayer]; ok {
 		close(ch)
