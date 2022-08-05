@@ -79,7 +79,6 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	if err != nil {
 		cs.logger.With().Fatal("failed to get nonce", log.Err(err))
 	}
-	cs.logger.With().Info("getState", addr, log.Uint64("got", nonce.Counter))
 	balance, err := cs.vmState.GetBalance(addr)
 	if err != nil {
 		cs.logger.With().Fatal("failed to get balance", log.Err(err))
