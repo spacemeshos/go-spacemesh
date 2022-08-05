@@ -358,7 +358,7 @@ func (t *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 type PostMetadata struct {
 	Challenge     []byte
 	BitsPerLabel  byte
-	LabelsPerUnit uint32
+	LabelsPerUnit uint64
 	K1            uint32
 	K2            uint32
 }
