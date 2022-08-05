@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
@@ -33,12 +34,14 @@ func (s *Wallet) MaxSpend(method uint8, args any) (uint64, error) {
 }
 
 // Verify that transaction is signed by the owner of the PublicKey using ed25519.
-func (s *Wallet) Verify(ctx *core.Context, tx []byte) bool {
-	if len(tx) < 64 {
+func (s *Wallet) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
+	sig := core.Signature{}
+	n, err := sig.DecodeScale(dec)
+	if err != nil {
 		return false
 	}
-	hash := core.Hash(tx[:len(tx)-64])
-	return ed25519.Verify(ed25519.PublicKey(s.PublicKey[:]), hash[:], tx[len(tx)-64:])
+	hash := core.Hash(raw[:len(raw)-n])
+	return ed25519.Verify(ed25519.PublicKey(s.PublicKey[:]), hash[:], sig[:])
 }
 
 // Spend transfers an amount to the address specified in SpendArguments.

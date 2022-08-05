@@ -5,7 +5,6 @@ replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
-	github.com/chaos-mesh/chaos-mesh/api/v1alpha1 v0.0.0-20220226050744-799408773657
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -33,7 +32,7 @@ require (
 	github.com/spacemeshos/api/release/go v1.4.1-0.20220701043434-46fb7f017a39
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
-	github.com/spacemeshos/go-scale v0.0.0-20220608060210-3f1e2c40f8dd
+	github.com/spacemeshos/go-scale v0.0.0-20220805102130-f990f881842a
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20220617165016-4e54cb497e8f
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
