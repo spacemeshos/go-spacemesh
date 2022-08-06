@@ -11,6 +11,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -820,4 +821,12 @@ func TestEncodeBeacon(t *testing.T) {
 	require.Len(t, beacon, 4)
 	expected := uint32(0x4aadebae)
 	require.Equal(t, expected, encodeBeacon(beacon))
+}
+
+func FuzzVrfMessageConsistency(f *testing.F) {
+	tester.FuzzConsistency[VrfMessage](f)
+}
+
+func FuzzVrfMessageSafety(f *testing.F) {
+	tester.FuzzSafety[VrfMessage](f)
 }
