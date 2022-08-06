@@ -7,9 +7,8 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/spacemeshos/go-scale/tester"
-
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 

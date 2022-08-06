@@ -27,6 +27,7 @@ type PoetProvingServiceClient interface {
 
 //go:generate scalegen -types BuilderState
 
+// BuilderState is a builder state.
 type BuilderState struct {
 	Challenge types.Hash32
 
