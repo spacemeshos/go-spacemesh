@@ -216,7 +216,7 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) InnerBytes() ([]byte, error) {
-	return InterfaceToBytes(atx.InnerActivationTx)
+	return InterfaceToBytes(&atx.InnerActivationTx)
 }
 
 // Fields returns an array of LoggableFields for logging.

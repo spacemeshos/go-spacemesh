@@ -612,7 +612,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, nipost)
-	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
+	atxBytes, err := types.InterfaceToBytes(&atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
