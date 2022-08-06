@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
+
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
@@ -289,7 +291,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(nipost)
 	db := sql.InMemory()
-	assert.Equal(builderState{NIPost: &types.NIPost{}}, *nb.state)
+	assert.Equal(BuilderState{NIPost: &types.NIPost{}}, *nb.state)
 
 	// fail after getting proof ref
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
@@ -467,4 +469,12 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
+}
+
+func FuzzBuilderStateConsistency(f *testing.F) {
+	tester.FuzzConsistency[BuilderState](f)
+}
+
+func FuzzBuilderStateSafety(f *testing.F) {
+	tester.FuzzSafety[BuilderState](f)
 }
