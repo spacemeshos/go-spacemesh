@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -88,12 +87,4 @@ func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "missing atx"))
 	require.True(t, got.IsNil())
-}
-
-func FuzzVrfMessageConsistency(f *testing.F) {
-	tester.FuzzConsistency[vrfMessage](f)
-}
-
-func FuzzVrfMessageSafety(f *testing.F) {
-	tester.FuzzSafety[vrfMessage](f)
 }
