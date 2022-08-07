@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
@@ -423,4 +424,12 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			instance.FinishEpoch(context.TODO(), epoch)
 		}
 	}
+}
+
+func FuzzMessageConsistency(f *testing.F) {
+	tester.FuzzConsistency[weakcoin.Message](f)
+}
+
+func FuzzMessageStateSafety(f *testing.F) {
+	tester.FuzzSafety[weakcoin.Message](f)
 }
