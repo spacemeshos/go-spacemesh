@@ -366,7 +366,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 		}
 	}()
 
-	o.With().Info("params",
+	o.With().Debug("params",
 		layer, layer.GetEpoch(), log.Uint32("round_id", round),
 		log.Int("committee_size", committeeSize),
 		log.Int("n", n),
@@ -457,8 +457,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				logger.With().Error("actives failed to get beacon", epoch, log.Err(err))
 				return nil, fmt.Errorf("error getting beacon for epoch %v: %w", epoch, err)
 			}
-			logger.With().Info("found beacon for epoch", epoch,
-				log.String("epoch_beacon", beacon.ShortString()))
+			logger.With().Debug("found beacon for epoch", epoch, beacon)
 			beacons[epoch] = beacon
 		}
 		blts, err := ballots.Layer(o.cdb, layerID)
@@ -533,7 +532,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
 	// TODO: do we want to cache tortoise active set too?
 	if safeLayerStart.GetEpoch().IsGenesis() {
-		logger.With().Info("no hare active set for genesis layer range, reading tortoise set for epoch instead",
+		logger.With().Debug("no hare active set for genesis layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	} else {
 		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
@@ -543,7 +542,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	if err != nil {
 		return nil, fmt.Errorf("can't get atxs for an epoch %d: %w", targetLayer.GetEpoch()-1, err)
 	}
-	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxids)))
 	if len(atxids) == 0 {
 		return nil, fmt.Errorf("%w: layer %v / epoch %v", errEmptyActiveSet, targetLayer, targetLayer.GetEpoch())
 	}
