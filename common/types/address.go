@@ -86,19 +86,6 @@ func StringToAddress(src string) (Address, error) {
 	return addr, nil
 }
 
-// BytesToAddress DEPRECATED returns Address with value b.
-// using in services, to parse address from api as is.
-// After API signature change from []byte to string - will removing this method
-// If b is larger than len(h), b will be cropped from the left.
-func BytesToAddress(b []byte) (Address, error) {
-	var a Address
-	if len(b) != len(a) {
-		return a, ErrWrongAddressLength
-	}
-	copy(a[:], b)
-	return a, nil
-}
-
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
 

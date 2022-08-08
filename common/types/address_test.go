@@ -75,17 +75,17 @@ func TestAddress_SetBytes(t *testing.T) {
 	t.Run("generate from correct string", func(t *testing.T) {
 		srcAddr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 		require.NoError(t, err)
-		newAddr, err := types.BytesToAddress(srcAddr.Bytes())
+		newAddr := types.GenerateAddress(srcAddr.Bytes())
 		require.NoError(t, err)
 		checkAddressesEqual(t, srcAddr, newAddr)
 	})
 	t.Run("generate from small byte slice", func(t *testing.T) {
-		_, err := types.BytesToAddress([]byte{1})
-		require.Error(t, err)
+		newAddr := types.GenerateAddress([]byte{1})
+		require.NotEmpty(t, newAddr.String())
 	})
 	t.Run("generate from large byte slice length", func(t *testing.T) {
-		_, err := types.BytesToAddress([]byte("12345678901234567890123456789012345678901234567890"))
-		require.Error(t, err)
+		newAddr := types.GenerateAddress([]byte("12345678901234567890123456789012345678901234567890"))
+		require.NotEmpty(t, newAddr.String())
 	})
 	t.Run("generate from correct byte slice", func(t *testing.T) {
 		data := make([]byte, types.AddressLength)

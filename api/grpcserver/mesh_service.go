@@ -178,9 +178,9 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
 
 	// Gather transaction data
-	addr, err := types.BytesToAddress(in.Filter.AccountId.Address)
+	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse Filter.AccountId.Address: %w", err)
+		return nil, fmt.Errorf("failed to parse Filter.AccountId.Address `%s`: %w", in.Filter.AccountId.Address, err)
 	}
 	res := &pb.AccountMeshDataQueryResponse{}
 	if filterTx {
@@ -260,8 +260,12 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 		Raw: t.Raw,
 	}
 	if t.TxHeader != nil {
-		tx.Principal = t.Principal[:]
-		tx.Template = t.Template[:]
+		tx.Principal = &pb.AccountId{
+			Address: t.Principal.String(),
+		}
+		tx.Template = &pb.AccountId{
+			Address: t.Template.String(),
+		}
 		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
 			Counter:  t.Nonce.Counter,
@@ -283,7 +287,7 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
 		SmesherId: &pb.SmesherId{Id: a.NodeID.ToBytes()},
-		Coinbase:  &pb.AccountId{Address: a.Coinbase.Bytes()},
+		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
 	}, nil
@@ -440,9 +444,9 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	if in.Filter.AccountMeshDataFlags == uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
 	}
-	addr, err := types.BytesToAddress(in.Filter.AccountId.Address)
+	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
 	if err != nil {
-		return fmt.Errorf("invalid in.Filter.AccountId.Address: %w", err)
+		return fmt.Errorf("invalid in.Filter.AccountId.Address `%s`: %w", in.Filter.AccountId.Address, err)
 	}
 
 	// Read the filter flags

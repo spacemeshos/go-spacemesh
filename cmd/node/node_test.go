@@ -780,7 +780,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		inTx := res.Transaction
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
-		require.Equal(t, address.Bytes(), inTx.Principal)
+		require.Equal(t, address.String(), inTx.Principal.Address)
 		// Let the test end
 		once.Do(oncebody)
 
