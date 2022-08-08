@@ -25,7 +25,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.5.0
 	github.com/natefinch/atomic v1.0.1
 	github.com/nullstyle/go-xdr v0.1.0
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20220708102147-0a8a51822cae
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1

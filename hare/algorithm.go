@@ -261,11 +261,7 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *consensusProcess) eventLoop(ctx context.Context) {
 	logger := proc.WithContext(ctx)
 	logger.With().Info("consensus process started",
-		log.Int("hare_n", proc.cfg.N),
-		log.Int("f", proc.cfg.F),
-		log.Duration("duration", time.Duration(proc.cfg.RoundDuration)*time.Second),
 		proc.instanceID,
-		log.Int("exp_leaders", proc.cfg.ExpectedLeaders),
 		log.String("current_set", proc.s.String()),
 		log.Int("set_size", proc.s.Size()))
 
@@ -282,7 +278,7 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(ctx, m)
 		} else {
-			logger.With().Info("should not participate",
+			logger.With().Debug("should not participate",
 				log.Uint32("current_k", proc.getK()),
 				proc.instanceID)
 		}
@@ -309,14 +305,11 @@ PreRound:
 		proc.instanceID,
 		log.Int("set_size", proc.s.Size()))
 	proc.preRoundTracker.FilterSet(proc.s)
-	logger.With().Debug("preround set size after filtering",
-		proc.instanceID,
-		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
 		logger.Event().Warning("preround ended with empty set",
 			proc.instanceID)
 	} else {
-		logger.With().Info("preround ended",
+		logger.With().Debug("preround ended",
 			log.Int("set_size", proc.s.Size()),
 			proc.instanceID)
 	}
@@ -499,7 +492,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 		return false
 	}
 
-	logger.Info("should participate: message sent")
+	logger.Debug("should participate: message sent")
 	return true
 }
 
@@ -520,12 +513,12 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 		if s != nil {
 			sStr = s.String()
 		}
-		logger.Event().Info("proposal round ended",
+		logger.Event().Debug("proposal round ended",
 			log.Int("set_size", proc.s.Size()),
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case commitRound:
-		logger.With().Info("commit round ended", log.Int("set_size", proc.s.Size()))
+		logger.With().Debug("commit round ended", log.Int("set_size", proc.s.Size()))
 	}
 }
 
@@ -615,7 +608,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	// send notify message only once
 	if proc.notifySent {
-		logger.Info("begin notify round: notify already sent")
+		logger.Debug("begin notify round: notify already sent")
 		return
 	}
 
@@ -781,7 +774,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		log.String("current_set", proc.s.String()),
 		log.Uint32("current_k", proc.getK()),
 		proc.instanceID,
-		log.Int("set_size", proc.s.Size()), log.Uint32("K", proc.getK()))
+		log.Int("set_size", proc.s.Size()))
 	proc.report(completed)
 	numIterations.Observe(float64(proc.getK()))
 	proc.terminating = true
@@ -825,7 +818,7 @@ func (proc *consensusProcess) endOfStatusRound() {
 	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
 	before := time.Now()
 	proc.statusesTracker.AnalyzeStatuses(vtFunc)
-	proc.Event().Info("status round ended",
+	proc.Event().Debug("status round ended",
 		log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		proc.instanceID,
 		log.Int("set_size", proc.s.Size()),
@@ -848,13 +841,13 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	}
 
 	if !res {
-		logger.Info("should not participate: identity is not active")
+		logger.Debug("should not participate: identity is not active")
 		return false
 	}
 
 	currentRole := proc.currentRole(ctx)
 	if currentRole == passive {
-		logger.Info("should not participate: passive")
+		logger.Debug("should not participate: passive")
 		return false
 	}
 
@@ -863,7 +856,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	proc.mu.RUnlock()
 
 	// should participate
-	logger.With().Info("should participate",
+	logger.With().Debug("should participate",
 		log.Bool("leader", currentRole == leader),
 		log.Uint32("eligibility_count", uint32(eligibilityCount)),
 	)

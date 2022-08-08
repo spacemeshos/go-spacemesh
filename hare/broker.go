@@ -362,7 +362,7 @@ func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
 	// not exist means unknown, check & set
 
 	if !b.nodeSyncState.IsSynced(ctx) {
-		b.WithContext(ctx).With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
+		b.WithContext(ctx).With().Debug("node is not synced, marking layer as not synced", types.LayerID(id))
 		b.syncState[id.Uint32()] = false // mark not synced
 		return
 	}
@@ -409,7 +409,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 				instance := b.minDeleted.Add(1)
 				b.mu.RUnlock()
 				b.cleanState(instance)
-				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
+				b.With().Info("unregistered layer due to maximum concurrent processes", instance)
 			}
 
 			outboxCh := make(chan *Msg, inboxCapacity)
@@ -468,7 +468,7 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	wg.Add(1)
 	f := func() {
 		b.cleanState(id)
-		b.WithContext(ctx).With().Info("hare broker unregistered layer", id)
+		b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
 		wg.Done()
 	}
 	select {

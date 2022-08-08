@@ -22,7 +22,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		sendFor     uint32 = 8
 		stopSending        = first + sendFor
 		stopWaiting        = stopSending + 4
-		batch              = 3
+		batch              = 10
 		amount             = 100
 
 		// each account creates spawn transaction in the first layer

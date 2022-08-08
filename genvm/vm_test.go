@@ -624,23 +624,23 @@ func TestWorkflow(t *testing.T) {
 						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
 						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
 					},
-					ineffective: []int{1},
+					ineffective: []int{2},
 					headers: map[int]struct{}{
-						1: {},
+						2: {},
 					},
 					expected: map[int]change{
 						0: spawned{
 							template: wallet.TemplateAddress,
 							change:   spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)},
 						},
-						10: earned{amount: 100},
-						11: same{},
+						10: same{},
+						11: earned{amount: 100},
 					},
 				},
 				{
 					txs: []testTx{
-						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendWallet{0, 12, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendWallet{0, 12, 100}.withNonce(core.Nonce{Counter: 6}),
 					},
 					expected: map[int]change{
 						0:  spent{amount: 2*100 + 2*defaultGasPrice*wallet.TotalGasSpend},
@@ -701,6 +701,7 @@ func TestWorkflow(t *testing.T) {
 				{
 					txs: []testTx{
 						&spawnWallet{0},
+						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 5}),
 					},
 				},
 				{
