@@ -25,7 +25,7 @@ func (t *SpawnArguments) DecodeScale(dec *scale.Decoder) (total int, err error) 
 }
 
 func (t *Part) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact64(enc, uint64(t.Ref)); err != nil {
+	if n, err := scale.EncodeCompact8(enc, uint8(t.Ref)); err != nil {
 		return total, err
 	} else { // nolint
 		total += n
@@ -39,11 +39,11 @@ func (t *Part) EncodeScale(enc *scale.Encoder) (total int, err error) {
 }
 
 func (t *Part) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	if field, n, err := scale.DecodeCompact64(dec); err != nil {
+	if field, n, err := scale.DecodeCompact8(dec); err != nil {
 		return total, err
 	} else { // nolint
 		total += n
-		t.Ref = uint64(field)
+		t.Ref = uint8(field)
 	}
 	if n, err := scale.DecodeByteArray(dec, t.Sig[:]); err != nil {
 		return total, err

@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )

@@ -11,6 +11,7 @@ import (
 
 //go:generate scalegen
 
+// MultiSig K/N template.
 type MultiSig struct {
 	k          uint8
 	PublicKeys []core.PublicKey `scale:"type=StructArray"`
@@ -37,9 +38,9 @@ func (ms *MultiSig) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bo
 	}
 	hash := core.Hash(raw[:len(raw)-n])
 	batch := ed25519.NewBatchVerifierWithCapacity(int(ms.k))
-	last := uint64(0)
+	last := uint8(0)
 	for i, part := range sig {
-		if part.Ref >= uint64(len(ms.PublicKeys)) {
+		if part.Ref >= uint8(len(ms.PublicKeys)) {
 			return false
 		}
 		if i != 0 && part.Ref <= last {
