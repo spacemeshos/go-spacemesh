@@ -48,6 +48,15 @@ func RandomTXSet(size int) []TransactionID {
 	return ids
 }
 
+// RandomTXsSet generates a random TransactionIDs set of the specified size.
+func RandomTXsSet(size int) *TransactionIDs {
+	ids := make(TransactionIDs, 0, size)
+	for i := 0; i < size; i++ {
+		ids = append(ids, RandomTransactionID())
+	}
+	return &ids
+}
+
 // RandomATXID generates a random ATXID for testing.
 func RandomATXID() ATXID {
 	rand.Seed(time.Now().UnixNano())
@@ -136,6 +145,7 @@ func GenLayerBlock(layerID LayerID, txs []TransactionID) *Block {
 
 // GenLayerProposal returns a Proposal in the given layer with the given data.
 func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
+	txIDs := TransactionIDs(txs)
 	p := &Proposal{
 		InnerProposal: InnerProposal{
 			Ballot: Ballot{
@@ -148,7 +158,7 @@ func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
 					},
 				},
 			},
-			TxIDs: txs,
+			TxIDs: &txIDs,
 		},
 	}
 	signer := signing.NewEdSigner()

@@ -18,7 +18,7 @@ func TestProposal_Initialize(t *testing.T) {
 	p := Proposal{
 		InnerProposal: InnerProposal{
 			Ballot: *RandomBallot(),
-			TxIDs:  []TransactionID{RandomTransactionID(), RandomTransactionID()},
+			TxIDs:  &TransactionIDs{RandomTransactionID(), RandomTransactionID()},
 		},
 	}
 	signer := signing.NewEdSigner()
@@ -35,7 +35,7 @@ func TestProposal_Initialize_BadSignature(t *testing.T) {
 	p := Proposal{
 		InnerProposal: InnerProposal{
 			Ballot: *RandomBallot(),
-			TxIDs:  []TransactionID{RandomTransactionID(), RandomTransactionID()},
+			TxIDs:  &TransactionIDs{RandomTransactionID(), RandomTransactionID()},
 		},
 	}
 	signer := signing.NewEdSigner()
@@ -49,7 +49,7 @@ func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
 	p := Proposal{
 		InnerProposal: InnerProposal{
 			Ballot: *RandomBallot(),
-			TxIDs:  []TransactionID{RandomTransactionID(), RandomTransactionID()},
+			TxIDs:  &TransactionIDs{RandomTransactionID(), RandomTransactionID()},
 		},
 	}
 	p.Ballot.Signature = signing.NewEdSigner().Sign(p.Ballot.Bytes())

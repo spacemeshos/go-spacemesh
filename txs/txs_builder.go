@@ -65,7 +65,7 @@ func extractProposalMetadata(
 			meshHashes[key].count++
 		}
 
-		for _, tid := range p.TxIDs {
+		for _, tid := range *p.TxIDs {
 			if _, ok := seen[tid]; ok {
 				continue
 			}

@@ -195,7 +195,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	signature := make([]byte, stmt.ColumnLen(8))
 	stmt.ColumnBytes(8, signature)
 
-	txIDs := make([]types.TransactionID, 0)
+	txIDs := types.TransactionIDs{}
 	if err := codec.Decode(txIDsBytes, &txIDs); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("decode TX IDs: %w", err)
@@ -204,7 +204,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
-			TxIDs:    txIDs,
+			TxIDs:    &txIDs,
 			MeshHash: types.BytesToHash(meshBytes),
 		},
 		Signature: signature,

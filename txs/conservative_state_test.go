@@ -176,7 +176,7 @@ func TestSelectBlockTxsMissingHeader(t *testing.T) {
 	require.NoError(t, tcs.AddToDB(&tx))
 
 	_, err := tcs.SelectBlockTXs(types.NewLayerID(1), []*types.Proposal{
-		{InnerProposal: types.InnerProposal{TxIDs: []types.TransactionID{tx.ID}}},
+		{InnerProposal: types.InnerProposal{TxIDs: &types.TransactionIDs{tx.ID}}},
 	})
 	require.Error(t, err)
 }

@@ -163,7 +163,7 @@ func collectHashes(a any) []types.Hash32 {
 	p, ok := a.(types.Proposal)
 	if ok {
 		hashes := collectHashes(p.Ballot)
-		return append(hashes, types.TransactionIDsToHashes(p.TxIDs)...)
+		return append(hashes, types.TransactionIDsToHashes(*p.TxIDs)...)
 	}
 
 	b, ok := a.(types.Ballot)
@@ -215,7 +215,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	}
 	proposalDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t1)))
 
-	logger.With().Info("new proposal", log.Int("num_txs", len(p.TxIDs)))
+	logger.With().Info("new proposal", log.Int("num_txs", len(*p.TxIDs)))
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
@@ -247,7 +247,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte, peer p2p.
 	logger.With().Info("added proposal to database")
 
 	t6 := time.Now()
-	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
+	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), *p.TxIDs); err != nil {
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
 	proposalDuration.WithLabelValues(linkTxs).Observe(float64(time.Since(t6)))
@@ -488,18 +488,18 @@ func (h *Handler) fetchReferencedATXs(ctx context.Context, b *types.Ballot) erro
 }
 
 func (h *Handler) checkTransactions(ctx context.Context, p *types.Proposal) error {
-	if len(p.TxIDs) == 0 {
+	if len(*p.TxIDs) == 0 {
 		return nil
 	}
 
-	set := make(map[types.TransactionID]struct{}, len(p.TxIDs))
-	for _, tx := range p.TxIDs {
+	set := make(map[types.TransactionID]struct{}, len(*p.TxIDs))
+	for _, tx := range *p.TxIDs {
 		if _, exist := set[tx]; exist {
 			return errDuplicateTX
 		}
 		set[tx] = struct{}{}
 	}
-	if err := h.fetcher.GetProposalTxs(ctx, p.TxIDs); err != nil {
+	if err := h.fetcher.GetProposalTxs(ctx, *p.TxIDs); err != nil {
 		return fmt.Errorf("proposal get TXs: %w", err)
 	}
 	return nil
@@ -507,7 +507,7 @@ func (h *Handler) checkTransactions(ctx context.Context, p *types.Proposal) erro
 
 func reportProposalMetrics(p *types.Proposal) {
 	proposalSize.WithLabelValues().Observe(float64(len(p.Bytes())))
-	numTxsInProposal.WithLabelValues().Observe(float64(len(p.TxIDs)))
+	numTxsInProposal.WithLabelValues().Observe(float64(len(*p.TxIDs)))
 }
 
 func reportVotesMetrics(b *types.Ballot) {

@@ -232,12 +232,13 @@ func (pb *ProposalBuilder) createProposal(
 	if err != nil {
 		logger.With().Warning("failed to get mesh hash", log.Err(err))
 	}
+	transactionIDs := types.TransactionIDs(txIDs)
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: *ib,
 			},
-			TxIDs:    txIDs,
+			TxIDs:    &transactionIDs,
 			MeshHash: mesh,
 		},
 	}
@@ -246,7 +247,7 @@ func (pb *ProposalBuilder) createProposal(
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
-	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(p.TxIDs)))
+	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(*p.TxIDs)))
 	return p, nil
 }
 

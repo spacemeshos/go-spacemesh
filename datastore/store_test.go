@@ -131,7 +131,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	p := types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *blt,
-			TxIDs:  types.RandomTXSet(11),
+			TxIDs:  types.RandomTXsSet(11),
 		},
 	}
 	p.Signature = signer.Sign(p.Bytes())

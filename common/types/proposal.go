@@ -51,13 +51,31 @@ type Proposal struct {
 	proposalID ProposalID
 }
 
+// TransactionIDs is a list of transaction IDs.
+type TransactionIDs []TransactionID
+
+// EncodeScale implements scale codec interface.
+func (t *TransactionIDs) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeStructSlice(e, *t)
+}
+
+// DecodeScale implements scale codec interface.
+func (t *TransactionIDs) DecodeScale(d *scale.Decoder) (int, error) {
+	field, n, err := scale.DecodeStructSlice[TransactionID](d)
+	if err != nil {
+		return n, err
+	}
+	*t = field
+	return n, nil
+}
+
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.
 // this structure is serialized and signed to produce the signature in Proposal.
 type InnerProposal struct {
 	// smesher's votes on the mesh history
 	Ballot
 	// smesher's content proposal for a layer
-	TxIDs []TransactionID
+	TxIDs *TransactionIDs
 	// aggregated hash up to the layer before this proposal.
 	MeshHash Hash32
 	// TODO add this when a state commitment mechanism is implemented.
@@ -114,7 +132,7 @@ func (p *Proposal) SetID(pid ProposalID) {
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
 	encoder.AddArray("transactions", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, id := range p.TxIDs {
+		for _, id := range *p.TxIDs {
 			encoder.AppendString(id.String())
 		}
 		return nil

@@ -83,7 +83,7 @@ func createProposal(t *testing.T) *types.Proposal {
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *b,
-			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
+			TxIDs:  &types.TransactionIDs{types.RandomTransactionID(), types.RandomTransactionID()},
 		},
 	}
 	p.Signature = signer.Sign(p.Bytes())
@@ -561,7 +561,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *b,
-			TxIDs:  []types.TransactionID{tid, tid},
+			TxIDs:  &types.TransactionIDs{tid, tid},
 		},
 	}
 	p.Signature = signer.Sign(p.Bytes())
@@ -790,6 +790,6 @@ func TestCollectHashes(t *testing.T) {
 	expected = append(expected, types.BlockIDsToHashes(b.Votes.Support)...)
 	require.ElementsMatch(t, expected, collectHashes(b))
 
-	expected = append(expected, types.TransactionIDsToHashes(p.TxIDs)...)
+	expected = append(expected, types.TransactionIDsToHashes(*p.TxIDs)...)
 	require.ElementsMatch(t, expected, collectHashes(*p))
 }

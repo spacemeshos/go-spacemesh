@@ -125,6 +125,7 @@ func createProposals(t *testing.T, layerID types.LayerID, signers []*signing.EdS
 
 func createProposal(t *testing.T, epochData *types.EpochData, lid types.LayerID, atxID types.ATXID, signer *signing.EdSigner, txIDs []types.TransactionID, numEligibility int) *types.Proposal {
 	t.Helper()
+	transactionIDs := types.TransactionIDs(txIDs)
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
@@ -135,7 +136,7 @@ func createProposal(t *testing.T, epochData *types.EpochData, lid types.LayerID,
 					EpochData:         epochData,
 				},
 			},
-			TxIDs: txIDs,
+			TxIDs: &transactionIDs,
 		},
 	}
 	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
