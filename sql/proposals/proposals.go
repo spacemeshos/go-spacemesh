@@ -153,8 +153,7 @@ func toTransactionIDs(txIDs []types.TransactionID) TransactionIDs {
 	if txIDs == nil {
 		return nil
 	}
-	transactionIDs := TransactionIDs(txIDs)
-	return transactionIDs
+	return TransactionIDs(txIDs)
 }
 
 // Add adds a proposal for a given ID.
