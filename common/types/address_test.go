@@ -27,12 +27,12 @@ func TestAddress_NewAddress(t *testing.T) {
 			src:  "stest1qqqqqqy0dd83jemjmfj3ghjndxm0ndh0z2rymaqyp0gu3",
 		},
 		{
-			name: "corect address, but no reserved space",
+			name: "correct address, but no reserved space",
 			src:  "stest1fejq2x3d79ukpkw06t7h6lndjuwzxdnj59npghsg43mh4",
 			err:  types.ErrMissingReservedSpace,
 		},
 		{
-			name: "incorrect cahrset", // chars iob is not supported by bech32.
+			name: "incorrect charset", // chars `iob` not supported by bech32.
 			src:  "stest1fejq2x3d79ukpkw06t7h6lniobuwzxdnj59nphsywyusj",
 			err:  types.ErrDecodeBech32,
 		},
@@ -42,17 +42,17 @@ func TestAddress_NewAddress(t *testing.T) {
 			err:  types.ErrDecodeBech32,
 		},
 		{
-			name: "to big length",
+			name: "too long",
 			src:  "stest1qw508d6e1qejxtdg4y5r3zarvax8wucu",
 			err:  types.ErrWrongAddressLength,
 		},
 		{
-			name: "to small length",
+			name: "too short",
 			src:  "stest1qw504y5r3zarva2v6vda",
 			err:  types.ErrWrongAddressLength,
 		},
 		{
-			name: "wrong network",
+			name: "wrong network (hrp)",
 			src:  "sut1fejq2x3d79ukpkw06t7h6lndjuwzxdnj59npghsldfkky",
 			err:  types.ErrUnsupportedNetwork,
 		},

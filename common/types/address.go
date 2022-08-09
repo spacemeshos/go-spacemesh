@@ -23,7 +23,7 @@ var (
 	// ErrUnsupportedNetwork is returned when a network is not supported.
 	ErrUnsupportedNetwork = errors.New("unsupported network")
 	// ErrDecodeBech32 is returned when an error occurs during decoding bech32.
-	ErrDecodeBech32 = errors.New("error decode to bech32")
+	ErrDecodeBech32 = errors.New("error decoding bech32")
 	// ErrMissingReservedSpace is returned if top bytes of address is not 0.
 	ErrMissingReservedSpace = errors.New("missing reserved space")
 )
@@ -64,7 +64,7 @@ func StringToAddress(src string) (Address, error) {
 	// for encoding bech32 uses slice of 5-bit unsigned integers. convert it back it 8-bit uints.
 	dataConverted, err := bech32.ConvertBits(data, 5, 8, true)
 	if err != nil {
-		return addr, fmt.Errorf("error convert bits to 8 bits: %w", err)
+		return addr, fmt.Errorf("error converting bech32 bits: %w", err)
 	}
 
 	// AddressLength+1 cause ConvertBits append empty byte to the end of the slice.
@@ -103,12 +103,12 @@ func (a Address) IsEmpty() bool {
 func (a Address) String() string {
 	dataConverted, err := bech32.ConvertBits(a[:], 8, 5, true)
 	if err != nil {
-		log.Panic("error convert bits to 8 bits: ", err.Error())
+		log.Panic("error converting bech32 bits: ", err.Error())
 	}
 
 	result, err := bech32.Encode(conf.NetworkHRP, dataConverted)
 	if err != nil {
-		log.Panic("error encode to bech32: ", err.Error())
+		log.Panic("error encoding to bech32: ", err.Error())
 	}
 	return result
 }

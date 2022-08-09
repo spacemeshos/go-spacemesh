@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	runtime2 "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -67,7 +67,7 @@ func (s *JSONHTTPServer) startInternal(
 	// This will close all downstream connections when the server closes
 	defer cancel()
 
-	mux := runtime2.NewServeMux()
+	mux := runtime.NewServeMux()
 
 	// register each individual, enabled service
 	serviceCount := 0
