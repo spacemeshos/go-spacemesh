@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -50,6 +51,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
+	multisig.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}

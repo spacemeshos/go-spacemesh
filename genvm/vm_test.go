@@ -14,9 +14,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	sdkmultisig "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
+	sdkwallet "github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -41,16 +45,78 @@ func newTester(tb testing.TB) *tester {
 	}
 }
 
+type testAccount interface {
+	getAddress() core.Address
+	spend(to core.Address, amount uint64, nonce core.Nonce) []byte
+	selfSpawn() []byte
+}
+
+type singlesigAccount struct {
+	pk      ed25519.PrivateKey
+	address core.Address
+}
+
+func (a *singlesigAccount) getAddress() core.Address {
+	return a.address
+}
+
+func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
+	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce)
+}
+
+func (a *singlesigAccount) selfSpawn() []byte {
+	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk))
+}
+
+type multisigAccount struct {
+	k        int
+	pks      []ed25519.PrivateKey
+	address  core.Address
+	template core.Address
+}
+
+func (a *multisigAccount) getAddress() core.Address {
+	return a.address
+}
+
+func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
+	var agg *sdkmultisig.Aggregator
+	for i := 0; i < a.k; i++ {
+		part := sdkmultisig.Spend(uint8(i), a.pks[i], a.address, to, amount, nonce)
+		if agg == nil {
+			agg = part
+		} else {
+			agg.Add(*part.Part(uint8(i)))
+		}
+	}
+	return agg.Raw()
+}
+
+func (a *multisigAccount) selfSpawn() []byte {
+	var pubs []ed25519.PublicKey
+	for _, pk := range a.pks {
+		pubs = append(pubs, ed25519.PublicKey(signing.Public(signing.PrivateKey(pk))))
+	}
+	var agg *sdkmultisig.Aggregator
+	for i := 0; i < a.k; i++ {
+		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs)
+		if agg == nil {
+			agg = part
+		} else {
+			agg.Add(*part.Part(uint8(i)))
+		}
+	}
+	return agg.Raw()
+}
+
 type tester struct {
 	testing.TB
 	*VM
 
 	rng *rand.Rand
 
-	pks       []ed25519.PrivateKey
-	pubs      []ed25519.PublicKey
-	addresses []core.Address
-	nonces    []core.Nonce
+	accounts []testAccount
+	nonces   []core.Nonce
 }
 
 func (t *tester) persistent() *tester {
@@ -70,15 +136,32 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 	return t
 }
 
-func (t *tester) addAccounts(n int) *tester {
+func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		t.pks = append(t.pks, pk)
-		t.pubs = append(t.pubs, pub)
-		args := wallet.SpawnArguments{}
-		copy(args.PublicKey[:], pub)
-		t.addresses = append(t.addresses, core.ComputePrincipal(wallet.TemplateAddress, &args))
+		t.accounts = append(t.accounts, &singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
+		t.nonces = append(t.nonces, core.Nonce{})
+	}
+	return t
+}
+
+func (t *tester) addMultisig(total, k, n int, template core.Address) *tester {
+	for i := 0; i < total; i++ {
+		pks := []ed25519.PrivateKey{}
+		pubs := [][]byte{}
+		for j := 0; j < n; j++ {
+			pub, pk, err := ed25519.GenerateKey(t.rng)
+			require.NoError(t, err)
+			pks = append(pks, pk)
+			pubs = append(pubs, pub)
+		}
+		t.accounts = append(t.accounts, &multisigAccount{
+			k:        k,
+			pks:      pks,
+			address:  sdkmultisig.Address(pubs...),
+			template: template,
+		})
 		t.nonces = append(t.nonces, core.Nonce{})
 	}
 	return t
@@ -89,10 +172,10 @@ func (t *tester) applyGenesis() *tester {
 }
 
 func (t *tester) applyGenesisWithBalance(amount uint64) *tester {
-	accounts := make([]core.Account, len(t.pks))
+	accounts := make([]core.Account, len(t.accounts))
 	for i := range accounts {
 		accounts[i] = core.Account{
-			Address: types.Address(t.addresses[i]),
+			Address: t.accounts[i].getAddress(),
 			Balance: amount,
 		}
 	}
@@ -106,40 +189,32 @@ func (t *tester) nextNonce(i int) core.Nonce {
 	return nonce
 }
 
-func (t *tester) spawnWalletAll() []types.RawTx {
+func (t *tester) spawnAll() []types.RawTx {
 	var rst []types.RawTx
-	for i := 0; i < len(t.addresses); i++ {
+	for i := 0; i < len(t.accounts); i++ {
 		if t.nonces[i].Counter != 0 {
 			continue
 		}
-		rst = append(rst, t.selfSpawnWallet(i))
+		rst = append(rst, t.selfSpawn(i))
 	}
 	return rst
 }
 
-func (t *tester) selfSpawnWallet(i int) types.RawTx {
-	typ := scale.U8(0)
-	method := scale.U8(0)
-	payload := wallet.SpawnPayload{GasPrice: 1}
-	copy(payload.Arguments.PublicKey[:], t.pubs[i])
+func (t *tester) selfSpawn(i int) types.RawTx {
 	t.nextNonce(i)
-	return types.NewRawTx(encodeWalletTx(t, t.pks[i],
-		&typ,
-		&t.addresses[i], &method, &wallet.TemplateAddress,
-		&payload,
-	))
+	return types.NewRawTx(t.accounts[i].selfSpawn())
 }
 
-func (t *tester) randSendWalletN(n int, amount uint64) []types.RawTx {
+func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
 	rst := make([]types.RawTx, n)
 	for i := range rst {
-		rst[i] = t.randSpendWallet(amount)
+		rst[i] = t.randSpend(amount)
 	}
 	return rst
 }
 
-func (t *tester) randSpendWallet(amount uint64) types.RawTx {
-	return t.spendWallet(t.rng.Intn(len(t.addresses)), t.rng.Intn(len(t.addresses)), amount)
+func (t *tester) randSpend(amount uint64) types.RawTx {
+	return t.spend(t.rng.Intn(len(t.accounts)), t.rng.Intn(len(t.accounts)), amount)
 }
 
 func (t *tester) withSeed(seed int64) *tester {
@@ -147,8 +222,12 @@ func (t *tester) withSeed(seed int64) *tester {
 	return t
 }
 
-func (t *tester) spendWallet(from, to int, amount uint64) types.RawTx {
-	return t.spendWalletWithNonce(from, to, amount, t.nextNonce(from))
+func (t *tester) spend(from, to int, amount uint64) types.RawTx {
+	return t.spendWithNonce(from, to, amount, t.nextNonce(from))
+}
+
+func (t *tester) spendWithNonce(from, to int, amount uint64, nonce core.Nonce) types.RawTx {
+	return types.NewRawTx(t.accounts[from].spend(t.accounts[to].getAddress(), amount, nonce))
 }
 
 type reward struct {
@@ -161,7 +240,7 @@ func (t *tester) rewards(all ...reward) []types.AnyReward {
 	for _, rew := range all {
 		rat := new(big.Rat).SetFloat64(rew.share)
 		rst = append(rst, types.AnyReward{
-			Coinbase: t.addresses[rew.address],
+			Coinbase: t.accounts[rew.address].getAddress(),
 			Weight: types.RatNum{
 				Num:   rat.Num().Uint64(),
 				Denom: rat.Denom().Uint64(),
@@ -169,42 +248,6 @@ func (t *tester) rewards(all ...reward) []types.AnyReward {
 		})
 	}
 	return rst
-}
-
-func (t *tester) spendWalletWithNonce(from, to int, amount uint64, nonce core.Nonce) types.RawTx {
-	payload := wallet.SpendPayload{}
-	payload.Arguments.Destination = t.addresses[to]
-	payload.Arguments.Amount = amount
-	payload.GasPrice = 1
-	payload.Nonce = nonce
-
-	typ := scale.U8(0)
-	method := scale.U8(1)
-	return types.NewRawTx(encodeWalletTx(t, t.pks[from],
-		&typ,
-		&t.addresses[from],
-		&method,
-		&payload,
-	))
-}
-
-func encodeWalletTx(tb testing.TB, pk ed25519.PrivateKey, fields ...scale.Encodable) []byte {
-	tb.Helper()
-
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	for _, field := range fields {
-		_, err := field.EncodeScale(encoder)
-		require.NoError(tb, err)
-	}
-	hash := core.Hash(buf.Bytes())
-
-	sig := ed25519.Sign(pk, hash[:])
-	var sigfield core.Signature
-	copy(sigfield[:], sig)
-	_, err := sigfield.EncodeScale(encoder)
-	require.NoError(tb, err)
-	return buf.Bytes()
 }
 
 func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {
@@ -223,25 +266,25 @@ type testTx interface {
 	gen(*tester) types.RawTx
 }
 
-type spawnWallet struct {
+type spawnTx struct {
 	principal int
 }
 
-func (tx *spawnWallet) gen(t *tester) types.RawTx {
-	return t.selfSpawnWallet(tx.principal)
+func (tx *spawnTx) gen(t *tester) types.RawTx {
+	return t.selfSpawn(tx.principal)
 }
 
-type spendWallet struct {
+type spendTx struct {
 	from, to int
 	amount   uint64
 }
 
-func (tx *spendWallet) gen(t *tester) types.RawTx {
-	return t.spendWallet(tx.from, tx.to, tx.amount)
+func (tx *spendTx) gen(t *tester) types.RawTx {
+	return t.spend(tx.from, tx.to, tx.amount)
 }
 
-func (tx spendWallet) withNonce(nonce core.Nonce) *spendWalletNonce {
-	return &spendWalletNonce{spendWallet: tx, nonce: nonce}
+func (tx spendTx) withNonce(nonce core.Nonce) *spendNonce {
+	return &spendNonce{spendTx: tx, nonce: nonce}
 }
 
 type corruptSig struct {
@@ -260,13 +303,13 @@ func (cs corruptSig) gen(t *tester) types.RawTx {
 	return tx
 }
 
-type spendWalletNonce struct {
-	spendWallet
+type spendNonce struct {
+	spendTx
 	nonce core.Nonce
 }
 
-func (tx *spendWalletNonce) gen(t *tester) types.RawTx {
-	return t.spendWalletWithNonce(tx.from, tx.to, tx.amount, tx.nonce)
+func (tx *spendNonce) gen(t *tester) types.RawTx {
+	return t.spendWithNonce(tx.from, tx.to, tx.amount, tx.nonce)
 }
 
 type change interface {
@@ -344,15 +387,7 @@ func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
 	}
 }
 
-func TestWorkflow(t *testing.T) {
-	const (
-		funded  = 10  // number of funded accounts, included in genesis
-		total   = 100 // total number of accounts
-		balance = 1_000_000_000
-
-		defaultGasPrice = 1
-	)
-
+func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, spendGas int, genTester func(t *testing.T) *tester) {
 	type layertc struct {
 		txs      []testTx
 		rewards  []reward
@@ -371,19 +406,19 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 					expected: map[int]change{
-						0: spawned{template: wallet.TemplateAddress},
+						0: spawned{template: template},
 						1: same{},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{0, 10, 100},
+						&spendTx{0, 10, 100},
 					},
 					expected: map[int]change{
-						0:  spent{amount: 100 + defaultGasPrice*wallet.TotalGasSpend},
+						0:  spent{amount: 100 + defaultGasPrice*spendGas},
 						1:  same{},
 						10: earned{amount: 100},
 					},
@@ -395,13 +430,13 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
-						&spendWallet{0, 10, 100},
+						&spawnTx{0},
+						&spendTx{0, 10, 100},
 					},
 					expected: map[int]change{
 						0: spawned{
-							template: wallet.TemplateAddress,
-							change:   spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpend+wallet.TotalGasSpawn)},
+							template: template,
+							change:   spent{amount: 100 + defaultGasPrice*(spendGas+spawnGas)},
 						},
 						10: earned{amount: 100},
 					},
@@ -413,17 +448,17 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{0, 10, 100},
-						&spendWallet{0, 11, 100},
-						&spendWallet{0, 12, 100},
+						&spendTx{0, 10, 100},
+						&spendTx{0, 11, 100},
+						&spendTx{0, 12, 100},
 					},
 					expected: map[int]change{
-						0:  spent{amount: 100*3 + defaultGasPrice*3*wallet.TotalGasSpend},
+						0:  spent{amount: 100*3 + defaultGasPrice*3*spendGas},
 						10: earned{amount: 100},
 						11: earned{amount: 100},
 						12: earned{amount: 100},
@@ -436,31 +471,31 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{0, 10, 1000},
-						&spawnWallet{10},
-						&spendWallet{10, 11, 100},
+						&spendTx{0, 10, 10000},
+						&spawnTx{10},
+						&spendTx{10, 11, 100},
 					},
 					expected: map[int]change{
-						0: spent{amount: 1000 + defaultGasPrice*wallet.TotalGasSpend},
+						0: spent{amount: 10000 + defaultGasPrice*spendGas},
 						10: spawned{
-							template: wallet.TemplateAddress,
-							change:   earned{amount: 1000 - 100 - defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)},
+							template: template,
+							change:   earned{amount: 10000 - 100 - defaultGasPrice*(spawnGas+spendGas)},
 						},
 						11: earned{amount: 100},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{10, 11, 100},
-						&spendWallet{10, 12, 100},
+						&spendTx{10, 11, 100},
+						&spendTx{10, 12, 100},
 					},
 					expected: map[int]change{
-						10: spent{amount: 2*100 + 2*defaultGasPrice*wallet.TotalGasSpend},
+						10: spent{amount: 2*100 + 2*defaultGasPrice*spendGas},
 						11: earned{amount: 100},
 						12: earned{amount: 100},
 					},
@@ -472,35 +507,35 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
-						&spawnWallet{1},
+						&spawnTx{0},
+						&spawnTx{1},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{1, 0, 1000},
-						&spendWallet{0, 10, 1000},
+						&spendTx{1, 0, 1000},
+						&spendTx{0, 10, 1000},
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: defaultGasPrice * wallet.TotalGasSpend,
+							amount: defaultGasPrice * spendGas,
 							change: nonce{increased: 1},
 						},
-						1:  spent{amount: 1000 + defaultGasPrice*wallet.TotalGasSpend},
+						1:  spent{amount: 1000 + defaultGasPrice*spendGas},
 						10: earned{amount: 1000},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{0, 10, 1000},
-						&spendWallet{1, 0, 1000},
+						&spendTx{0, 10, 1000},
+						&spendTx{1, 0, 1000},
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: defaultGasPrice * wallet.TotalGasSpend,
+							amount: defaultGasPrice * spendGas,
 							change: nonce{increased: 1},
 						},
-						1:  spent{amount: 1000 + defaultGasPrice*wallet.TotalGasSpend},
+						1:  spent{amount: 1000 + defaultGasPrice*spendGas},
 						10: earned{amount: 1000},
 					},
 				},
@@ -511,16 +546,16 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendWallet{0, 0, 1000},
+						&spendTx{0, 0, 1000},
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: defaultGasPrice * wallet.TotalGasSpend,
+							amount: defaultGasPrice * spendGas,
 							change: nonce{increased: 1},
 						},
 					},
@@ -532,7 +567,7 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spendWallet{0, 10, 1},
+						&spendTx{0, 10, 1},
 					},
 					ineffective: []int{0},
 					expected: map[int]change{
@@ -547,7 +582,7 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{11},
+						&spawnTx{11},
 					},
 					ineffective: []int{0},
 					expected: map[int]change{
@@ -561,14 +596,14 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
-						&spendWallet{0, 11, wallet.TotalGasSpawn},
-						&spawnWallet{11},
-						&spendWallet{11, 12, 1},
+						&spawnTx{0},
+						&spendTx{0, 11, uint64(spawnGas) * uint64(defaultGasPrice)}, // send enough funds to cover spawn
+						&spawnTx{11},
+						&spendTx{11, 12, 1},
 					},
 					ineffective: []int{3},
 					expected: map[int]change{
-						11: spawned{template: wallet.TemplateAddress},
+						11: spawned{template: template},
 						12: same{},
 					},
 				},
@@ -579,15 +614,15 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
-						&spendWallet{0, 10, 100},
-						&spendWallet{0, 11, 100},
-						&spendWallet{0, 12, 100},
+						&spawnTx{0},
+						&spendTx{0, 10, 100},
+						&spendTx{0, 11, 100},
+						&spendTx{0, 12, 100},
 					},
-					gasLimit:    wallet.TotalGasSpawn + wallet.TotalGasSpend,
+					gasLimit:    uint64(spawnGas + spendGas),
 					ineffective: []int{2, 3},
 					expected: map[int]change{
-						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
+						0:  spent{amount: 100 + spawnGas + spendGas},
 						10: earned{amount: 100},
 						11: same{},
 						12: same{},
@@ -600,15 +635,15 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
-						&spawnWallet{10},
-						&spendWallet{0, 10, 100},
-						&spendWallet{0, 11, 100},
+						&spawnTx{0},
+						&spawnTx{10},
+						&spendTx{0, 10, 100},
+						&spendTx{0, 11, 100},
 					},
-					gasLimit:    wallet.TotalGasSpawn + wallet.TotalGasSpend,
+					gasLimit:    uint64(spawnGas + spendGas),
 					ineffective: []int{1, 3},
 					expected: map[int]change{
-						0:  spent{amount: 100 + wallet.TotalGasSpawn + wallet.TotalGasSpend},
+						0:  spent{amount: 100 + spawnGas + spendGas},
 						10: earned{amount: 100},
 						11: same{},
 					},
@@ -620,9 +655,9 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
-						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
+						&spawnTx{0},
+						spendTx{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
+						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
 					},
 					ineffective: []int{1},
 					headers: map[int]struct{}{
@@ -630,8 +665,8 @@ func TestWorkflow(t *testing.T) {
 					},
 					expected: map[int]change{
 						0: spawned{
-							template: wallet.TemplateAddress,
-							change:   spent{amount: 100 + defaultGasPrice*(wallet.TotalGasSpawn+wallet.TotalGasSpend)},
+							template: template,
+							change:   spent{amount: 100 + defaultGasPrice*(spawnGas+spendGas)},
 						},
 						10: earned{amount: 100},
 						11: same{},
@@ -639,11 +674,11 @@ func TestWorkflow(t *testing.T) {
 				},
 				{
 					txs: []testTx{
-						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendWallet{0, 12, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
+						spendTx{0, 12, 100}.withNonce(core.Nonce{Counter: 3}),
 					},
 					expected: map[int]change{
-						0:  spent{amount: 2*100 + 2*defaultGasPrice*wallet.TotalGasSpend},
+						0:  spent{amount: 2*100 + 2*defaultGasPrice*spendGas},
 						10: earned{amount: 100},
 						12: earned{amount: 100},
 					},
@@ -655,20 +690,20 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
-						10: earned{amount: testBaseReward + wallet.TotalGasSpawn},
+						10: earned{amount: testBaseReward + spawnGas},
 					},
 				},
 				{
 					txs: []testTx{
-						&spawnWallet{10},
+						&spawnTx{10},
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
-						10: spawned{template: wallet.TemplateAddress},
+						10: spawned{template: template},
 					},
 				},
 			},
@@ -679,18 +714,18 @@ func TestWorkflow(t *testing.T) {
 				{
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
-						10: earned{amount: testBaseReward * 0.5},
-						11: earned{amount: testBaseReward * 0.5},
+						10: earned{amount: testBaseReward / 2},
+						11: earned{amount: testBaseReward / 2},
 					},
 				},
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
-						10: earned{amount: (testBaseReward + wallet.TotalGasSpawn) * 0.5},
-						11: earned{amount: (testBaseReward + wallet.TotalGasSpawn) * 0.5},
+						10: earned{amount: (testBaseReward + spawnGas) / 2},
+						11: earned{amount: (testBaseReward + spawnGas) / 2},
 					},
 				},
 			},
@@ -700,13 +735,13 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 				},
 				{
 					txs: []testTx{
-						spendWallet{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendWallet{0, 11, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
+						spendTx{0, 11, 100}.withNonce(core.Nonce{Counter: 3}),
 					},
 					ineffective: []int{0, 1},
 					headers:     map[int]struct{}{0: {}, 1: {}},
@@ -722,12 +757,12 @@ func TestWorkflow(t *testing.T) {
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnWallet{0},
+						&spawnTx{0},
 					},
 				},
 				{
 					txs: []testTx{
-						corruptSig{&spendWallet{0, 10, 100}},
+						corruptSig{&spendTx{0, 10, 100}},
 					},
 					ineffective: []int{0},
 				},
@@ -735,11 +770,7 @@ func TestWorkflow(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			tt := newTester(t).
-				addAccounts(funded).
-				applyGenesisWithBalance(balance).
-				addAccounts(total - funded).
-				withBaseReward(testBaseReward)
+			tt := genTester(t)
 
 			for i, layer := range tc.layers {
 				var txs []types.RawTx
@@ -768,9 +799,9 @@ func TestWorkflow(t *testing.T) {
 					}
 				}
 				for account, changes := range layer.expected {
-					prev, err := accounts.Get(tt.db, tt.addresses[account], lid.Sub(1))
+					prev, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid.Sub(1))
 					require.NoError(tt, err)
-					current, err := accounts.Get(tt.db, tt.addresses[account], lid)
+					current, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid)
 					require.NoError(tt, err)
 					changes.verify(tt, &prev, &current)
 				}
@@ -779,34 +810,70 @@ func TestWorkflow(t *testing.T) {
 	}
 }
 
+func TestWallets(t *testing.T) {
+	const (
+		funded  = 10  // number of funded accounts, included in genesis
+		total   = 100 // total number of accounts
+		balance = 1_000_000_000
+
+		defaultGasPrice = 1
+	)
+	t.Run("SingleSig", func(t *testing.T) {
+		testWallet(t, wallet.TemplateAddress, defaultGasPrice, wallet.TotalGasSpawn, wallet.TotalGasSpend, func(t *testing.T) *tester {
+			return newTester(t).
+				addSingleSig(funded).
+				applyGenesisWithBalance(balance).
+				addSingleSig(total - funded).
+				withBaseReward(testBaseReward)
+		})
+	})
+	t.Run("MultiSig23", func(t *testing.T) {
+		testWallet(t, multisig.TemplateAddress23, defaultGasPrice, multisig.TotalGasSpawn23, multisig.TotalGasSpend23, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultisig(funded, 2, 3, multisig.TemplateAddress23).
+				applyGenesisWithBalance(balance).
+				addMultisig(total-funded, 2, 3, multisig.TemplateAddress23).
+				withBaseReward(testBaseReward)
+		})
+	})
+	t.Run("MultiSig35", func(t *testing.T) {
+		testWallet(t, multisig.TemplateAddress35, defaultGasPrice, multisig.TotalGasSpawn35, multisig.TotalGasSpend35, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultisig(funded, 3, 5, multisig.TemplateAddress35).
+				applyGenesisWithBalance(balance).
+				addMultisig(total-funded, 3, 5, multisig.TemplateAddress35).
+				withBaseReward(testBaseReward)
+		})
+	})
+}
+
 func TestRandomTransfers(t *testing.T) {
 	tt := newTester(t).withSeed(101).
-		addAccounts(10).
+		addSingleSig(10).
+		addMultisig(10, 2, 3, multisig.TemplateAddress23).
+		addMultisig(10, 3, 5, multisig.TemplateAddress35).
 		applyGenesis()
 
 	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
-		notVerified(tt.spawnWalletAll()...), nil)
+		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 	for i := 0; i < 1000; i++ {
 		lid := types.NewLayerID(2).Add(uint32(i))
 		skipped, _, err := tt.Apply(testContext(lid),
-			notVerified(tt.randSendWalletN(20, 10)...), nil)
+			notVerified(tt.randSpendN(20, 10)...), nil)
 		require.NoError(tt, err)
 		require.Empty(tt, skipped)
 	}
 }
 
-func TestValidation(t *testing.T) {
-	tt := newTester(t).
-		addAccounts(1).
-		applyGenesis().
-		addAccounts(1)
+func testValidation(t *testing.T, tt *tester, template core.Address, spawnGas, spendGas uint64) {
 	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
-		notVerified(tt.selfSpawnWallet(0)), nil)
+		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
+	firstAddress := tt.accounts[0].getAddress()
 	zero := scale.U8(0)
 	one := scale.U8(1)
 	two := scale.U8(2)
@@ -819,26 +886,26 @@ func TestValidation(t *testing.T) {
 	}{
 		{
 			desc: "Spawn",
-			tx:   tt.selfSpawnWallet(1),
+			tx:   tt.selfSpawn(1),
 			header: &core.Header{
-				Principal: tt.addresses[1],
+				Principal: tt.accounts[1].getAddress(),
 				Method:    0,
-				Template:  wallet.TemplateAddress,
+				Template:  template,
 				GasPrice:  1,
-				MaxGas:    wallet.TotalGasSpawn,
+				MaxGas:    spawnGas,
 			},
 		},
 		{
 			desc: "Spend",
-			tx:   tt.spendWallet(0, 1, 100),
+			tx:   tt.spend(0, 1, 100),
 			header: &core.Header{
-				Principal: tt.addresses[0],
+				Principal: tt.accounts[0].getAddress(),
 				Method:    1,
-				Template:  wallet.TemplateAddress,
+				Template:  template,
 				GasPrice:  1,
 				Nonce:     core.Nonce{Counter: 1},
 				MaxSpend:  100,
-				MaxGas:    wallet.TotalGasSpend,
+				MaxGas:    spendGas,
 			},
 		},
 		{
@@ -853,22 +920,22 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			desc: "InvalidTemplate",
-			tx:   encodeFields(tt, &zero, &tt.addresses[0], &zero, &one),
+			tx:   encodeFields(tt, &zero, &firstAddress, &zero, &one),
 			err:  core.ErrMalformed,
 		},
 		{
 			desc: "UnknownTemplate",
-			tx:   encodeFields(tt, &zero, &tt.addresses[0], &zero, &tt.addresses[0]),
+			tx:   encodeFields(tt, &zero, &firstAddress, &zero, &firstAddress),
 			err:  core.ErrMalformed,
 		},
 		{
 			desc: "UnknownMethod",
-			tx:   encodeFields(tt, &zero, &tt.addresses[0], &two),
+			tx:   encodeFields(tt, &zero, &firstAddress, &two),
 			err:  core.ErrMalformed,
 		},
 		{
 			desc: "NotSpawned",
-			tx:   tt.spendWallet(1, 1, 100),
+			tx:   tt.spend(1, 1, 100),
 			err:  core.ErrNotSpawned,
 		},
 	} {
@@ -885,18 +952,42 @@ func TestValidation(t *testing.T) {
 	}
 }
 
+func TestValidation(t *testing.T) {
+	t.Run("SingleSig", func(t *testing.T) {
+		tt := newTester(t).
+			addSingleSig(1).
+			applyGenesis().
+			addSingleSig(1)
+		testValidation(t, tt, wallet.TemplateAddress, wallet.TotalGasSpawn, wallet.TotalGasSpend)
+	})
+	t.Run("MultiSig23", func(t *testing.T) {
+		tt := newTester(t).
+			addMultisig(1, 2, 3, multisig.TemplateAddress23).
+			applyGenesis().
+			addMultisig(1, 2, 3, multisig.TemplateAddress23)
+		testValidation(t, tt, multisig.TemplateAddress23, multisig.TotalGasSpawn23, multisig.TotalGasSpend23)
+	})
+	t.Run("MultiSig35", func(t *testing.T) {
+		tt := newTester(t).
+			addMultisig(1, 3, 5, multisig.TemplateAddress35).
+			applyGenesis().
+			addMultisig(1, 3, 5, multisig.TemplateAddress35)
+		testValidation(t, tt, multisig.TemplateAddress35, multisig.TotalGasSpawn35, multisig.TotalGasSpend35)
+	})
+}
+
 func FuzzParse(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
-		tt := newTester(t).addAccounts(1).applyGenesis()
+		tt := newTester(t).addSingleSig(1).applyGenesis()
 		req := tt.Validation(types.NewRawTx(data))
 		req.Parse()
 	})
 }
 
 func BenchmarkValidation(b *testing.B) {
-	tt := newTester(b).addAccounts(2).applyGenesis()
+	tt := newTester(b).addSingleSig(2).applyGenesis()
 	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
-		notVerified(tt.selfSpawnWallet(0)), nil)
+		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -917,23 +1008,23 @@ func BenchmarkValidation(b *testing.B) {
 	}
 
 	b.Run("SpawnWallet", func(b *testing.B) {
-		bench(b, tt.selfSpawnWallet(1))
+		bench(b, tt.selfSpawn(1))
 	})
 
 	b.Run("SpendWallet", func(b *testing.B) {
-		bench(b, tt.spendWallet(0, 1, 10))
+		bench(b, tt.spend(0, 1, 10))
 	})
 }
 
 func TestStateHashFromUpdatedAccounts(t *testing.T) {
-	tt := newTester(t).addAccounts(10).applyGenesis()
+	tt := newTester(t).addSingleSig(10).applyGenesis()
 
 	lid := types.NewLayerID(1)
 	skipped, _, err := tt.Apply(testContext(lid), notVerified(
-		tt.selfSpawnWallet(0),
-		tt.selfSpawnWallet(1),
-		tt.spendWallet(0, 2, 100),
-		tt.spendWallet(1, 4, 100),
+		tt.selfSpawn(0),
+		tt.selfSpawn(1),
+		tt.spend(0, 2, 100),
+		tt.spend(1, 4, 100),
 	), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -942,7 +1033,7 @@ func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
 	for _, pos := range []int{0, 1, 2, 4} {
-		account, err := accounts.Get(tt.db, tt.addresses[pos], lid)
+		account, err := accounts.Get(tt.db, tt.accounts[pos].getAddress(), lid)
 		require.NoError(t, err)
 		account.EncodeScale(encoder)
 	}
@@ -964,16 +1055,16 @@ func BenchmarkWallet(b *testing.B) {
 
 func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
-		addAccounts(accounts).applyGenesis().withSeed(101)
+		addSingleSig(accounts).applyGenesis().withSeed(101)
 	lid := types.NewLayerID(1)
 	skipped, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
-		notVerified(tt.spawnWalletAll()...), nil)
+		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
 	var layers [][]types.Transaction
 	for i := 0; i < b.N; i++ {
-		raw := tt.randSendWalletN(n, 10)
+		raw := tt.randSpendN(n, 10)
 		parsed := make([]types.Transaction, 0, len(raw))
 		for _, tx := range raw {
 			val := tt.Validation(tx)

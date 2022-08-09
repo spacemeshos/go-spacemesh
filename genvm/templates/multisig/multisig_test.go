@@ -131,6 +131,14 @@ func BenchmarkVerify(b *testing.B) {
 	}
 }
 
+func FuzzVerify(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		ms := MultiSig{k: 2, PublicKeys: make([]core.PublicKey, 3)}
+		dec := scale.NewDecoder(bytes.NewReader(data))
+		ms.Verify(&core.Context{}, data, dec)
+	})
+}
+
 func pullReverse(k int) (rst []int) {
 	for i := k - 1; len(rst) > 0; i-- {
 		rst = append(rst, i)
