@@ -39,7 +39,7 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, ex
 		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel)
 	}
 
-	if uint(nipost.PostMetadata.LabelsPerUnit) < v.cfg.LabelsPerUnit {
+	if nipost.PostMetadata.LabelsPerUnit < uint64(v.cfg.LabelsPerUnit) {
 		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.cfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit)
 	}
 
