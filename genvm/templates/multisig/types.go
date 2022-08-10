@@ -6,7 +6,7 @@ import "github.com/spacemeshos/go-spacemesh/genvm/core"
 
 // SpawnArguments contains a collection with PublicKeys.
 type SpawnArguments struct {
-	PublicKeys []core.PublicKey `scale:"type=StructArray"`
+	PublicKeys []core.PublicKey
 }
 
 // Signatures is a collections of parts that must satisfy multisig

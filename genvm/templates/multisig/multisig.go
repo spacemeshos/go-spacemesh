@@ -14,7 +14,7 @@ import (
 // MultiSig K/N template.
 type MultiSig struct {
 	k          uint8
-	PublicKeys []core.PublicKey `scale:"type=StructArray"`
+	PublicKeys []core.PublicKey
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.

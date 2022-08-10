@@ -20,6 +20,8 @@ const (
 	TotalGasSpawn35 = 300
 	// TotalGasSpend35 is consumed from principal in case of successful spend.
 	TotalGasSpend35 = 150
+
+	keysLimit = 10
 )
 
 const (
@@ -35,12 +37,12 @@ func init() {
 // Register template.
 func Register(registry *registry.Registry) {
 	registry.Register(TemplateAddress23, &handler{
-		k: 2, n: 3, address: TemplateAddress23,
+		k: 2, address: TemplateAddress23,
 		totalGasSpawn: TotalGasSpawn23,
 		totalGasSpend: TotalGasSpend23,
 	})
 	registry.Register(TemplateAddress35, &handler{
-		k: 3, n: 5, address: TemplateAddress35,
+		k: 3, address: TemplateAddress35,
 		totalGasSpawn: TotalGasSpawn35,
 		totalGasSpend: TotalGasSpend35,
 	})
@@ -65,7 +67,6 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 	switch method {
 	case methodSpawn:
 		var p SpawnPayload
-		p.Arguments.PublicKeys = make([]core.PublicKey, h.n)
 		if _, err = p.DecodeScale(decoder); err != nil {
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
 			return
@@ -99,7 +100,7 @@ func (h *handler) Init(method uint8, args any, state []byte) (core.Template, err
 		}, nil
 	}
 	decoder := scale.NewDecoder(bytes.NewReader(state))
-	ms := MultiSig{k: h.k, PublicKeys: make([]core.PublicKey, h.n)}
+	ms := MultiSig{k: h.k}
 	if _, err := ms.DecodeScale(decoder); err != nil {
 		return nil, fmt.Errorf("%w: malformed state %s", core.ErrInternal, err.Error())
 	}
@@ -112,6 +113,9 @@ func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) er
 	case methodSpawn:
 		if err := ctx.Consume(h.totalGasSpawn); err != nil {
 			return err
+		}
+		if len(args.(*SpawnArguments).PublicKeys) > keysLimit {
+			return fmt.Errorf("multisig supports atmost %d key", keysLimit)
 		}
 		if err := ctx.Spawn(h.address, args); err != nil {
 			return err

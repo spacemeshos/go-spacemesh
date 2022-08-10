@@ -33,14 +33,14 @@ require (
 	github.com/spacemeshos/api/release/go v1.4.1-0.20220701043434-46fb7f017a39
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
-	github.com/spacemeshos/go-scale v0.0.0-20220805102130-f990f881842a
+	github.com/spacemeshos/go-scale v0.0.0-20220810053417-d1a076cd7b86
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20220617165016-4e54cb497e8f
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.0
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.1
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
@@ -188,7 +188,7 @@ require (
 	gopkg.in/ini.v1 v1.51.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.0 // indirect
 	k8s.io/component-base v0.24.0 // indirect
 	k8s.io/klog/v2 v2.60.1 // indirect
