@@ -106,7 +106,7 @@ type ActivationTxHeader struct {
 
 	id *ATXID // non-exported cache of the ATXID
 
-	// NOTE(dshulyak) this is important to prevent accidental state reads
+	// TODO(dshulyak) this is important to prevent accidental state reads
 	// before this field is set. reading empty data could lead to disastrous bugs.
 	verified       bool
 	baseTickHeight uint64
@@ -149,19 +149,16 @@ func (atxh *ActivationTxHeader) GetWeight() uint64 {
 }
 
 // BaseTickHeight is a tick height of the positional atx.
-// Will panic if read before Verify is called.
 func (atxh *ActivationTxHeader) BaseTickHeight() uint64 {
 	return atxh.baseTickHeight
 }
 
 // TickCount returns tick count from from poet proof attached to the atx.
-// Will panic if read before Verify is called.
 func (atxh *ActivationTxHeader) TickCount() uint64 {
 	return atxh.tickCount
 }
 
 // TickHeight returns a sum of base tick height and tick count.
-// Will panic if read before Verify is called.
 func (atxh *ActivationTxHeader) TickHeight() uint64 {
 	return atxh.baseTickHeight + atxh.tickCount
 }
@@ -171,11 +168,6 @@ func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
 	atxh.verified = true
 	atxh.baseTickHeight = baseTickHeight
 	atxh.tickCount = tickCount
-}
-
-// Verified is true after Verify was called.
-func (atxh *ActivationTxHeader) Verified() bool {
-	return atxh.verified
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -269,7 +261,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", uint32(atx.PubLayerID.GetEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	encoder.AddUint64("sequence_number", atx.Sequence)
-	if atx.Verified() {
+	if atx.verified {
 		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
 		encoder.AddUint64("tick_count", atx.tickCount)
 		encoder.AddUint64("weight", atx.GetWeight())
