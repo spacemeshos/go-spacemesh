@@ -26,7 +26,10 @@ const (
 	// TotalGasSpend3 is consumed from principal in case of successful spend.
 	TotalGasSpend3 = 300
 
-	keysLimit = 10
+	// StorageCostPerKey gets multipled by an N and added to the cost of the spawn transaction.
+	StorageCostPerKey = 10
+	// StorageLimit is a limit of keys that can be used when multisig is spawned.
+	StorageLimit = 10
 )
 
 const (
@@ -86,7 +89,7 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 		}
 		args = &p.Arguments
 		header.GasPrice = p.GasPrice
-		header.MaxGas = h.totalGasSpawn
+		header.MaxGas = h.totalGasSpawn + StorageCostPerKey*StorageLimit
 	case methodSpend:
 		var p SpendPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
@@ -124,11 +127,12 @@ func (h *handler) Init(method uint8, args any, state []byte) (core.Template, err
 func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case methodSpawn:
-		if err := ctx.Consume(h.totalGasSpawn); err != nil {
+		n := len(args.(*SpawnArguments).PublicKeys)
+		if err := ctx.Consume(h.totalGasSpawn + uint64(StorageCostPerKey*n)); err != nil {
 			return err
 		}
-		if len(args.(*SpawnArguments).PublicKeys) > keysLimit {
-			return fmt.Errorf("multisig supports atmost %d key", keysLimit)
+		if n > StorageLimit {
+			return fmt.Errorf("multisig supports atmost %d key", StorageLimit)
 		}
 		if err := ctx.Spawn(h.address, args); err != nil {
 			return err

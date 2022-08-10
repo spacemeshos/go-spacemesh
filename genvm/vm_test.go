@@ -387,7 +387,7 @@ func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
 	}
 }
 
-func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, spendGas int, genTester func(t *testing.T) *tester) {
+func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, maxSpawnGas, spendGas int, genTester func(t *testing.T) *tester) {
 	type layertc struct {
 		txs      []testTx
 		rewards  []reward
@@ -597,7 +597,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 				{
 					txs: []testTx{
 						&spawnTx{0},
-						&spendTx{0, 11, uint64(spawnGas) * uint64(defaultGasPrice)}, // send enough funds to cover spawn
+						&spendTx{0, 11, uint64(maxSpawnGas) * uint64(defaultGasPrice)}, // send enough funds to cover spawn, but no spend
 						&spawnTx{11},
 						&spendTx{11, 12, 1},
 					},
@@ -819,7 +819,7 @@ func TestWallets(t *testing.T) {
 		defaultGasPrice = 1
 	)
 	t.Run("SingleSig", func(t *testing.T) {
-		testWallet(t, wallet.TemplateAddress, defaultGasPrice, wallet.TotalGasSpawn, wallet.TotalGasSpend, func(t *testing.T) *tester {
+		testWallet(t, wallet.TemplateAddress, defaultGasPrice, wallet.TotalGasSpawn, wallet.TotalGasSpawn, wallet.TotalGasSpend, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(funded).
 				applyGenesisWithBalance(balance).
@@ -828,29 +828,32 @@ func TestWallets(t *testing.T) {
 		})
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
-		testWallet(t, multisig.TemplateAddress1, defaultGasPrice, multisig.TotalGasSpawn1, multisig.TotalGasSpend1, func(t *testing.T) *tester {
+		const n = 3
+		testWallet(t, multisig.TemplateAddress1, defaultGasPrice, multisig.TotalGasSpawn1+multisig.StorageCostPerKey*n, multisig.TotalGasSpawn1+multisig.StorageCostPerKey*multisig.StorageLimit, multisig.TotalGasSpend1, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 1, 3, multisig.TemplateAddress1).
+				addMultisig(funded, 1, n, multisig.TemplateAddress1).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 1, 3, multisig.TemplateAddress1).
+				addMultisig(total-funded, 1, n, multisig.TemplateAddress1).
 				withBaseReward(testBaseReward)
 		})
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
-		testWallet(t, multisig.TemplateAddress2, defaultGasPrice, multisig.TotalGasSpawn2, multisig.TotalGasSpend2, func(t *testing.T) *tester {
+		const n = 5
+		testWallet(t, multisig.TemplateAddress2, defaultGasPrice, multisig.TotalGasSpawn2+multisig.StorageCostPerKey*n, multisig.TotalGasSpawn2+multisig.StorageCostPerKey*multisig.StorageLimit, multisig.TotalGasSpend2, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 2, 5, multisig.TemplateAddress2).
+				addMultisig(funded, 2, n, multisig.TemplateAddress2).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 2, 5, multisig.TemplateAddress2).
+				addMultisig(total-funded, 2, n, multisig.TemplateAddress2).
 				withBaseReward(testBaseReward)
 		})
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
-		testWallet(t, multisig.TemplateAddress3, defaultGasPrice, multisig.TotalGasSpawn3, multisig.TotalGasSpend3, func(t *testing.T) *tester {
+		const n = 10
+		testWallet(t, multisig.TemplateAddress3, defaultGasPrice, multisig.TotalGasSpawn3+multisig.StorageCostPerKey*n, multisig.TotalGasSpawn3+multisig.StorageCostPerKey*multisig.StorageLimit, multisig.TotalGasSpend3, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 3, 10, multisig.TemplateAddress3).
+				addMultisig(funded, 3, n, multisig.TemplateAddress3).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 3, 10, multisig.TemplateAddress3).
+				addMultisig(total-funded, 3, n, multisig.TemplateAddress3).
 				withBaseReward(testBaseReward)
 		})
 	})
@@ -877,7 +880,7 @@ func TestRandomTransfers(t *testing.T) {
 	}
 }
 
-func testValidation(t *testing.T, tt *tester, template core.Address, spawnGas, spendGas uint64) {
+func testValidation(t *testing.T, tt *tester, template core.Address, maxSpawnGas, maxSpendGas uint64) {
 	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -902,7 +905,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address, spawnGas, s
 				Method:    0,
 				Template:  template,
 				GasPrice:  1,
-				MaxGas:    spawnGas,
+				MaxGas:    maxSpawnGas,
 			},
 		},
 		{
@@ -915,7 +918,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address, spawnGas, s
 				GasPrice:  1,
 				Nonce:     core.Nonce{Counter: 1},
 				MaxSpend:  100,
-				MaxGas:    spendGas,
+				MaxGas:    maxSpendGas,
 			},
 		},
 		{
@@ -975,21 +978,21 @@ func TestValidation(t *testing.T) {
 			addMultisig(1, 1, 3, multisig.TemplateAddress1).
 			applyGenesis().
 			addMultisig(1, 1, 3, multisig.TemplateAddress1)
-		testValidation(t, tt, multisig.TemplateAddress1, multisig.TotalGasSpawn1, multisig.TotalGasSpend1)
+		testValidation(t, tt, multisig.TemplateAddress1, multisig.TotalGasSpawn1+multisig.StorageCostPerKey*multisig.StorageLimit, multisig.TotalGasSpend1)
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		tt := newTester(t).
 			addMultisig(1, 2, 5, multisig.TemplateAddress2).
 			applyGenesis().
 			addMultisig(1, 2, 5, multisig.TemplateAddress2)
-		testValidation(t, tt, multisig.TemplateAddress2, multisig.TotalGasSpawn2, multisig.TotalGasSpend2)
+		testValidation(t, tt, multisig.TemplateAddress2, multisig.TotalGasSpawn2+multisig.StorageCostPerKey*multisig.StorageLimit, multisig.TotalGasSpend2)
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		tt := newTester(t).
 			addMultisig(1, 3, 10, multisig.TemplateAddress3).
 			applyGenesis().
 			addMultisig(1, 3, 10, multisig.TemplateAddress3)
-		testValidation(t, tt, multisig.TemplateAddress3, multisig.TotalGasSpawn3, multisig.TotalGasSpend3)
+		testValidation(t, tt, multisig.TemplateAddress3, multisig.TotalGasSpawn3+multisig.StorageCostPerKey*multisig.StorageLimit, multisig.TotalGasSpend3)
 	})
 }
 

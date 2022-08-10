@@ -17,7 +17,7 @@ type MultiSig struct {
 	PublicKeys []core.PublicKey
 }
 
-// MaxSpend returns amount specified in the SpendArguments for Spend method.
+// MaxSpend returns amount specified in the SpendArguments.
 func (ms *MultiSig) MaxSpend(method uint8, args any) (uint64, error) {
 	switch method {
 	case methodSpawn:
