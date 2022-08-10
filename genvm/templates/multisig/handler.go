@@ -11,15 +11,20 @@ import (
 )
 
 const (
-	// TotalGasSpawn23 is consumed from principal in case of successful spawn.
-	TotalGasSpawn23 = 200
-	// TotalGasSpend23 is consumed from principal in case of successful spend.
-	TotalGasSpend23 = 100
+	// TotalGasSpawn1 is consumed from principal in case of successful spawn.
+	TotalGasSpawn1 = 100
+	// TotalGasSpend1 is consumed from principal in case of successful spend.
+	TotalGasSpend1 = 100
 
-	// TotalGasSpawn35 is consumed from principal in case of successful spawn.
-	TotalGasSpawn35 = 300
-	// TotalGasSpend35 is consumed from principal in case of successful spend.
-	TotalGasSpend35 = 150
+	// TotalGasSpawn2 is consumed from principal in case of successful spawn.
+	TotalGasSpawn2 = 200
+	// TotalGasSpend2 is consumed from principal in case of successful spend.
+	TotalGasSpend2 = 200
+
+	// TotalGasSpawn3 is consumed from principal in case of successful spawn.
+	TotalGasSpawn3 = 300
+	// TotalGasSpend3 is consumed from principal in case of successful spend.
+	TotalGasSpend3 = 300
 
 	keysLimit = 10
 )
@@ -30,30 +35,38 @@ const (
 )
 
 func init() {
-	TemplateAddress23[len(TemplateAddress23)-1] = 2
-	TemplateAddress35[len(TemplateAddress35)-1] = 3
+	TemplateAddress1[len(TemplateAddress1)-1] = 2
+	TemplateAddress2[len(TemplateAddress2)-1] = 3
+	TemplateAddress3[len(TemplateAddress3)-1] = 4
 }
 
 // Register template.
 func Register(registry *registry.Registry) {
-	registry.Register(TemplateAddress23, &handler{
-		k: 2, address: TemplateAddress23,
-		totalGasSpawn: TotalGasSpawn23,
-		totalGasSpend: TotalGasSpend23,
+	registry.Register(TemplateAddress1, &handler{
+		k: 1, address: TemplateAddress1,
+		totalGasSpawn: TotalGasSpawn1,
+		totalGasSpend: TotalGasSpend1,
 	})
-	registry.Register(TemplateAddress35, &handler{
-		k: 3, address: TemplateAddress35,
-		totalGasSpawn: TotalGasSpawn35,
-		totalGasSpend: TotalGasSpend35,
+	registry.Register(TemplateAddress2, &handler{
+		k: 2, address: TemplateAddress2,
+		totalGasSpawn: TotalGasSpawn2,
+		totalGasSpend: TotalGasSpend2,
+	})
+	registry.Register(TemplateAddress3, &handler{
+		k: 3, address: TemplateAddress3,
+		totalGasSpawn: TotalGasSpawn3,
+		totalGasSpend: TotalGasSpend3,
 	})
 }
 
 var (
 	_ (core.Handler) = (*handler)(nil)
-	// TemplateAddress23 is an address of the 2/3 multisig template.
-	TemplateAddress23 core.Address
-	// TemplateAddress35 is an address of the 3/5 multisig template.
-	TemplateAddress35 core.Address
+	// TemplateAddress1 is an address of the 1/N multisig template.
+	TemplateAddress1 core.Address
+	// TemplateAddress2 is an address of the 2/N multisig template.
+	TemplateAddress2 core.Address
+	// TemplateAddress3 is an address of the 3/N multisig template.
+	TemplateAddress3 core.Address
 )
 
 type handler struct {

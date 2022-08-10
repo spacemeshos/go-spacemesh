@@ -159,7 +159,7 @@ func (t *tester) addMultisig(total, k, n int, template core.Address) *tester {
 		t.accounts = append(t.accounts, &multisigAccount{
 			k:        k,
 			pks:      pks,
-			address:  sdkmultisig.Address(pubs...),
+			address:  sdkmultisig.Address(template, pubs...),
 			template: template,
 		})
 		t.nonces = append(t.nonces, core.Nonce{})
@@ -827,21 +827,30 @@ func TestWallets(t *testing.T) {
 				withBaseReward(testBaseReward)
 		})
 	})
-	t.Run("MultiSig23", func(t *testing.T) {
-		testWallet(t, multisig.TemplateAddress23, defaultGasPrice, multisig.TotalGasSpawn23, multisig.TotalGasSpend23, func(t *testing.T) *tester {
+	t.Run("MultiSig13", func(t *testing.T) {
+		testWallet(t, multisig.TemplateAddress1, defaultGasPrice, multisig.TotalGasSpawn1, multisig.TotalGasSpend1, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 2, 3, multisig.TemplateAddress23).
+				addMultisig(funded, 1, 3, multisig.TemplateAddress1).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 2, 3, multisig.TemplateAddress23).
+				addMultisig(total-funded, 1, 3, multisig.TemplateAddress1).
 				withBaseReward(testBaseReward)
 		})
 	})
-	t.Run("MultiSig35", func(t *testing.T) {
-		testWallet(t, multisig.TemplateAddress35, defaultGasPrice, multisig.TotalGasSpawn35, multisig.TotalGasSpend35, func(t *testing.T) *tester {
+	t.Run("MultiSig25", func(t *testing.T) {
+		testWallet(t, multisig.TemplateAddress2, defaultGasPrice, multisig.TotalGasSpawn2, multisig.TotalGasSpend2, func(t *testing.T) *tester {
 			return newTester(t).
-				addMultisig(funded, 3, 5, multisig.TemplateAddress35).
+				addMultisig(funded, 2, 5, multisig.TemplateAddress2).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 3, 5, multisig.TemplateAddress35).
+				addMultisig(total-funded, 2, 5, multisig.TemplateAddress2).
+				withBaseReward(testBaseReward)
+		})
+	})
+	t.Run("MultiSig310", func(t *testing.T) {
+		testWallet(t, multisig.TemplateAddress3, defaultGasPrice, multisig.TotalGasSpawn3, multisig.TotalGasSpend3, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultisig(funded, 3, 10, multisig.TemplateAddress3).
+				applyGenesisWithBalance(balance).
+				addMultisig(total-funded, 3, 10, multisig.TemplateAddress3).
 				withBaseReward(testBaseReward)
 		})
 	})
@@ -850,8 +859,9 @@ func TestWallets(t *testing.T) {
 func TestRandomTransfers(t *testing.T) {
 	tt := newTester(t).withSeed(101).
 		addSingleSig(10).
-		addMultisig(10, 2, 3, multisig.TemplateAddress23).
-		addMultisig(10, 3, 5, multisig.TemplateAddress35).
+		addMultisig(10, 1, 3, multisig.TemplateAddress1).
+		addMultisig(10, 2, 5, multisig.TemplateAddress2).
+		addMultisig(10, 3, 10, multisig.TemplateAddress3).
 		applyGenesis()
 
 	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
@@ -960,19 +970,26 @@ func TestValidation(t *testing.T) {
 			addSingleSig(1)
 		testValidation(t, tt, wallet.TemplateAddress, wallet.TotalGasSpawn, wallet.TotalGasSpend)
 	})
-	t.Run("MultiSig23", func(t *testing.T) {
+	t.Run("MultiSig13", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 2, 3, multisig.TemplateAddress23).
+			addMultisig(1, 1, 3, multisig.TemplateAddress1).
 			applyGenesis().
-			addMultisig(1, 2, 3, multisig.TemplateAddress23)
-		testValidation(t, tt, multisig.TemplateAddress23, multisig.TotalGasSpawn23, multisig.TotalGasSpend23)
+			addMultisig(1, 1, 3, multisig.TemplateAddress1)
+		testValidation(t, tt, multisig.TemplateAddress1, multisig.TotalGasSpawn1, multisig.TotalGasSpend1)
 	})
-	t.Run("MultiSig35", func(t *testing.T) {
+	t.Run("MultiSig25", func(t *testing.T) {
 		tt := newTester(t).
-			addMultisig(1, 3, 5, multisig.TemplateAddress35).
+			addMultisig(1, 2, 5, multisig.TemplateAddress2).
 			applyGenesis().
-			addMultisig(1, 3, 5, multisig.TemplateAddress35)
-		testValidation(t, tt, multisig.TemplateAddress35, multisig.TotalGasSpawn35, multisig.TotalGasSpend35)
+			addMultisig(1, 2, 5, multisig.TemplateAddress2)
+		testValidation(t, tt, multisig.TemplateAddress2, multisig.TotalGasSpawn2, multisig.TotalGasSpend2)
+	})
+	t.Run("MultiSig310", func(t *testing.T) {
+		tt := newTester(t).
+			addMultisig(1, 3, 10, multisig.TemplateAddress3).
+			applyGenesis().
+			addMultisig(1, 3, 10, multisig.TemplateAddress3)
+		testValidation(t, tt, multisig.TemplateAddress3, multisig.TotalGasSpawn3, multisig.TotalGasSpend3)
 	})
 }
 
