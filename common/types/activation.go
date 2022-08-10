@@ -359,7 +359,7 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
 	Challenge     []byte
-	BitsPerLabel  byte
+	BitsPerLabel  uint8
 	LabelsPerUnit uint64
 	K1            uint32
 	K2            uint32
