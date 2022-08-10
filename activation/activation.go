@@ -53,6 +53,7 @@ type atxHandler interface {
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
+	GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err error)
 }
 
 type signer interface {
@@ -78,6 +79,7 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 	MinGas() uint64
 	SetMinGas(value uint64)
+	GetEpochStatus() ([]types.EpochResult, error)
 }
 
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
@@ -430,6 +432,56 @@ func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
 
+// GetEpochStatus returns the status of the current and next epoch.
+func (b *Builder) GetEpochStatus() ([]types.EpochResult, error) {
+	currentEpochStatus, err := b.getEpochStatus(b.currentEpoch())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current epoch status: %v", err)
+	}
+	nextEpochStatus, err := b.getEpochStatus(b.currentEpoch() + 1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next epoch status: %v", err)
+	}
+	return []types.EpochResult{*currentEpochStatus, *nextEpochStatus}, nil
+}
+
+func (b *Builder) getEpochStatus(epochNum types.EpochID) (*types.EpochResult, error) {
+	ids, err := b.atxHandler.GetEpochAtxs(epochNum)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get epoch atxs: %v", err)
+	}
+	if len(ids) == 0 {
+		// no data in db. probably generating of post in progress.
+		status := b.postSetupProvider.Status()
+		switch status.State {
+		case postSetupStateNotStarted, postSetupStateError:
+			return &types.EpochResult{
+				Epoch:  epochNum,
+				Status: types.EpochStatusPostNotFound,
+			}, nil
+		case postSetupStateInProgress:
+			return &types.EpochResult{
+				Epoch:  epochNum,
+				Status: types.EpochStatusInitializing,
+			}, nil
+		case postSetupStateComplete:
+			// if no atx in db and setup is complete - still not receive activation tx.
+			return &types.EpochResult{
+				Epoch:  epochNum,
+				Status: types.EpochStatusWaiting,
+			}, nil
+		default:
+			return nil, fmt.Errorf("unexpected post setup state: %v", status.State)
+		}
+	}
+	// todo 3281 EpochStatusGenerating is not used anymore.
+
+	return &types.EpochResult{
+		Epoch:  epochNum,
+		Status: types.EpochStatusSmeshing,
+	}, nil
+}
+
 func getNIPostKey() []byte {
 	return []byte("NIPost")
 }
@@ -601,7 +653,8 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 }
 
 // GetPositioningAtxInfo return the following details about the latest atx, to be used as a positioning atx:
-// 	atxID, pubLayerID, endTick
+//
+//	atxID, pubLayerID, endTick
 func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
 	if id, err := b.atxHandler.GetPosAtxID(); err != nil {
 		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("cannot find pos atx: %v", err)
