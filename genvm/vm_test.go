@@ -659,23 +659,23 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 						spendTx{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
 						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
 					},
-					ineffective: []int{1},
+					ineffective: []int{2},
 					headers: map[int]struct{}{
-						1: {},
+						2: {},
 					},
 					expected: map[int]change{
 						0: spawned{
 							template: template,
 							change:   spent{amount: 100 + defaultGasPrice*(spawnGas+spendGas)},
 						},
-						10: earned{amount: 100},
-						11: same{},
+						10: same{},
+						11: earned{amount: 100},
 					},
 				},
 				{
 					txs: []testTx{
-						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendTx{0, 12, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendTx{0, 12, 100}.withNonce(core.Nonce{Counter: 6}),
 					},
 					expected: map[int]change{
 						0:  spent{amount: 2*100 + 2*defaultGasPrice*spendGas},
@@ -736,6 +736,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 				{
 					txs: []testTx{
 						&spawnTx{0},
+						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 5}),
 					},
 				},
 				{

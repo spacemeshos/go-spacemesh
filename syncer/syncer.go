@@ -114,7 +114,7 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beac
 		fetcher:       fetcher,
 		patrol:        patrol,
 		syncTimer:     time.NewTicker(conf.SyncInterval),
-		validateTimer: time.NewTicker(conf.SyncInterval),
+		validateTimer: time.NewTicker(conf.SyncInterval * 3),
 		awaitSyncedCh: make([]chan struct{}, 0),
 		forceSyncCh:   make(chan struct{}, 1),
 		shutdownCtx:   shutdownCtx,
@@ -162,8 +162,8 @@ func (s *Syncer) ListenToATXGossip() bool {
 
 // IsSynced returns true if the node is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
-	// TODO: at startup, ctx contains no sessionId here
 	res := s.getSyncState() == synced
+	// TODO: downgrade log after syncer stablized.
 	s.logger.WithContext(ctx).With().Info("node sync state",
 		log.Bool("synced", res),
 		log.Stringer("current", s.ticker.GetCurrentLayer()),

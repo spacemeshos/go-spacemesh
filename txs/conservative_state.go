@@ -177,9 +177,8 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 		log.Int("num_txs_applied", len(results)),
 	)
 	t0 := time.Now()
-	if _, errs := cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(),
-		results, ineffective); len(errs) > 0 {
-		return errs[0]
+	if err = cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(), results, ineffective); err != nil {
+		return err
 	}
 	cacheApplyDuration.Observe(float64(time.Since(t0)))
 	return nil

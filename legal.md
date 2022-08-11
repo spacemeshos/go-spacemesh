@@ -4,12 +4,12 @@ By participating in the program, you agree to these terms and conditions.
 
 The bounty program is an experimental and discretionary rewards program to
 encourage and reward those who are helping to improve the platform. It is not
-a competition. 
+a competition.
 
 You should know that we can cancel or amend the terms of the
 program at any time, and we have the sole discretion to determine whether or
 not the criteria to qualifications for compensation hereunder are met in a
-satisfactory manner. 
+satisfactory manner.
 
 When compensated in Ethereum cryptocoins, the amount will be determined according to the $ value of the cryptocoin on the
 date of payment.

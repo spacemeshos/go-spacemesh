@@ -52,7 +52,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 		pre.bestVRF = shaUint32
 		// store lowest-order bit as coin toss value
 		pre.coinflip = sha[0]&byte(1) == byte(1)
-		pre.logger.With().Info("got new best vrf value",
+		pre.logger.With().Debug("got new best vrf value",
 			log.String("sender_id", pub.ShortString()),
 			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)),
 			log.Bool("weak_coin", pre.coinflip))
@@ -82,7 +82,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 func (pre *preRoundTracker) CanProveValue(value types.ProposalID) bool {
 	// at least threshold occurrences of a given value
 	countStatus := pre.tracker.CountStatus(value)
-	pre.logger.With().Debug("preround tracker count for blockid",
+	pre.logger.With().Debug("preround tracker count",
 		value,
 		log.Uint32("count", countStatus),
 		log.Uint32("threshold", pre.threshold))
