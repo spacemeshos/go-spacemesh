@@ -4,9 +4,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeysLimits(t *testing.T) {
@@ -37,6 +38,5 @@ func TestKeysLimits(t *testing.T) {
 				})
 			}
 		})
-
 	}
 }

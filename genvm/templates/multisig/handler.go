@@ -26,7 +26,7 @@ const (
 	// TotalGasSpend3 is consumed from principal in case of successful spend.
 	TotalGasSpend3 = 300
 
-	// StorageCostPerKey gets multipled by an N and added to the cost of the spawn transaction.
+	// StorageCostPerKey is multiplied by an N and added to the cost of the spawn transaction.
 	StorageCostPerKey = 10
 	// StorageLimit is a limit of keys that can be used when multisig is spawned.
 	StorageLimit = 10
