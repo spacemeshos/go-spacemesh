@@ -327,7 +327,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
 				logger.With().Info("syncing atxs for epoch", epoch)
 				if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-					s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
+					logger.With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
 					return false
 				}
 				s.setLastSyncedATXs(epoch)
@@ -342,11 +342,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 				logger.With().Warning("failed to fetch missing layer", missing, log.Err(err))
 				return false
 			}
-		}
-		// no need to sync a layer that's already processed (advanced by the hare)
-		processed := s.mesh.ProcessedLayer()
-		if s.getLastSyncedLayer().Before(processed) {
-			s.setLastSyncedLayer(processed)
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {

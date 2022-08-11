@@ -49,7 +49,7 @@ type poetHandler interface {
 
 type meshProvider interface {
 	ProcessedLayer() types.LayerID
-	SetZeroBlockLayer(types.LayerID) error
+	SetZeroBlockLayer(context.Context, types.LayerID) error
 }
 
 type host interface {

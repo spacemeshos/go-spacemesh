@@ -478,11 +478,12 @@ func TestMesh_Revert(t *testing.T) {
 
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
-	tm.setLatestLayer(types.NewLayerID(3))
-	tm.setLatestLayer(types.NewLayerID(7))
-	tm.setLatestLayer(types.NewLayerID(10))
-	tm.setLatestLayer(types.NewLayerID(1))
-	tm.setLatestLayer(types.NewLayerID(2))
+	lg := logtest.New(t)
+	tm.setLatestLayer(lg, types.NewLayerID(3))
+	tm.setLatestLayer(lg, types.NewLayerID(7))
+	tm.setLatestLayer(lg, types.NewLayerID(10))
+	tm.setLatestLayer(lg, types.NewLayerID(1))
+	tm.setLatestLayer(lg, types.NewLayerID(2))
 	assert.Equal(t, types.NewLayerID(10), tm.LatestLayer(), "wrong layer")
 }
 

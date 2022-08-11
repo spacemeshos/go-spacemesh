@@ -122,14 +122,14 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
 
-	msh.setLatestLayer(gLid)
+	msh.setLatestLayer(msh.logger, gLid)
 	msh.processedLayer.Store(gLid)
 	msh.setLatestLayerInState(gLid)
 	return msh, nil
 }
 
 func (msh *Mesh) recoverFromDB(latest types.LayerID) {
-	msh.setLatestLayer(latest)
+	msh.setLatestLayer(msh.logger, latest)
 
 	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
@@ -231,7 +231,7 @@ func (msh *Mesh) MissingLayer() types.LayerID {
 }
 
 // setLatestLayer sets the latest layer we saw from the network.
-func (msh *Mesh) setLatestLayer(lid types.LayerID) {
+func (msh *Mesh) setLatestLayer(logger log.Log, lid types.LayerID) {
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: lid,
 		Status:  events.LayerStatusTypeUnknown,
@@ -243,7 +243,7 @@ func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 		}
 		if msh.latestLayer.CompareAndSwap(current, lid) {
 			events.ReportNodeStatusUpdate()
-			msh.logger.With().Info("set latest known layer", lid)
+			logger.With().Info("set latest known layer", lid)
 		}
 	}
 }
@@ -624,12 +624,12 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 }
 
 // SetZeroBlockLayer tags lyr as a layer without blocks.
-func (msh *Mesh) SetZeroBlockLayer(lid types.LayerID) error {
-	msh.logger.With().Info("tagging zero block layer", lid)
-	if err := setZeroBlockLayer(msh.logger, msh.cdb, lid); err != nil {
+func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) error {
+	logger := msh.logger.WithContext(ctx)
+	if err := setZeroBlockLayer(logger, msh.cdb, lid); err != nil {
 		return err
 	}
-	msh.setLatestLayer(lid)
+	msh.setLatestLayer(logger, lid)
 	return nil
 }
 
@@ -662,7 +662,7 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 		logger.With().Error("failed to link proposal txs", log.Err(err))
 		return err
 	}
-	msh.setLatestLayer(layerID)
+	msh.setLatestLayer(logger, layerID)
 	logger.Debug("associated txs to proposal")
 	return nil
 }
@@ -717,7 +717,7 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 		logger.With().Error("failed to link block txs", log.Err(err))
 		return err
 	}
-	msh.setLatestLayer(block.LayerIndex)
+	msh.setLatestLayer(logger, block.LayerIndex)
 	logger.Debug("associated txs to block")
 
 	if err := blocks.Add(msh.cdb, block); err != nil && !errors.Is(err, sql.ErrObjectExists) {
