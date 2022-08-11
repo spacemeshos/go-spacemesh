@@ -10,36 +10,34 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
-// computeBallotWeight compute and assign ballot weight to the weights map.
+// computeBallotWeight compute ballot weight.
 func computeBallotWeight(
 	cdb *datastore.CachedDB,
-	referenceWeights, weights map[types.BallotID]util.Weight,
+	referenceWeights map[types.BallotID]util.Weight,
 	ballot *types.Ballot,
 	layerSize,
 	layersPerEpoch uint32,
 ) (util.Weight, error) {
-	var (
-		reference, actual util.Weight
-		err               error
-		exist             bool
-	)
-	refBallotID := ballot.ID()
+	ref := ballot.ID()
 	if ballot.EpochData == nil {
 		if ballot.RefBallot == types.EmptyBallotID {
 			return util.Weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 		}
-		refBallotID = ballot.RefBallot
+		ref = ballot.RefBallot
 	}
-	if reference, exist = referenceWeights[refBallotID]; !exist {
+	var (
+		reference util.Weight
+		err       error
+		exist     bool
+	)
+	if reference, exist = referenceWeights[ref]; !exist {
 		reference, err = proposals.ComputeWeightPerEligibility(cdb, ballot, layerSize, layersPerEpoch)
 		if err != nil {
 			return util.Weight{}, fmt.Errorf("get ballot weight %w", err)
 		}
-		referenceWeights[refBallotID] = reference
+		referenceWeights[ref] = reference
 	}
-	actual = reference.Copy().Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs))))
-	weights[ballot.ID()] = actual
-	return actual, nil
+	return reference.Copy().Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs)))), nil
 }
 
 func computeEpochWeight(cdb *datastore.CachedDB, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {

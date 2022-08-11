@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"container/list"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -75,28 +76,30 @@ func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.Lay
 	return sign
 }
 
-func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []types.BallotID) {
-	var delayed []types.BallotID
+func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []ballotInfo) {
+	var delayed []ballotInfo
 	for _, ballot := range ballots {
-		if f.shouldBeDelayed(ballot, ballotlid) {
+		if f.shouldBeDelayed(ballot.id, ballotlid) {
 			delayed = append(delayed, ballot)
 			continue
 		}
-		ballotWeight := f.ballotWeight[ballot]
-		if ballotWeight.IsNil() {
+		if ballot.weight.IsNil() {
 			continue
 		}
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
 			for _, block := range f.blocks[lid] {
-				vote := f.getVote(logger, ballot, lid, block)
-				current := f.weights[block]
+				if block.height > ballot.height {
+					continue
+				}
+				vote := f.getVote(logger, ballot.id, lid, block.id)
+				current := f.weights[block.id]
 				switch vote {
 				case support:
-					current = current.Add(ballotWeight)
+					current = current.Add(ballot.weight)
 				case against:
-					current = current.Sub(ballotWeight)
+					current = current.Sub(ballot.weight)
 				}
-				f.weights[block] = current
+				f.weights[block.id] = current
 			}
 		}
 	}
@@ -150,27 +153,47 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	)
 
 	blocks := f.blocks[lid]
-	// necessary only to log debug only once for each block
-	decisions := make([]sign, 0, len(blocks))
 
+	// order blocks by height in ascending order
+	// if there is a support before any abstain
+	// and a previous height is lower than the current one
+	// the layer is finalized
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].height < blocks[j].height
+	})
+
+	var (
+		decisions  = make([]sign, 0, len(blocks))
+		supports   bool
+		prevHeight uint64
+	)
 	for _, block := range blocks {
-		current := f.weights[block]
+		current := f.weights[block.id]
 		decision := sign(current.Cmp(f.globalThreshold))
+
 		if decision == abstain {
+			if supports && block.height > prevHeight {
+				break
+			}
 			logger.With().Info("candidate layer is not verified. not enough weight in votes",
-				log.Stringer("block", block),
+				log.Stringer("block", block.id),
 				log.Stringer("voting_weight", current),
 			)
 			return false
 		}
+		if decision == support {
+			supports = true
+		}
+		prevHeight = block.height
 		decisions = append(decisions, decision)
 	}
-	for i, block := range blocks {
+	for i := range decisions {
+		block := blocks[i]
 		logger.With().Debug("full tortoise decided on a block",
-			log.Stringer("block", block),
+			log.Stringer("block", block.id),
 			log.Stringer("decision", decisions[i]),
 		)
-		f.validity[block] = decisions[i]
+		f.validity[block.id] = decisions[i]
 	}
 	logger.With().Info("candidate layer is verified")
 	return true
@@ -185,5 +208,5 @@ func (f *full) shouldBeDelayed(ballotID types.BallotID, ballotlid types.LayerID)
 
 type delayedBallots struct {
 	lid     types.LayerID
-	ballots []types.BallotID
+	ballots []ballotInfo
 }

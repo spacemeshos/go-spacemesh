@@ -107,7 +107,7 @@ func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tor
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
 
-	goodWeight, goodBallotsCount := v.countGoodBallots(logger, ballots)
+	goodWeight, goodBallotsCount := v.countGoodBallots(logger, lid, ballots)
 
 	v.goodWeight[lid] = goodWeight
 	v.totalGoodWeight = v.totalGoodWeight.Add(goodWeight)
@@ -160,16 +160,16 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 
 	// if there is any block with neutral local opinion - we can't verify the layer
 	// if it happens outside hdist - protocol will switch to full tortoise
-	for _, bid := range v.blocks[lid] {
-		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
+	for _, block := range v.blocks[lid] {
+		vote, _ := getLocalVote(v.commonState, v.Config, lid, block.id)
 		if vote == abstain {
 			logger.With().Info("candidate layer is not verified."+
 				" block is undecided according to local votes",
-				bid,
+				block.id,
 			)
 			return false
 		}
-		v.validity[bid] = vote
+		v.validity[block.id] = vote
 	}
 
 	v.totalGoodWeight.Sub(v.goodWeight[lid])
@@ -177,11 +177,14 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	return true
 }
 
-func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (util.Weight, int) {
+func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) (util.Weight, int) {
 	sum := util.WeightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
 		if ballot.weight.IsNil() {
+			continue
+		}
+		if v.referenceHeight[lid.GetEpoch()] > ballot.height {
 			continue
 		}
 		rst := v.determineGoodness(logger, ballot)

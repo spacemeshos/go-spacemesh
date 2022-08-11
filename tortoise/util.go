@@ -41,24 +41,25 @@ type tortoiseBallot struct {
 	votes    votes
 	abstain  map[types.LayerID]struct{}
 	weight   util.Weight
+	height   uint64
 }
 
 func persistContextualValidity(logger log.Log,
 	updater blockValidityUpdater,
 	from, to types.LayerID,
-	blocks map[types.LayerID][]types.BlockID,
+	blocks map[types.LayerID][]blockInfo,
 	opinion votes,
 ) error {
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
-		for _, bid := range blocks[lid] {
-			sign := opinion[bid]
+		for _, block := range blocks[lid] {
+			sign := opinion[block.id]
 			if sign == abstain {
-				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
+				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
 			}
-			err = updater.UpdateBlockValidity(bid, lid, sign == support)
+			err = updater.UpdateBlockValidity(block.id, lid, sign == support)
 			if err != nil {
-				err = fmt.Errorf("saving validity for %s: %w", bid, err)
+				err = fmt.Errorf("saving validity for %s: %w", block.id, err)
 				return false
 			}
 		}

@@ -79,15 +79,13 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	genesis := genesisLayer.Index()
 	for _, blk := range genesisLayer.Blocks() {
 		t.blockLayer[blk.ID()] = genesis
-		t.blocks[genesis] = []types.BlockID{blk.ID()}
+		t.blocks[genesis] = []blockInfo{{id: blk.ID()}}
 		t.validity[blk.ID()] = support
 		t.hareOutput[blk.ID()] = support
 	}
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
-		// needs to be not nil
-		t.ballotWeight[ballot.ID()] = util.WeightFromFloat64(0)
-		t.ballots[genesis] = []types.BallotID{ballot.ID()}
+		t.ballots[genesis] = []ballotInfo{{id: ballot.ID()}}
 		t.verifying.goodBallots[ballot.ID()] = good
 	}
 	t.last = genesis
@@ -142,21 +140,20 @@ func (t *turtle) evict(ctx context.Context) {
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
-			delete(t.ballotLayer, ballot)
-			delete(t.ballotWeight, ballot)
-			delete(t.referenceWeight, ballot)
-			delete(t.badBeaconBallots, ballot)
-			delete(t.verifying.goodBallots, ballot)
-			delete(t.full.votes, ballot)
-			delete(t.full.abstain, ballot)
-			delete(t.full.base, ballot)
+			delete(t.ballotLayer, ballot.id)
+			delete(t.referenceWeight, ballot.id)
+			delete(t.badBeaconBallots, ballot.id)
+			delete(t.verifying.goodBallots, ballot.id)
+			delete(t.full.votes, ballot.id)
+			delete(t.full.abstain, ballot.id)
+			delete(t.full.base, ballot.id)
 		}
 		delete(t.ballots, lid)
 		for _, block := range t.blocks[lid] {
-			delete(t.blockLayer, block)
-			delete(t.hareOutput, block)
-			delete(t.validity, block)
-			delete(t.full.weights, block)
+			delete(t.blockLayer, block.id)
+			delete(t.hareOutput, block.id)
+			delete(t.validity, block.id)
+			delete(t.full.weights, block.id)
 		}
 		delete(t.blocks, lid)
 		delete(t.decided, lid)
@@ -203,18 +200,17 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 	if votes == nil {
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-			for _, ballotID := range t.ballots[lid] {
-				weight := t.ballotWeight[ballotID]
-				if weight.IsNil() {
+			for _, ballot := range t.ballots[lid] {
+				if ballot.weight.IsNil() {
 					continue
 				}
-				dis, err := t.firstDisagreement(ctx, lid, ballotID, disagreements)
+				dis, err := t.firstDisagreement(ctx, lid, ballot.id, disagreements)
 				if err != nil {
-					logger.With().Error("failed to compute first disagreement", ballotID, log.Err(err))
+					logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
 					continue
 				}
-				disagreements[ballotID] = dis
-				choices = append(choices, ballotID)
+				disagreements[ballot.id] = dis
+				choices = append(choices, ballot.id)
 			}
 		}
 
@@ -256,12 +252,12 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 	var choices []types.BallotID
 
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
-		for _, ballotID := range t.ballots[lid] {
-			if t.ballotWeight[ballotID].IsNil() {
+		for _, ballot := range t.ballots[lid] {
+			if ballot.weight.IsNil() {
 				continue
 			}
-			if rst := t.verifying.goodBallots[ballotID]; rst == good {
-				choices = append(choices, ballotID)
+			if rst := t.verifying.goodBallots[ballot.id]; rst == good {
+				choices = append(choices, ballot.id)
 			}
 		}
 		if len(choices) > 0 {
@@ -294,15 +290,15 @@ func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ball
 
 	for lid := start; lid.Before(blid); lid = lid.Add(1) {
 		for _, block := range t.blocks[lid] {
-			localVote, _, err := t.getFullVote(ctx, lid, block)
+			localVote, _, err := t.getFullVote(ctx, lid, block.id)
 			if err != nil {
 				return types.LayerID{}, err
 			}
-			vote := t.full.getVote(t.logger, ballotID, lid, block)
+			vote := t.full.getVote(t.logger, ballotID, lid, block.id)
 			if localVote != vote {
 				t.logger.With().Debug("found disagreement on a block",
 					ballotID,
-					block,
+					block.id,
 					log.Stringer("block_layer", lid),
 					log.Stringer("ballot_layer", blid),
 					log.Stringer("local_vote", localVote),
@@ -342,18 +338,18 @@ func (t *turtle) encodeVotes(
 			continue
 		}
 
-		for _, bid := range t.blocks[lid] {
-			localVote, reason, err := t.getFullVote(ctx, lid, bid)
+		for _, block := range t.blocks[lid] {
+			localVote, reason, err := t.getFullVote(ctx, lid, block.id)
 			if err != nil {
 				return nil, err
 			}
 			logger := logger.WithFields(
-				log.Stringer("block", bid),
+				log.Stringer("block", block.id),
 				log.Stringer("local_vote_reason", reason),
 				log.Stringer("local_vote", localVote),
 			)
 
-			baseVote := getter(lid, bid)
+			baseVote := getter(lid, block.id)
 			needsException := localVote != baseVote
 
 			logFunc := logger.With().Debug
@@ -372,12 +368,12 @@ func (t *turtle) encodeVotes(
 
 			switch localVote {
 			case support:
-				votes.Support = append(votes.Support, bid)
+				votes.Support = append(votes.Support, block.id)
 			case against:
-				votes.Against = append(votes.Against, bid)
+				votes.Against = append(votes.Against, block.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					bid, lid,
+					block.id, lid,
 				)
 			}
 		}
@@ -615,23 +611,23 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	tballots := make([]tortoiseBallot, 0, len(blts))
 	for _, ballot := range blts {
 		tballots = append(tballots, tortoiseBallot{
-			id:      ballot,
-			base:    t.full.base[ballot],
-			votes:   t.full.votes[ballot],
-			abstain: t.full.abstain[ballot],
-			weight:  t.ballotWeight[ballot],
+			id:      ballot.id,
+			base:    t.full.base[ballot.id],
+			votes:   t.full.votes[ballot.id],
+			abstain: t.full.abstain[ballot.id],
+			weight:  ballot.weight,
 		})
 	}
 	return tballots
 }
 
 func (t *turtle) loadConsensusData(lid types.LayerID) error {
-	bids, err := blocks.IDsInLayer(t.cdb, lid)
+	blocks, err := blocks.Layer(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}
-	for _, bid := range bids {
-		t.onBlock(lid, bid)
+	for _, block := range blocks {
+		t.onBlock(lid, block)
 	}
 
 	if err := t.loadHare(lid); err != nil {
@@ -715,16 +711,16 @@ func (t *turtle) loadBallots(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) onBlock(lid types.LayerID, block types.BlockID) {
+func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if !lid.After(t.evicted) {
 		return
 	}
-	if _, exist := t.blockLayer[block]; exist {
+	if _, exist := t.blockLayer[block.ID()]; exist {
 		return
 	}
-	t.blockLayer[block] = lid
-	t.blocks[lid] = append(t.blocks[lid], block)
-	t.full.onBlock(block)
+	t.blockLayer[block.ID()] = lid
+	t.blocks[lid] = append(t.blocks[lid], blockInfo{id: block.ID(), height: block.TickHeight})
+	t.full.onBlock(block.ID())
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
@@ -766,7 +762,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		var err error
 		ballotWeight, err = computeBallotWeight(
 			t.cdb, t.referenceWeight,
-			t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch(),
+			ballot, t.LayerSize, types.GetLayersPerEpoch(),
 		)
 		if err != nil {
 			return err
@@ -778,7 +774,8 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	// all potential errors must be handled before modifying state
 
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
-	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex], ballot.ID())
+	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex],
+		ballotInfo{id: ballot.ID(), weight: ballotWeight})
 
 	abstainVotes := map[types.LayerID]struct{}{}
 	for _, lid := range ballot.Votes.Abstain {
@@ -790,8 +787,8 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		if _, exist := abstainVotes[lid]; exist {
 			continue
 		}
-		for _, bid := range t.blocks[lid] {
-			votes[bid] = against
+		for _, block := range t.blocks[lid] {
+			votes[block.id] = against
 		}
 	}
 	for _, bid := range ballot.Votes.Support {
