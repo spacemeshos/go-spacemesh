@@ -128,13 +128,19 @@ func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) er
 	switch method {
 	case methodSpawn:
 		n := len(args.(*SpawnArguments).PublicKeys)
-		if err := ctx.Consume(h.totalGasSpawn + uint64(StorageCostPerKey*n)); err != nil {
+		if err := ctx.Consume(h.totalGasSpawn); err != nil {
 			return err
 		}
+		if n < int(h.k) {
+			return fmt.Errorf("multisig requires atleast %d keys", h.k)
+		}
 		if n > StorageLimit {
-			return fmt.Errorf("multisig supports atmost %d key", StorageLimit)
+			return fmt.Errorf("multisig supports atmost %d keys", StorageLimit)
 		}
 		if err := ctx.Spawn(h.address, args); err != nil {
+			return err
+		}
+		if err := ctx.Consume(StorageCostPerKey * uint64(n)); err != nil {
 			return err
 		}
 	case methodSpend:
