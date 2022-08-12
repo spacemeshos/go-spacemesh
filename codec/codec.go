@@ -90,3 +90,20 @@ func Decode(buf []byte, value Decodable) error {
 
 	return nil
 }
+
+func EncodeSlice[V any, H scale.EncodablePtr[V]](value []V) ([]byte, error) {
+	var b bytes.Buffer
+	_, err := scale.EncodeStructSlice[V, H](scale.NewEncoder(&b), value)
+	if err != nil {
+		return nil, fmt.Errorf("encode struct slice: %w", err)
+	}
+	return b.Bytes(), nil
+}
+
+func DecodeSlice[V any, H scale.DecodablePtr[V]](buf []byte) ([]V, error) {
+	v, _, err := scale.DecodeStructSlice[V, H](scale.NewDecoder(bytes.NewReader(buf)))
+	if err != nil {
+		return nil, fmt.Errorf("decode struct slice: %w", err)
+	}
+	return v, nil
+}

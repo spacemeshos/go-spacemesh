@@ -4,30 +4,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
-
-// TransactionIDs is a list of transaction IDs.
-type TransactionIDs []types.TransactionID
-
-// EncodeScale implements scale codec interface.
-func (t *TransactionIDs) EncodeScale(e *scale.Encoder) (int, error) {
-	return scale.EncodeStructSlice(e, *t)
-}
-
-// DecodeScale implements scale codec interface.
-func (t *TransactionIDs) DecodeScale(d *scale.Decoder) (int, error) {
-	field, n, err := scale.DecodeStructSlice[types.TransactionID](d)
-	if err != nil {
-		return n, err
-	}
-	*t = field
-	return n, nil
-}
 
 // Get gets a proposal by a given ID.
 func Get(db sql.Executor, id types.ProposalID) (proposal *types.Proposal, err error) {
@@ -149,21 +129,12 @@ func GetBlob(db sql.Executor, id []byte) (proposal []byte, err error) {
 	return proposal, err
 }
 
-func toTransactionIDs(txIDs []types.TransactionID) TransactionIDs {
-	if txIDs == nil {
-		return nil
-	}
-	return TransactionIDs(txIDs)
-}
-
 // Add adds a proposal for a given ID.
 func Add(db sql.Executor, proposal *types.Proposal) error {
-	txIDs := toTransactionIDs(proposal.TxIDs)
-	txIDsBytes, err := codec.Encode(&txIDs)
+	txIDsBytes, err := codec.EncodeSlice(proposal.TxIDs)
 	if err != nil {
 		return fmt.Errorf("encode TX IDs: %w", err)
 	}
-
 	encodedProposal, err := codec.Encode(proposal)
 	if err != nil {
 		return fmt.Errorf("encode proposal: %w", err)
@@ -223,8 +194,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	signature := make([]byte, stmt.ColumnLen(8))
 	stmt.ColumnBytes(8, signature)
 
-	txIDs := TransactionIDs{}
-	if err := codec.Decode(txIDsBytes, &txIDs); err != nil {
+	txIDs, err := codec.DecodeSlice[types.TransactionID](txIDsBytes)
+	if err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("decode TX IDs: %w", err)
 		}
