@@ -91,6 +91,7 @@ func Decode(buf []byte, value Decodable) error {
 	return nil
 }
 
+// EncodeSlice encodes slice to a buffer.
 func EncodeSlice[V any, H scale.EncodablePtr[V]](value []V) ([]byte, error) {
 	var b bytes.Buffer
 	_, err := scale.EncodeStructSlice[V, H](scale.NewEncoder(&b), value)
@@ -100,6 +101,7 @@ func EncodeSlice[V any, H scale.EncodablePtr[V]](value []V) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+// DecodeSlice decodes slice from a buffer.
 func DecodeSlice[V any, H scale.DecodablePtr[V]](buf []byte) ([]V, error) {
 	v, _, err := scale.DecodeStructSlice[V, H](scale.NewDecoder(bytes.NewReader(buf)))
 	if err != nil {
