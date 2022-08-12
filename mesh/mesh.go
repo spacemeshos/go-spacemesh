@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 type Mesh struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
+	beacon system.BeaconGetter
 
 	conState conservativeState
 	trtl     tortoise
@@ -56,10 +58,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, bcn system.BeaconGetter, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
+		beacon:              bcn,
 		trtl:                trtl,
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
@@ -364,6 +367,17 @@ func (msh *Mesh) revertMaybe(ctx context.Context, logger log.Log, newVerified ty
 	return nil
 }
 
+func (msh *Mesh) triggerTortoise(ctx context.Context, logger log.Log, lid types.LayerID) types.LayerID {
+	epoch := lid.GetEpoch()
+	if _, err := msh.beacon.GetBeacon(epoch); err != nil {
+		logger.With().Warning("not triggering tortoise: beacon not available", lid, epoch)
+		return msh.trtl.LatestComplete()
+	}
+	newVerified := msh.trtl.HandleIncomingLayer(ctx, lid)
+	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
+	return newVerified
+}
+
 // ProcessLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
@@ -375,8 +389,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	logger.Info("processing layer")
 
 	// pass the layer to tortoise for processing
-	newVerified := msh.trtl.HandleIncomingLayer(ctx, layerID)
-	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
+	newVerified := msh.triggerTortoise(ctx, logger, layerID)
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
@@ -401,8 +414,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 			return err
 		}
 	}
-
-	logger.Debug("done processing layer")
 	return nil
 }
 

@@ -144,6 +144,20 @@ func (mr *MocktortoiseMockRecorder) HandleIncomingLayer(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleIncomingLayer", reflect.TypeOf((*Mocktortoise)(nil).HandleIncomingLayer), arg0, arg1)
 }
 
+// LatestComplete mocks base method.
+func (m *Mocktortoise) LatestComplete() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LatestComplete")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// LatestComplete indicates an expected call of LatestComplete.
+func (mr *MocktortoiseMockRecorder) LatestComplete() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*Mocktortoise)(nil).LatestComplete))
+}
+
 // OnBallot mocks base method.
 func (m *Mocktortoise) OnBallot(arg0 *types.Ballot) {
 	m.ctrl.T.Helper()

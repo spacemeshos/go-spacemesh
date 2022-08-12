@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Configuration is the config params for syncer.
@@ -59,10 +58,9 @@ func (s syncState) String() string {
 }
 
 var (
-	errShuttingDown      = errors.New("shutting down")
-	errBeaconUnavailable = errors.New("beacon unavailable")
-	errHareInCharge      = errors.New("hare in charge of layer")
-	errATXsNotSynced     = errors.New("ATX not synced")
+	errShuttingDown  = errors.New("shutting down")
+	errHareInCharge  = errors.New("hare in charge of layer")
+	errATXsNotSynced = errors.New("ATX not synced")
 )
 
 // Syncer is responsible to keep the node in sync with the network.
@@ -71,7 +69,6 @@ type Syncer struct {
 
 	conf          Configuration
 	ticker        layerTicker
-	beacons       system.BeaconGetter
 	mesh          *mesh.Mesh
 	lyrProcessor  layerProcessor
 	fetcher       layerFetcher
@@ -100,13 +97,12 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons system.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
 		logger:        logger,
 		conf:          conf,
 		ticker:        ticker,
-		beacons:       beacons,
 		mesh:          mesh,
 		lyrProcessor:  mesh,
 		fetcher:       fetcher,
@@ -488,11 +484,6 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
-		epoch := lid.GetEpoch()
-		if _, err := s.beacons.GetBeacon(epoch); err != nil {
-			s.logger.With().Info("skip validating layer: beacon not available", lid, epoch)
-			return errBeaconUnavailable
-		}
 
 		if s.patrol.IsHareInCharge(lid) {
 			lag := types.NewLayerID(0)
