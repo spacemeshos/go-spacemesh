@@ -35,6 +35,7 @@ type BlockCertifyingService struct {
     blockSigner signing.Signer
     logger      log.Logger
     // Internal
+    edVerifier       signing.EDVerifier
     signatureCache   sigCache
     completedCertsCh chan certtypes.BlockCertificate
 }
@@ -55,6 +56,7 @@ func NewBlockCertifyingService(
     service.hareTerminationsCh = hareTerminations
     service.gossipPublisher = gossipPublisher
     service.blockSigner = blockSigner
+    service.edVerifier = signing.NewEDVerifier()
     service.db = db
     service.completedCertsCh = make(chan certtypes.BlockCertificate, config.Hdist)
 
@@ -89,23 +91,24 @@ func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
     return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
     ) pubsub.ValidationResult {
         logger := s.logger.WithContext(ctx)
-        msg := certtypes.BlockSignatureMsg{}
+        msg := certtypes.SignedBlockSignatureMsg{}
         err := codec.Decode(bytes, &msg)
         if err != nil {
             logger.Debug("certified block: gossip handler: failed to "+
                 "decode message from peer: %s", peerID)
             return pubsub.ValidationReject
         }
-        isValid, err := s.rolacle.Validate(ctx,
+
+        roleProofOk, err := s.rolacle.Validate(ctx,
             msg.LayerID, blockCertifierRole, s.config.CommitteeSize,
             msg.SignerNodeID, msg.SignerRoleProof, msg.SignerCommitteeSeats)
         if err != nil {
             log.Error("hare termination gossip: %w", err)
             return pubsub.ValidationReject
         }
-        if !isValid {
+        if !roleProofOk {
             logger.With().Debug("certified block: gossip hander: received "+
-                "invalid block signature", msg.BlockID, msg.LayerID, msg.SignerNodeID)
+                "a block signature with an invalid role proof", msg.BlockID, msg.LayerID, msg.SignerNodeID)
             return pubsub.ValidationReject
         }
 

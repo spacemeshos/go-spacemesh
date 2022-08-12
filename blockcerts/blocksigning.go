@@ -76,8 +76,8 @@ func blockSigningLoop(ctx context.Context,
                     "block signature: %v", err)
                 break
             }
-
-            signatureCache.CacheBlockSignature(ctx, blockSigMsg)
+            // GossipHandler will be called on publish, so no need to add
+            // signature to cache here as well.
         }
     }
 }

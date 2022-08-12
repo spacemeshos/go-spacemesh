@@ -4,6 +4,7 @@ CREATE TABLE blocks
     layer    INT NOT NULL,
     validity SMALL INT,
     block    BLOB
+    cert     BLOB
 ) WITHOUT ROWID;
 CREATE INDEX blocks_by_layer ON blocks (layer, id asc);
 
