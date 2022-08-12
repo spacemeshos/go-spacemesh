@@ -31,7 +31,7 @@ var (
 	testid    = flag.String("testid", "", "Name of the pod that runs tests.")
 	imageFlag = flag.String("image", "spacemeshos/go-spacemesh-dev:proposal-events",
 		"go-spacemesh image")
-	poetImage     = flag.String("poet-image", "spacemeshos/poet:b8ce4ac5b1ee4597230476f9b011d17e712b1ab3", "poet server image")
+	poetImage     = flag.String("poet-image", "spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4", "poet server image")
 	namespaceFlag = flag.String("namespace", "",
 		"namespace for the cluster. if empty every test will use random namespace")
 	logLevel          = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
