@@ -28,6 +28,35 @@ func TestStepCreate(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestStepDeletePoet(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	tctx.Log.Debugw("deleting poet servers", "poets", cl.Poets())
+	require.NoError(t, cl.DeletePoet(tctx))
+}
+
+func TestStepRedeployPoet(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	require.Zero(t, cl.Poets())
+	tctx.Log.Debug("adding poet servers")
+	require.NoError(t, cl.AddPoet(tctx))
+
+	for i := 0; i < cl.Total(); i++ {
+		node := cl.Client(i)
+		idx := i % tctx.PoetSize
+		target := cluster.MakePoetEndpoint(idx)
+		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poet", target)
+		updated, err := updatePoetServer(tctx, node, target)
+		require.NoError(t, err)
+		require.True(t, updated)
+	}
+}
+
 func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/ed25519"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
@@ -38,7 +39,8 @@ func headlessSvc(setname string) string {
 	return setname + "-headless"
 }
 
-func poetEndpoint(ith int) string {
+// MakePoetEndpoint generate a poet endpoint for the ith instance.
+func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("%s-%d:%d", poetSvc, ith, poetPort)
 }
 
@@ -126,6 +128,7 @@ type Cluster struct {
 	bootnodes int
 	smeshers  int
 	clients   []*NodeClient
+	poets     []*v1.Pod
 }
 
 func (c *Cluster) nextSmesher() int {
@@ -211,7 +214,12 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
 
-	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers)
+	c.poets, err = discoverPoets(cctx)
+	for _, poet := range c.poets {
+		cctx.Log.Debugw("discovered existing poets", "name", poet.Name)
+	}
+
+	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets))
 	if err := c.accounts.Recover(cctx); err != nil {
 		return err
 	}
@@ -240,9 +248,11 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 	for i := 0; i < cctx.PoetSize; i++ {
 		name := fmt.Sprintf("%s-%d", poetSvc, i)
-		if err := deployPoet(cctx, name, gateways, flags...); err != nil {
+		pod, err := deployPoet(cctx, name, gateways, flags...)
+		if err != nil {
 			return err
 		}
+		c.poets = append(c.poets, pod)
 	}
 	return nil
 }
@@ -304,6 +314,17 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	return nil
 }
 
+// DeletePoet delete all poet servers.
+func (c *Cluster) DeletePoet(cctx *testcontext.Context) error {
+	for _, pod := range c.poets {
+		if err := deletePoet(cctx, pod.Name); err != nil {
+			return err
+		}
+		c.poets = c.poets[1:]
+	}
+	return nil
+}
+
 // DeleteSmesher will smesher i from the cluster.
 func (c *Cluster) DeleteSmesher(cctx *testcontext.Context, node *NodeClient) error {
 	err := deleteNode(cctx, node.Name)
@@ -331,6 +352,11 @@ func (c *Cluster) Bootnodes() int {
 // Total returns total number of clients.
 func (c *Cluster) Total() int {
 	return len(c.clients)
+}
+
+// Poets returns total number of poet servers.
+func (c *Cluster) Poets() int {
+	return len(c.poets)
 }
 
 // Client returns client for i-th node, either bootnode or smesher.

@@ -60,7 +60,7 @@ type NodeClient struct {
 
 // deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address)
 // and output ip of the poet.
-func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) error {
+func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) (*v1.Pod, error) {
 	args := []string{}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
@@ -90,7 +90,7 @@ func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags 
 		)
 	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return fmt.Errorf("create poet: %w", err)
+		return nil, fmt.Errorf("create poet: %w", err)
 	}
 	svc := corev1.Service(name, ctx.Namespace).
 		WithLabels(labels).
@@ -102,14 +102,18 @@ func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags 
 		)
 	_, err = ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return fmt.Errorf("apply poet service: %w", err)
+		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	_, err = waitPod(ctx, *pod.Name)
+	ppod, err := waitPod(ctx, *pod.Name)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return ppod, nil
+}
+
+func deletePoet(ctx *testcontext.Context, name string) error {
+	return ctx.Client.CoreV1().Pods(ctx.Namespace).Delete(ctx, name, apimetav1.DeleteOptions{})
 }
 
 func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
@@ -187,7 +191,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 		eg.Go(func() error {
 			setname := fmt.Sprintf("%s-%d", name, i)
 			idx := i % ctx.PoetSize
-			finalFlags[len(finalFlags)-1] = PoetEndpoint(poetEndpoint(idx))
+			finalFlags[len(finalFlags)-1] = PoetEndpoint(MakePoetEndpoint(idx))
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
@@ -325,6 +329,35 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 		return fmt.Errorf("apply statefulset: %w", err)
 	}
 	return nil
+}
+
+func waitPoet(tctx *testcontext.Context, podname string) (*v1.Pod, error) {
+	attempt := func() (*v1.Pod, error) {
+		pod, err := waitPod(tctx, podname)
+		if err != nil {
+			return nil, err
+		}
+		if pod == nil {
+			return nil, nil
+		}
+		return pod, nil
+	}
+	const attempts = 10
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for i := 1; i <= attempts; i++ {
+		if nc, err := attempt(); err != nil && i == attempts {
+			return nil, err
+		} else if err == nil {
+			return nc, nil
+		}
+		select {
+		case <-tctx.Done():
+			return nil, tctx.Err()
+		case <-ticker.C:
+		}
+	}
+	panic("unreachable")
 }
 
 func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error) {
