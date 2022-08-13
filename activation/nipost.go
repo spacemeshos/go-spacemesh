@@ -118,6 +118,7 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 		NIPost: &types.NIPost{},
 	}
 	nb.poetProver = poetProver
+	nb.log.With().Info("updated poet proof service client")
 }
 
 // BuildNIPost uses the given challenge to build a NIPost. "atxExpired" and "stop" are channels for early termination of
@@ -143,16 +144,23 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		poetChallenge := challenge
 		nb.state.Challenge = *challenge
 
-		nb.log.Debug("submitting challenge to poet proving service (poet id: %x, challenge: %x)",
-			nb.state.PoetServiceID, poetChallenge)
+		nb.log.With().Debug("submitting challenge to poet proving service",
+			log.Binary("poet_id", nb.state.PoetServiceID),
+			log.Stringer("challenge", poetChallenge))
 
 		round, err := nb.poetProver.Submit(ctx, *poetChallenge)
 		if err != nil {
+			nb.log.With().Error("failed to submit challenge to poet proving service",
+				log.Binary("poet_id", nb.state.PoetServiceID),
+				log.Stringer("challenge", poetChallenge),
+				log.Err(err))
 			return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
 		}
 
-		nb.log.Info("challenge submitted to poet proving service (poet id: %x, round id: %v, challenge: %x)",
-			nb.state.PoetServiceID, round.ID, poetChallenge)
+		nb.log.With().Info("challenge submitted to poet proving service",
+			log.Binary("poet_id", nb.state.PoetServiceID),
+			log.String("round_id", round.ID),
+			log.Stringer("challenge", poetChallenge))
 
 		nipost.Challenge = poetChallenge
 		nb.state.PoetRound = round
@@ -174,7 +182,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
 			nb.log.With().Panic("failed to fetch membership for poet proof",
-				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state
+				log.Binary("challenge", nb.state.PoetProofRef)) // TODO: handle inconsistent state
 		}
 		if !membership[*nipost.Challenge] {
 			round := nb.state.PoetRound
@@ -189,7 +197,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	// Phase 2: Post execution.
 	if nipost.Post == nil {
 		nb.log.With().Info("starting post execution",
-			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
+			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
 		if err != nil {
