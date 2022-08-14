@@ -32,7 +32,6 @@ func TestKeysLimits(t *testing.T) {
 						require.Error(t, err)
 					} else {
 						require.NoError(t, err)
-
 					}
 					require.Equal(t, spawnGas[i], int(ctx.Consumed()))
 				})
