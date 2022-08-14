@@ -30,11 +30,11 @@ func TestKeysLimits(t *testing.T) {
 					err := handler.Exec(&ctx, methodSpawn, &args)
 					if n < expectedK || n > StorageLimit {
 						require.Error(t, err)
-						require.Equal(t, spawnGas[i], int(ctx.Consumed()))
 					} else {
 						require.NoError(t, err)
-						require.Equal(t, spawnGas[i]+n*StorageCostPerKey, int(ctx.Consumed()))
+
 					}
+					require.Equal(t, spawnGas[i], int(ctx.Consumed()))
 				})
 			}
 		})
