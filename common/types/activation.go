@@ -103,7 +103,7 @@ type ActivationTxHeader struct {
 	NIPostChallenge
 	id       *ATXID // non-exported cache of the ATXID
 	Coinbase Address
-	NumUnits uint
+	NumUnits uint32
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -185,7 +185,7 @@ func (challenge *NIPostChallenge) String() string {
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
-	*ActivationTxHeader
+	ActivationTxHeader
 	NIPost      *NIPost
 	InitialPost *Post
 }
@@ -193,18 +193,18 @@ type InnerActivationTx struct {
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
-	*InnerActivationTx
+	InnerActivationTx
 	Sig []byte
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
-		InnerActivationTx: &InnerActivationTx{
-			ActivationTxHeader: &ActivationTxHeader{
+		InnerActivationTx: InnerActivationTx{
+			ActivationTxHeader: ActivationTxHeader{
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
-				NumUnits:        numUnits,
+				NumUnits:        uint32(numUnits),
 			},
 			NIPost:      nipost,
 			InitialPost: initialPost,
@@ -216,7 +216,7 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) InnerBytes() ([]byte, error) {
-	return InterfaceToBytes(atx.InnerActivationTx)
+	return InterfaceToBytes(&atx.InnerActivationTx)
 }
 
 // Fields returns an array of LoggableFields for logging.
@@ -324,18 +324,50 @@ type NIPost struct {
 // Post is an alias to postShared.Proof.
 type Post postShared.Proof
 
+// EncodeScale implements scale codec interface.
+func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	if n, err := scale.EncodeCompact32(enc, uint32(p.Nonce)); err != nil {
+		return total, err
+	} else { // nolint
+		total += n
+	}
+	if n, err := scale.EncodeByteSlice(enc, p.Indices); err != nil {
+		return total, err
+	} else { // nolint
+		total += n
+	}
+	return total, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	if field, n, err := scale.DecodeCompact32(dec); err != nil {
+		return total, err
+	} else { // nolint
+		total += n
+		p.Nonce = uint32(field)
+	}
+	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
+		return total, err
+	} else { // nolint
+		total += n
+		p.Indices = field
+	}
+	return total, nil
+}
+
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
 	Challenge     []byte
-	BitsPerLabel  uint
-	LabelsPerUnit uint
-	K1            uint
-	K2            uint
+	BitsPerLabel  uint8
+	LabelsPerUnit uint64
+	K1            uint32
+	K2            uint32
 }
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
-func (p Post) String() string {
+func (p *Post) String() string {
 	return fmt.Sprintf("nonce: %v, indices: %v",
 		p.Nonce, bytesToShortString(p.Indices))
 }

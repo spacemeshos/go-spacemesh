@@ -160,7 +160,7 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.NoError(t, err)
 
-	err = atxHdlr.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.NoError(t, err)
 }
 
@@ -261,7 +261,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
@@ -272,7 +272,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
-	err = atxHdlr.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.ErrorIs(t, err, sql.ErrNotFound)
 
 	// Prev atx not declared but initial Post not included.
@@ -374,7 +374,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
@@ -406,7 +406,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
@@ -473,7 +473,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxHdlr.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
@@ -618,12 +618,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
 	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), types.Address{}, nil, 0, nil)
-	err := atxHdlr.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
+	err := atxHdlr.ContextuallyValidateAtx(&validAtx.ActivationTxHeader)
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
 	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), types.Address{}, nil, 0, nil)
-	err = atxHdlr.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(&malformedAtx.ActivationTxHeader)
 	r.ErrorIs(err, sql.ErrNotFound)
 }
 

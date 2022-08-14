@@ -127,7 +127,10 @@ func New(
 	}
 }
 
-type vrfMessage struct {
+//go:generate scalegen -types VrfMessage
+
+// VrfMessage is a verification message.
+type VrfMessage struct {
 	Beacon uint32
 	Round  uint32
 	Layer  types.LayerID
@@ -179,7 +182,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))

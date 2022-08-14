@@ -95,7 +95,7 @@ func TestFullCountVotes(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc         string
-		activeset    []uint         // list of weights in activeset
+		activeset    []uint32       // list of weights in activeset
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
@@ -103,7 +103,7 @@ func TestFullCountVotes(t *testing.T) {
 	}{
 		{
 			desc:      "TwoLayersSupport",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -126,7 +126,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "ConflictWithBase",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -161,7 +161,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeights",
-			activeset: []uint{80, 40, 20},
+			activeset: []uint32{80, 40, 20},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -191,7 +191,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
-			activeset: []uint{80, 40, 20},
+			activeset: []uint32{80, 40, 20},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -218,7 +218,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneLayerSupport",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			}, layerBallots: [][]testBallot{
@@ -234,7 +234,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAbstain",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -251,7 +251,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAagaisnt",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -268,7 +268,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "MajorityAgainst",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -285,7 +285,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "NoVotes",
-			activeset: []uint{10, 10, 10},
+			activeset: []uint32{10, 10, 10},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -303,7 +303,7 @@ func TestFullCountVotes(t *testing.T) {
 			var activeset []types.ATXID
 			for i, weight := range tc.activeset {
 				header := makeAtxHeaderWithWeight(weight)
-				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))

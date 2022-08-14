@@ -253,8 +253,8 @@ func TestAdd(t *testing.T) {
 
 func newAtx(nodeID types.NodeID, layerID types.LayerID) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: &types.ActivationTxHeader{
+		InnerActivationTx: types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					NodeID:     nodeID,
 					PubLayerID: layerID,
