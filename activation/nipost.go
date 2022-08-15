@@ -25,7 +25,10 @@ type PoetProvingServiceClient interface {
 	PoetServiceID(context.Context) ([]byte, error)
 }
 
-type builderState struct {
+//go:generate scalegen -types BuilderState
+
+// BuilderState is a builder state.
+type BuilderState struct {
 	Challenge types.Hash32
 
 	NIPost *types.NIPost
@@ -49,20 +52,20 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 		nb.log.With().Warning("cannot load nipost state", log.Err(err))
 		return
 	} else if len(bts) > 0 {
-		var state builderState
+		var state BuilderState
 		if err := types.BytesToInterface(bts, &state); err != nil {
 			nb.log.With().Error("cannot load nipost state", log.Err(err))
 		}
 		if state.Challenge == challenge {
 			nb.state = &state
 		} else {
-			nb.state = &builderState{Challenge: challenge, NIPost: &types.NIPost{}}
+			nb.state = &BuilderState{Challenge: challenge, NIPost: &types.NIPost{}}
 		}
 	}
 }
 
 func (nb *NIPostBuilder) persist() {
-	if bts, err := types.InterfaceToBytes(&nb.state); err != nil {
+	if bts, err := types.InterfaceToBytes(nb.state); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 		return
 	} else if err := niposts.Add(nb.db, nipostBuildStateKey(), bts); err != nil {
@@ -77,7 +80,7 @@ type NIPostBuilder struct {
 	postSetupProvider PostSetupProvider
 	poetProver        PoetProvingServiceClient
 	poetDB            poetDbAPI
-	state             *builderState
+	state             *BuilderState
 	log               log.Log
 }
 
@@ -102,7 +105,7 @@ func NewNIPostBuilder(
 		postSetupProvider: postSetupProvider,
 		poetProver:        poetProver,
 		poetDB:            poetDB,
-		state:             &builderState{NIPost: &types.NIPost{}},
+		state:             &BuilderState{NIPost: &types.NIPost{}},
 		db:                db,
 		log:               log,
 	}
@@ -111,7 +114,7 @@ func NewNIPostBuilder(
 // updatePoETProver updates poetProver reference. It should not be executed concurently with BuildNIPST.
 func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 	// reset the state for safety to avoid accidental erroneous wait in Phase 1.
-	nb.state = &builderState{
+	nb.state = &BuilderState{
 		NIPost: &types.NIPost{},
 	}
 	nb.poetProver = poetProver
@@ -204,7 +207,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 	nb.log.Info("finished nipost construction")
 
-	nb.state = &builderState{
+	nb.state = &BuilderState{
 		NIPost: &types.NIPost{},
 	}
 	nb.persist()

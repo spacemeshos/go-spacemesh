@@ -122,7 +122,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
-	if err := h.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
+	if err := h.ContextuallyValidateAtx(&atx.ActivationTxHeader); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID),
@@ -212,7 +212,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		// as expected from the initial Post.
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
-		if err := h.nipostValidator.ValidatePost(pub.Bytes(), atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+		if err := h.nipostValidator.ValidatePost(pub.Bytes(), atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
 			return fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
@@ -246,7 +246,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(atx.NodeID[:])
-	leaves, err := h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
 		return fmt.Errorf("invalid nipost: %v", err)
 	}

@@ -133,7 +133,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 	}
 
-	v.logger.WithContext(ctx).With().Info("ballot eligibility verified",
+	v.logger.WithContext(ctx).With().Debug("ballot eligibility verified",
 		ballot.ID(),
 		ballot.LayerIndex,
 		epoch,
@@ -144,7 +144,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	return true, nil
 }
 
-func (v Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
+func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
 	if ballot.AtxID == *types.EmptyATXID {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
