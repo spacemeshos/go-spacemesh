@@ -38,6 +38,7 @@ type Handler struct {
 
 	cdb             *datastore.CachedDB
 	layersPerEpoch  uint32
+	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
 	log             log.Log
@@ -47,10 +48,11 @@ type Handler struct {
 }
 
 // NewHandler returns a data handler for ATX.
-func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *Handler {
+func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *Handler {
 	db := &Handler{
 		cdb:             cdb,
 		layersPerEpoch:  layersPerEpoch,
+		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
 		log:             log,
@@ -214,7 +216,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
-
+	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
 		posAtx, err := h.cdb.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
@@ -228,6 +230,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
 				h.layersPerEpoch, d)
 		}
+		baseTickHeight = posAtx.TickHeight()
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
 		if !publicationEpoch.NeedsGoldenPositioningATX() {
@@ -243,10 +246,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(atx.NodeID[:])
-	if err = h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits)); err != nil {
+	leaves, err := h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
+	if err != nil {
 		return fmt.Errorf("invalid nipost: %v", err)
 	}
-
+	atx.Verify(baseTickHeight, leaves/h.tickSize)
 	return nil
 }
 
@@ -272,7 +276,8 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 			return err
 		}
 
-		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
+		if err == nil {
+			// we found an ATX for this node ID, although it reported no prevATX -- this is invalid
 			return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v",
 				atx.NodeID.ShortString(), lastAtx.ShortString())
 		}
@@ -288,9 +293,12 @@ func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Ac
 	h.Lock()
 	defer h.Unlock()
 
-	// todo: maybe cleanup handler if failed by using defer (#1921)
-	if err := h.storeATXInDB(atx); err != nil {
-		return fmt.Errorf("store ATX in db: %w", err)
+	if err := atxs.Add(h.cdb, atx, time.Now()); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			// exists - how should we handle this?
+			return nil
+		}
+		return fmt.Errorf("add atx to db: %w", err)
 	}
 
 	// notify subscribers
@@ -301,28 +309,6 @@ func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Ac
 
 	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
-}
-
-func (h *Handler) storeATXInDB(atx *types.ActivationTx) error {
-	dbTx, err := h.cdb.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-	defer dbTx.Release()
-
-	if err = atxs.Add(dbTx, atx, time.Now()); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			// exists - how should we handle this?
-			return nil
-		}
-		return fmt.Errorf("add ATX to db: %w", err)
-	}
-
-	if err = atxs.UpdateTopIfNeeded(dbTx, atx); err != nil {
-		return fmt.Errorf("update top: %w", err)
-	}
-
-	return dbTx.Commit()
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID.
@@ -336,14 +322,10 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 
 // GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
 func (h *Handler) GetPosAtxID() (types.ATXID, error) {
-	id, err := atxs.GetTop(h.cdb)
+	id, err := atxs.GetPositioningID(h.cdb)
 	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			return h.goldenATXID, nil
-		}
-		return *types.EmptyATXID, fmt.Errorf("failed to get top atx: %v", err)
+		return *types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
 	}
-
 	return id, nil
 }
 
@@ -385,8 +367,6 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())
 	}
 
-	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
-
 	if atx.NIPost == nil {
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
@@ -405,14 +385,13 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}
-
 	err = h.ProcessAtx(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
 	}
 
-	logger.With().Info("stored and propagated new syntactically valid atx", atx.ID())
+	logger.With().Info("got new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil
 }
 

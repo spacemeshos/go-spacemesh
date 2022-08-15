@@ -103,6 +103,21 @@ func (mr *MockpoetDbAPIMockRecorder) GetMembershipMap(proofRef interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembershipMap", reflect.TypeOf((*MockpoetDbAPI)(nil).GetMembershipMap), proofRef)
 }
 
+// GetProof mocks base method.
+func (m *MockpoetDbAPI) GetProof(arg0 []byte) (*types.PoetProof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProof", arg0)
+	ret0, _ := ret[0].(*types.PoetProof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProof indicates an expected call of GetProof.
+func (mr *MockpoetDbAPIMockRecorder) GetProof(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockpoetDbAPI)(nil).GetProof), arg0)
+}
+
 // SubscribeToProofRef mocks base method.
 func (m *MockpoetDbAPI) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
 	m.ctrl.T.Helper()

@@ -192,30 +192,6 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
-func TestGetTop(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
-	db := sql.InMemory()
-
-	nodeID1 := types.NodeID{1}
-	nodeID2 := types.NodeID{1}
-
-	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
-	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
-
-	atx1 := newAtx(nodeID1, l1)
-	atx2 := newAtx(nodeID1, l2)
-	atx3 := newAtx(nodeID2, l2)
-
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
-		require.NoError(t, UpdateTopIfNeeded(db, atx))
-	}
-
-	top, err := GetTop(db)
-	require.NoError(t, err)
-	require.EqualValues(t, atx2.ID(), top)
-}
-
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
 
@@ -258,13 +234,73 @@ func newAtx(nodeID types.NodeID, layerID types.LayerID) *types.ActivationTx {
 				NIPostChallenge: types.NIPostChallenge{
 					NodeID:     nodeID,
 					PubLayerID: layerID,
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: 2,
 			},
 		},
 	}
+	activationTx.Verify(0, 1)
 	activationTx.CalcAndSetID()
 	return activationTx
+}
+
+func TestPositioningID(t *testing.T) {
+	types.SetLayersPerEpoch(10)
+	type header struct {
+		coinbase    types.Address
+		base, count uint64
+		epoch       types.EpochID
+	}
+	for _, tc := range []struct {
+		desc   string
+		atxs   []header
+		expect int
+	}{
+		{
+			desc: "not found",
+		},
+		{
+			desc: "by epoch",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 2},
+			},
+			expect: 1,
+		},
+		{
+			desc: "by tick height",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 1},
+			},
+			expect: 0,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			db := sql.InMemory()
+			ids := []types.ATXID{}
+			for _, atx := range tc.atxs {
+				full := &types.ActivationTx{
+					InnerActivationTx: types.InnerActivationTx{
+						ActivationTxHeader: types.ActivationTxHeader{
+							NIPostChallenge: types.NIPostChallenge{
+								PubLayerID: atx.epoch.FirstLayer(),
+							},
+							Coinbase: atx.coinbase,
+						},
+					},
+				}
+				full.Verify(atx.base, atx.count)
+				full.CalcAndSetID()
+				require.NoError(t, Add(db, full, time.Time{}))
+				ids = append(ids, full.ID())
+			}
+			rst, err := GetPositioningID(db)
+			if len(tc.atxs) == 0 {
+				require.ErrorIs(t, err, sql.ErrNotFound)
+			} else {
+				require.Equal(t, ids[tc.expect], rst)
+			}
+		})
+	}
 }

@@ -131,6 +131,12 @@ func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, e
 	return map[types.Hash32]bool{hash: true, hash2: true}, nil
 }
 
+func (p *poetDbMock) GetProof(poetRef []byte) (*types.PoetProof, error) {
+	hash := types.BytesToHash([]byte("anton"))
+	hash2 := types.BytesToHash([]byte("anton1"))
+	return &types.PoetProof{Members: [][]byte{hash.Bytes(), hash2.Bytes()}}, nil
+}
+
 func TestNIPostBuilderWithMocks(t *testing.T) {
 	assert := require.New(t)
 
@@ -392,7 +398,8 @@ func TestValidator_Validate(t *testing.T) {
 //
 func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
-	return v.Validate(*signing.NewPublicKey(minerID), nipost, challenge, numUnits)
+	_, err := v.Validate(*signing.NewPublicKey(minerID), nipost, challenge, numUnits)
+	return err
 }
 
 func TestNIPostBuilder_TimeoutUnsubscribe(t *testing.T) {

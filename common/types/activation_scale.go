@@ -88,20 +88,6 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.StartTick))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.EndTick))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeByteArray(enc, t.PositioningATX[:])
 		if err != nil {
 			return total, err
@@ -147,22 +133,6 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.StartTick = uint64(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.EndTick = uint64(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])

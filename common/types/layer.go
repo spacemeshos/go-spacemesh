@@ -184,7 +184,7 @@ func BytesToNodeID(buf []byte) (id NodeID) {
 	return id
 }
 
-// NodeID contains a miner's two public keys.
+// NodeID contains a miner's public key.
 type NodeID [32]byte
 
 func (id NodeID) hex() string {
