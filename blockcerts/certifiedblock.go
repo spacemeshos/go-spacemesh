@@ -1,24 +1,25 @@
 package blockcerts
 
 import (
-    "context"
-    "github.com/spacemeshos/go-spacemesh/blockcerts/config"
-    certtypes "github.com/spacemeshos/go-spacemesh/blockcerts/types"
-    "github.com/spacemeshos/go-spacemesh/codec"
-    "github.com/spacemeshos/go-spacemesh/common/types"
-    "github.com/spacemeshos/go-spacemesh/hare"
-    "github.com/spacemeshos/go-spacemesh/log"
-    "github.com/spacemeshos/go-spacemesh/p2p"
-    "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-    "github.com/spacemeshos/go-spacemesh/signing"
-    "github.com/spacemeshos/go-spacemesh/sql"
-    "math"
-    "sync"
+	"context"
+	"math"
+	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/blockcerts/config"
+	certtypes "github.com/spacemeshos/go-spacemesh/blockcerts/types"
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
-    blockCertifierRole uint32 = math.MaxUint32 - 2        // for Rolacle
-    BlockSigTopic             = "trackableBlockSignature" // for gossip
+	blockCertifierRole uint32 = math.MaxUint32 - 2 // for Rolacle
+	BlockSigTopic             = "BlockSig/1"       // for gossip
 )
 
 // BlockCertifyingService is a long-lived service responsible for participating
@@ -26,93 +27,93 @@ const (
 // Inputs: hareTerminationsCh and GossipHandler.
 // Outputs: gossipPublisher and database
 type BlockCertifyingService struct {
-    hareTerminationsCh <-chan hare.TerminationBlockOutput
-    gossipPublisher    pubsub.Publisher
-    db                 sql.Executor
-    // Dependencies
-    rolacle     hare.Rolacle
-    config      config.BlockCertificateConfig
-    blockSigner signing.Signer
-    logger      log.Logger
-    // Internal
-    edVerifier       signing.EDVerifier
-    signatureCache   sigCache
-    completedCertsCh chan certtypes.BlockCertificate
+	hareTerminationsCh <-chan hare.TerminationBlockOutput
+	gossipPublisher    pubsub.Publisher
+	db                 sql.Executor
+	// Dependencies
+	rolacle     hare.Rolacle
+	config      config.BlockCertificateConfig
+	blockSigner signing.Signer
+	logger      log.Logger
+	// Internal
+	edVerifier       signing.EDVerifier
+	signatureCache   sigCache
+	completedCertsCh chan certtypes.BlockCertificate
 }
 
 // NewBlockCertifyingService constructs a new BlockCertifyingService.
 func NewBlockCertifyingService(
-    hareTerminations <-chan hare.TerminationBlockOutput,
-    rolacle hare.Rolacle,
-    gossipPublisher pubsub.Publisher,
-    blockSigner signing.Signer,
-    db sql.Executor,
-    config config.BlockCertificateConfig,
-    logger log.Logger,
+	hareTerminations <-chan hare.TerminationBlockOutput,
+	rolacle hare.Rolacle,
+	gossipPublisher pubsub.Publisher,
+	blockSigner signing.Signer,
+	db sql.Executor,
+	config config.BlockCertificateConfig,
+	logger log.Logger,
 ) (*BlockCertifyingService, error) {
-    service := &BlockCertifyingService{}
-    service.rolacle = rolacle
-    service.config = config
-    service.hareTerminationsCh = hareTerminations
-    service.gossipPublisher = gossipPublisher
-    service.blockSigner = blockSigner
-    service.edVerifier = signing.NewEDVerifier()
-    service.db = db
-    service.completedCertsCh = make(chan certtypes.BlockCertificate, config.Hdist)
+	service := &BlockCertifyingService{}
+	service.rolacle = rolacle
+	service.config = config
+	service.hareTerminationsCh = hareTerminations
+	service.gossipPublisher = gossipPublisher
+	service.blockSigner = blockSigner
+	service.edVerifier = signing.NewEDVerifier()
+	service.db = db
+	service.completedCertsCh = make(chan certtypes.BlockCertificate, config.Hdist)
 
-    service.signatureCache = sigCache{
-        logger:             logger,
-        blockSigsByLayer:   sync.Map{},
-        cacheBoundary:      types.NewLayerID(0), // TODO: check this is okay
-        cacheBoundaryMutex: sync.RWMutex{},
-        signaturesRequired: config.MaxAdversaries + 1,
-        completedCertsCh:   service.completedCertsCh,
-    }
+	service.signatureCache = sigCache{
+		logger:             logger,
+		blockSigsByLayer:   sync.Map{},
+		cacheBoundary:      types.NewLayerID(0), // TODO: check this is okay
+		cacheBoundaryMutex: sync.RWMutex{},
+		signaturesRequired: config.MaxAdversaries + 1,
+		completedCertsCh:   service.completedCertsCh,
+	}
 
-    service.logger = logger
-    return service, nil
+	service.logger = logger
+	return service, nil
 }
 
 func (s *BlockCertifyingService) Start(ctx context.Context) error {
-    go blockSigningLoop(ctx, s.hareTerminationsCh,
-        s.blockSigner, s.config.CommitteeSize, s.rolacle,
-        s.gossipPublisher, &s.signatureCache, s.logger,
-    )
-    go certificateStoringLoop(ctx, s.completedCertsCh, s.db, s.logger)
-    return nil
+	go blockSigningLoop(ctx, s.hareTerminationsCh,
+		s.blockSigner, s.config.CommitteeSize, s.rolacle,
+		s.gossipPublisher, &s.signatureCache, s.logger,
+	)
+	go certificateStoringLoop(ctx, s.completedCertsCh, s.db, s.logger)
+	return nil
 }
 
 func (s *BlockCertifyingService) SignatureCacher() SigCacher {
-    return &s.signatureCache // exported functions are thread safe
+	return &s.signatureCache // exported functions are thread safe
 }
 
 // GossipHandler returns a function that handles incoming BlockSignatureMsg gossip.
 func (s *BlockCertifyingService) GossipHandler() pubsub.GossipHandler {
-    return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
-    ) pubsub.ValidationResult {
-        logger := s.logger.WithContext(ctx)
-        msg := certtypes.SignedBlockSignatureMsg{}
-        err := codec.Decode(bytes, &msg)
-        if err != nil {
-            logger.Debug("certified block: gossip handler: failed to "+
-                "decode message from peer: %s", peerID)
-            return pubsub.ValidationReject
-        }
+	return func(ctx context.Context, peerID p2p.Peer, bytes []byte,
+	) pubsub.ValidationResult {
+		logger := s.logger.WithContext(ctx)
+		msg := certtypes.SignedBlockSignatureMsg{}
+		err := codec.Decode(bytes, &msg)
+		if err != nil {
+			logger.Debug("certified block: gossip handler: failed to "+
+				"decode message from peer: %s", peerID)
+			return pubsub.ValidationReject
+		}
 
-        roleProofOk, err := s.rolacle.Validate(ctx,
-            msg.LayerID, blockCertifierRole, s.config.CommitteeSize,
-            msg.SignerNodeID, msg.SignerRoleProof, msg.SignerCommitteeSeats)
-        if err != nil {
-            log.Error("hare termination gossip: %w", err)
-            return pubsub.ValidationReject
-        }
-        if !roleProofOk {
-            logger.With().Debug("certified block: gossip hander: received "+
-                "a block signature with an invalid role proof", msg.BlockID, msg.LayerID, msg.SignerNodeID)
-            return pubsub.ValidationReject
-        }
+		roleProofOk, err := s.rolacle.Validate(ctx,
+			msg.LayerID, blockCertifierRole, s.config.CommitteeSize,
+			msg.SignerNodeID, msg.SignerRoleProof, msg.SignerCommitteeSeats)
+		if err != nil {
+			log.Error("hare termination gossip: %w", err)
+			return pubsub.ValidationReject
+		}
+		if !roleProofOk {
+			logger.With().Debug("certified block: gossip hander: received "+
+				"a block signature with an invalid role proof", msg.BlockID, msg.LayerID, msg.SignerNodeID)
+			return pubsub.ValidationReject
+		}
 
-        s.SignatureCacher().CacheBlockSignature(ctx, msg)
-        return pubsub.ValidationAccept
-    }
+		s.SignatureCacher().CacheBlockSignature(ctx, msg)
+		return pubsub.ValidationAccept
+	}
 }
