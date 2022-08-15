@@ -401,3 +401,130 @@ func TestFullCountVotes(t *testing.T) {
 		})
 	}
 }
+
+func TestFullVerify(t *testing.T) {
+	type testBlock struct {
+		height, margin int
+	}
+	for _, tc := range []struct {
+		desc      string
+		blocks    []testBlock
+		threshold uint64
+		validity  []sign
+	}{
+		{
+			desc:      "support",
+			blocks:    []testBlock{{margin: 11}},
+			threshold: 10,
+			validity:  []sign{support},
+		},
+		{
+			desc:      "abstain",
+			blocks:    []testBlock{{margin: 10}},
+			threshold: 10,
+		},
+		{
+			desc: "abstain before support",
+			blocks: []testBlock{
+				{margin: 10, height: 10},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+		},
+		{
+			desc: "abstain after support",
+			blocks: []testBlock{
+				{margin: 10, height: 30},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{against, support},
+		},
+		{
+			desc: "abstained same height",
+			blocks: []testBlock{
+				{margin: 11, height: 20},
+				{margin: 10, height: 20},
+			},
+			threshold: 10,
+		},
+		{
+			desc: "support after against",
+			blocks: []testBlock{
+				{margin: -11, height: 10},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{against, support},
+		},
+		{
+			desc: "only against",
+			blocks: []testBlock{
+				{margin: -11, height: 10},
+				{margin: -11, height: 20},
+			},
+			threshold: 10,
+		},
+		{
+			desc: "support same height",
+			blocks: []testBlock{
+				{margin: 11, height: 10},
+				{margin: 11, height: 10},
+			},
+			threshold: 10,
+			validity:  []sign{support, support},
+		},
+		{
+			desc: "support different height",
+			blocks: []testBlock{
+				{margin: 11, height: 10},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{support, support},
+		},
+		{
+			desc: "support abstain support",
+			blocks: []testBlock{
+				{margin: 11, height: 10},
+				{margin: 10, height: 11},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{support, against, support},
+		},
+		{
+			desc: "against abstain support",
+			blocks: []testBlock{
+				{margin: -11, height: 10},
+				{margin: 10, height: 10},
+				{margin: 11, height: 10},
+			},
+			threshold: 10,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			lid := types.LayerID{}
+			full := newFullTortoise(Config{}, &commonState{
+				blocks:   map[types.LayerID][]blockInfo{},
+				validity: votes{},
+			})
+			full.globalThreshold = util.WeightFromUint64(tc.threshold)
+			for i, block := range tc.blocks {
+				id := types.BlockID{uint8(i)}
+				full.blocks[lid] = append(full.blocks[lid], blockInfo{
+					id:     id,
+					height: uint64(block.height),
+				})
+				full.weights[id] = util.WeightFromInt64(int64(block.margin))
+			}
+			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
+			if tc.validity != nil {
+				for i, expect := range tc.validity {
+					id := types.BlockID{uint8(i)}
+					require.Equal(t, expect, full.validity[id])
+				}
+			}
+		})
+	}
+}
