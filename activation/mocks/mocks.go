@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockpoetValidatorPersistor is a mock of poetValidatorPersistor interface.
@@ -74,4 +75,56 @@ func (m *MockpoetValidatorPersistor) Validate(arg0 types.PoetProof, arg1 []byte,
 func (mr *MockpoetValidatorPersistorMockRecorder) Validate(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockpoetValidatorPersistor)(nil).Validate), arg0, arg1, arg2, arg3)
+}
+
+// MocknipostValidator is a mock of nipostValidator interface.
+type MocknipostValidator struct {
+	ctrl     *gomock.Controller
+	recorder *MocknipostValidatorMockRecorder
+}
+
+// MocknipostValidatorMockRecorder is the mock recorder for MocknipostValidator.
+type MocknipostValidatorMockRecorder struct {
+	mock *MocknipostValidator
+}
+
+// NewMocknipostValidator creates a new mock instance.
+func NewMocknipostValidator(ctrl *gomock.Controller) *MocknipostValidator {
+	mock := &MocknipostValidator{ctrl: ctrl}
+	mock.recorder = &MocknipostValidatorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocknipostValidator) EXPECT() *MocknipostValidatorMockRecorder {
+	return m.recorder
+}
+
+// Validate mocks base method.
+func (m *MocknipostValidator) Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Validate", id, NIPost, expectedChallenge, numUnits)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Validate indicates an expected call of Validate.
+func (mr *MocknipostValidatorMockRecorder) Validate(id, NIPost, expectedChallenge, numUnits interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MocknipostValidator)(nil).Validate), id, NIPost, expectedChallenge, numUnits)
+}
+
+// ValidatePost mocks base method.
+func (m *MocknipostValidator) ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidatePost", id, Post, PostMetadata, numUnits)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidatePost indicates an expected call of ValidatePost.
+func (mr *MocknipostValidatorMockRecorder) ValidatePost(id, Post, PostMetadata, numUnits interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatePost", reflect.TypeOf((*MocknipostValidator)(nil).ValidatePost), id, Post, PostMetadata, numUnits)
 }

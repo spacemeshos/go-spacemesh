@@ -89,11 +89,10 @@ func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATX
 		address := types.BytesToAddress(signer.PublicKey().Bytes())
 		nipostChallenge := types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
-			StartTick:  1,
-			EndTick:    2,
 			PubLayerID: lid,
 		}
 		atx := types.NewActivationTx(nipostChallenge, address, nil, numUint, nil)
+		atx.Verify(0, 1)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 		atxes = append(atxes, atx)
 	}

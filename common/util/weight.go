@@ -25,6 +25,8 @@ func WeightFromNumDenom(num, denom uint64) Weight {
 }
 
 // Weight represents weight for any ATX/ballot.
+// note: this is golang specific and is used to do math on weight.
+// for representing weight over the wire or data persistence, use types.RatNum.
 type Weight struct {
 	*big.Rat
 }

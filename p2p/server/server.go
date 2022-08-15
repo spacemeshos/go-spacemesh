@@ -47,8 +47,6 @@ func WithContext(ctx context.Context) Opt {
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
 
-//go:generate scalegen -types Response
-
 // Response is a server response.
 type Response struct {
 	Data  []byte
