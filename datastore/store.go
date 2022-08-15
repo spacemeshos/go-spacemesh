@@ -89,6 +89,24 @@ func (db *CachedDB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID
 	return weight, activeSet, nil
 }
 
+// IterateEpochATXHeaders iterates over activation headers from an epoch.
+func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) bool) error {
+	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		header, err := db.GetAtxHeader(id)
+		if err != nil {
+			return err
+		}
+		if !iter(header) {
+			return nil
+		}
+	}
+	return nil
+}
+
 // GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
 // AtxHeader struct in db.
 func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {

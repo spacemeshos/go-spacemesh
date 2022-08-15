@@ -162,6 +162,7 @@ func (t *turtle) evict(ctx context.Context) {
 		if lid.GetEpoch() < oldestEpoch {
 			delete(t.refBallotBeacons, lid.GetEpoch())
 			delete(t.epochWeight, lid.GetEpoch())
+			delete(t.referenceHeight, lid.GetEpoch())
 			oldestEpoch = lid.GetEpoch()
 		}
 	}
@@ -679,11 +680,17 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 		if _, exist := t.epochWeight[epoch]; exist {
 			break
 		}
-		layerWeight, err := computeEpochWeight(t.cdb, t.epochWeight, epoch)
+		weight, height, err := extractAtxsData(t.cdb, epoch)
 		if err != nil {
 			return err
 		}
-		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
+		t.epochWeight[epoch] = weight
+		t.referenceHeight[epoch] = height
+		logger.With().Info("computed height and weight for epoch",
+			epoch,
+			log.Stringer("weight", weight),
+			log.Uint64("height", height),
+		)
 	}
 	window := getVerificationWindow(t.Config, t.mode, t.verified.Add(1), t.last)
 	if lastUpdated || window.Before(t.processed) || t.globalThreshold.IsNil() {

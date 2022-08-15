@@ -1309,8 +1309,9 @@ func TestComputeExpectedWeight(t *testing.T) {
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
-				_, err := computeEpochWeight(cdb, epochWeights, lid.GetEpoch())
+				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
 				require.NoError(t, err)
+				epochWeights[lid.GetEpoch()] = weight
 			}
 
 			weight := computeExpectedWeight(epochWeights, tc.target, tc.last)

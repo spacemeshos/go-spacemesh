@@ -48,19 +48,31 @@ func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, err
 	return atx.TickHeight(), nil
 }
 
-func computeEpochWeight(cdb *datastore.CachedDB, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {
-	layerWeight, exist := epochWeights[eid]
-	if exist {
-		return layerWeight, nil
+func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (util.Weight, uint64, error) {
+	var (
+		weight  uint64
+		heights []uint64
+	)
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		weight += header.GetWeight()
+		heights = append(heights, header.TickHeight())
+		return true
+	}); err != nil {
+		return util.Weight{}, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
 	}
-	epochWeight, _, err := cdb.GetEpochWeight(eid)
-	if err != nil {
-		return util.Weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
+	return util.WeightFromUint64(weight).
+		Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch()))), getMedian(heights), nil
+}
+
+func getMedian(heights []uint64) uint64 {
+	if len(heights) == 0 {
+		return 0
 	}
-	layerWeight = util.WeightFromUint64(epochWeight)
-	layerWeight = layerWeight.Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
-	epochWeights[eid] = layerWeight
-	return layerWeight, nil
+	mid := len(heights) / 2
+	if len(heights)%2 == 0 {
+		return (heights[mid-1] + heights[mid]) / 2
+	}
+	return heights[mid]
 }
 
 // computes weight for (from, to] layers.
