@@ -116,13 +116,13 @@ func TestReferenceHeight(t *testing.T) {
 		{
 			desc:     "median odd",
 			epoch:    3,
-			heights:  []int{10, 20, 30},
+			heights:  []int{30, 10, 20},
 			expected: 20,
 		},
 		{
 			desc:     "median even",
 			epoch:    4,
-			heights:  []int{10, 20, 30, 40},
+			heights:  []int{30, 20, 10, 40},
 			expected: 25,
 		},
 	} {

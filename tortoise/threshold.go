@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -68,6 +69,9 @@ func getMedian(heights []uint64) uint64 {
 	if len(heights) == 0 {
 		return 0
 	}
+	sort.Slice(heights, func(i, j int) bool {
+		return heights[i] < heights[j]
+	})
 	mid := len(heights) / 2
 	if len(heights)%2 == 0 {
 		return (heights[mid-1] + heights[mid]) / 2
