@@ -757,13 +757,20 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		}
 	}
 
-	var ballotWeight util.Weight
+	var (
+		weight util.Weight
+		height uint64
+	)
 	if !ballot.IsMalicious() {
 		var err error
-		ballotWeight, err = computeBallotWeight(
+		weight, err = computeBallotWeight(
 			t.cdb, t.referenceWeight,
 			ballot, t.LayerSize, types.GetLayersPerEpoch(),
 		)
+		if err != nil {
+			return err
+		}
+		height, err = getBallotHeight(t.cdb, ballot)
 		if err != nil {
 			return err
 		}
@@ -775,7 +782,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex],
-		ballotInfo{id: ballot.ID(), weight: ballotWeight})
+		ballotInfo{id: ballot.ID(), weight: weight, height: height})
 
 	abstainVotes := map[types.LayerID]struct{}{}
 	for _, lid := range ballot.Votes.Abstain {
@@ -801,7 +808,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	tballot := tortoiseBallot{
 		id:      ballot.ID(),
 		base:    ballot.Votes.Base,
-		weight:  ballotWeight,
+		weight:  weight,
 		votes:   votes,
 		abstain: abstainVotes,
 	}

@@ -78,15 +78,20 @@ func TestFullCountVotes(t *testing.T) {
 		Abstain          []int    // [layer]
 		ATX              int
 	}
-	type testBlock struct{}
+	type testBlock struct {
+		Height uint64
+	}
+	type testAtx struct {
+		BaseHeight, TickCount uint64
+	}
 
 	rng := mrand.New(mrand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
-	getDiff := func(layers [][]types.BlockID, choices [][2]int) []types.BlockID {
+	getDiff := func(layers [][]types.Block, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID
 		for _, choice := range choices {
-			rst = append(rst, layers[choice[0]][choice[1]])
+			rst = append(rst, layers[choice[0]][choice[1]].ID())
 		}
 		return rst
 	}
@@ -95,7 +100,7 @@ func TestFullCountVotes(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc         string
-		activeset    []uint         // list of weights in activeset
+		activeset    []testAtx      // list of atxs
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
@@ -103,7 +108,7 @@ func TestFullCountVotes(t *testing.T) {
 	}{
 		{
 			desc:      "TwoLayersSupport",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -126,7 +131,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "ConflictWithBase",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -161,7 +166,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeights",
-			activeset: []uint{80, 40, 20},
+			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -191,7 +196,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
-			activeset: []uint{80, 40, 20},
+			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -218,7 +223,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneLayerSupport",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			}, layerBallots: [][]testBallot{
@@ -234,7 +239,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAbstain",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -251,7 +256,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAagaisnt",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -268,7 +273,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "MajorityAgainst",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -285,7 +290,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "NoVotes",
-			activeset: []uint{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -295,15 +300,39 @@ func TestFullCountVotes(t *testing.T) {
 			target: [2]int{0, 0},
 			expect: util.WeightFromFloat64(0),
 		},
+		{
+			desc:      "FutureVotes",
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 12}},
+			layerBlocks: [][]testBlock{
+				{{Height: 11}},
+			},
+			layerBallots: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 0}}}, // ignored
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 0}}}, // counted
+				},
+				{
+					{ATX: 0, Base: [2]int{1, 1}}, // ignored
+					{ATX: 1, Base: [2]int{1, 0}}, // counted regardless of the base ballot choice
+				},
+			},
+			target: [2]int{0, 0},
+			expect: util.WeightFromFloat64(4),
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
 			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 			var activeset []types.ATXID
-			for i, weight := range tc.activeset {
-				header := makeAtxHeaderWithWeight(weight)
-				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
+			for i := range tc.activeset {
+				header := types.ActivationTxHeader{
+					NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
+					NumUnits:        1,
+				}
+				header.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
+				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: &header}}
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
@@ -314,20 +343,21 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
 
-			var blocks [][]types.BlockID
+			var blocks [][]types.Block
 			for i, layer := range tc.layerBlocks {
-				var layerBlocks []types.BlockID
+				var layerBlocks []types.Block
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
-					b := &types.Block{}
+					b := types.Block{}
 					b.LayerIndex = lid
+					b.TickHeight = layer[j].Height
 					b.TxIDs = types.RandomTXSet(j)
 					b.Initialize()
-					layerBlocks = append(layerBlocks, b.ID())
+					layerBlocks = append(layerBlocks, b)
 				}
 
 				for _, block := range layerBlocks {
-					consensus.onBlock(lid, block)
+					consensus.onBlock(lid, &block)
 				}
 				blocks = append(blocks, layerBlocks)
 			}
@@ -366,8 +396,8 @@ func TestFullCountVotes(t *testing.T) {
 
 				consensus.full.countVotes(logger)
 			}
-			bid := blocks[tc.target[0]][tc.target[1]]
-			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())
+			block := blocks[tc.target[0]][tc.target[1]]
+			require.Equal(t, tc.expect.String(), consensus.full.weights[block.ID()].String())
 		})
 	}
 }

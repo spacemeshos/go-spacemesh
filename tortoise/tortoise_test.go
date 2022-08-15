@@ -2096,7 +2096,6 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxids []types.ATXID
 
 				refWeights = map[types.BallotID]util.Weight{}
-				weights    = map[types.BallotID]util.Weight{}
 			)
 
 			cdb := newCachedDB(t, logtest.New(t))
@@ -2136,7 +2135,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballot.Initialize()
 				blts = append(blts, ballot)
 
-				weight, err := computeBallotWeight(cdb, refWeights, weights, ballot, tc.layerSize, tc.layersPerEpoch)
+				weight, err := computeBallotWeight(cdb, refWeights, ballot, tc.layerSize, tc.layersPerEpoch)
 				require.NoError(t, err)
 				require.Equal(t, b.ExpectedWeight.String(), weight.String())
 			}
@@ -2525,7 +2524,6 @@ func TestStateManagement(t *testing.T) {
 				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.ballotWeight, ballot, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
 			}
 		}
@@ -2559,7 +2557,6 @@ func TestStateManagement(t *testing.T) {
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
 				require.Contains(t, tortoise.trtl.full.votes, ballot, "layer %s", lid)
-				require.Contains(t, tortoise.trtl.ballotWeight, ballot, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
 			}
 		}

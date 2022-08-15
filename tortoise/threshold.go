@@ -40,6 +40,14 @@ func computeBallotWeight(
 	return reference.Copy().Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs)))), nil
 }
 
+func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, error) {
+	atx, err := cdb.GetAtxHeader(ballot.AtxID)
+	if err != nil {
+		return 0, fmt.Errorf("read atx for ballot height: %w", err)
+	}
+	return atx.TickHeight(), nil
+}
+
 func computeEpochWeight(cdb *datastore.CachedDB, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {
 	layerWeight, exist := epochWeights[eid]
 	if exist {

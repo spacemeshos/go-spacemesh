@@ -220,11 +220,15 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			ballots[2]: start.Add(2),
 			ballots[3]: start.Add(2),
 		}
-		state.ballotWeight = map[types.BallotID]util.Weight{
-			ballots[0]: ballotWeight,
-			ballots[1]: ballotWeight,
-			ballots[2]: ballotWeight,
-			ballots[3]: ballotWeight,
+		state.ballots = map[types.LayerID][]ballotInfo{
+			start.Add(1): {
+				{id: ballots[0], weight: ballotWeight},
+				{id: ballots[1], weight: ballotWeight},
+			},
+			start.Add(2): {
+				{id: ballots[2], weight: ballotWeight},
+				{id: ballots[3], weight: ballotWeight},
+			},
 		}
 		return state
 	}
@@ -378,7 +382,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 		abstainedWeight     map[types.LayerID]util.Weight
 		totalWeight         util.Weight
 		verified, processed types.LayerID
-		blocks              map[types.LayerID][]types.BlockID
+		blocks              map[types.LayerID][]blockInfo
 		localOpinion        votes
 		config              Config
 
@@ -401,7 +405,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			totalWeight:     util.WeightFromUint64(32),
 			verified:        start,
 			processed:       start.Add(4),
-			blocks:          map[types.LayerID][]types.BlockID{},
+			blocks:          map[types.LayerID][]blockInfo{},
 			localOpinion:    votes{},
 			config: Config{
 				LocalThreshold:                  big.NewRat(1, 10),
@@ -430,7 +434,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			totalWeight:  util.WeightFromUint64(34),
 			verified:     start,
 			processed:    start.Add(4),
-			blocks:       map[types.LayerID][]types.BlockID{},
+			blocks:       map[types.LayerID][]blockInfo{},
 			localOpinion: votes{},
 			config: Config{
 				LocalThreshold:                  big.NewRat(1, 10),
@@ -480,8 +484,8 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			totalWeight:     util.WeightFromUint64(40),
 			verified:        start,
 			processed:       start.Add(4),
-			blocks: map[types.LayerID][]types.BlockID{
-				start.Add(3): {{1}},
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(3): {{id: types.BlockID{1}}},
 			},
 			localOpinion: votes{{1}: abstain},
 			config: Config{
