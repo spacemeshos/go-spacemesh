@@ -143,7 +143,6 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 }
 
 // GetWeight of the atx.
-// Will panic if read before Verify is called.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
 	return uint64(atxh.NumUnits) * (atxh.tickCount)
 }
