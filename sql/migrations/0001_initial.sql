@@ -28,6 +28,7 @@ CREATE TABLE layers
     id              INT PRIMARY KEY DESC,
     weak_coin       SMALL INT,
     hare_output     VARCHAR,
+    cert            BLOB,
     processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
