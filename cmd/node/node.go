@@ -463,7 +463,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	genesisAccts := app.Config.Genesis.ToAccounts()
+	genesisAccts := app.Config.Genesis.Accounts.ToAccounts()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
 		if err != nil {
@@ -476,7 +476,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.Genesis.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -1050,9 +1050,9 @@ func (app *App) Start() error {
 	/* Initialize all protocol services */
 
 	dbStorepath := app.Config.DataDir()
-	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
