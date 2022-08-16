@@ -74,6 +74,7 @@ type commonState struct {
 type blockInfo struct {
 	id     types.BlockID
 	height uint64
+	weight util.Weight
 }
 
 type ballotInfo struct {

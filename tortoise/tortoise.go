@@ -153,7 +153,6 @@ func (t *turtle) evict(ctx context.Context) {
 			delete(t.blockLayer, block.id)
 			delete(t.hareOutput, block.id)
 			delete(t.validity, block.id)
-			delete(t.full.weights, block.id)
 		}
 		delete(t.blocks, lid)
 		delete(t.decided, lid)
@@ -292,7 +291,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ball
 
 	for lid := start; lid.Before(blid); lid = lid.Add(1) {
 		for _, block := range t.blocks[lid] {
-			localVote, _, err := t.getFullVote(ctx, lid, block.id)
+			localVote, _, err := t.getFullVote(ctx, lid, block)
 			if err != nil {
 				return types.LayerID{}, err
 			}
@@ -341,7 +340,7 @@ func (t *turtle) encodeVotes(
 		}
 
 		for _, block := range t.blocks[lid] {
-			localVote, reason, err := t.getFullVote(ctx, lid, block.id)
+			localVote, reason, err := t.getFullVote(ctx, lid, block)
 			if err != nil {
 				return nil, err
 			}
@@ -391,20 +390,19 @@ func (t *turtle) encodeVotes(
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
 // outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
-func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, bid types.BlockID) (sign, voteReason, error) {
-	vote, reason := getLocalVote(&t.commonState, t.Config, lid, bid)
+func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, block blockInfo) (sign, voteReason, error) {
+	vote, reason := getLocalVote(&t.commonState, t.Config, lid, block.id)
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
-	sum := t.full.weights[bid]
-	vote = sign(sum.Cmp(t.localThreshold))
+	vote = sign(block.weight.Cmp(t.localThreshold))
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
 	coin, err := layers.GetWeakCoin(t.cdb, t.last)
 	if err != nil {
 		return 0, "", fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
-			t.last, bid, lid)
+			t.last, block.id, lid)
 	}
 	if coin {
 		return support, reasonCoinflip, nil
@@ -735,9 +733,12 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	}
 	t.blockLayer[block.ID()] = lid
 	t.blocks[lid] = append(t.blocks[lid],
-		blockInfo{id: block.ID(), height: block.TickHeight},
+		blockInfo{
+			id:     block.ID(),
+			height: block.TickHeight,
+			weight: util.WeightFromUint64(0),
+		},
 	)
-	t.full.onBlock(block)
 	t.verifying.onBlock(block)
 }
 

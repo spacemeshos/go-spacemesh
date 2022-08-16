@@ -4,7 +4,6 @@ import (
 	"container/list"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -15,7 +14,6 @@ func newFullTortoise(config Config, common *commonState) *full {
 		votes:        map[types.BallotID]votes{},
 		abstain:      map[types.BallotID]map[types.LayerID]struct{}{},
 		base:         map[types.BallotID]types.BallotID{},
-		weights:      map[types.BlockID]util.Weight{},
 		delayedQueue: list.New(),
 	}
 }
@@ -34,8 +32,6 @@ type full struct {
 	// we want to wait until verifying can't make progress before they are counted.
 	// storing them in current version is cheap.
 	counted types.LayerID
-	// counted weights of all blocks up to counted layer.
-	weights map[types.BlockID]util.Weight
 	// queue of the ballots with bad beacon
 	delayedQueue *list.List
 }
@@ -52,10 +48,6 @@ func (f *full) onBallot(ballot *tortoiseBallot) {
 	f.base[ballot.id] = ballot.base
 	f.votes[ballot.id] = ballot.votes
 	f.abstain[ballot.id] = ballot.abstain
-}
-
-func (f *full) onBlock(block *types.Block) {
-	f.weights[block.ID()] = util.WeightFromUint64(0)
 }
 
 func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.LayerID, block types.BlockID) sign {
@@ -86,19 +78,17 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			continue
 		}
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
-			for _, block := range f.blocks[lid] {
+			for i := range f.blocks[lid] {
+				block := &f.blocks[lid][i]
 				if block.height > ballot.height {
 					continue
 				}
-				vote := f.getVote(logger, ballot.id, lid, block.id)
-				current := f.weights[block.id]
-				switch vote {
+				switch f.getVote(logger, ballot.id, lid, block.id) {
 				case support:
-					current = current.Add(ballot.weight)
+					block.weight.Add(ballot.weight)
 				case against:
-					current = current.Sub(ballot.weight)
+					block.weight.Sub(ballot.weight)
 				}
-				f.weights[block.id] = current
 			}
 		}
 	}
@@ -154,7 +144,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		f.blocks[lid],
 		f.validity,
 		func(block blockInfo) sign {
-			return sign(f.weights[block.id].Cmp(f.globalThreshold))
+			return sign(block.weight.Cmp(f.globalThreshold))
 		},
 	)
 }

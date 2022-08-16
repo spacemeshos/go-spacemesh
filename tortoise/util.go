@@ -157,6 +157,7 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 			log.Stringer("decision", decision),
 			log.Stringer("id", block.id),
 			log.Uint64("height", block.height),
+			log.Stringer("weight", block.weight),
 		)
 		if decision == abstain {
 			if positive && block.height > prev.height {
@@ -183,6 +184,8 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 					encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
 						encoder.AddString("decision", decisions[i].String())
 						encoder.AddString("id", blocks[i].id.String())
+						encoder.AddString("weight", blocks[i].weight.String())
+						encoder.AddUint64("height", blocks[i].height)
 						return nil
 					}))
 				}

@@ -397,7 +397,14 @@ func TestFullCountVotes(t *testing.T) {
 				consensus.full.countVotes(logger)
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
-			require.Equal(t, tc.expect.String(), consensus.full.weights[block.ID()].String())
+			var target *blockInfo
+			for _, info := range consensus.blocks[block.LayerIndex] {
+				if info.id == block.ID() {
+					target = &info
+				}
+			}
+			require.NotNil(t, target)
+			require.Equal(t, tc.expect.String(), target.weight.String())
 		})
 	}
 }
@@ -515,8 +522,8 @@ func TestFullVerify(t *testing.T) {
 				full.blocks[lid] = append(full.blocks[lid], blockInfo{
 					id:     id,
 					height: uint64(block.height),
+					weight: util.WeightFromInt64(int64(block.margin)),
 				})
-				full.weights[id] = util.WeightFromInt64(int64(block.margin))
 			}
 			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
 			if tc.validity != nil {
