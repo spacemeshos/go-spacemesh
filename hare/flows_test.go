@@ -434,10 +434,7 @@ func Test_multipleCPs(t *testing.T) {
 		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, layerID types.LayerID, got []*types.Proposal) (*types.Block, error) {
-				diff := proposalsDiff(t, pList[layerID], got)
-				if diff != "" {
-					t.Errorf("proposals don't match: %s", diff)
-				}
+				require.Empty(t, proposalsDiff(t, pList[layerID], got))
 				return blocks[layerID], nil
 			}).AnyTimes()
 		h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -525,10 +522,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, layerID types.LayerID, got []*types.Proposal) (*types.Block, error) {
-				diff := proposalsDiff(t, pList[layerID], got)
-				if diff != "" {
-					t.Errorf("proposals don't match: %s", diff)
-				}
+				require.Empty(t, proposalsDiff(t, pList[layerID], got))
 				return blocks[layerID], nil
 			}).AnyTimes()
 		h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(

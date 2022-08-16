@@ -163,10 +163,7 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, pList, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, pList, got))
 			return block, nil
 		},
 	).Times(1)
@@ -215,10 +212,7 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, pList, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, pList, got))
 			return block, nil
 		},
 	).Times(1)
@@ -251,7 +245,8 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	h.broker.mu.RUnlock()
 }
 
-func proposalsDiff(t *testing.T, pList, got []*types.Proposal) string {
+func proposalsDiff(tb testing.TB, pList, got []*types.Proposal) string {
+	tb.Helper()
 	less := func(a, b *types.Proposal) bool { return a.ID().String() < b.ID().String() }
 	return cmp.Diff(pList, got, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Proposal{}, types.Ballot{}, signing.PublicKey{}), cmpopts.SortSlices(less))
 }
@@ -301,10 +296,7 @@ func TestHare_onTick(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, pList, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, pList, got))
 			return block, nil
 		},
 	).Times(1)
@@ -394,10 +386,7 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, pList, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, pList, got))
 			return block, nil
 		},
 	).Times(1)
@@ -468,10 +457,7 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, goodProposals, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, goodProposals, got))
 			return block, nil
 		},
 	).Times(1)
@@ -710,10 +696,7 @@ func TestHare_WeakCoin(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, pList, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, pList, got))
 			return block, nil
 		},
 	).Times(1)
@@ -749,10 +732,7 @@ func TestHare_WeakCoin(t *testing.T) {
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			diff := proposalsDiff(t, pList, got)
-			if diff != "" {
-				t.Errorf("proposals don't match: %s", diff)
-			}
+			require.Empty(t, proposalsDiff(t, pList, got))
 			return block, nil
 		},
 	).Times(1)
