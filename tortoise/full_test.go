@@ -84,7 +84,7 @@ func TestFullCountVotes(t *testing.T) {
 	type testAtx struct {
 		BaseHeight, TickCount uint64
 	}
-
+	const localHeight = 100
 	rng := mrand.New(mrand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
@@ -355,7 +355,7 @@ func TestFullCountVotes(t *testing.T) {
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
 				}
-
+				consensus.referenceHeight[lid.GetEpoch()] = localHeight
 				for _, block := range layerBlocks {
 					consensus.onBlock(lid, &block)
 				}
