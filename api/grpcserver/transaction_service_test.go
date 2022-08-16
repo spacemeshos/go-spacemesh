@@ -93,7 +93,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 				desc:    "Address",
 				matcher: resultsMatcher{Address: &gen.Addrs[0]},
 				request: &pb.TransactionResultsRequest{
-					Address: gen.Addrs[0][:],
+					Address: gen.Addrs[0].String(),
 					Start:   start,
 					Watch:   true,
 				},
@@ -167,7 +167,7 @@ func BenchmarkStreamResults(b *testing.B) {
 
 	stats := runtime.MemStats{}
 	for i := 0; i < b.N; i++ {
-		stream, err := client.StreamResults(context.TODO(), &pb.TransactionResultsRequest{Address: maxaddr[:]})
+		stream, err := client.StreamResults(context.TODO(), &pb.TransactionResultsRequest{Address: maxaddr.String()})
 		if err != nil {
 			b.Fatal(err)
 		}

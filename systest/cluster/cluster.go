@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -350,11 +351,11 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 // Account contains address and private key.
 type Account struct {
 	PrivateKey ed25519.PrivateKey
-	Address    []byte
+	Address    types.Address
 }
 
 func (a Account) String() string {
-	return "0x" + hex.EncodeToString(a.Address)
+	return a.Address.String()
 }
 
 type accounts struct {
@@ -377,7 +378,7 @@ func (a *accounts) Private(i int) ed25519.PrivateKey {
 	return a.keys[i].PK
 }
 
-func (a *accounts) Address(i int) []byte {
+func (a *accounts) Address(i int) types.Address {
 	return a.keys[i].Address()
 }
 
@@ -419,7 +420,7 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 func genGenesis(signers []*signer) (rst map[string]uint64) {
 	rst = map[string]uint64{}
 	for _, sig := range signers {
-		rst[sig.HexAddress()] = 100000000000000000
+		rst[sig.Address().String()] = 100000000000000000
 	}
 	return
 }
@@ -429,13 +430,8 @@ type signer struct {
 	PK  ed25519.PrivateKey
 }
 
-func (s *signer) Address() []byte {
-	address := wallet.Address(s.Pub)
-	return address[:]
-}
-
-func (s *signer) HexAddress() string {
-	return "0x" + hex.EncodeToString(s.Address())
+func (s *signer) Address() types.Address {
+	return wallet.Address(s.Pub)
 }
 
 func genSigners(n int) (rst []*signer) {

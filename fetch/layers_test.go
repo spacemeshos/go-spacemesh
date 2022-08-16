@@ -624,7 +624,7 @@ func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
 

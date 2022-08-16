@@ -194,18 +194,18 @@ func nextFirstLayer(current uint32, size uint32) uint32 {
 	return current
 }
 
-func getNonce(ctx context.Context, client *cluster.NodeClient, address []byte) (uint64, error) {
+func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
 	gstate := spacemeshv1.NewGlobalStateServiceClient(client)
-	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address}})
+	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address.String()}})
 	if err != nil {
 		return 0, err
 	}
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
 
-func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address []byte) (uint64, error) {
+func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
 	gstate := spacemeshv1.NewGlobalStateServiceClient(client)
-	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address}})
+	resp, err := gstate.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: address.String()}})
 	if err != nil {
 		return 0, err
 	}
@@ -219,12 +219,12 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	return err
 }
 
-func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver [20]byte, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver types.Address, amount uint64, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,
 		wallet.Spend(
-			signing.PrivateKey(pk), types.Address(receiver), amount,
+			signing.PrivateKey(pk), receiver, amount,
 			types.Nonce{Counter: nonce},
 		),
 		client)

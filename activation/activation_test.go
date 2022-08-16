@@ -36,7 +36,7 @@ var (
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.BytesToNodeID(pub)
 	otherNodeID = types.BytesToNodeID([]byte("00000"))
-	coinbase    = types.HexToAddress("33333")
+	coinbase    = types.GenerateAddress([]byte("33333"))
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
@@ -627,7 +627,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	id := types.BytesToNodeID([]byte("aaaaaa"))
-	coinbase := types.HexToAddress("0xaaa")
+	coinbase := types.GenerateAddress([]byte("0xaaa"))
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)

@@ -48,7 +48,7 @@ func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := getATXHandler(t, cdb)
 	id1 := types.NodeID{1}
-	coinbase1 := types.HexToAddress("aaaa")
+	coinbase1 := types.GenerateAddress([]byte("aaaa"))
 	epoch1 := types.EpochID(2)
 	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer()), coinbase1, &types.NIPost{}, 0, nil)
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), epoch1, atx1))
@@ -72,9 +72,10 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	id1 := types.NodeID{1}
 	id2 := types.NodeID{2}
 	id3 := types.NodeID{3}
-	coinbase1 := types.HexToAddress("aaaa")
-	coinbase2 := types.HexToAddress("bbbb")
-	coinbase3 := types.HexToAddress("cccc")
+
+	coinbase1 := types.GenerateAddress([]byte("aaaa"))
+	coinbase2 := types.GenerateAddress([]byte("bbbb"))
+	coinbase3 := types.GenerateAddress([]byte("cccc"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	npst := NewNIPostWithChallenge(&chlng, poetRef)
@@ -129,9 +130,9 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	id1 := types.NodeID{1}
 	id2 := types.NodeID{2}
 	id3 := types.NodeID{3}
-	coinbase1 := types.HexToAddress("aaaa")
-	coinbase2 := types.HexToAddress("bbbb")
-	coinbase3 := types.HexToAddress("cccc")
+	coinbase1 := types.GenerateAddress([]byte("aaaa"))
+	coinbase2 := types.GenerateAddress([]byte("bbbb"))
+	coinbase3 := types.GenerateAddress([]byte("cccc"))
 	atxs := []*types.ActivationTx{
 		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase1, 100, &types.NIPost{}),
 		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase2, 100, &types.NIPost{}),
@@ -173,7 +174,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	signer := signing.NewEdSigner()
 	idx1 := types.BytesToNodeID(signer.PublicKey().Bytes())
 	idx2 := types.NodeID{1}
-	coinbase := types.HexToAddress("aaaa")
+	coinbase := types.GenerateAddress([]byte("aaaa"))
 
 	id1 := types.NodeID{2}
 	id2 := types.NodeID{3}
@@ -341,7 +342,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	atxHdlr := getATXHandler(t, cdb)
 	signer := signing.NewEdSigner()
 	idx1 := types.BytesToNodeID(signer.PublicKey().Bytes())
-	coinbase := types.HexToAddress("aaaa")
+	coinbase := types.GenerateAddress([]byte("aaaa"))
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
@@ -419,11 +420,10 @@ func TestHandler_ProcessAtx(t *testing.T) {
 
 	atxHdlr := getATXHandler(t, newCachedDB(t))
 	idx1 := types.NodeID{2}
-	coinbase := types.HexToAddress("aaaa")
+	coinbase := types.GenerateAddress([]byte("aaaa"))
 	atx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
 
 	err := atxHdlr.ProcessAtx(context.TODO(), atx)
-	r.NoError(err)
 	r.NoError(err)
 }
 
@@ -436,7 +436,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 		numberOfLayers uint32 = 100
 	)
 
-	coinbase := types.HexToAddress("c012ba5e")
+	coinbase := types.GenerateAddress([]byte("c012ba5e"))
 	var atxList []*types.ActivationTx
 	for i := 0; i < activesetSize; i++ {
 		id := types.NodeID{3}

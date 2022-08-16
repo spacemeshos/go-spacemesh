@@ -4,6 +4,7 @@ import (
 	"time"
 
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
 
@@ -13,6 +14,7 @@ func init() {
 
 func fastnet() config.Config {
 	conf := config.DefaultConfig()
+	conf.Address = types.DefaultTestAddressConfig()
 
 	conf.API.StartGrpcServices = []string{
 		"gateway", "node", "mesh", "globalstate",
@@ -48,7 +50,7 @@ func fastnet() config.Config {
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
-	conf.SMESHING.CoinbaseAccount = "1"
+	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
 	conf.SMESHING.Opts.NumFiles = 1

@@ -133,7 +133,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			NodeID:     types.BytesToNodeID(c.signer.PublicKey().Bytes()),
 			PubLayerID: ev.LayerID,
 		}
-		atx := types.NewActivationTx(nipost, types.BytesToAddress(c.signer.PublicKey().Bytes()), nil, uint(c.units), nil)
+		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
+		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
 		atx.Verify(1, 2)
 		c.refBallot = nil
 		c.atx = atx.ID()

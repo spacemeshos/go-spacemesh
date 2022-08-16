@@ -601,9 +601,13 @@ func (app *App) initServices(ctx context.Context,
 
 	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
-	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
+	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
-		if coinbaseAddr.Big().Uint64() == 0 {
+		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
+		if err != nil {
+			app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+		}
+		if coinbaseAddr.IsEmpty() {
 			app.log.Panic("invalid coinbase account")
 		}
 	}
@@ -725,7 +729,10 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.Config.SMESHING.Start {
-		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
+		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
+		if err != nil {
+			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+		}
 		go func() {
 			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 				log.Panic("failed to start smeshing: %v", err)

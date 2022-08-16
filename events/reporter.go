@@ -180,7 +180,7 @@ func ReportAccountUpdate(a types.Address) {
 	if reporter != nil {
 		if err := reporter.accountEmitter.Emit(accountEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit account update", log.String("account", a.Short()), log.Err(err))
+			log.With().Error("Failed to emit account update", log.String("account", a.String()), log.Err(err))
 		} else {
 			log.With().Debug("reported account update", a)
 		}

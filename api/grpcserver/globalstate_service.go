@@ -57,7 +57,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 	}
 	counterProjected, balanceProjected := s.conState.GetProjection(addr)
 	return &pb.Account{
-		AccountId: &pb.AccountId{Address: addr.Bytes()},
+		AccountId: &pb.AccountId{Address: addr.String()},
 		StateCurrent: &pb.AccountState{
 			Counter: counterActual.Counter,
 			Balance: &pb.Amount{Value: balanceActual},
@@ -78,7 +78,10 @@ func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*
 	}
 
 	// Load data
-	addr := types.BytesToAddress(in.AccountId.Address)
+	addr, err := types.StringToAddress(in.AccountId.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse in.AccountId.Address `%s`: %w", in.AccountId.Address, err)
+	}
 	acct, err := s.getAccount(addr)
 	if err != nil {
 		log.With().Error("unable to fetch projected account state", log.Err(err))
@@ -115,7 +118,10 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	filterReward := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD) != 0
 	filterAccount := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT) != 0
 
-	addr := types.BytesToAddress(in.Filter.AccountId.Address)
+	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse in.Filter.AccountId.Address `%s`: %w", in.Filter.AccountId.Address, err)
+	}
 	res := &pb.AccountDataQueryResponse{}
 
 	// TODO: Implement this. The node does not implement tx receipts yet.
@@ -136,7 +142,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 					// Leave this out for now as this is changing
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
-					Coinbase: &pb.AccountId{Address: addr.Bytes()},
+					Coinbase: &pb.AccountId{Address: addr.String()},
 				},
 			}})
 		}
@@ -203,7 +209,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	if in.Filter.AccountDataFlags == uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`Filter.AccountDataFlags` must set at least one bitfield")
 	}
-	addr := types.BytesToAddress(in.Filter.AccountId.Address)
+	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
+	if err != nil {
+		return fmt.Errorf("failed to parse in.Filter.AccountId.Address `%s`: %w", in.Filter.AccountId.Address, err)
+	}
 
 	filterAccount := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT) != 0
 	filterReward := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD) != 0
@@ -267,7 +276,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						// Leave this out for now as this is changing
 						// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 						// LayerComputed: 0,
-						Coinbase: &pb.AccountId{Address: addr.Bytes()},
+						Coinbase: &pb.AccountId{Address: addr.String()},
 					},
 				}}}
 				if err := stream.Send(resp); err != nil {
@@ -399,7 +408,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					// Leave this out for now as this is changing
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
-					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
+					Coinbase: &pb.AccountId{Address: reward.Coinbase.String()},
 				},
 			}}}
 			if err := stream.Send(resp); err != nil {

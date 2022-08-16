@@ -154,7 +154,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 		account := &genesis[i]
 		v.logger.With().Info("genesis account", log.Inline(account))
 		if err := accounts.Update(tx, account); err != nil {
-			return fmt.Errorf("inserting genesis account %w", err)
+			return fmt.Errorf("inserting genesis account: %w", err)
 		}
 	}
 	return tx.Commit()

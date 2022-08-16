@@ -73,7 +73,7 @@ func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
 
@@ -81,7 +81,8 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 	t.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
-		tx := genTx(t, signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100)
+		addr := types.GenerateAddress([]byte("1"))
+		tx := genTx(t, signing.NewEdSigner(), addr, 1, 10, 100)
 		txIDs = append(txIDs, tx.ID)
 	}
 	return txIDs
@@ -100,7 +101,7 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 	for i := 0; i < numATXs; i++ {
 		signer := signing.NewEdSigner()
 		signers = append(signers, signer)
-		address := types.BytesToAddress(signer.PublicKey().Bytes())
+		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		nipostChallenge := types.NIPostChallenge{
 			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: lid,
@@ -457,13 +458,13 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, block.Rewards, len(plist))
 	sort.Slice(plist, func(i, j int) bool {
-		cbi := types.BytesToAddress(plist[i].SmesherID().Bytes())
-		cbj := types.BytesToAddress(plist[j].SmesherID().Bytes())
+		cbi := types.GenerateAddress(plist[i].SmesherID().Bytes())
+		cbj := types.GenerateAddress(plist[j].SmesherID().Bytes())
 		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
 	})
 	totalWeight := util.WeightFromUint64(0)
 	for i, r := range block.Rewards {
-		require.Equal(t, types.BytesToAddress(plist[i].SmesherID().Bytes()), r.Coinbase)
+		require.Equal(t, types.GenerateAddress(plist[i].SmesherID().Bytes()), r.Coinbase)
 		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3

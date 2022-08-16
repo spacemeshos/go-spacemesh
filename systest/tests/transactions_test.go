@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -34,9 +35,9 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		"stop waiting", stopWaiting,
 		"expected transactions", expectedCount,
 	)
-	receiver := [20]byte{11, 1, 1}
+	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	state := spacemeshv1.NewGlobalStateServiceClient(cl.Client(0))
-	response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver[:]}})
+	response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
 	require.NoError(t, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
@@ -109,7 +110,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		state := spacemeshv1.NewGlobalStateServiceClient(client)
-		response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver[:]}})
+		response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
 		require.NoError(t, err)
 		after := response.AccountWrapper.StateCurrent.Balance
 		tctx.Log.Debugw("receiver state",
