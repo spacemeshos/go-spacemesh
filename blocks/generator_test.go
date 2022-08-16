@@ -3,6 +3,7 @@ package blocks
 import (
 	"bytes"
 	"context"
+	"math/rand"
 	"sort"
 	"testing"
 	"time"
@@ -80,6 +81,12 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 }
 
 func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
+	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) {
+		atx.Verify(0, 1)
+	})
+}
+
+func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx)) ([]*signing.EdSigner, []*types.ActivationTx) {
 	t.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
@@ -92,7 +99,7 @@ func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATX
 			PubLayerID: lid,
 		}
 		atx := types.NewActivationTx(nipostChallenge, address, nil, numUint, nil)
-		atx.Verify(0, 1)
+		onAtx(atx)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 		atxes = append(atxes, atx)
 	}
@@ -177,6 +184,27 @@ func Test_GenerateBlock(t *testing.T) {
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	expWeight := util.WeightFromInt64(numUint * 1 / 3)
 	checkRewards(t, atxes, expWeight, block.Rewards)
+}
+
+func Test_GenerateBlockUnequalHeight(t *testing.T) {
+	tg := createTestGenerator(t)
+	layerID := types.GetEffectiveGenesis().Add(100)
+	numProposals := 10
+	rng := rand.New(rand.NewSource(10101))
+	max := uint64(0)
+	signers, atxs := createModifiedATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) {
+		n := rng.Uint64()
+		atx.Verify(n, 1)
+		if n > max {
+			max = n
+		}
+	})
+	activeSet := types.ToATXIDs(atxs)
+	proposals := createProposals(t, layerID, signers, activeSet, nil)
+	tg.mockCState.EXPECT().SelectBlockTXs(layerID, proposals).Return(nil, nil)
+	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
+	require.NoError(t, err)
+	require.Equal(t, max, block.TickHeight)
 }
 
 func Test_GenerateBlock_EmptyProposals(t *testing.T) {

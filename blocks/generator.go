@@ -77,13 +77,14 @@ func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, pr
 		logger.With().Error("failed to select block txs", layerID, log.Err(err))
 		return nil, fmt.Errorf("select block txs: %w", err)
 	}
-	rewards, err := g.calculateCoinbaseWeight(logger, proposals)
+	tickHeight, rewards, err := g.extractCoinbasesAndHeight(logger, proposals)
 	if err != nil {
 		return nil, err
 	}
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
+			TickHeight: tickHeight,
 			Rewards:    rewards,
 			TxIDs:      txIDs,
 		},
@@ -93,25 +94,29 @@ func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, pr
 	return b, nil
 }
 
-func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Proposal) ([]types.AnyReward, error) {
+func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Proposal) (uint64, []types.AnyReward, error) {
 	weights := make(map[types.Address]util.Weight)
 	coinbases := make([]types.Address, 0, len(props))
+	max := uint64(0)
 	for _, p := range props {
 		if p.AtxID == *types.EmptyATXID {
 			// this proposal would not have been validated
 			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
-			return nil, errInvalidATXID
+			return 0, nil, errInvalidATXID
 		}
 		atx, err := g.cdb.GetAtxHeader(p.AtxID)
+		if atx.BaseTickHeight() > max {
+			max = atx.BaseTickHeight()
+		}
 		if err != nil {
 			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
-			return nil, fmt.Errorf("block gen get ATX: %w", err)
+			return 0, nil, fmt.Errorf("block gen get ATX: %w", err)
 		}
 		ballot := &p.Ballot
 		weightPer, err := proposals.ComputeWeightPerEligibility(g.cdb, ballot, g.cfg.LayerSize, g.cfg.LayersPerEpoch)
 		if err != nil {
 			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
-			return nil, err
+			return 0, nil, err
 		}
 		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
 		actual := weightPer.Mul(util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
@@ -144,5 +149,5 @@ func (g *Generator) calculateCoinbaseWeight(logger log.Log, props []*types.Propo
 			log.Stringer("coinbase", coinbase),
 			log.Stringer("weight", weight))
 	}
-	return rewards, nil
+	return max, rewards, nil
 }
