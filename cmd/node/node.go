@@ -457,12 +457,6 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
-	var verifier blockValidityVerifier
-	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
-	}
-
 	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
@@ -489,10 +483,17 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
+	var verifier blockValidityVerifier
+	msh, err := mesh.NewMesh(cdb, beaconProtocol, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
+
 	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
+
 	// FIXME latest layer in state is not exactly the latest verified layer
 	// https://github.com/spacemeshos/go-spacemesh/issues/3318
 	verified := msh.LatestLayerInState()
@@ -549,7 +550,7 @@ func (app *App) initServices(ctx context.Context,
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 

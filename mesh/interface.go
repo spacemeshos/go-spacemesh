@@ -20,4 +20,5 @@ type tortoise interface {
 	OnBallot(*types.Ballot)
 	OnBlock(*types.Block)
 	HandleIncomingLayer(context.Context, types.LayerID) types.LayerID
+	LatestComplete() types.LayerID
 }

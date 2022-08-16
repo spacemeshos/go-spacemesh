@@ -59,38 +59,37 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 // handleLayerDataReq returns the block IDs for the specified layer hash,
 // it also returns the validation vector for this data and the latest blocks received in gossip.
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
-	lyrID := types.BytesToLayerID(req)
-	processed := h.msh.ProcessedLayer()
-	if lyrID.After(processed) {
-		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
-	}
-	ld := &layerData{ProcessedLayer: processed}
-	var err error
+	var (
+		lyrID = types.BytesToLayerID(req)
+		ld    layerData
+		err   error
+	)
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.AggregatedHash, err = layers.GetAggregatedHash(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.Ballots, err = ballots.IDsInLayer(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		// sqh.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.Blocks, err = blocks.IDsInLayer(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		// sqh.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, errInternal
 	}
-	if ld.HareOutput, err = layers.GetHareOutput(h.db, lyrID); err != nil {
+	ld.HareOutput, err = layers.GetHareOutput(h.db, lyrID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, errInternal
 	}
