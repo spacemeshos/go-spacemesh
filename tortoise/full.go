@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"container/list"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -144,63 +143,20 @@ func (f *full) countVotes(logger log.Log) {
 }
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
-	logger = logger.WithFields(
-		log.String("verifier", fullTortoise),
-		log.Stringer("counted_layer", f.counted),
-		log.Stringer("candidate_layer", lid),
-		log.Stringer("local_threshold", f.localThreshold),
-		log.Stringer("global_threshold", f.globalThreshold),
+	return verifyLayer(
+		logger.WithFields(
+			log.String("verifier", fullTortoise),
+			log.Stringer("counted_layer", f.counted),
+			log.Stringer("candidate_layer", lid),
+			log.Stringer("local_threshold", f.localThreshold),
+			log.Stringer("global_threshold", f.globalThreshold),
+		),
+		f.blocks[lid],
+		f.validity,
+		func(block blockInfo) sign {
+			return sign(f.weights[block.id].Cmp(f.globalThreshold))
+		},
 	)
-
-	blocks := f.blocks[lid]
-
-	// order blocks by height in ascending order
-	// if there is a support before any abstain
-	// and a previous height is lower than the current one
-	// the layer is finalized
-	sort.Slice(blocks, func(i, j int) bool {
-		return blocks[i].height < blocks[j].height
-	})
-
-	var (
-		decisions = make([]sign, 0, len(blocks))
-		supports  bool
-		prev      blockInfo
-	)
-	for _, block := range blocks {
-		current := f.weights[block.id]
-		decision := sign(current.Cmp(f.globalThreshold))
-
-		if decision == abstain {
-			if supports && block.height > prev.height {
-				decision = against
-			} else {
-				logger.With().Info("candidate layer is not verified. not enough weight in votes",
-					log.Stringer("block", block.id),
-					log.Stringer("voting_weight", current),
-				)
-				return false
-			}
-		}
-		if decision == support {
-			supports = true
-		}
-		prev = block
-		decisions = append(decisions, decision)
-	}
-	if !supports {
-		return false
-	}
-	for i := range decisions {
-		block := blocks[i]
-		logger.With().Debug("full tortoise decided on a block",
-			log.Stringer("block", block.id),
-			log.Stringer("decision", decisions[i]),
-		)
-		f.validity[block.id] = decisions[i]
-	}
-	logger.With().Info("candidate layer is verified")
-	return true
 }
 
 // shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently

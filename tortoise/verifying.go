@@ -153,28 +153,25 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	// 0 - there is not enough weight to cross threshold.
 	// 1 - layer is verified and contextual validity is according to our local opinion.
 	if sign(margin.Cmp(v.globalThreshold)) == abstain {
-		logger.With().Info("candidate layer is not verified." +
-			" voting weight from good ballots is lower than the threshold")
+		logger.With().Debug("candidate layer is not verified")
 		return false
 	}
-
-	// if there is any block with neutral local opinion - we can't verify the layer
-	// if it happens outside hdist - protocol will switch to full tortoise
-	for _, block := range v.blocks[lid] {
-		vote, _ := getLocalVote(v.commonState, v.Config, lid, block.id)
-		if vote == abstain {
-			logger.With().Info("candidate layer is not verified."+
-				" block is undecided according to local votes",
-				block.id,
-			)
-			return false
-		}
-		v.validity[block.id] = vote
+	if verifyLayer(
+		logger,
+		v.blocks[lid],
+		v.validity,
+		func(block blockInfo) sign {
+			decision, _ := getLocalVote(v.commonState, v.Config, lid, block.id)
+			if block.height > v.getReferenceHeight(lid) {
+				return abstain
+			}
+			return decision
+		},
+	) {
+		v.totalGoodWeight.Sub(v.goodWeight[lid])
+		return true
 	}
-
-	v.totalGoodWeight.Sub(v.goodWeight[lid])
-	logger.With().Info("candidate layer is verified")
-	return true
+	return false
 }
 
 func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) (util.Weight, int) {
@@ -184,7 +181,7 @@ func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots 
 		if ballot.weight.IsNil() {
 			continue
 		}
-		if v.referenceHeight[lid.GetEpoch()] > ballot.height {
+		if v.getReferenceHeight(lid) > ballot.height {
 			continue
 		}
 		rst := v.determineGoodness(logger, ballot)

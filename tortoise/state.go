@@ -71,6 +71,10 @@ type commonState struct {
 	validity   votes
 }
 
+func (s *commonState) getReferenceHeight(lid types.LayerID) uint64 {
+	return s.referenceHeight[lid.GetEpoch()]
+}
+
 type blockInfo struct {
 	id     types.BlockID
 	height uint64
