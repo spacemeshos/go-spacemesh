@@ -227,9 +227,9 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch_id", uint32(b.LayerIndex.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
 	encoder.AddString("base_ballot", b.Votes.Base.String())
-	encoder.AddInt("supports", len(b.Votes.Support))
-	encoder.AddInt("againsts", len(b.Votes.Against))
-	encoder.AddInt("abstains", len(b.Votes.Abstain))
+	encoder.AddInt("support", len(b.Votes.Support))
+	encoder.AddInt("against", len(b.Votes.Against))
+	encoder.AddInt("abstain", len(b.Votes.Abstain))
 	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddArray("eligibilities", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for _, proof := range b.EligibilityProofs {

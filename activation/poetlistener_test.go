@@ -23,7 +23,7 @@ func TestNewPoetListener(t *testing.T) {
 	listener := NewPoetListener(poetDb, lg)
 
 	msg := readPoetProofFromDisk(t)
-	data, err := types.InterfaceToBytes(&msg)
+	data, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 	ref, err := msg.Ref()
 	require.NoError(t, err)

@@ -129,13 +129,13 @@ func TestReferenceHeight(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 			for i, height := range tc.heights {
-				header := &types.ActivationTxHeader{
+				header := types.ActivationTxHeader{
 					NIPostChallenge: types.NIPostChallenge{
 						PubLayerID: (types.EpochID(tc.epoch) - 1).FirstLayer(),
 					},
 				}
 				header.Verify(0, uint64(height))
-				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
 				require.NoError(t, atxs.Add(cdb, atx, time.Time{}))
 			}

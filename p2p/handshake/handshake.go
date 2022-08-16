@@ -38,11 +38,15 @@ const (
 	streamTimeout = 10 * time.Second
 )
 
-type handshakeMessage struct {
+//go:generate scalegen -types HandshakeMessage,HandshakeAck
+
+// HandshakeMessage is a handshake message.
+type HandshakeMessage struct { // nolint
 	Network uint32
 }
 
-type handshakeAck struct {
+// HandshakeAck is a handshake ack.
+type HandshakeAck struct { // nolint
 	Error string
 }
 
@@ -133,10 +137,10 @@ func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err = codec.EncodeTo(stream, &handshakeMessage{Network: h.netid}); err != nil {
+	if _, err = codec.EncodeTo(stream, &HandshakeMessage{Network: h.netid}); err != nil {
 		return fmt.Errorf("failed to send handshake msg: %w", err)
 	}
-	var ack handshakeAck
+	var ack HandshakeAck
 	if _, err := codec.DecodeFrom(stream, &ack); err != nil {
 		return fmt.Errorf("failed to receive handshake ack: %w", err)
 	}
@@ -156,7 +160,7 @@ func (h *Handshake) handler(stream network.Stream) {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
-	var msg handshakeMessage
+	var msg HandshakeMessage
 	if _, err := codec.DecodeFrom(stream, &msg); err != nil {
 		return
 	}
@@ -169,7 +173,7 @@ func (h *Handshake) handler(stream network.Stream) {
 		)
 		return
 	}
-	if _, err := codec.EncodeTo(stream, &handshakeAck{}); err != nil {
+	if _, err := codec.EncodeTo(stream, &HandshakeAck{}); err != nil {
 		return
 	}
 }
