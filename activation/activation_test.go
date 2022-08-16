@@ -173,6 +173,7 @@ func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost) *types.Activa
 		},
 	}
 	activationTx.CalcAndSetID()
+	SignAtx(signing.NewEdSigner(), activationTx)
 	return activationTx
 }
 
