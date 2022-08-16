@@ -161,17 +161,6 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// SortBlocks sort blocks tick height, if height is equal by lexicographic order.
-func SortBlocks(blks []*Block) []*Block {
-	sort.Slice(blks, func(i, j int) bool {
-		if blks[i].TickHeight < blks[j].TickHeight {
-			return true
-		}
-		return blks[i].ID().Compare(blks[j].ID())
-	})
-	return blks
-}
-
 // BlockContextualValidity tuple with block id and contextual validity.
 type BlockContextualValidity struct {
 	ID       BlockID
