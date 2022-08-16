@@ -14,8 +14,8 @@ func newCommonState() commonState {
 		refBallotBeacons: map[types.EpochID]map[types.BallotID]types.Beacon{},
 		badBeaconBallots: map[types.BallotID]struct{}{},
 		epochWeight:      map[types.EpochID]util.Weight{},
-		referenceWeight:  map[types.BallotID]util.Weight{},
 		referenceHeight:  map[types.EpochID]uint64{},
+		referenceWeight:  map[types.BallotID]util.Weight{},
 		decided:          map[types.LayerID]struct{}{},
 		hareOutput:       votes{},
 		validity:         votes{},
@@ -75,6 +75,8 @@ type blockInfo struct {
 	id     types.BlockID
 	height uint64
 	weight util.Weight
+
+	empty bool
 }
 
 type ballotInfo struct {

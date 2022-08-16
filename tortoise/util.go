@@ -49,12 +49,15 @@ func persistContextualValidity(logger log.Log,
 	updater blockValidityUpdater,
 	from, to types.LayerID,
 	blocks map[types.LayerID][]blockInfo,
-	opinion votes,
+	validity votes,
 ) error {
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
 		for _, block := range blocks[lid] {
-			sign := opinion[block.id]
+			if block.empty {
+				continue
+			}
+			sign := validity[block.id]
 			if sign == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
 			}
@@ -143,12 +146,14 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 	// if there is a support before any abstain
 	// and a previous height is lower than the current one
 	// the layer is verified
+	//
+	// it will modify original slice
 	sort.Slice(blocks, func(i, j int) bool {
 		return blocks[i].height < blocks[j].height
 	})
 	var (
 		decisions = make([]sign, 0, len(blocks))
-		prev      blockInfo
+		supported blockInfo
 		positive  bool
 	)
 	for _, block := range blocks {
@@ -156,32 +161,38 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 		logger.With().Debug("decision for a block",
 			log.Stringer("decision", decision),
 			log.Stringer("id", block.id),
-			log.Uint64("height", block.height),
 			log.Stringer("weight", block.weight),
+			log.Uint64("height", block.height),
 		)
 		if decision == abstain {
-			if positive && block.height > prev.height {
+			// all blocks with the same height should be finalized
+			if positive && block.height > supported.height {
 				decision = against
 			} else {
 				return false
 			}
 		} else if decision == support {
 			positive = true
-			prev = block
+			supported = block
 		}
 		decisions = append(decisions, decision)
 	}
-	if !positive {
-		return false
-	}
-	for i, decision := range decisions {
-		validity[blocks[i].id] = decision
+	if len(blocks) > 1 {
+		if !positive {
+			return false
+		}
+		for i, decision := range decisions {
+			validity[blocks[i].id] = decision
+		}
 	}
 	logger.With().Info("candidate layer is verified",
 		log.Array("blocks",
 			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 				for i := range blocks {
 					encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+						if blocks[i].empty {
+							return nil
+						}
 						encoder.AddString("decision", decisions[i].String())
 						encoder.AddString("id", blocks[i].id.String())
 						encoder.AddString("weight", blocks[i].weight.String())

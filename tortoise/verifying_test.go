@@ -661,6 +661,38 @@ func TestVerifying_Verify(t *testing.T) {
 				{4}: support,
 			},
 		},
+		{
+			desc: "all empty layers",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight:     map[types.LayerID]util.Weight{},
+			totalWeight:         util.WeightFromUint64(40),
+			blocks:              map[types.LayerID][]blockInfo{},
+			localOpinion:        votes{},
+			expected:            start.Add(3),
+			expectedTotalWeight: util.WeightFromUint64(10),
+			expectedValidity:    map[types.BlockID]sign{},
+		},
+		{
+			desc: "some empty layers are not verified",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(4),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight:     map[types.LayerID]util.Weight{},
+			totalWeight:         util.WeightFromUint64(34),
+			blocks:              map[types.LayerID][]blockInfo{},
+			localOpinion:        votes{},
+			expected:            start.Add(1),
+			expectedTotalWeight: util.WeightFromUint64(24),
+			expectedValidity:    map[types.BlockID]sign{},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
@@ -686,6 +718,7 @@ func TestVerifying_Verify(t *testing.T) {
 			v.totalGoodWeight = tc.totalWeight
 			v.abstainedWeight = tc.abstainedWeight
 			for lid, blocks := range state.blocks {
+				state.blocks[lid] = append(state.blocks[lid], blockInfo{empty: true})
 				for _, block := range blocks {
 					v.onBlock(types.NewExistingBlock(block.id, types.InnerBlock{
 						LayerIndex: lid,

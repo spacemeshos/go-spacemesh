@@ -732,6 +732,14 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 		return
 	}
 	t.blockLayer[block.ID()] = lid
+	if len(t.blocks[lid]) == 0 {
+		t.blocks[lid] = append(t.blocks[lid],
+			blockInfo{
+				empty:  true,
+				weight: util.WeightFromUint64(0),
+			},
+		)
+	}
 	t.blocks[lid] = append(t.blocks[lid],
 		blockInfo{
 			id:     block.ID(),
@@ -814,6 +822,9 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 			continue
 		}
 		for _, block := range t.blocks[lid] {
+			if block.empty {
+				continue
+			}
 			votes[block.id] = against
 		}
 	}

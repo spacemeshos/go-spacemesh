@@ -410,6 +410,7 @@ func TestFullCountVotes(t *testing.T) {
 }
 
 func TestFullVerify(t *testing.T) {
+	const emptyThreshold = 20
 	type testBlock struct {
 		height, margin int
 	}
@@ -509,6 +510,15 @@ func TestFullVerify(t *testing.T) {
 			},
 			threshold: 10,
 		},
+		{
+			desc:      "empty layer",
+			threshold: 10,
+			validity:  []sign{},
+		},
+		{
+			desc:      "empty layer not verified",
+			threshold: emptyThreshold + 1,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			lid := types.LayerID{}
@@ -517,8 +527,10 @@ func TestFullVerify(t *testing.T) {
 				validity: votes{},
 			})
 			full.globalThreshold = util.WeightFromUint64(tc.threshold)
+			full.blocks[lid] = append(full.blocks[lid], blockInfo{
+				empty: true, weight: util.WeightFromInt64(-int64(emptyThreshold))})
 			for i, block := range tc.blocks {
-				id := types.BlockID{uint8(i)}
+				id := types.BlockID{uint8(i) + 1}
 				full.blocks[lid] = append(full.blocks[lid], blockInfo{
 					id:     id,
 					height: uint64(block.height),
@@ -528,7 +540,7 @@ func TestFullVerify(t *testing.T) {
 			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
-					id := types.BlockID{uint8(i)}
+					id := types.BlockID{uint8(i) + 1}
 					require.Equal(t, expect, full.validity[id])
 				}
 			}
