@@ -148,10 +148,8 @@ func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
 					},
 				},
 			},
+			TxIDs: txs,
 		},
-	}
-	if len(txs) > 0 {
-		p.InnerProposal.TxIDs = txs
 	}
 	signer := signing.NewEdSigner()
 	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())

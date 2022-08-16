@@ -522,7 +522,10 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, layerID types.LayerID, got []*types.Proposal) (*types.Block, error) {
-				require.ElementsMatch(t, pList[layerID], got)
+				diff := proposalsDiff(t, pList[layerID], got)
+				if diff != "" {
+					t.Errorf("proposals don't match: %s", diff)
+				}
 				return blocks[layerID], nil
 			}).AnyTimes()
 		h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
