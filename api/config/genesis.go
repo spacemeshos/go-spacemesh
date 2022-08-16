@@ -40,7 +40,6 @@ func DefaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
 		Accounts: generateGenesisAccounts(),
 	}
-	return &g
 }
 
 // DefaultTestGenesisConfig is the default test configuration for the node.
