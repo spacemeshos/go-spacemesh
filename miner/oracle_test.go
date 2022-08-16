@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -51,6 +52,7 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	hdr.Verify(0, 1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&id)
+	activation.SignAtx(signing.NewEdSigner(), atx)
 	require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
 	return atx
 }
@@ -195,6 +197,7 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	hdr.Verify(0, 1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&atxID)
+	activation.SignAtx(signing.NewEdSigner(), atx)
 	require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
 
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())

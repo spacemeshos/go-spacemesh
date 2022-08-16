@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -55,6 +56,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		}
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
+		activation.SignAtx(signing.NewEdSigner(), atx)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 	}
 	return activeset
@@ -232,6 +234,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		}
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
+		activation.SignAtx(signing.NewEdSigner(), atx)
 		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
@@ -278,6 +281,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		}
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
+		activation.SignAtx(signing.NewEdSigner(), atx)
 		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])

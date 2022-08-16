@@ -51,7 +51,7 @@ type atxHandler interface {
 	UnsubscribeAtx(id types.ATXID)
 }
 
-type signer interface {
+type Signer interface {
 	Sign(m []byte) []byte
 }
 
@@ -93,7 +93,7 @@ type Builder struct {
 	pendingPoetClient atomic.UnsafePointer
 	started           atomic.Bool
 
-	signer
+	Signer
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
 	coinbaseAccount   types.Address
@@ -148,13 +148,13 @@ func WithContext(ctx context.Context) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
+func NewBuilder(conf Config, nodeID types.NodeID, signer Signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
-		signer:            signer,
+		Signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
 		goldenATXID:       conf.GoldenATXID,
@@ -641,7 +641,7 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 
 // SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
-func SignAtx(signer signer, atx *types.ActivationTx) error {
+func SignAtx(signer Signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
 	if err != nil {
 		return fmt.Errorf("inner bytes of ATX: %w", err)

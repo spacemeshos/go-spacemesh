@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -101,6 +102,7 @@ func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, nodeID t
 	atx.Verify(0, 1)
 	id := types.RandomATXID()
 	atx.SetID(&id)
+	activation.SignAtx(signing.NewEdSigner(), atx)
 	require.NoError(t, atxs.Add(db, atx, time.Now().Add(-1*time.Second)))
 }
 

@@ -371,6 +371,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	hdr1.Verify(0, 1)
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr1}}
 	atx1.SetID(&activeSet[0])
+	activation.SignAtx(signing.NewEdSigner(), atx1)
 	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
 	hdr2 := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
@@ -381,6 +382,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	hdr2.Verify(0, 1)
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr2}}
 	atx2.SetID(&activeSet[1])
+	activation.SignAtx(signing.NewEdSigner(), atx2)
 	require.NoError(t, atxs.Add(o.cdb, atx2, time.Now()))
 
 	o.vrfVerifier = signing.VRFVerify
@@ -452,6 +454,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	hdr1.Verify(0, 1)
 	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr1}}
 	atx1.SetID(&activeSet[0])
+	activation.SignAtx(signing.NewEdSigner(), atx1)
 	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
 	hdr2 := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
@@ -462,6 +465,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	hdr1.Verify(0, 1)
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr2}}
 	atx2.SetID(&activeSet[1])
+	activation.SignAtx(signing.NewEdSigner(), atx2)
 	require.NoError(t, atxs.Add(o.cdb, atx2, time.Now()))
 
 	nodeID1, err := atx1.NodeID()
@@ -724,6 +728,7 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		hdr.Verify(0, 1)
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 		atx.SetID(&id)
+		activation.SignAtx(signing.NewEdSigner(), atx)
 		require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
 	}
 	oldActiveSet, err := o.actives(context.TODO(), layer)

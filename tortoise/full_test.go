@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -306,6 +307,7 @@ func TestFullCountVotes(t *testing.T) {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
+				activation.SignAtx(signing.NewEdSigner(), atx)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 				activeset = append(activeset, atxid)
 			}

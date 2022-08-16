@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -91,6 +92,7 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
 	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) {
 		atx.Verify(0, 1)
+		activation.SignAtx(signing.NewEdSigner(), atx)
 	})
 }
 
@@ -319,6 +321,7 @@ func Test_generateBlock_UnequalHeight(t *testing.T) {
 		if n > max {
 			max = n
 		}
+		activation.SignAtx(signing.NewEdSigner(), atx)
 	})
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.cdb, layerID, signers, activeSet, nil)
