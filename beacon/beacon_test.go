@@ -93,7 +93,6 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, nodeID types.NodeID, weight uint) {
 	header := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nodeID,
 			PubLayerID: lid,
 		},
 		NumUnits: uint32(weight),

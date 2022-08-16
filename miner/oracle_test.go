@@ -44,7 +44,6 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.ActivationTx {
 	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nodeID,
 			PubLayerID: publishLayer,
 		},
 		NumUnits: defaultAtxWeight,
@@ -189,7 +188,6 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	atxID := types.RandomATXID()
 	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     o.nodeID,
 			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
 		},
 		NumUnits: 0,

@@ -27,7 +27,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	signer := signing.NewEdSigner()
 	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 			PubLayerID: types.NewLayerID(22),
 		},
 		NumUnits: 11,

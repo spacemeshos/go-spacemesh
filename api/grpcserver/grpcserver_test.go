@@ -323,7 +323,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
 	challenge := types.NIPostChallenge{
-		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
@@ -2025,6 +2024,9 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
+	nodeId, err := globalAtx.NodeID()
+	require.NoError(t, err)
+
 	// The order of the activations is not deterministic since they're
 	// stored in a map, and randomized each run. Check if either matches.
 	require.Condition(t, func() bool {
@@ -2036,7 +2038,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
 				continue
 			}
-			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
+			if bytes.Compare(a.SmesherId.Id, nodeId.ToBytes()) != 0 {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2500,8 +2502,10 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
-		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
+		nodeId, err := globalAtx.NodeID()
+		require.NoError(t, err)
+		require.Equal(t, nodeId.ToBytes(), x.Activation.SmesherId.Id)
+		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 	default:

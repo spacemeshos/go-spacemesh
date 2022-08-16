@@ -160,11 +160,16 @@ func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
 		return fmt.Errorf("encode: %w", err)
 	}
 
+	nodeId, err := atx.NodeID()
+	if err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PubLayerID.GetEpoch()))
-		stmt.BindBytes(4, atx.NodeID.ToBytes())
+		stmt.BindBytes(4, nodeId.ToBytes())
 		stmt.BindBytes(5, buf)
 		stmt.BindInt64(6, timestamp.UnixNano())
 		stmt.BindInt64(7, int64(atx.BaseTickHeight()))

@@ -75,7 +75,6 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	for i, id := range activeSet {
 		hdr := types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				PubLayerID: lid,
 			},
 			NumUnits: uint32(i + 1),
@@ -364,7 +363,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	prevEpoch := layer.GetEpoch() - 1
 	hdr1 := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nid,
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 1 * 1024,
@@ -375,7 +373,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
 	hdr2 := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.NodeID{1},
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 9 * 1024,
@@ -447,7 +444,6 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	prevEpoch := layer.GetEpoch() - 1
 	hdr1 := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.NodeID{1},
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 1 * 1024,
@@ -458,7 +454,6 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
 	hdr2 := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.NodeID{2},
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 9 * 1024,
@@ -468,7 +463,11 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx2.SetID(&activeSet[1])
 	require.NoError(t, atxs.Add(o.cdb, atx2, time.Now()))
 
-	for _, edID := range []types.NodeID{atx1.NodeID, atx2.NodeID} {
+	nodeId1, err := atx1.NodeID()
+	require.NoError(t, err, "failed to derive NodeID 1")
+	nodeId2, err := atx1.NodeID()
+	require.NoError(t, err, "failed to derive NodeID 2")
+	for _, edID := range []types.NodeID{nodeId1, nodeId2} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), edID, layer)
 		require.NoError(t, err)
 		require.True(t, v)
@@ -717,7 +716,6 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		hdr := types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				PubLayerID: prevEpoch.FirstLayer(),
 			},
 			NumUnits: uint32(i + 1),
@@ -736,7 +734,6 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	for i, id := range activeSet {
 		hdr := types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i))),
 				PubLayerID: prevEpoch.FirstLayer(),
 			},
 			NumUnits: uint32(numMiners + i + 1),

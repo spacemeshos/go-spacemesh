@@ -504,22 +504,31 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				continue
 			}
 			seenATXIDs[id] = struct{}{}
-			atx, err := o.cdb.GetAtxHeader(id)
+			atx, err := o.cdb.GetFullAtx(id)
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
-			hareActiveSet[atx.NodeID] = atx.GetWeight()
+
+			nodeId, err := atx.NodeID()
+			if err != nil {
+				return nil, fmt.Errorf("failed to derive NodeID from atx %v: %w", atx.ID(), err)
+			}
+			hareActiveSet[nodeId] = atx.GetWeight()
 		}
 	}
 
 	// remove miners who published ballots with bad beacons
 	for id := range badBeaconATXIDs {
-		atx, err := o.cdb.GetAtxHeader(id)
+		atx, err := o.cdb.GetFullAtx(id)
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
-		delete(hareActiveSet, atx.NodeID)
-		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID))
+		nodeId, err := atx.NodeID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive NodeID from atx %v: %w", atx.ID(), err)
+		}
+		delete(hareActiveSet, nodeId)
+		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", nodeId))
 	}
 
 	if len(hareActiveSet) > 0 {
@@ -549,11 +558,15 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	// extract the nodeIDs and weights
 	activeMap := make(map[types.NodeID]uint64, len(atxids))
 	for _, atxid := range atxids {
-		atxHeader, err := o.cdb.GetAtxHeader(atxid)
+		atx, err := o.cdb.GetFullAtx(atxid)
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
-		activeMap[atxHeader.NodeID] = atxHeader.GetWeight()
+		nodeId, err := atx.NodeID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive NodeID from atx %v: %w", atx.ID(), err)
+		}
+		activeMap[nodeId] = atx.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
 

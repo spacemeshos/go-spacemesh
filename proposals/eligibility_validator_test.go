@@ -39,7 +39,6 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		if i == 0 {
 			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     nid,
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				},
 				NumUnits: testedATXUnit,
@@ -48,7 +47,6 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 		} else {
 			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes()),
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				},
 				NumUnits: defaultATXUnit,
@@ -218,7 +216,6 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		if i == 0 {
 			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 					PubLayerID: epoch.FirstLayer(),
 				},
 				NumUnits: testedATXUnit,
@@ -265,7 +262,6 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		if i == 0 {
 			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 				},
 				NumUnits: 0,

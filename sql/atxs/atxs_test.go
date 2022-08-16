@@ -232,7 +232,6 @@ func newAtx(nodeID types.NodeID, layerID types.LayerID) *types.ActivationTx {
 		InnerActivationTx: types.InnerActivationTx{
 			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     nodeID,
 					PubLayerID: layerID,
 				},
 				NumUnits: 2,

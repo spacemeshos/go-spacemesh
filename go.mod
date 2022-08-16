@@ -1,5 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
+go 1.18
+
 replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1.0
 
 require (
@@ -35,8 +37,8 @@ require (
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/go-scale v0.0.0-20220805113819-339d6408e9a5
-	github.com/spacemeshos/merkle-tree v0.0.0-20200107164308-9dfa6f215af5
-	github.com/spacemeshos/poet v0.1.1-0.20220804083423-56108df6e2d3
+	github.com/spacemeshos/merkle-tree v0.0.0-20220801075722-8d614b882cb3
+	github.com/spacemeshos/poet v0.1.1-0.20220812071757-87608eda8307
 	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
@@ -184,7 +186,7 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	golang.org/x/tools v0.1.10-0.20220218145154-897bd77cd717 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -202,5 +204,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-go 1.18

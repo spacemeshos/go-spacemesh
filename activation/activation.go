@@ -365,7 +365,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		return ErrStopRequested
 	case <-syncedCh:
 	}
-	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
+	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)

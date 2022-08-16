@@ -120,10 +120,10 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		vrfSig := proof.Sig
 
-		beaconStr := beacon.ShortString()
-		if !signing.VRFVerify(atx.NodeID.ToBytes(), message, vrfSig) {
+		nodeId, err := atx.NodeID()
+		if !signing.VRFVerify(nodeId.ToBytes(), message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
-				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
+				errIncorrectVRFSig, beacon.ShortString(), epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
 
 		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)
@@ -144,13 +144,13 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	return true, nil
 }
 
-func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
+func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTx, error) {
 	if ballot.AtxID == *types.EmptyATXID {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
 
 	epoch := ballot.LayerIndex.GetEpoch()
-	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
+	atx, err := v.cdb.GetFullAtx(ballot.AtxID)
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
 	}
@@ -158,8 +158,13 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pub := ballot.SmesherID(); bytes.Compare(atx.NodeID[:], pub.Bytes()) != 0 {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
+
+	nodeId, err := atx.NodeID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive NodeID from ATX (%v): %w", atx.ID(), err)
+	}
+	if pub := ballot.SmesherID(); bytes.Compare(nodeId[:], pub.Bytes()) != 0 {
+		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), nodeId)
 	}
 	return atx, nil
 }

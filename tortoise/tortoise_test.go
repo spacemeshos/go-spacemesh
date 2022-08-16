@@ -216,7 +216,6 @@ func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
 		atxHeader := makeAtxHeaderWithWeight(uint32(weight))
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 		atx.PubLayerID = lid
-		atx.NodeID = types.NodeID{byte(i)}
 		atxID := types.RandomATXID()
 		atx.SetID(&atxID)
 		atxList = append(atxList, atx)
@@ -532,7 +531,7 @@ func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 
 func makeAtxHeaderWithWeight(weight uint32) types.ActivationTxHeader {
 	header := types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
+		NIPostChallenge: types.NIPostChallenge{},
 	}
 	header.NumUnits = weight
 	header.Verify(0, 1)
@@ -726,8 +725,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -879,8 +877,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 40; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -938,8 +935,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -1579,9 +1575,7 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	base := blts[rng.Intn(len(blts))]
 	voting := sim.Voting{Base: base.ID()}
 	for _, layer := range layers[len(layers)-2:] {
-		for _, bid := range layer.BlocksIDs() {
-			voting.Support = append(voting.Support, bid)
-		}
+		voting.Support = append(voting.Support, layer.BlocksIDs()...)
 	}
 	return voting
 }
@@ -2102,11 +2096,10 @@ func TestComputeBallotWeight(t *testing.T) {
 			cdb := newCachedDB(t, logtest.New(t))
 			lid := types.NewLayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
-			for i, weight := range tc.atxs {
+			for _, weight := range tc.atxs {
 				atxHeader := makeAtxHeaderWithWeight(uint32(weight))
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 				atx.PubLayerID = atxLid
-				atx.NodeID = types.NodeID{byte(i)}
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))

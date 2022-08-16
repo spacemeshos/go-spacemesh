@@ -151,9 +151,8 @@ func newAtxHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
 	return NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxHandler"))
 }
 
-func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
 	challenge := types.NIPostChallenge{
-		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
@@ -311,7 +310,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
 
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -337,7 +336,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// setup
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -365,7 +364,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// if the network works and we try to publish a new ATX, the timeout should result in a clean state (so a NIPost should be built)
 	b.publisher = net
 	net.atxHdlr = atxHdlr
-	posAtx := newAtx(newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(layersPerEpoch+1)), nipost)
+	posAtx := newAtx(newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(layersPerEpoch+1)), nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 	published, builtNipost, err = publishAtx(b, postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
@@ -379,7 +378,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	// setup
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -404,7 +403,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	// if the network works - the ATX should be published
 	b.publisher = net
 	net.atxHdlr = atxHdlr
-	posAtx := newAtx(newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3*layersPerEpoch)), nipost)
+	posAtx := newAtx(newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3*layersPerEpoch)), nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 	published, builtNIPost, err = publishAtx(b, postGenesisEpoch+3, layersPerEpoch)
 	r.NoError(err)
@@ -421,7 +420,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
 
-	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -441,11 +440,11 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
 	lid := types.NewLayerID(1)
-	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, lid.Add(layersPerEpoch))
+	challenge := newChallenge(1, prevAtxID, prevAtxID, lid.Add(layersPerEpoch))
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
-	challenge = newChallenge(nodeID, 0, *types.EmptyATXID, posAtx.ID(), lid)
+	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), lid)
 	challenge.InitialPostIndices = initialPost.Indices
 	prevAtx := newAtx(challenge, nipost)
 	prevAtx.InitialPost = initialPost
@@ -467,7 +466,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
 
-	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Sub(layersPerEpoch) /*👀*/)
+	challenge := newChallenge( /*👀*/ 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Sub(layersPerEpoch) /*👀*/)
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -487,7 +486,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
 
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -528,7 +527,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	b.initialPost = initialPost
 
-	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -571,12 +570,12 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 
 	lg := logtest.New(t).WithName("storeAtx")
 	for i := postGenesisEpochLayer; i.Before(postGenesisEpochLayer.Add(3)); i = i.Add(1) {
-		challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, i.Mul(layersPerEpoch))
+		challenge := newChallenge(1, prevAtxID, prevAtxID, i.Mul(layersPerEpoch))
 		atx := newAtx(challenge, nipost)
 		storeAtx(r, atxHdlr, atx, lg)
 	}
 
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3).Mul(layersPerEpoch))
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3).Mul(layersPerEpoch))
 	prevATX := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, prevATX, lg)
 
@@ -621,7 +620,9 @@ func TestBuilder_SignAtx(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ed.PublicKey().Bytes(), []byte(pubkey))
 
-	ok := signing.Verify(signing.NewPublicKey(atx.NodeID[:]), atxBytes, atx.Sig)
+	nodeId, err := atx.NodeID()
+	assert.NoError(t, err)
+	ok := signing.Verify(signing.NewPublicKey(nodeId[:]), atxBytes, atx.Sig)
 	assert.True(t, ok)
 }
 
@@ -656,7 +657,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{
-		NodeID:         b.nodeID,
 		Sequence:       2,
 		PrevATXID:      atx.ID(),
 		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
@@ -725,7 +725,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	)
 	b.initialPost = initialPost
 
-	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -780,7 +780,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)
 
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -847,7 +847,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	select {
 	case <-syncPoint:
 	case <-time.After(time.Second):
-		require.FailNow(t, "timedout waiting for PoetServiceID to be called")
+		require.FailNow(t, "timed out waiting for PoetServiceID to be called")
 	}
 	poetProver2.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
 	require.NoError(t, b.UpdatePoETServer(context.TODO(), "update"))
@@ -860,7 +860,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	select {
 	case <-poet2Called:
 	case <-time.After(time.Second):
-		require.FailNow(t, "timedout waiting for update poet to be called")
+		require.FailNow(t, "timed out waiting for update poet to be called")
 	}
 }
 */
@@ -877,7 +877,6 @@ func newActivationTx(
 	nipost *types.NIPost,
 ) *types.ActivationTx {
 	nipostChallenge := types.NIPostChallenge{
-		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
 		PubLayerID:     pubLayerID,

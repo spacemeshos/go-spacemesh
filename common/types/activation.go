@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -170,11 +171,10 @@ func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
-// PoET membership proof. It includes the node ID, ATX sequence number, the previous ATX's ID (for all but the first in
-// the sequence), the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
+// PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
+// the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
-	NodeID             NodeID
 	Sequence           uint64
 	PrevATXID          ATXID
 	PubLayerID         LayerID
@@ -195,9 +195,7 @@ func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
 // String returns a string representation of the NIPostChallenge, for logging purposes.
 // It implements the Stringer interface.
 func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
-		challenge.NodeID.ShortString(),
-		challenge.NodeID.ShortString(),
+	return fmt.Sprintf("<seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
 		challenge.PubLayerID,
@@ -242,6 +240,19 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(&atx.InnerActivationTx)
 }
 
+// NodeID returns the public key of the node that signed the ATX
+func (atx *ActivationTx) NodeID() (NodeID, error) {
+	b, err := atx.InnerBytes()
+	if err != nil {
+		return NodeID{}, fmt.Errorf("failed to derive NodeID: %w", err)
+	}
+	pub, err := ed25519.ExtractPublicKey(b, atx.Sig)
+	if err != nil {
+		return NodeID{}, fmt.Errorf("failed to derive NodeID: %w", err)
+	}
+	return BytesToNodeID(pub), err
+}
+
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.InitialPost != nil {
@@ -251,8 +262,13 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if err == nil && h != nil {
 		encoder.AddString("challenge", h.String())
 	}
+
+	nodeId, err := atx.NodeID()
+	if err == nil {
+		encoder.AddString("sender_id", nodeId.String())
+	}
+
 	encoder.AddString("id", atx.id.String())
-	encoder.AddString("sender_id", atx.NodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	encoder.AddString("coinbase", atx.Coinbase.String())

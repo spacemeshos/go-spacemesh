@@ -180,7 +180,7 @@ func (pd *ProtocolDriver) SetSyncState(sync system.SyncStateProvider) {
 	pd.sync = sync
 }
 
-// for testing.
+// setMetricsRegistry is used for testing.
 func (pd *ProtocolDriver) setMetricsRegistry(registry *prometheus.Registry) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
@@ -467,12 +467,8 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 		return
 	}
 	oldest := epoch - numEpochsToKeep
-	if _, ok := pd.beacons[oldest]; ok {
-		delete(pd.beacons, oldest)
-	}
-	if _, ok := pd.beaconsFromBallots[oldest]; ok {
-		delete(pd.beaconsFromBallots, oldest)
-	}
+	delete(pd.beacons, oldest)
+	delete(pd.beaconsFromBallots, oldest)
 }
 
 // listens to new layers.
@@ -735,11 +731,16 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 	// we need to pass a map with spacetime unit allowances before any round is started
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
-		header, err := pd.cdb.GetAtxHeader(id)
+		atx, err := pd.cdb.GetFullAtx(id)
 		if err != nil {
-			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
+			pd.logger.WithContext(ctx).With().Panic("unable to load atx", log.Err(err))
 		}
-		ua[string(header.NodeID[:])] += uint64(header.NumUnits)
+		nodeId, err := atx.NodeID()
+		if err != nil {
+			pd.logger.WithContext(ctx).With().Panic("failed to derive nodeId from atx", log.Err(err))
+		}
+
+		ua[string(nodeId[:])] += uint64(atx.NumUnits)
 	}
 
 	pd.weakCoin.StartEpoch(ctx, epoch, ua)

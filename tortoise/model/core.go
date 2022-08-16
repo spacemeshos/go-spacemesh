@@ -130,7 +130,6 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(c.signer.PublicKey().Bytes()),
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())

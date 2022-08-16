@@ -283,10 +283,15 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 }
 
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
+	nodeId, err := a.NodeID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive NodeID from ATX (%v): %w", a.ID(), err)
+	}
+
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
-		SmesherId: &pb.SmesherId{Id: a.NodeID.ToBytes()},
+		SmesherId: &pb.SmesherId{Id: nodeId.ToBytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
