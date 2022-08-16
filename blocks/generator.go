@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -37,6 +38,7 @@ type Generator struct {
 	msh      meshProvider
 	conState conservativeState
 	fetcher  system.ProposalFetcher
+	cert     certifier
 }
 
 // Config is the config for Generator.
@@ -53,7 +55,7 @@ func defaultConfig() Config {
 }
 
 // GeneratorOpt for configuring Generator.
-type GeneratorOpt func(h *Generator)
+type GeneratorOpt func(*Generator)
 
 // WithContext modifies default context.
 func WithContext(ctx context.Context) GeneratorOpt {
@@ -84,7 +86,10 @@ func WithHareOutputChan(ch chan hare.LayerOutput) GeneratorOpt {
 }
 
 // NewGenerator creates new block generator.
-func NewGenerator(cdb *datastore.CachedDB, cState conservativeState, m meshProvider, f system.ProposalFetcher, opts ...GeneratorOpt) *Generator {
+func NewGenerator(
+	cdb *datastore.CachedDB, cState conservativeState, m meshProvider, f system.ProposalFetcher, c certifier,
+	opts ...GeneratorOpt,
+) *Generator {
 	g := &Generator{
 		logger:   log.NewNop(),
 		cfg:      defaultConfig(),
@@ -93,12 +98,12 @@ func NewGenerator(cdb *datastore.CachedDB, cState conservativeState, m meshProvi
 		msh:      m,
 		conState: cState,
 		fetcher:  f,
+		cert:     c,
 	}
 	for _, opt := range opts {
 		opt(g)
 	}
 	g.ctx, g.cancel = context.WithCancel(g.ctx)
-
 	return g
 }
 
@@ -184,6 +189,12 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 	} else {
 		emptyOutputCnt.Inc()
 	}
+
+	g.cert.RegisterDeadline(out.Layer, hareOutput, time.Now())
+	if err := g.cert.CertifyMaybe(ctx, logger.WithFields(hareOutput), out.Layer, hareOutput); err != nil {
+		logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
+	}
+
 	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput); err != nil {
 		logger.With().Error("mesh failed to process layer", log.Err(err))
 		return err

@@ -9,11 +9,30 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestBlock_IDSize(t *testing.T) {
 	var id BlockID
 	assert.Len(t, id.Bytes(), BlockIDSize)
+}
+
+func Test_CertifyMessage(t *testing.T) {
+	msg := CertifyMessage{
+		CertifyContent: CertifyContent{
+			LayerID:        NewLayerID(11),
+			BlockID:        RandomBlockID(),
+			EligibilityCnt: 2,
+			Proof:          []byte("not a fraud"),
+		},
+	}
+	msg.Signature = signing.NewEdSigner().Sign(msg.Bytes())
+	data, err := codec.Encode(msg)
+	require.NoError(t, err)
+
+	var decoded CertifyMessage
+	require.NoError(t, codec.Decode(data, &decoded))
+	require.Equal(t, msg, decoded)
 }
 
 func TestRewardCodec(t *testing.T) {

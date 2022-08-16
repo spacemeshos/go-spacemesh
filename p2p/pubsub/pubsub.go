@@ -62,6 +62,9 @@ const (
 	// HareProtocol is the protocol id for hare messages.
 	HareProtocol = "/sm/hr/1"
 
+	// BlockCertify is the protocol id for block certification.
+	BlockCertify = "/sm/bc/1"
+
 	// BeaconWeakCoinProtocol is the protocol id for beacon weak coin.
 	BeaconWeakCoinProtocol = "/sm/bw/1"
 	// BeaconProposalProtocol is the protocol id for beacon proposals.
