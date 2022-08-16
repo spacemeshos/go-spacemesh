@@ -11,7 +11,7 @@ type layerData struct {
 	// Blocks are the blocks in a layer
 	Blocks []types.BlockID
 	// HareOutput is the output of hare consensus and input for verifying tortoise
-	HareOutput types.BlockID
+	HareOutput *types.Certificate
 	// ProcessedLayer is the latest processed layer from peer
 	ProcessedLayer types.LayerID
 	// Hash is the hash of contextually valid blocks (sorted by block ID) in the given layer

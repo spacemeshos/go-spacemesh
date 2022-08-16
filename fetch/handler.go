@@ -88,8 +88,9 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, errInternal
 	}
-	ld.HareOutput, err = layers.GetHareOutput(h.db, lyrID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+
+	ld.HareOutput, err = layers.GetCert(h.db, lyrID)
+	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, errInternal
 	}

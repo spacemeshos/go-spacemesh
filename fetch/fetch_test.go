@@ -225,6 +225,7 @@ func TestFetch_GetRandomPeer(t *testing.T) {
 }
 
 func TestFetch_GetLayerData(t *testing.T) {
+	processed := types.NewLayerID(10)
 	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
 	errUnknown := errors.New("unknown")
 	tt := []struct {
@@ -275,7 +276,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 				f.mLyrS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, _ p2p.Peer, _ []byte, okFunc func([]byte), errFunc func(error)) error {
 						if tc.errs[idx] == nil {
-							go okFunc(generateLayerContent(false))
+							go okFunc(generateLayerContent(false, processed))
 						} else {
 							go errFunc(tc.errs[idx])
 						}

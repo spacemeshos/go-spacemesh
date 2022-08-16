@@ -92,15 +92,16 @@ func TestHandleLayerDataReq(t *testing.T) {
 				require.False(t, tc.emptyLyr)
 			}
 			th := createTestHandler(t)
-			expected := &lyrdata{}
+			expected := createLayer(t, th.db, tc.requested)
+			bid := types.EmptyBlockID
 			if !tc.emptyLyr {
-				expected = createLayer(t, th.db, tc.requested)
+				bid = expected.blks[0]
 			}
-			hareOutput := types.EmptyBlockID
-			if tc.hareHasOutput {
-				hareOutput = expected.blks[0]
+			hareOutput := &types.Certificate{
+				BlockID: bid,
 			}
-			require.NoError(t, layers.SetHareOutput(th.db, tc.requested, hareOutput))
+			require.NoError(t, layers.SetHareOutputWithCert(th.db, tc.requested, hareOutput))
+			th.mmp.EXPECT().ProcessedLayer().Return(tc.requested)
 
 			out, err := th.handleLayerDataReq(context.TODO(), tc.requested.Bytes())
 			require.NoError(t, err)
