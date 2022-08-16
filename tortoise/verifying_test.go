@@ -372,7 +372,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	}
 }
 
-func TestVerifyingVerifyLayers(t *testing.T) {
+func TestVerifying_Verify(t *testing.T) {
 	require.Equal(t, 4, int(types.GetLayersPerEpoch()))
 	start := types.NewLayerID(0)
 	for _, tc := range []struct {

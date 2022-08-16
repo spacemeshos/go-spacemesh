@@ -54,12 +54,13 @@ const (
 
 func newVerifying(config Config, common *commonState) *verifying {
 	return &verifying{
-		Config:          config,
-		commonState:     common,
-		goodBallots:     map[types.BallotID]goodness{},
-		goodWeight:      map[types.LayerID]util.Weight{},
-		abstainedWeight: map[types.LayerID]util.Weight{},
-		totalGoodWeight: util.WeightFromUint64(0),
+		Config:               config,
+		commonState:          common,
+		goodBallots:          map[types.BallotID]goodness{},
+		goodWeight:           map[types.LayerID]util.Weight{},
+		abstainedWeight:      map[types.LayerID]util.Weight{},
+		totalGoodWeight:      util.WeightFromUint64(0),
+		layerReferenceHeight: map[types.LayerID]uint64{},
 	}
 }
 
@@ -74,6 +75,26 @@ type verifying struct {
 	abstainedWeight map[types.LayerID]util.Weight
 	// total weight of good ballots from verified + 1 up to last processed
 	totalGoodWeight util.Weight
+	// layerReferenceHeight is a highest block height below reference height
+	layerReferenceHeight map[types.LayerID]uint64
+}
+
+func (v *verifying) onBlock(block *types.Block) {
+	if block.TickHeight > v.referenceHeight[block.LayerIndex.GetEpoch()] {
+		return
+	}
+	current, exist := v.layerReferenceHeight[block.LayerIndex]
+	if !exist {
+		current = v.layerReferenceHeight[block.LayerIndex.Sub(1)]
+	}
+	if block.TickHeight > current {
+		current = block.TickHeight
+	}
+	v.layerReferenceHeight[block.LayerIndex] = block.TickHeight
+}
+
+func (v *verifying) getReferenceHeight(lid types.LayerID) uint64 {
+	return v.layerReferenceHeight[lid]
 }
 
 func (v *verifying) resetWeights() {

@@ -54,8 +54,8 @@ func (f *full) onBallot(ballot *tortoiseBallot) {
 	f.abstain[ballot.id] = ballot.abstain
 }
 
-func (f *full) onBlock(block types.BlockID) {
-	f.weights[block] = util.WeightFromUint64(0)
+func (f *full) onBlock(block *types.Block) {
+	f.weights[block.ID()] = util.WeightFromUint64(0)
 }
 
 func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.LayerID, block types.BlockID) sign {

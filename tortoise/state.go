@@ -57,8 +57,7 @@ type commonState struct {
 
 	// epochWeight average weight per layer of atx's that target keyed epoch
 	epochWeight map[types.EpochID]util.Weight
-	// referenceHeight is either median height from all atxs that target keyed epoch
-	// or if smeshing is enabled - the height of its own atx
+	// referenceHeight is a median height from all atxs that target keyed epoch
 	referenceHeight map[types.EpochID]uint64
 
 	// referenceWeight stores atx weight divided by the total number of eligibilities.
@@ -69,10 +68,6 @@ type commonState struct {
 	decided    map[types.LayerID]struct{}
 	hareOutput votes
 	validity   votes
-}
-
-func (s *commonState) getReferenceHeight(lid types.LayerID) uint64 {
-	return s.referenceHeight[lid.GetEpoch()]
 }
 
 type blockInfo struct {

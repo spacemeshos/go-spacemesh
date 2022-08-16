@@ -159,6 +159,7 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.decided, lid)
 		delete(t.verifying.goodWeight, lid)
 		delete(t.verifying.abstainedWeight, lid)
+		delete(t.verifying.layerReferenceHeight, lid)
 		if lid.GetEpoch() < oldestEpoch {
 			delete(t.refBallotBeacons, lid.GetEpoch())
 			delete(t.epochWeight, lid.GetEpoch())
@@ -726,8 +727,11 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 		return
 	}
 	t.blockLayer[block.ID()] = lid
-	t.blocks[lid] = append(t.blocks[lid], blockInfo{id: block.ID(), height: block.TickHeight})
-	t.full.onBlock(block.ID())
+	t.blocks[lid] = append(t.blocks[lid],
+		blockInfo{id: block.ID(), height: block.TickHeight},
+	)
+	t.full.onBlock(block)
+	t.verifying.onBlock(block)
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
