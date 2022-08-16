@@ -620,9 +620,9 @@ func TestBuilder_SignAtx(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ed.PublicKey().Bytes(), []byte(pubkey))
 
-	nodeId, err := atx.NodeID()
+	nodeID, err = atx.NodeID()
 	assert.NoError(t, err)
-	ok := signing.Verify(signing.NewPublicKey(nodeId[:]), atxBytes, atx.Sig)
+	ok := signing.Verify(signing.NewPublicKey(nodeID[:]), atxBytes, atx.Sig)
 	assert.True(t, ok)
 }
 

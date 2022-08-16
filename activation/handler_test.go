@@ -243,12 +243,12 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	atx = newActivationTx(idx1, 1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
-	nodeId, err := atx.NodeID()
+	nodeID, err := atx.NodeID()
 	assert.NoError(t, err)
-	prevNodeId, err := atxList[0].NodeID()
+	prevNodeID, err := atxList[0].NodeID()
 	assert.NoError(t, err)
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), nodeId, prevNodeId))
+	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), nodeID, prevNodeID))
 
 	// Wrong layerId.
 	posAtx2 := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
@@ -273,9 +273,9 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	nodeId, err = atx.NodeID()
+	nodeID, err = atx.NodeID()
 	require.NoError(t, err)
-	require.NoError(t, atxs.DeleteATXsByNodeID(cdb, nodeId))
+	require.NoError(t, atxs.DeleteATXsByNodeID(cdb, nodeID))
 
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)

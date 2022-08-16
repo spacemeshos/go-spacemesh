@@ -509,11 +509,11 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
 
-			nodeId, err := atx.NodeID()
+			nodeID, err := atx.NodeID()
 			if err != nil {
 				return nil, fmt.Errorf("failed to derive NodeID from atx %v: %w", atx.ID(), err)
 			}
-			hareActiveSet[nodeId] = atx.GetWeight()
+			hareActiveSet[nodeID] = atx.GetWeight()
 		}
 	}
 
@@ -523,12 +523,12 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
-		nodeId, err := atx.NodeID()
+		nodeID, err := atx.NodeID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive NodeID from atx %v: %w", atx.ID(), err)
 		}
-		delete(hareActiveSet, nodeId)
-		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", nodeId))
+		delete(hareActiveSet, nodeID)
+		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", nodeID))
 	}
 
 	if len(hareActiveSet) > 0 {
@@ -562,11 +562,11 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
-		nodeId, err := atx.NodeID()
+		nodeID, err := atx.NodeID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive NodeID from atx %v: %w", atx.ID(), err)
 		}
-		activeMap[nodeId] = atx.GetWeight()
+		activeMap[nodeID] = atx.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
 

@@ -120,8 +120,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		vrfSig := proof.Sig
 
-		nodeId, err := atx.NodeID()
-		if !signing.VRFVerify(nodeId.ToBytes(), message, vrfSig) {
+		nodeID, err := atx.NodeID()
+		if !signing.VRFVerify(nodeID.ToBytes(), message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beacon.ShortString(), epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
@@ -159,12 +159,12 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
 
-	nodeId, err := atx.NodeID()
+	nodeID, err := atx.NodeID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive NodeID from ATX (%v): %w", atx.ID(), err)
 	}
-	if pub := ballot.SmesherID(); bytes.Compare(nodeId[:], pub.Bytes()) != 0 {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), nodeId)
+	if pub := ballot.SmesherID(); !bytes.Equal(nodeID[:], pub.Bytes()) {
+		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), nodeID)
 	}
 	return atx, nil
 }

@@ -735,12 +735,12 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx", log.Err(err))
 		}
-		nodeId, err := atx.NodeID()
+		nodeID, err := atx.NodeID()
 		if err != nil {
-			pd.logger.WithContext(ctx).With().Panic("failed to derive nodeId from atx", log.Err(err))
+			pd.logger.WithContext(ctx).With().Panic("failed to derive NodeID from atx", log.Err(err))
 		}
 
-		ua[string(nodeId[:])] += uint64(atx.NumUnits)
+		ua[string(nodeID[:])] += uint64(atx.NumUnits)
 	}
 
 	pd.weakCoin.StartEpoch(ctx, epoch, ua)

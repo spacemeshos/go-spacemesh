@@ -463,11 +463,11 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	atx2.SetID(&activeSet[1])
 	require.NoError(t, atxs.Add(o.cdb, atx2, time.Now()))
 
-	nodeId1, err := atx1.NodeID()
+	nodeID1, err := atx1.NodeID()
 	require.NoError(t, err, "failed to derive NodeID 1")
-	nodeId2, err := atx1.NodeID()
+	nodeID2, err := atx1.NodeID()
 	require.NoError(t, err, "failed to derive NodeID 2")
-	for _, edID := range []types.NodeID{nodeId1, nodeId2} {
+	for _, edID := range []types.NodeID{nodeID1, nodeID2} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), edID, layer)
 		require.NoError(t, err)
 		require.True(t, v)

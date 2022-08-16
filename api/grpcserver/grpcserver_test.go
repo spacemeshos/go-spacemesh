@@ -2024,7 +2024,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
-	nodeId, err := globalAtx.NodeID()
+	nodeID, err := globalAtx.NodeID()
 	require.NoError(t, err)
 
 	// The order of the activations is not deterministic since they're
@@ -2035,16 +2035,16 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
 				continue
 			}
-			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
+			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if bytes.Compare(a.SmesherId.Id, nodeId.ToBytes()) != 0 {
+			if !bytes.Equal(a.SmesherId.Id, nodeID.ToBytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
 				continue
 			}
-			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
+			if !bytes.Equal(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) {
 				continue
 			}
 			if a.NumUnits != uint32(globalAtx.NumUnits) {
@@ -2502,9 +2502,9 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		nodeId, err := globalAtx.NodeID()
+		nodeID, err := globalAtx.NodeID()
 		require.NoError(t, err)
-		require.Equal(t, nodeId.ToBytes(), x.Activation.SmesherId.Id)
+		require.Equal(t, nodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))

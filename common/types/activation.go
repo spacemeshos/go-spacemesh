@@ -240,7 +240,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(&atx.InnerActivationTx)
 }
 
-// NodeID returns the public key of the node that signed the ATX
+// NodeID returns the public key of the node that signed the ATX.
 func (atx *ActivationTx) NodeID() (NodeID, error) {
 	b, err := atx.InnerBytes()
 	if err != nil {
@@ -263,9 +263,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("challenge", h.String())
 	}
 
-	nodeId, err := atx.NodeID()
+	nodeID, err := atx.NodeID()
 	if err == nil {
-		encoder.AddString("sender_id", nodeId.String())
+		encoder.AddString("sender_id", nodeID.String())
 	}
 
 	encoder.AddString("id", atx.id.String())
