@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -120,8 +118,8 @@ func TestHare_New(t *testing.T) {
 	defer ctrl.Finish()
 
 	logger := logtest.New(t).WithName(t.Name())
-	h := New(sql.InMemory(), cfg, "", noopPubSub(t), signing.NewEdSigner(), types.NodeID{}, mocks.NewMockblockGenerator(ctrl), smocks.NewMockSyncStateProvider(ctrl),
-		mocks.NewMockmeshProvider(ctrl), smocks.NewMockBeaconGetter(ctrl), smocks.NewMockProposalFetcher(ctrl),
+	h := New(sql.InMemory(), cfg, "", noopPubSub(t), signing.NewEdSigner(), types.NodeID{}, make(chan LayerOutput, 1),
+		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10, mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
 	assert.NotNil(t, h)
 }
@@ -143,33 +141,13 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 	assert.Equal(t, errNoResult, err)
 	assert.Nil(t, res)
 
-	pList := []*types.Proposal{
-		types.GenLayerProposal(lyrID, []types.TransactionID{}),
-		types.GenLayerProposal(lyrID, []types.TransactionID{}),
-		types.GenLayerProposal(lyrID, []types.TransactionID{}),
-	}
-	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
-	}
-	pids := types.ToProposalIDs(pList)
+	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)
-	block := types.GenLayerBlock(lyrID, nil)
 
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, pids, pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, pList, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyrID, set, true, false}))
+	lo := <-h.blockGenCh
+	require.Equal(t, lyrID, lo.Layer)
+	require.ElementsMatch(t, pids, lo.Proposals)
 
 	res, err = h.getResult(lyrID)
 	assert.NoError(t, err)
@@ -192,34 +170,14 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 	h.lastLayer = lyrID.Add(h.bufferSize + 1)
 	h.layerLock.Unlock()
 
-	pList := []*types.Proposal{
-		types.GenLayerProposal(lyrID, []types.TransactionID{}),
-		types.GenLayerProposal(lyrID, []types.TransactionID{}),
-		types.GenLayerProposal(lyrID, []types.TransactionID{}),
-	}
-	for _, p := range pList {
-		require.NoError(t, ballots.Add(h.db, &p.Ballot))
-		require.NoError(t, proposals.Add(h.db, p))
-	}
-	pids := types.ToProposalIDs(pList)
+	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)
-	block := types.GenLayerBlock(lyrID, nil)
 
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, pids, pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, pList, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
 	err = h.collectOutput(context.TODO(), mockReport{lyrID, set, true, false})
 	assert.Equal(t, ErrTooLate, err)
+	lo := <-h.blockGenCh
+	require.Equal(t, lyrID, lo.Layer)
+	require.ElementsMatch(t, pids, lo.Proposals)
 
 	res, err = h.getResult(lyrID)
 	assert.Equal(t, err, errTooOld)
@@ -236,19 +194,16 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, types.EmptyBlockID).Times(1)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)
 
 	h.broker.mu.RLock()
-	assert.Nil(t, h.broker.outbox[mo.ID().Uint32()])
+	require.Nil(t, h.broker.outbox[mo.ID().Uint32()])
 	h.broker.mu.RUnlock()
-}
 
-func proposalsDiff(tb testing.TB, pList, got []*types.Proposal) string {
-	tb.Helper()
-	less := func(a, b *types.Proposal) bool { return a.ID().String() < b.ID().String() }
-	return cmp.Diff(pList, got, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Proposal{}, types.Ballot{}, signing.PublicKey{}), cmpopts.SortSlices(less))
+	lo := <-h.blockGenCh
+	require.Equal(t, lyrID, lo.Layer)
+	require.Empty(t, lo.Proposals)
 }
 
 func TestHare_onTick(t *testing.T) {
@@ -283,25 +238,11 @@ func TestHare_onTick(t *testing.T) {
 		require.NoError(t, ballots.Add(h.db, &p.Ballot))
 		require.NoError(t, proposals.Add(h.db, p))
 	}
-	block := types.GenLayerBlock(lyrID, nil)
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyrID).Return(true, nil).Times(1)
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(beacon, nil).Times(1)
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, types.ToProposalIDs(pList), pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, pList, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -314,9 +255,9 @@ func TestHare_onTick(t *testing.T) {
 
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res1, err := h.getResult(lyrID)
-	assert.NoError(t, err)
-	assert.Equal(t, types.SortProposalIDs(types.ToProposalIDs(pList)), types.SortProposalIDs(res1))
+	out := <-h.blockGenCh
+	require.Equal(t, lyrID, out.Layer)
+	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
 
 	lyrID = lyrID.Add(1)
 	// consensus process is closed, should not process any tick
@@ -372,26 +313,12 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 		require.NoError(t, ballots.Add(h.db, &p.Ballot))
 		require.NoError(t, proposals.Add(h.db, p))
 	}
-	block := types.GenLayerBlock(lyrID, nil)
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
 
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyrID).Return(true, nil).Times(1)
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(beacon, nil).Times(1)
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, types.ToProposalIDs(pList), pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, pList, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -404,9 +331,9 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res, err := h.getResult(lyrID)
-	assert.NoError(t, err)
-	assert.Equal(t, types.SortProposalIDs(types.ToProposalIDs(pList)), types.SortProposalIDs(res))
+	out := <-h.blockGenCh
+	require.Equal(t, lyrID, out.Layer)
+	require.ElementsMatch(t, types.ToProposalIDs(pList), out.Proposals)
 }
 
 func TestHare_onTick_SomeBadBallots(t *testing.T) {
@@ -444,25 +371,11 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 		require.NoError(t, proposals.Add(h.db, p))
 	}
 	goodProposals := []*types.Proposal{pList[0], pList[2]}
-	block := types.GenLayerBlock(lyrID, nil)
 
 	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
 	h.beacons = mockBeacons
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyrID).Return(true, nil).Times(1)
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, types.ToProposalIDs(goodProposals), pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, goodProposals, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -475,9 +388,9 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res, err := h.getResult(lyrID)
-	assert.NoError(t, err)
-	assert.Equal(t, types.SortProposalIDs(types.ToProposalIDs(goodProposals)), types.SortProposalIDs(res))
+	out := <-h.blockGenCh
+	require.Equal(t, lyrID, out.Layer)
+	require.ElementsMatch(t, types.ToProposalIDs(goodProposals), out.Proposals)
 }
 
 func TestHare_onTick_NoGoodBallots(t *testing.T) {
@@ -519,7 +432,6 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 	h.beacons = mockBeacons
 	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyrID).Return(true, nil).Times(1)
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, types.EmptyBlockID).Return(nil).Times(1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -532,9 +444,9 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res, err := h.getResult(lyrID)
-	assert.NoError(t, err)
-	assert.Empty(t, res)
+	out := <-h.blockGenCh
+	require.Equal(t, lyrID, out.Layer)
+	require.Empty(t, out.Proposals)
 }
 
 func TestHare_onTick_NoBeacon(t *testing.T) {
@@ -574,7 +486,6 @@ func TestHare_outputBuffer(t *testing.T) {
 	for i := uint32(1); i <= h.bufferSize; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		h.setLastLayer(lyr)
-		h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, types.EmptyBlockID).Return(nil).Times(1)
 		require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyr, NewEmptySet(0), true, false}))
 		_, ok := h.outputs[lyr]
 		require.True(t, ok)
@@ -586,7 +497,6 @@ func TestHare_outputBuffer(t *testing.T) {
 	// add another output
 	lyr = lyr.Add(1)
 	h.setLastLayer(lyr)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, types.EmptyBlockID).Return(nil).Times(1)
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyr, NewEmptySet(0), true, false}))
 	_, ok := h.outputs[lyr]
 	require.True(t, ok)
@@ -603,7 +513,6 @@ func TestHare_IsTooLate(t *testing.T) {
 	for i := uint32(1); i <= h.bufferSize*2; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		h.setLastLayer(lyr)
-		h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, types.EmptyBlockID).Return(nil).Times(1)
 		_ = h.collectOutput(context.TODO(), mockReport{lyr, NewEmptySet(0), true, false})
 		_, ok := h.outputs[lyr]
 		assert.True(t, ok)
@@ -627,7 +536,6 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	for i := uint32(1); i <= h.bufferSize; i++ {
 		lyr = types.GetEffectiveGenesis().Add(i)
 		h.setLastLayer(lyr)
-		h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, types.EmptyBlockID).Return(nil).Times(1)
 		require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyr, NewEmptySet(0), true, false}))
 		_, ok := h.outputs[lyr]
 		require.True(t, ok)
@@ -638,7 +546,6 @@ func TestHare_oldestInBuffer(t *testing.T) {
 
 	lyr = lyr.Add(1)
 	h.setLastLayer(lyr)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, types.EmptyBlockID).Return(nil).Times(1)
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyr, NewEmptySet(0), true, false}))
 	_, ok := h.outputs[lyr]
 	require.True(t, ok)
@@ -648,7 +555,6 @@ func TestHare_oldestInBuffer(t *testing.T) {
 
 	lyr = lyr.Add(2)
 	h.setLastLayer(lyr)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, types.EmptyBlockID).Return(nil).Times(1)
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyr, NewEmptySet(0), true, false}))
 	_, ok = h.outputs[lyr]
 	require.True(t, ok)
@@ -664,7 +570,6 @@ func TestHare_WeakCoin(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	h.setLastLayer(layerID)
 
-	done := make(chan struct{})
 	require.NoError(t, h.Start(context.TODO()))
 	defer h.Close()
 	waitForMsg := func() {
@@ -672,7 +577,7 @@ func TestHare_WeakCoin(t *testing.T) {
 		select {
 		case <-tmr.C:
 			require.Fail(t, "timed out waiting for message")
-		case <-done:
+		case <-h.blockGenCh:
 		}
 	}
 
@@ -686,26 +591,8 @@ func TestHare_WeakCoin(t *testing.T) {
 		require.NoError(t, proposals.Add(h.db, p))
 	}
 	set := NewSetFromValues(types.ToProposalIDs(pList)...)
-	block := types.GenLayerBlock(layerID, nil)
 
 	// complete + coin flip true
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, types.ToProposalIDs(pList), pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, pList, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID()).DoAndReturn(
-		func(context.Context, types.LayerID, types.BlockID) error {
-			done <- struct{}{}
-			return nil
-		}).Times(1)
 	h.outputChan <- mockReport{layerID, set, true, true}
 	waitForMsg()
 	wc, err := layers.GetWeakCoin(h.db, layerID)
@@ -713,11 +600,6 @@ func TestHare_WeakCoin(t *testing.T) {
 	require.True(t, wc)
 
 	// incomplete + coin flip true
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID).DoAndReturn(
-		func(context.Context, types.LayerID, types.BlockID) error {
-			done <- struct{}{}
-			return nil
-		}).Times(1)
 	h.outputChan <- mockReport{layerID, set, false, true}
 	waitForMsg()
 	wc, err = layers.GetWeakCoin(h.db, layerID)
@@ -725,23 +607,6 @@ func TestHare_WeakCoin(t *testing.T) {
 	require.True(t, wc)
 
 	// complete + coin flip false
-	h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, pids []types.ProposalID) error {
-			assert.ElementsMatch(t, types.ToProposalIDs(pList), pids)
-			return nil
-		}).Times(1)
-	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got []*types.Proposal) (*types.Block, error) {
-			require.Empty(t, proposalsDiff(t, pList, got))
-			return block, nil
-		},
-	).Times(1)
-	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID()).DoAndReturn(
-		func(context.Context, types.LayerID, types.BlockID) error {
-			done <- struct{}{}
-			return nil
-		}).Times(1)
 	h.outputChan <- mockReport{layerID, set, true, false}
 	waitForMsg()
 	wc, err = layers.GetWeakCoin(h.db, layerID)
@@ -749,11 +614,6 @@ func TestHare_WeakCoin(t *testing.T) {
 	require.False(t, wc)
 
 	// incomplete + coin flip false
-	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID).DoAndReturn(
-		func(context.Context, types.LayerID, types.BlockID) error {
-			done <- struct{}{}
-			return nil
-		}).Times(1)
 	h.outputChan <- mockReport{layerID, set, false, true}
 	waitForMsg()
 

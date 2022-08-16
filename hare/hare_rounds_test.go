@@ -53,15 +53,12 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 
 type (
 	funcOracle   func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
-	funcValidate func(types.LayerID, types.BlockID, *testHare)
+	funcValidate func(types.LayerID, *testHare)
 	testHare     struct {
 		*hareWithMocks
 		N int
 	}
 )
-
-func (testHare) Register(bool, string)   {}
-func (testHare) Unregister(bool, string) {}
 
 func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, createProposal bool, oracle funcOracle, validate funcValidate) *TestHareWrapper {
 	r := require.New(t)
@@ -105,11 +102,11 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, c
 				return oracle(layer, round, committeeSize, id, sig, th)
 			}).AnyTimes()
 		th.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		th.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, layer types.LayerID, blockID types.BlockID) error {
-				validate(layer, blockID, th)
-				return nil
-			}).AnyTimes()
+		go func() {
+			for out := range th.blockGenCh {
+				validate(out.Layer, th)
+			}
+		}()
 		w.hare = append(w.hare, th.Hare)
 		e := th.Start(context.TODO())
 		r.NoError(e)
@@ -134,7 +131,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 
 			mu.Lock()
@@ -144,6 +141,10 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
+
+	for _, h := range w.hare {
+		close(h.blockGenCh)
+	}
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -174,7 +175,7 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -207,7 +208,7 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -240,7 +241,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -273,7 +274,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -303,7 +304,7 @@ func Test_HareComplete(t *testing.T) {
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			return 1, nil
 		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})

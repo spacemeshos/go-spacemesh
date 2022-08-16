@@ -21,15 +21,6 @@ type Rolacle interface {
 	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
 }
 
-type meshProvider interface {
-	AddBlockWithTXs(context.Context, *types.Block) error
-	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
-}
-
-type blockGenerator interface {
-	GenerateBlock(context.Context, types.LayerID, []*types.Proposal) (*types.Block, error)
-}
-
 // stateQuerier provides a query to check if an Ed public key is active on the current consensus view.
 // It returns true if the identity is active and false otherwise.
 // An error is set iff the identity could not be checked for activeness.
