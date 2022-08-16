@@ -422,7 +422,6 @@ func Test_multipleCPs(t *testing.T) {
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-
 		go func(idx int) {
 			for out := range h.blockGenCh {
 				if outputs[idx] == nil {
@@ -431,7 +430,6 @@ func Test_multipleCPs(t *testing.T) {
 				outputs[idx][out.Layer] = out
 			}
 		}(i)
-
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h.Hare)
 		e := h.Start(context.TODO())
@@ -517,7 +515,6 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-
 		go func(idx int) {
 			for out := range h.blockGenCh {
 				if outputs[idx] == nil {
@@ -526,7 +523,6 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 				outputs[idx][out.Layer] = out
 			}
 		}(i)
-
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h.Hare)
 		e := h.Start(context.TODO())

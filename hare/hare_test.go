@@ -143,7 +143,6 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 
 	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)
-
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{lyrID, set, true, false}))
 	lo := <-h.blockGenCh
 	require.Equal(t, lyrID, lo.Layer)
@@ -172,7 +171,6 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 
 	pids := []types.ProposalID{types.RandomProposalID(), types.RandomProposalID(), types.RandomProposalID()}
 	set := NewSetFromValues(pids...)
-
 	err = h.collectOutput(context.TODO(), mockReport{lyrID, set, true, false})
 	assert.Equal(t, ErrTooLate, err)
 	lo := <-h.blockGenCh
