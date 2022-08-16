@@ -723,6 +723,13 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if !lid.After(t.evicted) {
 		return
 	}
+	if _, exist := t.referenceHeight[lid.GetEpoch()]; !exist {
+		// TODO(dshulyak) reference height is computed when first layer in the epoch
+		// is sent to the onLayerTerminated. after that we will load blocks from that layer.
+		// this warning is expected if block was sent to onBlock before the first event
+		t.logger.With().Info("block was submitted before computing reference height", block.ID(), lid)
+		return
+	}
 	if _, exist := t.blockLayer[block.ID()]; exist {
 		return
 	}

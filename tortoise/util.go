@@ -166,8 +166,8 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 			}
 		} else if decision == support {
 			positive = true
+			prev = block
 		}
-		prev = block
 		decisions = append(decisions, decision)
 	}
 	if !positive {

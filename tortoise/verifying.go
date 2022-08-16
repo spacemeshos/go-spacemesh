@@ -90,7 +90,7 @@ func (v *verifying) onBlock(block *types.Block) {
 	if block.TickHeight > current {
 		current = block.TickHeight
 	}
-	v.layerReferenceHeight[block.LayerIndex] = block.TickHeight
+	v.layerReferenceHeight[block.LayerIndex] = current
 }
 
 func (v *verifying) getReferenceHeight(lid types.LayerID) uint64 {
@@ -170,11 +170,8 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
-
-	// 0 - there is not enough weight to cross threshold.
-	// 1 - layer is verified and contextual validity is according to our local opinion.
 	if sign(margin.Cmp(v.globalThreshold)) == abstain {
-		logger.With().Debug("candidate layer is not verified")
+		logger.With().Debug("doesn't cross global threshol")
 		return false
 	}
 	if verifyLayer(
