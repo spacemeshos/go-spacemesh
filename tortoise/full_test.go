@@ -100,11 +100,7 @@ func TestFullCountVotes(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc         string
-<<<<<<< HEAD
 		activeset    []testAtx      // list of atxs
-=======
-		activeset    []uint32       // list of weights in activeset
->>>>>>> block-tick-height
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
@@ -112,11 +108,7 @@ func TestFullCountVotes(t *testing.T) {
 	}{
 		{
 			desc:      "TwoLayersSupport",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -139,11 +131,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "ConflictWithBase",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -178,11 +166,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeights",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
-=======
-			activeset: []uint32{80, 40, 20},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -212,11 +196,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
-=======
-			activeset: []uint32{80, 40, 20},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -243,11 +223,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneLayerSupport",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			}, layerBallots: [][]testBallot{
@@ -263,11 +239,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAbstain",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -284,11 +256,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAagaisnt",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -305,11 +273,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "MajorityAgainst",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -326,11 +290,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "NoVotes",
-<<<<<<< HEAD
 			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
-=======
-			activeset: []uint32{10, 10, 10},
->>>>>>> block-tick-height
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -366,19 +326,13 @@ func TestFullCountVotes(t *testing.T) {
 			logger := logtest.New(t)
 			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 			var activeset []types.ATXID
-<<<<<<< HEAD
 			for i := range tc.activeset {
 				header := types.ActivationTxHeader{
 					NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
 					NumUnits:        1,
 				}
 				header.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
-				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: &header}}
-=======
-			for i, weight := range tc.activeset {
-				header := makeAtxHeaderWithWeight(weight)
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
->>>>>>> block-tick-height
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
