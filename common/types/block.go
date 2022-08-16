@@ -50,16 +50,20 @@ type Block struct {
 // InnerBlock contains the transactions and rewards of a block.
 type InnerBlock struct {
 	LayerIndex LayerID
+	TickHeight uint64
 	Rewards    []AnyReward
 	TxIDs      []TransactionID
 }
 
 // RatNum represents a rational number with the numerator and denominator.
+// note: RatNum aims to be a generic representation of a rational number and parse-able by
+// different programming languages.
+// for doing math around weight inside go-spacemesh codebase, use util.Weight.
 type RatNum struct {
 	Num, Denom uint64
 }
 
-// AnyReward contains the rewards inforamtion.
+// AnyReward contains the reward information.
 type AnyReward struct {
 	Coinbase Address
 	Weight   RatNum
@@ -88,6 +92,7 @@ func (b *Block) ID() BlockID {
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
 	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddUint64("tick_height", b.TickHeight)
 	encoder.AddInt("num_tx", len(b.TxIDs))
 	encoder.AddInt("num_rewards", len(b.Rewards))
 	return nil
@@ -154,12 +159,6 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 		ids = append(ids, b.ID())
 	}
 	return ids
-}
-
-// SortBlocks sort blocks by their IDs.
-func SortBlocks(blks []*Block) []*Block {
-	sort.Slice(blks, func(i, j int) bool { return blks[i].ID().Compare(blks[j].ID()) })
-	return blks
 }
 
 // BlockContextualValidity tuple with block id and contextual validity.

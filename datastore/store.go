@@ -51,8 +51,8 @@ func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, err
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, atxHeader.ActivationTxHeader)
-	return atxHeader.ActivationTxHeader, nil
+	db.atxHdrCache.Add(id, &atxHeader.ActivationTxHeader)
+	return &atxHeader.ActivationTxHeader, nil
 }
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
@@ -67,7 +67,7 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, atx.ActivationTxHeader)
+	db.atxHdrCache.Add(id, &atx.ActivationTxHeader)
 
 	return atx, nil
 }

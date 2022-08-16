@@ -42,16 +42,15 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 }
 
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.ActivationTx {
-	hdr := &types.ActivationTxHeader{
+	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     nodeID,
 			PubLayerID: publishLayer,
-			StartTick:  0,
-			EndTick:    1,
 		},
 		NumUnits: defaultAtxWeight,
 	}
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: hdr}}
+	hdr.Verify(0, 1)
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&id)
 	require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
 	return atx
@@ -113,7 +112,7 @@ func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end ty
 			}
 			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
 			if i == 0 {
-				info.atxHdr = atx.ActivationTxHeader
+				info.atxHdr = &atx.ActivationTxHeader
 			}
 		}
 		epochInfo[epoch] = info
@@ -188,16 +187,15 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	atxID := types.RandomATXID()
-	hdr := &types.ActivationTxHeader{
+	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     o.nodeID,
 			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
-			StartTick:  0,
-			EndTick:    1,
 		},
 		NumUnits: 0,
 	}
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: hdr}}
+	hdr.Verify(0, 1)
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&atxID)
 	require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
 

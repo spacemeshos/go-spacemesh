@@ -384,10 +384,10 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 
 	m := new(types.PostMetadata)
 	m.Challenge = proofMetadata.Challenge
-	m.BitsPerLabel = proofMetadata.BitsPerLabel
-	m.LabelsPerUnit = proofMetadata.LabelsPerUnit
-	m.K1 = proofMetadata.K1
-	m.K2 = proofMetadata.K2
+	m.BitsPerLabel = byte(proofMetadata.BitsPerLabel)
+	m.LabelsPerUnit = uint64(proofMetadata.LabelsPerUnit)
+	m.K1 = uint32(proofMetadata.K1)
+	m.K2 = uint32(proofMetadata.K2)
 
 	p := (*types.Post)(proof)
 

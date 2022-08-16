@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"go.uber.org/atomic"
@@ -466,12 +467,11 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to, latestVerified
 	return nil
 }
 
-// TODO: change this per conclusion in https://community.spacemesh.io/t/new-history-reversal-attack-and-mitigation/268
 func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	if len(validBlocks) == 0 {
 		return nil
 	}
-	sorted := types.SortBlocks(validBlocks)
+	sorted := sortBlocks(validBlocks)
 	return sorted[0]
 }
 
@@ -746,4 +746,15 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 // GetRewards retrieves account's rewards by the coinbase address.
 func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 	return rewards.List(msh.cdb, coinbase)
+}
+
+// sortBlocks sort blocks tick height, if height is equal by lexicographic order.
+func sortBlocks(blks []*types.Block) []*types.Block {
+	sort.Slice(blks, func(i, j int) bool {
+		if blks[i].TickHeight < blks[j].TickHeight {
+			return true
+		}
+		return blks[i].ID().Compare(blks[j].ID())
+	})
+	return blks
 }
