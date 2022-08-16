@@ -171,6 +171,13 @@ func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer util.We
 	}
 }
 
+func Test_StartStop(t *testing.T) {
+	tg := createTestGenerator(t)
+	tg.Start()
+	tg.Start() // start for the second time is ok.
+	tg.Stop()
+}
+
 func Test_processHareOutput(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)

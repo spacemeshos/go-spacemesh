@@ -55,7 +55,7 @@ func defaultConfig() Config {
 // GeneratorOpt for configuring Generator.
 type GeneratorOpt func(h *Generator)
 
-// WithContext modifies parent context that is used for all operations in Sync.
+// WithContext modifies default context.
 func WithContext(ctx context.Context) GeneratorOpt {
 	return func(g *Generator) {
 		g.ctx = ctx
