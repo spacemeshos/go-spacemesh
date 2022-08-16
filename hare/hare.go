@@ -127,7 +127,7 @@ func New(
 		layerTime := layerClock.LayerToTime(layerID)
 		wakeupDelta := time.Duration(conf.WakeupDelta) * time.Second
 		roundDuration := time.Duration(h.config.RoundDuration) * time.Second
-		h.With().Info("creating hare round clock", layerID,
+		h.With().Debug("creating hare round clock", layerID,
 			log.String("layer_time", layerTime.String()),
 			log.Duration("wakeup_delta", wakeupDelta),
 			log.Duration("round_duration", roundDuration))
@@ -239,7 +239,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		}
 	} else {
 		consensusFailCnt.Inc()
-		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
+		h.WithContext(ctx).With().Warning("hare terminated with failure", layerID)
 	}
 
 	hareOutput := types.EmptyBlockID
@@ -300,14 +300,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	h.setLastLayer(id)
 
 	if id.GetEpoch().IsGenesis() {
-		logger.Info("not starting hare since we are in genesis epoch")
+		logger.Info("not starting hare: genesis")
 		return false, nil
 	}
 
 	var err error
 	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
 	if err != nil {
-		logger.Info("not starting hare since beacon is not retrieved")
+		logger.Info("not starting hare: beacon not retrieved")
 		return false, nil
 	}
 
@@ -340,14 +340,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 
 	if !h.broker.Synced(ctx, id) {
 		// if not currently synced don't start consensus process
-		logger.Info("not processing hare tick since node is not synced")
+		logger.Info("not starting hare: node not synced at this layer")
 		return false, nil
 	}
 
 	h.layerLock.RLock()
 	proposals := h.getGoodProposal(h.lastLayer, beacon, logger)
 	h.layerLock.RUnlock()
-	logger.With().Info("starting hare consensus with proposals", log.Int("num_proposals", len(proposals)))
+	logger.With().Info("starting hare", log.Int("num_proposals", len(proposals)))
 	preNumProposals.Add(float64(len(proposals)))
 	set := NewSet(proposals)
 
@@ -365,7 +365,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, fmt.Errorf("start consensus: %w", err)
 	}
 	h.patrol.SetHareInCharge(instID)
-	logger.With().Info("number of consensus processes (after register)",
+	logger.With().Debug("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	return true, nil
 }
@@ -450,7 +450,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			logger := h.WithContext(ctx).WithFields(layerID)
 
 			// collect coinflip, regardless of success
-			logger.With().Info("recording weak coin result for layer",
+			logger.With().Debug("recording weak coin result for layer",
 				log.Bool("weak_coin", coin))
 			if err := layers.SetWeakCoin(h.db, layerID, coin); err != nil {
 				logger.With().Error("failed to set weak coin for layer", log.Err(err))
@@ -459,7 +459,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				logger.With().Warning("error collecting output from hare", log.Err(err))
 			}
 			h.broker.Unregister(ctx, out.ID())
-			logger.With().Info("number of consensus processes (after unregister)",
+			logger.With().Debug("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 		case <-h.CloseChannel():
 			return

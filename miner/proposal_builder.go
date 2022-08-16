@@ -258,16 +258,16 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		logger = pb.logger.WithContext(ctx).WithFields(layerID, epoch)
 	)
 
-	logger.Info("builder got layer")
 	if layerID.GetEpoch().IsGenesis() {
+		logger.Info("not building proposal: genesis")
 		return errGenesis
 	}
 	if !pb.syncer.IsSynced(ctx) {
-		logger.Info("not synced yet, not building a proposal")
+		logger.Info("not building proposal: not synced")
 		return errNotSynced
 	}
 	if beacon, err = pb.beaconProvider.GetBeacon(epoch); err != nil {
-		logger.With().Info("beacon not available for epoch", log.Err(err))
+		logger.With().Warning("beacon not available for epoch", log.Err(err))
 		return errNoBeacon
 	}
 
@@ -278,23 +278,22 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
-			logger.Info("miner has no ATX in previous epoch. not eligible for proposals")
+			logger.Info("miner has no ATX in previous epoch")
 			return fmt.Errorf("miner no ATX: %w", err)
 		}
 		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
 	if len(proofs) == 0 {
-		logger.Info("not eligible for proposal in layer")
+		logger.Debug("not eligible for proposal in layer")
 		return nil
 	}
+	logger.With().Info("eligible for proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
 	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
 	}
-
-	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
 	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
 	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)

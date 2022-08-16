@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,4 +22,20 @@ func TestHandshake(t *testing.T) {
 
 	require.NoError(t, hs1.Request(context.TODO(), hs2.h.ID()))
 	require.Error(t, hs1.Request(context.TODO(), hs3.h.ID()))
+}
+
+func FuzzHandshakeAckConsistency(f *testing.F) {
+	tester.FuzzConsistency[HandshakeAck](f)
+}
+
+func FuzzHandshakeAckSafety(f *testing.F) {
+	tester.FuzzSafety[HandshakeAck](f)
+}
+
+func FuzzHandshakeMessageConsistency(f *testing.F) {
+	tester.FuzzConsistency[HandshakeMessage](f)
+}
+
+func FuzzHandshakeMessageSafety(f *testing.F) {
+	tester.FuzzSafety[HandshakeMessage](f)
 }
