@@ -39,13 +39,13 @@ require (
 	github.com/spacemeshos/go-scale v0.0.0-20220805113819-339d6408e9a5
 	github.com/spacemeshos/merkle-tree v0.0.0-20220801075722-8d614b882cb3
 	github.com/spacemeshos/poet v0.1.1-0.20220812071757-87608eda8307
-	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
+	github.com/spacemeshos/post v0.0.0-20220816141409-e957784e6513
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.8.0
-	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.21.0
+	go.uber.org/atomic v1.10.0
+	go.uber.org/zap v1.22.0
 	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/genproto v0.0.0-20220805133916-01dd62135a58

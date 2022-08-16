@@ -12,8 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-scale/tester"
-	"github.com/stretchr/testify/require"
-
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -25,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -82,6 +82,7 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		hdr.Verify(0, 1)
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 		atx.SetID(&id)
+		activation.SignAtx(signing.NewEdSigner(), atx)
 		require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
 	}
 }
