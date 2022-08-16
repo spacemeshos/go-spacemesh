@@ -10,6 +10,7 @@ import (
 
 type meshProvider interface {
 	AddBlockWithTXs(context.Context, *types.Block) error
+	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
 }
 
 type conservativeState interface {
