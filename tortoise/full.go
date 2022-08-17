@@ -93,7 +93,6 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 				if block.height > ballot.height {
 					continue
 				}
-				// TODO(dshulyak) consider skipping getVote for empty layer
 				switch f.getVote(logger, ballot.id, lid, block.id) {
 				case support:
 					block.weight.Add(ballot.weight)

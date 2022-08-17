@@ -110,10 +110,13 @@ type Generator struct {
 
 	nextLayer types.LayerID
 	// key is when to return => value is the layer to return
-	reordered   map[types.LayerID]types.LayerID
-	layers      []*types.Layer
-	units       [2]int
+	reordered map[types.LayerID]types.LayerID
+	layers    []*types.Layer
+	units     [2]int
+
 	activations []types.ATXID
+	ticks       [2]int
+	prevHeight  []uint64
 
 	keys []*signing.EdSigner
 }
@@ -135,15 +138,24 @@ func WithSetupUnitsRange(low, high int) SetupOpt {
 	}
 }
 
+// WithSetupTicksRange adjusts ticks of the ATXs.
+func WithSetupTicksRange(low, high int) SetupOpt {
+	return func(conf *setupConf) {
+		conf.Ticks = [2]int{low, high}
+	}
+}
+
 type setupConf struct {
 	Miners [2]int
 	Units  [2]int
+	Ticks  [2]int
 }
 
 func defaultSetupConf() setupConf {
 	return setupConf{
 		Miners: [2]int{30, 30},
 		Units:  [2]int{10, 10},
+		Ticks:  [2]int{10, 10},
 	}
 }
 
@@ -171,6 +183,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 		opt(&conf)
 	}
 	g.units = conf.Units
+	g.ticks = conf.Ticks
 	if len(g.layers) == 0 {
 		g.layers = append(g.layers, types.GenesisLayer())
 	}
@@ -179,6 +192,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
+	g.prevHeight = make([]uint64, miners)
 
 	for i := 0; i < miners; i++ {
 		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
@@ -196,7 +210,9 @@ func (g *Generator) generateAtxs() {
 			PubLayerID: g.nextLayer.Sub(1),
 		}
 		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
-		atx.Verify(1, 2)
+		ticks := intInRange(g.rng, g.ticks)
+		atx.Verify(g.prevHeight[i], uint64(ticks))
+		g.prevHeight[i] += uint64(ticks)
 		g.activations[i] = atx.ID()
 
 		for _, state := range g.states {
