@@ -54,9 +54,6 @@ func persistContextualValidity(logger log.Log,
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
 		for _, block := range blocks[lid] {
-			if block.empty {
-				continue
-			}
 			sign := validity[block.id]
 			if sign == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
@@ -177,22 +174,15 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 		}
 		decisions = append(decisions, decision)
 	}
-	if len(blocks) > 1 {
-		if !positive {
-			return false
-		}
-		for i, decision := range decisions {
-			validity[blocks[i].id] = decision
-		}
+	for i, decision := range decisions {
+		validity[blocks[i].id] = decision
 	}
+
 	logger.With().Info("candidate layer is verified",
 		log.Array("blocks",
 			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 				for i := range blocks {
 					encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-						if blocks[i].empty {
-							return nil
-						}
 						encoder.AddString("decision", decisions[i].String())
 						encoder.AddString("id", blocks[i].id.String())
 						encoder.AddString("weight", blocks[i].weight.String())

@@ -197,9 +197,15 @@ func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots 
 	n := 0
 	for _, ballot := range ballots {
 		if ballot.weight.IsNil() {
+			logger.With().Debug("ballot weight is nil", ballot.id)
 			continue
 		}
-		if v.getReferenceHeight(lid) > ballot.height {
+		if refheight := v.getReferenceHeight(lid); refheight > ballot.height {
+			logger.With().Debug("reference height is higher than the ballot height",
+				ballot.id,
+				log.Uint64("reference height", refheight),
+				log.Uint64("ballot height", ballot.height),
+			)
 			continue
 		}
 		rst := v.determineGoodness(logger, ballot)

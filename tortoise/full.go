@@ -4,6 +4,7 @@ import (
 	"container/list"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -14,6 +15,7 @@ func newFullTortoise(config Config, common *commonState) *full {
 		votes:        map[types.BallotID]votes{},
 		abstain:      map[types.BallotID]map[types.LayerID]struct{}{},
 		base:         map[types.BallotID]types.BallotID{},
+		empty:        map[types.LayerID]util.Weight{},
 		delayedQueue: list.New(),
 	}
 }
@@ -26,6 +28,7 @@ type full struct {
 	abstain map[types.BallotID]map[types.LayerID]struct{}
 	base    map[types.BallotID]types.BallotID
 
+	empty map[types.LayerID]util.Weight
 	// counted weights up to this layer.
 	//
 	// counting votes is what makes full tortoise expensive during rerun.
@@ -77,14 +80,20 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 		if ballot.weight.IsNil() {
 			continue
 		}
+
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
-			for i := range f.blocks[lid] {
-				block := &f.blocks[lid][i]
+			if _, exist := f.empty[lid]; !exist {
+				f.empty[lid] = util.WeightFromUint64(0)
+			}
+			f.empty[lid].Add(ballot.weight)
+
+			blocks := f.blocks[lid]
+			for i := range blocks {
+				block := &blocks[i]
 				if block.height > ballot.height {
 					continue
 				}
-				// TODO(dshulyak) consider skipping getVote for empty layer.
-				// it should be explicit
+				// TODO(dshulyak) consider skipping getVote for empty layer
 				switch f.getVote(logger, ballot.id, lid, block.id) {
 				case support:
 					block.weight.Add(ballot.weight)
@@ -135,6 +144,13 @@ func (f *full) countVotes(logger log.Log) {
 }
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
+	empty, exists := f.empty[lid]
+	if !exists {
+		return false
+	}
+	if empty.Cmp(f.globalThreshold) == 0 {
+		return false
+	}
 	return verifyLayer(
 		logger.WithFields(
 			log.String("verifier", fullTortoise),

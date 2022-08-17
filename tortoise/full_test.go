@@ -472,6 +472,7 @@ func TestFullVerify(t *testing.T) {
 				{margin: -11, height: 20},
 			},
 			threshold: 10,
+			validity:  []sign{against, against},
 		},
 		{
 			desc: "support same height",
@@ -527,8 +528,7 @@ func TestFullVerify(t *testing.T) {
 				validity: votes{},
 			})
 			full.globalThreshold = util.WeightFromUint64(tc.threshold)
-			full.blocks[lid] = append(full.blocks[lid], blockInfo{
-				empty: true, weight: util.WeightFromInt64(-int64(emptyThreshold))})
+			full.empty[lid] = util.WeightFromInt64(-int64(emptyThreshold))
 			for i, block := range tc.blocks {
 				id := types.BlockID{uint8(i) + 1}
 				full.blocks[lid] = append(full.blocks[lid], blockInfo{

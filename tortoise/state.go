@@ -75,8 +75,6 @@ type blockInfo struct {
 	id     types.BlockID
 	height uint64
 	weight util.Weight
-
-	empty bool
 }
 
 type ballotInfo struct {

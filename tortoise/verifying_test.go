@@ -718,7 +718,6 @@ func TestVerifying_Verify(t *testing.T) {
 			v.totalGoodWeight = tc.totalWeight
 			v.abstainedWeight = tc.abstainedWeight
 			for lid, blocks := range state.blocks {
-				state.blocks[lid] = append(state.blocks[lid], blockInfo{empty: true})
 				for _, block := range blocks {
 					v.onBlock(types.NewExistingBlock(block.id, types.InnerBlock{
 						LayerIndex: lid,

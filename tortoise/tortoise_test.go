@@ -2521,11 +2521,11 @@ func TestStateManagement(t *testing.T) {
 		}
 
 		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
-			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
+			for _, block := range tortoise.trtl.blocks[lid] {
+				require.Contains(t, tortoise.trtl.blockLayer, block.id, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotLayer, ballot.id, "layer %s", lid)
 			}
 		}
 	})
@@ -2553,12 +2553,12 @@ func TestStateManagement(t *testing.T) {
 		}
 
 		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
-			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
+			for _, block := range tortoise.trtl.blocks[lid] {
+				require.Contains(t, tortoise.trtl.blockLayer, block.id, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.full.votes, ballot, "layer %s", lid)
-				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.full.votes, ballot.id, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotLayer, ballot.id, "layer %s", lid)
 			}
 		}
 	})

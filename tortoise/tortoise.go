@@ -85,7 +85,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	}
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
-		t.ballots[genesis] = []ballotInfo{{id: ballot.ID()}}
+		t.ballots[genesis] = []ballotInfo{{id: ballot.ID(), weight: util.WeightFromInt64(0)}}
 		t.verifying.goodBallots[ballot.ID()] = good
 	}
 	t.last = genesis
@@ -159,6 +159,7 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.verifying.goodWeight, lid)
 		delete(t.verifying.abstainedWeight, lid)
 		delete(t.verifying.layerReferenceHeight, lid)
+		delete(t.full.empty, lid)
 		if lid.GetEpoch() < oldestEpoch {
 			delete(t.refBallotBeacons, lid.GetEpoch())
 			delete(t.epochWeight, lid.GetEpoch())
@@ -732,14 +733,6 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 		return
 	}
 	t.blockLayer[block.ID()] = lid
-	if len(t.blocks[lid]) == 0 {
-		t.blocks[lid] = append(t.blocks[lid],
-			blockInfo{
-				empty:  true,
-				weight: util.WeightFromUint64(0),
-			},
-		)
-	}
 	t.blocks[lid] = append(t.blocks[lid],
 		blockInfo{
 			id:     block.ID(),
@@ -822,9 +815,6 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 			continue
 		}
 		for _, block := range t.blocks[lid] {
-			if block.empty {
-				continue
-			}
 			votes[block.id] = against
 		}
 	}
