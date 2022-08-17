@@ -478,7 +478,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 // Internally tortoise will verify all layers before the last one if there are no gaps in
 // terminated layers.
 func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error {
-	t.logger.With().Info("on layer terminated", lid)
+	t.logger.With().Debug("on layer terminated", lid)
 	defer t.evict(ctx)
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
@@ -511,7 +511,7 @@ func (t *turtle) switchModes(logger log.Log) {
 }
 
 func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
-	logger.With().Info("process layer")
+	logger.With().Debug("process layer")
 
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
