@@ -188,8 +188,8 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBallot(ballot)
 	}
-	if len(cfg.BlockTickHeights) != cfg.NumBlocks {
-		g.logger.With().Panic("BlockTickHeights should be equal to NumBlocks",
+	if len(cfg.BlockTickHeights) < cfg.NumBlocks {
+		g.logger.With().Panic("BlockTickHeights should be atleast to NumBlocks",
 			log.Int("num blocks", cfg.NumBlocks),
 		)
 	}

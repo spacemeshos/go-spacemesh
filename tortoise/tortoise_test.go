@@ -2563,3 +2563,28 @@ func TestStateManagement(t *testing.T) {
 		}
 	})
 }
+
+func TestFutureHeight(t *testing.T) {
+	cfg := defaultTestConfig()
+	cfg.Hdist = 3
+	cfg.Zdist = cfg.Hdist
+	cfg.LayerSize = 10
+	t.Run("hare from future", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup()
+
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		verified := tortoise.HandleIncomingLayer(context.Background(),
+			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(100_000)))
+		for i := 0; i < int(cfg.Hdist); i++ {
+			verified = tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1)))
+		}
+		require.Equal(t, types.GetEffectiveGenesis(), verified)
+		verified = tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1)))
+		require.NotEqual(t, types.GetEffectiveGenesis(), verified)
+	})
+}
