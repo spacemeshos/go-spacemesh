@@ -618,7 +618,7 @@ func (app *App) initServices(ctx context.Context,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, cdb, atxHandler, app.host, nipostBuilder,
+	atxBuilder := activation.NewBuilder(builderConfig, sgn, cdb, atxHandler, app.host, nipostBuilder,
 		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
 	)
 
@@ -938,33 +938,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
-}
-
-type identityFileFound struct{}
-
-func (identityFileFound) Error() string {
-	return "identity file found"
-}
-
-func (app *App) getIdentityFile() (string, error) {
-	var f string
-	err := filepath.Walk(app.Config.SMESHING.Opts.DataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() && info.Name() == edKeyFileName {
-			f = path
-			return &identityFileFound{}
-		}
-		return nil
-	})
-	if _, ok := err.(*identityFileFound); ok {
-		return f, nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to traverse Post data dir: %w", err)
-	}
-	return "", fmt.Errorf("not found")
 }
 
 func (app *App) startSyncer(ctx context.Context) {

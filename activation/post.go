@@ -414,10 +414,3 @@ func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
 func (mgr *PostSetupManager) Config() PostConfig {
 	return mgr.cfg
 }
-
-func (mgr *PostSetupManager) getState() postSetupState {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	return mgr.state
-}

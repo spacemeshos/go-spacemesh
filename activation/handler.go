@@ -355,9 +355,9 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) p
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData) == true:
+	case errors.Is(err, errMalformedData):
 		return pubsub.ValidationReject
-	case errors.Is(err, errKnownAtx) == true:
+	case errors.Is(err, errKnownAtx):
 		return pubsub.ValidationIgnore
 	default:
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip", log.Err(err))

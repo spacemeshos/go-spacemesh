@@ -3,6 +3,7 @@
 package activation
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -33,12 +34,6 @@ var (
 )
 
 const defaultPoetRetryInterval = 5 * time.Second
-
-type poetNumberOfTickProvider struct{}
-
-func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 1
-}
 
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
@@ -148,14 +143,13 @@ func WithContext(ctx context.Context) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer Signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
+func NewBuilder(conf Config, signer Signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
 		Signer:            signer,
-		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
 		goldenATXID:       conf.GoldenATXID,
 		layersPerEpoch:    conf.LayersPerEpoch,
@@ -253,6 +247,9 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 
 // SmesherID returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherID() types.NodeID {
+	if bytes.Equal(b.nodeID[:], (&types.NodeID{})[:]) {
+		panic("test")
+	}
 	return b.nodeID
 }
 
@@ -318,7 +315,7 @@ func (b *Builder) loop(ctx context.Context) {
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CAS(client, nil)
+			b.pendingPoetClient.CompareAndSwap(client, nil)
 		}
 
 		if err := b.PublishActivationTx(ctx); err != nil {
