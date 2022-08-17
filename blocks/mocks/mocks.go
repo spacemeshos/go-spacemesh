@@ -178,9 +178,9 @@ func (m *Mockcertifier) EXPECT() *MockcertifierMockRecorder {
 }
 
 // CertifyMaybe mocks base method.
-func (m *Mockcertifier) CertifyMaybe(arg0 context.Context, arg1 log.Log, arg2 types.LayerID, arg3 types.BlockID) error {
+func (m *Mockcertifier) CertifyIfEligible(arg0 context.Context, arg1 log.Log, arg2 types.LayerID, arg3 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CertifyMaybe", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CertifyIfEligible", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -188,7 +188,7 @@ func (m *Mockcertifier) CertifyMaybe(arg0 context.Context, arg1 log.Log, arg2 ty
 // CertifyMaybe indicates an expected call of CertifyMaybe.
 func (mr *MockcertifierMockRecorder) CertifyMaybe(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyMaybe", reflect.TypeOf((*Mockcertifier)(nil).CertifyMaybe), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyIfEligible", reflect.TypeOf((*Mockcertifier)(nil).CertifyIfEligible), arg0, arg1, arg2, arg3)
 }
 
 // RegisterDeadline mocks base method.

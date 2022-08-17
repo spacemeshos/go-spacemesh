@@ -254,6 +254,15 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 	return
 }
 
+func contains(blockIDs []types.BlockID, target types.BlockID) bool {
+	for _, bid := range blockIDs {
+		if bid == target {
+			return true
+		}
+	}
+	return false
+}
+
 // receiveLayerContent is called when response of block IDs for a layer hash is received from remote peer.
 // if enough responses are received, it notifies the channels waiting for the layer blocks result.
 func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer p2p.Peer, expectedResults int, data []byte, peerErr error) {
@@ -271,7 +280,12 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 
 	// process the certificate after blocks are fetched
 	if peerRes.data != nil && peerRes.data.HareOutput != nil {
-		if err := l.certHandler.HandleSyncedCertificate(ctx, layerID, peerRes.data.HareOutput); err != nil {
+		cert := peerRes.data.HareOutput
+		if cert.BlockID != types.EmptyBlockID && !contains(peerRes.data.Blocks, cert.BlockID) {
+			logger.With().Warning("certificate block id not in peer's layer content")
+			peerRes.err = errInvalidCertificate
+		}
+		if err := l.certHandler.HandleSyncedCertificate(ctx, layerID, cert); err != nil {
 			logger.With().Warning("failed to handle certificate", log.Err(err))
 			peerRes.err = errInvalidCertificate
 		}
@@ -314,6 +328,10 @@ func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database
 		if res.err == nil && res.data != nil {
 			success = true
 			if res.data.HareOutput != nil {
+				// we want to accept hare output in the following condition
+				// - we don't have any
+				// - when peer has higher processed layer than ours
+				// - given all peers have the same processed layer, we choose the non-empty block id
 				if best == nil ||
 					res.data.ProcessedLayer.After(maxProcessed) ||
 					res.data.ProcessedLayer == maxProcessed && best.BlockID == types.EmptyBlockID && res.data.HareOutput.BlockID != types.EmptyBlockID {

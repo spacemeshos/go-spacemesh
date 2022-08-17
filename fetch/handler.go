@@ -56,14 +56,14 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	return bts, nil
 }
 
-// handleLayerDataReq returns the block IDs for the specified layer hash,
-// it also returns the validation vector for this data and the latest blocks received in gossip.
+// handleLayerDataReq returns all data in a layer, described in layerData.
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
 		lyrID = types.BytesToLayerID(req)
 		ld    layerData
 		err   error
 	)
+	ld.ProcessedLayer = h.msh.ProcessedLayer()
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))

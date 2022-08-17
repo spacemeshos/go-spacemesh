@@ -65,9 +65,24 @@ func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) err
 	return nil
 }
 
+func fill(lid types.LayerID, bid types.BlockID, cert *types.Certificate) {
+	for _, msg := range cert.Signatures {
+		msg.LayerID = lid
+		msg.BlockID = bid
+	}
+}
+
+func prune(cert *types.Certificate) {
+	for _, msg := range cert.Signatures {
+		msg.LayerID = types.LayerID{}
+		msg.BlockID = types.BlockID{}
+	}
+}
+
 // SetHareOutputWithCert sets the hare output for the layer with a block certificate.
 func SetHareOutputWithCert(db sql.Executor, lid types.LayerID, cert *types.Certificate) error {
 	output := cert.BlockID
+	prune(cert)
 	data, err := codec.Encode(cert)
 	if err != nil {
 		return fmt.Errorf("encode cert %w", err)
@@ -96,7 +111,9 @@ func GetCert(db sql.Executor, lid types.LayerID) (*types.Certificate, error) {
 	}, func(stmt *sql.Statement) bool {
 		data := make([]byte, stmt.ColumnLen(0))
 		stmt.ColumnBytes(0, data[:])
-		err = codec.Decode(data, &cert)
+		if err = codec.Decode(data, &cert); err == nil {
+			fill(lid, cert.BlockID, &cert)
+		}
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("get cert %s: %w", lid, err)

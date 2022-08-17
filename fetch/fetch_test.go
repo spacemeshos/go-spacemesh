@@ -276,7 +276,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 				f.mLyrS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, _ p2p.Peer, _ []byte, okFunc func([]byte), errFunc func(error)) error {
 						if tc.errs[idx] == nil {
-							go okFunc(generateLayerContent(false, processed))
+							go okFunc(generateLayerContent(t, processed))
 						} else {
 							go errFunc(tc.errs[idx])
 						}

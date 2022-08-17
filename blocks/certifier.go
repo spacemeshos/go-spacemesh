@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -183,9 +182,9 @@ func (c *Certifier) RegisterDeadline(lid types.LayerID, bid types.BlockID, now t
 	}
 }
 
-// CertifyMaybe signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
+// CertifyIfEligible signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
 // if the node is eligible to be a certifier.
-func (c *Certifier) CertifyMaybe(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
+func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
 	// check if the node is eligible to certify the hare output
 	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
 	if err != nil {
@@ -318,12 +317,6 @@ func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.Cert
 	}
 
 	logger.WithFields(bid)
-	if bid != types.EmptyBlockID {
-		if err := c.verifyLayerID(logger, lid, bid); err != nil {
-			return err
-		}
-	}
-
 	// extract public key from signature
 	pubkey, err := ed25519.ExtractPublicKey(msg.Bytes(), msg.Signature)
 	if err != nil {
@@ -338,25 +331,6 @@ func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.Cert
 	if !valid {
 		logger.With().Warning("invalid cert msg", log.Err(err))
 		return errInvalidCertMsg
-	}
-	return nil
-}
-
-func (c *Certifier) verifyLayerID(logger log.Log, lid types.LayerID, bid types.BlockID) error {
-	block, err := blocks.Get(c.db, bid)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			logger.With().Warning("unable to handle cert msg, block not found", log.Err(err))
-		} else {
-			logger.With().Error("failed to lookup block", log.Err(err))
-		}
-		return errInternal
-	}
-	if block.LayerIndex != lid {
-		logger.With().Warning("unexpected layer id for block",
-			log.Stringer("expected", block.LayerIndex),
-			log.Stringer("received", lid))
-		return errMalformedData
 	}
 	return nil
 }

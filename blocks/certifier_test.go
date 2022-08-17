@@ -160,16 +160,6 @@ func Test_HandleCertifyMessage_CorruptedMsg(t *testing.T) {
 	require.Equal(t, pubsub.ValidationReject, res)
 }
 
-func Test_HandleCertifyMessage_WrongLayer(t *testing.T) {
-	tc := newTestCertifier(t)
-	b := generateBlock(t, tc.db)
-	_, msg, encoded := genEncodedMsg(t, b.LayerIndex.Add(1), b.ID())
-
-	tc.RegisterDeadline(msg.LayerID, b.ID(), time.Now())
-	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-	require.Equal(t, pubsub.ValidationReject, res)
-}
-
 func Test_HandleCertifyMessage_LayerNotRegistered(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
@@ -179,7 +169,7 @@ func Test_HandleCertifyMessage_LayerNotRegistered(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, res)
 }
 
-func Test_HandleCertifyMessage_RegisterDiffBlock(t *testing.T) {
+func Test_HandleCertifyMessage_BlockNotRegistered(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	_, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -245,7 +235,7 @@ func Test_CertifyMaybe(t *testing.T) {
 			require.Equal(t, defaultCnt, msg.EligibilityCnt)
 			return nil
 		})
-	require.NoError(t, tc.CertifyMaybe(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
+	require.NoError(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
 }
 
 func Test_CertifyMaybe_NotEligible(t *testing.T) {
@@ -254,7 +244,7 @@ func Test_CertifyMaybe_NotEligible(t *testing.T) {
 	proof := []byte("not a fraud")
 	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
 	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(uint16(0), nil)
-	require.NoError(t, tc.CertifyMaybe(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
+	require.NoError(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
 }
 
 func Test_CertifyMaybe_EligibilityErr(t *testing.T) {
@@ -264,7 +254,7 @@ func Test_CertifyMaybe_EligibilityErr(t *testing.T) {
 	proof := []byte("not a fraud")
 	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
 	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(uint16(0), errUnknown)
-	require.ErrorIs(t, tc.CertifyMaybe(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
+	require.ErrorIs(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 
 func Test_CertifyMaybe_ProofErr(t *testing.T) {
@@ -272,5 +262,5 @@ func Test_CertifyMaybe_ProofErr(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	errUnknown := errors.New("unknown")
 	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(nil, errUnknown)
-	require.ErrorIs(t, tc.CertifyMaybe(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
+	require.ErrorIs(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
