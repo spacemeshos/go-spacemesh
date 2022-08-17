@@ -2585,6 +2585,7 @@ func TestFutureHeight(t *testing.T) {
 		}
 		require.Equal(t, types.GetEffectiveGenesis(), verified)
 		verified = tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1)))
+		// verifies layer by counting all votes
 		require.NotEqual(t, types.GetEffectiveGenesis(), verified)
 	})
 }

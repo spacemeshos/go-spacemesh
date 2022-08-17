@@ -85,9 +85,9 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			if _, exist := f.empty[lid]; !exist {
 				f.empty[lid] = util.WeightFromUint64(0)
 			}
-			f.empty[lid].Add(ballot.weight)
 
 			blocks := f.blocks[lid]
+			supports := false
 			for i := range blocks {
 				block := &blocks[i]
 				if block.height > ballot.height {
@@ -95,10 +95,14 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 				}
 				switch f.getVote(logger, ballot.id, lid, block.id) {
 				case support:
+					supports = true
 					block.weight.Add(ballot.weight)
 				case against:
 					block.weight.Sub(ballot.weight)
 				}
+			}
+			if !supports {
+				f.empty[lid].Add(ballot.weight)
 			}
 		}
 	}
@@ -143,25 +147,34 @@ func (f *full) countVotes(logger log.Log) {
 }
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
+	logger = logger.WithFields(
+		log.String("verifier", fullTortoise),
+		log.Stringer("counted_layer", f.counted),
+		log.Stringer("candidate_layer", lid),
+		log.Stringer("local_threshold", f.localThreshold),
+		log.Stringer("global_threshold", f.globalThreshold),
+	)
 	empty, exists := f.empty[lid]
 	if !exists {
 		return false
 	}
-	if empty.Cmp(f.globalThreshold) == 0 {
-		return false
+	isEmpty := empty.Cmp(f.globalThreshold) > 0
+	if len(f.blocks) == 0 {
+		if isEmpty {
+			logger.With().Info("candidate layer is empty")
+		}
+		return isEmpty
 	}
 	return verifyLayer(
-		logger.WithFields(
-			log.String("verifier", fullTortoise),
-			log.Stringer("counted_layer", f.counted),
-			log.Stringer("candidate_layer", lid),
-			log.Stringer("local_threshold", f.localThreshold),
-			log.Stringer("global_threshold", f.globalThreshold),
-		),
+		logger,
 		f.blocks[lid],
 		f.validity,
 		func(block blockInfo) sign {
-			return sign(block.weight.Cmp(f.globalThreshold))
+			decision := sign(block.weight.Cmp(f.globalThreshold))
+			if decision == abstain && isEmpty {
+				return against
+			}
+			return decision
 		},
 	)
 }

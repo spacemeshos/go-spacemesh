@@ -429,7 +429,7 @@ func TestFullVerify(t *testing.T) {
 		{
 			desc:      "abstain",
 			blocks:    []testBlock{{margin: 10}},
-			threshold: 10,
+			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "abstain before support",
@@ -437,7 +437,7 @@ func TestFullVerify(t *testing.T) {
 				{margin: 10, height: 10},
 				{margin: 11, height: 20},
 			},
-			threshold: 10,
+			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "abstain after support",
@@ -454,7 +454,7 @@ func TestFullVerify(t *testing.T) {
 				{margin: 11, height: 20},
 				{margin: 10, height: 20},
 			},
-			threshold: 10,
+			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "support after against",
@@ -509,7 +509,7 @@ func TestFullVerify(t *testing.T) {
 				{margin: 10, height: 10},
 				{margin: 11, height: 10},
 			},
-			threshold: 10,
+			threshold: emptyThreshold + 1,
 		},
 		{
 			desc:      "empty layer",
@@ -528,7 +528,7 @@ func TestFullVerify(t *testing.T) {
 				validity: votes{},
 			})
 			full.globalThreshold = util.WeightFromUint64(tc.threshold)
-			full.empty[lid] = util.WeightFromInt64(-int64(emptyThreshold))
+			full.empty[lid] = util.WeightFromInt64(int64(emptyThreshold))
 			for i, block := range tc.blocks {
 				id := types.BlockID{uint8(i) + 1}
 				full.blocks[lid] = append(full.blocks[lid], blockInfo{
