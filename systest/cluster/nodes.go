@@ -60,8 +60,8 @@ type NodeClient struct {
 
 // deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address)
 // and output ip of the poet.
-func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) (*v1.Pod, error) {
-	args := []string{}
+func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) (*NodeClient, error) {
+	var args []string
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
@@ -105,7 +105,7 @@ func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags 
 		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	ppod, err := waitPod(ctx, *pod.Name)
+	ppod, err := waitNode(ctx, *pod.Name, Poet)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 				return err
 			}
 			podname := fmt.Sprintf("%s-0", setname)
-			node, err := waitSmesher(ctx, podname)
+			node, err := waitNode(ctx, podname, Smesher)
 			if err != nil {
 				return err
 			}
@@ -213,13 +213,6 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 		rst = append(rst, node)
 	}
 	return rst, nil
-}
-
-func deleteNodes(ctx *testcontext.Context, typename, podname string) ([]*NodeClient, error) {
-	if err := deleteNode(ctx, setName(podname)); err != nil {
-		return nil, err
-	}
-	return discoverNodes(ctx, typename)
 }
 
 func deleteNode(ctx *testcontext.Context, podname string) error {
@@ -331,36 +324,17 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 	return nil
 }
 
-func waitPoet(tctx *testcontext.Context, podname string) (*v1.Pod, error) {
-	attempt := func() (*v1.Pod, error) {
-		pod, err := waitPod(tctx, podname)
-		if err != nil {
-			return nil, err
-		}
-		if pod == nil {
-			return nil, nil
-		}
-		return pod, nil
-	}
-	const attempts = 10
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	for i := 1; i <= attempts; i++ {
-		if nc, err := attempt(); err != nil && i == attempts {
-			return nil, err
-		} else if err == nil {
-			return nc, nil
-		}
-		select {
-		case <-tctx.Done():
-			return nil, tctx.Err()
-		case <-ticker.C:
-		}
-	}
-	panic("unreachable")
-}
+// PodType indicates the type of pod.
+type PodType int
 
-func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error) {
+const (
+	// Smesher ...
+	Smesher PodType = iota
+	// Poet ...
+	Poet
+)
+
+func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClient, error) {
 	attempt := func() (*NodeClient, error) {
 		pod, err := waitPod(tctx, podname)
 		if err != nil {
@@ -368,6 +342,13 @@ func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error)
 		}
 		if pod == nil {
 			return nil, nil
+		}
+		if pt == Poet {
+			return &NodeClient{
+				Node: Node{
+					Name: podname,
+				},
+			}, nil
 		}
 		set, err := getStatefulSet(tctx, setName(podname))
 		if err != nil {

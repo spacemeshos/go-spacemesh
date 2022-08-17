@@ -28,16 +28,16 @@ func TestStepCreate(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestStepDeletePoet(t *testing.T) {
+func TestStepDeletePoets(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	tctx.Log.Debugw("deleting poet servers", "poets", cl.Poets())
-	require.NoError(t, cl.DeletePoet(tctx))
+	require.NoError(t, cl.DeletePoets(tctx))
 }
 
-func TestStepRedeployPoet(t *testing.T) {
+func TestStepRedeployPoets(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
