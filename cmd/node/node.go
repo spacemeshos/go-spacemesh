@@ -416,8 +416,6 @@ func (app *App) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	dbStorepath string,
 	sgn *signing.EdSigner,
-	isFixedOracle bool,
-	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
@@ -537,16 +535,9 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
-	var hOracle hare.Rolacle
-	if isFixedOracle {
-		// fixed rolacle, take the provided rolacle
-		hOracle = rolacle
-	} else {
-		// regular oracle, build and use it
-		hOracle = eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
-		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
-	}
+	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
@@ -1089,8 +1080,6 @@ func (app *App) Start() error {
 		nodeID,
 		dbStorepath,
 		app.edSgn,
-		false,
-		nil,
 		uint32(app.Config.LayerAvgSize),
 		poetClient,
 		vrfSigner,
