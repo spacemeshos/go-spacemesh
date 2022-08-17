@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
@@ -145,20 +146,20 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.state.Challenge = *challenge
 
 		nb.log.With().Debug("submitting challenge to poet proving service",
-			log.Binary("poet_id", nb.state.PoetServiceID),
+			log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
 			log.Stringer("challenge", poetChallenge))
 
 		round, err := nb.poetProver.Submit(ctx, *poetChallenge)
 		if err != nil {
 			nb.log.With().Error("failed to submit challenge to poet proving service",
-				log.Binary("poet_id", nb.state.PoetServiceID),
+				log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
 				log.Stringer("challenge", poetChallenge),
 				log.Err(err))
 			return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
 		}
 
 		nb.log.With().Info("challenge submitted to poet proving service",
-			log.Binary("poet_id", nb.state.PoetServiceID),
+			log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
 			log.String("round_id", round.ID),
 			log.Stringer("challenge", poetChallenge))
 

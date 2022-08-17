@@ -15,6 +15,7 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -398,7 +399,7 @@ func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
 	b.pendingPoetClient.Store(unsafe.Pointer(&client))
-	b.log.With().Debug("preparing to update poet service", log.Binary("poet_id", sid))
+	b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	return nil
 }
 
