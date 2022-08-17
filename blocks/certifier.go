@@ -40,7 +40,7 @@ type CertConfig struct {
 func defaultCertConfig() CertConfig {
 	return CertConfig{
 		CommitteeSize:         10,
-		CertifyThreshold:      5,
+		CertifyThreshold:      6,
 		SignatureWaitDuration: 10,
 		NumLayersToKeep:       5,
 	}
@@ -177,7 +177,7 @@ func (c *Certifier) RegisterDeadline(lid types.LayerID, bid types.BlockID, now t
 		c.certMsgs[lid] = &certInfo{
 			bid:        bid,
 			deadline:   now.Add(time.Duration(c.cfg.SignatureWaitDuration) * time.Second),
-			signatures: make([]types.CertifyMessage, 0, c.cfg.CommitteeSize),
+			signatures: make([]types.CertifyMessage, 0, c.cfg.CertifyThreshold),
 		}
 	}
 }
@@ -391,7 +391,7 @@ func (c *Certifier) tryGenCert() error {
 }
 
 func (c *Certifier) tryGenCertLocked(logger log.Log, lid types.LayerID, bid types.BlockID, sigs []types.CertifyMessage) (bool, error) {
-	if len(sigs) < c.cfg.CertifyThreshold+1 {
+	if len(sigs) < c.cfg.CertifyThreshold {
 		return false, nil
 	}
 	cert := &types.Certificate{

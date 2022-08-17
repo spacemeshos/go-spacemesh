@@ -127,7 +127,7 @@ func Test_HandleCertifyMessage(t *testing.T) {
 func Test_HandleCertifyMessage_Certified(t *testing.T) {
 	tc := newTestCertifier(t)
 	numMsgs := tc.cfg.CommitteeSize
-	cutoff := tc.cfg.CertifyThreshold + 1
+	cutoff := tc.cfg.CertifyThreshold
 	b := generateBlock(t, tc.db)
 	tc.RegisterDeadline(b.LayerIndex, b.ID(), time.Now())
 	for i := 0; i < numMsgs; i++ {

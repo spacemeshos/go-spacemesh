@@ -551,7 +551,7 @@ func (app *App) initServices(ctx context.Context,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:         app.Config.HARE.N,
-			CertifyThreshold:      app.Config.HARE.F,
+			CertifyThreshold:      app.Config.HARE.F + 1,
 			SignatureWaitDuration: app.Config.HARE.WakeupDelta,
 			NumLayersToKeep:       app.Config.Tortoise.Zdist,
 		}),
