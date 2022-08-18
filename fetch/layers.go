@@ -26,7 +26,8 @@ var (
 	// errLayerNotProcessed is returned when requested layer was not yet processed.
 	errLayerNotProcessed = errors.New("requested layer is not yet processed")
 
-	errInvalidCertificate = errors.New("peer has invalid certificate")
+	errInvalidCertificate          = errors.New("peer has invalid certificate")
+	errCertifiedBlockNotReferenced = errors.New("peer did not provide block for certified block")
 )
 
 // peerResult captures the response from each peer.
@@ -283,7 +284,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 		cert := peerRes.data.HareOutput
 		if cert.BlockID != types.EmptyBlockID && !contains(peerRes.data.Blocks, cert.BlockID) {
 			logger.With().Warning("certificate block id not in peer's layer content")
-			peerRes.err = errInvalidCertificate
+			peerRes.err = errCertifiedBlockNotReferenced
 		}
 		if err := l.certHandler.HandleSyncedCertificate(ctx, layerID, cert); err != nil {
 			logger.With().Warning("failed to handle certificate", log.Err(err))

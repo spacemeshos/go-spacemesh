@@ -104,8 +104,8 @@ type Certifier struct {
 	publisher  pubsub.Publisher
 	layerClock layerClock
 
-	mu       sync.Mutex
-	certMsgs map[types.LayerID]*certInfo
+	mu          sync.Mutex
+	certifyMsgs map[types.LayerID]*certInfo
 }
 
 // NewCertifier creates new block certifier.
@@ -114,16 +114,16 @@ func NewCertifier(
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
-		logger:     log.NewNop(),
-		cfg:        defaultCertConfig(),
-		ctx:        context.Background(),
-		db:         db,
-		oracle:     o,
-		nodeID:     n,
-		signer:     s,
-		publisher:  p,
-		layerClock: lc,
-		certMsgs:   make(map[types.LayerID]*certInfo),
+		logger:      log.NewNop(),
+		cfg:         defaultCertConfig(),
+		ctx:         context.Background(),
+		db:          db,
+		oracle:      o,
+		nodeID:      n,
+		signer:      s,
+		publisher:   p,
+		layerClock:  lc,
+		certifyMsgs: make(map[types.LayerID]*certInfo),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -175,8 +175,8 @@ func (c *Certifier) run() error {
 func (c *Certifier) RegisterDeadline(lid types.LayerID, bid types.BlockID, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, ok := c.certMsgs[lid]; !ok {
-		c.certMsgs[lid] = &certInfo{
+	if _, ok := c.certifyMsgs[lid]; !ok {
+		c.certifyMsgs[lid] = &certInfo{
 			bid:        bid,
 			deadline:   now.Add(c.cfg.SignatureWaitDuration),
 			signatures: make([]types.CertifyMessage, 0, c.cfg.CertifyThreshold),
@@ -248,7 +248,7 @@ func (c *Certifier) HandleCertifyMessage(ctx context.Context, _ p2p.Peer, msg []
 func (c *Certifier) NumCached() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return len(c.certMsgs)
+	return len(c.certifyMsgs)
 }
 
 func (c *Certifier) getCertState(logger log.Log, lid types.LayerID, bid types.BlockID) (certState, error) {
@@ -258,7 +258,7 @@ func (c *Certifier) getCertState(logger log.Log, lid types.LayerID, bid types.Bl
 }
 
 func (c *Certifier) getCertStateLocked(logger log.Log, lid types.LayerID, bid types.BlockID) (certState, error) {
-	if ci, ok := c.certMsgs[lid]; !ok {
+	if ci, ok := c.certifyMsgs[lid]; !ok {
 		logger.Warning("layer not registered for cert")
 		return unknown, errUnexpectedMsg
 	} else if bid != ci.bid {
@@ -266,11 +266,11 @@ func (c *Certifier) getCertStateLocked(logger log.Log, lid types.LayerID, bid ty
 		return unknown, errUnexpectedMsg
 	}
 
-	if time.Now().After(c.certMsgs[lid].deadline) {
-		logger.With().Debug("cert msg received after deadline", log.Time("deadline", c.certMsgs[lid].deadline))
+	if time.Now().After(c.certifyMsgs[lid].deadline) {
+		logger.With().Debug("cert msg received after deadline", log.Time("deadline", c.certifyMsgs[lid].deadline))
 		return expired, nil
 	}
-	if c.certMsgs[lid].done {
+	if c.certifyMsgs[lid].done {
 		return certified, nil
 	}
 	return pending, nil
@@ -349,25 +349,25 @@ func (c *Certifier) saveMessage(logger log.Log, msg types.CertifyMessage) error 
 		return nil
 	}
 
-	if _, ok := c.certMsgs[lid]; !ok {
+	if _, ok := c.certifyMsgs[lid]; !ok {
 		logger.Fatal("missing layer in cache")
 	}
-	c.certMsgs[lid].signatures = append(c.certMsgs[lid].signatures, msg)
-	c.certMsgs[lid].totalEligibility += msg.EligibilityCnt
+	c.certifyMsgs[lid].signatures = append(c.certifyMsgs[lid].signatures, msg)
+	c.certifyMsgs[lid].totalEligibility += msg.EligibilityCnt
 
-	if c.certMsgs[lid].totalEligibility < uint16(c.cfg.CertifyThreshold) {
+	if c.certifyMsgs[lid].totalEligibility < uint16(c.cfg.CertifyThreshold) {
 		return nil
 	}
 
 	cert := &types.Certificate{
 		BlockID:    bid,
-		Signatures: c.certMsgs[lid].signatures,
+		Signatures: c.certifyMsgs[lid].signatures,
 	}
 	if err := c.save(logger, lid, cert); err != nil {
 		return err
 	}
 
-	c.certMsgs[lid].done = true
+	c.certifyMsgs[lid].done = true
 	return nil
 }
 
@@ -376,9 +376,9 @@ func (c *Certifier) prune() error {
 	defer c.mu.Unlock()
 
 	cutoff := c.layerClock.GetCurrentLayer().Sub(c.cfg.NumLayersToKeep)
-	for lid := range c.certMsgs {
+	for lid := range c.certifyMsgs {
 		if lid.Before(cutoff) {
-			delete(c.certMsgs, lid)
+			delete(c.certifyMsgs, lid)
 		}
 	}
 

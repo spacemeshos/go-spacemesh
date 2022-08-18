@@ -187,7 +187,7 @@ func TestPollLayerContent(t *testing.T) {
 		},
 		{
 			name:       "cert non-existent block id",
-			err:        errInvalidCertificate,
+			err:        errCertifiedBlockNotReferenced,
 			hareOutput: &types.BlockID{1, 2, 3},
 		},
 		{
