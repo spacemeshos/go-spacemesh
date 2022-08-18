@@ -228,7 +228,8 @@ func TestAdd(t *testing.T) {
 
 	got, err := Get(db, atx.ID())
 	require.NoError(t, err)
-	require.Equal(t, atx, got)
+	diff := cmp.Diff(atx, got, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.ActivationTxHeader{}))
+	require.Empty(t, diff)
 }
 
 func newAtx(nodeID types.NodeID, layerID types.LayerID) *types.ActivationTx {

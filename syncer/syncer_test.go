@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
@@ -491,8 +494,10 @@ func TestSyncMissingLayer(t *testing.T) {
 		if lid == failed {
 			ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 			errMissingTXs := errors.New("missing TXs")
-			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).DoAndReturn(
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
+					diff := cmp.Diff(got, block, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+					require.Empty(t, diff)
 					require.Equal(t, block.ID(), got.ID())
 					return errMissingTXs
 				})
@@ -512,8 +517,10 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := failed; lid.Before(last); lid = lid.Add(1) {
 		ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 		if lid == failed {
-			ts.mConState.EXPECT().ApplyLayer(context.TODO(), block).DoAndReturn(
+			ts.mConState.EXPECT().ApplyLayer(context.TODO(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
+					diff := cmp.Diff(got, block, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+					require.Empty(t, diff)
 					require.Equal(t, block.ID(), got.ID())
 					return nil
 				})

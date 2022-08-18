@@ -3,6 +3,11 @@ package ballots
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/signing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -30,7 +35,8 @@ func TestLayer(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rst, len(ballots))
 	for i, ballot := range rst {
-		require.Equal(t, &ballots[i], ballot)
+		diff := cmp.Diff(&ballots[i], ballot, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, signing.PublicKey{}))
+		require.Empty(t, diff)
 	}
 
 	require.NoError(t, identities.SetMalicious(db, pub))
@@ -55,7 +61,8 @@ func TestAdd(t *testing.T) {
 
 	stored, err := Get(db, ballot.ID())
 	require.NoError(t, err)
-	require.Equal(t, &ballot, stored)
+	diff := cmp.Diff(&ballot, stored, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, signing.PublicKey{}))
+	require.Empty(t, diff)
 
 	require.NoError(t, identities.SetMalicious(db, pub))
 	stored, err = Get(db, ballot.ID())

@@ -3,6 +3,10 @@ package proposals
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/spacemeshos/go-spacemesh/signing"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -84,5 +88,6 @@ func TestGet(t *testing.T) {
 
 	got, err := Get(db, proposal.ID())
 	require.NoError(t, err)
-	require.EqualValues(t, proposal, got)
+	diff := cmp.Diff(proposal, got, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, types.Proposal{}, signing.PublicKey{}))
+	require.Empty(t, diff)
 }

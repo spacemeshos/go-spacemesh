@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -130,7 +133,8 @@ func TestIterateResults(t *testing.T) {
 			expected := filterTxs(txs, tc.filter)
 			i := 0
 			require.NoError(t, IterateResults(db, tc.filter, func(rst *types.TransactionWithResult) bool {
-				if !assert.Equal(t, expected[i], *rst) {
+				diff := cmp.Diff(expected[i], *rst, cmpopts.EquateEmpty())
+				if diff != "" {
 					return false
 				}
 				i++

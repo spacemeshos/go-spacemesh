@@ -4,6 +4,9 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -20,7 +23,8 @@ func TestAddGet(t *testing.T) {
 	require.NoError(t, Add(db, block))
 	got, err := Get(db, block.ID())
 	require.NoError(t, err)
-	require.Equal(t, block, got)
+	diff := cmp.Diff(block, got, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+	require.Empty(t, diff)
 }
 
 func TestAlreadyExists(t *testing.T) {
@@ -113,7 +117,8 @@ func TestLayerFilter(t *testing.T) {
 	blks, err := Layer(db, start)
 	require.NoError(t, err)
 	require.Len(t, blks, 2)
-	require.ElementsMatch(t, blocks[:2], blks)
+	diff := cmp.Diff(blocks[:2], blks, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+	require.Empty(t, diff)
 }
 
 func TestLayerOrdered(t *testing.T) {
