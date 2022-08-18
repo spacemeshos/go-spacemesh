@@ -33,7 +33,8 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		}
 		hdr.Verify(0, 1)
 		if id == rb.AtxID {
-			hdr.NodeID = types.BytesToNodeID(signer.PublicKey().Bytes())
+			nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+			hdr.SetNodeID(&nodeID)
 			hdr.NumUnits = testedATXUnit
 		}
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}

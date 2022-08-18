@@ -363,7 +363,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		return ErrStopRequested
 	case <-syncedCh:
 	}
-	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
+	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -567,7 +567,15 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		initialPost = b.initialPost
 	}
 
-	return types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPost), nil
+	atx := types.NewActivationTx(
+		*b.challenge,
+		b.nodeID,
+		b.Coinbase(),
+		nipost,
+		b.postSetupProvider.LastOpts().NumUnits,
+		initialPost,
+	)
+	return atx, nil
 }
 
 func (b *Builder) currentEpoch() types.EpochID {

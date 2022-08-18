@@ -527,7 +527,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
-			hareActiveSet[atx.NodeID] = atx.GetWeight()
+			hareActiveSet[atx.NodeID()] = atx.GetWeight()
 		}
 	}
 
@@ -537,8 +537,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
-		delete(hareActiveSet, atx.NodeID)
-		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID))
+		delete(hareActiveSet, atx.NodeID())
+		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID()))
 	}
 
 	if len(hareActiveSet) > 0 {
@@ -572,7 +572,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
-		activeMap[atxHeader.NodeID] = atxHeader.GetWeight()
+		activeMap[atxHeader.NodeID()] = atxHeader.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
 

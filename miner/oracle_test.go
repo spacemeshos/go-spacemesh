@@ -44,7 +44,6 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.ActivationTx {
 	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nodeID,
 			PubLayerID: publishLayer,
 		},
 		NumUnits: defaultAtxWeight,
@@ -52,6 +51,7 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	hdr.Verify(0, 1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&id)
+	atx.SetNodeID(&nodeID)
 	require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
 	return atx
 }
@@ -189,7 +189,6 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	atxID := types.RandomATXID()
 	hdr := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     o.nodeID,
 			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
 		},
 		NumUnits: 0,
@@ -197,6 +196,7 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	hdr.Verify(0, 1)
 	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	atx.SetID(&atxID)
+	atx.SetNodeID(&o.nodeID)
 	require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
 
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())

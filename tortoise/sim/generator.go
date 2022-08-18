@@ -221,10 +221,9 @@ func (g *Generator) generateAtxs() {
 		_, _ = g.rng.Read(address[:])
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(address.Bytes()),
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
+		atx := types.NewActivationTx(nipost, types.BytesToNodeID(address.Bytes()), address, nil, uint(units), nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
