@@ -73,23 +73,22 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
-func (db *CachedDB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
-	weight := uint64(0)
-	activeSet, err := atxs.GetIDsByEpoch(db, epochID-1)
-	if err != nil {
+func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, error) {
+	var (
+		weight uint64
+		ids    []types.ATXID
+	)
+	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		weight += header.GetWeight()
+		ids = append(ids, header.ID())
+		return true
+	}); err != nil {
 		return 0, nil, err
 	}
-	for _, atxID := range activeSet {
-		atxHeader, err := db.GetAtxHeader(atxID)
-		if err != nil {
-			return 0, nil, err
-		}
-		weight += atxHeader.GetWeight()
-	}
-	return weight, activeSet, nil
+	return weight, ids, nil
 }
 
-// IterateEpochATXHeaders iterates over activation headers from an epoch.
+// IterateEpochATXHeaders iterates over activation headers that target an epoch.
 func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) bool) error {
 	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
 	if err != nil {
