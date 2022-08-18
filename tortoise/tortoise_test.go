@@ -2604,9 +2604,7 @@ func TestFutureHeight(t *testing.T) {
 		tortoise := tortoiseFromSimState(
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
-		var (
-			last, verified types.LayerID
-		)
+		var last, verified types.LayerID
 		for i := 0; i < int(cfg.Hdist); i++ {
 			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1))
 			verified = tortoise.HandleIncomingLayer(context.Background(), last)
@@ -2628,9 +2626,7 @@ func TestFutureHeight(t *testing.T) {
 		tortoise := tortoiseFromSimState(
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
-		var (
-			last, verified types.LayerID
-		)
+		var last, verified types.LayerID
 		for i := 0; i < int(cfg.Hdist); i++ {
 			last = s.Next(sim.WithNumBlocks(0))
 			verified = tortoise.HandleIncomingLayer(context.Background(), last)
