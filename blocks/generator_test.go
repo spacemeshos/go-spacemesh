@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
@@ -192,7 +195,13 @@ func Test_processHareOutput(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	var block *types.Block
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).Return(nil)
-	tg.mockCState.EXPECT().SelectBlockTXs(layerID, plist).Return(txIDs, nil)
+	tg.mockCState.EXPECT().SelectBlockTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+			require.Equal(t, lid, layerID)
+			diff := cmp.Diff(proposals, plist, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, types.Proposal{}, signing.PublicKey{}))
+			require.Empty(t, diff)
+			return txIDs, nil
+		})
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, b *types.Block) error {
 			block = b
@@ -238,7 +247,14 @@ func Test_processHareOutput_ProcessFailed(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	var block *types.Block
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).Return(nil)
-	tg.mockCState.EXPECT().SelectBlockTXs(layerID, plist).Return(txIDs, nil)
+	tg.mockCState.EXPECT().SelectBlockTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+			require.Equal(t, lid, layerID)
+			diff := cmp.Diff(proposals, plist, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, types.Proposal{}, signing.PublicKey{}))
+			require.Empty(t, diff)
+			return txIDs, nil
+		})
+
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, b *types.Block) error {
 			block = b
@@ -269,7 +285,14 @@ func Test_processHareOutput_AddBlockFailed(t *testing.T) {
 	plist := createProposals(t, tg.cdb, layerID, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).Return(nil)
-	tg.mockCState.EXPECT().SelectBlockTXs(layerID, plist).Return(txIDs, nil)
+	tg.mockCState.EXPECT().SelectBlockTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+			require.Equal(t, lid, layerID)
+			diff := cmp.Diff(proposals, plist, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, types.Proposal{}, signing.PublicKey{}))
+			require.Empty(t, diff)
+			return txIDs, nil
+		})
+
 	errUnknown := errors.New("unknown")
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(errUnknown)
 	require.ErrorIs(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID, Proposals: pids}), errUnknown)
@@ -288,7 +311,14 @@ func Test_processHareOutput_TxPoolFailed(t *testing.T) {
 	pids := types.ToProposalIDs(plist)
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).Return(nil)
 	errUnknown := errors.New("unknown")
-	tg.mockCState.EXPECT().SelectBlockTXs(layerID, plist).Return(nil, errUnknown)
+	tg.mockCState.EXPECT().SelectBlockTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+			require.Equal(t, lid, layerID)
+			diff := cmp.Diff(proposals, plist, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, types.Proposal{}, signing.PublicKey{}))
+			require.Empty(t, diff)
+			return nil, errUnknown
+		})
+
 	require.ErrorIs(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID, Proposals: pids}), errUnknown)
 }
 

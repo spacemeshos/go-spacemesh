@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -31,7 +34,8 @@ func TestGetATXByID(t *testing.T) {
 	for _, want := range atxs {
 		got, err := Get(db, want.ID())
 		require.NoError(t, err)
-		require.Equal(t, want, got)
+		diff := cmp.Diff(want, got, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.ActivationTxHeader{}))
+		require.Empty(t, diff)
 	}
 
 	_, err := Get(db, types.ATXID(types.CalcHash32([]byte("0"))))

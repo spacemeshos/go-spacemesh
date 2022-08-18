@@ -230,7 +230,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
-		r.Nil(atx.InitialPostIndices)
+		r.Empty(atx.InitialPostIndices)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(*types.EmptyATXID, atx.PrevATXID)

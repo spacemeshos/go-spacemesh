@@ -27,6 +27,7 @@ func EncodeTo(w io.Writer, value Encodable) (int, error) {
 	if encodable, ok := value.(scale.Encodable); ok {
 		return encodable.EncodeScale(scale.NewEncoder(w))
 	}
+	//log.Panicf("[EncodeTo] %s\n", reflect.TypeOf(value))
 	v, err := xdr.Marshal(w, value)
 	if err != nil {
 		return v, fmt.Errorf("marshal XDR: %w", err)
@@ -40,6 +41,7 @@ func DecodeFrom(r io.Reader, value Decodable) (int, error) {
 	if decodable, ok := value.(scale.Decodable); ok {
 		return decodable.DecodeScale(scale.NewDecoder(r))
 	}
+	//log.Panicf("[DecodeFrom] %s\n", reflect.TypeOf(value))
 	v, err := xdr.Unmarshal(r, value)
 	if err != nil {
 		return v, fmt.Errorf("unmarshal XDR: %w", err)

@@ -5,6 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/signing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
@@ -247,7 +252,9 @@ func TestMesh_GetLayer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, id, lyr.Index())
 	require.Len(t, lyr.Ballots(), len(blts))
-	require.ElementsMatch(t, blts, lyr.Ballots())
+	ballotsDiff := cmp.Diff(blts, lyr.Ballots(), cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, signing.PublicKey{}))
+	require.Empty(t, ballotsDiff)
+	//require.ElementsMatch(t, blts, lyr.Ballots())
 	require.ElementsMatch(t, blks, lyr.Blocks())
 }
 

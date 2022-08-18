@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -46,7 +49,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
 	gotA.CalcAndSetID()
-	require.Equal(t, *atx, gotA)
+	diff := cmp.Diff(*atx, gotA, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.ActivationTxHeader{}))
+	require.Empty(t, diff)
 
 	_, err = bs.Get(BallotDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -68,7 +72,8 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	var gotB types.Ballot
 	require.NoError(t, codec.Decode(got, &gotB))
 	require.NoError(t, gotB.Initialize())
-	require.Equal(t, *blt, gotB)
+	diff := cmp.Diff(*blt, gotB, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, signing.PublicKey{}))
+	require.Empty(t, diff)
 
 	_, err = bs.Get(BlockDB, blt.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -94,7 +99,9 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 	var gotB types.Block
 	require.NoError(t, codec.Decode(got, &gotB))
 	gotB.Initialize()
-	require.Equal(t, blk, gotB)
+	diff := cmp.Diff(blk, gotB, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+	require.Empty(t, diff)
+
 	_, err = bs.Get(ProposalDB, blk.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -144,7 +151,8 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	var gotP types.Proposal
 	require.NoError(t, codec.Decode(got, &gotP))
 	require.NoError(t, gotP.Initialize())
-	require.Equal(t, p, gotP)
+	diff := cmp.Diff(p, gotP, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Ballot{}, types.Proposal{}, signing.PublicKey{}))
+	require.Empty(t, diff)
 
 	_, err = bs.Get(BlockDB, p.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)

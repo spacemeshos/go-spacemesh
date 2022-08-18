@@ -6,6 +6,9 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,7 +91,12 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
+	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, bl *types.Block) error {
+			diff := cmp.Diff(bl, block, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+			require.Empty(t, diff)
+			return errUnknown
+		}).Times(1)
 	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
 	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), data), errUnknown)
 }
@@ -100,7 +108,13 @@ func Test_HandleBlockData(t *testing.T) {
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
-	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
+	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, bl *types.Block) error {
+			diff := cmp.Diff(bl, block, cmpopts.EquateEmpty(), cmp.AllowUnexported(types.Block{}))
+			require.Empty(t, diff)
+			return nil
+		}).Times(1)
+
 	th.mockFetcher.EXPECT().AddPeersFromHash(block.ID().AsHash32(), types.TransactionIDsToHashes(block.TxIDs))
 	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), data))
 }

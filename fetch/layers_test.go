@@ -112,7 +112,7 @@ func generateLayerContent(emptyHareOutput bool) []byte {
 	if !emptyHareOutput {
 		hareOutput = blockIDs[0]
 	}
-	lb := layerData{
+	lb := LayerData{
 		Ballots:        ballotIDs,
 		Blocks:         blockIDs,
 		HareOutput:     hareOutput,
@@ -120,12 +120,12 @@ func generateLayerContent(emptyHareOutput bool) []byte {
 		Hash:           hash,
 		AggregatedHash: types.RandomHash(),
 	}
-	out, _ := codec.Encode(lb)
+	out, _ := codec.Encode(&lb)
 	return out
 }
 
 func generateEmptyLayer() []byte {
-	lb := layerData{
+	lb := LayerData{
 		Ballots:        []types.BallotID{},
 		Blocks:         []types.BlockID{},
 		HareOutput:     types.EmptyBlockID,
@@ -133,7 +133,7 @@ func generateEmptyLayer() []byte {
 		Hash:           types.EmptyLayerHash,
 		AggregatedHash: types.RandomHash(),
 	}
-	out, _ := codec.Encode(lb)
+	out, _ := codec.Encode(&lb)
 	return out
 }
 
@@ -311,7 +311,7 @@ func TestPollLayerContent_PeerErrors(t *testing.T) {
 
 func TestPollLayerContent_MissingBlocks(t *testing.T) {
 	requested := types.NewLayerID(20)
-	blks := &layerData{
+	blks := &LayerData{
 		Blocks:         []types.BlockID{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}},
 		ProcessedLayer: requested,
 	}

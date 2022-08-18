@@ -61,7 +61,7 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
 		lyrID = types.BytesToLayerID(req)
-		ld    layerData
+		ld    LayerData
 		err   error
 	)
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
@@ -103,15 +103,15 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 }
 
 func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
-	var requestBatch requestBatch
+	var requestBatch RequestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
 		return nil, errors.New("bad request")
 	}
-	resBatch := responseBatch{
+	resBatch := ResponseBatch{
 		ID:        requestBatch.ID,
-		Responses: make([]responseMessage, 0, len(requestBatch.Requests)),
+		Responses: make([]ResponseMessage, 0, len(requestBatch.Requests)),
 	}
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
@@ -129,7 +129,7 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 				log.Int("dataSize", len(res)))
 		}
 		// add response to batch
-		m := responseMessage{
+		m := ResponseMessage{
 			Hash: r.Hash,
 			Data: res,
 		}

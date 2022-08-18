@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -50,32 +52,34 @@ type request struct {
 	retries              int
 }
 
-// requestMessage is the on the wire message that will be send to the peer for hash query.
-type requestMessage struct {
+//go:generate scalegen -types RequestMessage,ResponseMessage,RequestBatch,ResponseBatch
+
+// RequestMessage is sent to the peer for hash query.
+type RequestMessage struct {
 	Hint datastore.Hint
 	Hash types.Hash32
 }
 
-// responseMessage is the on the wire message that will be send to the this node as response,.
-type responseMessage struct {
+// ResponseMessage is sent to the node as a response.
+type ResponseMessage struct {
 	Hash types.Hash32
 	Data []byte
 }
 
-// requestBatch is a batch of requests and a hash of all requests as ID.
-type requestBatch struct {
+// RequestBatch is a batch of requests and a hash of all requests as ID.
+type RequestBatch struct {
 	ID       types.Hash32
-	Requests []requestMessage
+	Requests []RequestMessage
 }
 
 type batchInfo struct {
-	requestBatch
+	RequestBatch
 	peer p2p.Peer
 }
 
 // SetID calculates the hash of all requests and sets it as this batches ID.
 func (b *batchInfo) SetID() {
-	bts, err := types.InterfaceToBytes(b.Requests)
+	bts, err := codec.EncodeSlice(b.Requests)
 	if err != nil {
 		return
 	}
@@ -83,19 +87,19 @@ func (b *batchInfo) SetID() {
 }
 
 // ToMap converts the array of requests to map so it can be easily invalidated.
-func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
-	m := make(map[types.Hash32]requestMessage)
+func (b batchInfo) ToMap() map[types.Hash32]RequestMessage {
+	m := make(map[types.Hash32]RequestMessage)
 	for _, r := range b.Requests {
 		m[r.Hash] = r
 	}
 	return m
 }
 
-// responseBatch is the response struct send for a requestBatch. the responseBatch ID must be the same
-// as stated in requestBatch even if not all Data is present.
-type responseBatch struct {
+// ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
+// as stated in RequestBatch even if not all Data is present.
+type ResponseBatch struct {
 	ID        types.Hash32
-	Responses []responseMessage
+	Responses []ResponseMessage
 }
 
 // Config is the configuration file of the Fetch component.
@@ -269,7 +273,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		return
 	}
 
-	var response responseBatch
+	var response ResponseBatch
 	err := types.BytesToInterface(data, &response)
 	if err != nil {
 		f.log.With().Error("response was unclear, maybe leaking", log.Err(err))
@@ -363,12 +367,12 @@ func (f *Fetch) receiveResponse(data []byte) {
 
 // this is the main function that sends the hash request to the peer.
 func (f *Fetch) requestHashBatchFromPeers() {
-	var requestList []requestMessage
+	var requestList []RequestMessage
 	f.activeReqM.Lock()
 	// only send one request per hash
 	for hash, reqs := range f.activeRequests {
 		f.log.With().Debug("batching hash request", log.String("hash", hash.ShortString()))
-		requestList = append(requestList, requestMessage{Hash: hash, Hint: reqs[0].hint})
+		requestList = append(requestList, RequestMessage{Hash: hash, Hint: reqs[0].hint})
 		// move the processed requests to pending
 		f.pendingRequests[hash] = append(f.pendingRequests[hash], reqs...)
 		delete(f.activeRequests, hash)
@@ -378,7 +382,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	f.send(requestList)
 }
 
-func (f *Fetch) send(requests []requestMessage) {
+func (f *Fetch) send(requests []RequestMessage) {
 	if len(requests) == 0 {
 		return
 	}
@@ -395,9 +399,9 @@ func (f *Fetch) send(requests []requestMessage) {
 	}
 }
 
-func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]requestMessage {
+func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]RequestMessage {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	peer2requests := make(map[p2p.Peer][]requestMessage)
+	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
 
 	for _, req := range requests {
@@ -408,17 +412,17 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 
 		_, ok := peer2requests[p]
 		if !ok {
-			peer2requests[p] = []requestMessage{req}
+			peer2requests[p] = []RequestMessage{req}
 		} else {
 			peer2requests[p] = append(peer2requests[p], req)
 		}
 	}
 
 	// split every peer's requests into batches of f.cfg.BatchSize each
-	result := make(map[p2p.Peer][][]requestMessage)
+	result := make(map[p2p.Peer][][]RequestMessage)
 	for peer, requests := range peer2requests {
 		if len(requests) < f.cfg.BatchSize {
-			result[peer] = [][]requestMessage{
+			result[peer] = [][]RequestMessage{
 				requests,
 			}
 			continue
@@ -436,7 +440,7 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 }
 
 // sendBatch dispatches batched request messages to provided peer.
-func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
+func (f *Fetch) sendBatch(p p2p.Peer, requests []RequestMessage) error {
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
@@ -455,7 +459,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
 		f.handleHashError(batch.ID, err)
 	}
 
-	bytes, err := types.InterfaceToBytes(&batch.requestBatch)
+	bytes, err := codec.Encode(&batch.RequestBatch)
 	if err != nil {
 		f.handleHashError(batch.ID, err)
 	}

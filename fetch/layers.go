@@ -29,7 +29,7 @@ var (
 
 // peerResult captures the response from each peer.
 type peerResult struct {
-	data *layerData
+	data *LayerData
 	err  error
 }
 
@@ -161,7 +161,7 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 }
 
 // registerLayerHashes registers provided hashes with provided peer.
-func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
+func (l *Logic) registerLayerHashes(peer p2p.Peer, data *LayerData) {
 	if data == nil {
 		return
 	}
@@ -185,7 +185,7 @@ func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
 }
 
 // fetchLayerData fetches the all content referenced in layerData.
-func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *layerData) error {
+func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *LayerData) error {
 	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
 	l.mutex.Lock()
 	lyrResult := l.layerBlocksRes[layerID]
@@ -251,7 +251,7 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 		return
 	}
 
-	var ldata layerData
+	var ldata LayerData
 	if err := codec.Decode(data, &ldata); err != nil {
 		logger.With().Debug("error converting bytes to layerData", log.Err(err))
 		result.err = err
