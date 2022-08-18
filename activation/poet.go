@@ -38,7 +38,7 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 
 	cfg.DisableBroadcast = disableBroadcast
 	cfg.Reset = true
-	cfg.CycleGap = 4 * time.Second
+	cfg.Duration = "4s"
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {

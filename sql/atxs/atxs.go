@@ -24,15 +24,15 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 		tickCount := uint64(stmt.ColumnInt64(2))
 		v.SetID(&id)
 		v.Verify(baseTickHeight, tickCount)
-		err = v.CalcAndSetNodeID()
-		if err != nil {
-			return false
-		}
+		buf := make([]byte, len(types.NodeID{}))
+		stmt.ColumnBytes(3, buf)
+		nodeID := types.BytesToNodeID(buf)
+		v.SetNodeID(&nodeID)
 		atx, err = &v, nil
 		return true
 	}
 
-	if rows, err := db.Exec("select atx, base_tick_height, tick_count from atxs where id = ?1;", enc, dec); err != nil {
+	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher from atxs where id = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)

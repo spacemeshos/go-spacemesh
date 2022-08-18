@@ -1235,8 +1235,7 @@ func TestMultiTortoise(t *testing.T) {
 
 func TestComputeExpectedWeight(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
-	lyrsPerEpoch := types.GetLayersPerEpoch()
-	require.EqualValues(t, 4, lyrsPerEpoch, "expecting layers per epoch to be 4. adjust test if it will change")
+	require.EqualValues(t, 4, types.GetLayersPerEpoch(), "expecting layers per epoch to be 4. adjust test if it will change")
 	for _, tc := range []struct {
 		desc         string
 		target, last types.LayerID
@@ -1305,6 +1304,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				id := types.RandomATXID()
 				atx.SetID(&id)
+				atx.SetNodeID(&types.NodeID{})
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
