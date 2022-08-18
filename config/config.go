@@ -210,3 +210,14 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 func (cfg *BaseConfig) SetConfigFile(file string) {
 	cfg.ConfigFile = file
 }
+
+func (cfg *Config) NetworkIdFromGenesis(genCfg *GenesisConfig) {
+	switch extraData := genCfg.ExtraData; {
+	case extraData == "mainnet":
+		cfg.P2P.NetworkID = uint32(1)
+	case extraData == "testnet":
+		cfg.P2P.NetworkID = uint32(2)
+	case extraData == "devnet":
+		cfg.P2P.NetworkID = uint32(3)
+	}
+}

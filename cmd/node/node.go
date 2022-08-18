@@ -1059,7 +1059,9 @@ func (app *App) Start() error {
 
 	lg.Info("initializing p2p services")
 
+	app.Config.NetworkIdFromGenesis(app.Config.Genesis)
 	cfg := app.Config.P2P
+
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
@@ -1070,7 +1072,8 @@ func (app *App) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
-
+	// Note to self: Configuration should be finished after this
+	// Panic should be before this
 	if err = app.initServices(ctx,
 		nodeID,
 		dbStorepath,

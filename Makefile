@@ -118,6 +118,9 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
+test-single: get-libs
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -run ^$(test_name) "github.com/spacemeshos/go-spacemesh/config"
+
 test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 
 test: get-libs

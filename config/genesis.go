@@ -4,24 +4,27 @@ import (
 	"time"
 
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
-)
-
-const (
-	defaultGenesisConfigFileName = "./genesis.toml"
+	"github.com/spf13/viper"
 )
 
 type GenesisConfig struct {
-	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api`
+	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
 	GoldenATXID string                          `mapstructure:"golden-atx"`
+	ExtraData   string                          `mapstructure:"genesis-extra-data"`
+}
+
+func GenesisViper() *viper.Viper {
+	genesisVip := viper.New()
+	return genesisVip
 }
 
 func DefaultGenesisConfig() *GenesisConfig {
-	// NOTE(dshulyak) keys in default config are used in some tests
 	return &GenesisConfig{
 		Accounts:    apiConfig.DefaultGenesisAccountConfig(),
-		GenesisTime: time.Now().Format(time.RFC3339),
-		GoldenATXID: "0x5678",
+		GenesisTime: DefaultTestGenesisTime(),
+		GoldenATXID: DefaultGoldenATXId(),
+		ExtraData:   DefaultGenesisExtraData(),
 	}
 }
 
@@ -30,6 +33,10 @@ func DefaultTestGenesisTime() string {
 }
 func DefaultGoldenATXId() string {
 	return "0x5678"
+}
+
+func DefaultGenesisExtraData() string {
+	return "mainnet"
 }
 func DefaultTestnetGenesisConfig() *GenesisConfig {
 	//accountConfig := &apiConfig
@@ -53,5 +60,6 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 		Accounts:    apiConfig.DefaultTestGenesisAccountConfig(),
 		GenesisTime: DefaultTestGenesisTime(),
 		GoldenATXID: DefaultGoldenATXId(),
+		ExtraData:   DefaultGenesisExtraData(),
 	}
 }

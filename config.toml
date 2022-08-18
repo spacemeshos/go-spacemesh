@@ -27,7 +27,6 @@ node-id = ""
 new-node = false
 dial-timeout = "1m"
 conn-keepalive = "48h"
-network-id = 1 # 0 - MainNet, 1 - TestNet
 response-timeout = "2s"
 session-timeout = "2s"
 max-pending-connections = 50
@@ -104,3 +103,9 @@ atx-builder = "info"
 hare-beacon = "info"
 beacon = "info"
 weakCoin = "info"
+
+[genesis]
+coinbase = "0x1234"
+golden-atx = "0x5678"
+genesis-time = "2019-02-13T17:02:00+00:00"
+genesis-extra-data = "mainnet"
