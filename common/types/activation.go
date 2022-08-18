@@ -289,7 +289,7 @@ func (atx *ActivationTx) CalcAndSetID() {
 	atx.SetID(&id)
 }
 
-// CalcAndSetNoteID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
+// CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
 func (atx *ActivationTx) CalcAndSetNodeID() error {
 	b, err := atx.InnerBytes()
 	if err != nil {
