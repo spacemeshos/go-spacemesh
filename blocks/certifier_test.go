@@ -83,7 +83,7 @@ func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID, cnt uint1
 func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.NodeID, *types.CertifyMessage, []byte) {
 	t.Helper()
 	nid, msg := genCertifyMsg(t, lid, bid, defaultCnt)
-	data, err := codec.Encode(msg)
+	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
 	return nid, msg, data
 }
@@ -142,33 +142,6 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 	verifiedSaved(t, tc.db, b.LayerIndex, b.ID(), cutoff)
 }
 
-func Test_HandleCertifyMessage_MultipleBlocks(t *testing.T) {
-	tc := newTestCertifier(t)
-	b1 := generateBlock(t, tc.db)
-	count1 := uint16(1)
-	nid1, msg1 := genCertifyMsg(t, b1.LayerIndex, b1.ID(), count1)
-	data1, err := codec.Encode(msg1)
-	require.NoError(t, err)
-	tc.RegisterDeadline(b1.LayerIndex, b1.ID(), time.Now())
-	tc.mOracle.EXPECT().Validate(gomock.Any(), b1.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid1, msg1.Proof, count1).
-		Return(true, nil)
-
-	b2 := generateBlock(t, tc.db)
-	count2 := uint16(tc.cfg.CertifyThreshold)
-	nid2, msg2 := genCertifyMsg(t, b2.LayerIndex, b2.ID(), count2)
-	data2, err := codec.Encode(msg2)
-	require.NoError(t, err)
-	tc.RegisterDeadline(b2.LayerIndex, b2.ID(), time.Now())
-	tc.mOracle.EXPECT().Validate(gomock.Any(), b1.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid2, msg2.Proof, count2).
-		Return(true, nil)
-
-	res := tc.HandleCertifyMessage(context.TODO(), "peer", data1)
-	require.Equal(t, pubsub.ValidationAccept, res)
-	res = tc.HandleCertifyMessage(context.TODO(), "peer", data2)
-	require.Equal(t, pubsub.ValidationAccept, res)
-	verifiedSaved(t, tc.db, b2.LayerIndex, b2.ID(), 1)
-}
-
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {
 	tc := newTestCertifier(t)
 	tc.Stop()
@@ -180,8 +153,8 @@ func Test_HandleCertifyMessage_Stopped(t *testing.T) {
 
 func Test_HandleCertifyMessage_CorruptedMsg(t *testing.T) {
 	tc := newTestCertifier(t)
-	_, _, encoded := genEncodedMsg(t, types.NewLayerID(11), types.RandomBlockID())
-	encoded = encoded[1:]
+	_, _, encoded := genEncodedMsg(t, types.NewLayerID(11), types.BlockID{1, 2, 3})
+	encoded = encoded[:1]
 
 	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
 	require.Equal(t, pubsub.ValidationReject, res)
