@@ -359,6 +359,16 @@ func (c *Certifier) saveMessage(logger log.Log, msg types.CertifyMessage) error 
 		return nil
 	}
 
+	// check for multiple cert for the same layer
+	for b, ci := range c.certMsgs[lid] {
+		if ci.done == true {
+			logger.With().Error("multiple certificate found for the same layer",
+				log.Stringer("cert_bid", b),
+				log.Uint16("total_count", ci.totalEligibility),
+				log.Int("num_sigs", len(ci.signatures)))
+		}
+	}
+
 	cert := &types.Certificate{
 		BlockID:    bid,
 		Signatures: c.certMsgs[lid][bid].signatures,
