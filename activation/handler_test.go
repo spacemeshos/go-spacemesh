@@ -50,13 +50,13 @@ func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	id1 := types.NodeID{1}
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
 	epoch1 := types.EpochID(2)
-	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer()), id1, coinbase1, &types.NIPost{}, 0, nil)
+	atx1 := types.NewActivationTx(newChallenge(0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer()), id1, coinbase1, &types.NIPost{}, 0, nil)
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), epoch1, atx1))
 
 	epoch2 := types.EpochID(1) + (1 << 8)
 	// This will fail if we convert the epoch id to bytes using LittleEndian, since LevelDB's lexicographic sorting will
 	// then sort by LSB instead of MSB, first.
-	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer()), id1, coinbase1, &types.NIPost{}, 0, nil)
+	atx2 := types.NewActivationTx(newChallenge(1, atx1.ID(), atx1.ID(), epoch2.FirstLayer()), id1, coinbase1, &types.NIPost{}, 0, nil)
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), epoch2, atx2))
 
 	atxid, err := atxs.GetLastIDByNodeID(cdb, id1)
@@ -203,13 +203,6 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
 
-	// Wrong active set.
-	/*atx = newActivationTx(idx1, 1, prevAtx.ID(), posatx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, 10, []types.BlockID{}, &types.NIPost{})
-	err = SignAtx(signer, atx)
-	assert.NoError(t, err)
-	err = atxHandler.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "atx contains view with unequal weight (10) than seen (0)")
-	*/
 	// Wrong positioning atx.
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = SignAtx(signer, atx)
@@ -451,7 +444,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	}
 
 	idx1 := types.NodeID{4}
-	challenge := newChallenge(idx1, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}.Add(numberOfLayers+1))
+	challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}.Add(numberOfLayers+1))
 	hash, err := challenge.Hash()
 	r.NoError(err)
 	prevAtx := newAtx(challenge, idx1, NewNIPostWithChallenge(hash, poetRef))
@@ -502,10 +495,10 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	eStart := time.Now()
 	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
 		for miner := 0; miner < numOfMiners; miner++ {
-			challenge := newChallenge(nodeID, 1, prevAtxs[miner], posAtx, layer)
+			challenge := newChallenge(1, prevAtxs[miner], posAtx, layer)
 			h, err := challenge.Hash()
 			r.NoError(err)
-			atx = newAtx(challenge, nodeID, NewNIPostWithChallenge(h, poetBytes))
+			atx = newAtx(challenge, sig.NodeID(), NewNIPostWithChallenge(h, poetBytes))
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxHdlr, atx, lg.WithName("storeAtx"))
 		}
@@ -618,19 +611,19 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
-	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), nodeID, types.Address{}, nil, 0, nil)
+	validAtx := types.NewActivationTx(newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}), sig.NodeID(), types.Address{}, nil, 0, nil)
 	err := atxHdlr.ContextuallyValidateAtx(&validAtx.ActivationTxHeader)
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), nodeID, types.Address{}, nil, 0, nil)
+	malformedAtx := types.NewActivationTx(newChallenge(0, arbitraryAtxID, goldenATXID, types.LayerID{}), sig.NodeID(), types.Address{}, nil, 0, nil)
 	err = atxHdlr.ContextuallyValidateAtx(&malformedAtx.ActivationTxHeader)
 	r.ErrorIs(err, sql.ErrNotFound)
 }
 
 func TestHandler_HandleAtxNilNipst(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
-	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
+	atx := newActivationTx(sig.NodeID(), 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := codec.Encode(atx)
 	require.NoError(t, err)
 	require.Error(t, atxHdlr.HandleAtxData(context.TODO(), buf))
@@ -638,8 +631,9 @@ func TestHandler_HandleAtxNilNipst(t *testing.T) {
 
 func TestHandler_KnownATX(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
-	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
+	atx := newActivationTx(sig.NodeID(), 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	require.NoError(t, atxHdlr.ProcessAtx(context.TODO(), atx))
+	require.NoError(t, SignAtx(sig, atx))
 	buf, err := codec.Encode(atx)
 	require.NoError(t, err)
 
@@ -663,7 +657,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 			pub, _, _ := ed25519.GenerateKey(nil)
 			id := types.BytesToNodeID(pub)
 			for i := 0; ; i++ {
-				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), id, types.Address{}, nil, 0, nil)
+				atx := types.NewActivationTx(newChallenge(uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), id, types.Address{}, nil, 0, nil)
 				if !assert.NoError(b, atxHdlr.StoreAtx(context.TODO(), types.EpochID(1), atx)) {
 					return
 				}
@@ -689,38 +683,38 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 	mockFetch := mocks.NewMockFetcher(gomock.NewController(t))
 	atxHdlr := NewHandler(newCachedDB(t), mockFetch, layersPerEpoch, testTickSize,
 		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxHandler"))
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 
-	atx1 := newAtx(challenge, nodeID, nipost)
+	atx1 := newAtx(challenge, sig.NodeID(), nipost)
 	atx1.PositioningATX = types.ATXID{1, 2, 3} // should be fetched
 	atx1.PrevATXID = types.ATXID{4, 5, 6}      // should be fetched
 	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.PositioningATX, atx1.PrevATXID}).Return(nil)
 	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx1))
 
-	atx2 := newAtx(challenge, nodeID, nipost)
+	atx2 := newAtx(challenge, sig.NodeID(), nipost)
 	atx2.PositioningATX = goldenATXID     // should *NOT* be fetched
 	atx2.PrevATXID = types.ATXID{2, 3, 4} // should be fetched
 	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx2.PrevATXID}).Return(nil)
 	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx2))
 
-	atx3 := newAtx(challenge, nodeID, nipost)
+	atx3 := newAtx(challenge, sig.NodeID(), nipost)
 	atx3.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
 	atx3.PrevATXID = types.ATXID{3, 4, 5}   // should be fetched
 	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx3.PrevATXID}).Return(nil)
 	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx3))
 
-	atx4 := newAtx(challenge, nodeID, nipost)
+	atx4 := newAtx(challenge, sig.NodeID(), nipost)
 	atx4.PositioningATX = types.ATXID{5, 6, 7} // should be fetched
 	atx4.PrevATXID = *types.EmptyATXID         // should *NOT* be fetched
 	mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx4.PositioningATX}).Return(nil)
 	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx4))
 
-	atx5 := newAtx(challenge, nodeID, nipost)
+	atx5 := newAtx(challenge, sig.NodeID(), nipost)
 	atx5.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
 	atx5.PrevATXID = *types.EmptyATXID      // should *NOT* be fetched
 	require.NoError(t, atxHdlr.FetchAtxReferences(context.TODO(), atx5))
 
-	atx6 := newAtx(challenge, nodeID, nipost)
+	atx6 := newAtx(challenge, sig.NodeID(), nipost)
 	atxid := types.ATXID{1, 2, 3}
 	atx6.PositioningATX = atxid // should be fetched
 	atx6.PrevATXID = atxid      // should be fetched
@@ -740,8 +734,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 		leaves   = uint64(11)
 	)
 
-	signer := signing.NewEdSigner()
-	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeID := sig.NodeID()
 
 	db := newCachedDB(t)
 	handler := NewHandler(db, mfetch, layersPerEpoch, tickSize,
@@ -765,7 +758,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 		},
 	}
 	atx1.SetNodeID(&nodeID)
-	require.NoError(t, SignAtx(signer, atx1))
+	require.NoError(t, SignAtx(sig, atx1))
 	atx1.CalcAndSetID()
 
 	buf, err := codec.Encode(atx1)
@@ -801,7 +794,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 		},
 	}
 	atx2.SetNodeID(&nodeID)
-	require.NoError(t, SignAtx(signer, atx2))
+	require.NoError(t, SignAtx(sig, atx2))
 	atx2.CalcAndSetID()
 
 	buf, err = codec.Encode(atx2)
