@@ -223,17 +223,3 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	nb.persist()
 	return nipost, nil
 }
-
-// NewNIPostWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
-func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
-	return &types.NIPost{
-		Challenge: challenge,
-		Post: &types.Post{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge: poetRef,
-		},
-	}
-}
