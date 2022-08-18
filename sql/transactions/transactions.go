@@ -298,10 +298,7 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 		}, func(stmt *sql.Statement) bool {
 			applied := stmt.ColumnInt(5)
 			tx, err = decodeTransaction(id, applied, stmt)
-			if err != nil {
-				return false
-			}
-			return true
+			return err == nil
 		})
 	if err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)

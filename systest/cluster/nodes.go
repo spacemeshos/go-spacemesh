@@ -10,6 +10,7 @@ import (
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apiappsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -365,7 +366,7 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
 		defer cancel()
 		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
-			grpc.WithInsecure(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)
 		if err != nil {

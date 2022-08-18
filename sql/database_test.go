@@ -18,13 +18,6 @@ func testTables(db Executor) error {
 	return nil
 }
 
-func persistentDB(tb testing.TB) *Database {
-	tb.Helper()
-	db, err := Open(testURI(tb), WithMigrations(testTables))
-	require.NoError(tb, err)
-	return db
-}
-
 func testURI(tb testing.TB) string {
 	tb.Helper()
 	return "file:" + filepath.Join(tb.TempDir(), "state.sql")

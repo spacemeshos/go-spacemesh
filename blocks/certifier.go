@@ -234,9 +234,9 @@ func (c *Certifier) HandleCertifyMessage(ctx context.Context, _ p2p.Peer, msg []
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData) == true:
+	case errors.Is(err, errMalformedData):
 		return pubsub.ValidationReject
-	case errors.Is(err, errKnownCertMsg) == true || errors.Is(err, errMsgTooOld):
+	case errors.Is(err, errKnownCertMsg) || errors.Is(err, errMsgTooOld):
 		return pubsub.ValidationIgnore
 	default:
 		c.logger.WithContext(ctx).With().Error("failed to process certify message gossip", log.Err(err))

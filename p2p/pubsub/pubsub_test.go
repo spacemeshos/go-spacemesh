@@ -47,10 +47,5 @@ func TestGossip(t *testing.T) {
 	for i, ps := range pubsubs {
 		require.NoError(t, ps.Publish(ctx, topic, []byte(mesh.Hosts()[i].ID())))
 	}
-	require.Eventually(t, func() bool {
-		if len(received) == count {
-			return true
-		}
-		return false
-	}, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return len(received) == count }, 5*time.Second, 10*time.Millisecond)
 }

@@ -49,7 +49,6 @@ func updateMetrics(err error, counter *prometheus.CounterVec) {
 	default:
 		counter.WithLabelValues(rejectedInternalErr).Inc()
 	}
-	return
 }
 
 // HandleGossipTransaction handles data received on the transactions gossip channel.

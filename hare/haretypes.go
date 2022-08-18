@@ -317,13 +317,6 @@ func (s *Set) Size() int {
 	return s.len()
 }
 
-func (s *Set) init() {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	s.values = make(map[types.ProposalID]struct{})
-}
-
 func (s *Set) initWithSize(size int) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
