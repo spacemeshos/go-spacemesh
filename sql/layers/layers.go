@@ -65,27 +65,9 @@ func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) err
 	return nil
 }
 
-// prune the repetitive LayerID and BlockID.
-func prune(cert *types.Certificate) *types.Certificate {
-	var pruned types.Certificate
-	pruned.BlockID = cert.BlockID
-	pruned.Signatures = make([]types.CertifyMessage, len(cert.Signatures))
-	for i, msg := range cert.Signatures {
-		pruned.Signatures[i] = types.CertifyMessage{
-			CertifyContent: types.CertifyContent{
-				EligibilityCnt: msg.EligibilityCnt,
-				Proof:          msg.Proof,
-			},
-			Signature: msg.Signature,
-		}
-	}
-	return &pruned
-}
-
 // SetHareOutputWithCert sets the hare output for the layer with a block certificate.
 func SetHareOutputWithCert(db sql.Executor, lid types.LayerID, cert *types.Certificate) error {
 	output := cert.BlockID
-	cert = prune(cert)
 	data, err := codec.Encode(cert)
 	if err != nil {
 		return fmt.Errorf("encode cert %w", err)
@@ -114,12 +96,7 @@ func GetCert(db sql.Executor, lid types.LayerID) (*types.Certificate, error) {
 	}, func(stmt *sql.Statement) bool {
 		data := make([]byte, stmt.ColumnLen(0))
 		stmt.ColumnBytes(0, data[:])
-		if err = codec.Decode(data, &cert); err == nil {
-			for i := range cert.Signatures {
-				cert.Signatures[i].LayerID = lid
-				cert.Signatures[i].BlockID = cert.BlockID
-			}
-		}
+		err = codec.Decode(data, &cert)
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("get cert %s: %w", lid, err)
