@@ -360,7 +360,9 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return errMalformedData
 	}
 	atx.CalcAndSetID()
-	atx.CalcAndSetNodeID()
+	if err := atx.CalcAndSetNodeID(); err != nil {
+		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
+	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existing != nil {

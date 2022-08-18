@@ -238,6 +238,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		h.Verify(0, 1)
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
+		atx.SetNodeID(&types.NodeID{})
 		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
@@ -287,6 +288,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		h.Verify(0, 1)
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
+		atx.SetNodeID(&types.NodeID{})
 		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])

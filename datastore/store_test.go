@@ -47,6 +47,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
 	gotA.CalcAndSetID()
+	gotA.CalcAndSetNodeID()
 	require.Equal(t, *atx, gotA)
 
 	_, err = bs.Get(BallotDB, atx.ID().Bytes())
