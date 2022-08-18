@@ -104,11 +104,14 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 		signer := signing.NewEdSigner()
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
-		nipostChallenge := types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
-			PubLayerID: lid,
-		}
-		atx := types.NewActivationTx(nipostChallenge, address, nil, numUint, nil)
+		atx := types.NewActivationTx(
+			types.NIPostChallenge{PubLayerID: lid},
+			types.BytesToNodeID(signer.PublicKey().Bytes()),
+			address,
+			nil,
+			numUint,
+			nil,
+		)
 		onAtx(atx)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 		atxes = append(atxes, atx)

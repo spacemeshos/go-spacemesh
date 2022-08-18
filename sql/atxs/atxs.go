@@ -24,6 +24,10 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 		tickCount := uint64(stmt.ColumnInt64(2))
 		v.SetID(&id)
 		v.Verify(baseTickHeight, tickCount)
+		err = v.CalcAndSetNodeID()
+		if err != nil {
+			return false
+		}
 		atx, err = &v, nil
 		return true
 	}
@@ -164,7 +168,7 @@ func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PubLayerID.GetEpoch()))
-		stmt.BindBytes(4, atx.NodeID.ToBytes())
+		stmt.BindBytes(4, atx.NodeID().ToBytes())
 		stmt.BindBytes(5, buf)
 		stmt.BindInt64(6, timestamp.UnixNano())
 		stmt.BindInt64(7, int64(atx.BaseTickHeight()))

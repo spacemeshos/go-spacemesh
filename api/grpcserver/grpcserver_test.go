@@ -89,8 +89,8 @@ var (
 	poetRef     = []byte("66666")
 	nipost      = NewNIPostWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx   = newAtx(challenge, nipost, addr1)
-	globalAtx2  = newAtx(challenge, nipost, addr2)
+	globalAtx   = newAtx(challenge, nodeID, nipost, addr1)
+	globalAtx2  = newAtx(challenge, nodeID, nipost, addr2)
 	signer1     = signing.NewEdSigner()
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
@@ -319,7 +319,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
 	challenge := types.NIPostChallenge{
-		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
@@ -328,8 +327,8 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 	return challenge
 }
 
-func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
-	activationTx := &types.ActivationTx{
+func newAtx(challenge types.NIPostChallenge, nodeID types.NodeID, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
+	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: challenge,
@@ -339,8 +338,9 @@ func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase type
 			NIPost: nipost,
 		},
 	}
-	activationTx.CalcAndSetID()
-	return activationTx
+	atx.CalcAndSetID()
+	atx.SetNodeID(&nodeID)
+	return atx
 }
 
 // PostAPIMock is a mock for Post API.
@@ -2032,7 +2032,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) {
+			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2496,7 +2496,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
+		require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))

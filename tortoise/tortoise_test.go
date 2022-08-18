@@ -216,7 +216,8 @@ func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
 		atxHeader := makeAtxHeaderWithWeight(uint32(weight))
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 		atx.PubLayerID = lid
-		atx.NodeID = types.NodeID{byte(i)}
+		nodeID := types.NodeID{byte(i)}
+		atx.SetNodeID(&nodeID)
 		atxID := types.RandomATXID()
 		atx.SetID(&atxID)
 		atxList = append(atxList, atx)
@@ -532,11 +533,11 @@ func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 }
 
 func makeAtxHeaderWithWeight(weight uint32) types.ActivationTxHeader {
-	header := types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
-	}
+	header := types.ActivationTxHeader{}
 	header.NumUnits = weight
 	header.Verify(0, 1)
+	nodeID := types.NodeID{1}
+	header.SetNodeID(&nodeID)
 	return header
 }
 
@@ -2277,7 +2278,8 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxHeader := makeAtxHeaderWithWeight(uint32(weight))
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 				atx.PubLayerID = atxLid
-				atx.NodeID = types.NodeID{byte(i)}
+				nodeID := types.NodeID{byte(i)}
+				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))

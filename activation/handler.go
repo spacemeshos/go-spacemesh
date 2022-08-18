@@ -120,12 +120,12 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 	h.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
 		epoch,
-		log.FieldNamed("atx_node_id", atx.NodeID),
+		log.FieldNamed("atx_node_id", atx.NodeID()),
 		atx.PubLayerID)
 	if err := h.ContextuallyValidateAtx(&atx.ActivationTxHeader); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
-			log.FieldNamed("atx_node_id", atx.NodeID),
+			log.FieldNamed("atx_node_id", atx.NodeID()),
 			log.Err(err))
 	} else {
 		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
@@ -153,7 +153,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
-	if !bytes.Equal(atx.NodeID[:], pub.Bytes()) {
+	if !bytes.Equal(atx.NodeID().ToBytes(), pub.Bytes()) {
 		return fmt.Errorf("node ids don't match")
 	}
 
@@ -167,9 +167,9 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
 
-		if prevATX.NodeID != atx.NodeID {
+		if prevATX.NodeID() != atx.NodeID() {
 			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
-				atx.ShortString(), atx.NodeID, prevATX.NodeID)
+				atx.ShortString(), atx.NodeID(), prevATX.NodeID())
 		}
 
 		prevEp := prevATX.PubLayerID.GetEpoch()
@@ -245,7 +245,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	pubKey := signing.NewPublicKey(atx.NodeID[:])
+	pubKey := signing.NewPublicKey(atx.NodeID().ToBytes())
 	leaves, err := h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
 		return fmt.Errorf("invalid nipost: %v", err)
@@ -258,10 +258,10 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
-		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID)
+		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil {
 			h.log.With().Error("could not fetch node last atx", atx.ID(),
-				log.FieldNamed("atx_node_id", atx.NodeID),
+				log.FieldNamed("atx_node_id", atx.NodeID()),
 				log.Err(err))
 			return fmt.Errorf("could not fetch node last atx: %w", err)
 		}
@@ -270,7 +270,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 			return fmt.Errorf("last atx is not the one referenced")
 		}
 	} else {
-		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID)
+		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			h.log.With().Error("fetching atx ids failed", log.Err(err))
 			return err
@@ -279,7 +279,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 		if err == nil {
 			// we found an ATX for this node ID, although it reported no prevATX -- this is invalid
 			return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v",
-				atx.NodeID.ShortString(), lastAtx.ShortString())
+				atx.NodeID().ShortString(), lastAtx.ShortString())
 		}
 	}
 
@@ -360,6 +360,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return errMalformedData
 	}
 	atx.CalcAndSetID()
+	atx.CalcAndSetNodeID()
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existing != nil {

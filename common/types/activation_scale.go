@@ -60,13 +60,6 @@ func (t *ActivationTxHeader) DecodeScale(dec *scale.Decoder) (total int, err err
 
 func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
 		if err != nil {
 			return total, err
@@ -105,13 +98,6 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 }
 
 func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
