@@ -83,7 +83,7 @@ func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID, cnt uint1
 func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.NodeID, *types.CertifyMessage, []byte) {
 	t.Helper()
 	nid, msg := genCertifyMsg(t, lid, bid, defaultCnt)
-	data, err := codec.Encode(&msg)
+	data, err := codec.Encode(msg)
 	require.NoError(t, err)
 	return nid, msg, data
 }
