@@ -216,7 +216,7 @@ func Test_OldLayersPruned(t *testing.T) {
 	tc.Stop()
 }
 
-func Test_CertifyMaybe(t *testing.T) {
+func Test_CertifyIfEligible(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	proof := []byte("not a fraud")
@@ -238,7 +238,7 @@ func Test_CertifyMaybe(t *testing.T) {
 	require.NoError(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
 }
 
-func Test_CertifyMaybe_NotEligible(t *testing.T) {
+func Test_CertifyIfEligible_NotEligible(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	proof := []byte("not a fraud")
@@ -247,7 +247,7 @@ func Test_CertifyMaybe_NotEligible(t *testing.T) {
 	require.NoError(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()))
 }
 
-func Test_CertifyMaybe_EligibilityErr(t *testing.T) {
+func Test_CertifyIfEligible_EligibilityErr(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	errUnknown := errors.New("unknown")
@@ -257,7 +257,7 @@ func Test_CertifyMaybe_EligibilityErr(t *testing.T) {
 	require.ErrorIs(t, tc.CertifyIfEligible(context.TODO(), tc.logger, b.LayerIndex, b.ID()), errUnknown)
 }
 
-func Test_CertifyMaybe_ProofErr(t *testing.T) {
+func Test_CertifyIfEligible_ProofErr(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
 	errUnknown := errors.New("unknown")

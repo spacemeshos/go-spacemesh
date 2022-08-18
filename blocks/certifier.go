@@ -210,7 +210,7 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 		},
 	}
 	msg.Signature = c.signer.Sign(msg.Bytes())
-	data, err := codec.Encode(msg)
+	data, err := codec.Encode(&msg)
 	if err != nil {
 		logger.With().Panic("failed to serialize certify message", log.Err(err))
 		return err
@@ -295,6 +295,7 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		logger.With().Error("malformed cert msg", log.Err(err))
 		return errMalformedData
 	}
+	logger = logger.WithFields(msg.LayerID, msg.BlockID)
 	if err := c.validate(ctx, logger, msg); err != nil {
 		return err
 	}
@@ -316,7 +317,6 @@ func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.Cert
 		return nil
 	}
 
-	logger.WithFields(bid)
 	// extract public key from signature
 	pubkey, err := ed25519.ExtractPublicKey(msg.Bytes(), msg.Signature)
 	if err != nil {

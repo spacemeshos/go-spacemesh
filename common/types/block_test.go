@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,13 +27,17 @@ func Test_CertifyMessage(t *testing.T) {
 			Proof:          []byte("not a fraud"),
 		},
 	}
-	msg.Signature = signing.NewEdSigner().Sign(msg.Bytes())
-	data, err := codec.Encode(msg)
+	signer := signing.NewEdSigner()
+	msg.Signature = signer.Sign(msg.Bytes())
+	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
 
 	var decoded CertifyMessage
 	require.NoError(t, codec.Decode(data, &decoded))
 	require.Equal(t, msg, decoded)
+	pubKey, err := ed25519.ExtractPublicKey(decoded.Bytes(), decoded.Signature)
+	require.NoError(t, err)
+	require.Equal(t, signer.PublicKey().Bytes(), []byte(pubKey))
 }
 
 func TestRewardCodec(t *testing.T) {
