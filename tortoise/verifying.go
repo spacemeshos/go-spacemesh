@@ -200,7 +200,8 @@ func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots 
 			logger.With().Debug("ballot weight is nil", ballot.id)
 			continue
 		}
-		if refheight := v.getReferenceHeight(lid); refheight > ballot.height {
+		// get height of the max votable block
+		if refheight := v.getReferenceHeight(lid.Sub(1)); refheight > ballot.height {
 			logger.With().Debug("reference height is higher than the ballot height",
 				ballot.id,
 				log.Uint64("reference height", refheight),

@@ -70,6 +70,18 @@ func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.Lay
 	return sign
 }
 
+func (f *full) abstained(ballot types.BallotID, blocklid types.LayerID) bool {
+	_, exist := f.abstain[ballot][blocklid]
+	if exist {
+		return true
+	}
+	base, exist := f.base[ballot]
+	if !exist {
+		return false
+	}
+	return f.abstained(base, blocklid)
+}
+
 func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []ballotInfo) {
 	var delayed []ballotInfo
 	for _, ballot := range ballots {
@@ -85,9 +97,8 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			if _, exist := f.empty[lid]; !exist {
 				f.empty[lid] = util.WeightFromUint64(0)
 			}
-
 			blocks := f.blocks[lid]
-			supports := false
+			empty := true
 			for i := range blocks {
 				block := &blocks[i]
 				if block.height > ballot.height {
@@ -95,13 +106,13 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 				}
 				switch f.getVote(logger, ballot.id, lid, block.id) {
 				case support:
-					supports = true
+					empty = false
 					block.weight.Add(ballot.weight)
 				case against:
 					block.weight.Sub(ballot.weight)
 				}
 			}
-			if !supports {
+			if empty && !f.abstained(ballot.id, lid) {
 				f.empty[lid].Add(ballot.weight)
 			}
 		}
