@@ -9,6 +9,30 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
+	return &types.Certificate{
+		BlockID: bid,
+		Signatures: []types.CertifyMessage{
+			{
+				CertifyContent: types.CertifyContent{
+					LayerID:        lid,
+					BlockID:        bid,
+					EligibilityCnt: 1,
+					Proof:          []byte("not a fraud 1"),
+				},
+			},
+			{
+				CertifyContent: types.CertifyContent{
+					LayerID:        lid,
+					BlockID:        bid,
+					EligibilityCnt: 2,
+					Proof:          []byte("not a fraud 2"),
+				},
+			},
+		},
+	}
+}
+
 func TestHareOutput(t *testing.T) {
 	db := sql.InMemory()
 	lid1 := types.NewLayerID(10)
@@ -29,28 +53,9 @@ func TestHareOutput(t *testing.T) {
 
 	// but setting the same layer with a certificate works
 	bid1 := types.BlockID{1, 1, 1}
-	cert := &types.Certificate{
-		BlockID: bid1,
-		Signatures: []types.CertifyMessage{
-			{
-				CertifyContent: types.CertifyContent{
-					LayerID:        lid1,
-					BlockID:        bid1,
-					EligibilityCnt: 1,
-					Proof:          []byte("not a fraud 1"),
-				},
-			},
-			{
-				CertifyContent: types.CertifyContent{
-					LayerID:        lid1,
-					BlockID:        bid1,
-					EligibilityCnt: 1,
-					Proof:          []byte("not a fraud 2"),
-				},
-			},
-		},
-	}
+	cert := makeCert(lid1, bid1)
 	require.NoError(t, SetHareOutputWithCert(db, lid1, cert))
+
 	output, err = GetHareOutput(db, lid1)
 	require.NoError(t, err)
 	require.Equal(t, bid1, output)
@@ -60,7 +65,7 @@ func TestHareOutput(t *testing.T) {
 
 	bid2 := types.BlockID{2, 2, 2}
 	lid2 := lid1.Add(1)
-	cert.BlockID = bid2
+	cert = makeCert(lid2, bid2)
 	require.NoError(t, SetHareOutputWithCert(db, lid2, cert))
 	output, err = GetHareOutput(db, lid2)
 	require.NoError(t, err)
@@ -70,7 +75,7 @@ func TestHareOutput(t *testing.T) {
 	require.Equal(t, cert, gotC)
 
 	bid3 := types.BlockID{3, 3, 3}
-	cert.BlockID = bid3
+	cert = makeCert(lid2, bid3)
 	// this will overwrite the previous certificate
 	require.NoError(t, SetHareOutputWithCert(db, lid2, cert))
 	output, err = GetHareOutput(db, lid2)
