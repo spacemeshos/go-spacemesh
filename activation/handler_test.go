@@ -42,6 +42,19 @@ func processAtxs(db *Handler, atxs []*types.ActivationTx) error {
 	return nil
 }
 
+func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+	return &types.NIPost{
+		Challenge: challenge,
+		Post: &types.Post{
+			Nonce:   0,
+			Indices: []byte(nil),
+		},
+		PostMetadata: &types.PostMetadata{
+			Challenge: poetRef,
+		},
+	}
+}
+
 func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	r := require.New(t)
 
@@ -78,7 +91,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	coinbase3 := types.GenerateAddress([]byte("cccc"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
-	npst := NewNIPostWithChallenge(&chlng, poetRef)
+	npst := newNIPostWithChallenge(&chlng, poetRef)
 	posATX := newActivationTx(types.NodeID{3, 3}, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, 100, coinbase1, 100, npst)
 	err := atxHdlr.StoreAtx(context.TODO(), 0, posATX)
 	assert.NoError(t, err)
@@ -90,7 +103,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, atx := range atxList {
 		hash, err := atx.NIPostChallenge.Hash()
 		assert.NoError(t, err)
-		atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	}
 
 	err = processAtxs(atxHdlr, atxList)
@@ -105,7 +118,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, atx := range atxList2 {
 		hash, err := atx.NIPostChallenge.Hash()
 		assert.NoError(t, err)
-		atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	}
 	err = processAtxs(atxHdlr, atxList2)
 	assert.NoError(t, err)
@@ -142,18 +155,18 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	for _, atx := range atxs {
 		hash, err := atx.NIPostChallenge.Hash()
 		assert.NoError(t, err)
-		atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	}
 
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase1, 100, &types.NIPost{})
 	hash, err := prevAtx.NIPostChallenge.Hash()
 	assert.NoError(t, err)
-	prevAtx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+	prevAtx.NIPost = newNIPostWithChallenge(hash, poetRef)
 
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase1, 100, &types.NIPost{})
 	hash, err = atx.NIPostChallenge.Hash()
 	assert.NoError(t, err)
-	atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+	atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
@@ -188,7 +201,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
-	npst := NewNIPostWithChallenge(&chlng, poetRef)
+	npst := newNIPostWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 	posAtx := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 	err := atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
@@ -339,7 +352,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
-	npst := NewNIPostWithChallenge(&chlng, poetRef)
+	npst := newNIPostWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 
 	err := atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
@@ -440,19 +453,19 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	for _, atx := range atxList {
 		hash, err := atx.NIPostChallenge.Hash()
 		r.NoError(err)
-		atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	}
 
 	idx1 := types.NodeID{4}
 	challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}.Add(numberOfLayers+1))
 	hash, err := challenge.Hash()
 	r.NoError(err)
-	prevAtx := newAtx(challenge, idx1, NewNIPostWithChallenge(hash, poetRef))
+	prevAtx := newAtx(challenge, idx1, newNIPostWithChallenge(hash, poetRef))
 
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.LayerID{}.Add(numberOfLayers+1+layersPerEpochBig), 0, 100, coinbase, 100, &types.NIPost{})
 	hash, err = atx.NIPostChallenge.Hash()
 	r.NoError(err)
-	atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
+	atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	err = atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
 	r.NoError(err)
 
@@ -498,7 +511,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			challenge := newChallenge(1, prevAtxs[miner], posAtx, layer)
 			h, err := challenge.Hash()
 			r.NoError(err)
-			atx = newAtx(challenge, sig.NodeID(), NewNIPostWithChallenge(h, poetBytes))
+			atx = newAtx(challenge, sig.NodeID(), newNIPostWithChallenge(h, poetBytes))
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxHdlr, atx, lg.WithName("storeAtx"))
 		}

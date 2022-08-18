@@ -228,20 +228,21 @@ func TestAdd(t *testing.T) {
 }
 
 func newAtx(nodeID types.NodeID, layerID types.LayerID) *types.ActivationTx {
-	activationTx := &types.ActivationTx{
+	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					PubLayerID: layerID,
+					PrevATXID:  types.RandomATXID(),
 				},
 				NumUnits: 2,
 			},
 		},
 	}
-	activationTx.Verify(0, 1)
-	activationTx.CalcAndSetID()
-	activationTx.SetNodeID(&nodeID)
-	return activationTx
+	atx.Verify(0, 1)
+	atx.CalcAndSetID()
+	atx.SetNodeID(&nodeID)
+	return atx
 }
 
 func TestPositioningID(t *testing.T) {

@@ -87,8 +87,8 @@ var (
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
-	nipost      = NewNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	nipost      = newNIPostWithChallenge(&chlng, poetRef)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx   = newAtx(challenge, nodeID, nipost, addr1)
 	globalAtx2  = newAtx(challenge, nodeID, nipost, addr2)
 	signer1     = signing.NewEdSigner()
@@ -130,7 +130,7 @@ func init() {
 	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
-func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: challenge,
 		Post: &types.Post{
@@ -317,14 +317,13 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
-	challenge := types.NIPostChallenge{
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
 	}
-	return challenge
 }
 
 func newAtx(challenge types.NIPostChallenge, nodeID types.NodeID, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {

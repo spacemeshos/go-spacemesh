@@ -48,7 +48,7 @@ var (
 	net               = &NetMock{}
 	layerClockMock    = &LayerClockMock{}
 	nipostBuilderMock = &NIPostBuilderMock{}
-	nipost            = NewNIPostWithChallenge(&chlng, poetBytes)
+	nipost            = newNIPostWithChallenge(&chlng, poetBytes)
 	initialPost       = &types.Post{
 		Nonce:   0,
 		Indices: make([]byte, 10),
@@ -113,7 +113,7 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Has
 	if np.buildNIPostFunc != nil {
 		return np.buildNIPostFunc(challenge)
 	}
-	return NewNIPostWithChallenge(challenge, np.poetRef), nil
+	return newNIPostWithChallenge(challenge, np.poetRef), nil
 }
 
 type NIPostErrBuilderMock struct{}
@@ -265,7 +265,7 @@ func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration u
 	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, error) {
 		builtNIPost = true
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
-		return NewNIPostWithChallenge(challenge, poetBytes), nil
+		return newNIPostWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer().Add(3)
 	err = b.PublishActivationTx(context.TODO())
@@ -659,7 +659,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
 	nipostBuilder.poetRef = poetRef
-	npst := NewNIPostWithChallenge(&chlng, poetRef)
+	npst := newNIPostWithChallenge(&chlng, poetRef)
 
 	atx := newActivationTx(types.BytesToNodeID([]byte("aaaaaa")), 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
@@ -675,7 +675,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	challengeHash, err := challenge.Hash()
 	assert.NoError(t, err)
-	npst2 := NewNIPostWithChallenge(challengeHash, poetRef)
+	npst2 := newNIPostWithChallenge(challengeHash, poetRef)
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer().Add(3)
 	err = b.PublishActivationTx(context.TODO())
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
@@ -750,7 +750,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		} else if tries < expectedTries {
 			return nil, ErrPoetServiceUnstable
 		}
-		return NewNIPostWithChallenge(challenge, poetBytes), nil
+		return newNIPostWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
 	ctx, cancel := context.WithCancel(context.Background())
