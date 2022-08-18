@@ -155,8 +155,9 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
 }
 
-func (atx *ActivationTxHeader) SetNodeID(nodeID *NodeID) {
-	atx.nodeID = nodeID
+// SetNodeID sets the Node ID in the ATX's cache.
+func (atxh *ActivationTxHeader) SetNodeID(nodeID *NodeID) {
+	atxh.nodeID = nodeID
 }
 
 // GetWeight of the atx.
