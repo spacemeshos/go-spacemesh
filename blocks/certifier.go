@@ -71,10 +71,11 @@ func WithCertifierLogger(logger log.Log) CertifierOpt {
 }
 
 type certInfo struct {
-	bid        types.BlockID
-	deadline   time.Time
-	done       bool
-	signatures []types.CertifyMessage
+	bid              types.BlockID
+	deadline         time.Time
+	done             bool
+	totalEligibility uint16
+	signatures       []types.CertifyMessage
 }
 
 type certState int
@@ -161,7 +162,7 @@ func (c *Certifier) run() error {
 	for layer := c.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-c.layerClock.AwaitLayer(layer):
-			_ = c.tryGenCert()
+			_ = c.prune()
 		case <-c.ctx.Done():
 			return fmt.Errorf("context done: %w", c.ctx.Err())
 		}
@@ -351,57 +352,36 @@ func (c *Certifier) saveMessage(logger log.Log, msg types.CertifyMessage) error 
 		logger.Fatal("missing layer in cache")
 	}
 	c.certMsgs[lid].signatures = append(c.certMsgs[lid].signatures, msg)
+	c.certMsgs[lid].totalEligibility += msg.EligibilityCnt
 
-	if created, err := c.tryGenCertLocked(logger, lid, bid, c.certMsgs[lid].signatures); err != nil {
-		return err
-	} else if created {
-		c.certMsgs[lid].done = true
+	if c.certMsgs[lid].totalEligibility < uint16(c.cfg.CertifyThreshold) {
+		return nil
 	}
+
+	cert := &types.Certificate{
+		BlockID:    bid,
+		Signatures: c.certMsgs[lid].signatures,
+	}
+	if err := c.save(logger, lid, cert); err != nil {
+		return err
+	}
+
+	c.certMsgs[lid].done = true
 	return nil
 }
 
-func (c *Certifier) tryGenCert() error {
+func (c *Certifier) prune() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	cutoff := c.layerClock.GetCurrentLayer().Sub(c.cfg.NumLayersToKeep)
-	for lid, ci := range c.certMsgs {
-		logger := c.logger.WithFields(lid, ci.bid)
+	for lid := range c.certMsgs {
 		if lid.Before(cutoff) {
 			delete(c.certMsgs, lid)
-			continue
-		}
-		state, err := c.getCertStateLocked(logger, lid, ci.bid)
-		if err != nil {
-			logger.With().Warning("background: failed to check cert", log.Err(err))
-			continue
-		}
-		if state != pending {
-			continue
-		}
-
-		if created, err := c.tryGenCertLocked(logger, lid, ci.bid, ci.signatures); err != nil {
-			logger.With().Warning("background: failed to generate cert", log.Err(err))
-		} else if created {
-			c.certMsgs[lid].done = true
 		}
 	}
 
 	return nil
-}
-
-func (c *Certifier) tryGenCertLocked(logger log.Log, lid types.LayerID, bid types.BlockID, sigs []types.CertifyMessage) (bool, error) {
-	if len(sigs) < c.cfg.CertifyThreshold {
-		return false, nil
-	}
-	cert := &types.Certificate{
-		BlockID:    bid,
-		Signatures: sigs,
-	}
-	if err := c.save(logger, lid, cert); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 func (c *Certifier) save(logger log.Log, lid types.LayerID, cert *types.Certificate) error {
