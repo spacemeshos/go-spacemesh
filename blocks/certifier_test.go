@@ -65,14 +65,14 @@ func generateBlock(t *testing.T, db *sql.Database) *types.Block {
 	return block
 }
 
-func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.NodeID, *types.CertifyMessage) {
+func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID, cnt uint16) (types.NodeID, *types.CertifyMessage) {
 	t.Helper()
 	signer := signing.NewEdSigner()
 	msg := &types.CertifyMessage{
 		CertifyContent: types.CertifyContent{
 			LayerID:        lid,
 			BlockID:        bid,
-			EligibilityCnt: defaultCnt,
+			EligibilityCnt: cnt,
 			Proof:          []byte("not a fraud"),
 		},
 	}
@@ -82,7 +82,7 @@ func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.No
 
 func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.NodeID, *types.CertifyMessage, []byte) {
 	t.Helper()
-	nid, msg := genCertifyMsg(t, lid, bid)
+	nid, msg := genCertifyMsg(t, lid, bid, defaultCnt)
 	data, err := codec.Encode(msg)
 	require.NoError(t, err)
 	return nid, msg, data
@@ -140,6 +140,33 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 		require.Equal(t, pubsub.ValidationAccept, res)
 	}
 	verifiedSaved(t, tc.db, b.LayerIndex, b.ID(), cutoff)
+}
+
+func Test_HandleCertifyMessage_MultipleBlocks(t *testing.T) {
+	tc := newTestCertifier(t)
+	b1 := generateBlock(t, tc.db)
+	count1 := uint16(1)
+	nid1, msg1 := genCertifyMsg(t, b1.LayerIndex, b1.ID(), count1)
+	data1, err := codec.Encode(msg1)
+	require.NoError(t, err)
+	tc.RegisterDeadline(b1.LayerIndex, b1.ID(), time.Now())
+	tc.mOracle.EXPECT().Validate(gomock.Any(), b1.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid1, msg1.Proof, count1).
+		Return(true, nil)
+
+	b2 := generateBlock(t, tc.db)
+	count2 := uint16(tc.cfg.CertifyThreshold)
+	nid2, msg2 := genCertifyMsg(t, b2.LayerIndex, b2.ID(), count2)
+	data2, err := codec.Encode(msg2)
+	require.NoError(t, err)
+	tc.RegisterDeadline(b2.LayerIndex, b2.ID(), time.Now())
+	tc.mOracle.EXPECT().Validate(gomock.Any(), b1.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid2, msg2.Proof, count2).
+		Return(true, nil)
+
+	res := tc.HandleCertifyMessage(context.TODO(), "peer", data1)
+	require.Equal(t, pubsub.ValidationAccept, res)
+	res = tc.HandleCertifyMessage(context.TODO(), "peer", data2)
+	require.Equal(t, pubsub.ValidationAccept, res)
+	verifiedSaved(t, tc.db, b2.LayerIndex, b2.ID(), 1)
 }
 
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {
