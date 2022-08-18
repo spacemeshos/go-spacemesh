@@ -171,7 +171,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
 	if sign(margin.Cmp(v.globalThreshold)) == abstain {
-		logger.With().Debug("doesn't cross global threshol")
+		logger.With().Debug("doesn't cross global threshold")
 		return false
 	}
 	if verifyLayer(

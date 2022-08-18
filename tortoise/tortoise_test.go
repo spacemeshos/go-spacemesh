@@ -2581,11 +2581,60 @@ func TestFutureHeight(t *testing.T) {
 		verified := tortoise.HandleIncomingLayer(context.Background(),
 			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(100_000)))
 		for i := 0; i < int(cfg.Hdist); i++ {
-			verified = tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1)))
+			verified = tortoise.HandleIncomingLayer(context.Background(), s.Next())
 		}
 		require.Equal(t, types.GetEffectiveGenesis(), verified)
-		verified = tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1)))
+		last := s.Next()
+		verified = tortoise.HandleIncomingLayer(context.Background(), last)
 		// verifies layer by counting all votes
-		require.NotEqual(t, types.GetEffectiveGenesis(), verified)
+		require.Equal(t, last.Sub(1), verified)
+	})
+	t.Run("median above slow smeshers", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		const (
+			slow   = 10
+			normal = 20
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(7, 7),
+			sim.WithSetupTicks(normal, normal, normal, normal, normal, slow, slow),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var (
+			last, verified types.LayerID
+		)
+		for i := 0; i < int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1))
+			verified = tortoise.HandleIncomingLayer(context.Background(), last)
+		}
+		require.Equal(t, last.Sub(2), verified)
+	})
+	t.Run("empty layers with slow smeshers", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		const (
+			slow   = 10
+			normal = 20
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(7, 7),
+			sim.WithSetupTicks(normal, normal, normal, normal, normal, slow, slow),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var (
+			last, verified types.LayerID
+		)
+		for i := 0; i < int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(0))
+			verified = tortoise.HandleIncomingLayer(context.Background(), last)
+		}
+		require.Equal(t, last.Sub(1), verified)
 	})
 }

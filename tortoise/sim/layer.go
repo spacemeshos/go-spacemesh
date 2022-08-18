@@ -206,7 +206,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	}
 	if !cfg.FailHare {
 		hareOutput := types.EmptyBlockID
-		if !cfg.EmptyHare {
+		if !cfg.EmptyHare && len(layer.BlocksIDs()) > 0 {
 			hareOutput = layer.BlocksIDs()[0]
 		}
 		for _, state := range g.states {

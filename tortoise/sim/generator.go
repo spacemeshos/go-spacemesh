@@ -115,7 +115,8 @@ type Generator struct {
 	units     [2]int
 
 	activations []types.ATXID
-	ticks       [2]int
+	ticksRange  [2]int
+	ticks       []uint64
 	prevHeight  []uint64
 
 	keys []*signing.EdSigner
@@ -134,28 +135,38 @@ func WithSetupMinerRange(low, high int) SetupOpt {
 // WithSetupUnitsRange adjusts units of the ATXs, which will directly affect block weight.
 func WithSetupUnitsRange(low, high int) SetupOpt {
 	return func(conf *setupConf) {
-		conf.Units = [2]int{low, high}
+		conf.UnitsRange = [2]int{low, high}
 	}
 }
 
-// WithSetupTicksRange adjusts ticks of the ATXs.
+// WithSetupTicksRange configures range of atxs, that will be randomly chosen by atxs.
 func WithSetupTicksRange(low, high int) SetupOpt {
 	return func(conf *setupConf) {
-		conf.Ticks = [2]int{low, high}
+		conf.TicksRange = [2]int{low, high}
+	}
+}
+
+// WithSetupTicks configures ticks for every atx.
+func WithSetupTicks(ticks ...uint64) SetupOpt {
+	return func(conf *setupConf) {
+		if len(ticks) > 0 {
+			conf.Ticks = ticks
+		}
 	}
 }
 
 type setupConf struct {
-	Miners [2]int
-	Units  [2]int
-	Ticks  [2]int
+	Miners     [2]int
+	UnitsRange [2]int
+	TicksRange [2]int
+	Ticks      []uint64
 }
 
 func defaultSetupConf() setupConf {
 	return setupConf{
-		Miners: [2]int{30, 30},
-		Units:  [2]int{10, 10},
-		Ticks:  [2]int{10, 10},
+		Miners:     [2]int{30, 30},
+		UnitsRange: [2]int{10, 10},
+		TicksRange: [2]int{10, 10},
 	}
 }
 
@@ -182,8 +193,12 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	for _, opt := range opts {
 		opt(&conf)
 	}
-	g.units = conf.Units
+	if conf.Ticks != nil && conf.Miners[0] != conf.Miners[1] && len(conf.Ticks) != conf.Miners[0] {
+		g.logger.Panic("if conf.Ticks is provided it should be equal to the constant number of conf.Miners")
+	}
+	g.units = conf.UnitsRange
 	g.ticks = conf.Ticks
+	g.ticksRange = conf.TicksRange
 	if len(g.layers) == 0 {
 		g.layers = append(g.layers, types.GenesisLayer())
 	}
@@ -210,9 +225,14 @@ func (g *Generator) generateAtxs() {
 			PubLayerID: g.nextLayer.Sub(1),
 		}
 		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
-		ticks := intInRange(g.rng, g.ticks)
-		atx.Verify(g.prevHeight[i], uint64(ticks))
-		g.prevHeight[i] += uint64(ticks)
+		var ticks uint64
+		if g.ticks != nil {
+			ticks = g.ticks[i]
+		} else {
+			ticks = uint64(intInRange(g.rng, g.ticksRange))
+		}
+		atx.Verify(g.prevHeight[i], ticks)
+		g.prevHeight[i] += ticks
 		g.activations[i] = atx.ID()
 
 		for _, state := range g.states {

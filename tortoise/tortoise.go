@@ -512,8 +512,6 @@ func (t *turtle) switchModes(logger log.Log) {
 }
 
 func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
-	logger.With().Debug("process layer")
-
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
 	)
@@ -605,18 +603,19 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.Layer
 }
 
 func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
-	blts := t.ballots[lid]
-	if len(blts) == 0 {
+	ballots := t.ballots[lid]
+	if len(ballots) == 0 {
 		return nil
 	}
-	tballots := make([]tortoiseBallot, 0, len(blts))
-	for _, ballot := range blts {
+	tballots := make([]tortoiseBallot, 0, len(ballots))
+	for _, ballot := range ballots {
 		tballots = append(tballots, tortoiseBallot{
 			id:      ballot.id,
 			base:    t.full.base[ballot.id],
 			votes:   t.full.votes[ballot.id],
 			abstain: t.full.abstain[ballot.id],
 			weight:  ballot.weight,
+			height:  ballot.height,
 		})
 	}
 	return tballots
@@ -797,7 +796,11 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	} else {
 		t.logger.With().Warning("observed malicious ballot", ballot.ID(), ballot.LayerIndex)
 	}
-
+	t.logger.With().Debug("computed weight and height for ballot",
+		ballot.ID(),
+		log.Stringer("weight", weight),
+		log.Uint64("height", height),
+	)
 	// all potential errors must be handled before modifying state
 
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
@@ -829,6 +832,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		id:      ballot.ID(),
 		base:    ballot.Votes.Base,
 		weight:  weight,
+		height:  height,
 		votes:   votes,
 		abstain: abstainVotes,
 	}
