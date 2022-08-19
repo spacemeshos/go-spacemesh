@@ -44,7 +44,7 @@ type Template interface {
 	// if it spends more than that.
 	MaxSpend(uint8, any) (uint64, error)
 	// Verify security of the transaction.
-	Verify(*Context, []byte) bool
+	Verify(*Context, []byte, *scale.Decoder) bool
 }
 
 // AccountLoader is an interface for loading accounts.
