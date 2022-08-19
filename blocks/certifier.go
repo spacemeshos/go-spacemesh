@@ -179,7 +179,7 @@ func (c *Certifier) RegisterDeadline(lid types.LayerID, bid types.BlockID, now t
 		c.certifyMsgs[lid] = &certInfo{
 			bid:        bid,
 			deadline:   now.Add(c.cfg.SignatureWaitDuration),
-			signatures: make([]types.CertifyMessage, 0, c.cfg.CertifyThreshold),
+			signatures: make([]types.CertifyMessage, 0, c.cfg.CommitteeSize),
 		}
 	}
 }
