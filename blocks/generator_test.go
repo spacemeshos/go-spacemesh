@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -44,6 +45,7 @@ type testGenerator struct {
 	mockMesh   *mocks.MockmeshProvider
 	mockCState *mocks.MockconservativeState
 	mockFetch  *smocks.MockProposalFetcher
+	mockCert   *mocks.Mockcertifier
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
@@ -53,10 +55,11 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
 		mockCState: mocks.NewMockconservativeState(ctrl),
 		mockFetch:  smocks.NewMockProposalFetcher(ctrl),
+		mockCert:   mocks.NewMockcertifier(ctrl),
 	}
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	tg.Generator = NewGenerator(cdb, tg.mockCState, tg.mockMesh, tg.mockFetch, WithGeneratorLogger(lg), WithConfig(testConfig()))
+	tg.Generator = NewGenerator(cdb, tg.mockCState, tg.mockMesh, tg.mockFetch, tg.mockCert, WithGeneratorLogger(lg), WithConfig(testConfig()))
 	return tg
 }
 
@@ -206,9 +209,18 @@ func Test_processHareOutput(t *testing.T) {
 			checkRewards(t, atxes, expWeight, block.Rewards)
 			return nil
 		})
+	tg.mockCert.EXPECT().RegisterDeadline(layerID, gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ types.LayerID, got types.BlockID, _ time.Time) {
+			require.Equal(t, block.ID(), got)
+		})
+	tg.mockCert.EXPECT().CertifyMaybe(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
+			require.Equal(t, block.ID(), got)
+			return nil
+		})
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got types.BlockID) error {
-			require.Equal(t, got, block.ID())
+			require.Equal(t, block.ID(), got)
 			return nil
 		})
 	require.NoError(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID, Proposals: pids}))
@@ -217,11 +229,9 @@ func Test_processHareOutput(t *testing.T) {
 func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
-	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got types.BlockID) error {
-			require.Equal(t, got, types.EmptyBlockID)
-			return nil
-		})
+	tg.mockCert.EXPECT().RegisterDeadline(layerID, types.EmptyBlockID, gomock.Any())
+	tg.mockCert.EXPECT().CertifyMaybe(gomock.Any(), gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
 	require.NoError(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID}))
 }
 
@@ -250,6 +260,15 @@ func Test_processHareOutput_ProcessFailed(t *testing.T) {
 			// the expected weight for each eligibility is `numUnit` * 1/3
 			expWeight := util.WeightFromInt64(numUint * 1 / 3)
 			checkRewards(t, atxes, expWeight, block.Rewards)
+			return nil
+		})
+	tg.mockCert.EXPECT().RegisterDeadline(layerID, gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ types.LayerID, got types.BlockID, _ time.Time) {
+			require.Equal(t, block.ID(), got)
+		})
+	tg.mockCert.EXPECT().CertifyMaybe(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
+			require.Equal(t, block.ID(), got)
 			return nil
 		})
 	errUnknown := errors.New("unknown")

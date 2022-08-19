@@ -34,6 +34,7 @@ type testLogic struct {
 	mAtxH      *mocks.MockatxHandler
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
+	mCertH     *mocks.MockcertHandler
 	mProposalH *mocks.MockproposalHandler
 	method     int
 	mTxH       *mocks.MocktxHandler
@@ -71,6 +72,7 @@ func createTestLogic(t *testing.T) *testLogic {
 		mAtxH:      mocks.NewMockatxHandler(ctrl),
 		mBallotH:   mocks.NewMockballotHandler(ctrl),
 		mBlocksH:   mocks.NewMockblockHandler(ctrl),
+		mCertH:     mocks.NewMockcertHandler(ctrl),
 		mProposalH: mocks.NewMockproposalHandler(ctrl),
 		mTxH:       mocks.NewMocktxHandler(ctrl),
 		mPoetH:     mocks.NewMockpoetHandler(ctrl),
@@ -85,6 +87,7 @@ func createTestLogic(t *testing.T) *testLogic {
 		atxHandler:      tl.mAtxH,
 		ballotHandler:   tl.mBallotH,
 		blockHandler:    tl.mBlocksH,
+		certHandler:     tl.mCertH,
 		proposalHandler: tl.mProposalH,
 		txHandler:       tl.mTxH,
 		poetHandler:     tl.mPoetH,
@@ -98,7 +101,8 @@ const (
 	numBlocks  = 3
 )
 
-func generateLayerContent(emptyHareOutput bool) []byte {
+func generateLayerContent(t *testing.T, processed types.LayerID, hareOutput ...*types.BlockID) []byte {
+	require.LessOrEqual(t, len(hareOutput), 1)
 	ballotIDs := make([]types.BallotID, 0, numBallots)
 	for i := 0; i < numBallots; i++ {
 		ballotIDs = append(ballotIDs, types.RandomBallotID())
@@ -108,15 +112,19 @@ func generateLayerContent(emptyHareOutput bool) []byte {
 		blockIDs = append(blockIDs, types.RandomBlockID())
 	}
 	hash := types.CalcBlocksHash32(types.SortBlockIDs(blockIDs), nil)
-	hareOutput := types.EmptyBlockID
-	if !emptyHareOutput {
-		hareOutput = blockIDs[0]
+	certified := types.EmptyBlockID
+	if len(hareOutput) == 1 {
+		certified = *hareOutput[0]
+	} else {
+		certified = blockIDs[0]
 	}
 	lb := layerData{
-		Ballots:        ballotIDs,
-		Blocks:         blockIDs,
-		HareOutput:     hareOutput,
-		ProcessedLayer: types.NewLayerID(10),
+		Ballots: ballotIDs,
+		Blocks:  blockIDs,
+		HareOutput: &types.Certificate{
+			BlockID: certified,
+		},
+		ProcessedLayer: processed,
 		Hash:           hash,
 		AggregatedHash: types.RandomHash(),
 	}
@@ -126,9 +134,11 @@ func generateLayerContent(emptyHareOutput bool) []byte {
 
 func generateEmptyLayer() []byte {
 	lb := layerData{
-		Ballots:        []types.BallotID{},
-		Blocks:         []types.BlockID{},
-		HareOutput:     types.EmptyBlockID,
+		Ballots: []types.BallotID{},
+		Blocks:  []types.BlockID{},
+		HareOutput: &types.Certificate{
+			BlockID: types.EmptyBlockID,
+		},
 		ProcessedLayer: types.NewLayerID(10),
 		Hash:           types.EmptyLayerHash,
 		AggregatedHash: types.RandomHash(),
@@ -146,19 +156,22 @@ func genPeers(num int) []p2p.Peer {
 }
 
 func TestPollLayerContent(t *testing.T) {
+	processed := types.NewLayerID(11)
+	errUnknown := errors.New("unknown")
 	tt := []struct {
-		name                       string
-		emptyHareOutput, zeroBlock bool
-		ballotFail, blocksFail     bool
-		err                        error
+		name                   string
+		zeroBlock              bool
+		ballotFail, blocksFail bool
+		hareOutput             *types.BlockID
+		certErr, err           error
 	}{
 		{
-			name:            "all peers have layer data",
-			emptyHareOutput: false,
+			name:       "all peers have layer data",
+			hareOutput: &types.EmptyBlockID,
 		},
 		{
-			name:            "empty hare output",
-			emptyHareOutput: true,
+			name:       "empty hare output",
+			hareOutput: &types.BlockID{},
 		},
 		{
 			name:      "all peers have zero blocks",
@@ -171,6 +184,16 @@ func TestPollLayerContent(t *testing.T) {
 		{
 			name:       "blocks failure ignored",
 			blocksFail: true,
+		},
+		{
+			name:       "cert non-existent block id",
+			err:        errCertifiedBlockNotReferenced,
+			hareOutput: &types.BlockID{1, 2, 3},
+		},
+		{
+			name:    "cert error",
+			certErr: errUnknown,
+			err:     errInvalidCertificate,
 		},
 	}
 
@@ -190,11 +213,27 @@ func TestPollLayerContent(t *testing.T) {
 							okCB(generateEmptyLayer(), peer, numPeers)
 						} else {
 							tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-							okCB(generateLayerContent(tc.emptyHareOutput), peer, numPeers)
+							if tc.hareOutput != nil {
+								okCB(generateLayerContent(t, processed, tc.hareOutput), peer, numPeers)
+							} else {
+								okCB(generateLayerContent(t, processed), peer, numPeers)
+							}
 						}
 					}
 					return nil
 				})
+			tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ types.LayerID, got *types.Certificate) error {
+					require.NotNil(t, got)
+					if tc.zeroBlock {
+						require.Equal(t, types.EmptyBlockID, got.BlockID)
+					} else if tc.hareOutput != nil {
+						require.Equal(t, *tc.hareOutput, got.BlockID)
+					} else {
+						require.NotEqual(t, types.EmptyBlockID, got.BlockID)
+					}
+					return tc.certErr
+				}).Times(numPeers)
 			if tc.ballotFail {
 				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).DoAndReturn(
 					func([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan ftypes.HashDataPromiseResult {
@@ -231,8 +270,10 @@ func TestPollLayerContent(t *testing.T) {
 				assert.Equal(t, layerID, res.Layer)
 				got, err := layers.GetHareOutput(tl.db, layerID)
 				require.NoError(t, err)
-				if tc.emptyHareOutput || tc.zeroBlock {
+				if tc.zeroBlock {
 					require.Equal(t, types.EmptyBlockID, got)
+				} else if tc.hareOutput != nil {
+					require.Equal(t, *tc.hareOutput, got)
 				} else {
 					require.NotEqual(t, types.EmptyBlockID, got)
 				}
@@ -242,6 +283,7 @@ func TestPollLayerContent(t *testing.T) {
 }
 
 func TestPollLayerContent_PeerErrors(t *testing.T) {
+	processed := types.NewLayerID(11)
 	numPeers := 4
 	peers := genPeers(numPeers)
 	err := errors.New("not available")
@@ -280,7 +322,11 @@ func TestPollLayerContent_PeerErrors(t *testing.T) {
 								okCB(generateEmptyLayer(), peer, numPeers)
 							} else {
 								tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-								okCB(generateLayerContent(tc.emptyHareOutput), peer, numPeers)
+								if tc.emptyHareOutput {
+									okCB(generateLayerContent(t, processed, &types.EmptyBlockID), peer, numPeers)
+								} else {
+									okCB(generateLayerContent(t, processed), peer, numPeers)
+								}
 							}
 						} else {
 							errCB(errors.New("not available"), peer, numPeers)
@@ -288,6 +334,7 @@ func TestPollLayerContent_PeerErrors(t *testing.T) {
 					}
 					return nil
 				})
+			tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), layerID, gomock.Any()).Return(nil).AnyTimes()
 			if tc.zeroBlock {
 				tl.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID)
 			} else {
@@ -314,6 +361,9 @@ func TestPollLayerContent_MissingBlocks(t *testing.T) {
 	blks := &layerData{
 		Blocks:         []types.BlockID{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}},
 		ProcessedLayer: requested,
+		HareOutput: &types.Certificate{
+			BlockID: types.EmptyBlockID,
+		},
 	}
 	data, err := codec.Encode(blks)
 	require.NoError(t, err)
@@ -328,6 +378,7 @@ func TestPollLayerContent_MissingBlocks(t *testing.T) {
 			}
 			return nil
 		})
+	tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), requested, gomock.Any()).Return(nil).AnyTimes()
 
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).Return(nil).AnyTimes()
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).DoAndReturn(
@@ -356,7 +407,7 @@ func TestPollLayerContent_MissingBlocks(t *testing.T) {
 	require.Equal(t, types.EmptyBlockID, got)
 }
 
-func TestPollLayerContent_DifferentHareOutputIgnored(t *testing.T) {
+func TestPollLayerContent_SameProcessedLayer(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogic(t)
 	numPeers := 4
@@ -366,13 +417,14 @@ func TestPollLayerContent_DifferentHareOutputIgnored(t *testing.T) {
 			for i, peer := range peers {
 				tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 				if i == 0 {
-					okCB(generateLayerContent(true), peer, numPeers)
+					okCB(generateLayerContent(t, layerID), peer, numPeers)
 				} else {
-					okCB(generateLayerContent(false), peer, numPeers)
+					okCB(generateLayerContent(t, layerID, &types.EmptyBlockID), peer, numPeers)
 				}
 			}
 			return nil
 		})
+	tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), layerID, gomock.Any()).Return(nil).AnyTimes()
 
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).Return(nil).Times(numPeers)
 	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).Return(nil).Times(numPeers)
@@ -383,6 +435,39 @@ func TestPollLayerContent_DifferentHareOutputIgnored(t *testing.T) {
 	got, err := layers.GetHareOutput(tl.db, layerID)
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyBlockID, got)
+}
+
+func TestPollLayerContent_HigherProcessedLayerWins(t *testing.T) {
+	layerID := types.NewLayerID(10)
+	tl := createTestLogic(t)
+	numPeers := 4
+	peers := genPeers(numPeers)
+	tl.mFetcher.EXPECT().GetLayerData(gomock.Any(), layerID, gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
+			for i, peer := range peers {
+				tl.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
+				if i == 0 {
+					okCB(generateLayerContent(t, layerID.Add(1), &types.EmptyBlockID), peer, numPeers)
+				} else {
+					okCB(generateLayerContent(t, layerID), peer, numPeers)
+				}
+			}
+			return nil
+		})
+	tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), layerID, gomock.Any()).Return(nil).AnyTimes()
+
+	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).Return(nil).Times(numPeers)
+	tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).Return(nil).Times(numPeers)
+
+	res := <-tl.PollLayerContent(context.TODO(), layerID)
+	assert.NoError(t, res.Err)
+	assert.Equal(t, layerID, res.Layer)
+	got, err := layers.GetHareOutput(tl.db, layerID)
+	require.NoError(t, err)
+	require.Equal(t, types.EmptyBlockID, got)
+	gotC, err := layers.GetCert(tl.db, layerID)
+	require.NoError(t, err)
+	require.Equal(t, types.EmptyBlockID, gotC.BlockID)
 }
 
 func TestPollLayerContent_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
@@ -397,6 +482,7 @@ func TestPollLayerContent_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 			}
 			return nil
 		})
+	tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), layerID, gomock.Any()).Return(nil).AnyTimes()
 	tl.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID).Return(errors.New("whatever")).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -405,6 +491,9 @@ func TestPollLayerContent_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 	got, err := layers.GetHareOutput(tl.db, layerID)
 	require.NoError(t, err)
 	require.Equal(t, types.EmptyBlockID, got)
+	gotC, err := layers.GetCert(tl.db, layerID)
+	require.NoError(t, err)
+	require.Equal(t, types.EmptyBlockID, gotC.BlockID)
 }
 
 func TestGetBlocks(t *testing.T) {

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
-	"math"
 	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 )
 
 type messageType byte
@@ -22,14 +22,12 @@ const (
 	pre      messageType = 10
 )
 
-const preRound uint32 = math.MaxUint32
-
-// declare round identifiers.
 const (
-	statusRound uint32 = iota
-	proposalRound
-	commitRound
-	notifyRound
+	preRound      = eligibility.HarePreRound
+	statusRound   = eligibility.HareStatusRound
+	proposalRound = eligibility.HareProposalRound
+	commitRound   = eligibility.HareCommitRound
+	notifyRound   = eligibility.HareNotifyRound
 )
 
 const defaultSetSize = 200
