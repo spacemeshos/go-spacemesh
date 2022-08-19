@@ -767,6 +767,59 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 				},
 			},
 		},
+		{
+			desc: "RetrySpend",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0},
+						&spendTx{0, 11, uint64(spawnGas)},
+						&spawnTx{11},
+						&spendTx{11, 12, 1_000},
+					},
+					failed: map[int]error{3: core.ErrNoBalance},
+					expected: map[int]change{
+						11: spawned{template: template, change: nonce{increased: 2}},
+						12: same{},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{0, 11, uint64(spendGas) + 1_000},
+						&spendTx{11, 12, 1_000},
+					},
+					expected: map[int]change{
+						0:  spent{amount: spendGas*2 + 1_000, change: nonce{increased: 1}},
+						11: nonce{increased: 1},
+						12: earned{amount: 1_000},
+					},
+				},
+			},
+		},
+		{
+			desc: "FailedFeesAndGas",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0},
+						&spendTx{0, 11, uint64(spawnGas) - 1},
+						&spawnTx{11},
+						// we expect this transaction to be executated as well, since the previous one will not consume gas
+						&spendTx{0, 12, 100},
+					},
+					gasLimit: uint64(spawnGas + spendGas + spendGas),
+					failed:   map[int]error{2: core.ErrNoBalance},
+					rewards:  []reward{{address: 20, share: 1}},
+					expected: map[int]change{
+						0:  spent{amount: spawnGas + spendGas + spawnGas - 1 + spendGas + 100},
+						11: nonce{increased: 1},
+						12: earned{amount: 100},
+						// fees from every transaction (including failed) + testBaseReward
+						20: earned{amount: spawnGas + spendGas + spawnGas - 1 + spendGas + testBaseReward},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			tt := genTester(t)
@@ -806,14 +859,12 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 						require.Equal(t, expected.Error(), rst.Message)
 					}
 				}
-				if layer.failed == nil {
-
-				}
 				for account, changes := range layer.expected {
 					prev, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid.Sub(1))
 					require.NoError(tt, err)
 					current, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid)
 					require.NoError(tt, err)
+					tt.Logf("verifying account index=%d in layer index=%d", account, i)
 					changes.verify(tt, &prev, &current)
 				}
 			}
