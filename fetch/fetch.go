@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
-
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
