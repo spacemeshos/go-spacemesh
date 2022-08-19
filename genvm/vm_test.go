@@ -391,6 +391,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 		gasLimit uint64
 
 		ineffective []int            // list with references to ineffective txs
+		failed      map[int]error    // map with references to failed transaction, with specified error
 		headers     map[int]struct{} // is vm expected to return the header
 	}
 	for _, tc := range []struct {
@@ -580,7 +581,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 					txs: []testTx{
 						&spawnTx{11},
 					},
-					ineffective: []int{0},
+					failed: map[int]error{0: core.ErrNoBalance},
 					expected: map[int]change{
 						11: same{},
 					},
@@ -779,7 +780,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 				if layer.gasLimit > 0 {
 					tt = tt.withGasLimit(layer.gasLimit)
 				}
-				ineffective, _, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
+				ineffective, results, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
 				require.NoError(tt, err)
 				if layer.ineffective == nil {
 					require.Empty(tt, ineffective)
@@ -794,6 +795,12 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 							require.Nil(t, ineffective[i].TxHeader)
 						}
 					}
+				}
+				for i, rst := range results {
+
+				}
+				if layer.failed == nil {
+
 				}
 				for account, changes := range layer.expected {
 					prev, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid.Sub(1))

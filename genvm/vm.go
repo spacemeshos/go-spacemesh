@@ -292,15 +292,6 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		ctx := req.ctx
 		args := req.args
 
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("ineffective transaction. can't cover gas and max spend",
-				log.Object("header", header),
-				log.Object("account", &ctx.Account),
-			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
-			invalidTxCount.Inc()
-			continue
-		}
 		if limit < ctx.Header.MaxGas {
 			v.logger.With().Warning("ineffective transaction. out of block gas",
 				log.Uint64("block gas limit", v.cfg.GasLimit),

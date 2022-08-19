@@ -22,8 +22,11 @@ type Context struct {
 	Header Header
 	Args   scale.Encodable
 
-	// consumed and transferred is for MaxGas/MaxSpend validation
-	consumed    uint64
+	// consumed is in gas units and will be used
+	consumed uint64
+	// fee is in coins units
+	fee uint64
+	// transfered is an amount transfered to other accounts
 	transferred uint64
 
 	// TODO all templates for genesis will support transfers to only one account.
@@ -82,14 +85,16 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
 	if amount > c.Account.Balance {
-		return ErrNoBalance
-	}
-	if total := c.consumed + gas; total > c.Header.MaxGas {
+		amount = c.Account.Balance
+		gas = 0
+		err = ErrNoBalance
+	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
 		amount = gas * c.Header.GasPrice
 		err = ErrMaxGas
 	}
 	c.consumed += gas
+	c.fee += amount
 	c.Account.Balance -= amount
 	return err
 }
