@@ -213,8 +213,8 @@ type (
 func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
 	atxList := make([]*types.ActivationTx, 0, numATXs)
 	for i := 0; i < numATXs; i++ {
-		atxHeader := makeAtxHeaderWithWeight(uint(weight))
-		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+		atxHeader := makeAtxHeaderWithWeight(uint32(weight))
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 		atx.PubLayerID = lid
 		atx.NodeID = types.NodeID{byte(i)}
 		atxID := types.RandomATXID()
@@ -530,13 +530,12 @@ func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 	)
 }
 
-func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
-	header := &types.ActivationTxHeader{
+func makeAtxHeaderWithWeight(weight uint32) types.ActivationTxHeader {
+	header := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
 	}
-	header.StartTick = 0
-	header.EndTick = 1
 	header.NumUnits = weight
+	header.Verify(0, 1)
 	return header
 }
 
@@ -1297,15 +1296,14 @@ func TestComputeExpectedWeight(t *testing.T) {
 			)
 			for i, weight := range tc.totals {
 				eid := first + types.EpochID(i)
-				header := &types.ActivationTxHeader{
+				header := types.ActivationTxHeader{
 					NIPostChallenge: types.NIPostChallenge{
-						StartTick:  0,
-						EndTick:    1,
 						PubLayerID: (eid - 1).FirstLayer(),
 					},
-					NumUnits: uint(weight),
+					NumUnits: uint32(weight),
 				}
-				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
+				header.Verify(0, 1)
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				id := types.RandomATXID()
 				atx.SetID(&id)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
@@ -2105,8 +2103,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			lid := types.NewLayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
 			for i, weight := range tc.atxs {
-				atxHeader := makeAtxHeaderWithWeight(weight)
-				atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+				atxHeader := makeAtxHeaderWithWeight(uint32(weight))
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 				atx.PubLayerID = atxLid
 				atx.NodeID = types.NodeID{byte(i)}
 				atxID := types.RandomATXID()

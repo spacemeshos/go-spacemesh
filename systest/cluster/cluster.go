@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -24,6 +25,9 @@ const (
 	smesherPrefix    = "smesher"
 	poetPort         = 80
 	defaultBootnodes = 2
+
+	poetFlags    = "poetflags"
+	smesherFlags = "smesherflags"
 )
 
 func setName(podname string) string {
@@ -85,10 +89,23 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 
 // New initializes Cluster with options.
 func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
-	cluster := &Cluster{smesherFlags: map[string]DeploymentFlag{}}
-	cluster.addFlag(GenesisTime(time.Now().Add(cctx.BootstrapDuration)))
+	cluster := &Cluster{
+		smesherFlags: map[string]DeploymentFlag{},
+		poetFlags:    map[string]DeploymentFlag{},
+	}
+	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
+	cluster.addFlag(genesis)
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
 	cluster.addFlag(NetworkID(defaultNetID))
+
+	cluster.addPoetFlag(genesis)
+	cluster.addPoetFlag(PoetRestListen(poetPort))
+	// NOTE(dshulyak) epoch duration needs to be in sync with go-spacemesh
+	// configuration. consider to move epoch configuration from preset to systest
+	cluster.addPoetFlag(EpochDuration(60 * time.Second))
+	cluster.addPoetFlag(CycleGap(10 * time.Second))
+	cluster.addPoetFlag(PhaseShift(20 * time.Second))
+
 	for _, opt := range opts {
 		opt(cluster)
 	}
@@ -102,6 +119,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 type Cluster struct {
 	persistedFlags bool
 	smesherFlags   map[string]DeploymentFlag
+	poetFlags      map[string]DeploymentFlag
 
 	accounts
 
@@ -129,7 +147,10 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 		return nil
 	}
 	ctx.Log.Debugf("persisting flags %+v", c.smesherFlags)
-	if err := persistFlags(ctx, c.smesherFlags); err != nil {
+	if err := persistFlags(ctx, smesherFlags, c.smesherFlags); err != nil {
+		return err
+	}
+	if err := persistFlags(ctx, poetFlags, c.poetFlags); err != nil {
 		return err
 	}
 	c.persistedFlags = true
@@ -137,14 +158,22 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 }
 
 func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
-	flags, err := recoverFlags(ctx)
+	sflags, err := recoverFlags(ctx, smesherFlags)
 	if err != nil {
 		return err
 	}
-	c.smesherFlags[genesisTimeFlag] = flags[genesisTimeFlag]
-	c.smesherFlags[accountsFlag] = flags[accountsFlag]
-	if !reflect.DeepEqual(c.smesherFlags, flags) {
-		return fmt.Errorf("configuration doesn't match %+v != %+v", c.smesherFlags, flags)
+	c.smesherFlags[genesisTimeFlag] = sflags[genesisTimeFlag]
+	c.smesherFlags[accountsFlag] = sflags[accountsFlag]
+	if !reflect.DeepEqual(c.smesherFlags, sflags) {
+		return fmt.Errorf("sm configuration doesn't match %+v != %+v", c.smesherFlags, sflags)
+	}
+	pflags, err := recoverFlags(ctx, poetFlags)
+	if err != nil {
+		return err
+	}
+	c.poetFlags[genesisTimeFlag] = pflags[genesisTimeFlag]
+	if !reflect.DeepEqual(c.poetFlags, pflags) {
+		return fmt.Errorf("poet configuration doesn't match %+v != %+v", c.poetFlags, sflags)
 	}
 	c.persistedFlags = true
 	return nil
@@ -152,6 +181,10 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 
 func (c *Cluster) addFlag(flag DeploymentFlag) {
 	c.smesherFlags[flag.Name] = flag
+}
+
+func (c *Cluster) addPoetFlag(flag DeploymentFlag) {
+	c.poetFlags[flag.Name] = flag
 }
 
 func (c *Cluster) reuse(cctx *testcontext.Context) error {
@@ -191,15 +224,23 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 // AddPoet ...
 func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	if c.bootnodes == 0 {
-		return fmt.Errorf("bootnodes are used as a gateways. create at least one before adding a poet server")
+		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
 	}
+	if err := c.persist(cctx); err != nil {
+		return err
+	}
+	flags := []DeploymentFlag{}
+	for _, flag := range c.poetFlags {
+		flags = append(flags, flag)
+	}
+
 	gateways := []string{}
 	for _, bootnode := range c.clients[:c.bootnodes] {
 		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name))))
 	}
 	for i := 0; i < cctx.PoetSize; i++ {
 		name := fmt.Sprintf("%s-%d", poetSvc, i)
-		if err := deployPoet(cctx, name, gateways...); err != nil {
+		if err := deployPoet(cctx, name, gateways, flags...); err != nil {
 			return err
 		}
 	}
@@ -310,11 +351,11 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 // Account contains address and private key.
 type Account struct {
 	PrivateKey ed25519.PrivateKey
-	Address    []byte
+	Address    types.Address
 }
 
 func (a Account) String() string {
-	return "0x" + hex.EncodeToString(a.Address)
+	return a.Address.String()
 }
 
 type accounts struct {
@@ -337,7 +378,7 @@ func (a *accounts) Private(i int) ed25519.PrivateKey {
 	return a.keys[i].PK
 }
 
-func (a *accounts) Address(i int) []byte {
+func (a *accounts) Address(i int) types.Address {
 	return a.keys[i].Address()
 }
 
@@ -379,7 +420,7 @@ func (a *accounts) Recover(ctx *testcontext.Context) error {
 func genGenesis(signers []*signer) (rst map[string]uint64) {
 	rst = map[string]uint64{}
 	for _, sig := range signers {
-		rst[sig.HexAddress()] = 100000000000000000
+		rst[sig.Address().String()] = 100000000000000000
 	}
 	return
 }
@@ -389,13 +430,8 @@ type signer struct {
 	PK  ed25519.PrivateKey
 }
 
-func (s *signer) Address() []byte {
-	address := wallet.Address(s.Pub)
-	return address[:]
-}
-
-func (s *signer) HexAddress() string {
-	return "0x" + hex.EncodeToString(s.Address())
+func (s *signer) Address() types.Address {
+	return wallet.Address(s.Pub)
 }
 
 func genSigners(n int) (rst []*signer) {
@@ -436,12 +472,12 @@ func defaultTargetOutbound(size int) int {
 	return int(0.3 * float64(size))
 }
 
-func persistFlags(ctx *testcontext.Context, config map[string]DeploymentFlag) error {
+func persistFlags(ctx *testcontext.Context, name string, config map[string]DeploymentFlag) error {
 	data := map[string]string{}
 	for _, flag := range config {
 		data[flag.Name] = flag.Value
 	}
-	cfgmap := corev1.ConfigMap("flags", ctx.Namespace).
+	cfgmap := corev1.ConfigMap(name, ctx.Namespace).
 		WithData(data)
 	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
@@ -450,9 +486,9 @@ func persistFlags(ctx *testcontext.Context, config map[string]DeploymentFlag) er
 	return nil
 }
 
-func recoverFlags(ctx *testcontext.Context) (map[string]DeploymentFlag, error) {
+func recoverFlags(ctx *testcontext.Context, name string) (map[string]DeploymentFlag, error) {
 	flags := map[string]DeploymentFlag{}
-	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "flags", metav1.GetOptions{})
+	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch flags %w", err)
 	}

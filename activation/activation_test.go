@@ -24,6 +24,8 @@ import (
 const (
 	layersPerEpoch   = 10
 	postGenesisEpoch = 2
+
+	testTickSize = 1
 )
 
 func init() {
@@ -34,7 +36,7 @@ var (
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.BytesToNodeID(pub)
 	otherNodeID = types.BytesToNodeID([]byte("00000"))
-	coinbase    = types.HexToAddress("33333")
+	coinbase    = types.GenerateAddress([]byte("33333"))
 	goldenATXID = types.ATXID(types.HexToHash32("77777"))
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
@@ -117,8 +119,8 @@ type ValidatorMock struct{}
 // A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
 var _ nipostValidator = (*ValidatorMock)(nil)
 
-func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
-	return nil
+func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) (uint64, error) {
+	return 1, nil
 }
 
 func (*ValidatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
@@ -146,7 +148,7 @@ func newCachedDB(tb testing.TB) *datastore.CachedDB {
 }
 
 func newAtxHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
-	return NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxHandler"))
+	return NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxHandler"))
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
@@ -155,8 +157,6 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
-		StartTick:      100 * sequence,
-		EndTick:        100 * (sequence + 1),
 		PositioningATX: posAtxID,
 	}
 	return challenge
@@ -164,8 +164,8 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 
 func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: &types.ActivationTxHeader{
+		InnerActivationTx: types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: challenge,
 				NumUnits:        2,
 				Coinbase:        coinbase,
@@ -319,7 +319,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	// create and publish another ATX
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
@@ -328,7 +328,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, _, err = publishAtx(b, postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, publishedAtx.ActivationTxHeader, publishedAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &publishedAtx.ActivationTxHeader, &publishedAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
@@ -421,7 +421,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
 
-	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
@@ -429,7 +429,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx.ActivationTxHeader, nil, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
@@ -440,12 +440,12 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
-
-	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	lid := types.NewLayerID(1)
+	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, lid.Add(layersPerEpoch))
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
 
-	challenge = newChallenge(nodeID /*👀*/, 0, *types.EmptyATXID, posAtx.ID(), postGenesisEpochLayer)
+	challenge = newChallenge(nodeID, 0, *types.EmptyATXID, posAtx.ID(), lid)
 	challenge.InitialPostIndices = initialPost.Indices
 	prevAtx := newAtx(challenge, nipost)
 	prevAtx.InitialPost = initialPost
@@ -455,7 +455,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
@@ -475,7 +475,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx.ActivationTxHeader, nil, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
@@ -495,7 +495,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
@@ -505,7 +505,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, _, err = publishAtx(b, postGenesisEpoch, layersPerEpoch) // 👀
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, publishedAtx.ActivationTxHeader, publishedAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &publishedAtx.ActivationTxHeader, &publishedAtx.ActivationTxHeader, layersPerEpoch)
 
 	publishedAtx2, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
@@ -590,7 +590,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	posAtx, err := cdb.GetAtxHeader(newAtx.PositioningATX)
 	r.NoError(err)
 
-	assertLastAtx(r, posAtx, prevATX.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, posAtx, &prevATX.ActivationTxHeader, layersPerEpoch)
 
 	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerID
@@ -607,12 +607,12 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ed := signing.NewEdSigner()
 	nodeID := types.BytesToNodeID(ed.PublicKey().Bytes())
 	cdb := newCachedDB(t)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, nodeID, ed, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, nipost)
-	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
+	atxBytes, err := types.InterfaceToBytes(&atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
@@ -627,13 +627,13 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	id := types.BytesToNodeID([]byte("aaaaaa"))
-	coinbase := types.HexToAddress("0xaaa")
+	coinbase := types.GenerateAddress([]byte("0xaaa"))
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
 	sig := &MockSigning{}
 	cdb := newCachedDB(t)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	net.atxHdlr = atxHdlr
 
 	cfg := Config{
@@ -660,8 +660,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		Sequence:       2,
 		PrevATXID:      atx.ID(),
 		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
-		StartTick:      atx.EndTick,
-		EndTick:        atx.EndTick + b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
 		PositioningATX: atx.ID(),
 	}
 
@@ -789,7 +787,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)
@@ -875,7 +873,7 @@ func newActivationTx(
 	pubLayerID types.LayerID,
 	startTick, numTicks uint64,
 	coinbase types.Address,
-	numUnints uint,
+	numUnits uint,
 	nipost *types.NIPost,
 ) *types.ActivationTx {
 	nipostChallenge := types.NIPostChallenge{
@@ -883,9 +881,9 @@ func newActivationTx(
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
 		PubLayerID:     pubLayerID,
-		StartTick:      startTick,
-		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnints, nil)
+	atx := types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnits, nil)
+	atx.Verify(startTick, numTicks)
+	return atx
 }

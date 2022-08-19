@@ -334,8 +334,8 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 
 func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: &types.ActivationTxHeader{
+		InnerActivationTx: types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
 				NumUnits:        numUnits,
@@ -704,10 +704,10 @@ func TestGlobalStateService(t *testing.T) {
 		{"Account", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.Account(context.Background(), &pb.AccountRequest{
-				AccountId: &pb.AccountId{Address: addr1.Bytes()},
+				AccountId: &pb.AccountId{Address: addr1.String()},
 			})
 			require.NoError(t, err)
-			require.Equal(t, addr1.Bytes(), res.AccountWrapper.AccountId.Address)
+			require.Equal(t, addr1.String(), res.AccountWrapper.AccountId.Address)
 			require.Equal(t, uint64(accountBalance), res.AccountWrapper.StateCurrent.Balance.Value)
 			require.Equal(t, uint64(accountCounter), res.AccountWrapper.StateCurrent.Counter)
 			require.Equal(t, uint64(accountBalance+1), res.AccountWrapper.StateProjected.Balance.Value)
@@ -723,7 +723,7 @@ func TestGlobalStateService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountId: &pb.AccountId{Address: addr1.String()},
 				},
 			})
 			require.Error(t, err)
@@ -735,7 +735,7 @@ func TestGlobalStateService(t *testing.T) {
 				MaxResults: uint32(1),
 				Offset:     math.MaxUint32,
 				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountId: &pb.AccountId{Address: addr1.String()},
 					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
 				},
@@ -750,7 +750,7 @@ func TestGlobalStateService(t *testing.T) {
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				MaxResults: uint32(0),
 				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountId: &pb.AccountId{Address: addr1.String()},
 					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
 				},
@@ -765,7 +765,7 @@ func TestGlobalStateService(t *testing.T) {
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				MaxResults: uint32(1),
 				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountId: &pb.AccountId{Address: addr1.String()},
 					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
 				},
@@ -779,7 +779,7 @@ func TestGlobalStateService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountId: &pb.AccountId{Address: addr1.String()},
 					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
 						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
 				},
@@ -860,7 +860,7 @@ func TestGlobalStateService(t *testing.T) {
 					name: "filter with zero flags",
 					run: generateRunFnError("`Filter.AccountDataFlags` must set at least one bitfield", &pb.AccountDataStreamRequest{
 						Filter: &pb.AccountDataFilter{
-							AccountId:        &pb.AccountId{Address: addr1.Bytes()},
+							AccountId:        &pb.AccountId{Address: addr1.String()},
 							AccountDataFlags: uint32(0),
 						},
 					}),
@@ -882,7 +882,7 @@ func TestGlobalStateService(t *testing.T) {
 					name: "invalid address",
 					run: generateRunFn(&pb.AccountDataStreamRequest{
 						Filter: &pb.AccountDataFilter{
-							AccountId: &pb.AccountId{Address: []byte{'A'}},
+							AccountId: &pb.AccountId{Address: types.GenerateAddress([]byte{'A'}).String()},
 							AccountDataFlags: uint32(
 								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
 									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
@@ -1001,7 +1001,7 @@ func TestSmesherService(t *testing.T) {
 			opts.NumUnits = 1
 			opts.NumFiles = 1
 
-			coinbase := &pb.AccountId{Address: addr1.Bytes()}
+			coinbase := &pb.AccountId{Address: addr1.String()}
 
 			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 				Opts:     opts,
@@ -1020,7 +1020,10 @@ func TestSmesherService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			require.Equal(t, nodeID[:], res.AccountId.Address)
+			nodeAddr := types.GenerateAddress(nodeID[:])
+			resAddr, err := types.StringToAddress(res.AccountId.Address)
+			require.NoError(t, err)
+			require.Equal(t, nodeAddr.String(), resAddr.String())
 		}},
 		{"SetCoinbaseMissingArgs", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1032,7 +1035,7 @@ func TestSmesherService(t *testing.T) {
 		{"SetCoinbase", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
-				Id: &pb.AccountId{Address: addr1.Bytes()},
+				Id: &pb.AccountId{Address: addr1.String()},
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
@@ -1041,7 +1044,9 @@ func TestSmesherService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.Coinbase(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			require.Equal(t, addr1.Bytes(), res.AccountId.Address)
+			addr, err := types.StringToAddress(res.AccountId.Address)
+			require.NoError(t, err)
+			require.Equal(t, addr1.Bytes(), addr.Bytes())
 		}},
 		{"MinGas", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1178,7 +1183,9 @@ func TestMeshService(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{},
+								AccountId: &pb.AccountId{
+									Address: types.GenerateAddress(make([]byte, types.AddressLength)).String(),
+								},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
 							Offset: math.MaxUint32,
@@ -1222,7 +1229,9 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{},
+								AccountId: &pb.AccountId{
+									Address: types.GenerateAddress(make([]byte, types.AddressLength)).String(),
+								},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
 						})
@@ -1239,7 +1248,7 @@ func TestMeshService(t *testing.T) {
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
-								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.String()},
 							},
 						})
 						require.NoError(t, err)
@@ -1254,7 +1263,7 @@ func TestMeshService(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.String()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED),
 							},
 						})
@@ -1271,7 +1280,7 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.String()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
 							},
 						})
@@ -1288,7 +1297,7 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.String()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
 						})
@@ -1306,7 +1315,7 @@ func TestMeshService(t *testing.T) {
 							// Zero means unlimited
 							MaxResults: uint32(0),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountId: &pb.AccountId{Address: addr1.String()},
 								AccountMeshDataFlags: uint32(
 									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
 										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
@@ -1326,7 +1335,7 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(1),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountId: &pb.AccountId{Address: addr1.String()},
 								AccountMeshDataFlags: uint32(
 									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
 										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
@@ -1346,7 +1355,7 @@ func TestMeshService(t *testing.T) {
 							MaxResults: uint32(1),
 							Offset:     uint32(1),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountId: &pb.AccountId{Address: addr1.String()},
 								AccountMeshDataFlags: uint32(
 									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
 										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
@@ -1426,7 +1435,7 @@ func TestMeshService(t *testing.T) {
 					name: "filter_with_zero_flags",
 					run: generateRunFnError("`Filter.AccountMeshDataFlags` must set at least one bitfield", &pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{
-							AccountId:            &pb.AccountId{Address: addr1.Bytes()},
+							AccountId:            &pb.AccountId{Address: addr1.String()},
 							AccountMeshDataFlags: uint32(0),
 						},
 					}),
@@ -1448,7 +1457,7 @@ func TestMeshService(t *testing.T) {
 					name: "invalid_address",
 					run: generateRunFn(&pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{
-							AccountId: &pb.AccountId{Address: []byte{'A'}},
+							AccountId: &pb.AccountId{Address: types.GenerateAddress([]byte{'A'}).String()},
 							AccountMeshDataFlags: uint32(
 								pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
 									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
@@ -2001,7 +2010,7 @@ func TestTransactionService(t *testing.T) {
 
 func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.ID.Bytes(), tx.Id)
-	require.Equal(t, globalTx.Principal.Bytes(), tx.Principal)
+	require.Equal(t, globalTx.Principal.String(), tx.Principal.Address)
 	require.Equal(t, globalTx.GasPrice, tx.GasPrice)
 	require.Equal(t, globalTx.MaxGas, tx.MaxGas)
 	require.Equal(t, globalTx.MaxSpend, tx.MaxSpend)
@@ -2030,7 +2039,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
 				continue
 			}
-			if bytes.Compare(a.Coinbase.Address, globalAtx.Coinbase.Bytes()) != 0 {
+			if a.Coinbase.Address != globalAtx.Coinbase.String() {
 				continue
 			}
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
@@ -2054,7 +2063,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	// Check the tx as well
 	resTx := resBlock.Transactions[0]
 	require.Equal(t, globalTx.ID.Bytes(), resTx.Id)
-	require.Equal(t, globalTx.Principal.Bytes(), resTx.Principal)
+	require.Equal(t, globalTx.Principal.String(), resTx.Principal.Address)
 	require.Equal(t, globalTx.GasPrice, resTx.GasPrice)
 	require.Equal(t, globalTx.MaxGas, resTx.MaxGas)
 	require.Equal(t, globalTx.MaxSpend, resTx.MaxSpend)
@@ -2081,7 +2090,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	// set up the grpc listener stream
 	req := &pb.AccountMeshDataStreamRequest{
 		Filter: &pb.AccountMeshDataFilter{
-			AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			AccountId: &pb.AccountId{Address: addr1.String()},
 			AccountMeshDataFlags: uint32(
 				pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
 					pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
@@ -2180,7 +2189,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// set up the grpc listener stream
 	req := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
-			AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			AccountId: &pb.AccountId{Address: addr1.String()},
 			AccountDataFlags: uint32(
 				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
@@ -2448,7 +2457,7 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_AccountWrapper:
 		// Check the account, nonce, and balance
-		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address,
+		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address,
 			"inner account has bad address")
 		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
 			"inner account has bad current counter")
@@ -2469,7 +2478,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 		require.Nil(t, x.Reward.Smesher)
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2480,7 +2489,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_MeshTransaction:
 		// Check the sender
-		require.Equal(t, globalTx.Principal.Bytes(), x.MeshTransaction.Transaction.Principal)
+		require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 	default:
 		require.Fail(t, "inner account data item has wrong data type", x)
 	}
@@ -2492,9 +2501,9 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
-		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
+		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		require.Equal(t, globalAtx.NumUnits, uint(x.Activation.NumUnits))
+		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
 	}
@@ -2506,7 +2515,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 
 	default:
 		require.Fail(t, fmt.Sprintf("inner account data item has wrong data type: %T", dataItem))
@@ -2528,7 +2537,7 @@ func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
 func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_AccountWrapper:
-		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
+		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
 		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
 		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
 		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
@@ -2545,7 +2554,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2565,7 +2574,7 @@ func checkGlobalStateDataReceipt(t *testing.T, dataItem interface{}) {
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_AccountWrapper:
-		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
+		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
 		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
 		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
 		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
@@ -2699,12 +2708,12 @@ func TestDebugService(t *testing.T) {
 		require.Equal(t, 2, len(res.AccountWrapper))
 
 		// Get the list of addresses and compare them regardless of order
-		var addresses [][]byte
+		var addresses []string
 		for _, a := range res.AccountWrapper {
 			addresses = append(addresses, a.AccountId.Address)
 		}
-		require.Contains(t, addresses, globalTx.Principal.Bytes())
-		require.Contains(t, addresses, addr1.Bytes())
+		require.Contains(t, addresses, globalTx.Principal.String())
+		require.Contains(t, addresses, addr1.String())
 	})
 	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
@@ -2815,7 +2824,7 @@ func TestEventsReceived(t *testing.T) {
 
 	principalReq := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
-			AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			AccountId: &pb.AccountId{Address: addr1.String()},
 			AccountDataFlags: uint32(
 				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
@@ -2825,7 +2834,7 @@ func TestEventsReceived(t *testing.T) {
 
 	receiverReq := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
-			AccountId: &pb.AccountId{Address: addr2.Bytes()},
+			AccountId: &pb.AccountId{Address: addr2.String()},
 			AccountDataFlags: uint32(
 				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
 					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
@@ -2855,11 +2864,11 @@ func TestEventsReceived(t *testing.T) {
 
 		acc1Res, err := principalStream.Recv()
 		require.NoError(t, err)
-		require.Equal(t, addr1.Bytes(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+		require.Equal(t, addr1.String(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
 
 		receiverRes, err := receiverStream.Recv()
 		require.NoError(t, err)
-		require.Equal(t, addr2.Bytes(), receiverRes.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+		require.Equal(t, addr2.String(), receiverRes.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
 
 		close(waiter)
 	}()

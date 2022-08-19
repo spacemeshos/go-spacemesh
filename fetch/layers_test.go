@@ -220,7 +220,7 @@ func TestPollLayerContent(t *testing.T) {
 				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).Return(nil).Times(numPeers)
 			}
 			if tc.zeroBlock {
-				tl.mMesh.EXPECT().SetZeroBlockLayer(layerID)
+				tl.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID)
 			}
 
 			res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -289,7 +289,7 @@ func TestPollLayerContent_PeerErrors(t *testing.T) {
 					return nil
 				})
 			if tc.zeroBlock {
-				tl.mMesh.EXPECT().SetZeroBlockLayer(layerID)
+				tl.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID)
 			} else {
 				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BallotDB, false).Return(nil)
 				tl.mFetcher.EXPECT().GetHashes(gomock.Any(), datastore.BlockDB, false).Return(nil)
@@ -397,7 +397,7 @@ func TestPollLayerContent_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 			}
 			return nil
 		})
-	tl.mMesh.EXPECT().SetZeroBlockLayer(layerID).Return(errors.New("whatever")).Times(1)
+	tl.mMesh.EXPECT().SetZeroBlockLayer(gomock.Any(), layerID).Return(errors.New("whatever")).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
 	assert.NoError(t, res.Err)
@@ -624,7 +624,7 @@ func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxSpend = amount
 	tx.GasPrice = price
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }
 

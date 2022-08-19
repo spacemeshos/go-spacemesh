@@ -25,7 +25,7 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 	parsed.GasPrice = 1
 	parsed.MaxSpend = amount
 	parsed.Nonce = nonce
-	parsed.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	parsed.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return &types.MeshTransaction{
 		Transaction: parsed,
 		LayerID:     lid,

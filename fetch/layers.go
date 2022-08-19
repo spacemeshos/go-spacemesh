@@ -294,7 +294,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	// make a copy of data and channels to avoid holding a lock while notifying
 	chs := l.layerBlocksChs[layerID]
 	l.eg.Go(func() error {
-		notifyLayerDataResult(l.db, layerID, l.msh, chs, result, l.log.WithContext(ctx).WithFields(layerID))
+		notifyLayerDataResult(ctx, l.log.WithContext(ctx).WithFields(layerID), l.db, layerID, l.msh, chs, result)
 		return nil
 	})
 	delete(l.layerBlocksChs, layerID)
@@ -304,7 +304,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // notifyLayerDataResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
+func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseResult, lyrResult *layerResult) {
 	var (
 		missing, success bool
 		err              error
@@ -338,7 +338,7 @@ func notifyLayerDataResult(db *sql.Database, layerID types.LayerID, msh meshProv
 			result.Err = err
 		}
 		if len(lyrResult.blocks) == 0 {
-			if err := msh.SetZeroBlockLayer(layerID); err != nil {
+			if err := msh.SetZeroBlockLayer(ctx, layerID); err != nil {
 				// this can happen when node actually had received blocks for this layer before. ok to ignore
 				logger.With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
 			}

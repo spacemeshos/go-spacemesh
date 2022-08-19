@@ -62,28 +62,24 @@ func createLayer(t *testing.T, db *sql.Database, lid types.LayerID) *lyrdata {
 
 func TestHandleLayerDataReq(t *testing.T) {
 	tt := []struct {
-		name                 string
-		requested, processed types.LayerID
-		emptyLyr             bool
-		err                  error
+		name                    string
+		requested               types.LayerID
+		emptyLyr, hareHasOutput bool
 	}{
 		{
-			name:      "success",
-			requested: types.NewLayerID(100),
-			processed: types.NewLayerID(101),
-			emptyLyr:  false,
+			name:          "success",
+			requested:     types.NewLayerID(100),
+			hareHasOutput: true,
 		},
 		{
-			name:      "success with empty layer",
+			name:          "empty hare output",
+			requested:     types.NewLayerID(100),
+			hareHasOutput: false,
+		},
+		{
+			name:      "empty layer",
 			requested: types.NewLayerID(100),
-			processed: types.NewLayerID(101),
 			emptyLyr:  true,
-		},
-		{
-			name:      "requested layer too high",
-			requested: types.NewLayerID(100),
-			processed: types.NewLayerID(99),
-			err:       errLayerNotProcessed,
 		},
 	}
 
@@ -92,30 +88,30 @@ func TestHandleLayerDataReq(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			if tc.hareHasOutput {
+				require.False(t, tc.emptyLyr)
+			}
 			th := createTestHandler(t)
-			expected := createLayer(t, th.db, tc.requested)
-			hareOutput := types.EmptyBlockID
+			expected := &lyrdata{}
 			if !tc.emptyLyr {
+				expected = createLayer(t, th.db, tc.requested)
+			}
+			hareOutput := types.EmptyBlockID
+			if tc.hareHasOutput {
 				hareOutput = expected.blks[0]
 			}
 			require.NoError(t, layers.SetHareOutput(th.db, tc.requested, hareOutput))
-			th.mmp.EXPECT().ProcessedLayer().Return(tc.processed)
 
 			out, err := th.handleLayerDataReq(context.TODO(), tc.requested.Bytes())
-			if tc.err != nil {
-				require.ErrorIs(t, err, tc.err)
-			} else {
-				require.NoError(t, err)
-				var got layerData
-				err = codec.Decode(out, &got)
-				require.NoError(t, err)
-				assert.ElementsMatch(t, expected.blts, got.Ballots)
-				assert.ElementsMatch(t, expected.blks, got.Blocks)
-				assert.Equal(t, hareOutput, got.HareOutput)
-				assert.Equal(t, tc.processed, got.ProcessedLayer)
-				assert.Equal(t, expected.hash, got.Hash)
-				assert.Equal(t, expected.aggHash, got.AggregatedHash)
-			}
+			require.NoError(t, err)
+			var got layerData
+			err = codec.Decode(out, &got)
+			require.NoError(t, err)
+			assert.ElementsMatch(t, expected.blts, got.Ballots)
+			assert.ElementsMatch(t, expected.blks, got.Blocks)
+			assert.Equal(t, hareOutput, got.HareOutput)
+			assert.Equal(t, expected.hash, got.Hash)
+			assert.Equal(t, expected.aggHash, got.AggregatedHash)
 		})
 	}
 }

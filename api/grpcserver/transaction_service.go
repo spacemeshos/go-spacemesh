@@ -294,7 +294,10 @@ func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stre
 		persisted types.LayerID
 	)
 	if len(in.Address) > 0 {
-		addr := types.BytesToAddress(in.Address)
+		addr, err := types.StringToAddress(in.Address)
+		if err != nil {
+			return fmt.Errorf("failed to parse in.Address `%s`: %w", in.Address, err)
+		}
 		filter.Address = &addr
 	}
 	if len(in.Id) > 0 {
@@ -376,9 +379,9 @@ func castResult(rst *types.TransactionWithResult) *pb.TransactionResult {
 		Layer:       rst.Layer.Value,
 	}
 	if len(rst.Addresses) > 0 {
-		casted.TouchedAddresses = make([][]byte, len(rst.Addresses))
+		casted.TouchedAddresses = make([]string, len(rst.Addresses))
 		for i := range rst.Addresses {
-			casted.TouchedAddresses[i] = rst.Addresses[i][:]
+			casted.TouchedAddresses[i] = rst.Addresses[i].String()
 		}
 	}
 	return casted

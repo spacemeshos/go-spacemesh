@@ -118,7 +118,9 @@ func TestStepTransactions(t *testing.T) {
 				"count", n,
 			)
 			for i := 0; i < n; i++ {
-				receiver := types.Address{}
+				randBytes := [types.AddressLength]byte{}
+				rng.Read(randBytes[:])
+				receiver := types.GenerateAddress(randBytes[:])
 				rng.Read(receiver[:])
 				raw := wallet.Spend(
 					client.account.PrivateKey,

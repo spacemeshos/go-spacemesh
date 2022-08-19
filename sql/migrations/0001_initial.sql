@@ -96,22 +96,17 @@ CREATE TABLE beacons
 
 CREATE TABLE atxs
 (
-    id        CHAR(32) PRIMARY KEY,
-    layer     INT NOT NULL,
-    epoch     INT NOT NULL,
-    smesher   CHAR(64),
-    atx       BLOB,
-    timestamp INT NOT NULL
+    id               CHAR(32) PRIMARY KEY,
+    layer            INT NOT NULL,
+    epoch            INT NOT NULL,
+    base_tick_height UNSIGNED LONG INT,
+    tick_count       UNSIGNED LONG INT,
+    smesher          CHAR(32),
+    atx              BLOB,
+    timestamp        INT NOT NULL
 ) WITHOUT ROWID;
 CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
 CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);
-
-CREATE TABLE atx_top
-(
-    id     INT PRIMARY KEY CHECK (id = 1),
-    atx_id CHAR(32),
-    layer  INT NOT NULL
-) WITHOUT ROWID;
 
 CREATE TABLE proposals
 (
