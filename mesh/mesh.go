@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"go.uber.org/atomic"
@@ -20,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
@@ -31,6 +33,7 @@ var (
 type Mesh struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
+	beacon system.BeaconGetter
 
 	conState conservativeState
 	trtl     tortoise
@@ -55,10 +58,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, bcn system.BeaconGetter, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
+		beacon:              bcn,
 		trtl:                trtl,
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
@@ -121,14 +125,14 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
 
-	msh.setLatestLayer(gLid)
+	msh.setLatestLayer(msh.logger, gLid)
 	msh.processedLayer.Store(gLid)
 	msh.setLatestLayerInState(gLid)
 	return msh, nil
 }
 
 func (msh *Mesh) recoverFromDB(latest types.LayerID) {
-	msh.setLatestLayer(latest)
+	msh.setLatestLayer(msh.logger, latest)
 
 	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
@@ -230,7 +234,7 @@ func (msh *Mesh) MissingLayer() types.LayerID {
 }
 
 // setLatestLayer sets the latest layer we saw from the network.
-func (msh *Mesh) setLatestLayer(lid types.LayerID) {
+func (msh *Mesh) setLatestLayer(logger log.Log, lid types.LayerID) {
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: lid,
 		Status:  events.LayerStatusTypeUnknown,
@@ -242,7 +246,7 @@ func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 		}
 		if msh.latestLayer.CompareAndSwap(current, lid) {
 			events.ReportNodeStatusUpdate()
-			msh.logger.With().Info("set latest known layer", lid)
+			logger.With().Info("set latest known layer", lid)
 		}
 	}
 }
@@ -363,6 +367,17 @@ func (msh *Mesh) revertMaybe(ctx context.Context, logger log.Log, newVerified ty
 	return nil
 }
 
+func (msh *Mesh) triggerTortoise(ctx context.Context, logger log.Log, lid types.LayerID) types.LayerID {
+	epoch := lid.GetEpoch()
+	if _, err := msh.beacon.GetBeacon(epoch); err != nil {
+		logger.With().Warning("not triggering tortoise: beacon not available", lid, epoch)
+		return msh.trtl.LatestComplete()
+	}
+	newVerified := msh.trtl.HandleIncomingLayer(ctx, lid)
+	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
+	return newVerified
+}
+
 // ProcessLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
@@ -374,8 +389,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	logger.Info("processing layer")
 
 	// pass the layer to tortoise for processing
-	newVerified := msh.trtl.HandleIncomingLayer(ctx, layerID)
-	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
+	newVerified := msh.triggerTortoise(ctx, logger, layerID)
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
@@ -400,8 +414,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 			return err
 		}
 	}
-
-	logger.Debug("done processing layer")
 	return nil
 }
 
@@ -466,12 +478,11 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to, latestVerified
 	return nil
 }
 
-// TODO: change this per conclusion in https://community.spacemesh.io/t/new-history-reversal-attack-and-mitigation/268
 func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	if len(validBlocks) == 0 {
 		return nil
 	}
-	sorted := types.SortBlocks(validBlocks)
+	sorted := sortBlocks(validBlocks)
 	return sorted[0]
 }
 
@@ -624,12 +635,12 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 }
 
 // SetZeroBlockLayer tags lyr as a layer without blocks.
-func (msh *Mesh) SetZeroBlockLayer(lid types.LayerID) error {
-	msh.logger.With().Info("tagging zero block layer", lid)
-	if err := setZeroBlockLayer(msh.logger, msh.cdb, lid); err != nil {
+func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) error {
+	logger := msh.logger.WithContext(ctx)
+	if err := setZeroBlockLayer(logger, msh.cdb, lid); err != nil {
 		return err
 	}
-	msh.setLatestLayer(lid)
+	msh.setLatestLayer(logger, lid)
 	return nil
 }
 
@@ -662,7 +673,7 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 		logger.With().Error("failed to link proposal txs", log.Err(err))
 		return err
 	}
-	msh.setLatestLayer(layerID)
+	msh.setLatestLayer(logger, layerID)
 	logger.Debug("associated txs to proposal")
 	return nil
 }
@@ -717,7 +728,7 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 		logger.With().Error("failed to link block txs", log.Err(err))
 		return err
 	}
-	msh.setLatestLayer(block.LayerIndex)
+	msh.setLatestLayer(logger, block.LayerIndex)
 	logger.Debug("associated txs to block")
 
 	if err := blocks.Add(msh.cdb, block); err != nil && !errors.Is(err, sql.ErrObjectExists) {
@@ -746,4 +757,15 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 // GetRewards retrieves account's rewards by the coinbase address.
 func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 	return rewards.List(msh.cdb, coinbase)
+}
+
+// sortBlocks sort blocks tick height, if height is equal by lexicographic order.
+func sortBlocks(blks []*types.Block) []*types.Block {
+	sort.Slice(blks, func(i, j int) bool {
+		if blks[i].TickHeight < blks[j].TickHeight {
+			return true
+		}
+		return blks[i].ID().Compare(blks[j].ID())
+	})
+	return blks
 }

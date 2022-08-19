@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -172,4 +173,20 @@ func TestSyncSimulateMultiple(t *testing.T) {
 			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
 		}
 	}
+}
+
+func FuzzRequestConsistency(f *testing.F) {
+	tester.FuzzConsistency[Request](f)
+}
+
+func FuzzRequestSafety(f *testing.F) {
+	tester.FuzzSafety[Request](f)
+}
+
+func FuzzResponseConsistency(f *testing.F) {
+	tester.FuzzConsistency[Response](f)
+}
+
+func FuzzResponseSafety(f *testing.F) {
+	tester.FuzzSafety[Response](f)
 }

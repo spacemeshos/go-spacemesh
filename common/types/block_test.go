@@ -17,10 +17,9 @@ func TestBlock_IDSize(t *testing.T) {
 }
 
 func TestRewardCodec(t *testing.T) {
-	addr := BytesToAddress(RandomBytes(AddressLength))
 	weight := util.WeightFromUint64(1234).Div(util.WeightFromUint64(7))
 	r := &AnyReward{
-		Coinbase: addr,
+		Coinbase: GenerateAddress(RandomBytes(AddressLength)),
 		Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
 

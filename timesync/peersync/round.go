@@ -6,7 +6,7 @@ import (
 )
 
 type timedResponse struct {
-	response
+	Response
 	receiveTimestamp int64
 }
 
@@ -17,12 +17,12 @@ type round struct {
 	responses         []timedResponse
 }
 
-func (r *round) AddResponse(resp response, timestamp int64) {
+func (r *round) AddResponse(resp Response, timestamp int64) {
 	if resp.ID != r.ID {
 		return
 	}
 	r.responses = append(r.responses,
-		timedResponse{response: resp, receiveTimestamp: timestamp})
+		timedResponse{Response: resp, receiveTimestamp: timestamp})
 }
 
 func (r *round) Ready() bool {
@@ -36,7 +36,7 @@ func (r *round) Offset() time.Duration {
 	offsets := make([]int64, len(r.responses))
 	for i := range r.responses {
 		rtt := r.responses[i].receiveTimestamp - r.Timestamp
-		offsets[i] = r.responses[i].Timestamp - r.Timestamp - rtt/2
+		offsets[i] = int64(r.responses[i].Timestamp) - r.Timestamp - rtt/2
 	}
 	sort.Slice(offsets, func(i, j int) bool {
 		return offsets[i] < offsets[j]

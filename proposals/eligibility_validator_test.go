@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	defaultATXUnit = uint(5)
-	testedATXUnit  = uint(2)
+	defaultATXUnit = uint32(5)
+	testedATXUnit  = uint32(2)
 	// eligibleSlots is calculated based on layerAvgSize, layersPerEpoch, epoch ATX weight and smesher's own weight.
 	eligibleSlots = uint32(3)
 	epoch         = types.EpochID(3)
@@ -35,29 +35,27 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	t.Helper()
 	activeset := types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
 	for i, id := range activeset {
-		var h *types.ActivationTxHeader
+		var h types.ActivationTxHeader
 		if i == 0 {
-			h = &types.ActivationTxHeader{
+			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					NodeID:     nid,
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: testedATXUnit,
 			}
+			h.Verify(0, 1)
 		} else {
-			h = &types.ActivationTxHeader{
+			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					NodeID:     types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes()),
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: defaultATXUnit,
 			}
+			h.Verify(0, 1)
 		}
-		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: h}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 	}
@@ -216,28 +214,26 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	for i, id := range rb.EpochData.ActiveSet {
-		var h *types.ActivationTxHeader
+		var h types.ActivationTxHeader
 		if i == 0 {
-			h = &types.ActivationTxHeader{
+			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 					PubLayerID: epoch.FirstLayer(),
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: testedATXUnit,
 			}
+			h.Verify(0, 1)
 		} else {
-			h = &types.ActivationTxHeader{
+			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: defaultATXUnit,
 			}
+			h.Verify(0, 1)
 		}
-		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: h}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
 		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 	}
@@ -265,28 +261,26 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	for i, id := range rb.EpochData.ActiveSet {
-		var h *types.ActivationTxHeader
+		var h types.ActivationTxHeader
 		if i == 0 {
-			h = &types.ActivationTxHeader{
+			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: 0,
 			}
+			h.Verify(0, 1)
 		} else {
-			h = &types.ActivationTxHeader{
+			h = types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-					StartTick:  0,
-					EndTick:    1,
 				},
 				NumUnits: 0,
 			}
+			h.Verify(0, 1)
 		}
-		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: h}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
 		atx.SetID(&id)
 		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 	}

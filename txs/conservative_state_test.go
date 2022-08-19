@@ -57,7 +57,7 @@ func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, f
 	tx.MaxSpend = amount
 	tx.GasPrice = fee
 	tx.Nonce = types.Nonce{Counter: nonce}
-	tx.Principal = types.BytesToAddress(signer.PublicKey().Bytes())
+	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return &tx
 }
 
@@ -102,7 +102,7 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
-		addr := types.BytesToAddress(signer.PublicKey().Bytes())
+		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 		tx := newTx(t, nonce+5, defaultAmount, defaultFee, signer)
@@ -454,7 +454,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 func TestGetProjection(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx1 := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -471,7 +471,7 @@ func TestGetProjection(t *testing.T) {
 func TestAddToCache(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -518,7 +518,7 @@ func TestAddToCache_NonceGap(t *testing.T) {
 func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -531,7 +531,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(uint64(math.MaxUint64), nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	mtxs := make([]*types.MeshTransaction, 0, maxTXsPerAcct+1)
@@ -547,7 +547,7 @@ func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 func TestGetMeshTransaction(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -575,7 +575,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	lid := types.NewLayerID(1)
 
 	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
@@ -588,7 +588,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, got.TxHeader)
 
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -626,7 +626,7 @@ func TestApplyLayer(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -677,7 +677,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance-(tx.Spending()), nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)
 	}
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
@@ -731,7 +731,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
-	coinbase := types.GenerateAddress(types.RandomBytes(20))
+	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
 	weight := util.WeightFromFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{

@@ -416,17 +416,17 @@ func (mr *MockmeshProviderMockRecorder) ProcessedLayer() *gomock.Call {
 }
 
 // SetZeroBlockLayer mocks base method.
-func (m *MockmeshProvider) SetZeroBlockLayer(arg0 types.LayerID) error {
+func (m *MockmeshProvider) SetZeroBlockLayer(arg0 context.Context, arg1 types.LayerID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetZeroBlockLayer", arg0)
+	ret := m.ctrl.Call(m, "SetZeroBlockLayer", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetZeroBlockLayer indicates an expected call of SetZeroBlockLayer.
-func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0, arg1)
 }
 
 // Mockhost is a mock of host interface.

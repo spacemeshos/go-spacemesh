@@ -131,11 +131,10 @@ func GetBlob(db sql.Executor, id []byte) (proposal []byte, err error) {
 
 // Add adds a proposal for a given ID.
 func Add(db sql.Executor, proposal *types.Proposal) error {
-	txIDsBytes, err := codec.Encode(proposal.TxIDs)
+	txIDsBytes, err := codec.EncodeSlice(proposal.TxIDs)
 	if err != nil {
 		return fmt.Errorf("encode TX IDs: %w", err)
 	}
-
 	encodedProposal, err := codec.Encode(proposal)
 	if err != nil {
 		return fmt.Errorf("encode proposal: %w", err)
@@ -195,8 +194,8 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	signature := make([]byte, stmt.ColumnLen(8))
 	stmt.ColumnBytes(8, signature)
 
-	txIDs := make([]types.TransactionID, 0)
-	if err := codec.Decode(txIDsBytes, &txIDs); err != nil {
+	txIDs, err := codec.DecodeSlice[types.TransactionID](txIDsBytes)
+	if err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("decode TX IDs: %w", err)
 		}

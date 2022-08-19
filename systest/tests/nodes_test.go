@@ -10,10 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
+
+func init() {
+	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
+	types.DefaultTestAddressConfig()
+}
 
 func TestAddNodes(t *testing.T) {
 	t.Parallel()

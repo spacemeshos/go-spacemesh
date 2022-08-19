@@ -183,6 +183,19 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 	return membershipSliceToMap(proofMessage.Members), nil
 }
 
+// GetProof returns full proof.
+func (db *PoetDb) GetProof(proofRef []byte) (*types.PoetProof, error) {
+	proofMessageBytes, err := db.GetProofMessage(proofRef)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
+	}
+	var proofMessage types.PoetProofMessage
+	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef[:5], err)
+	}
+	return &proofMessage.PoetProof, nil
+}
+
 func makeKey(poetID []byte, roundID string) poetProofKey {
 	sum := hash.Sum(append(poetID[:], []byte(roundID)...))
 	return sum

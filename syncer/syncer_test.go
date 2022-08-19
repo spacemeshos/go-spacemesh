@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
@@ -48,22 +47,6 @@ func (mlt *mockLayerTicker) GetCurrentLayer() types.LayerID {
 	return mlt.current.Load().(types.LayerID)
 }
 
-func newMesh(t *testing.T, lg log.Log, cdb *datastore.CachedDB, allMocked bool) (*mesh.Mesh, *mmocks.MockconservativeState, *mmocks.Mocktortoise) {
-	ctrl := gomock.NewController(t)
-	mcs := mmocks.NewMockconservativeState(ctrl)
-	mt := mmocks.NewMocktortoise(ctrl)
-	if allMocked {
-		mcs.EXPECT().GetStateRoot().AnyTimes()
-		mt.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, lid types.LayerID) types.LayerID {
-				return lid.Sub(1)
-			}).AnyTimes()
-	}
-	msh, err := mesh.NewMesh(cdb, mt, mcs, lg)
-	require.NoError(t, err)
-	return msh, mcs, mt
-}
-
 type testSyncer struct {
 	syncer  *Syncer
 	cdb     *datastore.CachedDB
@@ -81,17 +64,30 @@ type testSyncer struct {
 func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, defaultMocked bool) *testSyncer {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	lg := logtest.New(t)
+
 	mt := newMockLayerTicker()
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	mm, mcs, mtrt := newMesh(t, lg.WithName("test_mesh"), cdb, defaultMocked)
 
 	ctrl := gomock.NewController(t)
+	mcs := mmocks.NewMockconservativeState(ctrl)
+	mtrt := mmocks.NewMocktortoise(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
+	mb.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
+	if defaultMocked {
+		mcs.EXPECT().GetStateRoot().AnyTimes()
+		mtrt.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, lid types.LayerID) types.LayerID {
+				return lid.Sub(1)
+			}).AnyTimes()
+	}
+	mm, err := mesh.NewMesh(cdb, mb, mtrt, mcs, lg)
+	require.NoError(t, err)
+
 	mp := mocks.NewMocklayerPatrol(ctrl)
 	mf := mocks.NewMocklayerFetcher(ctrl)
 	mlp := mocks.NewMocklayerProcessor(ctrl)
 	return &testSyncer{
-		syncer:        NewSyncer(ctx, Configuration{SyncInterval: interval}, mt, mb, mm, mf, mp, lg.WithName("test_sync")),
+		syncer:        NewSyncer(ctx, Configuration{SyncInterval: interval}, mt, mm, mf, mp, lg.WithName("test_sync")),
 		cdb:           cdb,
 		msh:           mm,
 		mTicker:       mt,
@@ -265,7 +261,7 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	lyr := current.Sub(1)
 	ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lyr).DoAndReturn(
 		func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+			require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 			return okCh()
 		})
 
@@ -322,7 +318,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).DoAndReturn(
 			func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-				require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+				require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 				return okCh()
 			})
 	}
@@ -346,7 +342,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lyr).DoAndReturn(
 		func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+			require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 			return okCh()
 		})
 
@@ -370,7 +366,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).DoAndReturn(
 			func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-				require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+				require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 				return okCh()
 			})
 	}
@@ -411,7 +407,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).DoAndReturn(
 			func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-				require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+				require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 				return okCh()
 			})
 	}
@@ -439,7 +435,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	ts.mTicker.advanceToLayer(current)
 	ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lyr).DoAndReturn(
 		func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+			require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 			return okCh()
 		})
 	require.True(t, ts.syncer.synchronize(context.TODO()))
@@ -455,7 +451,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	ts.mTicker.advanceToLayer(current)
 	ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lyr).DoAndReturn(
 		func(_ context.Context, got types.LayerID) chan fetch.LayerPromiseResult {
-			require.NoError(t, ts.msh.SetZeroBlockLayer(got))
+			require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), got))
 			return okCh()
 		})
 	require.True(t, ts.syncer.synchronize(context.TODO()))
@@ -464,43 +460,6 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
-}
-
-func TestForceSync(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
-	require.False(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.TODO()))
-	ts.syncer.Start(context.TODO())
-	t.Cleanup(func() {
-		ts.syncer.Close()
-	})
-	ts.syncer.ForceSync(context.TODO())
-	<-syncedCh
-	require.True(t, ts.syncer.dataSynced())
-	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
-	require.True(t, ts.syncer.IsSynced(context.TODO()))
-}
-
-func TestMultipleForceSync(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.TODO()))
-	lyr := types.NewLayerID(1)
-	ts.mTicker.advanceToLayer(lyr)
-	ts.syncer.Start(context.TODO())
-
-	require.True(t, true, ts.syncer.ForceSync(context.TODO()))
-	require.False(t, false, ts.syncer.ForceSync(context.TODO()))
-
-	// allow synchronize to finish
-	ts.syncer.Close()
-
-	// node already shutdown
-	require.False(t, false, ts.syncer.ForceSync(context.TODO()))
 }
 
 func TestSyncMissingLayer(t *testing.T) {
@@ -512,7 +471,6 @@ func TestSyncMissingLayer(t *testing.T) {
 
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	ts.mConState.EXPECT().GetStateRoot().AnyTimes()
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 
 	block := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{
@@ -527,7 +485,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(rst)
 		if lid.Before(failed) {
-			require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+			require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lid))
 			ts.mTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 		}
 		if lid == failed {
@@ -560,7 +518,7 @@ func TestSyncMissingLayer(t *testing.T) {
 					return nil
 				})
 		} else {
-			require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+			require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lid))
 		}
 	}
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
@@ -568,7 +526,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())
 }
 
-func TestSync_SkipProcessedLayer(t *testing.T) {
+func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
@@ -576,12 +534,12 @@ func TestSync_SkipProcessedLayer(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 
 	// simulate hare advancing the mesh forward
-	require.NoError(t, ts.msh.SetZeroBlockLayer(lyr))
-	require.NoError(t, ts.msh.ProcessLayer(context.TODO(), lyr))
+	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 
 	// no data sync should happen
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
+	ts.mLyrFetcher.EXPECT().PollLayerContent(gomock.Any(), lyr).Return(okCh())
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	// but last synced is updated
 	require.Equal(t, lyr, ts.syncer.getLastSyncedLayer())
@@ -595,10 +553,9 @@ func TestProcessLayers_AllGood(t *testing.T) {
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
 	ts.mTicker.advanceToLayer(current)
 	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+		require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lid))
 	}
 	require.False(t, ts.syncer.stateSynced())
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
 	require.True(t, ts.syncer.stateSynced())
@@ -612,13 +569,12 @@ func TestProcessLayers_ProcessedLayerStuck(t *testing.T) {
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
 	ts.mTicker.advanceToLayer(current)
 	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+		require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lid))
 	}
 	// cause the applied layer to advance but not processed layer
 	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), current, types.EmptyBlockID))
 	require.False(t, ts.syncer.stateSynced())
 
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
 	require.True(t, ts.syncer.stateSynced())
@@ -631,10 +587,9 @@ func TestProcessLayers_ATXsNotSynced(t *testing.T) {
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
 	ts.mTicker.advanceToLayer(current)
 	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+		require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lid))
 	}
 	require.False(t, ts.syncer.stateSynced())
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errATXsNotSynced)
 	require.False(t, ts.syncer.stateSynced())
@@ -648,7 +603,7 @@ func TestProcessLayers_Shutdown(t *testing.T) {
 	glayer := types.GetEffectiveGenesis()
 	lastSynced := glayer.Add(1)
 	ts.syncer.setLastSyncedLayer(lastSynced)
-	require.NoError(t, ts.msh.SetZeroBlockLayer(lastSynced))
+	require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lastSynced))
 	current := lastSynced.Add(1)
 	ts.mTicker.advanceToLayer(current)
 
@@ -657,39 +612,17 @@ func TestProcessLayers_Shutdown(t *testing.T) {
 	require.False(t, ts.syncer.stateSynced())
 }
 
-func TestProcessLayers_BeaconDelay(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	ts.syncer.setATXSynced()
-	glayer := types.GetEffectiveGenesis()
-	lastSynced := glayer.Add(1)
-	ts.syncer.setLastSyncedLayer(lastSynced)
-	require.NoError(t, ts.msh.SetZeroBlockLayer(lastSynced))
-	current := lastSynced.Add(1)
-	ts.mTicker.advanceToLayer(current)
-
-	require.False(t, ts.syncer.stateSynced())
-	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
-	ts.mBeacon.EXPECT().GetBeacon(lastSynced.GetEpoch()).Return(types.EmptyBeacon, sql.ErrNotFound)
-	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errBeaconUnavailable)
-	require.False(t, ts.syncer.stateSynced())
-
-	ts.mBeacon.EXPECT().GetBeacon(lastSynced.GetEpoch()).Return(types.RandomBeacon(), nil)
-	require.NoError(t, ts.syncer.processLayers(context.TODO()))
-	require.True(t, ts.syncer.stateSynced())
-}
-
 func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.syncer.setATXSynced()
 	glayer := types.GetEffectiveGenesis()
 	lastSynced := glayer.Add(1)
 	ts.syncer.setLastSyncedLayer(lastSynced)
-	require.NoError(t, ts.msh.SetZeroBlockLayer(lastSynced))
+	require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lastSynced))
 	current := lastSynced.Add(1)
 	ts.mTicker.advanceToLayer(current)
 
 	require.False(t, ts.syncer.stateSynced())
-	ts.mBeacon.EXPECT().GetBeacon(lastSynced.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(true)
 	require.ErrorIs(t, ts.syncer.processLayers(context.TODO()), errHareInCharge)
 	require.False(t, ts.syncer.stateSynced())
@@ -707,9 +640,8 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 	ts.syncer.setLastSyncedLayer(lastSynced)
 	current := lastSynced.Add(1)
 	ts.mTicker.advanceToLayer(current)
-	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	for lid := glayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		require.NoError(t, ts.msh.SetZeroBlockLayer(lid))
+		require.NoError(t, ts.msh.SetZeroBlockLayer(context.TODO(), lid))
 		if lid == glayer.Add(1) {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(true)
 		} else {

@@ -91,16 +91,15 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 }
 
 func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, nodeID types.NodeID, weight uint) {
-	header := &types.ActivationTxHeader{
+	header := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			NodeID:     nodeID,
-			StartTick:  0,
-			EndTick:    1,
 			PubLayerID: lid,
 		},
-		NumUnits: weight,
+		NumUnits: uint32(weight),
 	}
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: header}}
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
+	atx.Verify(0, 1)
 	id := types.RandomATXID()
 	atx.SetID(&id)
 	require.NoError(t, atxs.Add(db, atx, time.Now().Add(-1*time.Second)))

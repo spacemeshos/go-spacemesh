@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"

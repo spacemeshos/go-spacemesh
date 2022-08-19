@@ -270,6 +270,7 @@ type App struct {
 	mesh             *mesh.Mesh
 	clock            TickProvider
 	hare             HareService
+	blockGen         *blocks.Generator
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
@@ -456,12 +457,6 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
-	var verifier blockValidityVerifier
-	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
-	}
-
 	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
@@ -481,17 +476,24 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
+	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
 
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
+	var verifier blockValidityVerifier
+	msh, err := mesh.NewMesh(cdb, beaconProtocol, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
+
 	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
+
 	// FIXME latest layer in state is not exactly the latest verified layer
 	// https://github.com/spacemeshos/go-spacemesh/issues/3318
 	verified := msh.LatestLayerInState()
@@ -548,7 +550,7 @@ func (app *App) initServices(ctx context.Context,
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -563,13 +565,16 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	blockGen := blocks.NewGenerator(cdb, app.conState,
+	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
+	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped,
+		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:      layerSize,
 			LayersPerEpoch: layersPerEpoch,
 		}),
+		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(sqlDB, sgn, blockGen, nodeID, patrol, newSyncer, msh, beaconProtocol, fetcherWrapped, hOracle, clock, lg)
+	rabbit := app.HareFactory(sqlDB, sgn, hareOutputCh, nodeID, patrol, newSyncer, beaconProtocol, hOracle, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -597,9 +602,13 @@ func (app *App) initServices(ctx context.Context,
 
 	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
-	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
+	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
-		if coinbaseAddr.Big().Uint64() == 0 {
+		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
+		if err != nil {
+			app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+		}
+		if coinbaseAddr.IsEmpty() {
 			app.log.Panic("invalid coinbase account")
 		}
 	}
@@ -674,19 +683,17 @@ func (app *App) initServices(ctx context.Context,
 func (app *App) HareFactory(
 	sqlDB *sql.Database,
 	sgn hare.Signer,
-	blockGen *blocks.Generator,
+	ch chan hare.LayerOutput,
 	nodeID types.NodeID,
 	patrol *layerpatrol.LayerPatrol,
 	syncer system.SyncStateProvider,
-	msh *mesh.Mesh,
 	beacons system.BeaconGetter,
-	pFetcher system.ProposalFetcher,
 	hOracle hare.Rolacle,
 	clock TickProvider,
 	lg log.Log,
 ) HareService {
 	if app.Config.HARE.SuperHare {
-		hr := turbohare.New(sqlDB, app.Config.HARE, msh, blockGen, clock.Subscribe(), app.addLogger(HareLogger, lg))
+		hr := turbohare.New(sqlDB, app.Config.HARE, ch, clock.Subscribe(), app.addLogger(HareLogger, lg))
 		return hr
 	}
 
@@ -697,11 +704,9 @@ func (app *App) HareFactory(
 		app.host,
 		sgn,
 		nodeID,
-		blockGen,
+		ch,
 		syncer,
-		msh,
 		beacons,
-		pFetcher,
 		hOracle,
 		patrol,
 		uint16(app.Config.LayersPerEpoch),
@@ -716,6 +721,7 @@ func (app *App) startServices(ctx context.Context) error {
 	go app.startSyncer(ctx)
 	app.beaconProtocol.Start(ctx)
 
+	app.blockGen.Start()
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -724,7 +730,10 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 
 	if app.Config.SMESHING.Start {
-		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
+		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
+		if err != nil {
+			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+		}
 		go func() {
 			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 				log.Panic("failed to start smeshing: %v", err)
@@ -852,6 +861,11 @@ func (app *App) stopServices() {
 	if app.hare != nil {
 		app.log.Info("closing hare")
 		app.hare.Close()
+	}
+
+	if app.blockGen != nil {
+		app.log.Info("stopping blockGen")
+		app.blockGen.Stop()
 	}
 
 	if app.layerFetch != nil {

@@ -5,6 +5,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -779,7 +780,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		inTx := res.Transaction
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
-		require.Equal(t, address.Bytes(), inTx.Principal)
+		require.Equal(t, address.String(), inTx.Principal.Address)
 		// Let the test end
 		once.Do(oncebody)
 
@@ -1020,7 +1021,9 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config = &cfg
 	smApp.Config.GenesisTime = genesisTime
 
-	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
+	coinbaseAddressBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
+	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
 
 	smApp.host = host
