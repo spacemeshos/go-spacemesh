@@ -71,6 +71,7 @@ install:
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.45.2
+	go install github.com/spacemeshos/go-scale/scalegen
 .PHONY: install
 
 build: go-spacemesh
@@ -123,6 +124,10 @@ test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 test: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -v -p 1 $(UNIT_TESTS)
 .PHONY: test
+
+generate: get-libs
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
+.PHONY: generate
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
