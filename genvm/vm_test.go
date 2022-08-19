@@ -80,14 +80,10 @@ func (a *multisigAccount) getAddress() core.Address {
 }
 
 func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
-	var agg *sdkmultisig.Aggregator
-	for i := 0; i < a.k; i++ {
+	agg := sdkmultisig.Spend(0, a.pks[0], a.address, to, amount, nonce)
+	for i := 1; i < a.k; i++ {
 		part := sdkmultisig.Spend(uint8(i), a.pks[i], a.address, to, amount, nonce)
-		if agg == nil {
-			agg = part
-		} else {
-			agg.Add(*part.Part(uint8(i)))
-		}
+		agg.Add(*part.Part(uint8(i)))
 	}
 	return agg.Raw()
 }

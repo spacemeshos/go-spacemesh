@@ -1,6 +1,9 @@
 package multisig
 
-import "github.com/spacemeshos/go-spacemesh/genvm/core"
+import (
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+)
 
 //go:generate scalegen
 
@@ -20,17 +23,10 @@ type Part struct {
 }
 
 // SpendArguments ...
-type SpendArguments struct {
-	Destination core.Address
-	Amount      uint64
-}
+type SpendArguments = wallet.SpendArguments
 
 // SpendPayload ...
-type SpendPayload struct {
-	Arguments SpendArguments
-	Nonce     core.Nonce
-	GasPrice  uint64
-}
+type SpendPayload = wallet.SpendPayload
 
 // SpawnPayload ...
 type SpawnPayload struct {

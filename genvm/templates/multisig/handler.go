@@ -107,7 +107,7 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 
 // Init wallet.
 func (h *handler) Init(method uint8, args any, state []byte) (core.Template, error) {
-	if method == 0 {
+	if method == methodSpawn {
 		return &MultiSig{
 			PublicKeys: args.(*SpawnArguments).PublicKeys,
 			k:          h.k,

@@ -21,11 +21,6 @@ const (
 	TotalGasSpend = wallet.TotalGasSpend
 )
 
-var (
-	zero = scale.U8(0)
-	one  = scale.U8(1)
-)
-
 func encode(fields ...scale.Encodable) []byte {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
@@ -50,7 +45,7 @@ func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
 	copy(payload.Arguments.PublicKey[:], signing.Public(pk))
 	principal := core.ComputePrincipal(wallet.TemplateAddress, &payload.Arguments)
 
-	tx := encode(&zero, &principal, &zero, &wallet.TemplateAddress, &payload)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &wallet.TemplateAddress, &payload)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
@@ -73,7 +68,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	payload.Arguments.Amount = amount
 	payload.Nonce = nonce
 
-	tx := encode(&zero, &principal, &one, &payload)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)

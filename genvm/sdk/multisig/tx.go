@@ -14,11 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
-var (
-	zero = scale.U8(0)
-	one  = scale.U8(1)
-)
-
 func encode(fields ...scale.Encodable) []byte {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
@@ -86,7 +81,7 @@ func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, pubs []
 	}
 	principal := core.ComputePrincipal(template, &payload.Arguments)
 
-	tx := encode(&zero, &principal, &zero, &template, &payload)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	aggregator := &Aggregator{payload: tx, parts: map[uint8]multisig.Part{}}
@@ -109,7 +104,7 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 	payload.Arguments.Amount = amount
 	payload.Nonce = nonce
 
-	tx := encode(&zero, &principal, &one, &payload)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	aggregator := &Aggregator{payload: tx, parts: map[uint8]multisig.Part{}}
