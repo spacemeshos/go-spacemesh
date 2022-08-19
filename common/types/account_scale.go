@@ -22,7 +22,7 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	} else {
 		total += n
 	}
-	if n, err := scale.EncodeCompact64(enc, t.Nonce); err != nil {
+	if n, err := scale.EncodeCompact64(enc, t.NextNonce); err != nil {
 		return total, err
 	} else {
 		total += n
@@ -66,7 +66,7 @@ func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		return total, err
 	} else {
 		total += n
-		t.Nonce = field
+		t.NextNonce = field
 	}
 	if field, n, err := scale.DecodeCompact64(dec); err != nil {
 		return total, err

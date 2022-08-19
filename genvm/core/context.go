@@ -105,7 +105,7 @@ func (c *Context) Apply(updater AccountUpdater) error {
 	encoder := scale.NewEncoder(buf)
 	c.Template.EncodeScale(encoder)
 
-	c.Account.Nonce = c.Header.Nonce.Counter
+	c.Account.NextNonce = c.Header.Nonce.Counter + 1
 	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {
 		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
@@ -126,7 +126,7 @@ func (c *Context) Consumed() uint64 {
 
 // Fee computed from consumed gas.
 func (c *Context) Fee() uint64 {
-	return c.consumed * c.Header.GasPrice
+	return c.fee
 }
 
 // Updated list of addresses.

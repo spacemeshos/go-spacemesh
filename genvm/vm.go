@@ -133,7 +133,7 @@ func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	if err != nil {
 		return core.Nonce{}, err
 	}
-	return core.Nonce{Counter: account.NextNonce()}, nil
+	return core.Nonce{Counter: account.NextNonce}, nil
 }
 
 // GetBalance returns balance for an address.
@@ -266,6 +266,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		limit       = v.cfg.GasLimit
 	)
 	for i := range txs {
+		logger := v.logger.WithFields(log.Int("i", i))
 		txCount.Inc()
 
 		t1 := time.Now()
@@ -281,7 +282,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		header, err := req.Parse()
 		if err != nil {
-			v.logger.With().Warning("ineffective transaction. failed to parse",
+			logger.With().Warning("ineffective transaction. failed to parse",
 				tx.GetRaw().ID,
 				log.Err(err),
 			)
@@ -293,7 +294,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		args := req.args
 
 		if limit < ctx.Header.MaxGas {
-			v.logger.With().Warning("ineffective transaction. out of block gas",
+			logger.With().Warning("ineffective transaction. out of block gas",
 				log.Uint64("block gas limit", v.cfg.GasLimit),
 				log.Uint64("current limit", limit),
 				log.Object("header", header),
@@ -307,7 +308,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		// NOTE this part is executed only for transactions that weren't verified
 		// when saved into database by txs module
 		if !tx.Verified() && !req.Verify() {
-			v.logger.With().Warning("ineffective transaction. failed verify",
+			logger.With().Warning("ineffective transaction. failed verify",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -316,8 +317,8 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			continue
 		}
 
-		if ctx.Account.NextNonce() > ctx.Header.Nonce.Counter {
-			v.logger.With().Warning("ineffective transaction. failed nonce check",
+		if ctx.Account.NextNonce > ctx.Header.Nonce.Counter {
+			logger.With().Warning("ineffective transaction. nonce too low",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -327,7 +328,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 
 		t2 := time.Now()
-		v.logger.With().Debug("applying transaction",
+		logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
@@ -337,7 +338,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		rst.Block = lctx.Block
 		err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
 		if err != nil {
-			v.logger.With().Debug("transaction failed",
+			logger.With().Debug("transaction failed",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 				log.Err(err),

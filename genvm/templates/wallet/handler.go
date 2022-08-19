@@ -12,7 +12,7 @@ import (
 
 const (
 	// TotalGasSpawn is consumed from principal in case of successful spawn.
-	TotalGasSpawn = 200
+	TotalGasSpawn = 100
 	// TotalGasSpend is consumed from principal in case of successful spend.
 	TotalGasSpend = 100
 )

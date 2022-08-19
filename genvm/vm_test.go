@@ -377,7 +377,7 @@ type nonce struct {
 }
 
 func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
-	require.Equal(tb, ch.increased, int(current.Nonce-prev.Nonce))
+	require.Equal(tb, ch.increased, int(current.NextNonce-prev.NextNonce))
 	if ch.next != nil {
 		ch.next.verify(tb, prev, current)
 	}
@@ -583,7 +583,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 					},
 					failed: map[int]error{0: core.ErrNoBalance},
 					expected: map[int]change{
-						11: same{},
+						11: nonce{increased: 1},
 					},
 				},
 			},
@@ -598,9 +598,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 						&spawnTx{11},
 						&spendTx{11, 12, 1},
 					},
-					ineffective: []int{3},
+					failed: map[int]error{3: core.ErrNoBalance},
 					expected: map[int]change{
-						11: spawned{template: template},
+						11: spawned{template: template, change: nonce{increased: 2}},
 						12: same{},
 					},
 				},
@@ -628,7 +628,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 			},
 		},
 		{
-			desc: "BlockGasLimitIsNotConsumedByInefective",
+			desc: "BlockGasLimitIsNotConsumedByFailedOrInefective",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -638,7 +638,8 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 						&spendTx{0, 11, 100},
 					},
 					gasLimit:    uint64(spawnGas + spendGas),
-					ineffective: []int{1, 3},
+					failed:      map[int]error{1: core.ErrNoBalance},
+					ineffective: []int{3},
 					expected: map[int]change{
 						0:  spent{amount: 100 + spawnGas + spendGas},
 						10: earned{amount: 100},
@@ -797,7 +798,13 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 					}
 				}
 				for i, rst := range results {
-
+					expected, exists := layer.failed[i]
+					if !exists {
+						require.Equal(t, types.TransactionSuccess.String(), rst.Status.String())
+					} else {
+						require.Equal(t, types.TransactionFailure.String(), rst.Status.String())
+						require.Equal(t, expected.Error(), rst.Message)
+					}
 				}
 				if layer.failed == nil {
 
