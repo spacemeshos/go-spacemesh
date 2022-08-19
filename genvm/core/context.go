@@ -131,8 +131,8 @@ func (c *Context) Fee() uint64 {
 
 // Updated list of addresses.
 func (c *Context) Updated() []types.Address {
-	rst := make([]types.Address, len(c.touched)+1)
+	rst := make([]types.Address, 0, len(c.touched)+1)
 	rst = append(rst, c.Account.Address)
-	copy(rst[1:], c.touched)
+	rst = append(rst, c.touched...)
 	return rst
 }
