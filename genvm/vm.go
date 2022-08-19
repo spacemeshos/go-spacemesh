@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -50,6 +51,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
+	multisig.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}
@@ -413,7 +415,7 @@ func (r *Request) Verify() bool {
 		panic("Verify should be called after successful Parse")
 	}
 	start := time.Now()
-	rst := verify(r.ctx, r.raw.Raw)
+	rst := verify(r.ctx, r.raw.Raw, r.decoder)
 	transactionDurationVerify.Observe(float64(time.Since(start)))
 	return rst
 }
@@ -486,8 +488,8 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, de
 	return &ctx.Header, ctx, args, nil
 }
 
-func verify(ctx *core.Context, raw []byte) bool {
-	return ctx.Template.Verify(ctx, raw)
+func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
+	return ctx.Template.Verify(ctx, raw, dec)
 }
 
 // ApplyContext has information on layer and block id.

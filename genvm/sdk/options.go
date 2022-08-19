@@ -1,5 +1,7 @@
 package sdk
 
+import "github.com/spacemeshos/go-scale"
+
 // Opt modifies Options.
 type Opt func(*Options)
 
@@ -19,3 +21,13 @@ func WithGasPrice(price uint64) Opt {
 		opts.GasPrice = price
 	}
 }
+
+var (
+	// TxVersion is the only version supported at genesis.
+	TxVersion = scale.U8(0)
+
+	// MethodSpawn ...
+	MethodSpawn = scale.U8(0)
+	// MethodSpend ...
+	MethodSpend = scale.U8(1)
+)
