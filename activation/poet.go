@@ -64,6 +64,10 @@ type HTTPPoetClient struct {
 // A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*HTTPPoetClient)(nil)
 
+func defaultPoetClientFunc(target string) PoetProvingServiceClient {
+	return NewHTTPPoetClient(target)
+}
+
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
 func NewHTTPPoetClient(target string) *HTTPPoetClient {
 	return &HTTPPoetClient{
