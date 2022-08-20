@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -215,7 +216,7 @@ func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hndlr atxHandler) *Build
 
 func lastTransmittedAtx(t *testing.T) types.ActivationTx {
 	var signedAtx types.ActivationTx
-	err := types.BytesToInterface(net.lastTransmission, &signedAtx)
+	err := codec.Decode(net.lastTransmission, &signedAtx)
 	require.NoError(t, err)
 	return signedAtx
 }
@@ -549,13 +550,13 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), 0, 100, coinbase, 100, nipost)
 
-	bt, err := types.InterfaceToBytes(act)
+	bt, err := codec.Encode(act)
 	assert.NoError(t, err)
 
 	a, err := types.BytesToAtx(bt)
 	assert.NoError(t, err)
 
-	bt2, err := types.InterfaceToBytes(a)
+	bt2, err := codec.Encode(a)
 	assert.NoError(t, err)
 
 	assert.Equal(t, bt, bt2)
@@ -612,7 +613,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, nipost)
-	atxBytes, err := types.InterfaceToBytes(&atx.InnerActivationTx)
+	atxBytes, err := codec.Encode(&atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
@@ -680,7 +681,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	// TODO(moshababo): encoded atx comparison fail, although decoded atxs are equal.
-	// bts, err := types.InterfaceToBytes(act)
+	// bts, err := codec.Encode(act)
 	// assert.NoError(t, err)
 	// assert.Equal(t, bts, net.lastTransmission)
 

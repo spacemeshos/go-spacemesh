@@ -60,7 +60,7 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
 		lyrID = types.BytesToLayerID(req)
-		ld    layerData
+		ld    LayerData
 		err   error
 	)
 	ld.ProcessedLayer = h.msh.ProcessedLayer()
@@ -95,7 +95,7 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 		return nil, errInternal
 	}
 
-	out, err := codec.Encode(ld)
+	out, err := codec.Encode(&ld)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
 	}

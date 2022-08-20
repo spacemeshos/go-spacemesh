@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -926,7 +927,7 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 }
 
 func signMessage(signer signing.Signer, message interface{}, logger log.Log) []byte {
-	encoded, err := types.InterfaceToBytes(message)
+	encoded, err := codec.Encode(message)
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
@@ -942,7 +943,7 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 		Epoch:  uint32(epoch),
 	}
 
-	b, err := types.InterfaceToBytes(message)
+	b, err := codec.Encode(message)
 	if err != nil {
 		logger.With().Panic("failed to serialize proposal", log.Err(err))
 	}
@@ -950,7 +951,7 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 }
 
 func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, data interface{}) {
-	serialized, err := types.InterfaceToBytes(data)
+	serialized, err := codec.Encode(data)
 	if err != nil {
 		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
 	}
