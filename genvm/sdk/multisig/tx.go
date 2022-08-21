@@ -67,13 +67,14 @@ func (tx *Aggregator) Raw() []byte {
 }
 
 // SelfSpawn returns accumulator for self-spawn transaction.
-func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, pubs []ed25519.PublicKey, opts ...sdk.Opt) *Aggregator {
+func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
 	payload := multisig.SpawnPayload{}
+	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
 	payload.Arguments.PublicKeys = make([]core.PublicKey, len(pubs))
 	for i := range pubs {

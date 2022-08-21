@@ -27,5 +27,6 @@ type SpendPayload struct {
 // SpawnPayload ...
 type SpawnPayload struct {
 	Arguments SpawnArguments
+	Nonce     core.Nonce
 	GasPrice  uint64
 }

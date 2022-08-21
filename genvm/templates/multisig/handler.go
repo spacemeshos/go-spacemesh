@@ -87,6 +87,7 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 		}
 		args = &p.Arguments
 		header.GasPrice = p.GasPrice
+		header.Nonce = p.Nonce
 		header.MaxGas = h.totalGasSpawn
 	case methodSpend:
 		var p SpendPayload
@@ -96,8 +97,7 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 		}
 		args = &p.Arguments
 		header.GasPrice = p.GasPrice
-		header.Nonce.Counter = p.Nonce.Counter
-		header.Nonce.Bitfield = p.Nonce.Bitfield
+		header.Nonce = p.Nonce
 		header.MaxGas = h.totalGasSpend
 	default:
 		return header, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)

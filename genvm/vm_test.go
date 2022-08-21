@@ -48,7 +48,7 @@ func newTester(tb testing.TB) *tester {
 type testAccount interface {
 	getAddress() core.Address
 	spend(to core.Address, amount uint64, nonce core.Nonce) []byte
-	selfSpawn() []byte
+	selfSpawn(nonce core.Nonce) []byte
 }
 
 type singlesigAccount struct {
@@ -64,8 +64,8 @@ func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonc
 	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce)
 }
 
-func (a *singlesigAccount) selfSpawn() []byte {
-	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk))
+func (a *singlesigAccount) selfSpawn(nonce core.Nonce) []byte {
+	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce)
 }
 
 type multisigAccount struct {
@@ -88,14 +88,14 @@ func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce
 	return agg.Raw()
 }
 
-func (a *multisigAccount) selfSpawn() []byte {
+func (a *multisigAccount) selfSpawn(nonce core.Nonce) []byte {
 	var pubs []ed25519.PublicKey
 	for _, pk := range a.pks {
 		pubs = append(pubs, ed25519.PublicKey(signing.Public(signing.PrivateKey(pk))))
 	}
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < a.k; i++ {
-		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs)
+		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs, nonce)
 		if agg == nil {
 			agg = part
 		} else {
@@ -197,8 +197,8 @@ func (t *tester) spawnAll() []types.RawTx {
 }
 
 func (t *tester) selfSpawn(i int) types.RawTx {
-	t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].selfSpawn())
+	nonce := t.nextNonce(i)
+	return types.NewRawTx(t.accounts[i].selfSpawn(nonce))
 }
 
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
@@ -373,13 +373,13 @@ func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
 
 type nonce struct {
 	increased int
-	next      change
+	change    change
 }
 
 func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
 	require.Equal(tb, ch.increased, int(current.NextNonce-prev.NextNonce))
-	if ch.next != nil {
-		ch.next.verify(tb, prev, current)
+	if ch.change != nil {
+		ch.change.verify(tb, prev, current)
 	}
 }
 
@@ -792,6 +792,51 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 						0:  spent{amount: spendGas*2 + 1_000, change: nonce{increased: 1}},
 						11: nonce{increased: 1},
 						12: earned{amount: 1_000},
+					},
+				},
+			},
+		},
+		{
+			desc: "RetrySelfSpawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0},
+						&spendTx{0, 11, uint64(spawnGas) - 1},
+						&spawnTx{11},
+					},
+					failed: map[int]error{2: core.ErrNoBalance},
+					expected: map[int]change{
+						0:  spent{amount: spawnGas - 1 + spawnGas + spendGas},
+						11: nonce{increased: 1},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{0, 11, uint64(spawnGas)},
+						&spawnTx{11},
+					},
+					expected: map[int]change{
+						0:  spent{amount: spawnGas + spendGas},
+						11: spawned{template: template, change: nonce{increased: 1}},
+					},
+				},
+			},
+		},
+		{
+			desc: "SelfSpawnFailed",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0},
+						&spawnTx{0},
+					},
+					failed: map[int]error{1: core.ErrSpawned},
+					expected: map[int]change{
+						0: spawned{
+							template: template,
+							change: nonce{increased: 2,
+								change: spent{amount: 2 * spawnGas}}},
 					},
 				},
 			},
