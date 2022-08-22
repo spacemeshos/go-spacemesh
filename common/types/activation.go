@@ -11,6 +11,7 @@ import (
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -239,7 +240,7 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) InnerBytes() ([]byte, error) {
-	return InterfaceToBytes(&atx.InnerActivationTx)
+	return codec.Encode(&atx.InnerActivationTx)
 }
 
 // MarshalLogObject implements logging interface.
@@ -303,7 +304,7 @@ type PoetProofMessage struct {
 
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
 func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
-	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
+	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)

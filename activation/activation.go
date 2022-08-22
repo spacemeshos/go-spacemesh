@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -433,7 +434,7 @@ func getNIPostKey() []byte {
 }
 
 func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	bts, err := types.InterfaceToBytes(ch)
+	bts, err := codec.Encode(ch)
 	if err != nil {
 		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
@@ -452,12 +453,12 @@ func (b *Builder) loadChallenge() error {
 	}
 
 	if len(bts) > 0 {
-		tp := &types.NIPostChallenge{}
-		if err = types.BytesToInterface(bts, tp); err != nil {
+		var tp types.NIPostChallenge
+		if err = codec.Decode(bts, &tp); err != nil {
 			return fmt.Errorf("parse NIPost challenge: %w", err)
 		}
 
-		b.challenge = tp
+		b.challenge = &tp
 	}
 	return nil
 }
@@ -591,7 +592,7 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	if err := b.SignAtx(atx); err != nil {
 		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
-	buf, err := types.InterfaceToBytes(atx)
+	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}

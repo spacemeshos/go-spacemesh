@@ -43,7 +43,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	ref, err := msg.Ref()
 	require.NoError(t, err)
 
-	proofBytes, err := types.InterfaceToBytes(&msg.PoetProof)
+	proofBytes, err := codec.Encode(&msg.PoetProof)
 	require.NoError(t, err)
 	expectedRef := hash.Sum(proofBytes)
 	require.Equal(t, types.CalcHash32(expectedRef[:]).Bytes(), ref)

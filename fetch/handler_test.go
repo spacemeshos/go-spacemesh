@@ -105,7 +105,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 			out, err := th.handleLayerDataReq(context.TODO(), tc.requested.Bytes())
 			require.NoError(t, err)
-			var got layerData
+			var got LayerData
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			assert.ElementsMatch(t, expected.blts, got.Ballots)

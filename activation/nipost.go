@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -54,7 +55,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 		return
 	} else if len(bts) > 0 {
 		var state BuilderState
-		if err := types.BytesToInterface(bts, &state); err != nil {
+		if err := codec.Decode(bts, &state); err != nil {
 			nb.log.With().Error("cannot load nipost state", log.Err(err))
 		}
 		if state.Challenge == challenge {
@@ -66,7 +67,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 }
 
 func (nb *NIPostBuilder) persist() {
-	if bts, err := types.InterfaceToBytes(nb.state); err != nil {
+	if bts, err := codec.Encode(nb.state); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 		return
 	} else if err := niposts.Add(nb.db, nipostBuildStateKey(), bts); err != nil {

@@ -4,8 +4,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// layerData is the response for a given layer ID.
-type layerData struct {
+//go:generate scalegen
+
+// LayerData is the response for a given layer ID.
+type LayerData struct {
 	// Ballots are the ballots in layer
 	Ballots []types.BallotID
 	// Blocks are the blocks in a layer

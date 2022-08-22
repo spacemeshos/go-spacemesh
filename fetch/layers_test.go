@@ -118,7 +118,7 @@ func generateLayerContent(t *testing.T, processed types.LayerID, hareOutput ...*
 	} else {
 		certified = blockIDs[0]
 	}
-	lb := layerData{
+	lb := LayerData{
 		Ballots: ballotIDs,
 		Blocks:  blockIDs,
 		HareOutput: &types.Certificate{
@@ -128,12 +128,12 @@ func generateLayerContent(t *testing.T, processed types.LayerID, hareOutput ...*
 		Hash:           hash,
 		AggregatedHash: types.RandomHash(),
 	}
-	out, _ := codec.Encode(lb)
+	out, _ := codec.Encode(&lb)
 	return out
 }
 
 func generateEmptyLayer() []byte {
-	lb := layerData{
+	lb := LayerData{
 		Ballots: []types.BallotID{},
 		Blocks:  []types.BlockID{},
 		HareOutput: &types.Certificate{
@@ -143,7 +143,7 @@ func generateEmptyLayer() []byte {
 		Hash:           types.EmptyLayerHash,
 		AggregatedHash: types.RandomHash(),
 	}
-	out, _ := codec.Encode(lb)
+	out, _ := codec.Encode(&lb)
 	return out
 }
 
@@ -358,7 +358,7 @@ func TestPollLayerContent_PeerErrors(t *testing.T) {
 
 func TestPollLayerContent_MissingBlocks(t *testing.T) {
 	requested := types.NewLayerID(20)
-	blks := &layerData{
+	blks := &LayerData{
 		Blocks:         []types.BlockID{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}},
 		ProcessedLayer: requested,
 		HareOutput: &types.Certificate{
@@ -757,7 +757,7 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 						Err:  errUnknown,
 					}
 				} else {
-					data, err := codec.Encode(tids[i])
+					data, err := codec.Encode(&tids[i])
 					require.NoError(t, err)
 					ch <- ftypes.HashDataPromiseResult{
 						Hash: h,
@@ -784,7 +784,7 @@ func TestGetTxs_HandlerError(t *testing.T) {
 	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
 		ch := make(chan ftypes.HashDataPromiseResult, 1)
-		data, err := codec.Encode(tids[i])
+		data, err := codec.Encode(&tids[i])
 		require.NoError(t, err)
 		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
@@ -807,7 +807,7 @@ func TestGetTxs(t *testing.T) {
 	results := make(map[types.Hash32]chan ftypes.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
 		ch := make(chan ftypes.HashDataPromiseResult, 1)
-		data, err := codec.Encode(tids[i])
+		data, err := codec.Encode(&tids[i])
 		require.NoError(t, err)
 		ch <- ftypes.HashDataPromiseResult{
 			Hash: h,
@@ -902,7 +902,7 @@ func TestGetPoetProof(t *testing.T) {
 	h := types.RandomHash()
 
 	ch := make(chan ftypes.HashDataPromiseResult, 1)
-	data, err := codec.Encode(proof)
+	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
 	ch <- ftypes.HashDataPromiseResult{
 		Hash: h,
