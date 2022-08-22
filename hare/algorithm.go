@@ -79,7 +79,7 @@ type State struct {
 	k           uint32       // the round counter (k%4 is the round number); it should be first in struct for alignment because atomics are used
 	ki          uint32       // indicates when S was first committed upon
 	s           *Set         // the set of values
-	certificate *certificate // the certificate
+	certificate *Certificate // the certificate
 }
 
 // Msg is the wrapper of the protocol's message.
@@ -695,7 +695,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 }
 
 // init a new message builder with the current state (s, k, ki) for this instance.
-func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
+func (proc *consensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.getK()).SetKi(proc.ki).SetValues(s)
 	proof, err := proc.oracle.Proof(context.TODO(), proc.instanceID, proc.getK())

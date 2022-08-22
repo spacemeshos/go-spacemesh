@@ -3,7 +3,7 @@ package hare
 type commitTrackerProvider interface {
 	OnCommit(msg *Msg)
 	HasEnoughCommits() bool
-	BuildCertificate() *certificate
+	BuildCertificate() *Certificate
 	CommitCount() int
 }
 
@@ -67,14 +67,14 @@ func (ct *commitTracker) CommitCount() int {
 
 // BuildCertificate returns a certificate if there are enough commits, nil otherwise
 // Returns the certificate if has enough commit Messages, nil otherwise.
-func (ct *commitTracker) BuildCertificate() *certificate {
+func (ct *commitTracker) BuildCertificate() *Certificate {
 	if !ct.HasEnoughCommits() {
 		return nil
 	}
 
-	c := &certificate{}
+	c := &Certificate{}
 	c.Values = ct.proposedSet.ToSlice()
-	c.AggMsgs = &aggregatedMessages{}
+	c.AggMsgs = &AggregatedMessages{}
 	c.AggMsgs.Messages = ct.commits // just enough to fit eligibility threshold
 
 	// optimize msg size by setting Values to nil
