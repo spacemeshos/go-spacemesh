@@ -149,13 +149,6 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 //   - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error {
 	events.ReportNewActivation(atx)
-	pub, err := ExtractPublicKey(atx)
-	if err != nil {
-		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
-	}
-	if !bytes.Equal(atx.NodeID().ToBytes(), pub.Bytes()) {
-		return fmt.Errorf("node ids don't match")
-	}
 
 	if atx.PositioningATX == *types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
@@ -212,7 +205,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		// as expected from the initial Post.
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
-		if err := h.nipostValidator.ValidatePost(pub.Bytes(), atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
+		if err := h.nipostValidator.ValidatePost(atx.NodeID().ToBytes(), atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
 			return fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
