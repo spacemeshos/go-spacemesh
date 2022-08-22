@@ -2,7 +2,8 @@ package hare
 
 import (
 	"encoding/binary"
-	"hash/fnv"
+
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 // notifyTracker tracks notify messages.
@@ -49,20 +50,20 @@ func (nt *notifyTracker) NotificationsCount(s *Set) int {
 
 // calculates a unique id for the provided k and set.
 func calcID(k uint32, set *Set) uint32 {
-	hash := fnv.New32()
+	h := hash.New()
 
 	// write K
 	buff := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buff, k) // K>=0 because this not pre-round
-	hash.Write(buff)
+	h.Write(buff)
 
 	// TODO: is this hash enough for this usage?
 	// write set ObjectID
 	buff = make([]byte, 4)
 	binary.LittleEndian.PutUint32(buff, set.ID())
-	hash.Write(buff)
+	h.Write(buff)
 
-	return hash.Sum32()
+	return binary.LittleEndian.Uint32(h.Sum(make([]byte, h.Size())))
 }
 
 // tracks certificates.

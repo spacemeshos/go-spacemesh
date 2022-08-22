@@ -2,13 +2,14 @@ package hare
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
-	"hash/fnv"
 	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 // MessageType is a message type.
@@ -203,13 +204,14 @@ func (s *Set) updateID() {
 	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
 
 	// calc
-	h := fnv.New32()
+	h := hash.New()
 	for i := 0; i < len(keys); i++ {
 		h.Write(keys[i].Bytes())
 	}
 
 	// update
-	s.id = h.Sum32()
+	idBuf := make([]byte, h.Size())
+	s.id = binary.LittleEndian.Uint32(h.Sum(idBuf))
 	s.isIDValid = true
 }
 
