@@ -36,6 +36,12 @@ var (
 
 const defaultPoetRetryInterval = 5 * time.Second
 
+type poetNumberOfTickProvider struct{}
+
+func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
+	return 1
+}
+
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
