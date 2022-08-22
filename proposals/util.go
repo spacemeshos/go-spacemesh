@@ -39,6 +39,7 @@ func GetNumEligibleSlots(weight, totalWeight uint64, committeeSize uint32, layer
 
 //go:generate scalegen -types VrfMessage
 
+// VrfMessage is a verification message.
 type VrfMessage struct {
 	Beacon  types.Beacon
 	Epoch   types.EpochID

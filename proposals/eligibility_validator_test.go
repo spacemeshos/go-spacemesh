@@ -307,7 +307,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := signing.NewEdSignerFromRand(rand.New(rand.NewSource(2222)))
 	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
-	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{7, 7, 7})
+	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{10})
 	rb := blts[0]
 	require.Len(t, rb.EligibilityProofs, 2)
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
