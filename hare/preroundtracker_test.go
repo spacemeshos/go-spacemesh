@@ -59,20 +59,20 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(context.TODO(), m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
-	g := tracker.preRound[verifier.PublicKey().String()]
+	g, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, s.Equals(g))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(verifier, nSet, nil)
 	m2.InnerMsg.EligibilityCount = 2
 	tracker.OnPreRound(context.TODO(), m2)
-	h := tracker.preRound[verifier.PublicKey().String()]
+	h, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
 
 	interSet := NewSetFromValues(value1, value2, value5)
 	m3 := BuildPreRoundMsg(verifier, interSet, nil)
 	tracker.OnPreRound(context.TODO(), m3)
-	h = tracker.preRound[verifier.PublicKey().String()]
+	h, _ = tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value2))
