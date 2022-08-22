@@ -330,15 +330,6 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
-
-	// NodeID and extracted pubkey don't match
-	atx = newActivationTx(idx2, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 1, &types.NIPost{})
-	atx.InitialPost = initialPost
-	atx.InitialPostIndices = append([]byte{}, initialPost.Indices...)
-	err = SignAtx(signer, atx)
-	assert.NoError(t, err)
-	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "node ids don't match")
 }
 
 func TestHandler_ValidateAndInsertSorted(t *testing.T) {
