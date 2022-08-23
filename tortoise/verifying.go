@@ -93,7 +93,7 @@ func (v *verifying) onBlock(block *types.Block) {
 	v.layerReferenceHeight[block.LayerIndex] = current
 }
 
-func (v *verifying) getReferenceHeight(lid types.LayerID) uint64 {
+func (v *verifying) getLayerReferenceHeight(lid types.LayerID) uint64 {
 	return v.layerReferenceHeight[lid]
 }
 
@@ -170,7 +170,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
-	if sign(margin.Cmp(v.globalThreshold)) == abstain {
+	if sign(margin.Cmp(v.globalThreshold)) == neutral {
 		logger.With().Debug("doesn't cross global threshold")
 		return false
 	}
@@ -179,10 +179,10 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		v.blocks[lid],
 		v.validity,
 		func(block blockInfo) sign {
-			decision, _ := getLocalVote(v.commonState, v.Config, lid, block.id)
-			if block.height > v.getReferenceHeight(lid) {
-				return abstain
+			if block.height > v.getLayerReferenceHeight(lid) {
+				return neutral
 			}
+			decision, _ := getLocalVote(v.commonState, v.Config, lid, block.id)
 			return decision
 		},
 	) {
@@ -201,7 +201,7 @@ func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots 
 			continue
 		}
 		// get height of the max votable block
-		if refheight := v.getReferenceHeight(lid.Sub(1)); refheight > ballot.height {
+		if refheight := v.getLayerReferenceHeight(lid.Sub(1)); refheight > ballot.height {
 			logger.With().Debug("reference height is higher than the ballot height",
 				ballot.id,
 				log.Uint64("reference height", refheight),

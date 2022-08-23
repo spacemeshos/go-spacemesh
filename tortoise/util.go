@@ -18,6 +18,8 @@ const (
 	support sign = 1
 	against sign = -1
 	abstain sign = 0
+
+	neutral = abstain
 )
 
 type sign int8

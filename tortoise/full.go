@@ -28,6 +28,7 @@ type full struct {
 	abstain map[types.BallotID]map[types.LayerID]struct{}
 	base    map[types.BallotID]types.BallotID
 
+	// weight of the ballots that vote that a particular layer is empty
 	empty map[types.LayerID]util.Weight
 	// counted weights up to this layer.
 	//
@@ -182,7 +183,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		f.validity,
 		func(block blockInfo) sign {
 			decision := sign(block.weight.Cmp(f.globalThreshold))
-			if decision == abstain && isEmpty {
+			if decision == neutral && isEmpty {
 				return against
 			}
 			return decision
