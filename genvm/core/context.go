@@ -26,7 +26,7 @@ type Context struct {
 	consumed uint64
 	// fee is in coins units
 	fee uint64
-	// transfered is an amount transfered to other accounts
+	// an amount transfrered to other accounts
 	transferred uint64
 
 	// TODO all templates for genesis will support transfers to only one account.
