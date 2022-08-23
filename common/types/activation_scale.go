@@ -295,7 +295,7 @@ func (t *PoetProofMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeString(enc, t.RoundID)
+		n, err := scale.EncodeString(enc, string(t.RoundID))
 		if err != nil {
 			return total, err
 		}
@@ -333,7 +333,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-		t.RoundID = field
+		t.RoundID = string(field)
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -348,7 +348,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeString(enc, t.ID)
+		n, err := scale.EncodeString(enc, string(t.ID))
 		if err != nil {
 			return total, err
 		}
@@ -364,7 +364,7 @@ func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.ID = field
+		t.ID = string(field)
 	}
 	return total, nil
 }

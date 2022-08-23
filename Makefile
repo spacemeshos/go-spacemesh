@@ -72,6 +72,7 @@ install:
 	GO111MODULE=off go get golang.org/x/lint/golint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
 	go install github.com/spacemeshos/go-scale/scalegen
+	go install github.com/golang/mock/mockgen
 .PHONY: install
 
 build: go-spacemesh

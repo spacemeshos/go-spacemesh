@@ -32,7 +32,7 @@ func (t *HandshakeMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *HandshakeAck) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeString(enc, t.Error)
+		n, err := scale.EncodeString(enc, string(t.Error))
 		if err != nil {
 			return total, err
 		}
@@ -48,7 +48,7 @@ func (t *HandshakeAck) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.Error = field
+		t.Error = string(field)
 	}
 	return total, nil
 }
