@@ -835,8 +835,11 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice, spawnGas, 
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change: nonce{increased: 2,
-								change: spent{amount: 2 * spawnGas}}},
+							change: nonce{
+								increased: 2,
+								change:    spent{amount: 2 * spawnGas},
+							},
+						},
 					},
 				},
 			},
