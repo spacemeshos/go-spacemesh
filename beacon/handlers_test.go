@@ -285,11 +285,8 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 	signer := signing.NewEdSigner()
 	vrfSigner := signer.VRFSigner()
 
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
-	msgBytes, err := codec.Encode(msg)
-	require.NoError(t, err)
-
-	got := tpd.handleProposal(context.TODO(), "peerID", msgBytes[1:], time.Now())
+	msg := []byte("guaranteed to be  malformed")
+	got := tpd.handleProposal(context.TODO(), "peerID", msg, time.Now())
 	require.ErrorIs(t, got, errMalformedMessage)
 
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.PublicKey(), false)
