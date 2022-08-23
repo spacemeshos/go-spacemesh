@@ -105,6 +105,7 @@ func (builder *MessageBuilder) Build() *Msg {
 	return builder.msg
 }
 
+// SetCertificate sets certificate.
 func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *MessageBuilder {
 	builder.inner.Cert = certificate
 	return builder
@@ -124,41 +125,49 @@ func (builder *MessageBuilder) SetPubKey(pub *signing.PublicKey) *MessageBuilder
 	return builder
 }
 
+// SetType sets message type.
 func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
 	builder.inner.Type = msgType
 	return builder
 }
 
+// SetInstanceID sets instance ID.
 func (builder *MessageBuilder) SetInstanceID(id types.LayerID) *MessageBuilder {
 	builder.inner.InstanceID = id
 	return builder
 }
 
+// SetRoundCounter sets round counter.
 func (builder *MessageBuilder) SetRoundCounter(k uint32) *MessageBuilder {
 	builder.inner.K = k
 	return builder
 }
 
+// SetKi sets ki.
 func (builder *MessageBuilder) SetKi(ki uint32) *MessageBuilder {
 	builder.inner.Ki = ki
 	return builder
 }
 
+// SetValues sets values.
 func (builder *MessageBuilder) SetValues(set *Set) *MessageBuilder {
 	builder.inner.Values = set.ToSlice()
 	return builder
 }
 
+// SetRoleProof sets role proof.
 func (builder *MessageBuilder) SetRoleProof(sig []byte) *MessageBuilder {
 	builder.inner.RoleProof = sig
 	return builder
 }
 
+// SetEligibilityCount sets eligibility count.
 func (builder *MessageBuilder) SetEligibilityCount(eligibilityCount uint16) *MessageBuilder {
 	builder.inner.EligibilityCount = eligibilityCount
 	return builder
 }
 
+// SetSVP sets svp.
 func (builder *MessageBuilder) SetSVP(svp *AggregatedMessages) *MessageBuilder {
 	builder.inner.Svp = svp
 	return builder

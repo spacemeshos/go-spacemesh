@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 )
 
+// MessageType is a message type.
 type MessageType byte
 
 // declare all known message types.
