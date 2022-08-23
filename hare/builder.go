@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate scalegen
+//go:generate scalegen -types Message,Certificate,AggregatedMessages,InnerMessage
 
 // Message is the tuple of a message and its corresponding signature.
 type Message struct {
@@ -84,35 +84,35 @@ func (im *InnerMessage) String() string {
 	return fmt.Sprintf("Type: %v InstanceID: %v K: %v Ki: %v", im.Type, im.InstanceID, im.K, im.Ki)
 }
 
-// MessageBuilder is the impl of the builder DP.
+// messageBuilder is the impl of the builder DP.
 // It allows the user to set the different fields of the builder and eventually Build the message.
-type MessageBuilder struct {
+type messageBuilder struct {
 	msg   *Msg
 	inner *InnerMessage
 }
 
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
-func newMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&Msg{Message: Message{}, PubKey: nil}, &InnerMessage{}}
+func newMessageBuilder() *messageBuilder {
+	m := &messageBuilder{&Msg{Message: Message{}, PubKey: nil}, &InnerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m
 }
 
 // Build returns the protocol message as type Msg.
-func (builder *MessageBuilder) Build() *Msg {
+func (builder *messageBuilder) Build() *Msg {
 	return builder.msg
 }
 
 // SetCertificate sets certificate.
-func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *MessageBuilder {
+func (builder *messageBuilder) SetCertificate(certificate *Certificate) *messageBuilder {
 	builder.inner.Cert = certificate
 	return builder
 }
 
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
-func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
+func (builder *messageBuilder) Sign(signing Signer) *messageBuilder {
 	builder.msg.Sig = signing.Sign(builder.inner.Bytes())
 
 	return builder
@@ -120,55 +120,55 @@ func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
 
 // SetPubKey sets the public key of the message.
 // Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
-func (builder *MessageBuilder) SetPubKey(pub *signing.PublicKey) *MessageBuilder {
+func (builder *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder {
 	builder.msg.PubKey = pub
 	return builder
 }
 
 // SetType sets message type.
-func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
+func (builder *messageBuilder) SetType(msgType MessageType) *messageBuilder {
 	builder.inner.Type = msgType
 	return builder
 }
 
 // SetInstanceID sets instance ID.
-func (builder *MessageBuilder) SetInstanceID(id types.LayerID) *MessageBuilder {
+func (builder *messageBuilder) SetInstanceID(id types.LayerID) *messageBuilder {
 	builder.inner.InstanceID = id
 	return builder
 }
 
 // SetRoundCounter sets round counter.
-func (builder *MessageBuilder) SetRoundCounter(k uint32) *MessageBuilder {
+func (builder *messageBuilder) SetRoundCounter(k uint32) *messageBuilder {
 	builder.inner.K = k
 	return builder
 }
 
 // SetKi sets ki.
-func (builder *MessageBuilder) SetKi(ki uint32) *MessageBuilder {
+func (builder *messageBuilder) SetKi(ki uint32) *messageBuilder {
 	builder.inner.Ki = ki
 	return builder
 }
 
 // SetValues sets values.
-func (builder *MessageBuilder) SetValues(set *Set) *MessageBuilder {
+func (builder *messageBuilder) SetValues(set *Set) *messageBuilder {
 	builder.inner.Values = set.ToSlice()
 	return builder
 }
 
 // SetRoleProof sets role proof.
-func (builder *MessageBuilder) SetRoleProof(sig []byte) *MessageBuilder {
+func (builder *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
 	builder.inner.RoleProof = sig
 	return builder
 }
 
 // SetEligibilityCount sets eligibility count.
-func (builder *MessageBuilder) SetEligibilityCount(eligibilityCount uint16) *MessageBuilder {
+func (builder *messageBuilder) SetEligibilityCount(eligibilityCount uint16) *messageBuilder {
 	builder.inner.EligibilityCount = eligibilityCount
 	return builder
 }
 
 // SetSVP sets svp.
-func (builder *MessageBuilder) SetSVP(svp *AggregatedMessages) *MessageBuilder {
+func (builder *messageBuilder) SetSVP(svp *AggregatedMessages) *messageBuilder {
 	builder.inner.Svp = svp
 	return builder
 }

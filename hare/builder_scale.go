@@ -248,11 +248,3 @@ func (t *InnerMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	}
 	return total, nil
 }
-
-func (t *MessageBuilder) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	return total, nil
-}
-
-func (t *MessageBuilder) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	return total, nil
-}

@@ -695,7 +695,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 }
 
 // init a new message builder with the current state (s, k, ki) for this instance.
-func (proc *consensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error) {
+func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.getK()).SetKi(proc.ki).SetValues(s)
 	proof, err := proc.oracle.Proof(context.TODO(), proc.instanceID, proc.getK())
