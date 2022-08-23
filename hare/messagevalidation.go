@@ -305,7 +305,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
 		// check if exist in cache of valid messages
-		if pub := v.validMsgsTracker.PublicKey(innerMsg); pub != nil {
+		if pub := v.validMsgsTracker.PublicKey(&innerMsg); pub != nil {
 			// validate unique sender
 			if _, exist := senders[pub.String()]; exist { // pub already exist
 				return errDupSender

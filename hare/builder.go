@@ -20,9 +20,9 @@ type Message struct {
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
 // It returns an error if unmarshal of the provided byte slice failed.
-func MessageFromBuffer(buf []byte) (*Message, error) {
-	msg := &Message{}
-	if err := codec.Decode(buf, msg); err != nil {
+func MessageFromBuffer(buf []byte) (Message, error) {
+	msg := Message{}
+	if err := codec.Decode(buf, &msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
 
@@ -52,7 +52,7 @@ type Certificate struct {
 
 // AggregatedMessages is a collection of messages.
 type AggregatedMessages struct {
-	Messages []*Message
+	Messages []Message
 }
 
 // InnerMessage is the actual set of fields that describe a message in the Hare protocol.
@@ -78,6 +78,9 @@ func (im *InnerMessage) Bytes() []byte {
 }
 
 func (im *InnerMessage) String() string {
+	if im == nil {
+		return ""
+	}
 	return fmt.Sprintf("Type: %v InstanceID: %v K: %v Ki: %v", im.Type, im.InstanceID, im.K, im.Ki)
 }
 
@@ -91,7 +94,7 @@ type MessageBuilder struct {
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&Msg{Message: &Message{}, PubKey: nil}, &InnerMessage{}}
+	m := &MessageBuilder{&Msg{Message: Message{}, PubKey: nil}, &InnerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m

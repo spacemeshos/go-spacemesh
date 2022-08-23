@@ -119,7 +119,7 @@ type mockCommitTracker struct {
 	countHasEnoughCommits int
 	countBuildCertificate int
 	hasEnoughCommits      bool
-	certificate           *certificate
+	certificate           *Certificate
 }
 
 func (mct *mockCommitTracker) CommitCount() int {
@@ -135,12 +135,12 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 	return mct.hasEnoughCommits
 }
 
-func (mct *mockCommitTracker) BuildCertificate() *certificate {
+func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
 }
 
-func buildMessage(msg *Message) *Msg {
+func buildMessage(msg Message) *Msg {
 	return &Msg{Message: msg, PubKey: nil}
 }
 
@@ -530,7 +530,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	proc.advanceToNextRound(context.TODO())
-	proc.onEarlyMessage(context.TODO(), buildMessage(nil))
+	proc.onEarlyMessage(context.TODO(), buildMessage(Message{}))
 	r.Len(proc.pending, 0)
 	proc.onEarlyMessage(context.TODO(), m)
 	r.Len(proc.pending, 1)
@@ -722,7 +722,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	mct.certificate = &certificate{}
+	mct.certificate = &Certificate{}
 	mpt.proposedSet = nil
 	proc.s = NewDefaultEmptySet()
 	proc.beginNotifyRound(context.TODO())
