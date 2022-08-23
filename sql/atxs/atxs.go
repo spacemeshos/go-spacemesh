@@ -24,9 +24,8 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 		tickCount := uint64(stmt.ColumnInt64(2))
 		v.SetID(&id)
 		v.Verify(baseTickHeight, tickCount)
-		buf := make([]byte, len(types.NodeID{}))
-		stmt.ColumnBytes(3, buf)
-		nodeID := types.BytesToNodeID(buf)
+		nodeID := types.NodeID{}
+		stmt.ColumnBytes(3, nodeID[:])
 		v.SetNodeID(&nodeID)
 		atx, err = &v, nil
 		return true
