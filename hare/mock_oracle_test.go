@@ -62,7 +62,7 @@ func TestMockHashOracle_Concurrency(t *testing.T) {
 func genSig() []byte {
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
-	sig := make([]byte, 4, 4)
+	sig := make([]byte, 4)
 	binary.LittleEndian.PutUint32(sig, r1.Uint32())
 	return sig[:]
 }
