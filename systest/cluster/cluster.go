@@ -214,6 +214,9 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	c.smeshers = len(clients)
 
 	c.poets, err = discoverNodes(cctx, poetSvc, Poet)
+	if err != nil {
+		return err
+	}
 	for _, poet := range c.poets {
 		cctx.Log.Debugw("discovered existing poets", "name", poet.Name)
 	}

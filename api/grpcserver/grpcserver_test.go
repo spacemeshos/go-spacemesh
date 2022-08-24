@@ -1,6 +1,6 @@
 package grpcserver
 
-//lint:file-ignore SA1019 hide deprecated protobuf version error
+//nolint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"

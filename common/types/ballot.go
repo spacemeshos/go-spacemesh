@@ -77,34 +77,45 @@ type InnerBallot struct {
 // - select a Ballot in the past as a base Ballot
 // - calculate the opinion difference on history between the smesher and the base Ballot
 // - encode the opinion difference in 3 list:
-//	 - ForDiff
-//	   contains blocks we support while the base ballot did not support (i.e. voted against)
-//	   for blocks we support in layers later than the base ballot, we also add them to this list
+//   - ForDiff
+//     contains blocks we support while the base ballot did not support (i.e. voted against)
+//     for blocks we support in layers later than the base ballot, we also add them to this list
 //   - AgainstDiff
 //     contains blocks we vote against while the base ballot explicitly supported
-//	 - NeutralDiff
-//	   contains layers we vote neutral while the base ballot explicitly supported or voted against
+//   - NeutralDiff
+//     contains layers we vote neutral while the base ballot explicitly supported or voted against
 //
 // example:
 // layer | unified content block
 // -----------------------------------------------------------------------------------------------
-//   N   | UCB_A (genesis)
+//
+//	N   | UCB_A (genesis)
+//
 // -----------------------------------------------------------------------------------------------
-//  N+1  | UCB_B base:UCB_A, for:[UCB_A], against:[], neutral:[]
+//
+//	N+1  | UCB_B base:UCB_A, for:[UCB_A], against:[], neutral:[]
+//
 // -----------------------------------------------------------------------------------------------
-//  N+2  | UCB_C base:UCB_B, for:[UCB_B], against:[], neutral:[]
+//
+//	N+2  | UCB_C base:UCB_B, for:[UCB_B], against:[], neutral:[]
+//
 // -----------------------------------------------------------------------------------------------
-//  (hare hasn't terminated for N+2)
-//  N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[N+2]
+//
+//	(hare hasn't terminated for N+2)
+//	N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[N+2]
+//
 // -----------------------------------------------------------------------------------------------
-//  (hare succeeded for N+2 but failed for N+3)
-//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
+//
+//	(hare succeeded for N+2 but failed for N+3)
+//	N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
+//
 // -----------------------------------------------------------------------------------------------
 // NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
 // there's no need to explicitly add neutral votes for more recent layers.
 //
 // TODO: maybe collapse Support and Against into a single list.
-//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
+//
+//	see https://github.com/spacemeshos/go-spacemesh/issues/2369.
 type Votes struct {
 	// Base ballot.
 	Base BallotID

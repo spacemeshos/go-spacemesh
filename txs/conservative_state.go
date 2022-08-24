@@ -88,14 +88,14 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 
 // SelectBlockTXs combined the transactions in the proposals and put them in a stable order.
 // the steps are:
-// 0. do optimistic filtering if the proposals agree on the mesh hash and state root
-//    this mean the following transactions will be filtered out. transactions that
-//    - fail nonce check
-//    - fail balance check
-//    - are already applied in previous layer
-//    if the proposals don't agree on the mesh hash and state root, we keep all transactions
-// 1. put the output of step 0 in a stable order
-// 2. pick the transactions in step 1 until the gas limit runs out.
+//  0. do optimistic filtering if the proposals agree on the mesh hash and state root
+//     this mean the following transactions will be filtered out. transactions that
+//     - fail nonce check
+//     - fail balance check
+//     - are already applied in previous layer
+//     if the proposals don't agree on the mesh hash and state root, we keep all transactions
+//  1. put the output of step 0 in a stable order
+//  2. pick the transactions in step 1 until the gas limit runs out.
 func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
 	myHash, err := cs.GetMeshHash(lid.Sub(1))
 	if err != nil {

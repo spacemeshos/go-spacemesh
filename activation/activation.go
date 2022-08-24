@@ -315,7 +315,7 @@ func (b *Builder) loop(ctx context.Context) {
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CAS(client, nil)
+			b.pendingPoetClient.CompareAndSwap(client, nil)
 		}
 
 		if err := b.PublishActivationTx(ctx); err != nil {
