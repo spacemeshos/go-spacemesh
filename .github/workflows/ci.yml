@@ -33,7 +33,7 @@ jobs:
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: set up go
         uses: actions/setup-go@v2
         with:
@@ -74,7 +74,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: set up go
         uses: actions/setup-go@v2
         with:
@@ -96,7 +96,7 @@ jobs:
       - name: disable TCP/UDP offload
         run: sudo ethtool -K eth0 tx off rx off
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: set up go
         uses: actions/setup-go@v2
         with:
@@ -151,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: push to dockerhub
         run: make dockerpush
 
@@ -166,7 +166,7 @@ jobs:
     timeout-minutes: 50
     concurrency: cloud-limits
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
