@@ -11,15 +11,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 )
 
-type messageType byte
+// MessageType is a message type.
+type MessageType byte
 
 // declare all known message types.
 const (
-	status   messageType = 0
-	proposal messageType = 1
-	commit   messageType = 2
-	notify   messageType = 3
-	pre      messageType = 10
+	status   MessageType = 0
+	proposal MessageType = 1
+	commit   MessageType = 2
+	notify   MessageType = 3
+	pre      MessageType = 10
 )
 
 const (
@@ -32,7 +33,7 @@ const (
 
 const defaultSetSize = 200
 
-func (mType messageType) String() string {
+func (mType MessageType) String() string {
 	switch mType {
 	case status:
 		return "Status"
