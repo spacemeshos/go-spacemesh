@@ -7,10 +7,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -137,6 +139,8 @@ func TestReferenceHeight(t *testing.T) {
 				header.Verify(0, uint64(height))
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
+				activation.SignAtx(signing.NewEdSigner(), atx)
+				require.NoError(t, atx.CalcAndSetNodeID())
 				require.NoError(t, atxs.Add(cdb, atx, time.Time{}))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
