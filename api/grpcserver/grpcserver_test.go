@@ -1,6 +1,6 @@
 package grpcserver
 
-//nolint:file-ignore SA1019 hide deprecated protobuf version error
+//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -2028,16 +2028,16 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
 				continue
 			}
-			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
+			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
 				continue
 			}
-			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
+			if !bytes.Equal(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) {
 				continue
 			}
 			if a.NumUnits != uint32(globalAtx.NumUnits) {

@@ -153,7 +153,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
-	if bytes.Compare(atx.NodeID[:], pub.Bytes()) != 0 {
+	if !bytes.Equal(atx.NodeID[:], pub.Bytes()) {
 		return fmt.Errorf("node ids don't match")
 	}
 
@@ -335,9 +335,9 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) p
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData) == true:
+	case errors.Is(err, errMalformedData):
 		return pubsub.ValidationReject
-	case errors.Is(err, errKnownAtx) == true:
+	case errors.Is(err, errKnownAtx):
 		return pubsub.ValidationIgnore
 	default:
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip", log.Err(err))

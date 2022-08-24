@@ -207,7 +207,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		}
 
 		nb.log.With().Info("finished post execution",
-			log.Duration("duration", time.Now().Sub(startTime)))
+			log.Duration("duration", time.Since(startTime)))
 
 		nipost.Post = proof
 		nipost.PostMetadata = proofMetadata
