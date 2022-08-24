@@ -932,6 +932,7 @@ func signMessage(signer signing.Signer, message interface{}, logger log.Log) []b
 
 //go:generate scalegen -types BuildProposalMessage
 
+// BuildProposalMessage is a message for buildProposal below.
 type BuildProposalMessage struct {
 	Prefix string
 	Epoch  uint32
