@@ -357,7 +357,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 
 	defer func(startTime time.Time) {
 		logger.With().Debug("svp validation duration",
-			log.String("duration", time.Now().Sub(startTime).String()))
+			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
 	proposalIter := iterationFromCounter(msg.InnerMsg.K)
 	validateSameIteration := func(m *Msg) bool {
@@ -415,7 +415,7 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 
 	defer func(startTime time.Time) {
 		logger.With().Debug("certificate validation duration",
-			log.String("duration", time.Now().Sub(startTime).String()))
+			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
 
 	if cert == nil {

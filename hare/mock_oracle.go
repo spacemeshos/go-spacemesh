@@ -85,8 +85,6 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	}
 
 	if committeeSize > numClients {
-		/*log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
-		committeeSize, numClients)*/
 		return 0
 	}
 

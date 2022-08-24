@@ -146,7 +146,6 @@ func buildMessage(msg Message) *Msg {
 
 type testBroker struct {
 	*Broker
-	ctrl       *gomock.Controller
 	mockStateQ *mocks.MockstateQuerier
 	mockSyncS  *smocks.MockSyncStateProvider
 }
@@ -654,7 +653,6 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 
 type mockNet struct {
 	callBroadcast int
-	callRegister  int
 	err           error
 }
 
