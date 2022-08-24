@@ -4,8 +4,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
 func TestLayerIDWraparound(t *testing.T) {
