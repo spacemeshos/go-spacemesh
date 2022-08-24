@@ -36,6 +36,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -1636,7 +1637,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
-	serializedTx, err := types.InterfaceToBytes(globalTx)
+	serializedTx, err := codec.Encode(globalTx)
 	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)

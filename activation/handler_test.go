@@ -631,7 +631,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 func TestHandler_HandleAtxNilNipst(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
-	buf, err := types.InterfaceToBytes(atx)
+	buf, err := codec.Encode(atx)
 	require.NoError(t, err)
 	require.Error(t, atxHdlr.HandleAtxData(context.TODO(), buf))
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
 func TestLayerIDWraparound(t *testing.T) {
@@ -69,10 +71,10 @@ func TestLayerIDString(t *testing.T) {
 
 func TestLayerIDBinaryEncoding(t *testing.T) {
 	lid := NewLayerID(100)
-	buf, err := InterfaceToBytes(&lid)
+	buf, err := codec.Encode(&lid)
 	require.NoError(t, err)
 	decoded := LayerID{}
-	require.NoError(t, BytesToInterface(buf, &decoded))
+	require.NoError(t, codec.Decode(buf, &decoded))
 	require.Equal(t, lid, decoded)
 }
 

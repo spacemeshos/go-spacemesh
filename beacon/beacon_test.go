@@ -715,7 +715,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("000000024250000012345678")),
+			result: string(util.Hex2Bytes("084250e259d148")),
 		},
 	}
 
@@ -781,12 +781,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000001")),
+			result: vrfSigner.Sign(util.Hex2Bytes("08425004")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000002")),
+			result: vrfSigner.Sign(util.Hex2Bytes("08425008")),
 		},
 	}
 
