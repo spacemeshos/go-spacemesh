@@ -236,11 +236,11 @@ func TestStepVerifyConsistency(t *testing.T) {
 					return err
 				}
 				layers[i] = layer
-				if bytes.Compare(layer.Hash, reference.Hash) != 0 {
+				if !bytes.Equal(layer.Hash, reference.Hash) {
 					return fmt.Errorf("hash doesn't match reference %s in layer %d: %x != %x",
 						node.Name, reference.Number.Number, layer.Hash, reference.Hash)
 				}
-				if bytes.Compare(layer.RootStateHash, reference.RootStateHash) != 0 {
+				if !bytes.Equal(layer.RootStateHash, reference.RootStateHash) {
 					return fmt.Errorf("state hash doesn't match reference %s in layer %d: %x != %x",
 						node.Name, reference.Number.Number, layer.RootStateHash, reference.RootStateHash)
 				}

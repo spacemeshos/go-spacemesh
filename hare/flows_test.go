@@ -34,7 +34,6 @@ type HareWrapper struct {
 	hare        []*Hare
 	initialSets []*Set // all initial sets
 	outputs     map[types.LayerID][]*Set
-	name        string
 }
 
 func newHareWrapper(totalCp uint32) *HareWrapper {
@@ -45,12 +44,6 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs
-}
-
-func (his *HareWrapper) fill(set *Set, begin, end int) {
-	for i := begin; i <= end; i++ {
-		his.initialSets[i] = set
-	}
 }
 
 func (his *HareWrapper) waitForTermination() {

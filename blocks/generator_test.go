@@ -41,7 +41,6 @@ func testConfig() Config {
 
 type testGenerator struct {
 	*Generator
-	ctrl       *gomock.Controller
 	mockMesh   *mocks.MockmeshProvider
 	mockCState *mocks.MockconservativeState
 	mockFetch  *smocks.MockProposalFetcher

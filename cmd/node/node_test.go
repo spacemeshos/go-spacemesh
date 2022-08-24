@@ -1,7 +1,6 @@
 package node
 
-// Hide deprecated protobuf version error.
-// nolint: staticcheck
+//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -31,11 +30,11 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -432,7 +431,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	var conn *grpc.ClientConn
 	require.Eventually(t, func() bool {
 		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return err == nil
 	}, 2*time.Second, 100*time.Millisecond)
 
@@ -460,7 +459,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return err == nil
 	}, 2*time.Second, 100*time.Millisecond)
 	defer conn.Close()
@@ -606,7 +605,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	var conn *grpc.ClientConn
 	require.Eventually(t, func() bool {
 		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return err == nil
 	}, 5*time.Second, 100*time.Millisecond)
 	t.Cleanup(func() {
@@ -743,7 +742,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	var conn *grpc.ClientConn
 	require.Eventually(t, func() bool {
 		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return err == nil
 	}, 5*time.Second, 100*time.Millisecond)
 	defer func() {
@@ -976,40 +975,6 @@ func getTestDefaultConfig() *config.Config {
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return cfg
-}
-
-// activateGRPCServer starts a grpc server on the provided node.
-func activateGRPCServer(smApp *App) {
-	// Activate the API services used by app_test
-	smApp.Config.API.StartGatewayService = true
-	smApp.Config.API.StartGlobalStateService = true
-	smApp.Config.API.StartTransactionService = true
-	smApp.Config.API.GrpcServerPort = 9094
-	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
-	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.host)
-	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.conState)
-	smApp.txService = grpcserver.NewTransactionService(smApp.db, smApp.host, smApp.mesh, smApp.conState, smApp.syncer)
-	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
-	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
-	smApp.txService.RegisterService(smApp.grpcAPIService)
-	smApp.grpcAPIService.Start()
-}
-
-// gracefulShutdown stops the current services running in apps.
-func gracefulShutdown(apps []*App) {
-	log.Info("graceful shutdown begin")
-
-	var wg sync.WaitGroup
-	for _, app := range apps {
-		wg.Add(1)
-		go func(app *App) {
-			app.stopServices()
-			wg.Done()
-		}(app)
-	}
-	wg.Wait()
-
-	log.Info("graceful shutdown end")
 }
 
 // initSingleInstance initializes a node instance with given

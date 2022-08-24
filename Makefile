@@ -70,7 +70,7 @@ install:
 	go run scripts/check-go-version.go --major 1 --minor 18
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.45.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
 	go install github.com/spacemeshos/go-scale/scalegen
 .PHONY: install
 
@@ -128,6 +128,10 @@ test: get-libs
 generate: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
 .PHONY: generate
+
+staticcheck: get-libs
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
+.PHONY: staticcheck
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive

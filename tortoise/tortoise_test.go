@@ -726,8 +726,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -879,8 +878,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 40; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -938,8 +936,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -1580,9 +1577,7 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	base := blts[rng.Intn(len(blts))]
 	voting := sim.Voting{Base: base.ID()}
 	for _, layer := range layers[len(layers)-2:] {
-		for _, bid := range layer.BlocksIDs() {
-			voting.Support = append(voting.Support, bid)
-		}
+		voting.Support = append(voting.Support, layer.BlocksIDs()...)
 	}
 	return voting
 }

@@ -182,7 +182,6 @@ func (l *Logic) registerLayerHashes(peer p2p.Peer, data *LayerData) {
 	}
 
 	l.fetcher.RegisterPeerHashes(peer, layerHashes)
-	return
 }
 
 // fetchLayerData fetches the all content referenced in layerData.

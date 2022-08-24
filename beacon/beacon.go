@@ -468,12 +468,8 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 		return
 	}
 	oldest := epoch - numEpochsToKeep
-	if _, ok := pd.beacons[oldest]; ok {
-		delete(pd.beacons, oldest)
-	}
-	if _, ok := pd.beaconsFromBallots[oldest]; ok {
-		delete(pd.beaconsFromBallots, oldest)
-	}
+	delete(pd.beacons, oldest)
+	delete(pd.beaconsFromBallots, oldest)
 }
 
 // listens to new layers.

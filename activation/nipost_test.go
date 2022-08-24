@@ -395,7 +395,6 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-//
 func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
 	_, err := v.Validate(*signing.NewPublicKey(minerID), nipost, challenge, numUnits)

@@ -91,10 +91,8 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 }
 
 type NIPostBuilderMock struct {
-	updatedPoETs    []PoetProvingServiceClient
 	poetRef         []byte
 	buildNIPostFunc func(challenge *types.Hash32) (*types.NIPost, error)
-	initPostFunc    func(logicalDrive string, commitmentSize uint64) (*types.Post, error)
 	SleepTime       int
 }
 

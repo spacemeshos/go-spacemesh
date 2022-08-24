@@ -38,7 +38,6 @@ type HareSuite struct {
 	initialSets []*Set // all initial sets
 	honestSets  []*Set // initial sets of honest
 	outputs     []*Set
-	name        string
 }
 
 func newHareSuite() *HareSuite {

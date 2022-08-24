@@ -2,17 +2,10 @@ package types
 
 import (
 	"math"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-func genByte32() [32]byte {
-	var x [32]byte
-	rand.Read(x[:])
-	return x
-}
 
 func TestLayerIDWraparound(t *testing.T) {
 	var (
