@@ -930,11 +930,15 @@ func signMessage(signer signing.Signer, message interface{}, logger log.Log) []b
 	return signer.Sign(encoded)
 }
 
+//go:generate scalegen -types BuildProposalMessage
+
+type BuildProposalMessage struct {
+	Prefix string
+	Epoch  uint32
+}
+
 func buildProposal(epoch types.EpochID, logger log.Log) []byte {
-	message := &struct {
-		Prefix string
-		Epoch  uint32
-	}{
+	message := &BuildProposalMessage{
 		Prefix: proposalPrefix,
 		Epoch:  uint32(epoch),
 	}
