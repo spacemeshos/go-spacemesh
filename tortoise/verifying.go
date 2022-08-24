@@ -54,12 +54,13 @@ const (
 
 func newVerifying(config Config, common *commonState) *verifying {
 	return &verifying{
-		Config:          config,
-		commonState:     common,
-		goodBallots:     map[types.BallotID]goodness{},
-		goodWeight:      map[types.LayerID]util.Weight{},
-		abstainedWeight: map[types.LayerID]util.Weight{},
-		totalGoodWeight: util.WeightFromUint64(0),
+		Config:               config,
+		commonState:          common,
+		goodBallots:          map[types.BallotID]goodness{},
+		goodWeight:           map[types.LayerID]util.Weight{},
+		abstainedWeight:      map[types.LayerID]util.Weight{},
+		totalGoodWeight:      util.WeightFromUint64(0),
+		layerReferenceHeight: map[types.LayerID]uint64{},
 	}
 }
 
@@ -74,6 +75,26 @@ type verifying struct {
 	abstainedWeight map[types.LayerID]util.Weight
 	// total weight of good ballots from verified + 1 up to last processed
 	totalGoodWeight util.Weight
+	// layerReferenceHeight is a highest block height below reference height
+	layerReferenceHeight map[types.LayerID]uint64
+}
+
+func (v *verifying) onBlock(block *types.Block) {
+	if block.TickHeight > v.referenceHeight[block.LayerIndex.GetEpoch()] {
+		return
+	}
+	current, exist := v.layerReferenceHeight[block.LayerIndex]
+	if !exist {
+		current = v.layerReferenceHeight[block.LayerIndex.Sub(1)]
+	}
+	if block.TickHeight > current {
+		current = block.TickHeight
+	}
+	v.layerReferenceHeight[block.LayerIndex] = current
+}
+
+func (v *verifying) getLayerReferenceHeight(lid types.LayerID) uint64 {
+	return v.layerReferenceHeight[lid]
 }
 
 func (v *verifying) resetWeights() {
@@ -107,7 +128,7 @@ func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tor
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
 
-	goodWeight, goodBallotsCount := v.countGoodBallots(logger, ballots)
+	goodWeight, goodBallotsCount := v.countGoodBallots(logger, lid, ballots)
 
 	v.goodWeight[lid] = goodWeight
 	v.totalGoodWeight = v.totalGoodWeight.Add(goodWeight)
@@ -149,39 +170,43 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
-
-	// 0 - there is not enough weight to cross threshold.
-	// 1 - layer is verified and contextual validity is according to our local opinion.
-	if sign(margin.Cmp(v.globalThreshold)) == abstain {
-		logger.With().Info("candidate layer is not verified." +
-			" voting weight from good ballots is lower than the threshold")
+	if sign(margin.Cmp(v.globalThreshold)) == neutral {
+		logger.With().Debug("doesn't cross global threshold")
 		return false
 	}
-
-	// if there is any block with neutral local opinion - we can't verify the layer
-	// if it happens outside hdist - protocol will switch to full tortoise
-	for _, bid := range v.blocks[lid] {
-		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
-		if vote == abstain {
-			logger.With().Info("candidate layer is not verified."+
-				" block is undecided according to local votes",
-				bid,
-			)
-			return false
-		}
-		v.validity[bid] = vote
+	if verifyLayer(
+		logger,
+		v.blocks[lid],
+		v.validity,
+		func(block blockInfo) sign {
+			if block.height > v.getLayerReferenceHeight(lid) {
+				return neutral
+			}
+			decision, _ := getLocalVote(v.commonState, v.Config, lid, block.id)
+			return decision
+		},
+	) {
+		v.totalGoodWeight.Sub(v.goodWeight[lid])
+		return true
 	}
-
-	v.totalGoodWeight.Sub(v.goodWeight[lid])
-	logger.With().Info("candidate layer is verified")
-	return true
+	return false
 }
 
-func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (util.Weight, int) {
+func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) (util.Weight, int) {
 	sum := util.WeightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
 		if ballot.weight.IsNil() {
+			logger.With().Debug("ballot weight is nil", ballot.id)
+			continue
+		}
+		// get height of the max votable block
+		if refheight := v.getLayerReferenceHeight(lid.Sub(1)); refheight > ballot.height {
+			logger.With().Debug("reference height is higher than the ballot height",
+				ballot.id,
+				log.Uint64("reference height", refheight),
+				log.Uint64("ballot height", ballot.height),
+			)
 			continue
 		}
 		rst := v.determineGoodness(logger, ballot)
