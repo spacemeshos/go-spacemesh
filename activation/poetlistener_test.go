@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -23,7 +23,7 @@ func TestNewPoetListener(t *testing.T) {
 	listener := NewPoetListener(poetDb, lg)
 
 	msg := readPoetProofFromDisk(t)
-	data, err := types.InterfaceToBytes(msg)
+	data, err := codec.Encode(msg)
 	require.NoError(t, err)
 	ref, err := msg.Ref()
 	require.NoError(t, err)

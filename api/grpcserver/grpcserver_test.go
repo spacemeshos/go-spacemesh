@@ -24,6 +24,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -1636,7 +1637,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
-	serializedTx, err := types.InterfaceToBytes(globalTx)
+	serializedTx, err := codec.Encode(globalTx)
 	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)
