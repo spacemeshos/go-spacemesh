@@ -789,7 +789,12 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		return err
 	}
 
-	sig := signFirstVotingMessage(pd.edSigner, &mb, pd.logger)
+	encoded, err := codec.Encode(&mb)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := pd.edSigner.Sign(encoded)
+
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		Signature:              sig,
@@ -831,7 +836,11 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig := signFollowingVotingMessage(pd.edSigner, &mb, pd.logger)
+	encoded, err := codec.Encode(&mb)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := pd.edSigner.Sign(encoded)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
@@ -935,22 +944,6 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 		log.String("signature", string(signature)))
 
 	return signature
-}
-
-func signFirstVotingMessage(signer signing.Signer, message *FirstVotingMessageBody, logger log.Log) []byte {
-	encoded, err := codec.Encode(message)
-	if err != nil {
-		logger.With().Panic("failed to serialize message for signing", log.Err(err))
-	}
-	return signer.Sign(encoded)
-}
-
-func signFollowingVotingMessage(signer signing.Signer, message *FollowingVotingMessageBody, logger log.Log) []byte {
-	encoded, err := codec.Encode(message)
-	if err != nil {
-		logger.With().Panic("failed to serialize message for signing", log.Err(err))
-	}
-	return signer.Sign(encoded)
 }
 
 //go:generate scalegen -types BuildProposalMessage
