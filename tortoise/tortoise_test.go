@@ -1508,6 +1508,37 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
+func TestObjectsNotProcessedBeforeRefencedHeight(t *testing.T) {
+	ctx := context.Background()
+
+	s := sim.New()
+	s.Setup()
+	cfg := defaultTestConfig()
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	last := s.Next()
+
+	blks, err := blocks.Layer(s.GetState(0).DB, last)
+	require.NoError(t, err)
+	for _, block := range blks {
+		tortoise.OnBlock(block)
+	}
+
+	blts, err := ballots.Layer(s.GetState(0).DB, last)
+	require.NoError(t, err)
+	for _, ballot := range blts {
+		tortoise.OnBallot(ballot)
+	}
+
+	require.Empty(t, tortoise.trtl.blocks[last])
+	require.Empty(t, tortoise.trtl.ballots[last])
+
+	_ = tortoise.HandleIncomingLayer(ctx, last)
+	require.NotEmpty(t, tortoise.trtl.blocks[last])
+	require.NotEmpty(t, tortoise.trtl.ballots[last])
+	verified := tortoise.HandleIncomingLayer(ctx, s.Next())
+	require.Equal(t, last, verified)
+}
+
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 	ctx := context.Background()
 
