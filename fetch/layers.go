@@ -390,8 +390,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, eid types.EpochID) error {
 
 	// build receiver function
 	okFunc := func(data []byte, peer p2p.Peer) {
-		var atxsIDs []types.ATXID
-		err := codec.Decode(data, &atxsIDs)
+		atxsIDs, err := codec.DecodeSlice[types.ATXID](data)
 		resCh <- epochAtxRes{
 			Error: err,
 			Atxs:  atxsIDs,

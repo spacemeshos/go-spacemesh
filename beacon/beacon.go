@@ -652,7 +652,12 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 		VRFSignature: proposedSignature,
 	}
 
-	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
 	logger.With().Info("beacon proposal sent", log.String("message", m.String()))
 }
 
@@ -784,7 +789,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		return err
 	}
 
-	sig := signMessage(pd.edSigner, mb, pd.logger)
+	sig := signFirstVotingMessage(pd.edSigner, &mb, pd.logger)
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		Signature:              sig,
@@ -795,7 +800,12 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		types.FirstRound,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, serialized)
 	return nil
 }
 
@@ -821,7 +831,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig := signMessage(pd.edSigner, mb, pd.logger)
+	sig := signFollowingVotingMessage(pd.edSigner, &mb, pd.logger)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
@@ -833,7 +843,12 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		round,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, serialized)
 	return nil
 }
 
@@ -922,7 +937,15 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 	return signature
 }
 
-func signMessage(signer signing.Signer, message interface{}, logger log.Log) []byte {
+func signFirstVotingMessage(signer signing.Signer, message *FirstVotingMessageBody, logger log.Log) []byte {
+	encoded, err := codec.Encode(message)
+	if err != nil {
+		logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	return signer.Sign(encoded)
+}
+
+func signFollowingVotingMessage(signer signing.Signer, message *FollowingVotingMessageBody, logger log.Log) []byte {
 	encoded, err := codec.Encode(message)
 	if err != nil {
 		logger.With().Panic("failed to serialize message for signing", log.Err(err))
@@ -951,12 +974,7 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 	return b
 }
 
-func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, data interface{}) {
-	serialized, err := codec.Encode(data)
-	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
-	}
-
+func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) {
 	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
 	pd.eg.Go(func() error {
 		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {

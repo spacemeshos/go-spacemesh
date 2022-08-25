@@ -730,41 +730,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}
 }
 
-func TestBeacon_signMessage(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	edSgn := signing.NewEdSigner()
-
-	tt := []struct {
-		name    string
-		message interface{}
-		result  []byte
-	}{
-		{
-			name:    "Case 1",
-			message: []byte{},
-			result:  edSgn.Sign([]byte{0, 0, 0, 0}),
-		},
-		{
-			name:    "Case 2",
-			message: &struct{ Test int }{Test: 0x12345678},
-			result:  edSgn.Sign([]byte{0x12, 0x34, 0x56, 0x78}),
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := signMessage(edSgn, tc.message, logtest.New(t))
-			r.Equal(string(tc.result), string(result))
-		})
-	}
-}
-
 func TestBeacon_getSignedProposal(t *testing.T) {
 	t.Parallel()
 

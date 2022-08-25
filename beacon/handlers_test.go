@@ -124,7 +124,7 @@ func createFirstVote(t *testing.T, signer signing.Signer, epoch types.EpochID, v
 			PotentiallyValidProposals: pValid,
 		},
 	}
-	sig := signMessage(signer, msg.FirstVotingMessageBody, logtest.New(t))
+	sig := signFirstVotingMessage(signer, &msg.FirstVotingMessageBody, logtest.New(t))
 	if corruptSignature {
 		msg.Signature = sig[1:]
 	} else {
@@ -156,7 +156,7 @@ func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochI
 			VotesBitVector: bitVector,
 		},
 	}
-	sig := signMessage(signer, msg.FollowingVotingMessageBody, logtest.New(t))
+	sig := signFollowingVotingMessage(signer, &msg.FollowingVotingMessageBody, logtest.New(t))
 	if corruptSignature {
 		msg.Signature = sig[1:]
 	} else {
@@ -992,8 +992,8 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 			VotesBitVector: votesBitVector,
 		},
 	}
-	msg1.Signature = signMessage(edSgn, msg1.FollowingVotingMessageBody, logtest.New(t))
-	data1, err := codec.Encode(msg1)
+	msg1.Signature = signFollowingVotingMessage(edSgn, &msg1.FollowingVotingMessageBody, logtest.New(t))
+	data1, err := codec.Encode(&msg1)
 	require.NoError(t, err)
 
 	msg2 := FollowingVotingMessage{
@@ -1002,21 +1002,21 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 			VotesBitVector: votesBitVector,
 		},
 	}
-	msg2.Signature = signMessage(edSgn, msg2.FollowingVotingMessageBody, logtest.New(t))
-	data2, err := codec.Encode(msg2)
+	msg2.Signature = signFollowingVotingMessage(edSgn, &msg2.FollowingVotingMessageBody, logtest.New(t))
+	data2, err := codec.Encode(&msg2)
 	require.NoError(t, err)
 
 	// without EpochID, we cannot tell the following messages apart
 	require.Equal(t, data1, data2)
 
 	msg1.EpochID = types.EpochID(5)
-	msg1.Signature = signMessage(edSgn, msg1.FollowingVotingMessageBody, logtest.New(t))
-	data1, err = codec.Encode(msg1)
+	msg1.Signature = signFollowingVotingMessage(edSgn, &msg1.FollowingVotingMessageBody, logtest.New(t))
+	data1, err = codec.Encode(&msg1)
 	require.NoError(t, err)
 
 	msg2.EpochID = msg1.EpochID + 1
-	msg2.Signature = signMessage(edSgn, msg2.FollowingVotingMessageBody, logtest.New(t))
-	data2, err = codec.Encode(msg2)
+	msg2.Signature = signFollowingVotingMessage(edSgn, &msg2.FollowingVotingMessageBody, logtest.New(t))
+	data2, err = codec.Encode(&msg2)
 	require.NoError(t, err)
 
 	// with EpochID, voting messages from the same miner with the same bit vector will
