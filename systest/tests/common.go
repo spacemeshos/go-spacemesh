@@ -284,7 +284,7 @@ func updatePoetServer(ctx context.Context, node *cluster.NodeClient, target stri
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	svc := spacemeshv1.NewNodeServiceClient(node)
-	resp, err := svc.UpdatePoetServer(context.TODO(), &spacemeshv1.UpdatePoetServerRequest{Url: target})
+	resp, err := svc.UpdatePoetServer(ctx, &spacemeshv1.UpdatePoetServerRequest{Url: target})
 	if err != nil {
 		return false, err
 	}

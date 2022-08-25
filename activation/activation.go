@@ -36,12 +36,6 @@ var (
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-type poetNumberOfTickProvider struct{}
-
-func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 1
-}
-
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
@@ -321,7 +315,7 @@ func (b *Builder) loop(ctx context.Context) {
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CAS(client, nil)
+			b.pendingPoetClient.CompareAndSwap(client, nil)
 		}
 
 		if err := b.PublishActivationTx(ctx); err != nil {

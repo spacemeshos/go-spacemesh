@@ -726,8 +726,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -879,8 +878,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 40; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -938,8 +936,7 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			ballotsA, ballotsB := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
+			blts := append(ballotsA, ballotsB...)
 
 			// add all ballots/blocks to both tortoises
 			for _, ballot := range blts {
@@ -1309,8 +1306,9 @@ func TestComputeExpectedWeight(t *testing.T) {
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
-				_, err := computeEpochWeight(cdb, epochWeights, lid.GetEpoch())
+				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
 				require.NoError(t, err)
+				epochWeights[lid.GetEpoch()] = weight
 			}
 
 			weight := computeExpectedWeight(epochWeights, tc.target, tc.last)
@@ -1579,9 +1577,7 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	base := blts[rng.Intn(len(blts))]
 	voting := sim.Voting{Base: base.ID()}
 	for _, layer := range layers[len(layers)-2:] {
-		for _, bid := range layer.BlocksIDs() {
-			voting.Support = append(voting.Support, bid)
-		}
+		voting.Support = append(voting.Support, layer.BlocksIDs()...)
 	}
 	return voting
 }
@@ -2096,7 +2092,6 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxids []types.ATXID
 
 				refWeights = map[types.BallotID]util.Weight{}
-				weights    = map[types.BallotID]util.Weight{}
 			)
 
 			cdb := newCachedDB(t, logtest.New(t))
@@ -2136,7 +2131,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballot.Initialize()
 				blts = append(blts, ballot)
 
-				weight, err := computeBallotWeight(cdb, refWeights, weights, ballot, tc.layerSize, tc.layersPerEpoch)
+				weight, err := computeBallotWeight(cdb, refWeights, ballot, tc.layerSize, tc.layersPerEpoch)
 				require.NoError(t, err)
 				require.Equal(t, b.ExpectedWeight.String(), weight.String())
 			}
@@ -2521,12 +2516,11 @@ func TestStateManagement(t *testing.T) {
 		}
 
 		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
-			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
+			for _, block := range tortoise.trtl.blocks[lid] {
+				require.Contains(t, tortoise.trtl.blockLayer, block.id, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.ballotWeight, ballot, "layer %s", lid)
-				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotLayer, ballot.id, "layer %s", lid)
 			}
 		}
 	})
@@ -2554,14 +2548,84 @@ func TestStateManagement(t *testing.T) {
 		}
 
 		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
-			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
+			for _, block := range tortoise.trtl.blocks[lid] {
+				require.Contains(t, tortoise.trtl.blockLayer, block.id, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.full.votes, ballot, "layer %s", lid)
-				require.Contains(t, tortoise.trtl.ballotWeight, ballot, "layer %s", lid)
-				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.full.votes, ballot.id, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotLayer, ballot.id, "layer %s", lid)
 			}
 		}
+	})
+}
+
+func TestFutureHeight(t *testing.T) {
+	cfg := defaultTestConfig()
+	cfg.Hdist = 3
+	cfg.Zdist = cfg.Hdist
+	cfg.LayerSize = 10
+	t.Run("hare from future", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup()
+
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		verified := tortoise.HandleIncomingLayer(context.Background(),
+			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(100_000)))
+		for i := 0; i < int(cfg.Hdist); i++ {
+			verified = tortoise.HandleIncomingLayer(context.Background(), s.Next())
+		}
+		require.Equal(t, types.GetEffectiveGenesis(), verified)
+		last := s.Next()
+		verified = tortoise.HandleIncomingLayer(context.Background(), last)
+		// verifies layer by counting all votes
+		require.Equal(t, last.Sub(1), verified)
+	})
+	t.Run("median above slow smeshers", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		const (
+			slow   = 10
+			normal = 20
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(7, 7),
+			sim.WithSetupTicks(normal, normal, normal, normal, normal, slow, slow),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last, verified types.LayerID
+		for i := 0; i < int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1))
+			verified = tortoise.HandleIncomingLayer(context.Background(), last)
+		}
+		require.Equal(t, last.Sub(2), verified)
+	})
+	t.Run("empty layers with slow smeshers", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		const (
+			slow   = 10
+			normal = 20
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(7, 7),
+			sim.WithSetupTicks(normal, normal, normal, normal, normal, slow, slow),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last, verified types.LayerID
+		for i := 0; i < int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(0))
+			verified = tortoise.HandleIncomingLayer(context.Background(), last)
+		}
+		require.Equal(t, last.Sub(1), verified)
 	})
 }

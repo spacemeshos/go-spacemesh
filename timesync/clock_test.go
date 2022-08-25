@@ -23,8 +23,10 @@ func TestClock_StartClock(t *testing.T) {
 
 	select {
 	case <-tk:
-		dur := time.Now().Sub(then)
+		dur := time.Since(then)
 		assert.True(t, tick <= dur)
+	case <-time.After(10 * tick):
+		assert.Fail(t, "no notification received")
 	}
 	ts.Close()
 }
@@ -41,9 +43,12 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 
 	select {
 	case <-tk:
-		dur := time.Now().Sub(then)
+		dur := time.Since(then)
 		assert.True(t, waitTime < dur)
+	case <-time.After(10 * waitTime):
+		assert.Fail(t, "no notification received")
 	}
+
 	ts.Close()
 }
 

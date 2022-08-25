@@ -60,7 +60,7 @@ func (g *GossipCollector) AddPeer(id peer.ID, proto protocol.ID) {
 // RemovePeer is invoked when a peer is removed.
 func (g *GossipCollector) RemovePeer(id peer.ID) {
 	g.peers.Lock()
-	proto, _ := g.peers.m[id]
+	proto := g.peers.m[id]
 	delete(g.peers.m, id)
 	g.peers.Unlock()
 

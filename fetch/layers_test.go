@@ -112,7 +112,7 @@ func generateLayerContent(t *testing.T, processed types.LayerID, hareOutput ...*
 		blockIDs = append(blockIDs, types.RandomBlockID())
 	}
 	hash := types.CalcBlocksHash32(types.SortBlockIDs(blockIDs), nil)
-	certified := types.EmptyBlockID
+	var certified types.BlockID
 	if len(hareOutput) == 1 {
 		certified = *hareOutput[0]
 	} else {

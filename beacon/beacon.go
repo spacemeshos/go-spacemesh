@@ -468,12 +468,8 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 		return
 	}
 	oldest := epoch - numEpochsToKeep
-	if _, ok := pd.beacons[oldest]; ok {
-		delete(pd.beacons, oldest)
-	}
-	if _, ok := pd.beaconsFromBallots[oldest]; ok {
-		delete(pd.beaconsFromBallots, oldest)
-	}
+	delete(pd.beacons, oldest)
+	delete(pd.beaconsFromBallots, oldest)
 }
 
 // listens to new layers.
@@ -934,11 +930,16 @@ func signMessage(signer signing.Signer, message interface{}, logger log.Log) []b
 	return signer.Sign(encoded)
 }
 
+//go:generate scalegen -types BuildProposalMessage
+
+// BuildProposalMessage is a message for buildProposal below.
+type BuildProposalMessage struct {
+	Prefix string
+	Epoch  uint32
+}
+
 func buildProposal(epoch types.EpochID, logger log.Log) []byte {
-	message := &struct {
-		Prefix string
-		Epoch  uint32
-	}{
+	message := &BuildProposalMessage{
 		Prefix: proposalPrefix,
 		Epoch:  uint32(epoch),
 	}
