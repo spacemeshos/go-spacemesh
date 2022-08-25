@@ -1032,8 +1032,6 @@ github.com/spacemeshos/ed25519 v0.0.0-20220819111725-6f9b8412778f h1:x87xdFatVFf
 github.com/spacemeshos/ed25519 v0.0.0-20220819111725-6f9b8412778f/go.mod h1:orGrF8tPKsyp9RbZcga4v4x0u/ubAmgqew4gDK8oU88=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a h1:p/BRpvEHGqd4oYBp+B/vG3Z3RWdb7vAZCz8xsecS92M=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a/go.mod h1:3SkkvXHU4Vm7yjpfgPu97PcZVvWweBmx0FOLRW7ek+g=
-github.com/spacemeshos/go-scale v0.0.0-20220821093428-e4e86499ed2b h1:8Rc02d5JTuItNcLdNsxJrQw1rKA4Mpgsa9JoKyxxUZQ=
-github.com/spacemeshos/go-scale v0.0.0-20220821093428-e4e86499ed2b/go.mod h1:7GtYsMzAZ4x93wkEwHBm8HYrgQtJkK7V31ypa80Mhmg=
 github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c h1:4flg9MKhjhR0lCGBIDYt6GUL3+Ejbk5wLBUnKBgqeTc=
 github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c/go.mod h1:7GtYsMzAZ4x93wkEwHBm8HYrgQtJkK7V31ypa80Mhmg=
 github.com/spacemeshos/go-xdr v0.1.0 h1:ML3sGM1skp7NJCb/13UzXonUIEFbdgAvCA6IG42Shv8=
