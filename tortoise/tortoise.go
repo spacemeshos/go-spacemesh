@@ -757,6 +757,10 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	if !ballot.LayerIndex.After(t.evicted) {
 		return nil
 	}
+	if _, exist := t.referenceHeight[ballot.LayerIndex.GetEpoch()]; !exist {
+		t.logger.With().Info("ballot was submitted before computing reference height", ballot.ID(), ballot.LayerIndex)
+		return nil
+	}
 	if _, exist := t.ballotLayer[ballot.ID()]; exist {
 		return nil
 	}
