@@ -106,6 +106,5 @@ weakCoin = "info"
 
 [genesis]
 genesis-id = ""
-coinbase = "0x1234"
 genesis-time = "" #"2019-02-13T17:02:00+00:00"
 genesis-extra-data = "mainnet"

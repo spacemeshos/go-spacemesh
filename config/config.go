@@ -12,6 +12,7 @@ import (
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -212,12 +213,5 @@ func (cfg *BaseConfig) SetConfigFile(file string) {
 }
 
 func (cfg *Config) NetworkIdFromGenesis(genCfg *GenesisConfig) {
-	switch extraData := genCfg.ExtraData; {
-	case extraData == "mainnet":
-		cfg.P2P.NetworkID = uint32(1)
-	case extraData == "testnet":
-		cfg.P2P.NetworkID = uint32(2)
-	case extraData == "devnet":
-		cfg.P2P.NetworkID = uint32(3)
-	}
+	cfg.P2P.NetworkID = util.BytesToUint32(util.FromHex(cfg.Genesis.GenesisID))
 }

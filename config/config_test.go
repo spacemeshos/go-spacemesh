@@ -3,14 +3,22 @@ package config
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+)
+
+const (
+	ExtraDataText       = "mainnet"
+	GenesisTimeText     = "2019-02-13T17:02:00+00:00"
+	ExpectedHash        = "0x171f780f0fa34038e92473d3c9bf6af39e75d25d92534b29bdbb4de9436ab6c8"
+	ExpectedGenesisId   = "0x1e459123cf26ee0de56d9e2ef6a30f8317c797e1"
+	ExpectedGoldenATXID = "0x1e459123cf26ee0de56d9e2ef6a30f8317c797e1000000000000000000000000"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -36,9 +44,9 @@ func TestConfig_DataDir(t *testing.T) {
 
 func TestDefaultConfigGenesisValues(t *testing.T) {
 	config := DefaultTestConfig()
-	assert.Equal(t, config.Genesis.ExtraData, "mainnet")
-	assert.Equal(t, config.Genesis.GenesisTime, time.Now().Format(time.RFC3339))
-	assert.Equal(t, config.Genesis.GoldenATXID, "0x5678")
+	assert.Equal(t, config.Genesis.ExtraData, ExtraDataText)
+	assert.Equal(t, config.Genesis.GenesisTime, GenesisTimeText)
+	assert.Equal(t, config.Genesis.GoldenATXID, ExpectedGoldenATXID)
 }
 
 func TestCorrectGenesisValuesFromFile(t *testing.T) {
@@ -56,10 +64,22 @@ func TestCorrectGenesisValuesFromFile(t *testing.T) {
 	// load config if it was loaded to our viper
 	err := vip.Unmarshal(&cfg, viper.DecodeHook(hook))
 	assert.Equal(t, err, nil)
-	assert.Equal(t, cfg.Genesis.ExtraData, "mainnet")
-	assert.Equal(t, cfg.Genesis.GenesisTime, time.Now().Format(time.RFC3339))
-	assert.Equal(t, cfg.Genesis.GoldenATXID, "0x5678")
+	assert.Equal(t, cfg.Genesis.ExtraData, ExtraDataText)
+	assert.Equal(t, cfg.Genesis.GenesisTime, GenesisTimeText)
+	assert.Equal(t, cfg.Genesis.GoldenATXID, ExpectedGoldenATXID)
 
 	cfg.NetworkIdFromGenesis(cfg.Genesis)
 	assert.Equal(t, uint32(1), cfg.P2P.NetworkID)
+}
+
+func TestCorrectGenesisIDGeneration(t *testing.T) {
+	cfg := DefaultGenesisConfig()
+	cfg.GenesisTime = GenesisTimeText
+	cfg.ExtraData = ExtraDataText
+	cfg.GoldenATXID = cfg.CalcGoldenATX().Hash32().Hex()
+	gen_id, err := CalcGenesisId([]byte(cfg.ExtraData), GenesisTimeText)
+	assert.Equal(t, err, nil)
+	assert.Equal(t, cfg.GoldenATXID != types.ATXID{}.Hash32().Hex(), true)
+	print(gen_id.Hex())
+	assert.Equal(t, gen_id.Hex(), ExpectedGenesisId)
 }

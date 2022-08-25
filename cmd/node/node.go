@@ -476,7 +476,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(types.HexToHash32(app.Config.Genesis.GoldenATXID))
+	goldenATXID := app.Config.Genesis.CalcGoldenATX()
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
