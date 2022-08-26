@@ -161,6 +161,18 @@ func (m *MocklayerProcessor) EXPECT() *MocklayerProcessorMockRecorder {
 	return m.recorder
 }
 
+// ProcessCertificates mocks base method.
+func (m *MocklayerProcessor) ProcessCertificates(arg0 context.Context, arg1 types.LayerID, arg2 []*types.Certificate) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ProcessCertificates", arg0, arg1, arg2)
+}
+
+// ProcessCertificates indicates an expected call of ProcessCertificates.
+func (mr *MocklayerProcessorMockRecorder) ProcessCertificates(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessCertificates", reflect.TypeOf((*MocklayerProcessor)(nil).ProcessCertificates), arg0, arg1, arg2)
+}
+
 // ProcessLayer mocks base method.
 func (m *MocklayerProcessor) ProcessLayer(arg0 context.Context, arg1 types.LayerID) error {
 	m.ctrl.T.Helper()

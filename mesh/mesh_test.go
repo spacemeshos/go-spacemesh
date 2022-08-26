@@ -28,9 +28,10 @@ const (
 
 type testMesh struct {
 	*Mesh
-	mockState    *mocks.MockconservativeState
-	mockTortoise *mocks.Mocktortoise
-	mockBeacon   *smocks.MockBeaconGetter
+	mockCertHandler *mocks.MockcertHandler
+	mockState       *mocks.MockconservativeState
+	mockTortoise    *mocks.Mocktortoise
+	mockBeacon      *smocks.MockBeaconGetter
 }
 
 func createTestMesh(t *testing.T) *testMesh {
@@ -39,11 +40,12 @@ func createTestMesh(t *testing.T) *testMesh {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
-		mockState:    mocks.NewMockconservativeState(ctrl),
-		mockTortoise: mocks.NewMocktortoise(ctrl),
-		mockBeacon:   smocks.NewMockBeaconGetter(ctrl),
+		mockCertHandler: mocks.NewMockcertHandler(ctrl),
+		mockState:       mocks.NewMockconservativeState(ctrl),
+		mockTortoise:    mocks.NewMocktortoise(ctrl),
+		mockBeacon:      smocks.NewMockBeaconGetter(ctrl),
 	}
-	msh, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockBeacon, tm.mockTortoise, tm.mockState, lg)
+	msh, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockBeacon, tm.mockTortoise, tm.mockState, tm.mockCertHandler, lg)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
@@ -155,7 +157,7 @@ func TestMesh_FromGenesis(t *testing.T) {
 
 func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	tm := createTestMesh(t)
-	msh, err := NewMesh(tm.cdb, tm.mockBeacon, tm.mockTortoise, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockBeacon, tm.mockTortoise, tm.mockState, tm.mockCertHandler, logtest.New(t))
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLatestInDB(t, msh, gLid)
@@ -179,7 +181,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tm.cdb, latestState, types.RandomBlockID()))
 
 	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
-	msh, err := NewMesh(tm.cdb, tm.mockBeacon, tm.mockTortoise, tm.mockState, logtest.New(t))
+	msh, err := NewMesh(tm.cdb, tm.mockBeacon, tm.mockTortoise, tm.mockState, tm.mockCertHandler, logtest.New(t))
 	require.NoError(t, err)
 	gotL := msh.LatestLayer()
 	require.Equal(t, latest, gotL)
@@ -407,20 +409,119 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	checkLastAppliedInDB(t, tm.Mesh, gPlus2)
 }
 
-func TestMesh_ProcessLayer_NoBeacon(t *testing.T) {
+func TestMesh_ProcessLayer_BeaconDelayed(t *testing.T) {
 	tm := createTestMesh(t)
 	gLyr := types.GetEffectiveGenesis()
-	lyr := gLyr.Add(1)
+	lid := gLyr.Add(1)
 	errUnknown := errors.New("unknown")
-	tm.mockBeacon.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, errUnknown)
+
+	certs := []*types.Certificate{
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+	}
+	tm.mockTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+	tm.mockBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.EmptyBeacon, errUnknown)
+	tm.ProcessCertificates(context.TODO(), lid, certs)
+
+	tm.mockBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.EmptyBeacon, errUnknown)
 	tm.mockTortoise.EXPECT().LatestComplete().Return(gLyr)
+	require.ErrorIs(t, tm.ProcessLayer(context.TODO(), lid), errMissingHareOutput)
+	require.Equal(t, lid, tm.ProcessedLayer())
+	checkLastAppliedInDB(t, tm.Mesh, gLyr)
+
+	tm.mockBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
+	tm.mockCertHandler.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, certs[0]).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, got *types.Certificate) error {
+			require.NoError(t, layers.SetHareOutputWithCert(tm.cdb, lid, got))
+			return nil
+		},
+	)
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), lid).Return(lid.Sub(1))
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
-	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))
-	got, err := layers.GetHareOutput(tm.cdb, lyr)
-	require.NoError(t, err)
-	require.Equal(t, types.EmptyBlockID, got)
-	require.Equal(t, lyr, tm.ProcessedLayer())
-	checkLastAppliedInDB(t, tm.Mesh, lyr)
+	require.NoError(t, tm.ProcessLayer(context.TODO(), lid))
+	checkLastAppliedInDB(t, tm.Mesh, lid)
+}
+
+func TestMesh_ProcessCertificates(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.NewLayerID(11)
+	certs := []*types.Certificate{
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+	}
+	tm.mockTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+	tm.mockBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
+	tm.mockCertHandler.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, certs[0]).Return(nil)
+
+	tm.ProcessCertificates(context.TODO(), lid, certs)
+}
+
+func TestMesh_ProcessCertificates_BeaconDelayed(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.NewLayerID(11)
+	certs := []*types.Certificate{
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+	}
+	tm.mockTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+	tm.mockBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.EmptyBeacon, errors.New("meh"))
+
+	tm.ProcessCertificates(context.TODO(), lid, certs)
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	require.Equal(t, certs, tm.certCache[lid])
+}
+
+func TestMesh_ProcessCertificates_AlreadyVerified(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.NewLayerID(11)
+	certs := []*types.Certificate{
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+	}
+	tm.mockTortoise.EXPECT().LatestComplete().Return(lid)
+
+	tm.ProcessCertificates(context.TODO(), lid, certs)
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	require.Empty(t, tm.certCache[lid])
+}
+
+func TestMesh_ProcessCertificates_AlreadySaved(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.NewLayerID(11)
+	certs := []*types.Certificate{
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+		{
+			BlockID: types.BlockID{1, 2, 3},
+		},
+	}
+	require.NoError(t, layers.SetHareOutputWithCert(tm.cdb, lid, certs[0]))
+	tm.mockTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+	tm.mockBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
+
+	tm.ProcessCertificates(context.TODO(), lid, certs)
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	require.Empty(t, tm.certCache[lid])
 }
 
 func TestMesh_Revert(t *testing.T) {

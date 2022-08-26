@@ -90,11 +90,10 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	}
 
 	ld.HareOutput, err = layers.GetCert(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, errInternal
 	}
-
 	out, err := codec.Encode(&ld)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))

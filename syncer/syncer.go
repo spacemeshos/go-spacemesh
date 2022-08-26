@@ -12,13 +12,15 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 // Configuration is the config params for syncer.
 type Configuration struct {
-	SyncInterval time.Duration
+	SyncInterval     time.Duration
+	SyncCertDistance uint32
 }
 
 const (
@@ -442,15 +444,24 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	if err := s.getLayerFromPeers(ctx, layerID); err != nil {
 		return err
 	}
-
 	return nil
 }
 
 func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) error {
 	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
-	if res.Err != nil {
+	cutoff := types.GetEffectiveGenesis()
+	current := s.ticker.GetCurrentLayer()
+	if current.Uint32() > s.conf.SyncCertDistance {
+		cutoff = current.Sub(s.conf.SyncCertDistance)
+	}
+	if errors.Is(res.Err, fetch.ErrLayerDataNotFetched) ||
+		(errors.Is(res.Err, fetch.ErrCertificateMissing) && layerID.After(cutoff)) {
 		return fmt.Errorf("PollLayerContent: %w", res.Err)
+	}
+
+	if layerID.After(cutoff) && len(res.Certs) > 0 {
+		s.lyrProcessor.ProcessCertificates(ctx, layerID, res.Certs)
 	}
 	return nil
 }
@@ -463,6 +474,7 @@ func minLayer(a, b types.LayerID) types.LayerID {
 }
 
 func (s *Syncer) processLayers(ctx context.Context) error {
+	ctx = log.WithNewSessionID(ctx)
 	if !s.ListenToATXGossip() {
 		return errATXsNotSynced
 	}
@@ -492,17 +504,17 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 				lag = current.Sub(lid.Uint32())
 			}
 			if lag.Value < maxHareDelayLayers {
-				s.logger.With().Info("skip validating layer: hare still working", lid)
+				s.logger.WithContext(ctx).With().Info("skip validating layer: hare still working", lid)
 				return errHareInCharge
 			}
 		}
 
 		if err := s.lyrProcessor.ProcessLayer(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", log.Err(err))
-			return fmt.Errorf("process layer: %w", err)
+			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+			return fmt.Errorf("sync process layer: %w", err)
 		}
 	}
-	s.logger.With().Info("end of state sync",
+	s.logger.WithContext(ctx).With().Info("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))

@@ -55,10 +55,17 @@ type Mesh struct {
 	// if contextual validity changed for blocks in that layer, we need to
 	// double-check whether we have applied the correct block for that layer.
 	minUpdatedLayer atomic.Value
+
+	// used for caching hare certificate when the node sync data from peers.
+	// a synced certificate cannot be verified before the node learns the beacon value
+	// of the epoch. any certificate passed on by the syncer will stay here until
+	// beacon is available.
+	certCache    map[types.LayerID][]*types.Certificate
+	certVerifier certHandler
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, bcn system.BeaconGetter, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, bcn system.BeaconGetter, trtl tortoise, state conservativeState, c certHandler, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
@@ -66,6 +73,8 @@ func NewMesh(cdb *datastore.CachedDB, bcn system.BeaconGetter, trtl tortoise, st
 		trtl:                trtl,
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
+		certCache:           make(map[types.LayerID][]*types.Certificate),
+		certVerifier:        c,
 	}
 	msh.latestLayer.Store(types.LayerID{})
 	msh.latestLayerInState.Store(types.LayerID{})
@@ -367,12 +376,51 @@ func (msh *Mesh) revertMaybe(ctx context.Context, logger log.Log, newVerified ty
 	return nil
 }
 
+// TODO: detect multiple hare certificate in the same network
+// https://github.com/spacemeshos/go-spacemesh/issues/3467
+func (msh *Mesh) verifyCertificates(ctx context.Context, lid types.LayerID, certs []*types.Certificate) {
+	if _, err := layers.GetCert(msh.cdb, lid); err == nil {
+		return
+	}
+	for _, cert := range certs {
+		if err := msh.certVerifier.HandleSyncedCertificate(ctx, lid, cert); err == nil {
+			// we only need one valid certificate per layer
+			return
+		}
+	}
+}
+
+// ProcessCertificates verify the hare certificate if beacon is available. if not, put them in the cache.
+// they will be verified when tortoise is triggered.
+func (msh *Mesh) ProcessCertificates(ctx context.Context, lid types.LayerID, certs []*types.Certificate) {
+	if !msh.trtl.LatestComplete().Before(lid) {
+		return
+	}
+
+	epoch := lid.GetEpoch()
+	if _, err := msh.beacon.GetBeacon(epoch); err != nil {
+		msh.logger.WithContext(ctx).With().Info("beacon not available. cache certs for now", lid, epoch)
+		msh.mu.Lock()
+		defer msh.mu.Unlock()
+		msh.certCache[lid] = certs
+		return
+	}
+
+	msh.verifyCertificates(ctx, lid, certs)
+}
+
 func (msh *Mesh) triggerTortoise(ctx context.Context, logger log.Log, lid types.LayerID) types.LayerID {
 	epoch := lid.GetEpoch()
 	if _, err := msh.beacon.GetBeacon(epoch); err != nil {
 		logger.With().Warning("not triggering tortoise: beacon not available", lid, epoch)
 		return msh.trtl.LatestComplete()
 	}
+
+	if _, ok := msh.certCache[lid]; ok {
+		msh.verifyCertificates(ctx, lid, msh.certCache[lid])
+		delete(msh.certCache, lid)
+	}
+
 	newVerified := msh.trtl.HandleIncomingLayer(ctx, lid)
 	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
 	return newVerified
@@ -498,7 +546,7 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVe
 		// tortoise has not verified this layer yet, simply apply the block that hare certified
 		bid, err := layers.GetHareOutput(cdb, layerID)
 		if err != nil {
-			logger.With().Error("failed to get hare output", layerID, log.Err(err))
+			logger.With().Warning("failed to get hare output", layerID, log.Err(err))
 			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
 		}
 		// hare output an empty layer

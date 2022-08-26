@@ -22,3 +22,7 @@ type tortoise interface {
 	HandleIncomingLayer(context.Context, types.LayerID) types.LayerID
 	LatestComplete() types.LayerID
 }
+
+type certHandler interface {
+	HandleSyncedCertificate(context.Context, types.LayerID, *types.Certificate) error
+}

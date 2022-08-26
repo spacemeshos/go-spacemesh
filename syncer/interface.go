@@ -24,4 +24,5 @@ type layerPatrol interface {
 
 type layerProcessor interface {
 	ProcessLayer(context.Context, types.LayerID) error
+	ProcessCertificates(context.Context, types.LayerID, []*types.Certificate)
 }

@@ -16,17 +16,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 var (
-	// errLayerDataNotFetched is returned when any layer data is not fetched successfully.
-	errLayerDataNotFetched = errors.New("layer data not fetched")
+	// ErrLayerDataNotFetched is returned when any layer data is not fetched successfully.
+	ErrLayerDataNotFetched = errors.New("layer data not fetched")
+	// ErrCertificateMissing is returned when no peers have the layer's certificate.
+	ErrCertificateMissing = errors.New("certificates missing from all peers")
 
-	// errLayerNotProcessed is returned when requested layer was not yet processed.
-	errLayerNotProcessed = errors.New("requested layer is not yet processed")
-
-	errInvalidCertificate          = errors.New("peer has invalid certificate")
 	errCertifiedBlockNotReferenced = errors.New("peer did not provide block for certified block")
 )
 
@@ -41,6 +38,7 @@ type layerResult struct {
 	layerID   types.LayerID
 	ballots   map[types.BallotID]struct{}
 	blocks    map[types.BlockID]struct{}
+	certs     []*types.Certificate
 	responses map[p2p.Peer]*peerResult
 }
 
@@ -48,6 +46,7 @@ type layerResult struct {
 type LayerPromiseResult struct {
 	Err   error
 	Layer types.LayerID
+	Certs []*types.Certificate
 }
 
 // Logic is the struct containing components needed to follow layer fetching logic.
@@ -65,7 +64,6 @@ type Logic struct {
 	atxHandler      atxHandler
 	ballotHandler   ballotHandler
 	blockHandler    blockHandler
-	certHandler     certHandler
 	proposalHandler proposalHandler
 	txHandler       txHandler
 }
@@ -75,7 +73,6 @@ type DataHandlers struct {
 	ATX      atxHandler
 	Ballot   ballotHandler
 	Block    blockHandler
-	Cert     certHandler
 	Proposal proposalHandler
 	TX       txHandler
 	Poet     poetHandler
@@ -93,7 +90,6 @@ func NewLogic(cfg Config, db *sql.Database, msh meshProvider, host *p2p.Host, ha
 		atxHandler:      handlers.ATX,
 		ballotHandler:   handlers.Ballot,
 		blockHandler:    handlers.Block,
-		certHandler:     handlers.Cert,
 		proposalHandler: handlers.Proposal,
 		txHandler:       handlers.TX,
 	}
@@ -266,7 +262,7 @@ func contains(blockIDs []types.BlockID, target types.BlockID) bool {
 // receiveLayerContent is called when response of block IDs for a layer hash is received from remote peer.
 // if enough responses are received, it notifies the channels waiting for the layer blocks result.
 func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer p2p.Peer, expectedResults int, data []byte, peerErr error) {
-	logger := l.log.WithContext(ctx).WithFields(layerID, log.String("peer", peer.String()))
+	logger := l.log.WithContext(ctx).WithFields(layerID, log.Stringer("peer", peer))
 	logger.Debug("received layer content from peer")
 	peerRes := extractPeerResult(logger, layerID, data, peerErr)
 
@@ -274,20 +270,17 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 
 	if peerRes.err == nil {
 		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
-			peerRes.err = errLayerDataNotFetched
+			peerRes.err = ErrLayerDataNotFetched
 		}
 	}
 
-	// process the certificate after blocks are fetched
+	var cert *types.Certificate
 	if peerRes.data != nil && peerRes.data.HareOutput != nil {
-		cert := peerRes.data.HareOutput
+		cert = peerRes.data.HareOutput
 		if cert.BlockID != types.EmptyBlockID && !contains(peerRes.data.Blocks, cert.BlockID) {
 			logger.With().Warning("certificate block id not in peer's layer content")
+			cert = nil
 			peerRes.err = errCertifiedBlockNotReferenced
-		}
-		if err := l.certHandler.HandleSyncedCertificate(ctx, layerID, cert); err != nil {
-			logger.With().Warning("failed to handle certificate", log.Err(err))
-			peerRes.err = errInvalidCertificate
 		}
 	}
 
@@ -296,9 +289,12 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 
 	// check if we have all responses from peers
 	result := l.layerBlocksRes[layerID]
+	if cert != nil {
+		result.certs = append(result.certs, cert)
+	}
 	result.responses[peer] = &peerRes
 	if len(result.responses) < expectedResults {
-		l.log.WithContext(ctx).With().Debug("not yet received layer blocks from all peers",
+		logger.With().Debug("not yet received layer blocks from all peers",
 			log.Int("received", len(result.responses)),
 			log.Int("expected", expectedResults))
 		return
@@ -307,7 +303,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	// make a copy of data and channels to avoid holding a lock while notifying
 	chs := l.layerBlocksChs[layerID]
 	l.eg.Go(func() error {
-		notifyLayerDataResult(ctx, l.log.WithContext(ctx).WithFields(layerID), l.db, layerID, l.msh, chs, result)
+		notifyLayerDataResult(ctx, l.log.WithContext(ctx).WithFields(layerID), layerID, l.msh, chs, result)
 		return nil
 	})
 	delete(l.layerBlocksChs, layerID)
@@ -317,30 +313,17 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // notifyLayerDataResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseResult, lyrResult *layerResult) {
+func notifyLayerDataResult(ctx context.Context, logger log.Log, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseResult, lyrResult *layerResult) {
 	var (
-		missing, success bool
-		err              error
-		best             *types.Certificate
-		maxProcessed     = types.NewLayerID(0)
+		missing, success, hasHareOutput bool
+		err                             error
 	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			success = true
-			if res.data.HareOutput != nil {
-				// we want to accept hare output in the following condition
-				// - we don't have any
-				// - when peer has higher processed layer than ours
-				// - given all peers have the same processed layer, we choose the non-empty block id
-				if best == nil ||
-					res.data.ProcessedLayer.After(maxProcessed) ||
-					res.data.ProcessedLayer == maxProcessed && best.BlockID == types.EmptyBlockID && res.data.HareOutput.BlockID != types.EmptyBlockID {
-					maxProcessed = res.data.ProcessedLayer
-					best = res.data.HareOutput
-				}
-			}
+			hasHareOutput = hasHareOutput || res.data.HareOutput != nil
 		}
-		if errors.Is(res.err, errLayerDataNotFetched) {
+		if errors.Is(res.err, ErrLayerDataNotFetched) {
 			// all fetches need to succeed
 			missing = true
 			err = res.err
@@ -351,19 +334,16 @@ func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database
 		}
 	}
 
-	result := LayerPromiseResult{Layer: layerID}
+	result := LayerPromiseResult{Layer: layerID, Certs: lyrResult.certs}
 	// we tolerate errors from peers as long as we fetched all known blocks in this layer.
 	if missing || !success {
 		result.Err = err
+	} else if !hasHareOutput {
+		logger.Warning("certificate not found from peers")
+		result.Err = ErrCertificateMissing
 	}
 
 	if result.Err == nil {
-		if best != nil {
-			if err := layers.SetHareOutputWithCert(db, layerID, best); err != nil {
-				logger.With().Error("failed to save hare output from peers", log.Err(err))
-				result.Err = err
-			}
-		}
 		if len(lyrResult.blocks) == 0 {
 			if err := msh.SetZeroBlockLayer(ctx, layerID); err != nil {
 				// this can happen when node actually had received blocks for this layer before. ok to ignore
