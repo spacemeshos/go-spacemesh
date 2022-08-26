@@ -16,9 +16,9 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/libp2p/go-eventbus v0.2.1
-	github.com/libp2p/go-libp2p v0.20.3
-	github.com/libp2p/go-libp2p-core v0.16.1
+	github.com/libp2p/go-eventbus v0.3.0
+	github.com/libp2p/go-libp2p v0.22.0
+	github.com/libp2p/go-libp2p-core v0.19.0
 	github.com/libp2p/go-libp2p-netutil v0.1.0
 	github.com/libp2p/go-libp2p-peerstore v0.6.0
 	github.com/libp2p/go-libp2p-pubsub v0.7.1
@@ -106,7 +106,6 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/ipfs/go-cid v0.2.0 // indirect
-	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
@@ -116,27 +115,28 @@ require (
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
 	github.com/koron/go-ssdp v0.0.3 // indirect
-	github.com/libp2p/go-buffer-pool v0.0.2 // indirect
+	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
-	github.com/libp2p/go-flow-metrics v0.0.3 // indirect
+	github.com/libp2p/go-flow-metrics v0.1.0 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.2.0 // indirect
 	github.com/libp2p/go-libp2p-discovery v0.6.0 // indirect
-	github.com/libp2p/go-libp2p-resource-manager v0.3.0 // indirect
-	github.com/libp2p/go-libp2p-testing v0.9.2 // indirect
+	github.com/libp2p/go-libp2p-testing v0.11.0 // indirect
 	github.com/libp2p/go-msgio v0.2.0 // indirect
 	github.com/libp2p/go-nat v0.1.0 // indirect
 	github.com/libp2p/go-netroute v0.2.0 // indirect
-	github.com/libp2p/go-openssl v0.0.7 // indirect
+	github.com/libp2p/go-openssl v0.1.0 // indirect
 	github.com/libp2p/go-reuseport v0.2.0 // indirect
 	github.com/libp2p/go-yamux/v3 v3.1.2 // indirect
-	github.com/lucas-clemente/quic-go v0.27.1 // indirect
+	github.com/lucas-clemente/quic-go v0.28.1 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.2 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.2 // indirect
+	github.com/marten-seemann/qtls-go1-19 v0.1.0 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
+	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/miekg/dns v1.1.50 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
@@ -184,7 +184,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
