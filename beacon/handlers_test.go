@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -117,6 +118,7 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 }
 
 func createFirstVote(t *testing.T, signer signing.Signer, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
+	logger := logtest.New(t)
 	msg := &FirstVotingMessage{
 		FirstVotingMessageBody: FirstVotingMessageBody{
 			EpochID:                   epoch,
@@ -124,7 +126,12 @@ func createFirstVote(t *testing.T, signer signing.Signer, epoch types.EpochID, v
 			PotentiallyValidProposals: pValid,
 		},
 	}
-	sig := signMessage(signer, msg.FirstVotingMessageBody, logtest.New(t))
+	encoded, err := codec.Encode(&msg.FirstVotingMessageBody)
+	if err != nil {
+		logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := signer.Sign(encoded)
+
 	if corruptSignature {
 		msg.Signature = sig[1:]
 	} else {
@@ -156,7 +163,12 @@ func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochI
 			VotesBitVector: bitVector,
 		},
 	}
-	sig := signMessage(signer, msg.FollowingVotingMessageBody, logtest.New(t))
+	logger := logtest.New(t)
+	encoded, err := codec.Encode(&msg.FollowingVotingMessageBody)
+	if err != nil {
+		logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := signer.Sign(encoded)
 	if corruptSignature {
 		msg.Signature = sig[1:]
 	} else {
@@ -992,8 +1004,14 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 			VotesBitVector: votesBitVector,
 		},
 	}
-	msg1.Signature = signMessage(edSgn, msg1.FollowingVotingMessageBody, logtest.New(t))
-	data1, err := codec.Encode(msg1)
+	logger := logtest.New(t)
+	encodedMsg1FollowingVotingMessageBody, err := codec.Encode(&msg1.FollowingVotingMessageBody)
+	if err != nil {
+		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
+	}
+	msg1.Signature = edSgn.Sign(encodedMsg1FollowingVotingMessageBody)
+
+	data1, err := codec.Encode(&msg1)
 	require.NoError(t, err)
 
 	msg2 := FollowingVotingMessage{
@@ -1002,21 +1020,35 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 			VotesBitVector: votesBitVector,
 		},
 	}
-	msg2.Signature = signMessage(edSgn, msg2.FollowingVotingMessageBody, logtest.New(t))
-	data2, err := codec.Encode(msg2)
+	encodedMsg2FollowingVotingMessageBody, err := codec.Encode(&msg2.FollowingVotingMessageBody)
+	if err != nil {
+		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
+	}
+	msg2.Signature = edSgn.Sign(encodedMsg2FollowingVotingMessageBody)
+
+	data2, err := codec.Encode(&msg2)
 	require.NoError(t, err)
 
 	// without EpochID, we cannot tell the following messages apart
 	require.Equal(t, data1, data2)
 
 	msg1.EpochID = types.EpochID(5)
-	msg1.Signature = signMessage(edSgn, msg1.FollowingVotingMessageBody, logtest.New(t))
-	data1, err = codec.Encode(msg1)
+	encodedMsg1FollowingVotingMessageBody, err = codec.Encode(&msg1.FollowingVotingMessageBody)
+	if err != nil {
+		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
+	}
+	msg1.Signature = edSgn.Sign(encodedMsg1FollowingVotingMessageBody)
+	data1, err = codec.Encode(&msg1)
 	require.NoError(t, err)
 
 	msg2.EpochID = msg1.EpochID + 1
-	msg2.Signature = signMessage(edSgn, msg2.FollowingVotingMessageBody, logtest.New(t))
-	data2, err = codec.Encode(msg2)
+	encodedMsg2FollowingVotingMessageBody, err = codec.Encode(&msg2.FollowingVotingMessageBody)
+	if err != nil {
+		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
+	}
+	msg2.Signature = edSgn.Sign(encodedMsg2FollowingVotingMessageBody)
+
+	data2, err = codec.Encode(&msg2)
 	require.NoError(t, err)
 
 	// with EpochID, voting messages from the same miner with the same bit vector will

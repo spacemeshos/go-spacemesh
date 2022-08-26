@@ -47,7 +47,7 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	h.logger.WithContext(ctx).With().Debug("responded to epoch atx request",
 		epoch,
 		log.Int("count", len(atxids)))
-	bts, err := codec.Encode(atxids)
+	bts, err := codec.EncodeSlice(atxids)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize epoch atx", epoch, log.Err(err))
 		return bts, fmt.Errorf("serialize: %w", err)

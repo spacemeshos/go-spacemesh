@@ -264,7 +264,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 
 func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, types.ATXID, error) {
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
-	messageBytes, err := codec.Encode(m.FirstVotingMessageBody)
+	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
 		logger.With().Panic("failed to serialize first voting message", log.Err(err))
 	}
@@ -395,7 +395,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 
 func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, types.ATXID, error) {
 	round := m.RoundID
-	messageBytes, err := codec.Encode(m.FollowingVotingMessageBody)
+	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Panic("failed to serialize voting message", log.Err(err))
 	}
