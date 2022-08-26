@@ -24,7 +24,7 @@ jobs:
       
       - if: matrix.os == 'windows-latest'
         name: Install dependencies in windows
-        uses: crazy-max/ghaction-chocolatey@v1
+        uses: crazy-max/ghaction-chocolatey@v2
         with:
           args: install make wget zip
 
