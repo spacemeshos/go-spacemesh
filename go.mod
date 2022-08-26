@@ -19,7 +19,7 @@ require (
 	github.com/libp2p/go-eventbus v0.2.1
 	github.com/libp2p/go-libp2p v0.20.3
 	github.com/libp2p/go-libp2p-core v0.16.1
-	github.com/libp2p/go-libp2p-netutil v0.1.0
+	github.com/libp2p/go-libp2p-netutil v0.2.0
 	github.com/libp2p/go-libp2p-peerstore v0.6.0
 	github.com/libp2p/go-libp2p-pubsub v0.7.1
 	github.com/minio/sha256-simd v1.0.0
