@@ -2,8 +2,6 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.18
 
-replace github.com/nullstyle/go-xdr v0.1.0 => github.com/spacemeshos/go-xdr v0.1.0
-
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
@@ -147,7 +145,7 @@ require (
 	github.com/multiformats/go-multistream v0.3.3 // indirect
 	github.com/multiformats/go-varint v0.0.6 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nullstyle/go-xdr v0.1.0 // indirect
+	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.20.0 // indirect
@@ -162,10 +160,11 @@ require (
 	github.com/pyroscope-io/dotnetdiag v1.2.1 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
 	github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 // indirect
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 // indirect
-	github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 // indirect
+	github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
