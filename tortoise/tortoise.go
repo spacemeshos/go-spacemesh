@@ -622,7 +622,7 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	return tballots
 }
 
-// loadBlocksData loads blocks, hare output and contextual validity
+// loadBlocksData loads blocks, hare output and contextual validity.
 func (t *turtle) loadBlocksData(lid types.LayerID) error {
 	blocks, err := blocks.Layer(t.cdb, lid)
 	if err != nil {
