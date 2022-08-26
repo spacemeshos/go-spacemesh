@@ -278,19 +278,6 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 		}
 	}
 
-	// process the certificate after blocks are fetched
-	if peerRes.data != nil && peerRes.data.HareOutput != nil {
-		cert := peerRes.data.HareOutput
-		if cert.BlockID != types.EmptyBlockID && !contains(peerRes.data.Blocks, cert.BlockID) {
-			logger.With().Warning("certificate block id not in peer's layer content")
-			peerRes.err = errCertifiedBlockNotReferenced
-		}
-		if err := l.certHandler.HandleSyncedCertificate(ctx, layerID, cert); err != nil {
-			logger.With().Warning("failed to handle certificate", log.Err(err))
-			peerRes.err = errInvalidCertificate
-		}
-	}
-
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -322,23 +309,10 @@ func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database
 		missing, success bool
 		err              error
 		best             *types.Certificate
-		maxProcessed     = types.NewLayerID(0)
 	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			success = true
-			if res.data.HareOutput != nil {
-				// we want to accept hare output in the following condition
-				// - we don't have any
-				// - when peer has higher processed layer than ours
-				// - given all peers have the same processed layer, we choose the non-empty block id
-				if best == nil ||
-					res.data.ProcessedLayer.After(maxProcessed) ||
-					res.data.ProcessedLayer == maxProcessed && best.BlockID == types.EmptyBlockID && res.data.HareOutput.BlockID != types.EmptyBlockID {
-					maxProcessed = res.data.ProcessedLayer
-					best = res.data.HareOutput
-				}
-			}
 		}
 		if errors.Is(res.err, errLayerDataNotFetched) {
 			// all fetches need to succeed

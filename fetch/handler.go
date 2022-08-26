@@ -63,7 +63,6 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 		ld    LayerData
 		err   error
 	)
-	ld.ProcessedLayer = h.msh.ProcessedLayer()
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
@@ -86,12 +85,6 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 		// sqh.ErrNotFound should be considered a programming error since we are only responding for
 		// layers older than processed layer
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
-		return nil, errInternal
-	}
-
-	ld.HareOutput, err = layers.GetCert(h.db, lyrID)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 
