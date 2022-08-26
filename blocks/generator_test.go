@@ -208,11 +208,12 @@ func Test_processHareOutput(t *testing.T) {
 			checkRewards(t, atxes, expWeight, block.Rewards)
 			return nil
 		})
-	tg.mockCert.EXPECT().RegisterDeadline(layerID, gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ types.LayerID, got types.BlockID, _ time.Time) {
+	tg.mockCert.EXPECT().RegisterDeadline(gomock.Any(), layerID, gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, got types.BlockID, _ time.Time) error {
 			require.Equal(t, block.ID(), got)
+			return nil
 		})
-	tg.mockCert.EXPECT().CertifyMaybe(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
 			require.Equal(t, block.ID(), got)
 			return nil
@@ -228,8 +229,8 @@ func Test_processHareOutput(t *testing.T) {
 func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
-	tg.mockCert.EXPECT().RegisterDeadline(layerID, types.EmptyBlockID, gomock.Any())
-	tg.mockCert.EXPECT().CertifyMaybe(gomock.Any(), gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
+	tg.mockCert.EXPECT().RegisterDeadline(gomock.Any(), layerID, types.EmptyBlockID, gomock.Any()).Return(nil)
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
 	require.NoError(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID}))
 }
@@ -261,11 +262,12 @@ func Test_processHareOutput_ProcessFailed(t *testing.T) {
 			checkRewards(t, atxes, expWeight, block.Rewards)
 			return nil
 		})
-	tg.mockCert.EXPECT().RegisterDeadline(layerID, gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ types.LayerID, got types.BlockID, _ time.Time) {
+	tg.mockCert.EXPECT().RegisterDeadline(gomock.Any(), layerID, gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, got types.BlockID, _ time.Time) error {
 			require.Equal(t, block.ID(), got)
+			return nil
 		})
-	tg.mockCert.EXPECT().CertifyMaybe(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
 			require.Equal(t, block.ID(), got)
 			return nil

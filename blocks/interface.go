@@ -25,6 +25,6 @@ type layerClock interface {
 }
 
 type certifier interface {
-	RegisterDeadline(types.LayerID, types.BlockID, time.Time)
+	RegisterDeadline(context.Context, types.LayerID, types.BlockID, time.Time) error
 	CertifyIfEligible(context.Context, log.Log, types.LayerID, types.BlockID) error
 }

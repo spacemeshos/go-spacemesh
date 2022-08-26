@@ -190,7 +190,10 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 		emptyOutputCnt.Inc()
 	}
 
-	g.cert.RegisterDeadline(out.Layer, hareOutput, time.Now())
+	if err := g.cert.RegisterDeadline(ctx, out.Layer, hareOutput, time.Now()); err != nil {
+		logger.With().Warning("failed to register hare output for certifying", log.Err(err))
+	}
+
 	if err := g.cert.CertifyIfEligible(ctx, logger.WithFields(hareOutput), out.Layer, hareOutput); err != nil {
 		logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
 	}
