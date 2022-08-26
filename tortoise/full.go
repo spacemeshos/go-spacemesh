@@ -171,7 +171,8 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		return false
 	}
 	isEmpty := empty.Cmp(f.globalThreshold) > 0
-	if len(f.blocks) == 0 {
+	blocks := f.blocks[lid]
+	if len(blocks) == 0 {
 		if isEmpty {
 			logger.With().Info("candidate layer is empty")
 		}
@@ -179,7 +180,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	}
 	return verifyLayer(
 		logger,
-		f.blocks[lid],
+		blocks,
 		f.validity,
 		func(block blockInfo) sign {
 			decision := sign(block.weight.Cmp(f.globalThreshold))
