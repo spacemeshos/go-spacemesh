@@ -483,8 +483,21 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
+	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+
+	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol,
+		blocks.WithCertContext(ctx),
+		blocks.WithCertConfig(blocks.CertConfig{
+			CommitteeSize:         app.Config.HARE.N,
+			CertifyThreshold:      app.Config.HARE.F + 1,
+			SignatureWaitDuration: time.Second * time.Duration(app.Config.HARE.WakeupDelta),
+			NumLayersToKeep:       app.Config.Tortoise.Zdist,
+		}),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
+
 	var verifier blockValidityVerifier
-	msh, err := mesh.NewMesh(cdb, beaconProtocol, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(cdb, beaconProtocol, &verifier, app.conState, app.certifier, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -535,23 +548,9 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
-	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
-
-	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock,
-		blocks.WithCertContext(ctx),
-		blocks.WithCertConfig(blocks.CertConfig{
-			CommitteeSize:         app.Config.HARE.N,
-			CertifyThreshold:      app.Config.HARE.F + 1,
-			SignatureWaitDuration: time.Second * time.Duration(app.Config.HARE.WakeupDelta),
-			NumLayersToKeep:       app.Config.Tortoise.Zdist,
-		}),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
-
 	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
-		Cert:     app.certifier,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
@@ -562,7 +561,8 @@ func (app *App) initServices(ctx context.Context,
 
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
-		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
+		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
+		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -726,6 +726,7 @@ func (app *App) startServices(ctx context.Context) error {
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
+	app.certifier.Start()
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -870,6 +871,11 @@ func (app *App) stopServices() {
 	if app.blockGen != nil {
 		app.log.Info("stopping blockGen")
 		app.blockGen.Stop()
+	}
+
+	if app.certifier != nil {
+		app.log.Info("stopping certifier")
+		app.certifier.Stop()
 	}
 
 	if app.layerFetch != nil {
