@@ -484,10 +484,10 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
 	}
-	if err := t.loadConsensusData(lid); err != nil {
-		return err
-	}
 	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
+		if err := t.loadBlocksData(process); err != nil {
+			return err
+		}
 		if isUndecided(t.Config, t.decided, process, t.last) {
 			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", process))
 			return nil
@@ -515,6 +515,7 @@ func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
 	)
+	logger.With().Debug("processing layer", lid)
 	if err := t.loadBallots(logger, lid); err != nil {
 		return err
 	}
@@ -621,7 +622,8 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	return tballots
 }
 
-func (t *turtle) loadConsensusData(lid types.LayerID) error {
+// loadBlocksData loads blocks, hare output and contextual validity
+func (t *turtle) loadBlocksData(lid types.LayerID) error {
 	blocks, err := blocks.Layer(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
@@ -721,6 +723,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if !lid.After(t.evicted) {
 		return
 	}
+	t.logger.With().Debug("on block", log.Inline(block))
 	if _, exist := t.referenceHeight[lid.GetEpoch()]; !exist {
 		// TODO(dshulyak) reference height is computed when first layer in the epoch
 		// is sent to the onLayerTerminated. after that we will load blocks from that layer.
@@ -746,6 +749,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if !lid.After(t.evicted) {
 		return
 	}
+	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID))
 	t.decided[lid] = struct{}{}
 	if bid != types.EmptyBlockID {
 		t.hareOutput[bid] = support

@@ -1319,11 +1319,13 @@ func TestComputeExpectedWeight(t *testing.T) {
 
 func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	// increase layer size reduce test flakiness
-	s := sim.New(sim.WithLayerSize(defaultTestLayerSize * 10))
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
+	cfg.LayerSize = size
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var (
@@ -1339,6 +1341,148 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 		verified = tortoise.HandleIncomingLayer(ctx, lid)
 	}
 	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestLongTermination(t *testing.T) {
+	t.Run("hare output exists", func(t *testing.T) {
+		// note that test should pass without switching into full mode
+		// therefore limit is lower than hdist
+		const (
+			size  = 10
+			zdist = 2
+			hdist = zdist + 3
+			skip  = 1 // skipping layer generated at this position
+			limit = hdist
+		)
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
+
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = zdist
+		cfg.Hdist = hdist
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var (
+			last     types.LayerID
+			verified types.LayerID
+		)
+		for i := 0; i < limit; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			if i == skip {
+				continue
+			}
+			verified = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, last.Sub(1), verified)
+		for lid := types.GetEffectiveGenesis().Add(1); lid.Before(last); lid = lid.Add(1) {
+			validities, err := blocks.ContextualValidity(s.GetState(0).DB, lid)
+			require.NoError(t, err)
+			require.Len(t, validities, 1, "layer=%s", lid)
+			for _, validity := range validities {
+				require.True(t, validity.Validity, "layer=%s block=%s", lid, validity.ID)
+			}
+		}
+	})
+	t.Run("no hare output for this node", func(t *testing.T) {
+		// layers won't be verified within hdist, since everyones opinion
+		// will be different from this node opinion
+		const (
+			size  = 10
+			zdist = 2
+			hdist = zdist + 3
+			skip  = 1 // skipping layer generated at this position
+			limit = hdist + 1
+		)
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
+
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = zdist
+		cfg.Hdist = hdist
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var (
+			last     types.LayerID
+			verified types.LayerID
+		)
+		for i := 0; i < limit; i++ {
+			opts := []sim.NextOpt{sim.WithNumBlocks(1)}
+			if i == skip {
+				opts = append(opts, sim.WithoutHareOutput())
+			}
+			last = s.Next(opts...)
+			if i == skip {
+				continue
+			}
+			verified = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, types.GetEffectiveGenesis().Add(skip).Sub(1), verified)
+		// switch to full mode happens here
+		last = s.Next(sim.WithNumBlocks(1))
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+		require.Equal(t, last.Sub(1), verified)
+		for lid := types.GetEffectiveGenesis().Add(1); lid.Before(last); lid = lid.Add(1) {
+			validities, err := blocks.ContextualValidity(s.GetState(0).DB, lid)
+			require.NoError(t, err)
+			require.Len(t, validities, 1, "layer=%s", lid)
+			for _, validity := range validities {
+				require.True(t, validity.Validity, "layer=%s block=%s", lid, validity.ID)
+			}
+		}
+	})
+	t.Run("empty layer", func(t *testing.T) {
+		// layer will be verified within hdist, as everyones opinion will
+		// be consistent with empty layer
+		const (
+			size  = 10
+			zdist = 2
+			hdist = zdist + 3
+			skip  = 1 // skipping layer generated at this position
+			limit = hdist
+		)
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
+
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = zdist
+		cfg.Hdist = hdist
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var (
+			last     types.LayerID
+			verified types.LayerID
+		)
+		for i := 0; i < limit; i++ {
+			opts := []sim.NextOpt{sim.WithNumBlocks(1)}
+			if i == skip {
+				opts = []sim.NextOpt{sim.WithNumBlocks(0), sim.WithEmptyHareOutput()}
+			}
+			last = s.Next(opts...)
+			if i == skip {
+				continue
+			}
+			verified = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, last.Sub(1), verified)
+		for lid := types.GetEffectiveGenesis().Add(1); lid.Before(last); lid = lid.Add(1) {
+			validities, err := blocks.ContextualValidity(s.GetState(0).DB, lid)
+			require.NoError(t, err)
+			if lid == types.GetEffectiveGenesis().Add(1).Add(skip) {
+				require.Empty(t, validities)
+			} else {
+				require.Len(t, validities, 1, "layer=%s", lid)
+				for _, validity := range validities {
+					require.True(t, validity.Validity, "layer=%s block=%s", lid, validity.ID)
+				}
+			}
+		}
+	})
 }
 
 func benchmarkLayersHandling(b *testing.B, opts ...sim.NextOpt) {
@@ -2000,7 +2144,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			err := tortoise.trtl.loadConsensusData(tc.lid)
+			err := tortoise.trtl.loadBlocksData(tc.lid)
 			require.NoError(t, err)
 
 			blks, err := blocks.IDsInLayer(s.GetState(0).DB, tc.lid)
