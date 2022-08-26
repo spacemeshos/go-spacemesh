@@ -10,14 +10,10 @@ import (
 )
 
 // Encodable is an interface that must be implemented by a struct to be encoded.
-type Encodable interface {
-	scale.Encodable
-}
+type Encodable = scale.Encodable
 
 // Decodable is an interface that must be implemented bya struct to be decoded.
-type Decodable interface {
-	scale.Decodable
-}
+type Decodable = scale.Decodable
 
 // EncodeTo encodes value to a writer stream.
 func EncodeTo(w io.Writer, value Encodable) (int, error) {
