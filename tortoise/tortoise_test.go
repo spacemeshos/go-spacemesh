@@ -2776,7 +2776,7 @@ func TestFutureHeight(t *testing.T) {
 		)
 		var last, verified types.LayerID
 		for i := 0; i < int(cfg.Hdist); i++ {
-			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1))
+			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1), sim.WithVoteGenerator(sim.ConsistentVoting))
 			verified = tortoise.HandleIncomingLayer(context.Background(), last)
 		}
 		require.Equal(t, last.Sub(2), verified)
