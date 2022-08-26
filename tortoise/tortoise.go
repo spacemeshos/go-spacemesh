@@ -484,13 +484,17 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
 	}
+	if err := t.loadBlocksData(lid); err != nil {
+		return err
+	}
 	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
-		if err := t.loadBlocksData(process); err != nil {
-			return err
-		}
 		if isUndecided(t.Config, t.decided, process, t.last) {
 			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", process))
 			return nil
+		}
+		// load data for layers that were skipped due to zdist limit
+		if err := t.loadBlocksData(process); err != nil {
+			return err
 		}
 		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(process), process); err != nil {
 			return err

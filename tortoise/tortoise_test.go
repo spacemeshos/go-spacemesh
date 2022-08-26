@@ -438,8 +438,9 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 		verified types.LayerID
 	)
 	for _, lid := range sim.GenLayers(s,
-		sim.WithSequence(1),
-		sim.WithSequence(1, sim.WithNextReorder(1)),
+		sim.WithSequence(1, sim.WithNumBlocks(1)),
+		sim.WithSequence(1, sim.WithNumBlocks(1), sim.WithoutHareOutput()),
+		sim.WithSequence(1, sim.WithNumBlocks(1)),
 	) {
 		last = lid
 		verified = tortoise.HandleIncomingLayer(ctx, lid)
