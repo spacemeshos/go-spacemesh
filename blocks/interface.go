@@ -2,7 +2,6 @@ package blocks
 
 import (
 	"context"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -25,6 +24,6 @@ type layerClock interface {
 }
 
 type certifier interface {
-	RegisterDeadline(context.Context, types.LayerID, types.BlockID, time.Time) error
+	RegisterForCert(context.Context, types.LayerID, types.BlockID) error
 	CertifyIfEligible(context.Context, log.Log, types.LayerID, types.BlockID) error
 }

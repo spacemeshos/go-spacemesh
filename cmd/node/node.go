@@ -489,10 +489,9 @@ func (app *App) initServices(ctx context.Context,
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
-			CommitteeSize:         app.Config.HARE.N,
-			CertifyThreshold:      app.Config.HARE.F + 1,
-			SignatureWaitDuration: time.Second * time.Duration(app.Config.HARE.WakeupDelta),
-			NumLayersToKeep:       app.Config.Tortoise.Zdist,
+			CommitteeSize:    app.Config.HARE.N,
+			CertifyThreshold: app.Config.HARE.F + 1,
+			NumLayersToKeep:  app.Config.Tortoise.Zdist,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 

@@ -7,7 +7,6 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
-	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
@@ -191,16 +190,16 @@ func (mr *MockcertifierMockRecorder) CertifyIfEligible(arg0, arg1, arg2, arg3 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyIfEligible", reflect.TypeOf((*Mockcertifier)(nil).CertifyIfEligible), arg0, arg1, arg2, arg3)
 }
 
-// RegisterDeadline mocks base method.
-func (m *Mockcertifier) RegisterDeadline(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 time.Time) error {
+// RegisterForCert mocks base method.
+func (m *Mockcertifier) RegisterForCert(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterDeadline", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "RegisterForCert", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// RegisterDeadline indicates an expected call of RegisterDeadline.
-func (mr *MockcertifierMockRecorder) RegisterDeadline(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// RegisterForCert indicates an expected call of RegisterForCert.
+func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterDeadline", reflect.TypeOf((*Mockcertifier)(nil).RegisterDeadline), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForCert", reflect.TypeOf((*Mockcertifier)(nil).RegisterForCert), arg0, arg1, arg2)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
@@ -93,7 +92,14 @@ func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.No
 	return nid, msg, data
 }
 
-func verifiedSaved(t *testing.T, db *sql.Database, lid types.LayerID, bid types.BlockID, expectedSigs int) {
+func verifyNotSaved(t *testing.T, db *sql.Database, lid types.LayerID) {
+	t.Helper()
+	cert, err := layers.GetCert(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, cert)
+}
+
+func verifySaved(t *testing.T, db *sql.Database, lid types.LayerID, bid types.BlockID, expectedSigs int) {
 	t.Helper()
 	cert, err := layers.GetCert(db, lid)
 	require.NoError(t, err)
@@ -121,7 +127,7 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 	tc := newTestCertifier(t)
 	numMsgs := tc.cfg.CertifyThreshold / int(defaultCnt)
 	b := generateBlock(t, tc.db)
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), b.LayerIndex, b.ID(), time.Now()))
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 	sigs := make([]types.CertifyMessage, numMsgs)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -134,14 +140,14 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 		Signatures: sigs,
 	}
 	require.NoError(t, tc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert))
-	verifiedSaved(t, tc.db, b.LayerIndex, b.ID(), numMsgs)
+	verifySaved(t, tc.db, b.LayerIndex, b.ID(), numMsgs)
 }
 
 func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
 	tc := newTestCertifier(t)
 	numMsgs := tc.cfg.CertifyThreshold/int(defaultCnt) - 1
 	b := generateBlock(t, tc.db)
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), b.LayerIndex, b.ID(), time.Now()))
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 	sigs := make([]types.CertifyMessage, numMsgs)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -161,7 +167,8 @@ func Test_HandleCertifyMessage(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), b.LayerIndex, b.ID(), time.Now()))
+	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 		Return(true, nil)
@@ -169,99 +176,81 @@ func Test_HandleCertifyMessage(t *testing.T) {
 	require.Equal(t, pubsub.ValidationAccept, res)
 }
 
-func waitTillCertified(t *testing.T, tc *testCertifier, current types.LayerID, b *types.Block, numMsgs int) {
-	ch := make(chan struct{}, 1)
-	started := make(chan struct{}, 1)
-	tc.mClk.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
-			if got == current {
-				close(started)
-			}
-			return ch
-		}).AnyTimes()
-	tc.Start()
-	<-started
-	close(ch)
-	var cert *types.Certificate
-	require.Eventually(t, func() bool {
-		cert, _ = layers.GetCert(tc.db, b.LayerIndex)
-		return cert != nil
-	}, 1*time.Second, 1*time.Millisecond)
-	tc.Stop()
-	require.Equal(t, b.ID(), cert.BlockID)
-	require.Len(t, cert.Signatures, numMsgs)
-}
-
 func Test_HandleCertifyMessage_Certified(t *testing.T) {
 	tc := newTestCertifier(t)
-	numMsgs := tc.cfg.CertifyThreshold/int(defaultCnt) + 2
+	numMsgs := tc.cfg.CommitteeSize
+	cutoff := tc.cfg.CertifyThreshold / int(defaultCnt)
 	b := generateBlock(t, tc.db)
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), b.LayerIndex, b.ID(), time.Time{}))
+	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
+	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-		tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-			Return(true, nil)
-		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-		require.Equal(t, pubsub.ValidationAccept, res)
-	}
-	waitTillCertified(t, tc, b.LayerIndex, b, numMsgs)
-}
-
-func Test_HandleCertifyMessage_CertifiedWithEarlyMsgs(t *testing.T) {
-	tc := newTestCertifier(t)
-	numMsgs := tc.cfg.CertifyThreshold/int(defaultCnt) + 2
-	b := generateBlock(t, tc.db)
-	current := b.LayerIndex.Sub(1)
-	tc.mClk.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-	for i := 0; i < numMsgs; i++ {
-		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-		tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-			Return(true, nil)
-		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-		require.Equal(t, pubsub.ValidationAccept, res)
-	}
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), b.LayerIndex, b.ID(), time.Time{}))
-	waitTillCertified(t, tc, current, b, numMsgs)
-}
-
-func Test_HandleCertifyMessage_TooManyEarlyMsgs(t *testing.T) {
-	tc := newTestCertifier(t)
-	numMsgs := tc.cfg.CommitteeSize + 1
-	b := generateBlock(t, tc.db)
-	current := b.LayerIndex.Sub(1)
-	tc.mClk.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-	for i := 0; i < numMsgs; i++ {
-		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-		if i < tc.cfg.CommitteeSize {
+		if i < cutoff {
 			tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 				Return(true, nil)
 		}
 		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-		if i < tc.cfg.CommitteeSize {
-			require.Equal(t, pubsub.ValidationAccept, res)
-		} else {
-			// one too many
-			require.Equal(t, pubsub.ValidationIgnore, res)
-		}
+		require.Equal(t, pubsub.ValidationAccept, res)
 	}
+	verifySaved(t, tc.db, b.LayerIndex, b.ID(), cutoff)
 }
 
-func Test_HandleCertifyMessage_MsgsTooEarly(t *testing.T) {
+func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 	tc := newTestCertifier(t)
 	numMsgs := tc.cfg.CommitteeSize
 	b := generateBlock(t, tc.db)
-	current := b.LayerIndex.Sub(tc.cfg.NumLayersToKeep)
-	tc.mClk.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
+	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, types.RandomBlockID()))
 	for i := 0; i < numMsgs; i++ {
-		_, _, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
+		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+		tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+			Return(true, nil)
 		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-		require.Equal(t, pubsub.ValidationIgnore, res)
+		require.Equal(t, pubsub.ValidationAccept, res)
 	}
+	verifyNotSaved(t, tc.db, b.LayerIndex)
+}
+
+func Test_HandleCertifyMessage_CertifiedWithEarlyMsgs(t *testing.T) {
+	tc := newTestCertifier(t)
+	numMsgs := tc.cfg.CommitteeSize
+	b := generateBlock(t, tc.db)
+	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
+	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
+	for i := 0; i < numMsgs; i++ {
+		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+		tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+			Return(true, nil)
+		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
+		require.Equal(t, pubsub.ValidationAccept, res)
+	}
+	verifyNotSaved(t, tc.db, b.LayerIndex)
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
+	verifySaved(t, tc.db, b.LayerIndex, b.ID(), numMsgs)
+}
+
+func Test_HandleCertifyMessage_TooLate(t *testing.T) {
+	tc := newTestCertifier(t)
+	b := generateBlock(t, tc.db)
+	current := b.LayerIndex.Sub(1)
+	tc.mClk.EXPECT().GetCurrentLayer().Return(current.Sub(1)).AnyTimes()
+	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
+	_, _, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+}
+
+func Test_HandleCertifyMessage_TooEarly(t *testing.T) {
+	tc := newTestCertifier(t)
+	b := generateBlock(t, tc.db)
+	current := b.LayerIndex.Add(numEarlyLayers + 1)
+	tc.mClk.EXPECT().GetCurrentLayer().Return(current.Sub(1)).AnyTimes()
+	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
+	_, _, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
+	require.Equal(t, pubsub.ValidationIgnore, res)
 }
 
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {
@@ -275,8 +264,7 @@ func Test_HandleCertifyMessage_Stopped(t *testing.T) {
 
 func Test_HandleCertifyMessage_CorruptedMsg(t *testing.T) {
 	tc := newTestCertifier(t)
-	_, _, encoded := genEncodedMsg(t, types.NewLayerID(11), types.BlockID{1, 2, 3})
-	encoded = encoded[:1]
+	encoded := []byte("guaranteed corrupt")
 
 	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
 	require.Equal(t, pubsub.ValidationReject, res)
@@ -285,23 +273,29 @@ func Test_HandleCertifyMessage_CorruptedMsg(t *testing.T) {
 func Test_HandleCertifyMessage_LayerNotRegistered(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
-	_, _, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+	nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex.Add(1), types.RandomBlockID()))
+	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex.Add(1)).AnyTimes()
+	tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+		Return(true, nil)
 	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Equal(t, pubsub.ValidationAccept, res)
 }
 
 func Test_HandleCertifyMessage_BlockNotRegistered(t *testing.T) {
 	tc := newTestCertifier(t)
 	b := generateBlock(t, tc.db)
-	_, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+	nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), msg.LayerID, types.RandomBlockID(), time.Now()))
+	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, types.RandomBlockID()))
+	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
+	tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+		Return(true, nil)
 	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Equal(t, pubsub.ValidationAccept, res)
 }
 
 func Test_HandleCertifyMessage_BeaconNotAvailable(t *testing.T) {
@@ -309,7 +303,7 @@ func Test_HandleCertifyMessage_BeaconNotAvailable(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	_, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), msg.LayerID, types.RandomBlockID(), time.Now()))
+	require.NoError(t, tc.RegisterForCert(context.TODO(), msg.LayerID, types.RandomBlockID()))
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.EmptyBeacon, errors.New("meh"))
 	res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
 	require.Equal(t, pubsub.ValidationIgnore, res)
@@ -319,8 +313,8 @@ func Test_OldLayersPruned(t *testing.T) {
 	tc := newTestCertifier(t)
 	lid := types.NewLayerID(11)
 
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), lid, types.RandomBlockID(), time.Now()))
-	require.NoError(t, tc.RegisterDeadline(context.TODO(), lid.Add(1), types.RandomBlockID(), time.Now()))
+	require.NoError(t, tc.RegisterForCert(context.TODO(), lid, types.RandomBlockID()))
+	require.NoError(t, tc.RegisterForCert(context.TODO(), lid.Add(1), types.RandomBlockID()))
 	require.Equal(t, 2, tc.NumCached())
 
 	current := lid.Add(tc.cfg.NumLayersToKeep + 1)

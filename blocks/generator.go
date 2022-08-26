@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -190,7 +189,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 		emptyOutputCnt.Inc()
 	}
 
-	if err := g.cert.RegisterDeadline(ctx, out.Layer, hareOutput, time.Now()); err != nil {
+	if err := g.cert.RegisterForCert(ctx, out.Layer, hareOutput); err != nil {
 		logger.With().Warning("failed to register hare output for certifying", log.Err(err))
 	}
 
