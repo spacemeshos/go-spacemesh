@@ -88,7 +88,11 @@ func (v *VM) GetLayerApplied(tid types.TransactionID) (types.LayerID, error) {
 
 // GetStateRoot gets the current state root hash.
 func (v *VM) GetStateRoot() (types.Hash32, error) {
-	return layers.GetLatestStateHash(v.db)
+	root, err := layers.GetLatestStateHash(v.db)
+	if errors.Is(err, sql.ErrNotFound) {
+		return types.Hash32{}, nil
+	}
+	return root, err
 }
 
 // GetAllAccounts returns a dump of all accounts in global state.
