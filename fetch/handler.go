@@ -24,15 +24,13 @@ type handler struct {
 	logger log.Log
 	db     *sql.Database
 	bs     *datastore.BlobStore
-	msh    meshProvider
 }
 
-func newHandler(db *sql.Database, bs *datastore.BlobStore, msh meshProvider, lg log.Log) *handler {
+func newHandler(db *sql.Database, bs *datastore.BlobStore, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		db:     db,
 		bs:     bs,
-		msh:    msh,
 	}
 }
 
@@ -56,14 +54,13 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	return bts, nil
 }
 
-// handleLayerDataReq returns all data in a layer, described in layerData.
+// handleLayerDataReq returns all data in a layer, described in LayerData.
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
 		lyrID = types.BytesToLayerID(req)
 		ld    LayerData
 		err   error
 	)
-	ld.ProcessedLayer = h.msh.ProcessedLayer()
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
@@ -76,29 +73,40 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	}
 	ld.Ballots, err = ballots.IDsInLayer(h.db, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		// sqh.ErrNotFound should be considered a programming error since we are only responding for
-		// layers older than processed layer
 		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.Blocks, err = blocks.IDsInLayer(h.db, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		// sqh.ErrNotFound should be considered a programming error since we are only responding for
-		// layers older than processed layer
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 
-	ld.HareOutput, err = layers.GetCert(h.db, lyrID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
-		return nil, errInternal
-	}
 	out, err := codec.Encode(&ld)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
+		h.logger.WithContext(ctx).With().Panic("failed to serialize layer data response", log.Err(err))
 	}
 
+	return out, nil
+}
+
+// handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinions.
+func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
+	var (
+		lid = types.BytesToLayerID(req)
+		ld  LayerOpinions
+		out []byte
+		err error
+	)
+	ld.Cert, err = layers.GetCert(h.db, lid)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		h.logger.WithContext(ctx).With().Warning("failed to get certificate for layer", lid, log.Err(err))
+		return nil, errInternal
+	}
+	out, err = codec.Encode(&ld)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Panic("failed to serialize layer opinions response", log.Err(err))
+	}
 	return out, nil
 }
 

@@ -144,20 +144,6 @@ func (mr *MocktortoiseMockRecorder) HandleIncomingLayer(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleIncomingLayer", reflect.TypeOf((*Mocktortoise)(nil).HandleIncomingLayer), arg0, arg1)
 }
 
-// LatestComplete mocks base method.
-func (m *Mocktortoise) LatestComplete() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LatestComplete")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// LatestComplete indicates an expected call of LatestComplete.
-func (mr *MocktortoiseMockRecorder) LatestComplete() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*Mocktortoise)(nil).LatestComplete))
-}
-
 // OnBallot mocks base method.
 func (m *Mocktortoise) OnBallot(arg0 *types.Ballot) {
 	m.ctrl.T.Helper()
@@ -180,41 +166,4 @@ func (m *Mocktortoise) OnBlock(arg0 *types.Block) {
 func (mr *MocktortoiseMockRecorder) OnBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBlock", reflect.TypeOf((*Mocktortoise)(nil).OnBlock), arg0)
-}
-
-// MockcertHandler is a mock of certHandler interface.
-type MockcertHandler struct {
-	ctrl     *gomock.Controller
-	recorder *MockcertHandlerMockRecorder
-}
-
-// MockcertHandlerMockRecorder is the mock recorder for MockcertHandler.
-type MockcertHandlerMockRecorder struct {
-	mock *MockcertHandler
-}
-
-// NewMockcertHandler creates a new mock instance.
-func NewMockcertHandler(ctrl *gomock.Controller) *MockcertHandler {
-	mock := &MockcertHandler{ctrl: ctrl}
-	mock.recorder = &MockcertHandlerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockcertHandler) EXPECT() *MockcertHandlerMockRecorder {
-	return m.recorder
-}
-
-// HandleSyncedCertificate mocks base method.
-func (m *MockcertHandler) HandleSyncedCertificate(arg0 context.Context, arg1 types.LayerID, arg2 *types.Certificate) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncedCertificate", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// HandleSyncedCertificate indicates an expected call of HandleSyncedCertificate.
-func (mr *MockcertHandlerMockRecorder) HandleSyncedCertificate(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedCertificate", reflect.TypeOf((*MockcertHandler)(nil).HandleSyncedCertificate), arg0, arg1, arg2)
 }

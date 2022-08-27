@@ -14,7 +14,8 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayerContent(context.Context, types.LayerID) chan fetch.LayerPromiseResult
+	PollLayerData(context.Context, types.LayerID) chan fetch.LayerPromiseResult
+	PollLayerOpinions(context.Context, types.LayerID) chan fetch.LayerPromiseResult
 	GetEpochATXs(context.Context, types.EpochID) error
 }
 
@@ -24,5 +25,4 @@ type layerPatrol interface {
 
 type layerProcessor interface {
 	ProcessLayer(context.Context, types.LayerID) error
-	ProcessCertificates(context.Context, types.LayerID, []*types.Certificate)
 }

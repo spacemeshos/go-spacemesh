@@ -12,23 +12,21 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Configuration is the config params for syncer.
 type Configuration struct {
 	SyncInterval     time.Duration
+	HareDelayLayers  uint32
 	SyncCertDistance uint32
 }
 
 const (
 	outOfSyncThreshold  uint32 = 3 // see notSynced
 	numGossipSyncLayers uint32 = 2 // see gossipSync
-
-	// the max amount of layer delays syncer can tolerate before it tries to validate a layer.
-	maxHareDelayLayers uint32 = 10
 )
 
 type syncState uint32
@@ -60,9 +58,10 @@ func (s syncState) String() string {
 }
 
 var (
-	errShuttingDown  = errors.New("shutting down")
-	errHareInCharge  = errors.New("hare in charge of layer")
-	errATXsNotSynced = errors.New("ATX not synced")
+	errShuttingDown       = errors.New("shutting down")
+	errHareInCharge       = errors.New("hare in charge of layer")
+	errATXsNotSynced      = errors.New("ATX not synced")
+	errBeaconNotAvailable = errors.New("beacon not available")
 )
 
 // Syncer is responsible to keep the node in sync with the network.
@@ -71,6 +70,7 @@ type Syncer struct {
 
 	conf          Configuration
 	ticker        layerTicker
+	beacon        system.BeaconGetter
 	mesh          *mesh.Mesh
 	lyrProcessor  layerProcessor
 	fetcher       layerFetcher
@@ -99,12 +99,22 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(
+	ctx context.Context,
+	conf Configuration,
+	ticker layerTicker,
+	beacon system.BeaconGetter,
+	mesh *mesh.Mesh,
+	fetcher layerFetcher,
+	patrol layerPatrol,
+	logger log.Log,
+) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
 		logger:        logger,
 		conf:          conf,
 		ticker:        ticker,
+		beacon:        beacon,
 		mesh:          mesh,
 		lyrProcessor:  mesh,
 		fetcher:       fetcher,
@@ -440,28 +450,59 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 		return errors.New("shutdown")
 	}
 
-	s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
-	if err := s.getLayerFromPeers(ctx, layerID); err != nil {
+	s.logger.WithContext(ctx).With().Info("polling layer data", layerID)
+	if err := s.fetchLayerData(ctx, layerID); err != nil {
 		return err
+	}
+
+	// best effort polling opinions up to this layer
+	s.logger.WithContext(ctx).With().Info("polling layer opinions", layerID)
+	cutoff := s.certCutoffLayer()
+	for lid := cutoff; !lid.After(layerID); lid = lid.Add(1) {
+		if err := s.fetchLayerOpinions(ctx, lid); err != nil {
+			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
+		}
 	}
 	return nil
 }
 
-func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) error {
-	bch := s.fetcher.PollLayerContent(ctx, layerID)
-	res := <-bch
-	cutoff := types.GetEffectiveGenesis()
-	current := s.ticker.GetCurrentLayer()
-	if current.Uint32() > s.conf.SyncCertDistance {
-		cutoff = current.Sub(s.conf.SyncCertDistance)
+func (s *Syncer) fetchLayerData(ctx context.Context, layerID types.LayerID) error {
+	ch := s.fetcher.PollLayerData(ctx, layerID)
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return fmt.Errorf("PollLayerData: %w", res.Err)
+		}
+	case <-ctx.Done():
 	}
-	if errors.Is(res.Err, fetch.ErrLayerDataNotFetched) ||
-		(errors.Is(res.Err, fetch.ErrCertificateMissing) && layerID.After(cutoff)) {
-		return fmt.Errorf("PollLayerContent: %w", res.Err)
+	return nil
+}
+
+func (s *Syncer) certCutoffLayer() types.LayerID {
+	cutoff := types.GetEffectiveGenesis()
+	last := s.mesh.ProcessedLayer()
+	if last.Uint32() > s.conf.SyncCertDistance {
+		limit := last.Sub(s.conf.SyncCertDistance)
+		if limit.After(cutoff) {
+			cutoff = limit
+		}
+	}
+	return cutoff
+}
+
+func (s *Syncer) fetchLayerOpinions(ctx context.Context, layerID types.LayerID) error {
+	cutoff := s.certCutoffLayer()
+	if !layerID.After(cutoff) {
+		return nil
 	}
 
-	if layerID.After(cutoff) && len(res.Certs) > 0 {
-		s.lyrProcessor.ProcessCertificates(ctx, layerID, res.Certs)
+	ch := s.fetcher.PollLayerOpinions(ctx, layerID)
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return fmt.Errorf("PollLayerOpinions: %w", res.Err)
+		}
+	case <-ctx.Done():
 	}
 	return nil
 }
@@ -496,6 +537,10 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
+		if _, err := s.beacon.GetBeacon(lid.GetEpoch()); err != nil {
+			s.logger.WithContext(ctx).With().Debug("beacon not available", lid)
+			return errBeaconNotAvailable
+		}
 
 		if s.patrol.IsHareInCharge(lid) {
 			lag := types.NewLayerID(0)
@@ -503,15 +548,18 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			if current.After(lid) {
 				lag = current.Sub(lid.Uint32())
 			}
-			if lag.Value < maxHareDelayLayers {
+			if lag.Value < s.conf.HareDelayLayers {
 				s.logger.WithContext(ctx).With().Info("skip validating layer: hare still working", lid)
 				return errHareInCharge
 			}
 		}
 
+		if err := s.fetchLayerOpinions(ctx, lid); err != nil {
+			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
+		}
+
 		if err := s.lyrProcessor.ProcessLayer(ctx, lid); err != nil {
 			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
-			return fmt.Errorf("sync process layer: %w", err)
 		}
 	}
 	s.logger.WithContext(ctx).With().Info("end of state sync",
