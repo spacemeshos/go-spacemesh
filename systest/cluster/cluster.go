@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"time"
 
 	"github.com/spacemeshos/ed25519"
@@ -313,9 +312,6 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	smeshers := c.clients[c.bootnodes:]
 	c.clients = nil
 	smeshers = append(smeshers, clients...)
-	sort.Slice(smeshers, func(i, j int) bool {
-		return decodeOrdinal(smeshers[i].Name) < decodeOrdinal(smeshers[j].Name)
-	})
 	c.clients = append(c.clients, bootnodes...)
 	c.clients = append(c.clients, smeshers...)
 	c.smeshers = len(smeshers)

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -108,6 +109,11 @@ func TestAddNodes(t *testing.T) {
 	require.NotEmpty(t, joined, "nodes weren't able to join the cluster")
 }
 
+type clientHash struct {
+	clientIdx   int
+	layerHashes map[uint32]string
+}
+
 func TestFailedNodes(t *testing.T) {
 	t.Parallel()
 
@@ -133,32 +139,54 @@ func TestFailedNodes(t *testing.T) {
 		return chaos.Fail(tctx, "fail60percent", names...)
 	})
 
-	hashes := make([]map[uint32]string, cl.Total())
-	for i := 0; i < cl.Total(); i++ {
-		hashes[i] = map[uint32]string{}
-	}
-	for i := 0; i < cl.Total()-failed; i++ {
-		i := i
-		client := cl.Client(i)
-		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
-				tctx.Log.Debugw("confirmed layer",
-					"client", client.Name,
-					"layer", layer.Layer.Number.Number,
-					"hash", prettyHex(layer.Layer.Hash),
-				)
-				if layer.Layer.Number.Number == lastLayer {
-					return false, nil
+	run := func() (map[uint32]string, []clientHash) {
+		var result []clientHash
+		hashes := make([]map[uint32]string, cl.Total())
+		for i := 0; i < cl.Total(); i++ {
+			hashes[i] = map[uint32]string{}
+		}
+		for i := 0; i < cl.Total()-failed; i++ {
+			i := i
+			client := cl.Client(i)
+			watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+				if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
+					tctx.Log.Debugw("confirmed layer",
+						"client", client.Name,
+						"index", i,
+						"layer", layer.Layer.Number.Number,
+						"hash", prettyHex(layer.Layer.Hash),
+					)
+					if layer.Layer.Number.Number == lastLayer {
+						return false, nil
+					}
+					hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
 				}
-				hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
+				return true, nil
+			})
+		}
+		require.NoError(t, eg.Wait())
+		reference := hashes[0]
+		for i, tested := range hashes[1 : cl.Total()-failed] {
+			if !reflect.DeepEqual(reference, tested) {
+				result = append(result, clientHash{clientIdx: i, layerHashes: tested})
 			}
-			return true, nil
-		})
+		}
+		return reference, result
 	}
-	require.NoError(t, eg.Wait())
-	reference := hashes[0]
-	for i, tested := range hashes[1 : cl.Total()-failed] {
-		assert.Equal(t, reference, tested, "client=%d", i)
+	// the reason we try more than once that we apply a block eagerly before tortoise verify
+	// it's contextual validity. for hashes collected from the earlier layers, they may have
+	// been changed when tortoise verify those layers.
+	for try := 0; try < attempts; try++ {
+		ref, diffs := run()
+		if len(diffs) == 0 {
+			break
+		}
+		if try == attempts-1 {
+			for _, d := range diffs {
+				assert.Equal(t, ref, d.layerHashes, "client=%d", d.clientIdx)
+			}
+		}
 	}
+
 	require.NoError(t, waitAll(tctx, cl))
 }
