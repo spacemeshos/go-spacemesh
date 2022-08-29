@@ -2,7 +2,6 @@ package hare
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sort"
 	"sync"
@@ -55,7 +54,7 @@ func (mType MessageType) String() string {
 type Set struct {
 	valuesMu  sync.RWMutex
 	values    map[types.ProposalID]struct{}
-	id        uint32
+	id        types.Hash32
 	isIDValid bool
 }
 
@@ -68,7 +67,7 @@ func NewDefaultEmptySet() *Set {
 func NewEmptySet(size int) *Set {
 	s := &Set{}
 	s.initWithSize(size)
-	s.id = 0
+	s.id = types.Hash32{}
 	s.isIDValid = false
 
 	return s
@@ -82,7 +81,7 @@ func NewSetFromValues(values ...types.ProposalID) *Set {
 	for _, v := range values {
 		s.Add(v)
 	}
-	s.id = 0
+	s.id = types.Hash32{}
 	s.isIDValid = false
 
 	return s
@@ -210,12 +209,12 @@ func (s *Set) updateID() {
 	}
 
 	// update
-	s.id = binary.LittleEndian.Uint32(h.Sum([]byte{}))
+	s.id = types.BytesToHash(h.Sum([]byte{}))
 	s.isIDValid = true
 }
 
 // ID returns the ObjectID of the set.
-func (s *Set) ID() uint32 {
+func (s *Set) ID() types.Hash32 {
 	if !s.isIDValid {
 		s.updateID()
 	}

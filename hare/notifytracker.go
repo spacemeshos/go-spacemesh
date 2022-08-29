@@ -3,22 +3,23 @@ package hare
 import (
 	"encoding/binary"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 // notifyTracker tracks notify messages.
 // It also provides the number of notifications tracked for a given set.
 type notifyTracker struct {
-	notifies     map[string]struct{} // tracks PubKey->Notification
-	tracker      *RefCountTracker    // tracks ref count to each seen set
-	certificates map[uint32]struct{} // tracks Set->certificate
+	notifies     map[string]struct{}       // tracks PubKey->Notification
+	tracker      *RefCountTracker          // tracks ref count to each seen set
+	certificates map[types.Hash32]struct{} // tracks Set->certificate
 }
 
 func newNotifyTracker(expectedSize int) *notifyTracker {
 	nt := &notifyTracker{}
 	nt.notifies = make(map[string]struct{}, expectedSize)
 	nt.tracker = NewRefCountTracker()
-	nt.certificates = make(map[uint32]struct{}, expectedSize)
+	nt.certificates = make(map[types.Hash32]struct{}, expectedSize)
 
 	return nt
 }
@@ -49,21 +50,17 @@ func (nt *notifyTracker) NotificationsCount(s *Set) int {
 }
 
 // calculates a unique id for the provided k and set.
-func calcID(k uint32, set *Set) uint32 {
+func calcID(k uint32, set *Set) types.Hash32 {
 	h := hash.New()
 
 	// write K
 	buff := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buff, k) // K>=0 because this not pre-round
 	h.Write(buff)
-
-	// TODO: is this hash enough for this usage?
 	// write set ObjectID
-	buff = make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, set.ID())
-	h.Write(buff)
+	h.Write(set.ID().Bytes())
 
-	return binary.LittleEndian.Uint32(h.Sum([]byte{}))
+	return types.BytesToHash(h.Sum([]byte{}))
 }
 
 // tracks certificates.
