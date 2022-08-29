@@ -3,17 +3,41 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestBlock_IDSize(t *testing.T) {
 	var id BlockID
 	assert.Len(t, id.Bytes(), BlockIDSize)
+}
+
+func Test_CertifyMessage(t *testing.T) {
+	msg := CertifyMessage{
+		CertifyContent: CertifyContent{
+			LayerID:        NewLayerID(11),
+			BlockID:        RandomBlockID(),
+			EligibilityCnt: 2,
+			Proof:          []byte("not a fraud"),
+		},
+	}
+	signer := signing.NewEdSigner()
+	msg.Signature = signer.Sign(msg.Bytes())
+	data, err := codec.Encode(&msg)
+	require.NoError(t, err)
+
+	var decoded CertifyMessage
+	require.NoError(t, codec.Decode(data, &decoded))
+	require.Equal(t, msg, decoded)
+	pubKey, err := ed25519.ExtractPublicKey(decoded.Bytes(), decoded.Signature)
+	require.NoError(t, err)
+	require.Equal(t, signer.PublicKey().Bytes(), []byte(pubKey))
 }
 
 func TestRewardCodec(t *testing.T) {

@@ -1,7 +1,6 @@
 package grpcserver
 
-// Hide deprecated protobuf version error.
-// nolint: staticcheck
+//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -29,6 +28,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -36,6 +36,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -144,11 +145,7 @@ func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 	}
 }
 
-type NetworkMock struct {
-	lock         sync.Mutex
-	broadCastErr bool
-	broadcasted  []byte
-}
+type NetworkMock struct{}
 
 func (s *NetworkMock) PeerCount() uint64 {
 	return 0
@@ -213,7 +210,6 @@ type ConStateAPIMock struct {
 	layerApplied map[types.TransactionID]*types.LayerID
 	balances     map[types.Address]*big.Int
 	nonces       map[types.Address]uint64
-	err          error
 
 	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
@@ -553,7 +549,7 @@ func TestNodeService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -683,7 +679,7 @@ func TestGlobalStateService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -972,7 +968,7 @@ func TestSmesherService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -1097,7 +1093,7 @@ func TestMeshService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -1636,13 +1632,13 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	req.NoError(err)
 
 	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
-	serializedTx, err := types.InterfaceToBytes(globalTx)
+	serializedTx, err := codec.Encode(globalTx)
 	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)
@@ -1687,7 +1683,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -1720,7 +1716,7 @@ func TestTransactionService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2034,16 +2030,16 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
 				continue
 			}
-			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
+			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
 				continue
 			}
-			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
+			if !bytes.Equal(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) {
 				continue
 			}
 			if a.NumUnits != uint32(globalAtx.NumUnits) {
@@ -2081,7 +2077,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2180,7 +2176,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2282,7 +2278,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2389,7 +2385,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2523,18 +2519,6 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 	}
 }
 
-func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	// We should check more data elements here but this isn't really implemented yet so for now
-	// just check one as a sanity check
-	case *pb.AccountData_Receipt:
-		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type: "+fmt.Sprintf("%T", dataItem))
-	}
-}
-
 func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_AccountWrapper:
@@ -2556,16 +2540,6 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
-}
-
-func checkGlobalStateDataReceipt(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_Receipt:
-		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2609,7 +2583,7 @@ func TestMultiService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2698,7 +2672,7 @@ func TestDebugService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, conn.Close()) }()
 	c := pb.NewDebugServiceClient(conn)
@@ -2763,7 +2737,7 @@ func TestGatewayService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	defer func() { require.NoError(t, conn.Close()) }()
@@ -2803,13 +2777,13 @@ func TestEventsReceived(t *testing.T) {
 
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
-	conn1, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn1, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn1.Close())
 	}()
 
-	conn2, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn2, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn2.Close())

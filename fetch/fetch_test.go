@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
@@ -104,7 +105,7 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
 
 			hsh := types.RandomHash()
-			res := responseMessage{
+			res := ResponseMessage{
 				Hash: hsh,
 				Data: []byte("a"),
 			}
@@ -113,14 +114,14 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 					if tc.err != nil {
 						return tc.err
 					}
-					var rb requestBatch
-					err := types.BytesToInterface(req, &rb)
+					var rb RequestBatch
+					err := codec.Decode(req, &rb)
 					require.NoError(t, err)
-					resBatch := responseBatch{
+					resBatch := ResponseBatch{
 						ID:        rb.ID,
-						Responses: []responseMessage{res},
+						Responses: []ResponseMessage{res},
 					}
-					bts, err := types.InterfaceToBytes(&resBatch)
+					bts, err := codec.Encode(&resBatch)
 					require.NoError(t, err)
 					okFunc(bts)
 					return nil
@@ -171,21 +172,21 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h3 := types.RandomHash()
 	f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-			var rb requestBatch
-			err := types.BytesToInterface(req, &rb)
+			var rb RequestBatch
+			err := codec.Decode(req, &rb)
 			require.NoError(t, err)
-			resps := make([]responseMessage, 0, len(rb.Requests))
+			resps := make([]ResponseMessage, 0, len(rb.Requests))
 			for _, r := range rb.Requests {
-				resps = append(resps, responseMessage{
+				resps = append(resps, ResponseMessage{
 					Hash: r.Hash,
 					Data: []byte("a"),
 				})
 			}
-			resBatch := responseBatch{
+			resBatch := ResponseBatch{
 				ID:        rb.ID,
 				Responses: resps,
 			}
-			bts, err := types.InterfaceToBytes(&resBatch)
+			bts, err := codec.Encode(&resBatch)
 			require.NoError(t, err)
 			okFunc(bts)
 			return nil
@@ -224,6 +225,7 @@ func TestFetch_GetRandomPeer(t *testing.T) {
 }
 
 func TestFetch_GetLayerData(t *testing.T) {
+	processed := types.NewLayerID(10)
 	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
 	errUnknown := errors.New("unknown")
 	tt := []struct {
@@ -274,7 +276,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 				f.mLyrS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, _ p2p.Peer, _ []byte, okFunc func([]byte), errFunc func(error)) error {
 						if tc.errs[idx] == nil {
-							go okFunc(generateLayerContent(false))
+							go okFunc(generateLayerContent(t, processed))
 						} else {
 							go errFunc(tc.errs[idx])
 						}

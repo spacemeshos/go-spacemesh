@@ -14,7 +14,9 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -33,12 +35,6 @@ var (
 )
 
 const defaultPoetRetryInterval = 5 * time.Second
-
-type poetNumberOfTickProvider struct{}
-
-func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 1
-}
 
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
@@ -153,21 +149,22 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
-		parentCtx:         context.Background(),
-		signer:            signer,
-		nodeID:            nodeID,
-		coinbaseAccount:   conf.CoinbaseAccount,
-		goldenATXID:       conf.GoldenATXID,
-		layersPerEpoch:    conf.LayersPerEpoch,
-		cdb:               cdb,
-		atxHandler:        hdlr,
-		publisher:         publisher,
-		nipostBuilder:     nipostBuilder,
-		postSetupProvider: postSetupProvider,
-		layerClock:        layerClock,
-		syncer:            syncer,
-		log:               log,
-		poetRetryInterval: defaultPoetRetryInterval,
+		parentCtx:             context.Background(),
+		signer:                signer,
+		nodeID:                nodeID,
+		coinbaseAccount:       conf.CoinbaseAccount,
+		goldenATXID:           conf.GoldenATXID,
+		layersPerEpoch:        conf.LayersPerEpoch,
+		cdb:                   cdb,
+		atxHandler:            hdlr,
+		publisher:             publisher,
+		nipostBuilder:         nipostBuilder,
+		postSetupProvider:     postSetupProvider,
+		layerClock:            layerClock,
+		syncer:                syncer,
+		log:                   log,
+		poetRetryInterval:     defaultPoetRetryInterval,
+		poetClientInitializer: defaultPoetClientFunc,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -318,7 +315,7 @@ func (b *Builder) loop(ctx context.Context) {
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CAS(client, nil)
+			b.pendingPoetClient.CompareAndSwap(client, nil)
 		}
 
 		if err := b.PublishActivationTx(ctx); err != nil {
@@ -332,6 +329,7 @@ func (b *Builder) loop(ctx context.Context) {
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
+				b.discardChallenge()
 				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
 				if poetRetryTimer == nil {
@@ -387,14 +385,16 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 
 // UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
 func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
+	b.log.With().Debug("request to update poet service", log.String("target", target))
 	client := b.poetClientInitializer(target)
 	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 	// Maybe it should be provided during update.
-	_, err := client.PoetServiceID(ctx)
+	sid, err := client.PoetServiceID(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
 	b.pendingPoetClient.Store(unsafe.Pointer(&client))
+	b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	return nil
 }
 
@@ -428,7 +428,7 @@ func getNIPostKey() []byte {
 }
 
 func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	bts, err := types.InterfaceToBytes(ch)
+	bts, err := codec.Encode(ch)
 	if err != nil {
 		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
@@ -447,12 +447,12 @@ func (b *Builder) loadChallenge() error {
 	}
 
 	if len(bts) > 0 {
-		tp := &types.NIPostChallenge{}
-		if err = types.BytesToInterface(bts, tp); err != nil {
+		var tp types.NIPostChallenge
+		if err = codec.Decode(bts, &tp); err != nil {
 			return fmt.Errorf("parse NIPost challenge: %w", err)
 		}
 
-		b.challenge = tp
+		b.challenge = &tp
 	}
 	return nil
 }
@@ -466,18 +466,20 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
-			b.log.Error(err.Error())
+			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return fmt.Errorf("failed to build new atx challenge: %w", err)
 		}
 	}
 
-	b.log.With().Info("new atx challenge is ready", b.currentEpoch())
+	b.log.With().Info("new atx challenge is ready",
+		log.Stringer("target_epoch", b.challenge.PubLayerID.GetEpoch()),
+		log.Stringer("current_epoch", b.currentEpoch()))
 
 	if b.pendingATX == nil {
 		var err error
 		b.pendingATX, err = b.createAtx(ctx)
 		if err != nil {
-			b.log.Error(err.Error())
+			b.log.With().Error("failed to create atx", log.Err(err))
 			return fmt.Errorf("create ATX: %w", err)
 		}
 	}
@@ -526,9 +528,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	}
 
 	// the following method waits for a PoET proof, which should take ~1 epoch
-	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
+	expireLayer := (pubEpoch + 2).FirstLayer()
+	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
 
-	b.log.With().Info("building NIPost")
+	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
 
 	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
 	if err != nil {
@@ -583,7 +586,7 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	if err := b.SignAtx(atx); err != nil {
 		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
-	buf, err := types.InterfaceToBytes(atx)
+	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}

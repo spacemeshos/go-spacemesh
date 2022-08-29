@@ -78,6 +78,7 @@ const (
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
 	HareLogger             = "hare"
+	BlockCertLogger        = "blockCert"
 	BlockGenLogger         = "blockGenerator"
 	BlockHandlerLogger     = "blockHandler"
 	TxHandlerLogger        = "txHandler"
@@ -271,6 +272,7 @@ type App struct {
 	clock            TickProvider
 	hare             HareService
 	blockGen         *blocks.Generator
+	certifier        *blocks.Certifier
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
@@ -414,8 +416,6 @@ func (app *App) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	dbStorepath string,
 	sgn *signing.EdSigner,
-	isFixedOracle bool,
-	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
@@ -535,9 +535,23 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
+	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+
+	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock,
+		blocks.WithCertContext(ctx),
+		blocks.WithCertConfig(blocks.CertConfig{
+			CommitteeSize:         app.Config.HARE.N,
+			CertifyThreshold:      app.Config.HARE.F + 1,
+			SignatureWaitDuration: time.Second * time.Duration(app.Config.HARE.WakeupDelta),
+			NumLayersToKeep:       app.Config.Tortoise.Zdist,
+		}),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
+
 	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
+		Cert:     app.certifier,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
@@ -554,19 +568,8 @@ func (app *App) initServices(ctx context.Context,
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
-	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
-	var hOracle hare.Rolacle
-	if isFixedOracle {
-		// fixed rolacle, take the provided rolacle
-		hOracle = rolacle
-	} else {
-		// regular oracle, build and use it
-		hOracle = eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
-		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
-	}
-
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped,
+	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:      layerSize,
@@ -652,6 +655,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("hare message handler missing")
 	}
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
+	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -1076,8 +1080,6 @@ func (app *App) Start() error {
 		nodeID,
 		dbStorepath,
 		app.edSgn,
-		false,
-		nil,
 		uint32(app.Config.LayerAvgSize),
 		poetClient,
 		vrfSigner,

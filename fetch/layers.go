@@ -25,21 +25,23 @@ var (
 
 	// errLayerNotProcessed is returned when requested layer was not yet processed.
 	errLayerNotProcessed = errors.New("requested layer is not yet processed")
+
+	errInvalidCertificate          = errors.New("peer has invalid certificate")
+	errCertifiedBlockNotReferenced = errors.New("peer did not provide block for certified block")
 )
 
 // peerResult captures the response from each peer.
 type peerResult struct {
-	data *layerData
+	data *LayerData
 	err  error
 }
 
 // layerResult captures expected content of a layer across peers.
 type layerResult struct {
-	layerID    types.LayerID
-	ballots    map[types.BallotID]struct{}
-	blocks     map[types.BlockID]struct{}
-	hareOutput types.BlockID
-	responses  map[p2p.Peer]*peerResult
+	layerID   types.LayerID
+	ballots   map[types.BallotID]struct{}
+	blocks    map[types.BlockID]struct{}
+	responses map[p2p.Peer]*peerResult
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -63,6 +65,7 @@ type Logic struct {
 	atxHandler      atxHandler
 	ballotHandler   ballotHandler
 	blockHandler    blockHandler
+	certHandler     certHandler
 	proposalHandler proposalHandler
 	txHandler       txHandler
 }
@@ -72,6 +75,7 @@ type DataHandlers struct {
 	ATX      atxHandler
 	Ballot   ballotHandler
 	Block    blockHandler
+	Cert     certHandler
 	Proposal proposalHandler
 	TX       txHandler
 	Poet     poetHandler
@@ -89,6 +93,7 @@ func NewLogic(cfg Config, db *sql.Database, msh meshProvider, host *p2p.Host, ha
 		atxHandler:      handlers.ATX,
 		ballotHandler:   handlers.Ballot,
 		blockHandler:    handlers.Block,
+		certHandler:     handlers.Cert,
 		proposalHandler: handlers.Proposal,
 		txHandler:       handlers.TX,
 	}
@@ -161,7 +166,7 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 }
 
 // registerLayerHashes registers provided hashes with provided peer.
-func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
+func (l *Logic) registerLayerHashes(peer p2p.Peer, data *LayerData) {
 	if data == nil {
 		return
 	}
@@ -172,25 +177,20 @@ func (l *Logic) registerLayerHashes(peer p2p.Peer, data *layerData) {
 	for _, blkID := range data.Blocks {
 		layerHashes = append(layerHashes, blkID.AsHash32())
 	}
-	if data.HareOutput != types.EmptyBlockID {
-		layerHashes = append(layerHashes, data.HareOutput.AsHash32())
-	}
-
 	if len(layerHashes) == 0 {
 		return
 	}
 
 	l.fetcher.RegisterPeerHashes(peer, layerHashes)
-	return
 }
 
 // fetchLayerData fetches the all content referenced in layerData.
-func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, blocks *layerData) error {
-	logger = logger.WithFields(log.Int("num_ballots", len(blocks.Ballots)), log.Int("num_blocks", len(blocks.Blocks)))
+func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID types.LayerID, ldata *LayerData) error {
+	logger = logger.WithFields(log.Int("num_ballots", len(ldata.Ballots)), log.Int("num_blocks", len(ldata.Blocks)))
 	l.mutex.Lock()
 	lyrResult := l.layerBlocksRes[layerID]
 	var ballotsToFetch []types.BallotID
-	for _, ballotID := range blocks.Ballots {
+	for _, ballotID := range ldata.Ballots {
 		if _, ok := lyrResult.ballots[ballotID]; !ok {
 			// not yet fetched
 			lyrResult.ballots[ballotID] = struct{}{}
@@ -198,21 +198,12 @@ func (l *Logic) fetchLayerData(ctx context.Context, logger log.Log, layerID type
 		}
 	}
 	var blocksToFetch []types.BlockID
-	for _, blkID := range blocks.Blocks {
+	for _, blkID := range ldata.Blocks {
 		if _, ok := lyrResult.blocks[blkID]; !ok {
 			// not yet fetched
 			lyrResult.blocks[blkID] = struct{}{}
 			blocksToFetch = append(blocksToFetch, blkID)
 		}
-	}
-	if lyrResult.hareOutput == types.EmptyBlockID {
-		if blocks.HareOutput != types.EmptyBlockID {
-			logger.With().Info("adopting hare output", blocks.HareOutput)
-			lyrResult.hareOutput = blocks.HareOutput
-		}
-	} else if blocks.HareOutput != types.EmptyBlockID && lyrResult.hareOutput != blocks.HareOutput {
-		logger.With().Warning("found different hare output from peer", blocks.HareOutput)
-		// TODO do something in combination of the layer hash difference and resolve differences with peers
 	}
 	l.mutex.Unlock()
 
@@ -251,7 +242,7 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 		return
 	}
 
-	var ldata layerData
+	var ldata LayerData
 	if err := codec.Decode(data, &ldata); err != nil {
 		logger.With().Debug("error converting bytes to layerData", log.Err(err))
 		result.err = err
@@ -261,6 +252,15 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 	result.data = &ldata
 	// TODO check layer hash to be consistent with the content. if not, blacklist the peer
 	return
+}
+
+func contains(blockIDs []types.BlockID, target types.BlockID) bool {
+	for _, bid := range blockIDs {
+		if bid == target {
+			return true
+		}
+	}
+	return false
 }
 
 // receiveLayerContent is called when response of block IDs for a layer hash is received from remote peer.
@@ -275,6 +275,19 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	if peerRes.err == nil {
 		if err := l.fetchLayerData(ctx, logger, layerID, peerRes.data); err != nil {
 			peerRes.err = errLayerDataNotFetched
+		}
+	}
+
+	// process the certificate after blocks are fetched
+	if peerRes.data != nil && peerRes.data.HareOutput != nil {
+		cert := peerRes.data.HareOutput
+		if cert.BlockID != types.EmptyBlockID && !contains(peerRes.data.Blocks, cert.BlockID) {
+			logger.With().Warning("certificate block id not in peer's layer content")
+			peerRes.err = errCertifiedBlockNotReferenced
+		}
+		if err := l.certHandler.HandleSyncedCertificate(ctx, layerID, cert); err != nil {
+			logger.With().Warning("failed to handle certificate", log.Err(err))
+			peerRes.err = errInvalidCertificate
 		}
 	}
 
@@ -308,10 +321,24 @@ func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database
 	var (
 		missing, success bool
 		err              error
+		best             *types.Certificate
+		maxProcessed     = types.NewLayerID(0)
 	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			success = true
+			if res.data.HareOutput != nil {
+				// we want to accept hare output in the following condition
+				// - we don't have any
+				// - when peer has higher processed layer than ours
+				// - given all peers have the same processed layer, we choose the non-empty block id
+				if best == nil ||
+					res.data.ProcessedLayer.After(maxProcessed) ||
+					res.data.ProcessedLayer == maxProcessed && best.BlockID == types.EmptyBlockID && res.data.HareOutput.BlockID != types.EmptyBlockID {
+					maxProcessed = res.data.ProcessedLayer
+					best = res.data.HareOutput
+				}
+			}
 		}
 		if errors.Is(res.err, errLayerDataNotFetched) {
 			// all fetches need to succeed
@@ -331,11 +358,11 @@ func notifyLayerDataResult(ctx context.Context, logger log.Log, db *sql.Database
 	}
 
 	if result.Err == nil {
-		// FIXME should not blindly save hare output from peer, potentially overwriting local hare's
-		// consensus result. see https://github.com/spacemeshos/go-spacemesh/issues/3200
-		if err := layers.SetHareOutput(db, layerID, lyrResult.hareOutput); err != nil {
-			logger.With().Error("failed to save hare output from peers", log.Err(err))
-			result.Err = err
+		if best != nil {
+			if err := layers.SetHareOutputWithCert(db, layerID, best); err != nil {
+				logger.With().Error("failed to save hare output from peers", log.Err(err))
+				result.Err = err
+			}
 		}
 		if len(lyrResult.blocks) == 0 {
 			if err := msh.SetZeroBlockLayer(ctx, layerID); err != nil {
@@ -363,8 +390,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, eid types.EpochID) error {
 
 	// build receiver function
 	okFunc := func(data []byte, peer p2p.Peer) {
-		var atxsIDs []types.ATXID
-		err := codec.Decode(data, &atxsIDs)
+		atxsIDs, err := codec.DecodeSlice[types.ATXID](data)
 		resCh <- epochAtxRes{
 			Error: err,
 			Atxs:  atxsIDs,
@@ -398,7 +424,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, eid types.EpochID) error {
 	return nil
 }
 
-// GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched.
+// GetAtxs gets the data for given atx IDs and validates them. returns an error if at least one ATX cannot be fetched.
 func (l *Logic) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	if len(ids) == 0 {
 		return nil

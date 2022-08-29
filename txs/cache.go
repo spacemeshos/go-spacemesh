@@ -280,11 +280,11 @@ func findBest(ntxs []*txtypes.NanoTX, balance uint64, blockSeed []byte) *txtypes
 }
 
 // adding a tx to the account cache. possible outcomes:
-// - nonce is smaller than the next nonce in state: reject from cache
-// - too many txs present: reject from cache
-// - nonce already exists in the cache:
-//   if it is better than the best candidate in that nonce group, swap
-// - nonce not present: add to cache.
+//   - nonce is smaller than the next nonce in state: reject from cache
+//   - too many txs present: reject from cache
+//   - nonce already exists in the cache:
+//     if it is better than the best candidate in that nonce group, swap
+//   - nonce not present: add to cache.
 func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce.Counter < ac.startNonce {
 		logger.With().Warning("nonce too small",
@@ -560,15 +560,15 @@ func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	}
 }
 
-// - errInsufficientBalance:
-//   conservative cache is conservative in that it only counts principal's spending for pending transactions.
-//   a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
-//   received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
-//   re-evaluate it after each layer is applied.
-// - errNonceTooBig: transactions are gossiped/synced out of nonce order. when we receive a errNonceTooBig tx,
-//   we should store it in db and retrieve it when the nonce gap is filled in the cache.
-// - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
-//   be stored in db and retrieved after each earlier nonce is applied.
+//   - errInsufficientBalance:
+//     conservative cache is conservative in that it only counts principal's spending for pending transactions.
+//     a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
+//     received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
+//     re-evaluate it after each layer is applied.
+//   - errNonceTooBig: transactions are gossiped/synced out of nonce order. when we receive a errNonceTooBig tx,
+//     we should store it in db and retrieve it when the nonce gap is filled in the cache.
+//   - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
+//     be stored in db and retrieved after each earlier nonce is applied.
 func acceptable(err error) bool {
 	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errNonceTooBig) || errors.Is(err, errTooManyNonce)
 }

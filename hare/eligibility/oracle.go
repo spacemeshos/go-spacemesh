@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -22,6 +23,24 @@ import (
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./oracle.go
+
+const (
+	// HarePreRound ...
+	HarePreRound uint32 = math.MaxUint32
+	// CertifyRound is not part of the hare protocol, but it shares the same oracle for eligibility.
+	CertifyRound uint32 = math.MaxUint32 >> 1
+)
+
+const (
+	// HareStatusRound ...
+	HareStatusRound uint32 = iota
+	// HareProposalRound ...
+	HareProposalRound
+	// HareCommitRound ...
+	HareCommitRound
+	// HareNotifyRound ...
+	HareNotifyRound
+)
 
 const (
 	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound

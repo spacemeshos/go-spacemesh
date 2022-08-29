@@ -91,12 +91,12 @@ func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 }
 
 // BuildSVP builds the SVP if available and returns it, it return false otherwise.
-func (st *statusTracker) BuildSVP() *aggregatedMessages {
+func (st *statusTracker) BuildSVP() *AggregatedMessages {
 	if !st.IsSVPReady() {
 		return nil
 	}
 
-	svp := &aggregatedMessages{}
+	svp := &AggregatedMessages{}
 	for _, m := range st.statuses {
 		svp.Messages = append(svp.Messages, m.Message)
 	}

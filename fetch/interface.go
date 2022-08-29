@@ -30,6 +30,10 @@ type blockHandler interface {
 	HandleSyncedBlock(context.Context, []byte) error
 }
 
+type certHandler interface {
+	HandleSyncedCertificate(context.Context, types.LayerID, *types.Certificate) error
+}
+
 type ballotHandler interface {
 	HandleSyncedBallot(context.Context, []byte) error
 }
