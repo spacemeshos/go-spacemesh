@@ -23,6 +23,7 @@ func init() {
 }
 
 func TestAddNodes(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
