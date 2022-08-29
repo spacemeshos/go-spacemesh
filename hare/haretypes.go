@@ -210,8 +210,7 @@ func (s *Set) updateID() {
 	}
 
 	// update
-	idBuf := make([]byte, h.Size())
-	s.id = binary.LittleEndian.Uint32(h.Sum(idBuf))
+	s.id = binary.LittleEndian.Uint32(h.Sum([]byte{}))
 	s.isIDValid = true
 }
 

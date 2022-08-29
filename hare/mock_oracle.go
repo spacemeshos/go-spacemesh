@@ -30,7 +30,7 @@ func (h *hasherU32) Hash(values ...[]byte) uint32 {
 	for _, b := range values {
 		hsh.Write(b)
 	}
-	return binary.LittleEndian.Uint32(hsh.Sum(make([]byte, 0)))
+	return binary.LittleEndian.Uint32(hsh.Sum([]byte{}))
 }
 
 func (h *hasherU32) MaxValue() uint32 {

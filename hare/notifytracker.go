@@ -63,7 +63,7 @@ func calcID(k uint32, set *Set) uint32 {
 	binary.LittleEndian.PutUint32(buff, set.ID())
 	h.Write(buff)
 
-	return binary.LittleEndian.Uint32(h.Sum(make([]byte, h.Size())))
+	return binary.LittleEndian.Uint32(h.Sum([]byte{}))
 }
 
 // tracks certificates.
