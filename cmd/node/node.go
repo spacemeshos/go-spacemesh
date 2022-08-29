@@ -623,8 +623,13 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, cdb, atxHandler, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
-	)
+		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
+		activation.WithContext(ctx),
+		activation.WithPoetConfig(activation.PoetConfig{
+			PhaseShift:  app.Config.POET.PhaseShift,
+			CycleGap:    app.Config.POET.CycleGap,
+			GracePeriod: app.Config.POET.GracePeriod,
+		}))
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {

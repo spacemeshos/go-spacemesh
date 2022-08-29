@@ -34,6 +34,13 @@ var (
 	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
 )
 
+// PoetConfig is the configuration to interact with the poet server.
+type PoetConfig struct {
+	PhaseShift  time.Duration `long:"phase-shift"`
+	CycleGap    time.Duration `long:"cycle-gap"`
+	GracePeriod time.Duration `long:"grace-period"`
+}
+
 const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
@@ -111,6 +118,7 @@ type Builder struct {
 	parentCtx             context.Context
 	stop                  func()
 	exited                chan struct{}
+	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
 }
@@ -140,6 +148,13 @@ func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption 
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
 		b.parentCtx = ctx
+	}
+}
+
+// WithPoetConfig sets the poet config.
+func WithPoetConfig(c PoetConfig) BuilderOption {
+	return func(b *Builder) {
+		b.poetCfg = c
 	}
 }
 
@@ -285,6 +300,8 @@ func (b *Builder) run(ctx context.Context) {
 		return
 	}
 
+	b.waitForFirstATX(ctx)
+
 	b.loop(ctx)
 }
 
@@ -307,6 +324,43 @@ func (b *Builder) generateProof() error {
 	return nil
 }
 
+func (b *Builder) waitForFirstATX(ctx context.Context) {
+	currEpoch := b.layerClock.GetCurrentLayer().GetEpoch()
+	if currEpoch == 0 { // genesis miner
+		return
+	}
+	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
+		if prev.PubLayerID.GetEpoch() == currEpoch-1 {
+			// miner has ATX in previous epoch
+			return
+		}
+	}
+
+	// first atx for this node
+	currentLayer := b.layerClock.GetCurrentLayer()
+	waitTill := (currentLayer.GetEpoch() + 1).FirstLayer()
+	b.log.WithContext(ctx).With().Info("building very first atx",
+		log.Stringer("current_epoch", currentLayer.GetEpoch()),
+		log.Stringer("wait_till", waitTill),
+		log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
+	select {
+	case <-ctx.Done():
+		return
+	case <-b.layerClock.AwaitLayer(waitTill):
+		// this estimate work if the majority of the nodes use poet servers that are configured the same way.
+		// TODO: do better when nodes use different poet services
+		timer := time.NewTimer(b.poetCfg.PhaseShift - b.poetCfg.CycleGap + b.poetCfg.GracePeriod)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+	}
+	b.log.WithContext(ctx).With().Info("ready to build first atx",
+		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()))
+}
+
 // loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
 	var poetRetryTimer *time.Timer
@@ -324,11 +378,12 @@ func (b *Builder) loop(ctx context.Context) {
 			b.pendingPoetClient.CompareAndSwap(client, nil)
 		}
 
+		ctx := log.WithNewSessionID(ctx)
 		if err := b.PublishActivationTx(ctx); err != nil {
 			if errors.Is(err, ErrStopRequested) {
 				return
 			}
-			b.log.With().Error("error attempting to publish atx",
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
@@ -466,17 +521,18 @@ func (b *Builder) loadChallenge() error {
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
+	logger := b.log.WithContext(ctx)
 	if b.challenge != nil {
-		b.log.With().Info("using existing atx challenge", b.currentEpoch())
+		logger.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
-		b.log.With().Info("building new atx challenge", b.currentEpoch())
+		logger.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to build new atx challenge: %w", err)
 		}
 	}
 
-	b.log.With().Info("new atx challenge is ready",
+	logger.With().Info("new atx challenge is ready",
 		log.Stringer("target_epoch", b.challenge.PubLayerID.GetEpoch()),
 		log.Stringer("current_epoch", b.currentEpoch()))
 
@@ -500,17 +556,17 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return fmt.Errorf("broadcast: %w", err)
 	}
 
-	b.log.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
+	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
 
 	select {
 	case <-atxReceived:
-		b.log.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
+		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		syncedCh := make(chan struct{})
 		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
-			b.log.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
+			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
 		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)

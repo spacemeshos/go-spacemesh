@@ -49,6 +49,7 @@ type Config struct {
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	VM              vm.Config                `mapstructure:"vm"`
 	POST            activation.PostConfig    `mapstructure:"post"`
+	POET            activation.PoetConfig    `mapstructure:"poet"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
 	FETCH           fetch.Config             `mapstructure:"fetch"`
