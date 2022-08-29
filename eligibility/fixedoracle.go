@@ -175,7 +175,7 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) u
 			log.FieldNamed("err1", log.Err(err)),
 			log.FieldNamed("err2", log.Err(err2)))
 	}
-	sum := h.Sum(make([]byte, h.Size()))
+	sum := h.Sum([]byte{})
 	return binary.LittleEndian.Uint32(sum)
 }
 
@@ -231,7 +231,7 @@ func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round ui
 		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 
-	sum := h.Sum(make([]byte, h.Size()))
+	sum := h.Sum([]byte{})
 
 	return sum, nil
 }
