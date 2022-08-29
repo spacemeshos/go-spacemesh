@@ -128,6 +128,7 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
 		POST:            activation.DefaultPostConfig(),
+		POET:            activation.DefaultPoetConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),

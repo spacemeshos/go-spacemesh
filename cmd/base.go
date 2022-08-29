@@ -249,6 +249,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG.Beacon).Elem()
 			assignFields(ff, elem, name)
 
+			ff = reflect.TypeOf(appCFG.POET)
+			elem = reflect.ValueOf(&appCFG.POET).Elem()
+			assignFields(ff, elem, name)
+
 			ff = reflect.TypeOf(appCFG.POST)
 			elem = reflect.ValueOf(&appCFG.POST).Elem()
 			assignFields(ff, elem, name)

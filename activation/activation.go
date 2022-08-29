@@ -36,9 +36,13 @@ var (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	PhaseShift  time.Duration `long:"phase-shift"`
-	CycleGap    time.Duration `long:"cycle-gap"`
-	GracePeriod time.Duration `long:"grace-period"`
+	PhaseShift  time.Duration `mapstructure:"phase-shift"`
+	CycleGap    time.Duration `mapstructure:"cycle-gap"`
+	GracePeriod time.Duration `mapstructure:"grace-period"`
+}
+
+func DefaultPoetConfig() PoetConfig {
+	return PoetConfig{}
 }
 
 const defaultPoetRetryInterval = 5 * time.Second
