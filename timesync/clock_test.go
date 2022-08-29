@@ -82,7 +82,7 @@ func TestClock_TickPastGenesis(t *testing.T) {
 	defer ticker.Close()
 	x := <-sub
 	duration := time.Since(start)
-	assert.Equal(t, types.NewLayerID(5), x)
+	assert.Equal(t, types.NewLayerID(4), x)
 	assert.True(t, duration >= expectedTimeToTick, "tick happened too soon (%v)", duration)
 	assert.True(t, duration < expectedTimeToTick+d50milli, "tick happened more than 50ms too late (%v)", duration)
 }
@@ -93,7 +93,7 @@ func TestClock_NewClock(t *testing.T) {
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), logtest.New(t).WithName(t.Name()))
 	defer ticker.Close()
 
-	r.Equal(types.NewLayerID(2), ticker.lastTickedLayer)
+	r.Equal(types.NewLayerID(1), ticker.lastTickedLayer)
 }
 
 func TestClock_CloseTwice(t *testing.T) {
