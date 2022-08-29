@@ -256,7 +256,12 @@ func (b *Builder) SmesherID() types.NodeID {
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
-	return SignAtx(b, atx)
+	err := SignAtx(b, atx)
+	if err != nil {
+		return err
+	}
+	atx.CalcAndSetID()
+	return nil
 }
 
 func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
@@ -485,12 +490,17 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	atx := b.pendingATX
+	if err := b.SignAtx(atx); err != nil {
+		b.log.Error(err.Error())
+		return fmt.Errorf("sign: %w", err)
+	}
+
 	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
 	defer b.atxHandler.UnsubscribeAtx(atx.ID())
-	size, err := b.signAndBroadcast(ctx, atx)
+	size, err := b.broadcast(ctx, atx)
 	if err != nil {
 		b.log.Error(err.Error())
-		return fmt.Errorf("sign and broadcast: %w", err)
+		return fmt.Errorf("broadcast: %w", err)
 	}
 
 	b.log.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
@@ -590,10 +600,7 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	if err := b.SignAtx(atx); err != nil {
-		return 0, fmt.Errorf("failed to sign ATX: %v", err)
-	}
+func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)

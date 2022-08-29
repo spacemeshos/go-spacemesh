@@ -240,7 +240,6 @@ func NewActivationTx(challenge NIPostChallenge, nodeID NodeID, coinbase Address,
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			ActivationTxHeader: ActivationTxHeader{
-				nodeID:          &nodeID,
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
 				NumUnits:        uint32(numUnits),
@@ -249,7 +248,6 @@ func NewActivationTx(challenge NIPostChallenge, nodeID NodeID, coinbase Address,
 			InitialPost: initialPost,
 		},
 	}
-	atx.CalcAndSetID()
 	return atx
 }
 
@@ -286,6 +284,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() {
+	if atx.Sig == nil {
+		panic("cannot calculate ATX ID: sig is nil")
+	}
 	id := ATXID(CalcATXHash32(atx))
 	atx.SetID(&id)
 }
