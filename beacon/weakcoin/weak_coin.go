@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -319,7 +320,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 				MinerPK:   wc.signer.PublicKey().Bytes(),
 				Signature: signature,
 			}
-			msg, err := types.InterfaceToBytes(&message)
+			msg, err := codec.Encode(&message)
 			if err != nil {
 				wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
 			}

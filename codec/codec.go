@@ -6,46 +6,23 @@ import (
 	"io"
 	"sync"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-scale"
 )
 
-func init() {
-	// xdr will fail with overflow if slice size is larger than 1mb
-	// see BenchmarkInvalidLength
-	xdr.SliceLimit = 1 << 20
-}
-
 // Encodable is an interface that must be implemented by a struct to be encoded.
-type Encodable interface{}
+type Encodable = scale.Encodable
 
 // Decodable is an interface that must be implemented bya struct to be decoded.
-type Decodable interface{}
+type Decodable = scale.Decodable
 
 // EncodeTo encodes value to a writer stream.
 func EncodeTo(w io.Writer, value Encodable) (int, error) {
-	if encodable, ok := value.(scale.Encodable); ok {
-		return encodable.EncodeScale(scale.NewEncoder(w))
-	}
-	v, err := xdr.Marshal(w, value)
-	if err != nil {
-		return v, fmt.Errorf("marshal XDR: %w", err)
-	}
-
-	return v, nil
+	return value.EncodeScale(scale.NewEncoder(w))
 }
 
 // DecodeFrom decodes a value using data from a reader stream.
 func DecodeFrom(r io.Reader, value Decodable) (int, error) {
-	if decodable, ok := value.(scale.Decodable); ok {
-		return decodable.DecodeScale(scale.NewDecoder(r))
-	}
-	v, err := xdr.Unmarshal(r, value)
-	if err != nil {
-		return v, fmt.Errorf("unmarshal XDR: %w", err)
-	}
-
-	return v, nil
+	return value.DecodeScale(scale.NewDecoder(r))
 }
 
 // TODO(dshulyak) this is a temporary solution to improve encoder allocations.
@@ -108,4 +85,24 @@ func DecodeSlice[V any, H scale.DecodablePtr[V]](buf []byte) ([]V, error) {
 		return nil, fmt.Errorf("decode struct slice: %w", err)
 	}
 	return v, nil
+}
+
+// EncodeCompact16 encodes uint16 to a buffer.
+func EncodeCompact16(w io.Writer, value uint16) (int, error) {
+	return scale.EncodeCompact16(scale.NewEncoder(w), value)
+}
+
+// DecodeCompact16 decodes uint16 from a buffer.
+func DecodeCompact16(w io.Reader) (uint16, int, error) {
+	return scale.DecodeCompact16(scale.NewDecoder(w))
+}
+
+// EncodeStringSlice encodes []string to a buffer.
+func EncodeStringSlice(w io.Writer, value []string) (int, error) {
+	return scale.EncodeStringSlice(scale.NewEncoder(w), value)
+}
+
+// DecodeStringSlice decodes []string from a buffer.
+func DecodeStringSlice(w io.Reader) ([]string, int, error) {
+	return scale.DecodeStringSlice(scale.NewDecoder(w))
 }

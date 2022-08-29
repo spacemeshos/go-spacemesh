@@ -4,37 +4,36 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
-	"math"
 	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 )
 
-type messageType byte
+// MessageType is a message type.
+type MessageType byte
 
 // declare all known message types.
 const (
-	status   messageType = 0
-	proposal messageType = 1
-	commit   messageType = 2
-	notify   messageType = 3
-	pre      messageType = 10
+	status   MessageType = 0
+	proposal MessageType = 1
+	commit   MessageType = 2
+	notify   MessageType = 3
+	pre      MessageType = 10
 )
 
-const preRound uint32 = math.MaxUint32
-
-// declare round identifiers.
 const (
-	statusRound uint32 = iota
-	proposalRound
-	commitRound
-	notifyRound
+	preRound      = eligibility.HarePreRound
+	statusRound   = eligibility.HareStatusRound
+	proposalRound = eligibility.HareProposalRound
+	commitRound   = eligibility.HareCommitRound
+	notifyRound   = eligibility.HareNotifyRound
 )
 
 const defaultSetSize = 200
 
-func (mType messageType) String() string {
+func (mType MessageType) String() string {
 	switch mType {
 	case status:
 		return "Status"
@@ -316,13 +315,6 @@ func (s *Set) Subtract(g *Set) {
 // Size returns the number of elements in the set.
 func (s *Set) Size() int {
 	return s.len()
-}
-
-func (s *Set) init() {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	s.values = make(map[types.ProposalID]struct{})
 }
 
 func (s *Set) initWithSize(size int) {

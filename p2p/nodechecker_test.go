@@ -14,7 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/transport"
-	p2putil "github.com/libp2p/go-libp2p-netutil"
+	p2putil "github.com/libp2p/go-libp2p-testing/netutil"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"

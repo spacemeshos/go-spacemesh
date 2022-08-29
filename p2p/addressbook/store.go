@@ -47,9 +47,8 @@ func (a *AddrBook) persistPeers() error {
 	for _, addr := range a.addrIndex {
 		sam.Addresses = append(sam.Addresses, addr)
 	}
-	for _, addr := range a.anchorPeers {
-		sam.AnchorAddresses = append(sam.AnchorAddresses, addr)
-	}
+	sam.AnchorAddresses = append(sam.AnchorAddresses, a.anchorPeers...)
+
 	for i := range a.addrNew {
 		sam.NewBuckets[i] = make([]peer.ID, len(a.addrNew[i]))
 		j := 0
@@ -176,9 +175,7 @@ func (a *AddrBook) decodeFrom(path string) error {
 		}
 	}
 
-	for _, v := range sam.AnchorAddresses {
-		a.lastAnchorPeers = append(a.lastAnchorPeers, v)
-	}
+	a.lastAnchorPeers = append(a.lastAnchorPeers, sam.AnchorAddresses...)
 
 	// Sanity checking.
 	for k, v := range a.addrIndex {

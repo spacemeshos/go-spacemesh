@@ -5,26 +5,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const numBlocks = 5
+// DefaultNumBlocks is a number of blocks in a layer by default.
+const DefaultNumBlocks = 5
 
 // NextOpt is for configuring layer generator.
 type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
 	return nextConf{
-		VoteGen:   PerfectVoting,
-		Coinflip:  true,
-		LayerSize: -1,
+		VoteGen:          PerfectVoting,
+		Coinflip:         true,
+		LayerSize:        -1,
+		NumBlocks:        DefaultNumBlocks,
+		BlockTickHeights: make([]uint64, DefaultNumBlocks),
 	}
 }
 
 type nextConf struct {
-	Reorder   uint32
-	FailHare  bool
-	EmptyHare bool
-	Coinflip  bool
-	LayerSize int
-	VoteGen   VotesGenerator
+	Reorder          uint32
+	FailHare         bool
+	EmptyHare        bool
+	Coinflip         bool
+	LayerSize        int
+	NumBlocks        int
+	BlockTickHeights []uint64
+	VoteGen          VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -73,6 +78,20 @@ func WithVoteGenerator(gen VotesGenerator) NextOpt {
 func WithCoin(coin bool) NextOpt {
 	return func(c *nextConf) {
 		c.Coinflip = coin
+	}
+}
+
+// WithBlockTickHeights updates height of the blocks.
+func WithBlockTickHeights(heights ...uint64) NextOpt {
+	return func(c *nextConf) {
+		c.BlockTickHeights = heights
+	}
+}
+
+// WithNumBlocks sets number of the generated blocks.
+func WithNumBlocks(num int) NextOpt {
+	return func(c *nextConf) {
+		c.NumBlocks = num
 	}
 }
 
@@ -169,8 +188,17 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBallot(ballot)
 	}
-	for i := 0; i < numBlocks; i++ {
-		block := types.GenLayerBlock(g.nextLayer, g.genTXIDs(3))
+	if len(cfg.BlockTickHeights) < cfg.NumBlocks {
+		g.logger.With().Panic("BlockTickHeights should be atleast to NumBlocks",
+			log.Int("num blocks", cfg.NumBlocks),
+		)
+	}
+	for i := 0; i < cfg.NumBlocks; i++ {
+		block := &types.Block{}
+		block.LayerIndex = g.nextLayer
+		block.TxIDs = g.genTXIDs(3)
+		block.TickHeight = cfg.BlockTickHeights[i]
+		block.Initialize()
 		for _, state := range g.states {
 			state.OnBlock(block)
 		}
@@ -178,7 +206,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	}
 	if !cfg.FailHare {
 		hareOutput := types.EmptyBlockID
-		if !cfg.EmptyHare {
+		if !cfg.EmptyHare && len(layer.BlocksIDs()) > 0 {
 			hareOutput = layer.BlocksIDs()[0]
 		}
 		for _, state := range g.states {

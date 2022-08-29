@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 AS linux
+FROM ubuntu:22.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
 ARG TZ=US/Eastern

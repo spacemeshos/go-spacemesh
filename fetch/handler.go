@@ -47,7 +47,7 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	h.logger.WithContext(ctx).With().Debug("responded to epoch atx request",
 		epoch,
 		log.Int("count", len(atxids)))
-	bts, err := codec.Encode(atxids)
+	bts, err := codec.EncodeSlice(atxids)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize epoch atx", epoch, log.Err(err))
 		return bts, fmt.Errorf("serialize: %w", err)
@@ -56,14 +56,14 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	return bts, nil
 }
 
-// handleLayerDataReq returns the block IDs for the specified layer hash,
-// it also returns the validation vector for this data and the latest blocks received in gossip.
+// handleLayerDataReq returns all data in a layer, described in layerData.
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
 		lyrID = types.BytesToLayerID(req)
-		ld    layerData
+		ld    LayerData
 		err   error
 	)
+	ld.ProcessedLayer = h.msh.ProcessedLayer()
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
@@ -88,13 +88,14 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, errInternal
 	}
-	ld.HareOutput, err = layers.GetHareOutput(h.db, lyrID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+
+	ld.HareOutput, err = layers.GetCert(h.db, lyrID)
+	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 
-	out, err := codec.Encode(ld)
+	out, err := codec.Encode(&ld)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
 	}
@@ -103,15 +104,15 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 }
 
 func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
-	var requestBatch requestBatch
-	err := types.BytesToInterface(data, &requestBatch)
+	var requestBatch RequestBatch
+	err := codec.Decode(data, &requestBatch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
 		return nil, errors.New("bad request")
 	}
-	resBatch := responseBatch{
+	resBatch := ResponseBatch{
 		ID:        requestBatch.ID,
-		Responses: make([]responseMessage, 0, len(requestBatch.Requests)),
+		Responses: make([]ResponseMessage, 0, len(requestBatch.Requests)),
 	}
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
@@ -129,14 +130,14 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 				log.Int("dataSize", len(res)))
 		}
 		// add response to batch
-		m := responseMessage{
+		m := ResponseMessage{
 			Hash: r.Hash,
 			Data: res,
 		}
 		resBatch.Responses = append(resBatch.Responses, m)
 	}
 
-	bts, err := types.InterfaceToBytes(&resBatch)
+	bts, err := codec.Encode(&resBatch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize batch id",
 			log.String("batch_hash", resBatch.ID.ShortString()))

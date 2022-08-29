@@ -715,7 +715,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("000000024250000012345678")),
+			result: string(util.Hex2Bytes("084250e259d148")),
 		},
 	}
 
@@ -726,41 +726,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 
 			result := buildProposal(tc.epoch, logtest.New(t))
 			r.Equal(tc.result, string(result))
-		})
-	}
-}
-
-func TestBeacon_signMessage(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	edSgn := signing.NewEdSigner()
-
-	tt := []struct {
-		name    string
-		message interface{}
-		result  []byte
-	}{
-		{
-			name:    "Case 1",
-			message: []byte{},
-			result:  edSgn.Sign([]byte{0, 0, 0, 0}),
-		},
-		{
-			name:    "Case 2",
-			message: &struct{ Test int }{Test: 0x12345678},
-			result:  edSgn.Sign([]byte{0x12, 0x34, 0x56, 0x78}),
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := signMessage(edSgn, tc.message, logtest.New(t))
-			r.Equal(string(tc.result), string(result))
 		})
 	}
 }
@@ -781,12 +746,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000001")),
+			result: vrfSigner.Sign(util.Hex2Bytes("08425004")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000002")),
+			result: vrfSigner.Sign(util.Hex2Bytes("08425008")),
 		},
 	}
 

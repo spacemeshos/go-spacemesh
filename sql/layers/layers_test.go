@@ -9,26 +9,81 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
+	return &types.Certificate{
+		BlockID: bid,
+		Signatures: []types.CertifyMessage{
+			{
+				CertifyContent: types.CertifyContent{
+					LayerID:        lid,
+					BlockID:        bid,
+					EligibilityCnt: 1,
+					Proof:          []byte("not a fraud 1"),
+				},
+			},
+			{
+				CertifyContent: types.CertifyContent{
+					LayerID:        lid,
+					BlockID:        bid,
+					EligibilityCnt: 2,
+					Proof:          []byte("not a fraud 2"),
+				},
+			},
+		},
+	}
+}
+
 func TestHareOutput(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(10)
+	lid1 := types.NewLayerID(10)
 
-	_, err := GetHareOutput(db, lid)
+	_, err := GetHareOutput(db, lid1)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	_, err = GetHareOutput(db, lid)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
-	require.NoError(t, SetHareOutput(db, lid, types.BlockID{}))
-	output, err := GetHareOutput(db, lid)
+	require.NoError(t, SetHareOutput(db, lid1, types.BlockID{}))
+	output, err := GetHareOutput(db, lid1)
 	require.NoError(t, err)
 	require.Equal(t, types.BlockID{}, output)
 
-	expected := types.BlockID{1, 1, 1}
-	require.NoError(t, SetHareOutput(db, lid, expected))
-	output, err = GetHareOutput(db, lid)
+	// setting the same layer for the second time will not have any effect
+	require.NoError(t, SetHareOutput(db, lid1, types.RandomBlockID()))
+	output, err = GetHareOutput(db, lid1)
 	require.NoError(t, err)
-	require.Equal(t, expected, output)
+	require.Equal(t, types.BlockID{}, output)
+
+	// but setting the same layer with a certificate works
+	bid1 := types.BlockID{1, 1, 1}
+	cert := makeCert(lid1, bid1)
+	require.NoError(t, SetHareOutputWithCert(db, lid1, cert))
+
+	output, err = GetHareOutput(db, lid1)
+	require.NoError(t, err)
+	require.Equal(t, bid1, output)
+	gotC, err := GetCert(db, lid1)
+	require.NoError(t, err)
+	require.Equal(t, cert, gotC)
+
+	bid2 := types.BlockID{2, 2, 2}
+	lid2 := lid1.Add(1)
+	cert = makeCert(lid2, bid2)
+	require.NoError(t, SetHareOutputWithCert(db, lid2, cert))
+	output, err = GetHareOutput(db, lid2)
+	require.NoError(t, err)
+	require.Equal(t, bid2, output)
+	gotC, err = GetCert(db, lid2)
+	require.NoError(t, err)
+	require.Equal(t, cert, gotC)
+
+	bid3 := types.BlockID{3, 3, 3}
+	cert = makeCert(lid2, bid3)
+	// this will overwrite the previous certificate
+	require.NoError(t, SetHareOutputWithCert(db, lid2, cert))
+	output, err = GetHareOutput(db, lid2)
+	require.NoError(t, err)
+	require.Equal(t, bid3, output)
+	gotC, err = GetCert(db, lid2)
+	require.NoError(t, err)
+	require.Equal(t, cert, gotC)
 }
 
 func TestWeakCoin(t *testing.T) {
