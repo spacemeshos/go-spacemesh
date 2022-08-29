@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	atxProtocol     = "/atx/1"
-	lyrDataProtocol = "/layerdata/1"
-	fetchProtocol   = "/fetch/2"
+	atxProtocol     = "ax/1"
+	lyrDataProtocol = "ld/1"
+	lyrOpnsProtocol = "lp/1"
+	hashProtocol    = "hs/1"
 
 	batchMaxSize = 20
 	cacheSize    = 1000
@@ -138,6 +139,7 @@ type Fetch struct {
 	host    host
 	atxSrv  server.Requestor
 	lyrSrv  server.Requestor
+	opnSrv  server.Requestor
 	hashSrv server.Requestor
 
 	// activeRequests contains requests that are not processed
@@ -156,7 +158,7 @@ type Fetch struct {
 }
 
 // newFetch creates a new Fetch struct.
-func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, hashS server.Requestor, logger log.Log) *Fetch {
+func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, opnS, hashS server.Requestor, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
@@ -164,6 +166,7 @@ func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, hashS ser
 		host:            h,
 		atxSrv:          atxS,
 		lyrSrv:          lyrS,
+		opnSrv:          opnS,
 		hashSrv:         hashS,
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
@@ -578,13 +581,21 @@ func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) 
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, lid types.LayerID, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
-	remotePeers := f.host.GetPeers()
-	numPeers := len(remotePeers)
+	return poll(ctx, f.lyrSrv, f.host.GetPeers(), lid.Bytes(), okCB, errCB)
+}
+
+// GetLayerOpinions get opinions on data in the specified layer from peers.
+func (f *Fetch) GetLayerOpinions(ctx context.Context, lid types.LayerID, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
+	return poll(ctx, f.opnSrv, f.host.GetPeers(), lid.Bytes(), okCB, errCB)
+}
+
+func poll(ctx context.Context, srv server.Requestor, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
+	numPeers := len(peers)
 	if numPeers == 0 {
 		return errNoPeers
 	}
 
-	for _, p := range remotePeers {
+	for _, p := range peers {
 		peer := p
 		okFunc := func(data []byte) {
 			okCB(data, peer, numPeers)
@@ -592,7 +603,7 @@ func (f *Fetch) GetLayerData(ctx context.Context, lid types.LayerID, okCB func([
 		errFunc := func(err error) {
 			errCB(err, peer, numPeers)
 		}
-		if err := f.lyrSrv.Request(ctx, peer, lid.Bytes(), okFunc, errFunc); err != nil {
+		if err := srv.Request(ctx, peer, req, okFunc, errFunc); err != nil {
 			errFunc(err)
 		}
 	}

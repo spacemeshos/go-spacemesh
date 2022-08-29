@@ -106,6 +106,20 @@ func (mr *MockfetcherMockRecorder) GetLayerData(arg0, arg1, arg2, arg3 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*Mockfetcher)(nil).GetLayerData), arg0, arg1, arg2, arg3)
 }
 
+// GetLayerOpinions mocks base method.
+func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 types.LayerID, arg2 func([]byte, p2p.Peer, int), arg3 func(error, p2p.Peer, int)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerOpinions indicates an expected call of GetLayerOpinions.
+func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3)
+}
+
 // RegisterPeerHashes mocks base method.
 func (m *Mockfetcher) RegisterPeerHashes(arg0 p2p.Peer, arg1 []types.Hash32) {
 	m.ctrl.T.Helper()

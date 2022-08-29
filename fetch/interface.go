@@ -14,6 +14,7 @@ import (
 type fetcher interface {
 	GetEpochATXIDs(context.Context, types.EpochID, func([]byte, p2p.Peer), func(error)) error
 	GetLayerData(context.Context, types.LayerID, func([]byte, p2p.Peer, int), func(error, p2p.Peer, int)) error
+	GetLayerOpinions(context.Context, types.LayerID, func([]byte, p2p.Peer, int), func(error, p2p.Peer, int)) error
 	GetHash(types.Hash32, datastore.Hint, bool) chan ftypes.HashDataPromiseResult
 	GetHashes([]types.Hash32, datastore.Hint, bool) map[types.Hash32]chan ftypes.HashDataPromiseResult
 	Stop()

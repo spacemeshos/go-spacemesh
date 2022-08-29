@@ -53,37 +53,42 @@ func TestHareOutput(t *testing.T) {
 
 	// but setting the same layer with a certificate works
 	bid1 := types.BlockID{1, 1, 1}
-	cert := makeCert(lid1, bid1)
-	require.NoError(t, SetHareOutputWithCert(db, lid1, cert))
+	cert1 := makeCert(lid1, bid1)
+	require.NoError(t, SetHareOutputWithCert(db, lid1, cert1))
 
 	output, err = GetHareOutput(db, lid1)
 	require.NoError(t, err)
 	require.Equal(t, bid1, output)
 	gotC, err := GetCert(db, lid1)
 	require.NoError(t, err)
-	require.Equal(t, cert, gotC)
+	require.Equal(t, cert1, gotC)
 
 	bid2 := types.BlockID{2, 2, 2}
 	lid2 := lid1.Add(1)
-	cert = makeCert(lid2, bid2)
-	require.NoError(t, SetHareOutputWithCert(db, lid2, cert))
+	cert2 := makeCert(lid2, bid2)
+	require.NoError(t, SetHareOutputWithCert(db, lid2, cert2))
 	output, err = GetHareOutput(db, lid2)
 	require.NoError(t, err)
 	require.Equal(t, bid2, output)
 	gotC, err = GetCert(db, lid2)
 	require.NoError(t, err)
-	require.Equal(t, cert, gotC)
+	require.Equal(t, cert2, gotC)
 
 	bid3 := types.BlockID{3, 3, 3}
-	cert = makeCert(lid2, bid3)
-	// this will overwrite the previous certificate
-	require.NoError(t, SetHareOutputWithCert(db, lid2, cert))
+	cert3 := makeCert(lid2, bid3)
+	// will not overwrite the previous certificate
+	require.NoError(t, SetHareOutput(db, lid2, bid3))
+	require.NoError(t, SetHareOutputWithCert(db, lid2, cert3))
 	output, err = GetHareOutput(db, lid2)
 	require.NoError(t, err)
-	require.Equal(t, bid3, output)
+	require.Equal(t, bid2, output)
 	gotC, err = GetCert(db, lid2)
 	require.NoError(t, err)
-	require.Equal(t, cert, gotC)
+	require.Equal(t, cert2, gotC)
+
+	got, err := GetCert(db, lid2.Add(1))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, got)
 }
 
 func TestWeakCoin(t *testing.T) {

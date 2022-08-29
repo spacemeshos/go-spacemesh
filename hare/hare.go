@@ -226,10 +226,13 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		h.WithContext(ctx).With().Warning("hare terminated with failure", layerID)
 	}
 
-	h.blockGenCh <- LayerOutput{
+	select {
+	case h.blockGenCh <- LayerOutput{
 		Ctx:       ctx,
 		Layer:     layerID,
 		Proposals: pids,
+	}:
+	case <-ctx.Done():
 	}
 
 	if h.outOfBufferRange(layerID) {
