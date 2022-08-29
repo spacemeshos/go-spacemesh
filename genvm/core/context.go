@@ -19,8 +19,9 @@ type Context struct {
 
 	Account Account
 
-	Header Header
-	Args   scale.Encodable
+	ParseOutput ParseOutput
+	Header      Header
+	Args        scale.Encodable
 
 	// consumed is in gas units and will be used
 	consumed uint64
@@ -88,7 +89,6 @@ func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
 	if amount > c.Account.Balance {
 		amount = c.Account.Balance
-		gas = 0
 		err = ErrNoBalance
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed

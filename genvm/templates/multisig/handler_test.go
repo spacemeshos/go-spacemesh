@@ -14,7 +14,6 @@ func TestKeysLimits(t *testing.T) {
 	reg := registry.New()
 	Register(reg)
 
-	spawnGas := []int{TotalGasSpawn1, TotalGasSpawn2, TotalGasSpawn3}
 	for i, address := range []core.Address{TemplateAddress1, TemplateAddress2, TemplateAddress3} {
 		expectedK := i + 1
 		t.Run(strconv.Itoa(expectedK), func(t *testing.T) {
@@ -33,7 +32,6 @@ func TestKeysLimits(t *testing.T) {
 					} else {
 						require.NoError(t, err)
 					}
-					require.Equal(t, spawnGas[i], int(ctx.Consumed()))
 				})
 			}
 		})
