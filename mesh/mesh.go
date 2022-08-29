@@ -376,7 +376,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 
 	// pass the layer to tortoise for processing
 	newVerified := msh.trtl.HandleIncomingLayer(ctx, layerID)
-	logger.With().Debug("tortoise results", log.FieldNamed("verified", newVerified))
+	logger.With().Debug("tortoise results", log.Stringer("verified", newVerified))
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
@@ -397,7 +397,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 
 	if !to.Before(from) {
 		if err := msh.pushLayersToState(ctx, from, to, newVerified); err != nil {
-			logger.With().Warning("failed to push layers to state", log.Err(err))
+			logger.With().Error("failed to push layers to state", log.Err(err))
 			return err
 		}
 	}

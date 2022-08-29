@@ -168,7 +168,7 @@ func (c *Certifier) prune() {
 	cutoff := types.GetEffectiveGenesis()
 	current := c.layerClock.GetCurrentLayer()
 	if current.Uint32() > c.cfg.NumLayersToKeep {
-		cutoff = c.layerClock.GetCurrentLayer().Sub(c.cfg.NumLayersToKeep)
+		cutoff = current.Sub(c.cfg.NumLayersToKeep)
 	}
 	for lid := range c.certifyMsgs {
 		if lid.Before(cutoff) {
@@ -198,8 +198,7 @@ func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid 
 	defer c.mu.Unlock()
 	c.createIfNeeded(lid, bid)
 	c.certifyMsgs[lid][bid].registered = true
-	c.tryGenCert(logger, lid, bid)
-	return nil
+	return c.tryGenCert(logger, lid, bid)
 }
 
 // CertifyIfEligible signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
@@ -273,7 +272,7 @@ func (c *Certifier) NumCached() int {
 // HandleSyncedCertificate handles Certificate from sync.
 func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, cert.BlockID)
-	logger.Info("processing synced certificate")
+	logger.Debug("processing synced certificate")
 	eligibilityCnt := uint16(0)
 	for _, msg := range cert.Signatures {
 		if err := validate(ctx, logger, c.oracle, c.cfg.CommitteeSize, msg); err != nil {
@@ -291,7 +290,6 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 	if err := c.save(logger, lid, cert); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -379,12 +377,12 @@ func (c *Certifier) saveMessage(logger log.Log, msg types.CertifyMessage) error 
 		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)))
 
 	if c.certifyMsgs[lid][bid].registered {
-		c.tryGenCert(logger, lid, bid)
+		return c.tryGenCert(logger, lid, bid)
 	}
 	return nil
 }
 
-func (c *Certifier) tryGenCert(logger log.Log, lid types.LayerID, bid types.BlockID) {
+func (c *Certifier) tryGenCert(logger log.Log, lid types.LayerID, bid types.BlockID) error {
 	if _, ok := c.certifyMsgs[lid]; !ok {
 		logger.Fatal("missing layer in cache")
 	}
@@ -394,13 +392,13 @@ func (c *Certifier) tryGenCert(logger log.Log, lid types.LayerID, bid types.Bloc
 
 	if c.certifyMsgs[lid][bid].done ||
 		c.certifyMsgs[lid][bid].totalEligibility < uint16(c.cfg.CertifyThreshold) {
-		return
+		return nil
 	}
 
 	if !c.certifyMsgs[lid][bid].registered {
 		// do not try to generate a certificate for this block.
 		// wait for syncer to download from peers
-		return
+		return nil
 	}
 
 	logger.With().Info("generating certificate",
@@ -411,9 +409,10 @@ func (c *Certifier) tryGenCert(logger log.Log, lid types.LayerID, bid types.Bloc
 		Signatures: c.certifyMsgs[lid][bid].signatures,
 	}
 	if err := c.save(logger, lid, cert); err != nil {
-		return
+		return err
 	}
 	c.certifyMsgs[lid][bid].done = true
+	return nil
 }
 
 func (c *Certifier) save(logger log.Log, lid types.LayerID, cert *types.Certificate) error {

@@ -173,8 +173,8 @@ func TestFailedNodes(t *testing.T) {
 		}
 		return reference, result
 	}
-	// the reason we try more than once that we apply a block eagerly before tortoise verify
-	// it's contextual validity. for hashes collected from the earlier layers, they may have
+	// the reason the test tries more than once is that the node applies a block eagerly before tortoise
+	// verifies its contextual validity. for hashes collected from the earlier layers, they may have
 	// been changed when tortoise verify those layers.
 	for try := 0; try < attempts; try++ {
 		ref, diffs := run()
@@ -187,6 +187,5 @@ func TestFailedNodes(t *testing.T) {
 			}
 		}
 	}
-
 	require.NoError(t, waitAll(tctx, cl))
 }

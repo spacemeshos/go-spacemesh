@@ -311,10 +311,10 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 	bootnodes := c.clients[:c.bootnodes]
 	smeshers := c.clients[c.bootnodes:]
 	c.clients = nil
-	smeshers = append(smeshers, clients...)
 	c.clients = append(c.clients, bootnodes...)
 	c.clients = append(c.clients, smeshers...)
-	c.smeshers = len(smeshers)
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
 	return nil
 }
 
