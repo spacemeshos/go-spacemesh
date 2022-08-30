@@ -85,23 +85,6 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 	}
 }
 
-type LayerClockMock struct {
-	currentLayer types.LayerID
-}
-
-func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
-	return l.currentLayer
-}
-
-func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		close(ch)
-	}()
-	return ch
-}
-
 func NewMockSigner() *MockSigning {
 	return &MockSigning{signing.NewEdSigner()}
 }
@@ -168,12 +151,6 @@ func (n *FaultyNetMock) Publish(_ context.Context, _ string, d []byte) error {
 	return nil
 }
 
-type mockSyncer struct{}
-
-func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
-	close(ch)
-}
-
 // ========== Helper functions ==========
 
 func newCachedDB(tb testing.TB) *datastore.CachedDB {
@@ -216,6 +193,29 @@ func newActivationTx(
 	atx := newAtx(challenge, sig, nipost, numUnits, coinbase)
 	atx.Verify(startTick, numTicks)
 	return atx
+}
+
+type LayerClockMock struct {
+	currentLayer types.LayerID
+}
+
+func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
+	return l.currentLayer
+}
+
+func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		close(ch)
+	}()
+	return ch
+}
+
+type mockSyncer struct{}
+
+func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
+	close(ch)
 }
 
 func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builder {

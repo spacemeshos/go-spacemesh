@@ -527,7 +527,7 @@ func TestHandler_TopAtx(t *testing.T) {
 	atxHdlr := getATXHandler(t, newCachedDB(t))
 
 	// ATX stored should become top ATX
-	atx, err := createAndStoreAtx(t, atxHdlr, types.LayerID{}.Add(1))
+	atx, err := createAndStoreAtx(atxHdlr, types.LayerID{}.Add(1))
 	r.NoError(err)
 
 	id, err := atxHdlr.GetPosAtxID()
@@ -535,7 +535,7 @@ func TestHandler_TopAtx(t *testing.T) {
 	r.Equal(atx.ID(), id)
 
 	// higher-layer ATX stored should become new top ATX
-	atx, err = createAndStoreAtx(t, atxHdlr, types.LayerID{}.Add(layersPerEpochBig))
+	atx, err = createAndStoreAtx(atxHdlr, types.LayerID{}.Add(layersPerEpochBig))
 	r.NoError(err)
 
 	id, err = atxHdlr.GetPosAtxID()
@@ -543,7 +543,7 @@ func TestHandler_TopAtx(t *testing.T) {
 	r.Equal(atx.ID(), id)
 
 	// lower-layer ATX stored should NOT become new top ATX
-	atx, err = createAndStoreAtx(t, atxHdlr, types.LayerID{}.Add(1))
+	atx, err = createAndStoreAtx(atxHdlr, types.LayerID{}.Add(1))
 	r.NoError(err)
 
 	id, err = atxHdlr.GetPosAtxID()
@@ -551,7 +551,7 @@ func TestHandler_TopAtx(t *testing.T) {
 	r.NotEqual(atx.ID(), id)
 }
 
-func createAndStoreAtx(t *testing.T, atxHdlr *Handler, layer types.LayerID) (*types.ActivationTx, error) {
+func createAndStoreAtx(atxHdlr *Handler, layer types.LayerID) (*types.ActivationTx, error) {
 	atx := newActivationTx(sig, 0, *types.EmptyATXID, *types.EmptyATXID, layer, 0, 100, coinbase, 100, &types.NIPost{})
 	err := atxHdlr.StoreAtx(context.TODO(), atx.TargetEpoch(), atx)
 	if err != nil {
