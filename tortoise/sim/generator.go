@@ -3,6 +3,7 @@ package sim
 import (
 	"math/rand"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -217,13 +218,13 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
-		address := types.Address{}
-		_, _ = g.rng.Read(address[:])
+		sig := signing.NewEdSigner()
+		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, types.BytesToNodeID(address.Bytes()), address, nil, uint(units), nil)
+		atx := types.NewActivationTx(nipost, types.NodeID{}, address, nil, uint(units), nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
@@ -231,6 +232,10 @@ func (g *Generator) generateAtxs() {
 			ticks = uint64(intInRange(g.rng, g.ticksRange))
 		}
 		atx.Verify(g.prevHeight[i], ticks)
+		activation.SignAtx(sig, atx)
+		atx.CalcAndSetID()
+		atx.CalcAndSetNodeID()
+
 		g.prevHeight[i] += ticks
 		g.activations[i] = atx.ID()
 
