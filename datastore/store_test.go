@@ -36,6 +36,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	require.NoError(t, err)
 	atx.Sig = signer.Sign(data)
 	atx.CalcAndSetID()
+	atx.CalcAndSetNodeID()
 
 	_, err = bs.Get(ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
