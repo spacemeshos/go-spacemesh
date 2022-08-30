@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -112,7 +113,11 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 			numUint,
 			nil,
 		)
+		activation.SignAtx(signer, atx)
+		atx.CalcAndSetID()
+		atx.CalcAndSetNodeID()
 		onAtx(atx)
+
 		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 		atxes = append(atxes, atx)
 	}

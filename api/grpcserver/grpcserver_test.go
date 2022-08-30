@@ -23,7 +23,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -82,15 +81,14 @@ var (
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	addr1       = wallet.Address(signer1.PublicKey().Bytes())
 	addr2       = wallet.Address(signer2.PublicKey().Bytes())
-	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.BytesToNodeID(pub)
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx   = newAtx(challenge, nodeID, nipost, addr1)
-	globalAtx2  = newAtx(challenge, nodeID, nipost, addr2)
+	signer      = NewMockSigner()
+	globalAtx   = newAtx(challenge, signer, nipost, numUnits, addr1)
+	globalAtx2  = newAtx(challenge, signer, nipost, numUnits, addr2)
 	signer1     = signing.NewEdSigner()
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
@@ -326,20 +324,28 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(challenge types.NIPostChallenge, nodeID types.NodeID, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
-				NIPostChallenge: challenge,
-				Coinbase:        coinbase,
-				NumUnits:        numUnits,
-			},
-			NIPost: nipost,
-		},
-	}
+func newAtx(challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
+	atx := types.NewActivationTx(challenge, types.NodeID{}, coinbase, nipost, numUnits, nil)
+	activation.SignAtx(sig, atx)
 	atx.CalcAndSetID()
-	atx.SetNodeID(&nodeID)
+	atx.CalcAndSetNodeID()
 	return atx
+}
+
+func NewMockSigner() *MockSigning {
+	return &MockSigning{signing.NewEdSigner()}
+}
+
+type MockSigning struct {
+	signer *signing.EdSigner
+}
+
+func (ms *MockSigning) NodeID() types.NodeID {
+	return types.BytesToNodeID(ms.signer.PublicKey().Bytes())
+}
+
+func (ms *MockSigning) Sign(m []byte) []byte {
+	return ms.signer.Sign(m)
 }
 
 // PostAPIMock is a mock for Post API.
@@ -411,7 +417,7 @@ func (*SmeshingAPIMock) StopSmeshing(bool) error {
 }
 
 func (*SmeshingAPIMock) SmesherID() types.NodeID {
-	return nodeID
+	return signer.NodeID()
 }
 
 func (*SmeshingAPIMock) Coinbase() types.Address {
@@ -1015,7 +1021,7 @@ func TestSmesherService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			nodeAddr := types.GenerateAddress(nodeID[:])
+			nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
 			resAddr, err := types.StringToAddress(res.AccountId.Address)
 			require.NoError(t, err)
 			require.Equal(t, nodeAddr.String(), resAddr.String())
