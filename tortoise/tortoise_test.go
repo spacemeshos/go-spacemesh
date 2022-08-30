@@ -2939,23 +2939,23 @@ func TestEmptyLayers(t *testing.T) {
 			)
 			verified = tortoise.HandleIncomingLayer(ctx, last)
 		}
-		// expected := types.GetEffectiveGenesis().Add(uint32(skipFrom))
-		// require.Equal(t, expected, verified,
-		// 	"votes from all skipped layers are counted because they cross zdist",
-		// )
-		// for i := 0; i < skipTo-skipFrom-1; i++ {
-		// 	last = s.Next(
-		// 		sim.WithNumBlocks(1),
-		// 		sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
-		// 	)
-		// 	verified = tortoise.HandleIncomingLayer(ctx, last)
-		// 	require.Equal(t, expected.Add(uint32(i)+1), verified)
-		// }
-		// last = s.Next(
-		// 	sim.WithNumBlocks(1),
-		// 	sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
-		// )
-		// verified = tortoise.HandleIncomingLayer(ctx, last)
-		// require.Equal(t, last.Sub(1), verified)
+		expected := types.GetEffectiveGenesis().Add(uint32(skipFrom))
+		require.Equal(t, expected, verified,
+			"votes from all skipped layers are counted because they cross zdist",
+		)
+		for i := 0; i < skipTo-skipFrom-1; i++ {
+			last = s.Next(
+				sim.WithNumBlocks(1),
+				sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+			)
+			verified = tortoise.HandleIncomingLayer(ctx, last)
+			require.Equal(t, expected.Add(uint32(i)+1), verified)
+		}
+		last = s.Next(
+			sim.WithNumBlocks(1),
+			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+		)
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+		require.Equal(t, last.Sub(1), verified)
 	})
 }

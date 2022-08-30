@@ -482,7 +482,9 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 	if err := t.loadBlocksData(lid); err != nil {
 		return err
 	}
-	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
+	from := t.minprocessed.Add(1)
+	to := from
+	for process := from; !process.After(t.processed); process = process.Add(1) {
 		if isUndecided(t.Config, t.decided, process, t.last) {
 			t.logger.With().Info("gap in the layers received by tortoise",
 				lid,
@@ -494,11 +496,17 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 		if err := t.loadBlocksData(process); err != nil {
 			return err
 		}
-		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(process), process); err != nil {
+		if err := t.loadBallots(process); err != nil {
 			return err
 		}
-		t.minprocessed = process
+		to = process
 	}
+	for count := from; !count.After(to); count = count.Add(1) {
+		if err := t.countLayer(t.logger.WithContext(ctx).WithFields(count), count); err != nil {
+			return err
+		}
+	}
+	t.minprocessed = to
 	return nil
 }
 
@@ -513,14 +521,11 @@ func (t *turtle) switchModes(logger log.Log) {
 	)
 }
 
-func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
+func (t *turtle) countLayer(logger log.Log, lid types.LayerID) error {
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
 	)
-	logger.With().Debug("processing layer", lid)
-	if err := t.loadBallots(logger, lid); err != nil {
-		return err
-	}
+	logger.With().Debug("counting layer", lid)
 
 	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
 	// but may require changes to t.processed
@@ -577,7 +582,6 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.Layer
 			target, t.last, counted,
 			t.epochWeight,
 		)
-
 		if t.full.verify(logger, target) {
 			break
 		}
@@ -707,7 +711,7 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 
 // loadBallots from database.
 // must be loaded in order, as base ballot information needs to be in the state.
-func (t *turtle) loadBallots(logger log.Log, lid types.LayerID) error {
+func (t *turtle) loadBallots(lid types.LayerID) error {
 	blts, err := ballots.Layer(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
@@ -715,7 +719,7 @@ func (t *turtle) loadBallots(logger log.Log, lid types.LayerID) error {
 
 	for _, ballot := range blts {
 		if err := t.onBallot(ballot); err != nil {
-			logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
+			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
 		}
 	}
 	return nil
@@ -817,7 +821,6 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex],
 		ballotInfo{id: ballot.ID(), weight: weight, height: height})
-
 	abstainVotes := map[types.LayerID]struct{}{}
 	for _, lid := range ballot.Votes.Abstain {
 		abstainVotes[lid] = struct{}{}
