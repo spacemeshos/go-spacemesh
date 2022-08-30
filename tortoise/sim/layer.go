@@ -148,15 +148,13 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	activeset := make([]types.ATXID, len(g.activations))
 	copy(activeset, g.activations)
 
-	miners := make(map[int]uint32, size)
+	miners := make([]uint32, len(g.activations))
 	for i := 0; i < size; i++ {
 		miner := i % len(g.activations)
 		miners[miner]++
 	}
-	i := 0
 	for miner, maxj := range miners {
-		voting := cfg.VoteGen(g.rng, g.layers, i)
-		i++
+		voting := cfg.VoteGen(g.rng, g.layers, miner)
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
 		proofs := []types.VotingEligibilityProof{}
