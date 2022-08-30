@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -647,10 +646,8 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pub, _, _ := ed25519.GenerateKey(nil)
-			id := types.BytesToNodeID(pub)
 			for i := 0; ; i++ {
-				atx := types.NewActivationTx(newChallenge(uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), id, types.Address{}, nil, 0, nil)
+				atx := types.NewActivationTx(newChallenge(uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), types.Address{}, nil, 0, nil)
 				if !assert.NoError(b, atxHdlr.StoreAtx(context.TODO(), types.EpochID(1), atx)) {
 					return
 				}

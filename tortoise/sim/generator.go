@@ -224,7 +224,7 @@ func (g *Generator) generateAtxs() {
 		nipost := types.NIPostChallenge{
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, types.NodeID{}, address, nil, uint(units), nil)
+		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]

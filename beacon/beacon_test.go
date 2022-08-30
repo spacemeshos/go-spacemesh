@@ -94,7 +94,6 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint) {
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
-		types.NodeID{},
 		types.Address{},
 		nil,
 		numUnits,

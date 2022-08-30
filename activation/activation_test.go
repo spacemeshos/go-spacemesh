@@ -171,7 +171,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 }
 
 func newAtx(challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, types.NodeID{}, coinbase, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	SignAtx(sig, atx)
 	atx.CalcAndSetID()
 	atx.CalcAndSetNodeID()

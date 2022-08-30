@@ -134,7 +134,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, types.BytesToNodeID(c.signer.PublicKey().Bytes()), addr, nil, uint(c.units), nil)
+		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
 		atx.Verify(1, 2)
 		activation.SignAtx(c.signer, atx)
 		atx.CalcAndSetID()

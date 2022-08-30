@@ -107,7 +107,6 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{PubLayerID: lid},
-			types.BytesToNodeID(signer.PublicKey().Bytes()),
 			address,
 			nil,
 			numUint,

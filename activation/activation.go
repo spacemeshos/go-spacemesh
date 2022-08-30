@@ -579,7 +579,6 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 	atx := types.NewActivationTx(
 		*b.challenge,
-		b.nodeID,
 		b.Coinbase(),
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,

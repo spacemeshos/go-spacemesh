@@ -785,7 +785,7 @@ func genATXs(t *testing.T, num int) []*types.ActivationTx {
 	sig := signing.NewEdSigner()
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := 0; i < num; i++ {
-		atx := types.NewActivationTx(types.NIPostChallenge{}, types.NodeID{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
+		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
 		activation.SignAtx(sig, atx)
 		atx.CalcAndSetID()
 		atx.CalcAndSetNodeID()
