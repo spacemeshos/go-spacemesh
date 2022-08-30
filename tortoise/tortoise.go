@@ -262,8 +262,6 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 			sort.Slice(choices, func(i, j int) bool {
 				return choices[i].Compare(choices[j])
 			})
-
-			logger.With().Debug("considering good base ballot", choices[0], lid)
 			return choices[0], lid
 		}
 	}
@@ -288,7 +286,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ball
 
 	for lid := start; lid.Before(blid); lid = lid.Add(1) {
 		if len(t.blocks[lid]) == 0 && t.full.abstained(ballotID, lid) {
-			t.logger.With().Debug("ballot is neutral about empty layer. can't use as a base ballot",
+			t.logger.With().Debug("ballot is neutral about layer. can't use as a base ballot",
 				ballotID,
 				lid,
 			)
