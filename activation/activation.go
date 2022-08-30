@@ -261,6 +261,7 @@ func (b *Builder) SignAtx(atx *types.ActivationTx) error {
 		return err
 	}
 	atx.CalcAndSetID()
+	atx.SetNodeID(&b.nodeID)
 	return nil
 }
 
