@@ -1716,7 +1716,7 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 			if i >= breakpoint {
 				return voteWithBaseBallot(types.BallotID{1, 1, 1})(rng, layers, i)
 			}
-			return sim.PerfectVoting(rng, layers, i)
+			return sim.ConsistentVoting(rng, layers, i)
 		}))) {
 			verified = tortoise.HandleIncomingLayer(ctx, last)
 		}
@@ -2769,8 +2769,12 @@ func TestFutureHeight(t *testing.T) {
 			normal = 20
 		)
 		s.Setup(
-			sim.WithSetupMinerRange(7, 7),
-			sim.WithSetupTicks(normal, normal, normal, normal, normal, slow, slow),
+			sim.WithSetupMinerRange(8, 8),
+			sim.WithSetupTicks(
+				normal, normal, normal,
+				normal, normal,
+				slow, slow, slow,
+			),
 		)
 		tortoise := tortoiseFromSimState(
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
