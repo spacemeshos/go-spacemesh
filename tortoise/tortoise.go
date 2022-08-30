@@ -482,15 +482,13 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 	if err := t.loadBlocksData(lid); err != nil {
 		return err
 	}
-	from := t.minprocessed.Add(1)
-	to := from
-	for process := from; !process.After(t.processed); process = process.Add(1) {
+	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
 		if isUndecided(t.Config, t.decided, process, t.last) {
 			t.logger.With().Info("gap in the layers received by tortoise",
 				lid,
 				log.Stringer("undecided", process),
 			)
-			return nil
+			break
 		}
 		// load data for layers that were skipped due to zdist limit
 		if err := t.loadBlocksData(process); err != nil {
@@ -499,14 +497,12 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 		if err := t.loadBallots(process); err != nil {
 			return err
 		}
-		to = process
-	}
-	for count := from; !count.After(to); count = count.Add(1) {
-		if err := t.countLayer(t.logger.WithContext(ctx).WithFields(count), count); err != nil {
+		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(process), process); err != nil {
 			return err
 		}
+		t.minprocessed = process
 	}
-	t.minprocessed = to
+
 	return nil
 }
 
@@ -521,18 +517,18 @@ func (t *turtle) switchModes(logger log.Log) {
 	)
 }
 
-func (t *turtle) countLayer(logger log.Log, lid types.LayerID) error {
+func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
 	)
-	logger.With().Debug("counting layer", lid)
+	logger.With().Debug("processing layer", lid)
 
 	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
 	// but may require changes to t.processed
 	t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 
 	previous := t.verified
-	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+	for target := t.verified.Add(1); target.Before(lid); target = target.Add(1) {
 		var success bool
 		if t.mode.isVerifying() {
 			success = t.verifying.verify(logger, target)
@@ -548,7 +544,7 @@ func (t *turtle) countLayer(logger log.Log, lid types.LayerID) error {
 			// any layer can be expected to get verified. this is infeasible given current performance
 			// of the full tortoise and may take weeks to finish.
 			// instead we recompute window using configuration for the full mode (think 2_000 layers)
-			success = t.catchupToVerifyingInFullMode(logger, target)
+			success = t.catchupToVerifyingInFullMode(logger, lid, target)
 		}
 		if success {
 			t.verified = target
@@ -573,9 +569,9 @@ func (t *turtle) countLayer(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.LayerID) bool {
+func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target types.LayerID) bool {
 	counted := maxLayer(t.full.counted.Add(1), target.Add(1))
-	for ; !counted.After(t.processed); counted = counted.Add(1) {
+	for ; !counted.After(vcounted); counted = counted.Add(1) {
 		t.full.countLayerVotes(logger, counted)
 
 		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
