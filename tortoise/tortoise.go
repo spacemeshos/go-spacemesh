@@ -235,6 +235,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 
 	logger.With().Info("choose base ballot",
+		log.Stringer("mode", t.mode),
 		log.Stringer("base_layer", ballotLID),
 		log.Stringer("voting_layer", last),
 		log.Inline(votes),
@@ -286,6 +287,13 @@ func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ball
 	start = t.ballotLayer[base]
 
 	for lid := start; lid.Before(blid); lid = lid.Add(1) {
+		if len(t.blocks[lid]) == 0 && t.full.abstained(ballotID, lid) {
+			t.logger.With().Debug("ballot is neutral about empty layer. can't use as a base ballot",
+				ballotID,
+				lid,
+			)
+			return types.LayerID{}, nil
+		}
 		for _, block := range t.blocks[lid] {
 			localVote, _, err := t.getFullVote(ctx, lid, block)
 			if err != nil {
