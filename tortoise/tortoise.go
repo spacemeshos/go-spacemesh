@@ -72,10 +72,6 @@ func (t *turtle) cloneTurtleParams() *turtle {
 
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
-	t.logger.WithContext(ctx).With().Info("initializing genesis layer for verifying tortoise",
-		genesisLayer.Index(),
-		genesisLayer.Hash().Field(),
-	)
 	genesis := genesisLayer.Index()
 	for _, blk := range genesisLayer.Blocks() {
 		t.blockLayer[blk.ID()] = genesis
@@ -239,10 +235,9 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 
 	logger.With().Info("choose base ballot",
-		ballotID,
-		ballotLID,
+		log.Stringer("base_layer", ballotLID),
 		log.Stringer("voting_layer", last),
-		log.Object("votes", votes),
+		log.Inline(votes),
 	)
 
 	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - ballotLID.Value))
@@ -267,7 +262,7 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 				return choices[i].Compare(choices[j])
 			})
 
-			logger.With().Info("considering good base ballot", choices[0], lid)
+			logger.With().Debug("considering good base ballot", choices[0], lid)
 			return choices[0], lid
 		}
 	}
@@ -489,7 +484,10 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 	}
 	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
 		if isUndecided(t.Config, t.decided, process, t.last) {
-			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", process))
+			t.logger.With().Info("gap in the layers received by tortoise",
+				lid,
+				log.Stringer("undecided", process),
+			)
 			return nil
 		}
 		// load data for layers that were skipped due to zdist limit
@@ -649,7 +647,7 @@ func (t *turtle) loadHare(lid types.LayerID) error {
 		return nil
 	}
 	if errors.Is(err, sql.ErrNotFound) {
-		t.logger.With().Info("hare output for layer is not found", lid)
+		t.logger.With().Debug("hare output for layer is not found", lid)
 		return nil
 	}
 	return fmt.Errorf("get hare output %s: %w", lid, err)
@@ -727,7 +725,6 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if !lid.After(t.evicted) {
 		return
 	}
-	t.logger.With().Debug("on block", log.Inline(block))
 	if _, exist := t.referenceHeight[lid.GetEpoch()]; !exist {
 		// TODO(dshulyak) reference height is computed when first layer in the epoch
 		// is sent to the onLayerTerminated. after that we will load blocks from that layer.
@@ -738,6 +735,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if _, exist := t.blockLayer[block.ID()]; exist {
 		return
 	}
+	t.logger.With().Debug("on block", log.Inline(block))
 	t.blockLayer[block.ID()] = lid
 	t.blocks[lid] = append(t.blocks[lid],
 		blockInfo{
@@ -761,7 +759,6 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 }
 
 func (t *turtle) onBallot(ballot *types.Ballot) error {
-	t.logger.With().Debug("on ballot", log.Inline(ballot))
 	if !ballot.LayerIndex.After(t.evicted) {
 		return nil
 	}
@@ -769,6 +766,8 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		t.logger.With().Debug("ballot was submitted before computing reference height", ballot.ID(), ballot.LayerIndex)
 		return nil
 	}
+
+	t.logger.With().Debug("on ballot", log.Inline(ballot))
 	if _, exist := t.ballotLayer[ballot.ID()]; exist {
 		return nil
 	}
