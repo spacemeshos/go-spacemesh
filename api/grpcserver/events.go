@@ -3,7 +3,7 @@ package grpcserver
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p/core/event"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
