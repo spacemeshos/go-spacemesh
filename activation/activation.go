@@ -62,11 +62,6 @@ type signer interface {
 	Sign(m []byte) []byte
 }
 
-type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
-}
-
 type syncer interface {
 	RegisterChForSynced(context.Context, chan struct{})
 }
@@ -329,40 +324,51 @@ func (b *Builder) generateProof() error {
 }
 
 func (b *Builder) waitForFirstATX(ctx context.Context) {
-	currEpoch := b.layerClock.GetCurrentLayer().GetEpoch()
+	currentLayer := b.layerClock.GetCurrentLayer()
+	currEpoch := currentLayer.GetEpoch()
 	if currEpoch == 0 { // genesis miner
 		return
 	}
 	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
-		if prev.PubLayerID.GetEpoch() == currEpoch-1 {
+		if prev.PubLayerID.GetEpoch() == currEpoch {
 			// miner has ATX in previous epoch
 			return
 		}
 	}
 
-	// first atx for this node
-	currentLayer := b.layerClock.GetCurrentLayer()
-	waitTill := (currentLayer.GetEpoch() + 1).FirstLayer()
-	b.log.WithContext(ctx).With().Info("building very first atx",
-		log.Stringer("current_epoch", currentLayer.GetEpoch()),
-		log.Stringer("wait_till", waitTill),
-		log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
-	select {
-	case <-ctx.Done():
-		return
-	case <-b.layerClock.AwaitLayer(waitTill):
-		// this estimate work if the majority of the nodes use poet servers that are configured the same way.
-		// TODO: do better when nodes use different poet services
-		timer := time.NewTimer(b.poetCfg.PhaseShift - b.poetCfg.CycleGap + b.poetCfg.GracePeriod)
-		defer timer.Stop()
+	// miner didn't publish ATX that targets current epoch.
+
+	// this estimate work if the majority of the nodes use poet servers that are configured the same way.
+	// TODO: do better when nodes use different poet services
+	window := b.poetCfg.PhaseShift - b.poetCfg.CycleGap + b.poetCfg.GracePeriod
+	windowEnd := b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(window)
+	wait := time.Until(windowEnd)
+	if wait <= 0 { // missed the window. wait for the next epoch
+		waitTill := (currentLayer.GetEpoch() + 1).FirstLayer()
+		b.log.WithContext(ctx).With().Info("waiting till next epoch to build atx",
+			log.Stringer("current_epoch", currentLayer.GetEpoch()),
+			log.Stringer("wait_till", waitTill),
+			log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
 		select {
 		case <-ctx.Done():
 			return
-		case <-timer.C:
+		case <-b.layerClock.AwaitLayer(waitTill):
+			wait = window
 		}
 	}
+	timer := time.NewTimer(wait)
+	b.log.WithContext(ctx).With().Info("waiting for the poet window expires",
+		log.Duration("grace_period", b.poetCfg.GracePeriod),
+		log.Duration("wait", wait))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-timer.C:
+	}
 	b.log.WithContext(ctx).With().Info("ready to build first atx",
-		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()))
+		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()),
+		log.Stringer("current_epoch", b.layerClock.GetCurrentLayer().GetEpoch()))
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock.

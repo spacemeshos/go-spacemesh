@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -17,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
@@ -200,6 +203,10 @@ type LayerClockMock struct {
 	currentLayer types.LayerID
 }
 
+func (l *LayerClockMock) LayerToTime(types.LayerID) time.Time {
+	return time.Time{}
+}
+
 func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
 	return l.currentLayer
 }
@@ -284,6 +291,127 @@ func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration u
 }
 
 // ========== Tests ==========
+
+func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) {
+	prevAtx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
+				NIPostChallenge: types.NIPostChallenge{
+					PubLayerID: epoch.FirstLayer(),
+					NodeID:     nodeID,
+				},
+			},
+		},
+	}
+	prevAtx.NodeID = nodeID
+	prevAtx.CalcAndSetID()
+	require.NoError(t, atxs.Add(db, prevAtx, time.Now()))
+}
+
+func TestBuilder_waitForFirstATX(t *testing.T) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	net.atxHdlr = atxHdlr
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+	poetCfg := PoetConfig{
+		PhaseShift:  5 * time.Millisecond,
+		CycleGap:    2 * time.Millisecond,
+		GracePeriod: time.Millisecond,
+	}
+	mClock := mocks.NewMocklayerClock(gomock.NewController(t))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
+		mClock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"),
+		WithPoetConfig(poetCfg))
+	b.initialPost = initialPost
+
+	layerStart := time.Now().Add(-1 * time.Millisecond)
+	poetWindwow := poetCfg.PhaseShift - poetCfg.CycleGap + poetCfg.GracePeriod
+	expectedWait := poetWindwow - time.Millisecond
+	ch := make(chan struct{}, 1)
+	close(ch)
+	current := types.NewLayerID(layersPerEpoch * 2)
+	addPrevAtx(t, cdb, current.GetEpoch()-1)
+	mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
+	start := time.Time{}
+	mClock.EXPECT().LayerToTime(current).DoAndReturn(
+		func(_ types.LayerID) time.Time {
+			start = time.Now()
+			return layerStart
+		})
+	b.waitForFirstATX(context.TODO())
+	elapsed := time.Since(start)
+	require.GreaterOrEqual(t, elapsed, expectedWait)
+}
+
+func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	net.atxHdlr = atxHdlr
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+	poetCfg := PoetConfig{
+		PhaseShift:  5 * time.Millisecond,
+		CycleGap:    2 * time.Millisecond,
+		GracePeriod: time.Millisecond,
+	}
+	mClock := mocks.NewMocklayerClock(gomock.NewController(t))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
+		mClock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"),
+		WithPoetConfig(poetCfg))
+	b.initialPost = initialPost
+
+	poetWindwow := poetCfg.PhaseShift - poetCfg.CycleGap + poetCfg.GracePeriod
+	ch := make(chan struct{}, 1)
+	close(ch)
+	current := types.NewLayerID(layersPerEpoch * 2)
+	addPrevAtx(t, cdb, current.GetEpoch()-1)
+	mClock.EXPECT().GetCurrentLayer().Return(current)
+	mClock.EXPECT().LayerToTime(current).Return(time.Now().Add(-5 * time.Millisecond))
+	start := time.Time{}
+	mClock.EXPECT().AwaitLayer(current.Add(layersPerEpoch)).DoAndReturn(
+		func(_ types.LayerID) chan struct{} {
+			start = time.Now()
+			return ch
+		})
+	mClock.EXPECT().GetCurrentLayer().Return(current.Add(layersPerEpoch)).AnyTimes()
+	b.waitForFirstATX(context.TODO())
+	elapsed := time.Since(start)
+	require.GreaterOrEqual(t, elapsed, poetWindwow)
+}
+
+func TestBuilder_waitForFirstATX_Genesis(t *testing.T) {
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	b := newBuilder(t, cdb, atxHdlr)
+	mClock := mocks.NewMocklayerClock(gomock.NewController(t))
+	b.layerClock = mClock
+
+	current := types.NewLayerID(0)
+	mClock.EXPECT().GetCurrentLayer().Return(current)
+	b.waitForFirstATX(context.TODO())
+}
+
+func TestBuilder_waitForFirstATX_NoWait(t *testing.T) {
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	b := newBuilder(t, cdb, atxHdlr)
+	mClock := mocks.NewMocklayerClock(gomock.NewController(t))
+	b.layerClock = mClock
+
+	current := types.NewLayerID(layersPerEpoch)
+	addPrevAtx(t, cdb, current.GetEpoch())
+	mClock.EXPECT().GetCurrentLayer().Return(current)
+	b.waitForFirstATX(context.TODO())
+}
 
 func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	cdb := newCachedDB(t)
