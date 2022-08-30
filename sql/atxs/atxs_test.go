@@ -186,7 +186,8 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	ids2, err := GetIDsByEpoch(db, l2.GetEpoch())
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx2.ID(), atx3.ID()}, ids2)
+	require.Contains(t, ids2, atx2.ID())
+	require.Contains(t, ids2, atx3.ID())
 
 	ids3, err := GetIDsByEpoch(db, l3.GetEpoch())
 	require.NoError(t, err)
