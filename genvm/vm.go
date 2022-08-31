@@ -266,7 +266,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		limit       = v.cfg.GasLimit
 	)
 	for i := range txs {
-		logger := v.logger.WithFields(log.Int("i", i))
+		logger := v.logger.WithFields(log.Int("ith", i))
 		txCount.Inc()
 
 		t1 := time.Now()

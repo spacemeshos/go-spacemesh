@@ -60,7 +60,7 @@ type AccountUpdater interface {
 }
 
 // ParseOutput is a tuple containing all fields that are returned
-// by ParsePayload call.
+// by Parse call.
 type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
