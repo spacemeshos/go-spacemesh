@@ -231,13 +231,11 @@ func TestAdd(t *testing.T) {
 func newAtx(sig *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					PubLayerID: layerID,
-					PrevATXID:  types.RandomATXID(),
-				},
-				NumUnits: 2,
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: layerID,
+				PrevATXID:  types.RandomATXID(),
 			},
+			NumUnits: 2,
 		},
 	}
 
@@ -288,12 +286,10 @@ func TestPositioningID(t *testing.T) {
 			for _, atx := range tc.atxs {
 				full := &types.ActivationTx{
 					InnerActivationTx: types.InnerActivationTx{
-						ActivationTxHeader: types.ActivationTxHeader{
-							NIPostChallenge: types.NIPostChallenge{
-								PubLayerID: atx.epoch.FirstLayer(),
-							},
-							Coinbase: atx.coinbase,
+						NIPostChallenge: types.NIPostChallenge{
+							PubLayerID: atx.epoch.FirstLayer(),
 						},
+						Coinbase: atx.coinbase,
 					},
 				}
 				full.Verify(atx.base, atx.count)

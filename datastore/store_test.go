@@ -25,13 +25,13 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	bs := NewBlobStore(db)
 
 	signer := signing.NewEdSigner()
-	hdr := types.ActivationTxHeader{
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: types.NewLayerID(22),
 		},
 		NumUnits: 11,
+	},
 	}
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
 	data, err := atx.InnerBytes()
 	require.NoError(t, err)
 	atx.Sig = signer.Sign(data)

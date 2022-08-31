@@ -144,7 +144,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	return true, nil
 }
 
-func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
+func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTx, error) {
 	if ballot.AtxID == *types.EmptyATXID {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
@@ -161,5 +161,5 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID().ToBytes(), pub.Bytes()) {
 		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID())
 	}
-	return &atx.ActivationTxHeader, nil
+	return atx, nil
 }

@@ -621,7 +621,7 @@ func (f *Fetch) GetEpochATXIDs(ctx context.Context, eid types.EpochID, okCB func
 	okFunc := func(data []byte) {
 		okCB(data, peer)
 	}
-	if err := f.atxSrv.Request(ctx, peer, eid.ToBytes(), okFunc, errFunc); err != nil {
+	if err := f.atxSrv.Request(ctx, peer, eid.Bytes(), okFunc, errFunc); err != nil {
 		return err
 	}
 	return nil

@@ -122,7 +122,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID()),
 		atx.PubLayerID)
-	if err := h.ContextuallyValidateAtx(&atx.ActivationTxHeader); err != nil {
+	if err := h.ContextuallyValidateAtx(atx); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
@@ -249,7 +249,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
+func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := atxs.LastIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil {

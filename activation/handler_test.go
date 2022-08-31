@@ -168,7 +168,7 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.NoError(t, err)
 
-	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(atx)
 	assert.NoError(t, err)
 }
 
@@ -264,7 +264,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(sig, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(atx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
@@ -275,7 +275,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 
 	err = SignAtx(sig, atx)
 	assert.NoError(t, err)
-	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(atx)
 	assert.ErrorIs(t, err, sql.ErrNotFound)
 
 	// Prev atx not declared but initial Post not included.
@@ -366,7 +366,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = newActivationTx(sig, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(atx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
@@ -398,7 +398,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = newActivationTx(otherSig, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(atx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
@@ -461,7 +461,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxHdlr.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(atx)
 	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
@@ -604,12 +604,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
 	validAtx := newAtx(newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{})
-	err := atxHdlr.ContextuallyValidateAtx(&validAtx.ActivationTxHeader)
+	err := atxHdlr.ContextuallyValidateAtx(validAtx)
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
 	malformedAtx := newAtx(newChallenge(0, arbitraryAtxID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{})
-	err = atxHdlr.ContextuallyValidateAtx(&malformedAtx.ActivationTxHeader)
+	err = atxHdlr.ContextuallyValidateAtx(malformedAtx)
 	r.ErrorIs(err, sql.ErrNotFound)
 }
 
@@ -730,14 +730,12 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	atx1 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					PositioningATX:     goldenATXID,
-					InitialPostIndices: []byte{1},
-					PubLayerID:         types.NewLayerID(1).Add(layersPerEpoch),
-				},
-				NumUnits: units,
+			NIPostChallenge: types.NIPostChallenge{
+				PositioningATX:     goldenATXID,
+				InitialPostIndices: []byte{1},
+				PubLayerID:         types.NewLayerID(1).Add(layersPerEpoch),
 			},
+			NumUnits: units,
 			NIPost: &types.NIPost{
 				Post:         &types.Post{},
 				PostMetadata: &types.PostMetadata{},
@@ -765,15 +763,13 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	atx2 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       1,
-					PositioningATX: atx1.ID(),
-					PrevATXID:      atx1.ID(),
-					PubLayerID:     types.NewLayerID(1).Add(2 * layersPerEpoch),
-				},
-				NumUnits: units,
+			NIPostChallenge: types.NIPostChallenge{
+				Sequence:       1,
+				PositioningATX: atx1.ID(),
+				PrevATXID:      atx1.ID(),
+				PubLayerID:     types.NewLayerID(1).Add(2 * layersPerEpoch),
 			},
+			NumUnits: units,
 			NIPost: &types.NIPost{
 				Post:         &types.Post{},
 				PostMetadata: &types.PostMetadata{},

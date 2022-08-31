@@ -23,8 +23,8 @@ import (
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
 
-// ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
-func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
+// Bytes returns a byte-slice representation of the EpochID, using little endian encoding.
+func (l EpochID) Bytes() []byte { return util.Uint32ToBytes(uint32(l)) }
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
@@ -81,8 +81,8 @@ func (t ATXID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
-// Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
-func (t ATXID) Compare(other ATXID) bool {
+// Less returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
+func (t ATXID) Less(other ATXID) bool {
 	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
 }
 
@@ -99,92 +99,73 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = &ATXID{}
 
-// ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
-// well as the coinbase address and total weight.
-type ActivationTxHeader struct {
-	NIPostChallenge
-	Coinbase Address
-	NumUnits uint32
-
-	// the following fields are kept private and from being serialized
-	id *ATXID // non-exported cache of the ATXID
-
-	nodeID *NodeID // the id of the Node that created the ATX (public key)
-
-	// TODO(dshulyak) this is important to prevent accidental state reads
-	// before this field is set. reading empty data could lead to disastrous bugs.
-	verified       bool
-	baseTickHeight uint64
-	tickCount      uint64
-}
-
 // ShortString returns the first 5 characters of the ID, for logging purposes.
-func (atxh *ActivationTxHeader) ShortString() string {
-	return atxh.ID().ShortString()
+func (atx *ActivationTx) ShortString() string {
+	return atx.ID().ShortString()
 }
 
 // Hash32 returns the ATX's ID as a Hash32.
-func (atxh *ActivationTxHeader) Hash32() Hash32 {
-	return atxh.ID().Hash32()
+func (atx *ActivationTx) Hash32() Hash32 {
+	return atx.ID().Hash32()
 }
 
 // ID returns the ATX's ID.
-func (atxh *ActivationTxHeader) ID() ATXID {
-	if atxh.id == nil {
+func (atx *ActivationTx) ID() ATXID {
+	if atx.id == nil {
 		panic("id field must be set")
 	}
-	return *atxh.id
+	return *atx.id
 }
 
 // NodeID returns the ATX's Node ID.
-func (atxh *ActivationTxHeader) NodeID() NodeID {
-	if atxh.nodeID == nil {
+func (atx *ActivationTx) NodeID() NodeID {
+	if atx.nodeID == nil {
 		panic("nodeID field must be set")
 	}
-	return *atxh.nodeID
+	return *atx.nodeID
 }
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
-func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
-	return atxh.PubLayerID.GetEpoch() + 1
+func (atx *ActivationTx) TargetEpoch() EpochID {
+	return atx.PubLayerID.GetEpoch() + 1
 }
 
 // SetID sets the ATXID in this ATX's cache.
-func (atxh *ActivationTxHeader) SetID(id *ATXID) {
-	atxh.id = id
+func (atx *ActivationTx) SetID(id *ATXID) {
+	atx.id = id
 }
 
 // SetNodeID sets the Node ID in the ATX's cache.
-func (atxh *ActivationTxHeader) SetNodeID(nodeID *NodeID) {
-	atxh.nodeID = nodeID
+func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
+	atx.nodeID = nodeID
 }
 
 // Weight of the atx.
-func (atxh *ActivationTxHeader) Weight() uint64 {
-	return uint64(atxh.NumUnits) * (atxh.tickCount)
+func (atx *ActivationTx) Weight() uint64 {
+	return uint64(atx.NumUnits) * (atx.tickCount)
 }
 
 // BaseTickHeight is a tick height of the positional atx.
-func (atxh *ActivationTxHeader) BaseTickHeight() uint64 {
-	return atxh.baseTickHeight
+func (atx *ActivationTx) BaseTickHeight() uint64 {
+	return atx.baseTickHeight
 }
 
 // TickCount returns tick count from from poet proof attached to the atx.
-func (atxh *ActivationTxHeader) TickCount() uint64 {
-	return atxh.tickCount
+func (atx *ActivationTx) TickCount() uint64 {
+	return atx.tickCount
 }
 
 // TickHeight returns a sum of base tick height and tick count.
-func (atxh *ActivationTxHeader) TickHeight() uint64 {
-	return atxh.baseTickHeight + atxh.tickCount
+func (atx *ActivationTx) TickHeight() uint64 {
+	return atx.baseTickHeight + atx.tickCount
 }
 
 // Verify sets field extract after verification.
-func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
-	atxh.verified = true
-	atxh.baseTickHeight = baseTickHeight
-	atxh.tickCount = tickCount
+func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) {
+	atx.verified = true
+	atx.baseTickHeight = baseTickHeight
+	atx.tickCount = tickCount
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -223,9 +204,23 @@ func (challenge *NIPostChallenge) String() string {
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
-	ActivationTxHeader
+	NIPostChallenge
+	Coinbase Address
+	NumUnits uint32
+
 	NIPost      *NIPost
 	InitialPost *Post
+
+	// the following fields are kept private and from being serialized
+	id *ATXID // non-exported cache of the ATXID
+
+	nodeID *NodeID // the id of the Node that created the ATX (public key)
+
+	// TODO(dshulyak) this is important to prevent accidental state reads
+	// before this field is set. reading empty data could lead to disastrous bugs.
+	verified       bool
+	baseTickHeight uint64
+	tickCount      uint64
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -239,11 +234,10 @@ type ActivationTx struct {
 func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
-				NIPostChallenge: challenge,
-				Coinbase:        coinbase,
-				NumUnits:        uint32(numUnits),
-			},
+			NIPostChallenge: challenge,
+			Coinbase:        coinbase,
+			NumUnits:        uint32(numUnits),
+
 			NIPost:      nipost,
 			InitialPost: initialPost,
 		},
@@ -455,7 +449,7 @@ func ToATXIDs(atxs []*ActivationTx) []ATXID {
 
 // SortAtxIDs sorts a list of atx IDs in lexicographic order, in-place.
 func SortAtxIDs(ids []ATXID) []ATXID {
-	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Less(ids[j]) })
 	return ids
 }
 

@@ -62,7 +62,7 @@ func (db *CachedDB) EpochWeight(epoch types.EpochID) (uint64, []types.ATXID, err
 		weight uint64
 		ids    []types.ATXID
 	)
-	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+	if err := db.IterateEpochATXs(epoch, func(header *types.ActivationTx) bool {
 		weight += header.Weight()
 		ids = append(ids, header.ID())
 		return true
@@ -72,8 +72,8 @@ func (db *CachedDB) EpochWeight(epoch types.EpochID) (uint64, []types.ATXID, err
 	return weight, ids, nil
 }
 
-// IterateEpochATXHeaders iterates over activation headers that target an epoch.
-func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) bool) error {
+// IterateEpochATXs iterates over ActivationTxs that target an epoch.
+func (db *CachedDB) IterateEpochATXs(epoch types.EpochID, iter func(*types.ActivationTx) bool) error {
 	ids, err := atxs.IDsByEpoch(db, epoch-1)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 		if err != nil {
 			return err
 		}
-		if !iter(&atx.ActivationTxHeader) {
+		if !iter(atx) {
 			return nil
 		}
 	}

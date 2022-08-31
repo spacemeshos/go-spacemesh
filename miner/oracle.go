@@ -23,7 +23,7 @@ var (
 
 type oracleCache struct {
 	epoch     types.EpochID
-	atx       *types.ActivationTxHeader
+	atx       *types.ActivationTx
 	activeSet []types.ATXID
 	proofs    map[types.LayerID][]types.VotingEligibilityProof
 }
@@ -105,7 +105,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	return o.cache.atx.ID(), o.cache.activeSet, layerProofs, nil
 }
 
-func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
+func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTx, error) {
 	publishEpoch := targetEpoch - 1
 	atxID, err := atxs.IDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
 	if err != nil {
@@ -124,7 +124,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 			log.Err(err))
 		return nil, fmt.Errorf("get ATX header: %w", err)
 	}
-	return &atx.ActivationTxHeader, nil
+	return atx, nil
 }
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch

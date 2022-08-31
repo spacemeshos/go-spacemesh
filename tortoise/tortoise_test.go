@@ -213,13 +213,15 @@ type (
 func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
 	atxList := make([]*types.ActivationTx, 0, numATXs)
 	for i := 0; i < numATXs; i++ {
-		atxHeader := makeAtxHeaderWithWeight(uint32(weight))
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NumUnits: uint32(weight),
+		}}
 		atx.PubLayerID = lid
 		nodeID := types.NodeID{byte(i)}
 		atx.SetNodeID(&nodeID)
 		atxID := types.RandomATXID()
 		atx.SetID(&atxID)
+		atx.Verify(0, 1)
 		atxList = append(atxList, atx)
 	}
 	return atxList
@@ -530,15 +532,6 @@ func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
-}
-
-func makeAtxHeaderWithWeight(weight uint32) types.ActivationTxHeader {
-	header := types.ActivationTxHeader{}
-	header.NumUnits = weight
-	header.Verify(0, 1)
-	nodeID := types.NodeID{1}
-	header.SetNodeID(&nodeID)
-	return header
 }
 
 func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
@@ -1294,17 +1287,16 @@ func TestComputeExpectedWeight(t *testing.T) {
 			)
 			for i, weight := range tc.totals {
 				eid := first + types.EpochID(i)
-				header := types.ActivationTxHeader{
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NIPostChallenge: types.NIPostChallenge{
 						PubLayerID: (eid - 1).FirstLayer(),
 					},
 					NumUnits: uint32(weight),
-				}
-				header.Verify(0, 1)
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
+				}}
 				id := types.RandomATXID()
 				atx.SetID(&id)
 				atx.SetNodeID(&types.NodeID{})
+				atx.Verify(0, 1)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
@@ -2289,13 +2281,15 @@ func TestComputeBallotWeight(t *testing.T) {
 			lid := types.NewLayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
 			for i, weight := range tc.atxs {
-				atxHeader := makeAtxHeaderWithWeight(uint32(weight))
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+					NumUnits: uint32(weight),
+				}}
 				atx.PubLayerID = atxLid
 				nodeID := types.NodeID{byte(i)}
 				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
+				atx.Verify(0, 1)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 				atxids = append(atxids, atxID)
 			}
