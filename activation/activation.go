@@ -327,7 +327,7 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	if currEpoch == 0 { // genesis miner
 		return false
 	}
-	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
+	if prev, err := b.cdb.PrevAtx(b.nodeID); err == nil {
 		if prev.PubLayerID.GetEpoch() == currEpoch {
 			// miner has ATX in previous epoch
 			return false
