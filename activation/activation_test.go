@@ -329,23 +329,13 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 		WithPoetConfig(poetCfg))
 	b.initialPost = initialPost
 
-	layerStart := time.Now().Add(-1 * time.Millisecond)
-	poetWindwow := poetCfg.PhaseShift - poetCfg.CycleGap + poetCfg.GracePeriod
-	expectedWait := poetWindwow - time.Millisecond
 	ch := make(chan struct{}, 1)
 	close(ch)
-	current := types.NewLayerID(layersPerEpoch * 2)
+	current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
 	addPrevAtx(t, cdb, current.GetEpoch()-1)
 	mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-	start := time.Time{}
-	mClock.EXPECT().LayerToTime(current).DoAndReturn(
-		func(_ types.LayerID) time.Time {
-			start = time.Now()
-			return layerStart
-		})
-	b.waitForFirstATX(context.TODO())
-	elapsed := time.Since(start)
-	require.GreaterOrEqual(t, elapsed, expectedWait)
+	mClock.EXPECT().LayerToTime(current).Return(time.Now().Add(100 * time.Millisecond))
+	require.True(t, b.waitForFirstATX(context.TODO()))
 }
 
 func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
@@ -369,23 +359,15 @@ func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
 		WithPoetConfig(poetCfg))
 	b.initialPost = initialPost
 
-	poetWindwow := poetCfg.PhaseShift - poetCfg.CycleGap + poetCfg.GracePeriod
 	ch := make(chan struct{}, 1)
 	close(ch)
-	current := types.NewLayerID(layersPerEpoch * 2)
+	current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
 	addPrevAtx(t, cdb, current.GetEpoch()-1)
 	mClock.EXPECT().GetCurrentLayer().Return(current)
 	mClock.EXPECT().LayerToTime(current).Return(time.Now().Add(-5 * time.Millisecond))
-	start := time.Time{}
-	mClock.EXPECT().AwaitLayer(current.Add(layersPerEpoch)).DoAndReturn(
-		func(_ types.LayerID) chan struct{} {
-			start = time.Now()
-			return ch
-		})
+	mClock.EXPECT().AwaitLayer(current.Add(layersPerEpoch)).Return(ch)
 	mClock.EXPECT().GetCurrentLayer().Return(current.Add(layersPerEpoch)).AnyTimes()
-	b.waitForFirstATX(context.TODO())
-	elapsed := time.Since(start)
-	require.GreaterOrEqual(t, elapsed, poetWindwow)
+	require.True(t, b.waitForFirstATX(context.TODO()))
 }
 
 func TestBuilder_waitForFirstATX_Genesis(t *testing.T) {
@@ -397,7 +379,7 @@ func TestBuilder_waitForFirstATX_Genesis(t *testing.T) {
 
 	current := types.NewLayerID(0)
 	mClock.EXPECT().GetCurrentLayer().Return(current)
-	b.waitForFirstATX(context.TODO())
+	require.False(t, b.waitForFirstATX(context.TODO()))
 }
 
 func TestBuilder_waitForFirstATX_NoWait(t *testing.T) {
@@ -410,7 +392,7 @@ func TestBuilder_waitForFirstATX_NoWait(t *testing.T) {
 	current := types.NewLayerID(layersPerEpoch)
 	addPrevAtx(t, cdb, current.GetEpoch())
 	mClock.EXPECT().GetCurrentLayer().Return(current)
-	b.waitForFirstATX(context.TODO())
+	require.False(t, b.waitForFirstATX(context.TODO()))
 }
 
 func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
