@@ -134,7 +134,7 @@ func (g *Generator) mergeActivations(other *Generator) {
 			}
 		}
 		if !exists {
-			atx, err := other.GetState(0).DB.AtxByID(atxid)
+			atx, err := other.GetState(0).DB.GetAtxByID(atxid)
 			if err != nil {
 				g.logger.With().Panic("failed to get atx", atxid, log.Err(err))
 			}

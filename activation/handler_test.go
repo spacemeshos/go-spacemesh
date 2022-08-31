@@ -67,7 +67,7 @@ func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	atx2 := newAtx(newChallenge(1, atx1.ID(), atx1.ID(), epoch2.FirstLayer()), sig, &types.NIPost{}, 0, coinbase1)
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), epoch2, atx2))
 
-	atxid, err := atxs.LastIDByNodeID(cdb, sig.NodeID())
+	atxid, err := atxs.GetLastIDByNodeID(cdb, sig.NodeID())
 	r.NoError(err)
 	r.Equal(atx2.ID(), atxid, "atx2.ShortString(): %v", atx2.ShortString())
 }
@@ -124,7 +124,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 }
 
 func assertEpochWeight(t *testing.T, cdb *datastore.CachedDB, epochID types.EpochID, expectedWeight uint64) {
-	epochWeight, _, err := cdb.EpochWeight(epochID)
+	epochWeight, _, err := cdb.GetEpochWeight(epochID)
 	assert.NoError(t, err)
 	assert.Equal(t, int(expectedWeight), int(epochWeight),
 		fmt.Sprintf("expectedWeight (%d) != epochWeight (%d)", expectedWeight, epochWeight))
@@ -372,14 +372,14 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 
-	id, err := atxs.LastIDByNodeID(cdb, sig.NodeID())
+	id, err := atxs.GetLastIDByNodeID(cdb, sig.NodeID())
 	assert.NoError(t, err)
 	assert.Equal(t, atx.ID(), id)
 
-	_, err = atxHdlr.cdb.AtxByID(id)
+	_, err = atxHdlr.cdb.GetAtxByID(id)
 	assert.NoError(t, err)
 
-	_, err = atxHdlr.cdb.AtxByID(atx2id)
+	_, err = atxHdlr.cdb.GetAtxByID(atx2id)
 	assert.NoError(t, err)
 
 	// test same sequence
@@ -504,10 +504,10 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			eStart = time.Now()
 
 			for miner := 0; miner < numOfMiners; miner++ {
-				atx, err := cdb.AtxByID(prevAtxs[miner])
+				atx, err := cdb.GetAtxByID(prevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
-				atx, err = cdb.AtxByID(pPrevAtxs[miner])
+				atx, err = cdb.GetAtxByID(pPrevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
 			}
@@ -659,7 +659,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := atxHdlr.cdb.AtxByID(types.ATXID{1, 1, 1})
+		_, err := atxHdlr.cdb.GetAtxByID(types.ATXID{1, 1, 1})
 		require.ErrorIs(b, err, sql.ErrNotFound)
 	}
 	atomic.StoreUint64(&stop, 1)
@@ -754,12 +754,12 @@ func TestHandler_AtxWeight(t *testing.T) {
 	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
 
-	stored1, err := db.AtxByID(atx1.ID())
+	stored1, err := db.GetAtxByID(atx1.ID())
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), stored1.BaseTickHeight())
 	require.Equal(t, leaves/tickSize, stored1.TickCount())
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
-	require.Equal(t, (leaves/tickSize)*units, stored1.Weight())
+	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
 
 	atx2 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -787,10 +787,10 @@ func TestHandler_AtxWeight(t *testing.T) {
 	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
 
-	stored2, err := db.AtxByID(atx2.ID())
+	stored2, err := db.GetAtxByID(atx2.ID())
 	require.NoError(t, err)
 	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight())
 	require.Equal(t, leaves/tickSize, stored2.TickCount())
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
-	require.Equal(t, int(leaves/tickSize)*units, int(stored2.Weight()))
+	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
 }

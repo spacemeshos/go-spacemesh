@@ -83,11 +83,11 @@ func ComputeWeightPerEligibility(
 		}
 	}
 	for _, atxID := range refBallot.EpochData.ActiveSet {
-		atx, err = cdb.AtxByID(atxID)
+		atx, err = cdb.GetAtxByID(atxID)
 		if err != nil {
 			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
 		}
-		weight := atx.Weight()
+		weight := atx.GetWeight()
 		total += weight
 		if atxID == ballot.AtxID {
 			atxWeight = weight

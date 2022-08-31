@@ -327,7 +327,6 @@ func TestFullCountVotes(t *testing.T) {
 			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 			var activeset []types.ATXID
 			for i := range tc.activeset {
-
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NIPostChallenge: types.NIPostChallenge{},
 					NumUnits:        1,

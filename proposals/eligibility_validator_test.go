@@ -227,7 +227,6 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
 
 	for _, id := range rb.EpochData.ActiveSet[1:] {
-
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
@@ -362,9 +361,9 @@ func TestCheckEligibility(t *testing.T) {
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	for _, b := range blts {
-		atx, err := tv.cdb.AtxByID(b.AtxID)
+		atx, err := tv.cdb.GetAtxByID(b.AtxID)
 		require.NoError(t, err)
-		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, atx.Weight()).Times(1)
+		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, atx.GetWeight()).Times(1)
 		eligible, err := tv.CheckEligibility(context.TODO(), b)
 		require.NoError(t, err)
 		require.True(t, eligible)

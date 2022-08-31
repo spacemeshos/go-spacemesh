@@ -523,17 +523,17 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				continue
 			}
 			seenATXIDs[id] = struct{}{}
-			atx, err := o.cdb.AtxByID(id)
+			atx, err := o.cdb.GetAtxByID(id)
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
-			hareActiveSet[atx.NodeID()] = atx.Weight()
+			hareActiveSet[atx.NodeID()] = atx.GetWeight()
 		}
 	}
 
 	// remove miners who published ballots with bad beacons
 	for id := range badBeaconATXIDs {
-		atx, err := o.cdb.AtxByID(id)
+		atx, err := o.cdb.GetAtxByID(id)
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
@@ -557,7 +557,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	}
-	atxids, err := atxs.IDsByEpoch(o.cdb, targetLayer.GetEpoch()-1)
+	atxids, err := atxs.GetIDsByEpoch(o.cdb, targetLayer.GetEpoch()-1)
 	if err != nil {
 		return nil, fmt.Errorf("can't get atxs for an epoch %d: %w", targetLayer.GetEpoch()-1, err)
 	}
@@ -568,11 +568,11 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	// extract the nodeIDs and weights
 	activeMap := make(map[types.NodeID]uint64, len(atxids))
 	for _, atxid := range atxids {
-		atxHeader, err := o.cdb.AtxByID(atxid)
+		atxHeader, err := o.cdb.GetAtxByID(atxid)
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
-		activeMap[atxHeader.NodeID()] = atxHeader.Weight()
+		activeMap[atxHeader.NodeID()] = atxHeader.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
 

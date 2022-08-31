@@ -37,7 +37,7 @@ func newHandler(db *sql.Database, bs *datastore.BlobStore, lg log.Log) *handler 
 // handleEpochATXIDsReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
-	atxids, err := atxs.IDsByEpoch(h.db, epoch)
+	atxids, err := atxs.GetIDsByEpoch(h.db, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("get epoch ATXs for epoch %v: %w", epoch, err)
 	}

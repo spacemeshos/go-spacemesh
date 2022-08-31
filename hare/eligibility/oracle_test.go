@@ -74,11 +74,12 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) {
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
-
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: lid,
-		},
-			NumUnits: uint32(i + 1)}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: lid,
+			},
+			NumUnits: uint32(i + 1),
+		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.Verify(0, 1)
@@ -373,10 +374,12 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1.Verify(0, 1)
 	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
 
-	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{NIPostChallenge: types.NIPostChallenge{
-		PubLayerID: prevEpoch.FirstLayer(),
-	},
-		NumUnits: 9 * 1024}}
+	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: prevEpoch.FirstLayer(),
+		},
+		NumUnits: 9 * 1024,
+	}}
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{1})
 	atx2.Verify(0, 1)
@@ -443,19 +446,23 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}
 	prevEpoch := layer.GetEpoch() - 1
 
-	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{NIPostChallenge: types.NIPostChallenge{
-		PubLayerID: prevEpoch.FirstLayer(),
-	},
-		NumUnits: 1 * 1024}}
+	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: prevEpoch.FirstLayer(),
+		},
+		NumUnits: 1 * 1024,
+	}}
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&types.NodeID{1})
 	atx1.Verify(0, 1)
 	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
 
-	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{NIPostChallenge: types.NIPostChallenge{
-		PubLayerID: prevEpoch.FirstLayer(),
-	},
-		NumUnits: 9 * 1024}}
+	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: prevEpoch.FirstLayer(),
+		},
+		NumUnits: 9 * 1024,
+	}}
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{2})
 	atx2.Verify(0, 1)
@@ -709,10 +716,12 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	prevEpoch := layer.GetEpoch() - 1
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{NIPostChallenge: types.NIPostChallenge{
-			PubLayerID: prevEpoch.FirstLayer(),
-		},
-			NumUnits: uint32(i + 1)}}
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: prevEpoch.FirstLayer(),
+			},
+			NumUnits: uint32(i + 1),
+		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
 		atx.Verify(0, 1)

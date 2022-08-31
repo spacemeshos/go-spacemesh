@@ -23,8 +23,8 @@ import (
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
 type EpochID uint32
 
-// Bytes returns a byte-slice representation of the EpochID, using little endian encoding.
-func (l EpochID) Bytes() []byte { return util.Uint32ToBytes(uint32(l)) }
+// ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
+func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
@@ -141,8 +141,8 @@ func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
 	atx.nodeID = nodeID
 }
 
-// Weight of the atx.
-func (atx *ActivationTx) Weight() uint64 {
+// GetWeight of the atx.
+func (atx *ActivationTx) GetWeight() uint64 {
 	return uint64(atx.NumUnits) * (atx.tickCount)
 }
 
@@ -271,7 +271,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.verified {
 		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
 		encoder.AddUint64("tick_count", atx.tickCount)
-		encoder.AddUint64("weight", atx.Weight())
+		encoder.AddUint64("weight", atx.GetWeight())
 	}
 	return nil
 }

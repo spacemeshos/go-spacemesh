@@ -112,7 +112,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 	h.processAtxMutex.Lock()
 	defer h.processAtxMutex.Unlock()
 
-	existingATX, _ := h.cdb.AtxByID(atx.ID())
+	existingATX, _ := h.cdb.GetAtxByID(atx.ID())
 	if existingATX != nil { // Already processed
 		return nil
 	}
@@ -139,7 +139,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
 //   - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
-//     than the current ATXs sequence number.
+//     than the current ATX's sequence number.
 //   - If the sequence number is zero: PrevATX is empty.
 //   - Positioning ATX points to a syntactically valid ATX.
 //   - NIPost challenge is a hash of the serialization of the following fields:
@@ -155,7 +155,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		prevATX, err := h.cdb.AtxByID(atx.PrevATXID)
+		prevATX, err := h.cdb.GetAtxByID(atx.PrevATXID)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
@@ -211,7 +211,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
-		posAtx, err := h.cdb.AtxByID(atx.PositioningATX)
+		posAtx, err := h.cdb.GetAtxByID(atx.PositioningATX)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
@@ -251,7 +251,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXID != *types.EmptyATXID {
-		lastAtx, err := atxs.LastIDByNodeID(h.cdb, atx.NodeID())
+		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil {
 			h.log.With().Error("could not fetch node last atx", atx.ID(),
 				log.FieldNamed("atx_node_id", atx.NodeID()),
@@ -263,7 +263,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("last atx is not the one referenced")
 		}
 	} else {
-		lastAtx, err := atxs.LastIDByNodeID(h.cdb, atx.NodeID())
+		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			h.log.With().Error("fetching atx ids failed", log.Err(err))
 			return err
@@ -306,7 +306,7 @@ func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Ac
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID.
 func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err error) {
-	ids, err = atxs.IDsByEpoch(h.cdb, epochID)
+	ids, err = atxs.GetIDsByEpoch(h.cdb, epochID)
 	h.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(ids)),
 		log.String("atxs", fmt.Sprint(ids)))
@@ -315,7 +315,7 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 
 // GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
 func (h *Handler) GetPosAtxID() (types.ATXID, error) {
-	id, err := atxs.PositioningID(h.cdb)
+	id, err := atxs.GetPositioningID(h.cdb)
 	if err != nil {
 		return *types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
 	}
@@ -357,7 +357,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
 	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
-	existing, _ := h.cdb.AtxByID(atx.ID())
+	existing, _ := h.cdb.GetAtxByID(atx.ID())
 	if existing != nil {
 		logger.With().Debug("received known atx")
 		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())

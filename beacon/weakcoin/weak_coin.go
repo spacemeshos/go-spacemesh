@@ -407,7 +407,7 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint64) []byte {
 	proposal := bytes.Buffer{}
 	proposal.WriteString(wc.config.VRFPrefix)
-	if _, err := proposal.Write(epoch.Bytes()); err != nil {
+	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
 		wc.logger.With().Panic("can't write epoch to a buffer", log.Err(err))
 	}
 	roundBuf := make([]byte, 8)

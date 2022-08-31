@@ -78,7 +78,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			return
 		}
 		if c.refBallot == nil {
-			total, _, err := c.cdb.EpochWeight(ev.LayerID.GetEpoch())
+			total, _, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
 			if err != nil {
 				panic(err)
 			}
@@ -98,7 +98,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot
 		} else {
-			_, activeset, err := c.cdb.EpochWeight(ev.LayerID.GetEpoch())
+			_, activeset, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
 			if err != nil {
 				panic(err)
 			}
@@ -142,7 +142,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 
 		c.refBallot = nil
 		c.atx = atx.ID()
-		c.weight = atx.Weight()
+		c.weight = atx.GetWeight()
 
 		m.Send(MessageAtx{Atx: atx})
 	case MessageBlock:

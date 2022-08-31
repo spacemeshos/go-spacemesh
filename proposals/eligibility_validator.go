@@ -78,18 +78,18 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range activeSets {
-		atx, err := v.cdb.AtxByID(atxID)
+		atx, err := v.cdb.GetAtxByID(atxID)
 		if err != nil {
 			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
 		}
-		totalWeight += atx.Weight()
+		totalWeight += atx.GetWeight()
 	}
 
 	atx, err := v.getBallotATX(ctx, ballot)
 	if err != nil {
 		return false, fmt.Errorf("get ballot ATX header %v: %w", ballot.AtxID, err)
 	}
-	weight = atx.Weight()
+	weight = atx.GetWeight()
 
 	numEligibleSlots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
@@ -150,7 +150,7 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 	}
 
 	epoch := ballot.LayerIndex.GetEpoch()
-	atx, err := v.cdb.AtxByID(ballot.AtxID)
+	atx, err := v.cdb.GetAtxByID(ballot.AtxID)
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
 	}

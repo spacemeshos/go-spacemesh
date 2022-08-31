@@ -717,7 +717,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	newAtx := lastTransmittedAtx(t)
 	r.Equal(prevATX.ID(), newAtx.PrevATXID)
 
-	posAtx, err := cdb.AtxByID(newAtx.PositioningATX)
+	posAtx, err := cdb.GetAtxByID(newAtx.PositioningATX)
 	r.NoError(err)
 
 	assertLastAtx(r, posAtx, prevATX, layersPerEpoch)

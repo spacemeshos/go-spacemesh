@@ -24,8 +24,8 @@ func NewAtxCache(size int) AtxCache {
 }
 
 // Add adds an ActivationTx to cache.
-func (bc *AtxCache) Add(id types.ATXID, atxHeader *types.ActivationTx) {
-	bc.Cache.Add(id, atxHeader)
+func (bc *AtxCache) Add(id types.ATXID, atx *types.ActivationTx) {
+	bc.Cache.Add(id, atx)
 }
 
 // Get gets the corresponding ActivationTx for the given id, it also returns a boolean to indicate whether the item
