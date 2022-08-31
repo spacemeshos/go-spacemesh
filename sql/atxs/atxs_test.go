@@ -96,7 +96,6 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx2 := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
 	atx3 := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
 	atx4 := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
-	atx4.Sequence = atx3.Sequence + 1
 	atx4.CalcAndSetID()
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {

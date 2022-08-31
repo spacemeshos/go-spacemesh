@@ -138,12 +138,9 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
-//   - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
-//     than the current ATX's sequence number.
-//   - If the sequence number is zero: PrevATX is empty.
 //   - Positioning ATX points to a syntactically valid ATX.
 //   - NIPost challenge is a hash of the serialization of the following fields:
-//     NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
+//     NodeID, PrevATXID, LayerID, StartTick, PositioningATX.
 //   - The NIPost is valid.
 //   - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 //   - The ATX view of the previous epoch contains ActiveSetSize activations.
@@ -173,10 +170,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 				prevEp, prevATX.PubLayerID, curEp, atx.PubLayerID)
 		}
 
-		if prevATX.Sequence+1 != atx.Sequence {
-			return fmt.Errorf("sequence number is not one more than prev sequence number")
-		}
-
 		if atx.InitialPost != nil {
 			return fmt.Errorf("prevATX declared, but initial Post is included")
 		}
@@ -185,10 +178,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
 		}
 	} else {
-		if atx.Sequence != 0 {
-			return fmt.Errorf("no prevATX declared, but sequence number not zero")
-		}
-
 		if atx.InitialPost == nil {
 			return fmt.Errorf("no prevATX declared, but initial Post is not included")
 		}

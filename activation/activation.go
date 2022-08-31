@@ -442,7 +442,6 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
-		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
 	if err := b.storeChallenge(b.challenge); err != nil {

@@ -167,7 +167,6 @@ func newAtxHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
 
 func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
 	return types.NIPostChallenge{
-		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
@@ -255,12 +254,10 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 	atx := sigAtx
 	r.Equal(sig.NodeID(), atx.NodeID())
 	if prevAtx != nil {
-		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
 		r.Nil(atx.InitialPostIndices)
 	} else {
-		r.Zero(atx.Sequence)
 		r.Equal(*types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
 		r.NotNil(atx.InitialPostIndices)
@@ -804,7 +801,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{
-		Sequence:       2,
 		PrevATXID:      atx.ID(),
 		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
 		PositioningATX: atx.ID(),

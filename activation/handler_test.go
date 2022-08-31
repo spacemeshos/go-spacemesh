@@ -204,15 +204,8 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, posAtx)
 	assert.NoError(t, err)
 
-	// Wrong sequence.
-	atx := newActivationTx(sig, 0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
-	err = SignAtx(sig, atx)
-	assert.NoError(t, err)
-	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
-
 	// Wrong positioning atx.
-	atx = newActivationTx(sig, 1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+	atx := newActivationTx(sig, 1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = SignAtx(sig, atx)
 	assert.NoError(t, err)
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
@@ -358,9 +351,6 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	atx = newActivationTx(sig, 4, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = SignAtx(sig, atx)
 	assert.NoError(t, err)
-
-	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
@@ -767,7 +757,6 @@ func TestHandler_AtxWeight(t *testing.T) {
 		InnerActivationTx: types.InnerActivationTx{
 			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       1,
 					PositioningATX: atx1.ID(),
 					PrevATXID:      atx1.ID(),
 					PubLayerID:     types.NewLayerID(1).Add(2 * layersPerEpoch),

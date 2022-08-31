@@ -188,11 +188,10 @@ func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
-// PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
-// the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
-// the first ATX in the sequence also the commitment Merkle root.
+// PoET membership proof. It includes the previous ATX's ID (for all but the first in the sequence), the intended publication
+// layer ID, the PoET's start and end ticks, the positioning ATX's ID and for the first ATX in the sequence also the
+// commitment Merkle root.
 type NIPostChallenge struct {
-	Sequence           uint64
 	PrevATXID          ATXID
 	PubLayerID         LayerID
 	PositioningATX     ATXID
@@ -212,8 +211,7 @@ func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
 // String returns a string representation of the NIPostChallenge, for logging purposes.
 // It implements the Stringer interface.
 func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
-		challenge.Sequence,
+	return fmt.Sprintf("<prevATX: %v, PubLayer: %v, posATX: %s>",
 		challenge.PrevATXID.ShortString(),
 		challenge.PubLayerID,
 		challenge.PositioningATX.ShortString())
@@ -273,7 +271,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PubLayerID.GetEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
-	encoder.AddUint64("sequence_number", atx.Sequence)
 	if atx.verified {
 		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
 		encoder.AddUint64("tick_count", atx.tickCount)

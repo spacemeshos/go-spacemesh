@@ -317,7 +317,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 
 func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
 	return types.NIPostChallenge{
-		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
