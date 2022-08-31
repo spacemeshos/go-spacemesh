@@ -256,7 +256,13 @@ func (b *Builder) SmesherID() types.NodeID {
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
-	return SignAtx(b, atx)
+	err := SignAtx(b, atx)
+	if err != nil {
+		return err
+	}
+	atx.CalcAndSetID()
+	atx.SetNodeID(&b.nodeID)
+	return nil
 }
 
 func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
@@ -363,7 +369,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		return ErrStopRequested
 	case <-syncedCh:
 	}
-	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
+	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -466,7 +472,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
-			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return fmt.Errorf("failed to build new atx challenge: %w", err)
 		}
 	}
@@ -479,18 +484,20 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		var err error
 		b.pendingATX, err = b.createAtx(ctx)
 		if err != nil {
-			b.log.With().Error("failed to create atx", log.Err(err))
 			return fmt.Errorf("create ATX: %w", err)
 		}
 	}
 
 	atx := b.pendingATX
+	if err := b.SignAtx(atx); err != nil {
+		return fmt.Errorf("sign: %w", err)
+	}
+
 	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
 	defer b.atxHandler.UnsubscribeAtx(atx.ID())
-	size, err := b.signAndBroadcast(ctx, atx)
+	size, err := b.broadcast(ctx, atx)
 	if err != nil {
-		b.log.Error(err.Error())
-		return fmt.Errorf("sign and broadcast: %w", err)
+		return fmt.Errorf("broadcast: %w", err)
 	}
 
 	b.log.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
@@ -567,7 +574,14 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		initialPost = b.initialPost
 	}
 
-	return types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPost), nil
+	atx := types.NewActivationTx(
+		*b.challenge,
+		b.Coinbase(),
+		nipost,
+		b.postSetupProvider.LastOpts().NumUnits,
+		initialPost,
+	)
+	return atx, nil
 }
 
 func (b *Builder) currentEpoch() types.EpochID {
@@ -582,10 +596,7 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	if err := b.SignAtx(atx); err != nil {
-		return 0, fmt.Errorf("failed to sign ATX: %v", err)
-	}
+func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)

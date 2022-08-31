@@ -12,7 +12,7 @@ import (
 
 const (
 	// TotalGasSpawn is consumed from principal in case of successful spawn.
-	TotalGasSpawn = 200
+	TotalGasSpawn = 100
 	// TotalGasSpend is consumed from principal in case of successful spend.
 	TotalGasSpend = 100
 )
@@ -40,7 +40,7 @@ var (
 type handler struct{}
 
 // Parse header and arguments.
-func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
+func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (out core.ParseOutput, args scale.Encodable, err error) {
 	switch method {
 	case methodSpawn:
 		var p SpawnPayload
@@ -49,8 +49,8 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 			return
 		}
 		args = &p.Arguments
-		header.GasPrice = p.GasPrice
-		header.MaxGas = TotalGasSpawn
+		out.GasPrice = p.GasPrice
+		out.FixedGas = TotalGasSpawn
 	case methodSpend:
 		var p SpendPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
@@ -58,14 +58,14 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 			return
 		}
 		args = &p.Arguments
-		header.GasPrice = p.GasPrice
-		header.Nonce.Counter = p.Nonce.Counter
-		header.Nonce.Bitfield = p.Nonce.Bitfield
-		header.MaxGas = TotalGasSpend
+		out.GasPrice = p.GasPrice
+		out.Nonce.Counter = p.Nonce.Counter
+		out.Nonce.Bitfield = p.Nonce.Bitfield
+		out.FixedGas = TotalGasSpend
 	default:
-		return header, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		return out, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
-	return header, args, nil
+	return out, args, nil
 }
 
 // Init wallet.
@@ -85,16 +85,10 @@ func (*handler) Init(method uint8, args any, state []byte) (core.Template, error
 func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case methodSpawn:
-		if err := ctx.Consume(TotalGasSpawn); err != nil {
-			return err
-		}
 		if err := ctx.Spawn(TemplateAddress, args); err != nil {
 			return err
 		}
 	case methodSpend:
-		if err := ctx.Consume(TotalGasSpend); err != nil {
-			return err
-		}
 		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*SpendArguments)); err != nil {
 			return err
 		}

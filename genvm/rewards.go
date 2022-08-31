@@ -11,15 +11,17 @@ import (
 
 // Config defines the configuration options for Spacemesh rewards.
 type Config struct {
-	GasLimit   uint64
-	BaseReward uint64 `mapstructure:"base-reward"`
+	GasLimit          uint64
+	StorageCostFactor uint64 `mapstructure:"vm-storage-cost-factor"`
+	BaseReward        uint64 `mapstructure:"base-reward"`
 }
 
 // DefaultConfig returns the default RewardConfig.
 func DefaultConfig() Config {
 	return Config{
-		GasLimit:   100_000_000,
-		BaseReward: 50 * uint64(math.Pow10(12)),
+		GasLimit:          100_000_000,
+		StorageCostFactor: 2,
+		BaseReward:        50 * uint64(math.Pow10(12)),
 	}
 }
 

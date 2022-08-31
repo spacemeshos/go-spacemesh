@@ -19,11 +19,15 @@ type Context struct {
 
 	Account Account
 
-	Header Header
-	Args   scale.Encodable
+	ParseOutput ParseOutput
+	Header      Header
+	Args        scale.Encodable
 
-	// consumed and transferred is for MaxGas/MaxSpend validation
-	consumed    uint64
+	// consumed is in gas units and will be used
+	consumed uint64
+	// fee is in coins units
+	fee uint64
+	// an amount transfrered to other accounts
 	transferred uint64
 
 	// TODO all templates for genesis will support transfers to only one account.
@@ -82,14 +86,15 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
 	if amount > c.Account.Balance {
-		return ErrNoBalance
-	}
-	if total := c.consumed + gas; total > c.Header.MaxGas {
+		amount = c.Account.Balance
+		err = ErrNoBalance
+	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
 		amount = gas * c.Header.GasPrice
 		err = ErrMaxGas
 	}
 	c.consumed += gas
+	c.fee += amount
 	c.Account.Balance -= amount
 	return err
 }
@@ -100,7 +105,7 @@ func (c *Context) Apply(updater AccountUpdater) error {
 	encoder := scale.NewEncoder(buf)
 	c.Template.EncodeScale(encoder)
 
-	c.Account.Nonce = c.Header.Nonce.Counter
+	c.Account.NextNonce = c.Header.Nonce.Counter + 1
 	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {
 		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
@@ -121,13 +126,13 @@ func (c *Context) Consumed() uint64 {
 
 // Fee computed from consumed gas.
 func (c *Context) Fee() uint64 {
-	return c.consumed * c.Header.GasPrice
+	return c.fee
 }
 
 // Updated list of addresses.
 func (c *Context) Updated() []types.Address {
-	rst := make([]types.Address, len(c.touched)+1)
+	rst := make([]types.Address, 0, len(c.touched)+1)
 	rst = append(rst, c.Account.Address)
-	copy(rst[1:], c.touched)
+	rst = append(rst, c.touched...)
 	return rst
 }

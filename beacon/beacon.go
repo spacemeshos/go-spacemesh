@@ -741,7 +741,7 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
-		ua[string(header.NodeID[:])] += uint64(header.NumUnits)
+		ua[string(header.NodeID().ToBytes())] += uint64(header.NumUnits)
 	}
 
 	pd.weakCoin.StartEpoch(ctx, epoch, ua)

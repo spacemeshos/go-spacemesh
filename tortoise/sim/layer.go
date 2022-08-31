@@ -101,7 +101,7 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	// TODO(dshulyak) we are not reoredering already reordered layer
+	// TODO(dshulyak) we are not reordering already reordered layer
 	if lid, exist := g.reordered[g.nextLayer]; exist {
 		delete(g.reordered, g.nextLayer)
 		return lid

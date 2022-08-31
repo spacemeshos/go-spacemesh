@@ -41,10 +41,13 @@ run:
 clean:
 	@echo "deleting test pods with testid=$(test_id)"
 	@kubectl delete pod --selector=testid=$(test_id)
+	@kubectl wait --for delete pod --selector=testid=$(test_id)
 	@echo "deleting ephemeral namespaces with testid=$(test_id)"
 	@kubectl delete ns --selector=testid=$(test_id),keep=false
+	@kubectl wait --timeout=60s --for delete namespace --selector=testid=$(test_id),keep=false
 
 .PHONY: cleanall
 cleanall: clean
 	@echo "deleting all namespaces with testid=$(test_id)"
 	@kubectl delete ns --selector=testid=$(test_id)
+	@kubectl wait --timeout=60s --for delete namespace --selector=testid=$(test_id)

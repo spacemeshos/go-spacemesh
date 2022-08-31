@@ -49,7 +49,7 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 
 	for _, account := range accounts {
 		state := &pb.AccountState{
-			Counter: account.Nonce,
+			Counter: account.NextNonce,
 			Balance: &pb.Amount{Value: account.Balance},
 		}
 
