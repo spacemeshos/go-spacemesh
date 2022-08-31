@@ -309,7 +309,7 @@ func (b *Builder) generateProof() error {
 	}
 
 	// don't generate the commitment every time smeshing is starting, but once only.
-	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+	if _, err := b.cdb.PrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
@@ -439,7 +439,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	}
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
-	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+	if prevAtx, err := b.cdb.PrevAtx(b.nodeID); err != nil {
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
@@ -681,7 +681,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 		}
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %v", err)
 	}
-	atx, err := b.cdb.GetAtxHeader(id)
+	atx, err := b.cdb.AtxByID(id)
 	if err != nil {
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	}

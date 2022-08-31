@@ -239,7 +239,7 @@ func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Pro
 			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
 			return 0, nil, errInvalidATXID
 		}
-		atx, err := g.cdb.GetAtxHeader(p.AtxID)
+		atx, err := g.cdb.AtxByID(p.AtxID)
 		if atx.BaseTickHeight() > max {
 			max = atx.BaseTickHeight()
 		}

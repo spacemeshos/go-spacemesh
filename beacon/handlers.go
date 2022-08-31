@@ -92,13 +92,13 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 
 func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, atxID types.ATXID, receivedTime time.Time) (category, error) {
 	minerID := m.NodeID.ShortString()
-	atxHeader, err := pd.cdb.GetAtxHeader(atxID)
+	atxHeader, err := pd.cdb.AtxByID(atxID)
 	if err != nil {
 		logger.Error("[proposal] failed to get ATX header", atxID, log.Err(err))
 		return invalid, fmt.Errorf("[proposal] failed to get ATX header (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
 	}
 
-	atxTimestamp, err := atxs.GetTimestamp(pd.cdb, atxID)
+	atxTimestamp, err := atxs.Timestamp(pd.cdb, atxID)
 	if err != nil {
 		logger.Error("[proposal] failed to get ATX timestamp", atxID, log.Err(err))
 		return invalid, fmt.Errorf("[proposal] failed to get ATX timestamp (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
@@ -171,7 +171,7 @@ func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
 func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessage) (types.ATXID, error) {
 	minerID := m.NodeID.ShortString()
 
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, m.EpochID-1, m.NodeID)
+	atxID, err := atxs.IDByEpochAndNodeID(pd.cdb, m.EpochID-1, m.NodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("[proposal] miner has no ATX in previous epoch")
 		return types.ATXID{}, fmt.Errorf("[proposal] miner has no ATX in previous epoch (miner ID %v): %w", minerID, errMinerATXNotFound)
@@ -250,13 +250,13 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 
 	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound, log.String("miner_id", minerID))
-	atx, err := pd.cdb.GetAtxHeader(atxID)
+	atx, err := pd.cdb.AtxByID(atxID)
 	if err != nil {
 		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
 		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", types.FirstRound, minerID, atxID, err)
 	}
 
-	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
+	voteWeight := new(big.Int).SetUint64(atx.Weight())
 
 	logger.Debug("received first voting message, storing its votes")
 	return pd.storeFirstVotes(m, minerPK, voteWeight)
@@ -282,7 +282,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, m.EpochID-1, nodeID)
+	atxID, err := atxs.IDByEpochAndNodeID(pd.cdb, m.EpochID-1, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] miner has no ATX in previous epoch (miner ID %v): %w", types.FirstRound, minerID, errMinerATXNotFound)
@@ -376,13 +376,13 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, m.RoundID, log.String("miner_id", minerID))
 
-	atx, err := pd.cdb.GetAtxHeader(atxID)
+	atx, err := pd.cdb.AtxByID(atxID)
 	if err != nil {
 		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
 		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", m.RoundID, minerID, atxID, err)
 	}
 
-	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
+	voteWeight := new(big.Int).SetUint64(atx.Weight())
 
 	logger.Debug("received following voting message, counting its votes")
 	if err = pd.storeFollowingVotes(m, minerPK, voteWeight); err != nil {
@@ -413,7 +413,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		return nil, types.ATXID{}, err
 	}
 
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, m.EpochID-1, nodeID)
+	atxID, err := atxs.IDByEpochAndNodeID(pd.cdb, m.EpochID-1, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] miner has no ATX in previous epoch (miner ID %v): %w", round, minerID, errMinerATXNotFound)

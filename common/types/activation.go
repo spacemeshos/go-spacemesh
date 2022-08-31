@@ -160,8 +160,8 @@ func (atxh *ActivationTxHeader) SetNodeID(nodeID *NodeID) {
 	atxh.nodeID = nodeID
 }
 
-// GetWeight of the atx.
-func (atxh *ActivationTxHeader) GetWeight() uint64 {
+// Weight of the atx.
+func (atxh *ActivationTxHeader) Weight() uint64 {
 	return uint64(atxh.NumUnits) * (atxh.tickCount)
 }
 
@@ -277,7 +277,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.verified {
 		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
 		encoder.AddUint64("tick_count", atx.tickCount)
-		encoder.AddUint64("weight", atx.GetWeight())
+		encoder.AddUint64("weight", atx.Weight())
 	}
 	return nil
 }

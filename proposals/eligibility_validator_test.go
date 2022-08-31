@@ -366,9 +366,9 @@ func TestCheckEligibility(t *testing.T) {
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	for _, b := range blts {
-		hdr, err := tv.cdb.GetAtxHeader(b.AtxID)
+		atx, err := tv.cdb.AtxByID(b.AtxID)
 		require.NoError(t, err)
-		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, hdr.GetWeight()).Times(1)
+		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, atx.Weight()).Times(1)
 		eligible, err := tv.CheckEligibility(context.TODO(), b)
 		require.NoError(t, err)
 		require.True(t, eligible)

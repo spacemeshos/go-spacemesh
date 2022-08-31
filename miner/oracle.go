@@ -86,7 +86,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
 	}
 
-	newProofs, activeSet, err := o.calcEligibilityProofs(atx.GetWeight(), epoch, beacon)
+	newProofs, activeSet, err := o.calcEligibilityProofs(atx.Weight(), epoch, beacon)
 	if err != nil {
 		logger.With().Error("failed to calculate eligibility proofs", log.Err(err))
 		return *types.EmptyATXID, nil, nil, err
@@ -107,7 +107,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 
 func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	publishEpoch := targetEpoch - 1
-	atxID, err := atxs.GetIDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
+	atxID, err := atxs.IDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
 	if err != nil {
 		o.log.With().Warning("failed to find ATX ID for node",
 			log.Named("publish_epoch", publishEpoch),
@@ -116,7 +116,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 		return nil, fmt.Errorf("get ATX ID: %w", err)
 	}
 
-	atx, err := o.cdb.GetAtxHeader(atxID)
+	atx, err := o.cdb.AtxByID(atxID)
 	if err != nil {
 		o.log.With().Error("failed to get ATX header",
 			log.Named("publish_epoch", publishEpoch),
@@ -124,7 +124,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 			log.Err(err))
 		return nil, fmt.Errorf("get ATX header: %w", err)
 	}
-	return atx, nil
+	return &atx.ActivationTxHeader, nil
 }
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
@@ -133,7 +133,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
-	totalWeight, activeSet, err := o.cdb.GetEpochWeight(epoch)
+	totalWeight, activeSet, err := o.cdb.EpochWeight(epoch)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get epoch %v weight: %w", epoch, err)
 	}

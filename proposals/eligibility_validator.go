@@ -78,18 +78,18 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range activeSets {
-		atx, err := v.cdb.GetAtxHeader(atxID)
+		atx, err := v.cdb.AtxByID(atxID)
 		if err != nil {
 			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
 		}
-		totalWeight += atx.GetWeight()
+		totalWeight += atx.Weight()
 	}
 
 	atx, err := v.getBallotATX(ctx, ballot)
 	if err != nil {
 		return false, fmt.Errorf("get ballot ATX header %v: %w", ballot.AtxID, err)
 	}
-	weight = atx.GetWeight()
+	weight = atx.Weight()
 
 	numEligibleSlots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
@@ -150,7 +150,7 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 	}
 
 	epoch := ballot.LayerIndex.GetEpoch()
-	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
+	atx, err := v.cdb.AtxByID(ballot.AtxID)
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
 	}
@@ -161,5 +161,5 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID().ToBytes(), pub.Bytes()) {
 		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID())
 	}
-	return atx, nil
+	return &atx.ActivationTxHeader, nil
 }

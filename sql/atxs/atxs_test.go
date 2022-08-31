@@ -30,12 +30,12 @@ func TestGetATXByID(t *testing.T) {
 	}
 
 	for _, want := range atxs {
-		got, err := Get(db, want.ID())
+		got, err := ByID(db, want.ID())
 		require.NoError(t, err)
 		require.Equal(t, want, got)
 	}
 
-	_, err := Get(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err := ByID(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -76,11 +76,11 @@ func TestGetTimestampByID(t *testing.T) {
 	ts := time.Now()
 	require.NoError(t, Add(db, atx, ts))
 
-	timestamp, err := GetTimestamp(db, atx.ID())
+	timestamp, err := Timestamp(db, atx.ID())
 	require.NoError(t, err)
 	require.EqualValues(t, ts.UnixNano(), timestamp.UnixNano())
 
-	_, err = GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err = Timestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -103,15 +103,15 @@ func TestGetLastIDByNodeID(t *testing.T) {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
-	id1, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	id1, err := LastIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx2.ID(), id1)
 
-	id2, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	id2, err := LastIDByNodeID(db, types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx4.ID(), id2)
 
-	_, err = GetLastIDByNodeID(db, types.BytesToNodeID(sig.PublicKey().Bytes()))
+	_, err = LastIDByNodeID(db, types.BytesToNodeID(sig.PublicKey().Bytes()))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -136,25 +136,25 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
-	l1n1, err := GetIDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	l1n1, err := IDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx1.ID(), l1n1)
 
-	_, err = GetIDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	_, err = IDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	l2n1, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	l2n1, err := IDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx2.ID(), l2n1)
 
-	l2n2, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	l2n2, err := IDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx3.ID(), l2n2)
 
-	_, err = GetIDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	_, err = IDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	l3n2, err := GetIDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	l3n2, err := IDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx4.ID(), l3n2)
 }
@@ -180,16 +180,16 @@ func TestGetIDsByEpoch(t *testing.T) {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
-	ids1, err := GetIDsByEpoch(db, l1.GetEpoch())
+	ids1, err := IDsByEpoch(db, l1.GetEpoch())
 	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
 
-	ids2, err := GetIDsByEpoch(db, l2.GetEpoch())
+	ids2, err := IDsByEpoch(db, l2.GetEpoch())
 	require.NoError(t, err)
 	require.Contains(t, ids2, atx2.ID())
 	require.Contains(t, ids2, atx3.ID())
 
-	ids3, err := GetIDsByEpoch(db, l3.GetEpoch())
+	ids3, err := IDsByEpoch(db, l3.GetEpoch())
 	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
@@ -214,7 +214,7 @@ func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
-	_, err := Get(db, nonExistingATXID)
+	_, err := ByID(db, nonExistingATXID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	sig := signing.NewEdSigner()
@@ -223,7 +223,7 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, Add(db, atx, time.Now()))
 	require.ErrorIs(t, Add(db, atx, time.Now()), sql.ErrObjectExists)
 
-	got, err := Get(db, atx.ID())
+	got, err := ByID(db, atx.ID())
 	require.NoError(t, err)
 	require.Equal(t, atx, got)
 }
@@ -309,7 +309,7 @@ func TestPositioningID(t *testing.T) {
 				require.NoError(t, Add(db, full, time.Time{}))
 				ids = append(ids, full.ID())
 			}
-			rst, err := GetPositioningID(db)
+			rst, err := PositioningID(db)
 			if len(tc.atxs) == 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {

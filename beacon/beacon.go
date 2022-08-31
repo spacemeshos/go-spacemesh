@@ -412,7 +412,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return s, nil
 	}
 
-	epochWeight, atxs, err := pd.cdb.GetEpochWeight(epoch)
+	epochWeight, atxs, err := pd.cdb.EpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
 		return nil, fmt.Errorf("get epoch weight: %w", err)
@@ -533,7 +533,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 	}
 
 	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
+	atxID, err := atxs.IDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
 	if err != nil {
 		logger.With().Info("not running beacon protocol: no own ATX in last epoch", log.Err(err))
 		return
@@ -737,7 +737,7 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 	// we need to pass a map with spacetime unit allowances before any round is started
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
-		header, err := pd.cdb.GetAtxHeader(id)
+		header, err := pd.cdb.AtxByID(id)
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
@@ -981,17 +981,17 @@ func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, ser
 }
 
 func (pd *ProtocolDriver) getOwnWeight(epoch types.EpochID) uint64 {
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch, pd.nodeID)
+	atxID, err := atxs.IDByEpochAndNodeID(pd.cdb, epoch, pd.nodeID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
 		return 0
 	}
-	hdr, err := pd.cdb.GetAtxHeader(atxID)
+	hdr, err := pd.cdb.AtxByID(atxID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
 		return 0
 	}
-	return hdr.GetWeight()
+	return hdr.Weight()
 }
 
 func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {

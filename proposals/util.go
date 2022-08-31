@@ -69,7 +69,7 @@ func ComputeWeightPerEligibility(
 ) (util.Weight, error) {
 	var (
 		refBallot        = ballot
-		hdr              *types.ActivationTxHeader
+		atx              *types.ActivationTx
 		err              error
 		total, atxWeight uint64
 	)
@@ -83,11 +83,11 @@ func ComputeWeightPerEligibility(
 		}
 	}
 	for _, atxID := range refBallot.EpochData.ActiveSet {
-		hdr, err = cdb.GetAtxHeader(atxID)
+		atx, err = cdb.AtxByID(atxID)
 		if err != nil {
 			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
 		}
-		weight := hdr.GetWeight()
+		weight := atx.Weight()
 		total += weight
 		if atxID == ballot.AtxID {
 			atxWeight = weight

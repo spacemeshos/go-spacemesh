@@ -9,8 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
+// ByID gets an ATX by a given ATX ID.
+func ByID(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -53,8 +53,8 @@ func Has(db sql.Executor, id types.ATXID) (bool, error) {
 	return rows > 0, nil
 }
 
-// GetTimestamp gets an ATX timestamp by a given ATX ID.
-func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err error) {
+// Timestamp gets an ATX timestamp by a given ATX ID.
+func Timestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -72,8 +72,8 @@ func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err err
 	return timestamp, err
 }
 
-// GetLastIDByNodeID gets the last ATX ID for a given node ID.
-func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
+// LastIDByNodeID gets the last ATX ID for a given node ID.
+func LastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.ToBytes())
 	}
@@ -95,8 +95,8 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	return id, err
 }
 
-// GetIDByEpochAndNodeID gets an ATX ID for a given epoch and node ID.
-func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (id types.ATXID, err error) {
+// IDByEpochAndNodeID gets an ATX ID for a given epoch and node ID.
+func IDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 		stmt.BindBytes(2, nodeID.ToBytes())
@@ -118,8 +118,8 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	return id, err
 }
 
-// GetIDsByEpoch gets ATX IDs for a given epoch.
-func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
+// IDsByEpoch gets ATX IDs for a given epoch.
+func IDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 	}
@@ -196,8 +196,8 @@ func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-// GetPositioningID returns atx id from the last epoch with the highest tick height.
-func GetPositioningID(db sql.Executor) (types.ATXID, error) {
+// PositioningID returns atx id from the last epoch with the highest tick height.
+func PositioningID(db sql.Executor) (types.ATXID, error) {
 	var (
 		rst types.ATXID
 		max uint64
