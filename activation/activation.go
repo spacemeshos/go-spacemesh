@@ -472,7 +472,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
-			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return fmt.Errorf("failed to build new atx challenge: %w", err)
 		}
 	}
@@ -485,14 +484,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		var err error
 		b.pendingATX, err = b.createAtx(ctx)
 		if err != nil {
-			b.log.With().Error("failed to create atx", log.Err(err))
 			return fmt.Errorf("create ATX: %w", err)
 		}
 	}
 
 	atx := b.pendingATX
 	if err := b.SignAtx(atx); err != nil {
-		b.log.Error(err.Error())
 		return fmt.Errorf("sign: %w", err)
 	}
 
@@ -500,7 +497,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	defer b.atxHandler.UnsubscribeAtx(atx.ID())
 	size, err := b.broadcast(ctx, atx)
 	if err != nil {
-		b.log.Error(err.Error())
 		return fmt.Errorf("broadcast: %w", err)
 	}
 

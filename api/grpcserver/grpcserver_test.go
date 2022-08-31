@@ -336,6 +336,7 @@ func NewMockSigner() *MockSigning {
 	return &MockSigning{signing.NewEdSigner()}
 }
 
+// TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
 type MockSigning struct {
 	signer *signing.EdSigner
 }
