@@ -298,13 +298,13 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) {
 			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
 					PubLayerID: epoch.FirstLayer(),
-					NodeID:     nodeID,
 				},
 			},
 		},
 	}
-	prevAtx.NodeID = nodeID
+	SignAtx(sig, prevAtx)
 	prevAtx.CalcAndSetID()
+	prevAtx.CalcAndSetNodeID()
 	require.NoError(t, atxs.Add(db, prevAtx, time.Now()))
 }
 
@@ -324,7 +324,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 		GracePeriod: time.Millisecond,
 	}
 	mClock := mocks.NewMocklayerClock(gomock.NewController(t))
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
+	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
 		mClock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"),
 		WithPoetConfig(poetCfg))
 	b.initialPost = initialPost
@@ -364,7 +364,7 @@ func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
 		GracePeriod: time.Millisecond,
 	}
 	mClock := mocks.NewMocklayerClock(gomock.NewController(t))
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
+	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
 		mClock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"),
 		WithPoetConfig(poetCfg))
 	b.initialPost = initialPost

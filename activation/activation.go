@@ -10,7 +10,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
@@ -20,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
@@ -344,9 +342,9 @@ func (b *Builder) waitForFirstATX(ctx context.Context) {
 	windowEnd := b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(window)
 	wait := time.Until(windowEnd)
 	if wait <= 0 { // missed the window. wait for the next epoch
-		waitTill := (currentLayer.GetEpoch() + 1).FirstLayer()
+		waitTill := (currEpoch + 1).FirstLayer()
 		b.log.WithContext(ctx).With().Info("waiting till next epoch to build atx",
-			log.Stringer("current_epoch", currentLayer.GetEpoch()),
+			log.Stringer("current_epoch", currEpoch),
 			log.Stringer("wait_till", waitTill),
 			log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
 		select {
@@ -358,7 +356,6 @@ func (b *Builder) waitForFirstATX(ctx context.Context) {
 	}
 	timer := time.NewTimer(wait)
 	b.log.WithContext(ctx).With().Info("waiting for the poet window expires",
-		log.Duration("grace_period", b.poetCfg.GracePeriod),
 		log.Duration("wait", wait))
 	defer timer.Stop()
 	select {
@@ -702,24 +699,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 	return false
 }
 
-// ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
-func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
-	bts, err := signedAtx.InnerBytes()
-	if err != nil {
-		return nil, fmt.Errorf("inner bytes of ATX: %w", err)
-	}
-
-	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
-	}
-
-	pub := signing.NewPublicKey(pubKey)
-	return pub, nil
-}
-
-// SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
+// SignAtx signs the atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
