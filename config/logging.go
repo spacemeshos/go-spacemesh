@@ -61,7 +61,7 @@ func defaultLoggingConfig() LoggerConfig {
 		StoreLoggerLevel:          defaultLoggingLevel.String(),
 		PoetDbLoggerLevel:         defaultLoggingLevel.String(),
 		MeshDBLoggerLevel:         defaultLoggingLevel.String(),
-		TrtlLoggerLevel:           defaultLoggingLevel.String(),
+		TrtlLoggerLevel:           zapcore.DebugLevel.String(),
 		AtxDbLoggerLevel:          defaultLoggingLevel.String(),
 		BlkEligibilityLoggerLevel: defaultLoggingLevel.String(),
 		MeshLoggerLevel:           defaultLoggingLevel.String(),
