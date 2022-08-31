@@ -369,43 +369,42 @@ type Post postShared.Proof
 
 // EncodeScale implements scale codec interface.
 func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
-	if err != nil {
-		return total, err
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
-	total += n
-	n, err = scale.EncodeByteSlice(enc, p.Indices)
-	if err != nil {
-		return total, err
+	{
+		n, err := scale.EncodeByteSlice(enc, p.Indices)
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
-	total += n
 	return total, nil
 }
 
 // DecodeScale implements scale codec interface.
 func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	if field, n, err := scale.DecodeCompact32(dec); err != nil {
-		return total, err
-	} else { // nolint
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
 		total += n
 		p.Nonce = uint32(field)
 	}
-	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
-		return total, err
-	} else { // nolint
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
 		total += n
 		p.Indices = field
 	}
 	return total, nil
-}
-
-// PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
-type PostMetadata struct {
-	Challenge     []byte
-	BitsPerLabel  uint8
-	LabelsPerUnit uint64
-	K1            uint32
-	K2            uint32
 }
 
 // String returns a string representation of the PostProof, for logging purposes.
@@ -421,6 +420,15 @@ func bytesToShortString(b []byte) string {
 		return "empty"
 	}
 	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:util.Min(l, 5)])
+}
+
+// PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
+type PostMetadata struct {
+	Challenge     []byte
+	BitsPerLabel  uint8
+	LabelsPerUnit uint64
+	K1            uint32
+	K2            uint32
 }
 
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
