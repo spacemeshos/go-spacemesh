@@ -202,7 +202,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 				if ballot.weight.IsNil() {
 					continue
 				}
-				dis, err := t.firstDisagreement(ctx, lid, ballot.id, disagreements)
+				dis, err := t.firstDisagreement(ctx, lid, last, ballot.id, disagreements)
 				if err != nil {
 					logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
 					continue
@@ -269,12 +269,12 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
+func (t *turtle) firstDisagreement(ctx context.Context, blid, last types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
 	var (
 		// using it as a mark that the votes for block are completely consistent
 		// with a local opinion. so if two blocks have consistent histories select block
 		// from a higher layer as it is more consistent.
-		consistent  = t.last
+		consistent  = last
 		start       = t.evicted
 		base, exist = t.full.base[ballotID]
 		basedis     = disagreements[base]
@@ -285,12 +285,18 @@ func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ball
 	start = t.ballotLayer[base]
 
 	for lid := start; lid.Before(blid); lid = lid.Add(1) {
-		if len(t.blocks[lid]) == 0 && t.full.abstained(ballotID, lid) {
-			t.logger.With().Debug("ballot is neutral about layer. can't use as a base ballot",
-				ballotID,
-				lid,
-			)
-			return types.LayerID{}, nil
+		if len(t.blocks[lid]) == 0 {
+			// it is not possible to encode against for empty layer
+			// because there are no blocks
+			// therefore we should not pick base ballot that votes abstain on
+			// layer outside zdist if layer is empty
+			if !isUndecided(t.Config, t.decided, lid, last) && t.full.abstained(ballotID, lid) {
+				t.logger.With().Debug("ballot votes abstain on a layer without blocks. can't use as a base ballot",
+					ballotID,
+					lid,
+				)
+				return types.LayerID{}, nil
+			}
 		}
 		for _, block := range t.blocks[lid] {
 			localVote, _, err := t.getFullVote(ctx, lid, block)
