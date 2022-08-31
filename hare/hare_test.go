@@ -570,12 +570,13 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	require.NoError(t, h.Start(context.TODO()))
 	defer h.Close()
-	waitForMsg := func() {
+	waitForMsg := func() error {
 		tmr := time.NewTimer(time.Second)
 		select {
 		case <-tmr.C:
-			require.Fail(t, "timed out waiting for message")
+			return errors.New("timeout")
 		case <-h.blockGenCh:
+			return nil
 		}
 	}
 
@@ -592,28 +593,28 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	// complete + coin flip true
 	h.outputChan <- mockReport{layerID, set, true, true}
-	waitForMsg()
+	require.NoError(t, waitForMsg())
 	wc, err := layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
 	require.True(t, wc)
 
 	// incomplete + coin flip true
 	h.outputChan <- mockReport{layerID, set, false, true}
-	waitForMsg()
+	require.Error(t, waitForMsg())
 	wc, err = layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
 	require.True(t, wc)
 
 	// complete + coin flip false
 	h.outputChan <- mockReport{layerID, set, true, false}
-	waitForMsg()
+	require.NoError(t, waitForMsg())
 	wc, err = layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
 	require.False(t, wc)
 
 	// incomplete + coin flip false
 	h.outputChan <- mockReport{layerID, set, false, true}
-	waitForMsg()
+	require.Error(t, waitForMsg())
 
 	wc, err = layers.GetWeakCoin(h.db, layerID)
 	require.NoError(t, err)
