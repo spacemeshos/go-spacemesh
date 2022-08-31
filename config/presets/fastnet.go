@@ -32,7 +32,7 @@ func fastnet() config.Config {
 	conf.HARE.F = 399
 	conf.HARE.LimitIterations = 4
 	conf.HARE.RoundDuration = 2
-	conf.HARE.WakeupDelta = 2
+	conf.HARE.WakeupDelta = 3
 
 	conf.P2P.TargetOutbound = 10
 

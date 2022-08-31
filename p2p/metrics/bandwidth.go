@@ -1,9 +1,9 @@
 package metrics
 
 import (
-	"github.com/libp2p/go-libp2p-core/metrics"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/metrics"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	prometheusMetrics "github.com/spacemeshos/go-spacemesh/metrics"
 )

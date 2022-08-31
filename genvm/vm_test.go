@@ -1255,6 +1255,10 @@ func BenchmarkValidation(b *testing.B) {
 func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	tt := newTester(t).addSingleSig(10).applyGenesis()
 
+	root, err := tt.GetStateRoot()
+	require.NoError(t, err)
+	require.Equal(t, types.Hash32{}, root)
+
 	lid := types.NewLayerID(1)
 	skipped, _, err := tt.Apply(testContext(lid), notVerified(
 		tt.selfSpawn(0),
@@ -1278,6 +1282,10 @@ func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	statehash, err := layers.GetStateHash(tt.db, lid)
 	require.NoError(t, err)
 	require.Equal(t, expected, statehash)
+
+	root, err = tt.GetStateRoot()
+	require.NoError(t, err)
+	require.Equal(t, expected, root)
 }
 
 func BenchmarkWallet(b *testing.B) {

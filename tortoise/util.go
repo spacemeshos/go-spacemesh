@@ -158,8 +158,8 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 	for _, block := range blocks {
 		decision := getDecision(block)
 		logger.With().Debug("decision for a block",
+			block.id,
 			log.Stringer("decision", decision),
-			log.Stringer("id", block.id),
 			log.Stringer("weight", block.weight),
 			log.Uint64("height", block.height),
 		)

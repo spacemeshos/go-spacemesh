@@ -87,18 +87,32 @@ func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MocklayerFetcher)(nil).GetEpochATXs), arg0, arg1)
 }
 
-// PollLayerContent mocks base method.
-func (m *MocklayerFetcher) PollLayerContent(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
+// PollLayerData mocks base method.
+func (m *MocklayerFetcher) PollLayerData(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PollLayerContent", arg0, arg1)
+	ret := m.ctrl.Call(m, "PollLayerData", arg0, arg1)
 	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
 	return ret0
 }
 
-// PollLayerContent indicates an expected call of PollLayerContent.
-func (mr *MocklayerFetcherMockRecorder) PollLayerContent(arg0, arg1 interface{}) *gomock.Call {
+// PollLayerData indicates an expected call of PollLayerData.
+func (mr *MocklayerFetcherMockRecorder) PollLayerData(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerContent", reflect.TypeOf((*MocklayerFetcher)(nil).PollLayerContent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerData", reflect.TypeOf((*MocklayerFetcher)(nil).PollLayerData), arg0, arg1)
+}
+
+// PollLayerOpinions mocks base method.
+func (m *MocklayerFetcher) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1)
+	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
+	return ret0
+}
+
+// PollLayerOpinions indicates an expected call of PollLayerOpinions.
+func (mr *MocklayerFetcherMockRecorder) PollLayerOpinions(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MocklayerFetcher)(nil).PollLayerOpinions), arg0, arg1)
 }
 
 // MocklayerPatrol is a mock of layerPatrol interface.

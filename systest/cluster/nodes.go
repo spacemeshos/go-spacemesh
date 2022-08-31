@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -213,6 +214,9 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	for node := range clients {
 		rst = append(rst, node)
 	}
+	sort.Slice(rst, func(i, j int) bool {
+		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)
+	})
 	return rst, nil
 }
 

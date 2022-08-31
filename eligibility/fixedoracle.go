@@ -4,10 +4,10 @@ package eligibility
 import (
 	"context"
 	"encoding/binary"
-	"hash/fnv"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -19,7 +19,7 @@ type FixedRolacle struct {
 	mapRW  sync.RWMutex
 	honest map[types.NodeID]struct{}
 	faulty map[types.NodeID]struct{}
-	emaps  map[uint32]map[types.NodeID]struct{}
+	emaps  map[types.Hash32]map[types.NodeID]struct{}
 }
 
 // New initializes the oracle with no participants.
@@ -28,7 +28,7 @@ func New(logger log.Log) *FixedRolacle {
 		logger: logger,
 		honest: make(map[types.NodeID]struct{}),
 		faulty: make(map[types.NodeID]struct{}),
-		emaps:  make(map[uint32]map[types.NodeID]struct{}),
+		emaps:  make(map[types.Hash32]map[types.NodeID]struct{}),
 	}
 }
 
@@ -38,7 +38,7 @@ func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edI
 }
 
 // Export creates a map with the eligible participants for id and committee size.
-func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[types.NodeID]struct{} {
+func (fo *FixedRolacle) Export(id types.Hash32, committeeSize int) map[types.NodeID]struct{} {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty)
 	fo.mapRW.RUnlock()
@@ -163,10 +163,10 @@ func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map
 	return emap
 }
 
-func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) uint32 {
+func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) types.Hash32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
-	h := fnv.New32()
+	h := hash.New()
 	_, err := h.Write(instanceID.Bytes())
 	_, err2 := h.Write(kInBytes)
 
@@ -175,8 +175,7 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) u
 			log.FieldNamed("err1", log.Err(err)),
 			log.FieldNamed("err2", log.Err(err2)))
 	}
-
-	return h.Sum32()
+	return types.BytesToHash(h.Sum([]byte{}))
 }
 
 // Validate is required to conform to the Rolacle interface, but should never be called.
@@ -226,13 +225,12 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
-	hash := fnv.New32()
-	if _, err := hash.Write(kInBytes); err != nil {
+	h := hash.New()
+	if _, err := h.Write(kInBytes); err != nil {
 		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 
-	hashBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hashBytes, hash.Sum32())
+	sum := h.Sum([]byte{})
 
-	return hashBytes, nil
+	return sum, nil
 }

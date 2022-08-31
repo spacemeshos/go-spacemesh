@@ -4,14 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -28,15 +26,12 @@ type lyrdata struct {
 
 type testHandler struct {
 	*handler
-	mmp *mocks.MockmeshProvider
 }
 
 func createTestHandler(t *testing.T) *testHandler {
-	mmp := mocks.NewMockmeshProvider(gomock.NewController(t))
 	db := sql.InMemory()
 	return &testHandler{
-		handler: newHandler(db, datastore.NewBlobStore(db), mmp, logtest.New(t)),
-		mmp:     mmp,
+		handler: newHandler(db, datastore.NewBlobStore(db), logtest.New(t)),
 	}
 }
 
@@ -62,24 +57,15 @@ func createLayer(t *testing.T, db *sql.Database, lid types.LayerID) *lyrdata {
 
 func TestHandleLayerDataReq(t *testing.T) {
 	tt := []struct {
-		name                    string
-		requested               types.LayerID
-		emptyLyr, hareHasOutput bool
+		name     string
+		emptyLyr bool
 	}{
 		{
-			name:          "success",
-			requested:     types.NewLayerID(100),
-			hareHasOutput: true,
+			name: "success",
 		},
 		{
-			name:          "empty hare output",
-			requested:     types.NewLayerID(100),
-			hareHasOutput: false,
-		},
-		{
-			name:      "empty layer",
-			requested: types.NewLayerID(100),
-			emptyLyr:  true,
+			name:     "empty layer",
+			emptyLyr: true,
 		},
 	}
 
@@ -88,31 +74,54 @@ func TestHandleLayerDataReq(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if tc.hareHasOutput {
-				require.False(t, tc.emptyLyr)
-			}
+			lid := types.NewLayerID(111)
 			th := createTestHandler(t)
-			expected := createLayer(t, th.db, tc.requested)
-			bid := types.EmptyBlockID
-			if !tc.emptyLyr {
-				bid = expected.blks[0]
-			}
-			hareOutput := &types.Certificate{
-				BlockID: bid,
-			}
-			require.NoError(t, layers.SetHareOutputWithCert(th.db, tc.requested, hareOutput))
-			th.mmp.EXPECT().ProcessedLayer().Return(tc.requested)
+			expected := createLayer(t, th.db, lid)
 
-			out, err := th.handleLayerDataReq(context.TODO(), tc.requested.Bytes())
+			out, err := th.handleLayerDataReq(context.TODO(), lid.Bytes())
 			require.NoError(t, err)
 			var got LayerData
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			assert.ElementsMatch(t, expected.blts, got.Ballots)
 			assert.ElementsMatch(t, expected.blks, got.Blocks)
-			assert.Equal(t, hareOutput, got.HareOutput)
 			assert.Equal(t, expected.hash, got.Hash)
 			assert.Equal(t, expected.aggHash, got.AggregatedHash)
+		})
+	}
+}
+
+func TestHandleLayerOpinionsReq(t *testing.T) {
+	tt := []struct {
+		name string
+		cert *types.Certificate
+	}{
+		{
+			name: "has cert",
+			cert: &types.Certificate{BlockID: types.BlockID{1, 2, 3}},
+		},
+		{
+			name: "no cert",
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			lid := types.NewLayerID(111)
+			if tc.cert != nil {
+				require.NoError(t, layers.SetHareOutputWithCert(th.db, lid, tc.cert))
+			}
+
+			out, err := th.handleLayerOpinionsReq(context.TODO(), lid.Bytes())
+			require.NoError(t, err)
+			var got LayerOpinions
+			err = codec.Decode(out, &got)
+			require.NoError(t, err)
+			assert.Equal(t, tc.cert, got.Cert)
 		})
 	}
 }
