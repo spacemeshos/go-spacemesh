@@ -144,7 +144,7 @@ CREATE TABLE accounts
     address        CHAR(20),
     balance        UNSIGNED LONG INT,
     initialized    BOOL,
-    nonce          UNSIGNED LONG INT,
+    next_nonce     UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
     template       CHAR(20),
     state          BLOB,

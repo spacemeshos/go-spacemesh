@@ -77,7 +77,7 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
+func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (out core.ParseOutput, args scale.Encodable, err error) {
 	switch method {
 	case methodSpawn:
 		var p SpawnPayload
@@ -86,8 +86,8 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 			return
 		}
 		args = &p.Arguments
-		header.GasPrice = p.GasPrice
-		header.MaxGas = h.totalGasSpawn
+		out.GasPrice = p.GasPrice
+		out.FixedGas = h.totalGasSpawn
 	case methodSpend:
 		var p SpendPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
@@ -95,14 +95,14 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 			return
 		}
 		args = &p.Arguments
-		header.GasPrice = p.GasPrice
-		header.Nonce.Counter = p.Nonce.Counter
-		header.Nonce.Bitfield = p.Nonce.Bitfield
-		header.MaxGas = h.totalGasSpend
+		out.GasPrice = p.GasPrice
+		out.Nonce.Counter = p.Nonce.Counter
+		out.Nonce.Bitfield = p.Nonce.Bitfield
+		out.FixedGas = h.totalGasSpend
 	default:
-		return header, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		return out, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
-	return header, args, nil
+	return out, args, nil
 }
 
 // Init wallet.
@@ -126,9 +126,6 @@ func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) er
 	switch method {
 	case methodSpawn:
 		n := len(args.(*SpawnArguments).PublicKeys)
-		if err := ctx.Consume(h.totalGasSpawn); err != nil {
-			return err
-		}
 		if n < int(h.k) {
 			return fmt.Errorf("multisig requires atleast %d keys", h.k)
 		}
@@ -139,9 +136,6 @@ func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) er
 			return err
 		}
 	case methodSpend:
-		if err := ctx.Consume(h.totalGasSpend); err != nil {
-			return err
-		}
 		if err := ctx.Template.(*MultiSig).Spend(ctx, args.(*SpendArguments)); err != nil {
 			return err
 		}

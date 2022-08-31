@@ -101,7 +101,7 @@ func TestApply(t *testing.T) {
 
 		account, err := ss.Get(ctx.Account.Address)
 		require.NoError(t, err)
-		require.Equal(t, ctx.Account.Nonce, account.Nonce)
+		require.Equal(t, ctx.Account.NextNonce, account.NextNonce)
 		require.Equal(t, rst, account.State)
 	})
 	t.Run("ConsumeMaxGas", func(t *testing.T) {

@@ -232,9 +232,9 @@ func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64) {
 func (t *ConStateAPIMock) GetAllAccounts() (res []*types.Account, err error) {
 	for address, balance := range t.balances {
 		res = append(res, &types.Account{
-			Address: address,
-			Balance: balance.Uint64(),
-			Nonce:   t.nonces[address],
+			Address:   address,
+			Balance:   balance.Uint64(),
+			NextNonce: t.nonces[address],
 		})
 	}
 	return res, nil

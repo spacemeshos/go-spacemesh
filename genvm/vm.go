@@ -140,7 +140,7 @@ func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	if err != nil {
 		return core.Nonce{}, err
 	}
-	return core.Nonce{Counter: account.NextNonce()}, nil
+	return core.Nonce{Counter: account.NextNonce}, nil
 }
 
 // GetBalance returns balance for an address.
@@ -273,6 +273,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		limit       = v.cfg.GasLimit
 	)
 	for i := range txs {
+		logger := v.logger.WithFields(log.Int("ith", i))
 		txCount.Inc()
 
 		t1 := time.Now()
@@ -288,7 +289,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		header, err := req.Parse()
 		if err != nil {
-			v.logger.With().Warning("ineffective transaction. failed to parse",
+			logger.With().Warning("ineffective transaction. failed to parse",
 				tx.GetRaw().ID,
 				log.Err(err),
 			)
@@ -298,18 +299,18 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 		ctx := req.ctx
 		args := req.args
-
-		if ctx.Account.Balance < ctx.Header.MaxGas*ctx.Header.GasPrice {
-			v.logger.With().Warning("ineffective transaction. can't cover gas and max spend",
+		if ctx.Account.Balance < ctx.ParseOutput.FixedGas*ctx.ParseOutput.GasPrice {
+			logger.With().Warning("ineffective transaction. fixed gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
+				log.Uint64("fixed gas", ctx.ParseOutput.FixedGas),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
 		if limit < ctx.Header.MaxGas {
-			v.logger.With().Warning("ineffective transaction. out of block gas",
+			logger.With().Warning("ineffective transaction. out of block gas",
 				log.Uint64("block gas limit", v.cfg.GasLimit),
 				log.Uint64("current limit", limit),
 				log.Object("header", header),
@@ -323,7 +324,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		// NOTE this part is executed only for transactions that weren't verified
 		// when saved into database by txs module
 		if !tx.Verified() && !req.Verify() {
-			v.logger.With().Warning("ineffective transaction. failed verify",
+			logger.With().Warning("ineffective transaction. failed verify",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -332,8 +333,8 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			continue
 		}
 
-		if ctx.Account.NextNonce() > ctx.Header.Nonce.Counter {
-			v.logger.With().Warning("ineffective transaction. failed nonce check",
+		if ctx.Account.NextNonce > ctx.Header.Nonce.Counter {
+			logger.With().Warning("ineffective transaction. nonce too low",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 			)
@@ -343,7 +344,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 
 		t2 := time.Now()
-		v.logger.With().Debug("applying transaction",
+		logger.With().Debug("applying transaction",
 			log.Object("header", header),
 			log.Object("account", &ctx.Account),
 		)
@@ -351,9 +352,13 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		rst := types.TransactionWithResult{}
 		rst.Layer = lctx.Layer
 		rst.Block = lctx.Block
-		err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
+
+		err = ctx.Consume(ctx.Header.MaxGas)
+		if err == nil {
+			err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
+		}
 		if err != nil {
-			v.logger.With().Debug("transaction failed",
+			logger.With().Debug("transaction failed",
 				log.Object("header", header),
 				log.Object("account", &ctx.Account),
 				log.Err(err),
@@ -406,7 +411,7 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.vm.cfg.StorageCostFactor, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +432,7 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, storageCost uint64, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
@@ -472,16 +477,20 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, de
 		Handler: handler,
 		Account: account,
 	}
-	header, args, err := handler.Parse(ctx, method, decoder)
+	output, args, err := handler.Parse(ctx, method, decoder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	header.Principal = principal
-	header.Template = *template
-	header.Method = method
+	ctx.ParseOutput = output
+
+	ctx.Header.Principal = principal
+	ctx.Header.Template = *template
+	ctx.Header.Method = method
+	ctx.Header.MaxGas = core.ComputeGasCost(output.FixedGas, raw, storageCost)
+	ctx.Header.GasPrice = output.GasPrice
+	ctx.Header.Nonce = output.Nonce
 
 	ctx.Args = args
-	ctx.Header = header
 
 	ctx.Template, err = handler.Init(method, args, account.State)
 	if err != nil {

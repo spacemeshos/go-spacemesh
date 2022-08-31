@@ -27,7 +27,7 @@ type (
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
-	Parse(*Context, uint8, *scale.Decoder) (Header, scale.Encodable, error)
+	Parse(*Context, uint8, *scale.Decoder) (ParseOutput, scale.Encodable, error)
 	// Init instance of the template either by decoding state into Template type or from arguments in case of spawn.
 	Init(uint8, any, []byte) (Template, error)
 	// Exec dispatches execution request based on the method selector.
@@ -57,4 +57,12 @@ type AccountLoader interface {
 // AccountUpdater is an interface for updating accounts.
 type AccountUpdater interface {
 	Update(Account) error
+}
+
+// ParseOutput is a tuple containing all fields that are returned
+// by Parse call.
+type ParseOutput struct {
+	Nonce    Nonce
+	GasPrice uint64
+	FixedGas uint64
 }
