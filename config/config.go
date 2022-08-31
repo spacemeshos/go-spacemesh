@@ -49,6 +49,7 @@ type Config struct {
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	VM              vm.Config                `mapstructure:"vm"`
 	POST            activation.PostConfig    `mapstructure:"post"`
+	POET            activation.PoetConfig    `mapstructure:"poet"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
 	FETCH           fetch.Config             `mapstructure:"fetch"`
@@ -127,6 +128,7 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
 		POST:            activation.DefaultPostConfig(),
+		POET:            activation.DefaultPoetConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LOGGING:         defaultLoggingConfig(),

@@ -483,3 +483,8 @@ func CycleGap(d time.Duration) DeploymentFlag {
 func PhaseShift(d time.Duration) DeploymentFlag {
 	return DurationFlag("--phase-shift", d)
 }
+
+// GracePeriod ...
+func GracePeriod(d time.Duration) DeploymentFlag {
+	return DurationFlag("--grace-period", d)
+}
