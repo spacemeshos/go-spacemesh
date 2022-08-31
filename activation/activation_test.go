@@ -326,8 +326,8 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 	b.initialPost = initialPost
 
 	layerStart := time.Now().Add(-1 * time.Millisecond)
-	poetWindwow := poetCfg.PhaseShift - poetCfg.CycleGap + poetCfg.GracePeriod
-	expectedWait := poetWindwow - time.Millisecond
+	poetWindow := poetCfg.PhaseShift - poetCfg.CycleGap + poetCfg.GracePeriod
+	expectedWait := poetWindow - time.Millisecond
 	ch := make(chan struct{}, 1)
 	close(ch)
 	current := types.NewLayerID(layersPerEpoch * 2)
