@@ -17,14 +17,16 @@ func TestSpawn(t *testing.T) {
 		template := core.Address{1}
 		args := core.PublicKey{1}
 		ctx := core.Context{}
-		require.ErrorIs(t, ctx.Spawn(template, &args), core.ErrSpawn)
+		ctx.Header.Template = template
+		require.ErrorIs(t, ctx.Spawn(&args), core.ErrSpawn)
 	})
 	t.Run("UpdateTemplate", func(t *testing.T) {
 		template := core.Address{1}
 		args := core.PublicKey{1}
 		ctx := core.Context{}
 		ctx.Header.Principal = core.ComputePrincipal(template, &args)
-		require.NoError(t, ctx.Spawn(template, &args))
+		ctx.Header.Template = template
+		require.NoError(t, ctx.Spawn(&args))
 		require.Equal(t, &template, ctx.Account.Template)
 	})
 }

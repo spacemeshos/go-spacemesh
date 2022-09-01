@@ -27,11 +27,17 @@ type (
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
-	Parse(*Context, uint8, *scale.Decoder) (ParseOutput, scale.Encodable, error)
-	// Init instance of the template either by decoding state into Template type or from arguments in case of spawn.
-	Init(uint8, any, []byte) (Template, error)
+	Parse(*Context, uint8, *scale.Decoder) (ParseOutput, error)
+	// Args returns method arguments for the method.
+	Args(uint8) scale.Type
+
 	// Exec dispatches execution request based on the method selector.
 	Exec(*Context, uint8, scale.Encodable) error
+
+	// New instantiates Template from spawn arguments.
+	New(any) (Template, error)
+	// Load template with stored immutable state.
+	Load([]byte) (Template, error)
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/genvm/core Template
@@ -64,4 +70,9 @@ type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
 	FixedGas uint64
+}
+
+// HandlerRegistry stores handlers for templates.
+type HandlerRegistry interface {
+	Get(Address) Handler
 }

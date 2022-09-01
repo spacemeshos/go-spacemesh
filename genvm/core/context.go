@@ -13,6 +13,7 @@ import (
 // - maintains changes to the system state, that will be applied only after succeful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
+	Registry HandlerRegistry
 	Loader   AccountLoader
 	Handler  Handler
 	Template Template
@@ -38,16 +39,40 @@ type Context struct {
 }
 
 // Spawn account.
-func (c *Context) Spawn(template Address, args scale.Encodable) error {
-	principal := ComputePrincipal(template, args)
-	// TODO(dshulyak) only self-spawn is supported
-	if principal != c.Header.Principal {
-		return ErrSpawn
+func (c *Context) Spawn(args scale.Encodable) error {
+	template := c.Header.Template
+	address := ComputePrincipal(template, args)
+	var account *types.Account
+	if address == c.Account.Address {
+		account = &c.Account
+	} else {
+		var err error
+		account, err = c.load(address)
+		if err != nil {
+			return err
+		}
 	}
-	if c.Account.Template != nil {
+	if account.Template != nil {
 		return ErrSpawned
 	}
-	c.Account.Template = &template
+	handler := c.Registry.Get(template)
+	if handler == nil {
+		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
+	}
+	buf := bytes.NewBuffer(nil)
+	instance, err := handler.New(args)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrMalformed, err.Error())
+	}
+	_, err = instance.EncodeScale(scale.NewEncoder(buf))
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrInternal, err)
+	}
+	account.State = buf.Bytes()
+	account.Template = &template
+	if account.Address != c.Account.Address {
+		c.change(account)
+	}
 	return nil
 }
 
@@ -64,23 +89,13 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	if c.Account.Address == to {
 		return nil
 	}
-
-	if c.changed == nil {
-		c.changed = map[Address]*Account{}
+	account, err := c.load(to)
+	if err != nil {
+		return err
 	}
-	account, exist := c.changed[to]
-	if !exist {
-		loaded, err := c.Loader.Get(to)
-		if err != nil {
-			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
-		}
-		c.touched = append(c.touched, to)
-		c.changed[to] = &loaded
-		account = &loaded
-	}
-
 	c.Account.Balance -= amount
 	account.Balance += amount
+	c.change(account)
 	return nil
 }
 
@@ -103,12 +118,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 
 // Apply is executed if transaction was consumed.
 func (c *Context) Apply(updater AccountUpdater) error {
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	c.Template.EncodeScale(encoder)
-
 	c.Account.NextNonce = c.Header.Nonce.Counter + 1
-	c.Account.State = buf.Bytes()
 	if err := updater.Update(c.Account); err != nil {
 		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
@@ -137,4 +147,27 @@ func (c *Context) Updated() []types.Address {
 	rst = append(rst, c.Account.Address)
 	rst = append(rst, c.touched...)
 	return rst
+}
+
+func (c *Context) load(address types.Address) (*Account, error) {
+	if c.changed == nil {
+		c.changed = map[Address]*Account{}
+	}
+	account, exist := c.changed[address]
+	if !exist {
+		loaded, err := c.Loader.Get(address)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrInternal, err.Error())
+		}
+		account = &loaded
+	}
+	return account, nil
+}
+
+func (c *Context) change(account *Account) {
+	_, exist := c.changed[account.Address]
+	if !exist {
+		c.touched = append(c.touched, account.Address)
+	}
+	c.changed[account.Address] = account
 }

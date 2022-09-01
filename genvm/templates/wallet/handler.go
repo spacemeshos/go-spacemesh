@@ -40,7 +40,7 @@ var (
 type handler struct{}
 
 // Parse header and arguments.
-func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (out core.ParseOutput, args scale.Encodable, err error) {
+func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
 	case methodSpawn:
 		var p SpawnPayload
@@ -48,31 +48,31 @@ func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
 			return
 		}
-		args = &p.Arguments
-		out.GasPrice = p.GasPrice
-		out.Nonce = p.Nonce
-		out.FixedGas = TotalGasSpawn
+		output.GasPrice = p.GasPrice
+		output.Nonce = p.Nonce
+		output.FixedGas = TotalGasSpawn
 	case methodSpend:
 		var p SpendPayload
 		if _, err = p.DecodeScale(decoder); err != nil {
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
 			return
 		}
-		args = &p.Arguments
-		out.GasPrice = p.GasPrice
-		out.Nonce = p.Nonce
-		out.FixedGas = TotalGasSpend
+		output.GasPrice = p.GasPrice
+		output.Nonce = p.Nonce
+		output.FixedGas = TotalGasSpend
 	default:
-		return out, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
-	return out, args, nil
+	return output, nil
 }
 
-// Init wallet.
-func (*handler) Init(method uint8, args any, state []byte) (core.Template, error) {
-	if method == 0 {
-		return New(args.(*SpawnArguments)), nil
-	}
+// New instatiates single sig wallet with spawn arguments.
+func (*handler) New(args any) (core.Template, error) {
+	return New(args.(*SpawnArguments)), nil
+}
+
+// Load single sig wallet from stored state.
+func (*handler) Load(state []byte) (core.Template, error) {
 	decoder := scale.NewDecoder(bytes.NewReader(state))
 	var wallet Wallet
 	if _, err := wallet.DecodeScale(decoder); err != nil {
@@ -85,7 +85,7 @@ func (*handler) Init(method uint8, args any, state []byte) (core.Template, error
 func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case methodSpawn:
-		if err := ctx.Spawn(TemplateAddress, args); err != nil {
+		if err := ctx.Spawn(args); err != nil {
 			return err
 		}
 	case methodSpend:
@@ -94,6 +94,17 @@ func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) erro
 		}
 	default:
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+	}
+	return nil
+}
+
+// Args ...
+func (h *handler) Args(method uint8) scale.Type {
+	switch method {
+	case methodSpawn:
+		return &SpawnArguments{}
+	case methodSpend:
+		return &SpendArguments{}
 	}
 	return nil
 }
