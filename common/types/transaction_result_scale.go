@@ -16,7 +16,7 @@ func (t *TransactionResult) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := scale.EncodeString(enc, t.Message)
+		n, err := scale.EncodeString(enc, string(t.Message))
 		if err != nil {
 			return total, err
 		}
@@ -75,7 +75,7 @@ func (t *TransactionResult) DecodeScale(dec *scale.Decoder) (total int, err erro
 			return total, err
 		}
 		total += n
-		t.Message = field
+		t.Message = string(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)

@@ -172,6 +172,10 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 func (h *Hare) setLastLayer(layerID types.LayerID) {
+	if layerID == (types.LayerID{}) {
+		// layers starts from 0. nothing to do here.
+		return
+	}
 	h.layerLock.Lock()
 	defer h.layerLock.Unlock()
 	if layerID.After(h.lastLayer) {
@@ -434,7 +438,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
-			if time.Until(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
+			if time.Since(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
 				h.With().Warning("missed hare window, skipping layer", layer)
 				continue
 			}

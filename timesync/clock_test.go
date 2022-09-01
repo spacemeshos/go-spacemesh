@@ -60,29 +60,29 @@ func TestClock_TickFutureGenesis(t *testing.T) {
 	ticker.StartNotifying()
 	defer ticker.Close()
 	x := <-sub
-	assert.Equal(t, types.NewLayerID(1), x)
+	assert.Equal(t, types.NewLayerID(0), x)
 	x = <-sub
-	assert.Equal(t, types.NewLayerID(2), x)
+	assert.Equal(t, types.NewLayerID(1), x)
 }
 
 func TestClock_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
 	start := time.Now()
-	ticker := NewClock(tmr, 2*d50milli, tmr.Now().Add(-7*d50milli), logtest.New(t).WithName(t.Name()))
-	expectedTimeToTick := d50milli // tickInterval is 100ms and the genesis tick (layer 1) was 350ms ago
+	ticker := NewClock(tmr, 2*d50milli, start.Add(-7*d50milli), logtest.New(t).WithName(t.Name()))
+	expectedTimeToTick := d50milli // tickInterval is 100ms and the genesis tick (layer 0) was 350ms ago
 	/*
-		T-350 -> layer 1
-		T-250 -> layer 2
-		T-150 -> layer 3
-		T-50  -> layer 4
-		T+50  -> layer 5
+		T-350 -> layer 0
+		T-250 -> layer 1
+		T-150 -> layer 2
+		T-50  -> layer 3
+		T+50  -> layer 4
 	*/
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	defer ticker.Close()
 	x := <-sub
 	duration := time.Since(start)
-	assert.Equal(t, types.NewLayerID(5), x)
+	assert.Equal(t, types.NewLayerID(4), x)
 	assert.True(t, duration >= expectedTimeToTick, "tick happened too soon (%v)", duration)
 	assert.True(t, duration < expectedTimeToTick+d50milli, "tick happened more than 50ms too late (%v)", duration)
 }
@@ -93,7 +93,7 @@ func TestClock_NewClock(t *testing.T) {
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), logtest.New(t).WithName(t.Name()))
 	defer ticker.Close()
 
-	r.Equal(types.NewLayerID(2), ticker.lastTickedLayer)
+	r.Equal(types.NewLayerID(1), ticker.lastTickedLayer)
 }
 
 func TestClock_CloseTwice(t *testing.T) {

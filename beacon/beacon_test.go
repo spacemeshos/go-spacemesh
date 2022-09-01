@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -90,25 +91,24 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	return tpd
 }
 
-func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, nodeID types.NodeID, weight uint) {
-	header := types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nodeID,
-			PubLayerID: lid,
-		},
-		NumUnits: uint32(weight),
-	}
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
+func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint) {
+	atx := types.NewActivationTx(
+		types.NIPostChallenge{PubLayerID: lid},
+		types.Address{},
+		nil,
+		numUnits,
+		nil,
+	)
 	atx.Verify(0, 1)
-	id := types.RandomATXID()
-	atx.SetID(&id)
+	activation.SignAtx(sig, atx)
+	atx.CalcAndSetID()
+	atx.CalcAndSetNodeID()
 	require.NoError(t, atxs.Add(db, atx, time.Now().Add(-1*time.Second)))
 }
 
 func createRandomATXs(t *testing.T, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
-		nodeID := types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes())
-		createATX(t, db, lid, nodeID, 1)
+		createATX(t, db, lid, signing.NewEdSigner(), 1)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestBeacon(t *testing.T) {
 	tpd.onNewEpoch(context.TODO(), types.EpochID(0))
 	tpd.onNewEpoch(context.TODO(), types.EpochID(1))
 	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
-	createATX(t, tpd.store, lid, tpd.nodeID, 1)
+	createATX(t, tpd.store, lid, tpd.edSigner, 1)
 	createRandomATXs(t, tpd.store, lid, numATXs-1)
 	tpd.onNewEpoch(context.TODO(), types.EpochID(2))
 
@@ -230,7 +230,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
-		createATX(t, tpd.store, lid, tpd.nodeID, 199)
+		createATX(t, tpd.store, lid, tpd.edSigner, 199)
 		createRandomATXs(t, tpd.store, lid, numATXs-1)
 	}
 	finalLayer := types.NewLayerID(types.GetLayersPerEpoch() * uint32(epoch))

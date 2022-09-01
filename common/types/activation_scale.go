@@ -60,13 +60,6 @@ func (t *ActivationTxHeader) DecodeScale(dec *scale.Decoder) (total int, err err
 
 func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
 		if err != nil {
 			return total, err
@@ -105,13 +98,6 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 }
 
 func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
@@ -309,7 +295,7 @@ func (t *PoetProofMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeString(enc, t.RoundID)
+		n, err := scale.EncodeString(enc, string(t.RoundID))
 		if err != nil {
 			return total, err
 		}
@@ -347,7 +333,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-		t.RoundID = field
+		t.RoundID = string(field)
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
@@ -362,7 +348,7 @@ func (t *PoetProofMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeString(enc, t.ID)
+		n, err := scale.EncodeString(enc, string(t.ID))
 		if err != nil {
 			return total, err
 		}
@@ -378,7 +364,7 @@ func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.ID = field
+		t.ID = string(field)
 	}
 	return total, nil
 }

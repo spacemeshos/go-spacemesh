@@ -328,13 +328,14 @@ func TestFullCountVotes(t *testing.T) {
 			var activeset []types.ATXID
 			for i := range tc.activeset {
 				header := types.ActivationTxHeader{
-					NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
+					NIPostChallenge: types.NIPostChallenge{},
 					NumUnits:        1,
 				}
 				header.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
+				atx.SetNodeID(&types.NodeID{1})
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 				activeset = append(activeset, atxid)
 			}

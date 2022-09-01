@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -781,9 +782,13 @@ func TestGetTxs(t *testing.T) {
 
 func genATXs(t *testing.T, num int) []*types.ActivationTx {
 	t.Helper()
+	sig := signing.NewEdSigner()
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := 0; i < num; i++ {
 		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
+		activation.SignAtx(sig, atx)
+		atx.CalcAndSetID()
+		atx.CalcAndSetNodeID()
 		atxs = append(atxs, atx)
 	}
 	return atxs

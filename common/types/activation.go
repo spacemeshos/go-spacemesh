@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -105,7 +106,10 @@ type ActivationTxHeader struct {
 	Coinbase Address
 	NumUnits uint32
 
+	// the following fields are kept private and from being serialized
 	id *ATXID // non-exported cache of the ATXID
+
+	nodeID *NodeID // the id of the Node that created the ATX (public key)
 
 	// TODO(dshulyak) this is important to prevent accidental state reads
 	// before this field is set. reading empty data could lead to disastrous bugs.
@@ -132,6 +136,14 @@ func (atxh *ActivationTxHeader) ID() ATXID {
 	return *atxh.id
 }
 
+// NodeID returns the ATX's Node ID.
+func (atxh *ActivationTxHeader) NodeID() NodeID {
+	if atxh.nodeID == nil {
+		panic("nodeID field must be set")
+	}
+	return *atxh.nodeID
+}
+
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
 func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
@@ -141,6 +153,11 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 // SetID sets the ATXID in this ATX's cache.
 func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
+}
+
+// SetNodeID sets the Node ID in the ATX's cache.
+func (atxh *ActivationTxHeader) SetNodeID(nodeID *NodeID) {
+	atxh.nodeID = nodeID
 }
 
 // GetWeight of the atx.
@@ -171,11 +188,10 @@ func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
-// PoET membership proof. It includes the node ID, ATX sequence number, the previous ATX's ID (for all but the first in
-// the sequence), the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
+// PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
+// the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
-	NodeID             NodeID
 	Sequence           uint64
 	PrevATXID          ATXID
 	PubLayerID         LayerID
@@ -196,9 +212,7 @@ func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
 // String returns a string representation of the NIPostChallenge, for logging purposes.
 // It implements the Stringer interface.
 func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
-		challenge.NodeID.ShortString(),
-		challenge.NodeID.ShortString(),
+	return fmt.Sprintf("<seq: %v, prevATX: %v, PubLayer: %v, posATX: %s>",
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
 		challenge.PubLayerID,
@@ -234,7 +248,6 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 			InitialPost: initialPost,
 		},
 	}
-	atx.CalcAndSetID()
 	return atx
 }
 
@@ -253,7 +266,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("challenge", h.String())
 	}
 	encoder.AddString("id", atx.id.String())
-	encoder.AddString("sender_id", atx.NodeID.String())
+	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	encoder.AddString("coinbase", atx.Coinbase.String())
@@ -271,8 +284,26 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() {
+	if atx.Sig == nil {
+		panic("cannot calculate ATX ID: sig is nil")
+	}
 	id := ATXID(CalcATXHash32(atx))
 	atx.SetID(&id)
+}
+
+// CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
+func (atx *ActivationTx) CalcAndSetNodeID() error {
+	b, err := atx.InnerBytes()
+	if err != nil {
+		return fmt.Errorf("failed to derive NodeID: %w", err)
+	}
+	pub, err := ed25519.ExtractPublicKey(b, atx.Sig)
+	if err != nil {
+		return fmt.Errorf("failed to derive NodeID: %w", err)
+	}
+	nodeID := BytesToNodeID(pub)
+	atx.SetNodeID(&nodeID)
+	return nil
 }
 
 // GetPoetProofRef returns the reference to the PoET proof.
@@ -344,16 +375,16 @@ type Post postShared.Proof
 
 // EncodeScale implements scale codec interface.
 func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	if n, err := scale.EncodeCompact32(enc, uint32(p.Nonce)); err != nil {
+	n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
+	if err != nil {
 		return total, err
-	} else { // nolint
-		total += n
 	}
-	if n, err := scale.EncodeByteSlice(enc, p.Indices); err != nil {
+	total += n
+	n, err = scale.EncodeByteSlice(enc, p.Indices)
+	if err != nil {
 		return total, err
-	} else { // nolint
-		total += n
 	}
+	total += n
 	return total, nil
 }
 

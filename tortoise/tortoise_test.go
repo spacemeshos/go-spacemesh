@@ -216,7 +216,8 @@ func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
 		atxHeader := makeAtxHeaderWithWeight(uint32(weight))
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 		atx.PubLayerID = lid
-		atx.NodeID = types.NodeID{byte(i)}
+		nodeID := types.NodeID{byte(i)}
+		atx.SetNodeID(&nodeID)
 		atxID := types.RandomATXID()
 		atx.SetID(&atxID)
 		atxList = append(atxList, atx)
@@ -532,11 +533,11 @@ func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 }
 
 func makeAtxHeaderWithWeight(weight uint32) types.ActivationTxHeader {
-	header := types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{1}},
-	}
+	header := types.ActivationTxHeader{}
 	header.NumUnits = weight
 	header.Verify(0, 1)
+	nodeID := types.NodeID{1}
+	header.SetNodeID(&nodeID)
 	return header
 }
 
@@ -1234,8 +1235,7 @@ func TestMultiTortoise(t *testing.T) {
 
 func TestComputeExpectedWeight(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
-	lyrsPerEpoch := types.GetLayersPerEpoch()
-	require.EqualValues(t, 4, lyrsPerEpoch, "expecting layers per epoch to be 4. adjust test if it will change")
+	require.EqualValues(t, 4, types.GetLayersPerEpoch(), "expecting layers per epoch to be 4. adjust test if it will change")
 	for _, tc := range []struct {
 		desc         string
 		target, last types.LayerID
@@ -1304,6 +1304,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
 				id := types.RandomATXID()
 				atx.SetID(&id)
+				atx.SetNodeID(&types.NodeID{})
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
@@ -2277,7 +2278,8 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxHeader := makeAtxHeaderWithWeight(uint32(weight))
 				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 				atx.PubLayerID = atxLid
-				atx.NodeID = types.NodeID{byte(i)}
+				nodeID := types.NodeID{byte(i)}
+				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
 				require.NoError(t, atxs.Add(cdb, atx, time.Now()))

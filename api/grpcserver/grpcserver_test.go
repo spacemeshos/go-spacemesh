@@ -23,7 +23,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -82,15 +81,14 @@ var (
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	addr1       = wallet.Address(signer1.PublicKey().Bytes())
 	addr2       = wallet.Address(signer2.PublicKey().Bytes())
-	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.BytesToNodeID(pub)
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
-	nipost      = NewNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx   = newAtx(challenge, nipost, addr1)
-	globalAtx2  = newAtx(challenge, nipost, addr2)
+	nipost      = newNIPostWithChallenge(&chlng, poetRef)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	signer      = NewMockSigner()
+	globalAtx   = newAtx(challenge, signer, nipost, numUnits, addr1)
+	globalAtx2  = newAtx(challenge, signer, nipost, numUnits, addr2)
 	signer1     = signing.NewEdSigner()
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
@@ -130,7 +128,7 @@ func init() {
 	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
-func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: challenge,
 		Post: &types.Post{
@@ -318,30 +316,38 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
-	challenge := types.NIPostChallenge{
-		NodeID:         nodeID,
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
 	}
-	return challenge
 }
 
-func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
-	activationTx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
-				NIPostChallenge: challenge,
-				Coinbase:        coinbase,
-				NumUnits:        numUnits,
-			},
-			NIPost: nipost,
-		},
-	}
-	activationTx.CalcAndSetID()
-	return activationTx
+func newAtx(challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
+	activation.SignAtx(sig, atx)
+	atx.CalcAndSetID()
+	atx.CalcAndSetNodeID()
+	return atx
+}
+
+func NewMockSigner() *MockSigning {
+	return &MockSigning{signing.NewEdSigner()}
+}
+
+// TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
+type MockSigning struct {
+	signer *signing.EdSigner
+}
+
+func (ms *MockSigning) NodeID() types.NodeID {
+	return types.BytesToNodeID(ms.signer.PublicKey().Bytes())
+}
+
+func (ms *MockSigning) Sign(m []byte) []byte {
+	return ms.signer.Sign(m)
 }
 
 // PostAPIMock is a mock for Post API.
@@ -413,7 +419,7 @@ func (*SmeshingAPIMock) StopSmeshing(bool) error {
 }
 
 func (*SmeshingAPIMock) SmesherID() types.NodeID {
-	return nodeID
+	return signer.NodeID()
 }
 
 func (*SmeshingAPIMock) Coinbase() types.Address {
@@ -1017,7 +1023,7 @@ func TestSmesherService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			nodeAddr := types.GenerateAddress(nodeID[:])
+			nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
 			resAddr, err := types.StringToAddress(res.AccountId.Address)
 			require.NoError(t, err)
 			require.Equal(t, nodeAddr.String(), resAddr.String())
@@ -2033,7 +2039,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().ToBytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2497,7 +2503,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
+		require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
