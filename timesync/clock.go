@@ -58,7 +58,7 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 func (t *TimeClock) startClock() error {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.genesis, t)
 
-	tmr := time.NewTimer(0)
+	tmr := time.NewTimer(time.Hour)
 	defer tmr.Stop()
 	for {
 		currLayer := t.Ticker.TimeToLayer(t.clock.Now()) // get current layer
