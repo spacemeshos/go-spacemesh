@@ -34,13 +34,14 @@ func encode(fields ...scale.Encodable) []byte {
 }
 
 // SelfSpawn create spawn transaction.
-func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
+func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
 	payload := wallet.SpawnPayload{}
+	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
 	copy(payload.Arguments.PublicKey[:], signing.Public(pk))
 	principal := core.ComputePrincipal(wallet.TemplateAddress, &payload.Arguments)

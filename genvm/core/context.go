@@ -44,7 +44,9 @@ func (c *Context) Spawn(template Address, args scale.Encodable) error {
 	if principal != c.Header.Principal {
 		return ErrSpawn
 	}
-
+	if c.Account.Template != nil {
+		return ErrSpawned
+	}
 	c.Account.Template = &template
 	return nil
 }

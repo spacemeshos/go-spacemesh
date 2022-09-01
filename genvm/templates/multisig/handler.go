@@ -87,6 +87,7 @@ func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder)
 		}
 		args = &p.Arguments
 		out.GasPrice = p.GasPrice
+		out.Nonce = p.Nonce
 		out.FixedGas = h.totalGasSpawn
 	case methodSpend:
 		var p SpendPayload
