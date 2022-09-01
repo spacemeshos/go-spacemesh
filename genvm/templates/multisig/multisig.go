@@ -30,7 +30,7 @@ func (ms *MultiSig) MaxSpend(method uint8, args any) (uint64, error) {
 }
 
 // Verify that transaction is signed has k valid signatures.
-func (ms *MultiSig) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
+func (ms *MultiSig) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	sig := make(Signatures, ms.k)
 	n, err := scale.DecodeStructArray(dec, sig)
 	if err != nil {
@@ -54,6 +54,6 @@ func (ms *MultiSig) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bo
 }
 
 // Spend transfers an amount to the address specified in SpendArguments.
-func (ms *MultiSig) Spend(ctx *core.Context, args *SpendArguments) error {
-	return ctx.Transfer(args.Destination, args.Amount)
+func (ms *MultiSig) Spend(host core.Host, args *SpendArguments) error {
+	return host.Transfer(args.Destination, args.Amount)
 }

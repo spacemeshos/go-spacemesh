@@ -34,7 +34,7 @@ func (s *Wallet) MaxSpend(method uint8, args any) (uint64, error) {
 }
 
 // Verify that transaction is signed by the owner of the PublicKey using ed25519.
-func (s *Wallet) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
+func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	sig := core.Signature{}
 	n, err := sig.DecodeScale(dec)
 	if err != nil {
@@ -45,6 +45,6 @@ func (s *Wallet) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool 
 }
 
 // Spend transfers an amount to the address specified in SpendArguments.
-func (s *Wallet) Spend(ctx *core.Context, args *SpendArguments) error {
-	return ctx.Transfer(args.Destination, args.Amount)
+func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
+	return host.Transfer(args.Destination, args.Amount)
 }

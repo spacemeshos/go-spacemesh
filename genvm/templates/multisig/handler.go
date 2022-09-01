@@ -70,6 +70,11 @@ var (
 	TemplateAddress3 core.Address
 )
 
+// NewHandler instantiates multisig handler with a particular configuration.
+func NewHandler(address core.Address, k uint8, gasSpawn, gasSpend uint64) core.Handler {
+	return &handler{k: k, address: address, totalGasSpawn: gasSpawn, totalGasSpend: gasSpend}
+}
+
 type handler struct {
 	k, n                         uint8
 	address                      core.Address
@@ -77,7 +82,7 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
 	case methodSpawn:
 		var p SpawnPayload
@@ -128,31 +133,15 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 	return &ms, nil
 }
 
-// Init wallet.
-func (h *handler) Init(method uint8, args any, state []byte) (core.Template, error) {
-	if method == methodSpawn {
-		return &MultiSig{
-			PublicKeys: args.(*SpawnArguments).PublicKeys,
-			k:          h.k,
-		}, nil
-	}
-	decoder := scale.NewDecoder(bytes.NewReader(state))
-	ms := MultiSig{k: h.k}
-	if _, err := ms.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w: malformed state %s", core.ErrInternal, err.Error())
-	}
-	return &ms, nil
-}
-
 // Exec spawn or spend based on the method selector.
-func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
+func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
 	switch method {
 	case methodSpawn:
-		if err := ctx.Spawn(args); err != nil {
+		if err := host.Spawn(args); err != nil {
 			return err
 		}
 	case methodSpend:
-		if err := ctx.Template.(*MultiSig).Spend(ctx, args.(*SpendArguments)); err != nil {
+		if err := host.Template().(SpendTemplate).Spend(host, args.(*SpendArguments)); err != nil {
 			return err
 		}
 	default:
@@ -170,4 +159,8 @@ func (h *handler) Args(method uint8) scale.Type {
 		return &SpendArguments{}
 	}
 	return nil
+}
+
+type SpendTemplate interface {
+	Spend(core.Host, *SpendArguments) error
 }

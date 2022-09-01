@@ -40,7 +40,7 @@ var (
 type handler struct{}
 
 // Parse header and arguments.
-func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (*handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
 	case methodSpawn:
 		var p SpawnPayload
@@ -82,14 +82,14 @@ func (*handler) Load(state []byte) (core.Template, error) {
 }
 
 // Exec spawn or spend based on the method selector.
-func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
+func (*handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
 	switch method {
 	case methodSpawn:
-		if err := ctx.Spawn(args); err != nil {
+		if err := host.Spawn(args); err != nil {
 			return err
 		}
 	case methodSpend:
-		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*SpendArguments)); err != nil {
+		if err := host.Template().(*Wallet).Spend(host, args.(*SpendArguments)); err != nil {
 			return err
 		}
 	default:

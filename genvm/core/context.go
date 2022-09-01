@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -15,10 +16,12 @@ import (
 type Context struct {
 	Registry HandlerRegistry
 	Loader   AccountLoader
-	Handler  Handler
-	Template Template
 
-	Account Account
+	LayerID LayerID
+
+	PrincipalHandler  Handler
+	PrincipalTemplate Template
+	PrincipalAccount  Account
 
 	ParseOutput ParseOutput
 	Header      Header
@@ -31,11 +34,26 @@ type Context struct {
 	// an amount transfrered to other accounts
 	transferred uint64
 
-	// TODO all templates for genesis will support transfers to only one account.
-	// i keep it for the purposes of testing and validation (e.g we can implement more complex templates)
-	// but it can be simplified down to one variable
 	touched []Address
 	changed map[Address]*Account
+}
+
+// Principal returns address of the account that signed transaction.
+func (c *Context) Principal() Address {
+	return c.PrincipalAccount.Address
+}
+
+// Layer returns block layer id.
+func (c *Context) Layer() LayerID {
+	return c.LayerID
+}
+
+func (c *Context) Template() Template {
+	return c.PrincipalTemplate
+}
+
+func (c *Context) Handler() Handler {
+	return c.PrincipalHandler
 }
 
 // Spawn account.
@@ -43,8 +61,8 @@ func (c *Context) Spawn(args scale.Encodable) error {
 	template := c.Header.Template
 	address := ComputePrincipal(template, args)
 	var account *types.Account
-	if address == c.Account.Address {
-		account = &c.Account
+	if address == c.PrincipalAccount.Address {
+		account = &c.PrincipalAccount
 	} else {
 		var err error
 		account, err = c.load(address)
@@ -70,7 +88,7 @@ func (c *Context) Spawn(args scale.Encodable) error {
 	}
 	account.State = buf.Bytes()
 	account.Template = &template
-	if account.Address != c.Account.Address {
+	if account.Address != c.PrincipalAccount.Address {
 		c.change(account)
 	}
 	return nil
@@ -78,23 +96,71 @@ func (c *Context) Spawn(args scale.Encodable) error {
 
 // Transfer amount to the address after validation passes.
 func (c *Context) Transfer(to Address, amount uint64) error {
-	if amount > c.Account.Balance {
-		return ErrNoBalance
-	}
-	c.transferred += amount
-	if c.transferred > c.Header.MaxSpend {
-		return fmt.Errorf("%w: %d", ErrMaxSpend, c.Header.MaxSpend)
-	}
-	// noop. only gas is consumed
-	if c.Account.Address == to {
-		return nil
-	}
+	return c.transfer(&c.PrincipalAccount, to, amount, c.Header.MaxSpend)
+}
+
+func (c *Context) transfer(from *Account, to Address, amount, max uint64) error {
 	account, err := c.load(to)
 	if err != nil {
 		return err
 	}
-	c.Account.Balance -= amount
+	if amount > from.Balance {
+		return ErrNoBalance
+	}
+	c.transferred += amount
+	if c.transferred > max {
+		return fmt.Errorf("%w: %d", ErrMaxSpend, max)
+	}
+	// noop. only gas is consumed
+	if from.Address == to {
+		return nil
+	}
+
+	from.Balance -= amount
 	account.Balance += amount
+	c.change(account)
+	return nil
+}
+
+// Relay call to the remote account.
+func (c *Context) Relay(expectedTemplate, address Address, call func(Host) error) error {
+	account, err := c.load(address)
+	if err != nil {
+		return err
+	}
+	if account.Template == nil {
+		return ErrNotSpawned
+	}
+	if *account.Template != expectedTemplate {
+		return errors.New("account is spawned with unexpected template")
+	}
+	handler := c.Registry.Get(expectedTemplate)
+	if handler == nil {
+		panic("account that was spawned with a specific tempalte, should exist in the registry")
+	}
+	template, err := handler.Load(account.State)
+	if err != nil {
+		return err
+	}
+
+	buf := bytes.NewBuffer(nil)
+	encoder := scale.NewEncoder(buf)
+	if _, err := template.EncodeScale(encoder); err != nil {
+		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+	}
+	remote := &RemoteContext{
+		Context:  c,
+		remote:   account,
+		handler:  handler,
+		template: template,
+	}
+	if err := call(remote); err != nil {
+		return err
+	}
+	// ideally such changes would be serialized once for the whole block execution
+	// but it requires more changes in the cache, so can be done as an optimization
+	// if it proves meaningful (most likely wont)
+	account.State = buf.Bytes()
 	c.change(account)
 	return nil
 }
@@ -102,8 +168,8 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 // Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
-	if amount > c.Account.Balance {
-		amount = c.Account.Balance
+	if amount > c.PrincipalAccount.Balance {
+		amount = c.PrincipalAccount.Balance
 		err = ErrNoBalance
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
@@ -112,14 +178,14 @@ func (c *Context) Consume(gas uint64) (err error) {
 	}
 	c.consumed += gas
 	c.fee += amount
-	c.Account.Balance -= amount
+	c.PrincipalAccount.Balance -= amount
 	return err
 }
 
 // Apply is executed if transaction was consumed.
 func (c *Context) Apply(updater AccountUpdater) error {
-	c.Account.NextNonce = c.Header.Nonce.Counter + 1
-	if err := updater.Update(c.Account); err != nil {
+	c.PrincipalAccount.NextNonce = c.Header.Nonce.Counter + 1
+	if err := updater.Update(c.PrincipalAccount); err != nil {
 		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
 	for _, address := range c.touched {
@@ -144,7 +210,7 @@ func (c *Context) Fee() uint64 {
 // Updated list of addresses.
 func (c *Context) Updated() []types.Address {
 	rst := make([]types.Address, 0, len(c.touched)+1)
-	rst = append(rst, c.Account.Address)
+	rst = append(rst, c.PrincipalAccount.Address)
 	rst = append(rst, c.touched...)
 	return rst
 }
@@ -170,4 +236,35 @@ func (c *Context) change(account *Account) {
 		c.touched = append(c.touched, account.Address)
 	}
 	c.changed[account.Address] = account
+}
+
+// RemoteContext ...
+type RemoteContext struct {
+	*Context
+	remote   *Account
+	handler  Handler
+	template Template
+}
+
+// Template ...
+func (r *RemoteContext) Template() Template {
+	return r.template
+}
+
+// Handler ...
+func (r *RemoteContext) Handler() Handler {
+	return r.handler
+}
+
+// Transfer ...
+func (r *RemoteContext) Transfer(to Address, amount uint64) error {
+	account, err := r.load(to)
+	if err != nil {
+		return err
+	}
+	if err := r.transfer(account, to, amount, account.Balance); err != nil {
+		return err
+	}
+	r.change(account)
+	return nil
 }
