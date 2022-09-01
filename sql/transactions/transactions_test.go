@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"context"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -379,7 +380,13 @@ func TestDiscardNonceBelow(t *testing.T) {
 	numTXs := 10
 	received := time.Now()
 	txs := make([]*types.Transaction, 0, numTXs*2)
-	for nonce := uint64(0); nonce < uint64(numTXs); nonce++ {
+
+	tx := createTX(t, signer, types.Address{1}, 0, 191, 1)
+	require.NoError(t, Add(db, tx, received))
+	txs = append(txs, tx)
+
+	// start nonce from math.MaxInt64+1 to validate sqlite comparison in DiscardNonceBelow
+	for nonce := uint64(math.MaxInt64 + 1); nonce < uint64(math.MaxInt64+numTXs); nonce++ {
 		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
