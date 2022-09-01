@@ -697,6 +697,7 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
 	numTXs := 13
+	// use math.MaxInt64+1 to validate nonce sqlite comparison in GetAcctPendingFromNonce
 	nonce := uint64(math.MaxInt64 + 1)
 	received := time.Now()
 	for i := 0; i < numTXs; i++ {
