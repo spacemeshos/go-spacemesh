@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"path/filepath"
@@ -482,33 +483,24 @@ func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
 	}
 }
 
-func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTester func(t *testing.T) *tester) {
-	// consumed gas is computed from two variables:
-	// - fixed gas
-	// - storage cost
-	// fixed gas depends on the template and type of the method call
-	// storage cost depends on the transaction size
-	//
-	// estimating the latter in advance is problematic, since we are using
-	// variable sized fields (mostly integers) in encoding.
-	// the only robust approach that i came up with is to recompute raw
-	// transaction based on expectations before the test itself
-	ref := genTester(t)
+type templateTestCase struct {
+	desc   string
+	layers []layertc
+}
 
-	type layertc struct {
-		txs      []testTx
-		rewards  []reward
-		expected map[int]change
-		gasLimit uint64
+type layertc struct {
+	txs      []testTx
+	rewards  []reward
+	expected map[int]change
+	gasLimit uint64
 
-		ineffective []int            // list with references to ineffective txs
-		failed      map[int]error    // map with references to failed transaction, with specified error
-		headers     map[int]struct{} // is vm expected to return the header
-	}
-	for _, tc := range []struct {
-		desc   string
-		layers []layertc
-	}{
+	ineffective []int            // list with references to ineffective txs
+	failed      map[int]error    // map with references to failed transaction, with specified error
+	headers     map[int]struct{} // is vm expected to return the header
+}
+
+func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *tester) []templateTestCase {
+	return []templateTestCase{
 		{
 			desc: "Sanity",
 			layers: []layertc{
@@ -1118,7 +1110,11 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 				},
 			},
 		},
-	} {
+	}
+}
+
+func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testing.T) *tester) {
+	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			tt := genTester(t)
 
@@ -1170,6 +1166,13 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 	}
 }
 
+func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
+	runTestCases(t,
+		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
+		genTester,
+	)
+}
+
 func TestWallets(t *testing.T) {
 	const (
 		funded  = 10  // number of funded accounts, included in genesis
@@ -1179,7 +1182,7 @@ func TestWallets(t *testing.T) {
 		defaultGasPrice = 1
 	)
 	t.Run("SingleSig", func(t *testing.T) {
-		testWallet(t, wallet.TemplateAddress, defaultGasPrice, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, wallet.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(funded).
 				applyGenesisWithBalance(balance).
@@ -1189,7 +1192,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, multisig.TemplateAddress1, defaultGasPrice, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress1, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 1, n, multisig.TemplateAddress1).
 				applyGenesisWithBalance(balance).
@@ -1199,7 +1202,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, multisig.TemplateAddress2, defaultGasPrice, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress2, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 2, n, multisig.TemplateAddress2).
 				applyGenesisWithBalance(balance).
@@ -1209,7 +1212,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, multisig.TemplateAddress3, defaultGasPrice, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress3, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 3, n, multisig.TemplateAddress3).
 				applyGenesisWithBalance(balance).
@@ -1311,6 +1314,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spend(1, 1, 100),
 			err:  core.ErrNotSpawned,
 		},
+		{
+			desc: "SpawnNotSpawned",
+			tx:   tt.spawn(1, 0),
+			err:  core.ErrNotSpawned,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := tt.Validation(tc.tx)
@@ -1323,6 +1331,88 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			}
 		})
 	}
+}
+
+func testSpawnOther(t *testing.T, genTester func(t *testing.T) *tester) {
+	ref := genTester(t)
+	genTestCase := func(i, j int) templateTestCase {
+		return templateTestCase{
+			desc: fmt.Sprintf("%d spawns %d", i, j),
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{i},
+						&spawnTx{i, j},
+					},
+					expected: map[int]change{
+						i: spawned{template: ref.accounts[i].getTemplate()},
+						j: spawned{template: ref.accounts[j].getTemplate()},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{j, i, 1000},
+					},
+					expected: map[int]change{
+						i: earned{amount: 1000},
+						j: spent{amount: 1000 + ref.estimateSpendGas(j, i, 1000, core.Nonce{})},
+					},
+				},
+			},
+		}
+	}
+	runTestCases(t, []templateTestCase{genTestCase(0, 1), genTestCase(1, 0)}, genTester)
+}
+
+func TestSpawnOtherTemplate(t *testing.T) {
+	t.Run("SingleSig/Multisig13", func(t *testing.T) {
+		testSpawnOther(t, func(t *testing.T) *tester {
+			return newTester(t).
+				addSingleSig(1).
+				addMultisig(1, 1, 3, multisig.TemplateAddress1).
+				applyGenesis()
+		})
+	})
+	t.Run("SingleSig/Multisig25", func(t *testing.T) {
+		testSpawnOther(t, func(t *testing.T) *tester {
+			return newTester(t).
+				addSingleSig(1).
+				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				applyGenesis()
+		})
+	})
+	t.Run("SingleSig/Multisig37", func(t *testing.T) {
+		testSpawnOther(t, func(t *testing.T) *tester {
+			return newTester(t).
+				addSingleSig(1).
+				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				applyGenesis()
+		})
+	})
+	t.Run("MultiSig13/Multisig25", func(t *testing.T) {
+		testSpawnOther(t, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultisig(1, 1, 3, multisig.TemplateAddress1).
+				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				applyGenesis()
+		})
+	})
+	t.Run("MultiSig13/Multisig37", func(t *testing.T) {
+		testSpawnOther(t, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultisig(1, 1, 3, multisig.TemplateAddress1).
+				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				applyGenesis()
+		})
+	})
+	t.Run("MultiSig25/Multisig37", func(t *testing.T) {
+		testSpawnOther(t, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultisig(1, 2, 5, multisig.TemplateAddress2).
+				addMultisig(1, 3, 7, multisig.TemplateAddress3).
+				applyGenesis()
+		})
+	})
 }
 
 func TestValidation(t *testing.T) {
