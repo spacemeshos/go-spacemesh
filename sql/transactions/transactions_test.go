@@ -697,7 +697,7 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
 	numTXs := 13
-	nonce := uint64(987)
+	nonce := uint64(math.MaxInt64 + 1)
 	received := time.Now()
 	for i := 0; i < numTXs; i++ {
 		tx := createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)
