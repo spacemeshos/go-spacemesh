@@ -321,16 +321,16 @@ func (b *Builder) generateProof() error {
 	return nil
 }
 
-func (b *Builder) waitForFirstATX(ctx context.Context) {
+func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	currentLayer := b.layerClock.GetCurrentLayer()
 	currEpoch := currentLayer.GetEpoch()
 	if currEpoch == 0 { // genesis miner
-		return
+		return false
 	}
 	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
 		if prev.PubLayerID.GetEpoch() == currEpoch {
 			// miner has ATX in previous epoch
-			return
+			return false
 		}
 	}
 
@@ -349,7 +349,7 @@ func (b *Builder) waitForFirstATX(ctx context.Context) {
 			log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-b.layerClock.AwaitLayer(waitTill):
 			wait = window
 		}
@@ -360,12 +360,13 @@ func (b *Builder) waitForFirstATX(ctx context.Context) {
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
-		return
+		return false
 	case <-timer.C:
 	}
 	b.log.WithContext(ctx).With().Info("ready to build first atx",
 		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()),
 		log.Stringer("current_epoch", b.layerClock.GetCurrentLayer().GetEpoch()))
+	return true
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock.
