@@ -20,7 +20,7 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 
 	var raw []byte
 	if nonce == 0 {
-		raw = wallet.SelfSpawn(principal.PrivateKey(), sdk.WithGasPrice(fee))
+		raw = wallet.SelfSpawn(principal.PrivateKey(), types.Nonce{}, sdk.WithGasPrice(fee))
 	} else {
 		raw = wallet.Spend(principal.PrivateKey(), dest, amount,
 			types.Nonce{Counter: nonce}, sdk.WithGasPrice(fee))

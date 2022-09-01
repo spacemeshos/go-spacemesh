@@ -48,7 +48,7 @@ func newTester(tb testing.TB) *tester {
 type testAccount interface {
 	getAddress() core.Address
 	spend(to core.Address, amount uint64, nonce core.Nonce) []byte
-	selfSpawn() []byte
+	selfSpawn(nonce core.Nonce) []byte
 
 	// fixed gas for spawn and spend
 	spawnGas() int
@@ -68,8 +68,8 @@ func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonc
 	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce)
 }
 
-func (a *singlesigAccount) selfSpawn() []byte {
-	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk))
+func (a *singlesigAccount) selfSpawn(nonce core.Nonce) []byte {
+	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce)
 }
 
 func (a *singlesigAccount) spendGas() int {
@@ -100,14 +100,14 @@ func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce
 	return agg.Raw()
 }
 
-func (a *multisigAccount) selfSpawn() []byte {
+func (a *multisigAccount) selfSpawn(nonce core.Nonce) []byte {
 	var pubs []ed25519.PublicKey
 	for _, pk := range a.pks {
 		pubs = append(pubs, ed25519.PublicKey(signing.Public(signing.PrivateKey(pk))))
 	}
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < a.k; i++ {
-		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs)
+		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs, nonce)
 		if agg == nil {
 			agg = part
 		} else {
@@ -233,8 +233,8 @@ func (t *tester) spawnAll() []types.RawTx {
 }
 
 func (t *tester) selfSpawn(i int) types.RawTx {
-	t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].selfSpawn())
+	nonce := t.nextNonce(i)
+	return types.NewRawTx(t.accounts[i].selfSpawn(nonce))
 }
 
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
@@ -284,7 +284,7 @@ func (t *tester) rewards(all ...reward) []types.AnyReward {
 
 func (t *tester) estimateSpawnGas(principal int) int {
 	return t.accounts[principal].spawnGas() +
-		len(t.accounts[principal].selfSpawn())*int(t.VM.cfg.StorageCostFactor)
+		len(t.accounts[principal].selfSpawn(core.Nonce{}))*int(t.VM.cfg.StorageCostFactor)
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
@@ -418,13 +418,13 @@ func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
 
 type nonce struct {
 	increased int
-	next      change
+	change    change
 }
 
 func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
 	require.Equal(tb, ch.increased, int(current.NextNonce-prev.NextNonce))
-	if ch.next != nil {
-		ch.next.verify(tb, prev, current)
+	if ch.change != nil {
+		ch.change.verify(tb, prev, current)
 	}
 }
 
@@ -661,7 +661,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
 					expected: map[int]change{
-						11: nonce{increased: 1},
+						// incresed by two because previous was ineffective
+						// but internal nonce in tester was incremented
+						11: nonce{increased: 2},
 					},
 				},
 			},
@@ -887,6 +889,57 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 						0:  spent{amount: ref.estimateSpendGas(11, 12, 1_000, core.Nonce{Counter: 2})*2 + 1_000, change: nonce{increased: 1}},
 						11: nonce{increased: 1},
 						12: earned{amount: 1_000},
+					},
+				},
+			},
+		},
+		{
+			desc: "RetrySelfSpawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
+						&spawnTx{11},
+					},
+					failed: map[int]error{2: core.ErrNoBalance},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateSpawnGas(11) - 1 +
+							ref.estimateSpawnGas(0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1})},
+						11: nonce{increased: 1},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11))},
+						&spawnTx{11},
+					},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateSpawnGas(11) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11), core.Nonce{Counter: 2})},
+						11: spawned{template: template, change: nonce{increased: 1}},
+					},
+				},
+			},
+		},
+		{
+			desc: "SelfSpawnFailed",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0},
+						&spawnTx{0},
+					},
+					failed: map[int]error{1: core.ErrSpawned},
+					expected: map[int]change{
+						0: spawned{
+							template: template,
+							change: nonce{
+								increased: 2,
+								change:    spent{amount: 2 * ref.estimateSpawnGas(0)},
+							},
+						},
 					},
 				},
 			},

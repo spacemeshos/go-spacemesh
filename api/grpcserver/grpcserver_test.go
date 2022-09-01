@@ -299,6 +299,7 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
 	if nonce == 0 {
 		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
+			types.Nonce{},
 			sdk.WithGasPrice(0),
 		))
 		tx.MaxGas = wallet.TotalGasSpawn
