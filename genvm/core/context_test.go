@@ -4,32 +4,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
-
-func TestSpawn(t *testing.T) {
-	t.Run("OnlySelf", func(t *testing.T) {
-		template := core.Address{1}
-		args := core.PublicKey{1}
-		ctx := core.Context{}
-		ctx.Header.Template = template
-		require.ErrorIs(t, ctx.Spawn(&args), core.ErrSpawn)
-	})
-	t.Run("UpdateTemplate", func(t *testing.T) {
-		template := core.Address{1}
-		args := core.PublicKey{1}
-		ctx := core.Context{}
-		ctx.Header.Principal = core.ComputePrincipal(template, &args)
-		ctx.Header.Template = template
-		require.NoError(t, ctx.Spawn(&args))
-		require.Equal(t, &template, ctx.Account.Template)
-	})
-}
 
 func TestTransfer(t *testing.T) {
 	t.Run("NoBalance", func(t *testing.T) {
@@ -84,27 +64,18 @@ func TestConsume(t *testing.T) {
 }
 
 func TestApply(t *testing.T) {
-	t.Run("UpdatesNonceAndState", func(t *testing.T) {
+	t.Run("UpdatesNonce", func(t *testing.T) {
 		ss := core.NewStagedCache(sql.InMemory())
 		ctx := core.Context{Loader: ss}
 		ctx.Account.Address = core.Address{1}
 		ctx.Header.Nonce = core.Nonce{Counter: 10}
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		template := mocks.NewMockTemplate(ctrl)
-		rst := []byte{1, 1, 1}
-		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
-			return scale.EncodeByteArray(encoder, rst)
-		})
-		ctx.Template = template
 		err := ctx.Apply(ss)
 		require.NoError(t, err)
 
 		account, err := ss.Get(ctx.Account.Address)
 		require.NoError(t, err)
 		require.Equal(t, ctx.Account.NextNonce, account.NextNonce)
-		require.Equal(t, rst, account.State)
 	})
 	t.Run("ConsumeMaxGas", func(t *testing.T) {
 		ss := core.NewStagedCache(sql.InMemory())
@@ -117,14 +88,6 @@ func TestApply(t *testing.T) {
 		ctx.Account.Address = core.Address{1}
 		ctx.Header.Nonce = core.Nonce{Counter: 10}
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		template := mocks.NewMockTemplate(ctrl)
-		rst := []byte{1, 1, 1}
-		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
-			return scale.EncodeByteArray(encoder, rst)
-		})
-		ctx.Template = template
 		require.NoError(t, ctx.Consume(5))
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
 		err := ctx.Apply(ss)
@@ -145,12 +108,6 @@ func TestApply(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		template := mocks.NewMockTemplate(ctrl)
-		rst := []byte{1, 1, 1}
-		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
-			return scale.EncodeByteArray(encoder, rst)
-		})
-		ctx.Template = template
 
 		updater := mocks.NewMockAccountUpdater(ctrl)
 		actual := []core.Address{}

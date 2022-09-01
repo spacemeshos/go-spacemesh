@@ -47,8 +47,12 @@ func newTester(tb testing.TB) *tester {
 
 type testAccount interface {
 	getAddress() core.Address
+	getTemplate() core.Address
 	spend(to core.Address, amount uint64, nonce core.Nonce) []byte
 	selfSpawn(nonce core.Nonce) []byte
+
+	spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte
+	spawnArgs() scale.Encodable
 
 	// fixed gas for spawn and spend
 	spawnGas() int
@@ -64,12 +68,26 @@ func (a *singlesigAccount) getAddress() core.Address {
 	return a.address
 }
 
+func (a *singlesigAccount) getTemplate() core.Address {
+	return wallet.TemplateAddress
+}
+
 func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
 	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce)
 }
 
 func (a *singlesigAccount) selfSpawn(nonce core.Nonce) []byte {
 	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce)
+}
+
+func (a *singlesigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte {
+	return sdkwallet.Spawn(signing.PrivateKey(a.pk), template, args, nonce)
+}
+
+func (a *singlesigAccount) spawnArgs() scale.Encodable {
+	args := wallet.SpawnArguments{}
+	copy(args.PublicKey[:], signing.Public(signing.PrivateKey(a.pk)))
+	return &args
 }
 
 func (a *singlesigAccount) spendGas() int {
@@ -89,6 +107,10 @@ type multisigAccount struct {
 
 func (a *multisigAccount) getAddress() core.Address {
 	return a.address
+}
+
+func (a *multisigAccount) getTemplate() core.Address {
+	return a.template
 }
 
 func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
@@ -115,6 +137,25 @@ func (a *multisigAccount) selfSpawn(nonce core.Nonce) []byte {
 		}
 	}
 	return agg.Raw()
+}
+
+func (a *multisigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte {
+	agg := sdkmultisig.Spawn(0, a.pks[0], a.address, template, args, nonce)
+	for i := 1; i < a.k; i++ {
+		part := sdkmultisig.Spawn(uint8(i), a.pks[i], a.address, template, args, nonce)
+		agg.Add(*part.Part(uint8(i)))
+	}
+	return agg.Raw()
+}
+
+func (a *multisigAccount) spawnArgs() scale.Encodable {
+	args := multisig.SpawnArguments{
+		PublicKeys: make([]core.PublicKey, len(a.pks)),
+	}
+	for i, pk := range a.pks {
+		copy(args.PublicKeys[i][:], signing.Public(signing.PrivateKey(pk)))
+	}
+	return &args
 }
 
 func (a *multisigAccount) spendGas() int {
@@ -237,6 +278,11 @@ func (t *tester) selfSpawn(i int) types.RawTx {
 	return types.NewRawTx(t.accounts[i].selfSpawn(nonce))
 }
 
+func (t *tester) spawn(i, j int) types.RawTx {
+	nonce := t.nextNonce(i)
+	return types.NewRawTx(t.accounts[i].spawn(t.accounts[j].getTemplate(), t.accounts[j].spawnArgs(), nonce))
+}
+
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
 	rst := make([]types.RawTx, n)
 	for i := range rst {
@@ -307,12 +353,20 @@ type testTx interface {
 	gen(*tester) types.RawTx
 }
 
-type spawnTx struct {
+type selfSpawnTx struct {
 	principal int
 }
 
-func (tx *spawnTx) gen(t *tester) types.RawTx {
+func (tx *selfSpawnTx) gen(t *tester) types.RawTx {
 	return t.selfSpawn(tx.principal)
+}
+
+type spawnTx struct {
+	principal, target int
+}
+
+func (tx *spawnTx) gen(t *tester) types.RawTx {
+	return t.spawn(tx.principal, tx.target)
 }
 
 type spendTx struct {
@@ -460,7 +514,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 					expected: map[int]change{
 						0: spawned{template: template},
@@ -484,7 +538,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 10, 100},
 					},
 					expected: map[int]change{
@@ -505,7 +559,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 				},
 				{
@@ -531,13 +585,13 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 				},
 				{
 					txs: []testTx{
 						&spendTx{0, 10, 10_000},
-						&spawnTx{10},
+						&selfSpawnTx{10},
 						&spendTx{10, 11, 100},
 					},
 					expected: map[int]change{
@@ -571,8 +625,8 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
-						&spawnTx{1},
+						&selfSpawnTx{0},
+						&selfSpawnTx{1},
 					},
 				},
 				{
@@ -610,7 +664,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 				},
 				{
@@ -646,7 +700,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{11},
+						&selfSpawnTx{11},
 					},
 					ineffective: []int{0},
 					expected: map[int]change{
@@ -655,9 +709,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 				},
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
-						&spawnTx{11},
+						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
 					expected: map[int]change{
@@ -673,9 +727,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(0) * defaultGasPrice)},
-						&spawnTx{11},
+						&selfSpawnTx{11},
 						&spendTx{11, 12, 1},
 					},
 					ineffective: []int{3},
@@ -702,7 +756,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 10, 100},
 						&spendTx{0, 11, 100},
 						&spendTx{0, 12, 100},
@@ -724,9 +778,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 10, uint64(ref.estimateSpawnGas(1)) - 1},
-						&spawnTx{10},
+						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0) +
@@ -749,7 +803,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						spendTx{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
 						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
 					},
@@ -785,7 +839,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
@@ -794,7 +848,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 				},
 				{
 					txs: []testTx{
-						&spawnTx{10},
+						&selfSpawnTx{10},
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
@@ -815,7 +869,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 				},
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
@@ -830,7 +884,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 5}),
 					},
 				},
@@ -853,7 +907,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 					},
 				},
 				{
@@ -869,9 +923,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11) + ref.estimateSpendGas(11, 12, 1_000, core.Nonce{Counter: 1}))},
-						&spawnTx{11},
+						&selfSpawnTx{11},
 						&spendTx{11, 12, 1_000},
 					},
 					failed: map[int]error{3: core.ErrNoBalance},
@@ -898,9 +952,9 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
-						&spawnTx{11},
+						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrNoBalance},
 					expected: map[int]change{
@@ -913,7 +967,7 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 				{
 					txs: []testTx{
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11))},
-						&spawnTx{11},
+						&selfSpawnTx{11},
 					},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(11) +
@@ -928,8 +982,8 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
-						&spawnTx{0},
+						&selfSpawnTx{0},
+						&selfSpawnTx{0},
 					},
 					failed: map[int]error{1: core.ErrSpawned},
 					expected: map[int]change{
@@ -949,11 +1003,11 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 			layers: []layertc{
 				{
 					txs: []testTx{
-						&spawnTx{0},
+						&selfSpawnTx{0},
 						// gas will be higher than fixed, but less than max gas
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11)) - 1},
 						// it will cause this transaction to be failed
-						&spawnTx{11},
+						&selfSpawnTx{11},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0) +
 						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1}) +
@@ -971,6 +1025,93 @@ func testWallet(t *testing.T, template core.Address, defaultGasPrice int, genTes
 							ref.estimateSpawnGas(11) - 1 +
 							testBaseReward},
 					},
+				},
+			},
+		},
+		{
+			desc: "Spawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTx{0, 11},
+					},
+					expected: map[int]change{
+						0: spawned{template: template,
+							change: spent{amount: 2 * ref.estimateSpawnGas(0),
+								change: nonce{increased: 2}},
+						},
+						11: spawned{template: template},
+					},
+				},
+			},
+		},
+		{
+			desc: "SpendFromSpawned",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTx{0, 11},
+						&spendTx{0, 11, 200 + uint64(ref.estimateSpendGas(11, 12, 200, core.Nonce{}))},
+					},
+					expected: map[int]change{
+						11: spawned{template: template},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{11, 12, 200},
+					},
+					expected: map[int]change{
+						11: spent{amount: 200 +
+							ref.estimateSpendGas(11, 12, 200, core.Nonce{})},
+						12: earned{amount: 200},
+					},
+				},
+			},
+		},
+		{
+			desc: "FailedSpawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spendTx{0, 11, uint64(2*ref.estimateSpawnGas(11) - 1)},
+						&selfSpawnTx{11},
+						&spawnTx{11, 12},
+					},
+					expected: map[int]change{
+						0:  spawned{template: template, change: nonce{increased: 2}},
+						11: spawned{template: template, change: nonce{increased: 2}},
+						12: same{},
+					},
+					failed: map[int]error{
+						3: core.ErrNoBalance,
+					},
+				},
+				{
+					txs: []testTx{
+						&spawnTx{0, 12},
+					},
+					expected: map[int]change{
+						12: spawned{template: template},
+					},
+				},
+			},
+		},
+		{
+			desc: "NotSpawned",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&spawnTx{0, 11},
+					},
+					expected: map[int]change{
+						0:  same{},
+						11: same{},
+					},
+					ineffective: []int{0},
 				},
 			},
 		},

@@ -16,8 +16,6 @@ var (
 	ErrMaxGas = errors.New("max gas")
 	// ErrMaxSpend raised if tx transferred over MaxSpend value.
 	ErrMaxSpend = errors.New("max spend")
-	// ErrSpawn raised to block regular spawn.
-	ErrSpawn = errors.New("spawn is not supported")
 	// ErrSpawned raised if account already spawned.
 	ErrSpawned = errors.New("account already spawned")
 	// ErrNotSpawned raised if account is not spawned.
