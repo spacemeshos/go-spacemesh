@@ -509,7 +509,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 	}
 	if method == 0 {
 		if core.ComputePrincipal(*template, args) == principal {
-			// this is a self spawn. if it fails validation - discard it immediatly
+			// this is a self spawn. if it fails validation - discard it immediately
 			ctx.Template, err = ctx.Handler.New(args)
 			if err != nil {
 				return nil, nil, nil, err
