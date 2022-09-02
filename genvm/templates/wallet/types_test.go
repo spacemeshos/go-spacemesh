@@ -16,7 +16,7 @@ func FuzzSpawnArgumentsSafety(f *testing.F) {
 	tester.FuzzSafety[SpawnArguments](f)
 }
 
-func TestGoldenSpawnArguments(t *testing.T) {
+func TestGolden(t *testing.T) {
 	golden, err := filepath.Abs("./golden")
 	require.NoError(t, err)
 	t.Run("SpawnArguments", func(t *testing.T) {
