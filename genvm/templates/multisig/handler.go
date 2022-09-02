@@ -128,22 +128,6 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 	return &ms, nil
 }
 
-// Init wallet.
-func (h *handler) Init(method uint8, args any, state []byte) (core.Template, error) {
-	if method == methodSpawn {
-		return &MultiSig{
-			PublicKeys: args.(*SpawnArguments).PublicKeys,
-			k:          h.k,
-		}, nil
-	}
-	decoder := scale.NewDecoder(bytes.NewReader(state))
-	ms := MultiSig{k: h.k}
-	if _, err := ms.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w: malformed state %s", core.ErrInternal, err.Error())
-	}
-	return &ms, nil
-}
-
 // Exec spawn or spend based on the method selector.
 func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
