@@ -16,14 +16,7 @@ func (t *DrainVaultArguments) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Receiver[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Amount))
+		n, err := t.SpendArguments.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -41,19 +34,11 @@ func (t *DrainVaultArguments) DecodeScale(dec *scale.Decoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Receiver[:])
+		n, err := t.SpendArguments.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Amount = uint64(field)
 	}
 	return total, nil
 }

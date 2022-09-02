@@ -12,8 +12,3 @@ func (v *Vesting) MaxSpend(method uint8, args any) (uint64, error) {
 	}
 	return v.Template.MaxSpend(method, args)
 }
-
-// Spend transfers an amount to the address specified in SpendArguments.
-func (v *Vesting) Spend(ctx *core.Context, args *SpendArguments) error {
-	return ctx.Transfer(args.Destination, args.Amount)
-}

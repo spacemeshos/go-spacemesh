@@ -34,10 +34,10 @@ func DrainVault(ref uint8, pk ed25519.PrivateKey, principal, vault, receiver typ
 	payload.GasPrice = options.GasPrice
 
 	args := vesting.DrainVaultArguments{
-		Vault:    vault,
-		Receiver: receiver,
-		Amount:   amount,
+		Vault: vault,
 	}
+	args.Destination = receiver
+	args.Amount = amount
 
 	method := scale.U8(vesting.MethodDrainVault)
 	tx := sdk.Encode(&sdk.TxVersion, &principal, &method, &payload, &args)

@@ -28,13 +28,14 @@ const (
 	TotalGasSpend1 = multisig.TotalGasSpend1
 	TotalGasSpend2 = multisig.TotalGasSpend2
 	TotalGasSpend3 = multisig.TotalGasSpend3
+
+	TotalGasDrainVault1 = 100
+	TotalGasDrainVault2 = 200
+	TotalGasDrainVault3 = 300
 )
 
 // MethodDrainVault is used to relay a call to drain a vault.
 const MethodDrainVault = 17
-
-// FixedGasDrainVault is a fixed gas for drain_vault method
-const FixedGasDrainVault = 100
 
 func init() {
 	TemplateAddress1[len(TemplateAddress1)-1] = 5
@@ -45,18 +46,22 @@ func init() {
 // Register vesting templates.
 func Register(reg *registry.Registry) {
 	reg.Register(TemplateAddress1, &handler{
-		multisig: multisig.NewHandler(TemplateAddress1, 1, multisig.TotalGasSpawn1, multisig.TotalGasSpend1),
+		multisig:      multisig.NewHandler(TemplateAddress1, 1, multisig.TotalGasSpawn1, multisig.TotalGasSpend1),
+		drainVaultGas: TotalGasDrainVault1,
 	})
 	reg.Register(TemplateAddress2, &handler{
-		multisig: multisig.NewHandler(TemplateAddress2, 2, multisig.TotalGasSpawn2, multisig.TotalGasSpend2),
+		multisig:      multisig.NewHandler(TemplateAddress2, 2, multisig.TotalGasSpawn2, multisig.TotalGasSpend2),
+		drainVaultGas: TotalGasDrainVault2,
 	})
 	reg.Register(TemplateAddress3, &handler{
-		multisig: multisig.NewHandler(TemplateAddress3, 3, multisig.TotalGasSpawn3, multisig.TotalGasSpend3),
+		multisig:      multisig.NewHandler(TemplateAddress3, 3, multisig.TotalGasSpawn3, multisig.TotalGasSpend3),
+		drainVaultGas: TotalGasDrainVault3,
 	})
 }
 
 type handler struct {
-	multisig core.Handler
+	multisig      core.Handler
+	drainVaultGas uint64
 }
 
 // Parse header and arguments.
@@ -69,7 +74,7 @@ func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (o
 		}
 		output.GasPrice = p.GasPrice
 		output.Nonce = p.Nonce
-		output.FixedGas = FixedGasDrainVault
+		output.FixedGas = h.drainVaultGas
 		return output, nil
 	}
 	return h.multisig.Parse(host, method, decoder)
@@ -78,20 +83,20 @@ func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (o
 // New instatiates vesting state, note that the state is the same as multisig.
 // The difference is that vesting supports one more transaction type.
 func (h *handler) New(args any) (core.Template, error) {
-	instance, err := h.multisig.New(args)
+	template, err := h.multisig.New(args)
 	if err != nil {
 		return nil, err
 	}
-	return &Vesting{Template: instance}, nil
+	return &Vesting{Template: template}, nil
 }
 
 // Load instnatiates vesting state from stored state. See comment on New.
 func (h *handler) Load(state []byte) (core.Template, error) {
-	instance, err := h.multisig.Load(state)
+	template, err := h.multisig.Load(state)
 	if err != nil {
 		return nil, err
 	}
-	return &Vesting{Template: instance}, nil
+	return &Vesting{Template: template}, nil
 }
 
 // Exec spawn or spend based on the method selector.
@@ -100,7 +105,7 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 		drain := args.(*DrainVaultArguments)
 		return host.Relay(vault.TemplateAddress, drain.Vault, func(host core.Host) error {
 			return host.Handler().Exec(host, vault.MethodSpend, &vault.SpendArguments{
-				Destination: drain.Receiver,
+				Destination: drain.Destination,
 				Amount:      drain.Amount,
 			})
 		})

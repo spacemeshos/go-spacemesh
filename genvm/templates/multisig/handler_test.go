@@ -22,7 +22,7 @@ func TestKeysLimits(t *testing.T) {
 					handler := reg.Get(address)
 					args := SpawnArguments{PublicKeys: make([]core.PublicKey, n)}
 					ctx := core.Context{}
-					ctx.Account.Balance = 1_000_000
+					ctx.PrincipalAccount.Balance = 1_000_000
 					ctx.Header.GasPrice = 1
 					ctx.Header.MaxGas = 1_000_000
 					ctx.Header.Principal = core.ComputePrincipal(address, &args)
