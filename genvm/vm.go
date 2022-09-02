@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -52,6 +54,8 @@ func New(db *sql.Database, opts ...Opt) *VM {
 	}
 	wallet.Register(vm.registry)
 	multisig.Register(vm.registry)
+	vesting.Register(vm.registry)
+	vault.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}
@@ -283,6 +287,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		req := &Request{
 			vm:      v,
 			cache:   ss,
+			lid:     lctx.Layer,
 			raw:     txs[i].GetRaw(),
 			decoder: decoder,
 		}
@@ -400,6 +405,7 @@ type Request struct {
 	vm    *VM
 	cache *core.StagedCache
 
+	lid     types.LayerID
 	raw     types.RawTx
 	decoder *scale.Decoder
 
@@ -411,7 +417,7 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.vm.cfg.StorageCostFactor, r.raw.Raw, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg.StorageCostFactor, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +438,7 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, storageCost uint64, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, storageCost uint64, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
@@ -459,6 +465,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 		Registry:         reg,
 		Loader:           loader,
 		PrincipalAccount: account,
+		LayerID:          lid,
 	}
 
 	if account.Template != nil {

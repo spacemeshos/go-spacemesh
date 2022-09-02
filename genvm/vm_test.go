@@ -16,8 +16,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	sdkmultisig "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
+	sdkvesting "github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
 	sdkwallet "github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -183,6 +186,77 @@ func (a *multisigAccount) spawnGas() int {
 	panic("unknown template")
 }
 
+type vestingAccount struct {
+	multisigAccount
+}
+
+func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64, nonce core.Nonce) []byte {
+	agg := sdkvesting.DrainVault(0, a.pks[0], a.address, vault, recipient, amount, nonce)
+	for i := 1; i < a.k; i++ {
+		part := sdkvesting.DrainVault(uint8(i), a.pks[i], a.address, vault, recipient, amount, nonce)
+		agg.Add(*part.Part(uint8(i)))
+	}
+	return agg.Raw()
+}
+
+func (a *vestingAccount) drainGas() int {
+	switch a.template {
+	case vesting.TemplateAddress1:
+		return vesting.TotalGasDrainVault1
+	case vesting.TemplateAddress2:
+		return vesting.TotalGasDrainVault2
+	case vesting.TemplateAddress3:
+		return vesting.TotalGasDrainVault3
+	}
+	panic("unknown template")
+}
+
+type vaultAccount struct {
+	address core.Address
+
+	owner                      core.Address
+	vestingStart, vestingEnd   core.LayerID
+	totalAmount, initialUnlock uint64
+}
+
+func (a *vaultAccount) getTemplate() core.Address {
+	return vault.TemplateAddress
+}
+
+func (a *vaultAccount) getAddress() core.Address {
+	return a.address
+}
+
+func (a *vaultAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
+	return nil
+}
+
+func (a *vaultAccount) selfSpawn(nonce core.Nonce) []byte {
+	return nil
+}
+
+func (a *vaultAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte {
+	return nil
+}
+
+func (a *vaultAccount) spawnArgs() scale.Encodable {
+	return &vault.SpawnArguments{
+		Owner:               a.owner,
+		TotalAmount:         a.totalAmount,
+		InitialUnlockAmount: a.initialUnlock,
+		VestingStart:        a.vestingStart,
+		VestingEnd:          a.vestingEnd,
+	}
+}
+
+func (a *vaultAccount) spawnGas() int {
+	return 0
+}
+
+func (a *vaultAccount) spendGas() int {
+	return 0
+}
+
 type tester struct {
 	testing.TB
 	*VM
@@ -210,33 +284,63 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 	return t
 }
 
+func (t *tester) addAccount(account testAccount) {
+	t.accounts = append(t.accounts, account)
+	t.nonces = append(t.nonces, core.Nonce{})
+}
+
 func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		t.accounts = append(t.accounts, &singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
-		t.nonces = append(t.nonces, core.Nonce{})
+		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
 	}
 	return t
 }
 
+func (t *tester) createMultisig(k, n int, template core.Address) *multisigAccount {
+	pks := []ed25519.PrivateKey{}
+	pubs := [][]byte{}
+	for j := 0; j < n; j++ {
+		pub, pk, err := ed25519.GenerateKey(t.rng)
+		require.NoError(t, err)
+		pks = append(pks, pk)
+		pubs = append(pubs, pub)
+	}
+	return &multisigAccount{
+		k:        k,
+		pks:      pks,
+		address:  sdkmultisig.Address(template, pubs...),
+		template: template,
+	}
+}
+
 func (t *tester) addMultisig(total, k, n int, template core.Address) *tester {
 	for i := 0; i < total; i++ {
-		pks := []ed25519.PrivateKey{}
-		pubs := [][]byte{}
-		for j := 0; j < n; j++ {
-			pub, pk, err := ed25519.GenerateKey(t.rng)
-			require.NoError(t, err)
-			pks = append(pks, pk)
-			pubs = append(pubs, pub)
+		t.addAccount(t.createMultisig(k, n, template))
+	}
+	return t
+}
+
+func (t *tester) addVesting(total int, k, n int, template core.Address) *tester {
+	for i := 0; i < total; i++ {
+		ms := t.createMultisig(k, n, template)
+		t.addAccount(&vestingAccount{*ms})
+	}
+	return t
+}
+
+func (t *tester) addVault(owners int, totalAmount, initialUnlock uint64, start, end types.LayerID) *tester {
+	for i := 0; i < owners; i++ {
+		account := &vaultAccount{
+			owner:         t.accounts[i].getAddress(),
+			totalAmount:   totalAmount,
+			initialUnlock: initialUnlock,
+			vestingStart:  start,
+			vestingEnd:    end,
 		}
-		t.accounts = append(t.accounts, &multisigAccount{
-			k:        k,
-			pks:      pks,
-			address:  sdkmultisig.Address(template, pubs...),
-			template: template,
-		})
-		t.nonces = append(t.nonces, core.Nonce{})
+		account.address = core.ComputePrincipal(account.getTemplate(), account.spawnArgs())
+		t.addAccount(account)
 	}
 	return t
 }
@@ -338,6 +442,17 @@ func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) i
 	return t.accounts[principal].spendGas() + len(t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce))*int(t.VM.cfg.StorageCostFactor)
 }
 
+func (t *tester) estimateDrainGas(principal, vault, to, amount int, nonce core.Nonce) int {
+	require.IsType(t, t.accounts[principal], &vestingAccount{})
+	vestacc := t.accounts[principal].(*vestingAccount)
+	return vestacc.drainGas() + len(vestacc.drainVault(
+		t.accounts[vault].getAddress(),
+		t.accounts[to].getAddress(),
+		uint64(amount),
+		nonce),
+	)*int(t.VM.cfg.StorageCostFactor)
+}
+
 func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {
 	tb.Helper()
 
@@ -381,6 +496,23 @@ func (tx *spendTx) gen(t *tester) types.RawTx {
 
 func (tx spendTx) withNonce(nonce core.Nonce) *spendNonce {
 	return &spendNonce{spendTx: tx, nonce: nonce}
+}
+
+type drainVault struct {
+	owner, vault, recipient int
+	amount                  uint64
+}
+
+func (tx *drainVault) gen(t *tester) types.RawTx {
+	require.IsType(t, t.accounts[tx.owner], &vestingAccount{})
+	vestacc := t.accounts[tx.owner].(*vestingAccount)
+	nonce := t.nextNonce(tx.owner)
+	return types.NewRawTx(vestacc.drainVault(
+		t.accounts[tx.vault].getAddress(),
+		t.accounts[tx.recipient].getAddress(),
+		tx.amount,
+		nonce,
+	))
 }
 
 type corruptSig struct {
@@ -1147,9 +1279,9 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				for i, rst := range results {
 					expected, exists := layer.failed[i]
 					if !exists {
-						require.Equal(t, types.TransactionSuccess.String(), rst.Status.String())
+						require.Equal(t, types.TransactionSuccess.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
 					} else {
-						require.Equal(t, types.TransactionFailure.String(), rst.Status.String())
+						require.Equal(t, types.TransactionFailure.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
 						require.Equal(t, expected.Error(), rst.Message)
 					}
 				}
@@ -1413,6 +1545,195 @@ func TestSpawnOtherTemplate(t *testing.T) {
 				applyGenesis()
 		})
 	})
+}
+
+func TestVestingWithVault(t *testing.T) {
+	const (
+		initial = 1_000
+		total   = 11_000
+		start   = 2
+		end     = 4
+
+		balance         = 1_000_000_000
+		defaultGasPrice = 1
+
+		vestingAccounts = 20 // number of funded vesting accounts
+		vaultAccounts   = 10 // number of funded vault accounts
+
+		// in the test below
+		// vesting with funds:  [0 : 20)
+		// vesting with vaults: [0 : 10)
+		// vault accounts:      [20 : 30)
+	)
+	var (
+		vestingTemplate = vesting.TemplateAddress1
+		vaultTemplate   = vault.TemplateAddress
+	)
+
+	genTester := func(t *testing.T) *tester {
+		return newTester(t).
+			addVesting(vestingAccounts, 1, 2, vestingTemplate).
+			addVault(10, total, initial, types.NewLayerID(start), types.NewLayerID(end)).
+			applyGenesis()
+	}
+	ref := genTester(t)
+	tcs := []templateTestCase{
+		{
+			desc: "sanity",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTx{0, 20},
+					},
+					expected: map[int]change{
+						0:  spawned{template: vestingTemplate},
+						20: spawned{template: vaultTemplate},
+					},
+				},
+				{
+					txs: []testTx{
+						&drainVault{0, 20, 11, 500},
+					},
+					expected: map[int]change{
+						0:  spent{amount: ref.estimateDrainGas(0, 20, 11, 500, core.Nonce{Counter: 2})},
+						20: spent{amount: 500},
+						11: earned{amount: 500},
+					},
+				},
+			},
+		},
+		{
+			desc: "owner is not overwritten by principal",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&selfSpawnTx{1},
+						// 20 is owned by 0, so drain vault wont work for 1
+						&spawnTx{1, 20},
+					},
+					expected: map[int]change{
+						0:  spawned{template: vestingTemplate},
+						1:  spawned{template: vestingTemplate},
+						20: spawned{template: vaultTemplate},
+					},
+				},
+				{
+					txs: []testTx{
+						&drainVault{
+							owner: 1, vault: 20, recipient: 11,
+							amount: 100,
+						},
+					},
+					failed: map[int]error{
+						0: vault.ErrNotOwner,
+					},
+					expected: map[int]change{
+						0: same{},
+						1: spent{
+							amount: ref.estimateDrainGas(1, 20, 11, 100, core.Nonce{Counter: 1}),
+							change: nonce{increased: 1},
+						},
+						11: same{},
+						20: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "dont transfer more than available",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTx{0, 20},
+						&drainVault{0, 20, 11, 500},
+					},
+					failed: map[int]error{
+						2: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						0:  spawned{template: vestingTemplate},
+						20: spawned{template: vaultTemplate},
+					},
+				},
+				{
+					txs: []testTx{
+						&drainVault{
+							owner: 0, vault: 20, recipient: 11,
+							amount: 1001,
+						},
+						&drainVault{
+							owner: 0, vault: 20, recipient: 11,
+							amount: 1000,
+						},
+						&drainVault{
+							owner: 0, vault: 20, recipient: 11,
+							amount: 1000,
+						},
+					},
+					failed: map[int]error{
+						0: vault.ErrAmountNotAvailable,
+						2: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: ref.estimateDrainGas(0, 20, 11, 1001, core.Nonce{Counter: 3}) +
+								ref.estimateDrainGas(0, 20, 11, 1000, core.Nonce{Counter: 4}) +
+								ref.estimateDrainGas(0, 20, 11, 1000, core.Nonce{Counter: 5}),
+						},
+						11: earned{amount: 1000},
+						20: spent{amount: 1000},
+					},
+				},
+				{
+					txs: []testTx{
+						&drainVault{
+							owner: 0, vault: 20, recipient: 10,
+							amount: 10000,
+						},
+						&drainVault{
+							owner: 0, vault: 20, recipient: 10,
+							amount: 5000,
+						},
+					},
+					failed: map[int]error{
+						0: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateDrainGas(0, 20, 10, 10000, core.Nonce{Counter: 5}) +
+							ref.estimateDrainGas(0, 20, 10, 5000, core.Nonce{Counter: 6})},
+						10: earned{amount: 5000},
+						20: spent{amount: 5000},
+					},
+				},
+				{}, // note the layer without transactions
+				{
+					txs: []testTx{
+						&drainVault{
+							owner: 0, vault: 20, recipient: 9,
+							amount: 5001,
+						},
+						&drainVault{
+							owner: 0, vault: 20, recipient: 9,
+							amount: 5000,
+						},
+					},
+					failed: map[int]error{
+						0: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateDrainGas(0, 20, 9, 5001, core.Nonce{Counter: 7}) +
+							ref.estimateDrainGas(0, 20, 9, 5000, core.Nonce{Counter: 8})},
+						9:  earned{amount: 5000},
+						20: spent{amount: 5000},
+					},
+				},
+			},
+		},
+	}
+	runTestCases(t, tcs, genTester)
 }
 
 func TestValidation(t *testing.T) {

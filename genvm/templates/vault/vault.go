@@ -5,11 +5,14 @@ import (
 	"math/big"
 
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
 var (
-	ErrNotOwner           = errors.New("vault: not an owner")
+	// ErrNotOwner is raised if Spend is not executed by a principal that matches owner.
+	ErrNotOwner = errors.New("vault: not an owner")
+	// ErrAmountNotAvailable if Spend overlows available amount (see method with the same name).
 	ErrAmountNotAvailable = errors.New("vault: amount not available")
 )
 
@@ -37,7 +40,7 @@ func (v *Vault) available(lid core.LayerID) uint64 {
 		return v.TotalAmount
 	}
 	incremental := new(big.Int).SetUint64(v.TotalAmount - v.InitialUnlockAmount)
-	incremental.Sub(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
+	incremental.Mul(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
 	incremental.Div(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
 	return v.InitialUnlockAmount + incremental.Uint64()
 }
@@ -47,7 +50,8 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 	if !v.isOwner(host.Principal()) {
 		return ErrNotOwner
 	}
-	if available := v.available(host.Layer()) - v.DrainedSoFar; amount > available {
+	available := v.available(host.Layer()) - v.DrainedSoFar
+	if amount > available {
 		return ErrAmountNotAvailable
 	}
 	if err := host.Transfer(to, amount); err != nil {

@@ -48,10 +48,12 @@ func (c *Context) Layer() LayerID {
 	return c.LayerID
 }
 
+// Template of the principal account.
 func (c *Context) Template() Template {
 	return c.PrincipalTemplate
 }
 
+// Handler of the principal account.
 func (c *Context) Handler() Handler {
 	return c.PrincipalHandler
 }
@@ -136,18 +138,13 @@ func (c *Context) Relay(expectedTemplate, address Address, call func(Host) error
 	}
 	handler := c.Registry.Get(expectedTemplate)
 	if handler == nil {
-		panic("account that was spawned with a specific tempalte, should exist in the registry")
+		panic("account that was spawned with a specific template, should exist in the registry")
 	}
 	template, err := handler.Load(account.State)
 	if err != nil {
 		return err
 	}
 
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	if _, err := template.EncodeScale(encoder); err != nil {
-		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
-	}
 	remote := &RemoteContext{
 		Context:  c,
 		remote:   account,
@@ -160,6 +157,11 @@ func (c *Context) Relay(expectedTemplate, address Address, call func(Host) error
 	// ideally such changes would be serialized once for the whole block execution
 	// but it requires more changes in the cache, so can be done as an optimization
 	// if it proves meaningful (most likely wont)
+	buf := bytes.NewBuffer(nil)
+	encoder := scale.NewEncoder(buf)
+	if _, err := template.EncodeScale(encoder); err != nil {
+		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+	}
 	account.State = buf.Bytes()
 	c.change(account)
 	return nil
@@ -258,13 +260,9 @@ func (r *RemoteContext) Handler() Handler {
 
 // Transfer ...
 func (r *RemoteContext) Transfer(to Address, amount uint64) error {
-	account, err := r.load(to)
-	if err != nil {
+	if err := r.transfer(r.remote, to, amount, r.remote.Balance); err != nil {
 		return err
 	}
-	if err := r.transfer(account, to, amount, account.Balance); err != nil {
-		return err
-	}
-	r.change(account)
+	r.change(r.remote)
 	return nil
 }
