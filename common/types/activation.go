@@ -173,6 +173,8 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) {
 // the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
+	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
+	// It can be used in proving to other nodes that a malicious party created more ATXs than they would are allowed to.
 	Sequence           uint64
 	PrevATXID          ATXID
 	PubLayerID         LayerID
