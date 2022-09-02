@@ -58,8 +58,6 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 func (t *TimeClock) startClock() error {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.genesis, t)
 
-	tmr := time.NewTimer(0)
-	defer tmr.Stop()
 	for {
 		currLayer := t.Ticker.TimeToLayer(t.clock.Now()) // get current layer
 		nextLayer := currLayer.Add(1)
@@ -68,13 +66,14 @@ func (t *TimeClock) startClock() error {
 		}
 		nextTickTime := t.Ticker.LayerToTime(nextLayer) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
-		tmr.Reset(diff)
 		t.log.With().Info("global clock going to sleep before next layer",
 			log.String("diff", diff.String()),
 			log.FieldNamed("curr_layer", currLayer),
 			log.FieldNamed("next_layer", nextLayer))
+		tmr := time.NewTimer(diff)
 		select {
 		case <-tmr.C:
+			tmr.Stop()
 			t.mu.Lock()
 			subscriberCount := len(t.subscribers)
 			t.mu.Unlock()
@@ -90,6 +89,7 @@ func (t *TimeClock) startClock() error {
 					log.Int("missed", missed))
 			}
 		case <-t.stop:
+			tmr.Stop()
 			t.log.Info("stopping global clock %p", t)
 			return nil
 		}
