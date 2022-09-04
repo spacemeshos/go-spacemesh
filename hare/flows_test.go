@@ -504,6 +504,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
 	var outputsWaitGroup sync.WaitGroup
+	var outputsMu sync.Mutex
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
@@ -520,10 +521,12 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		go func(idx int) {
 			defer outputsWaitGroup.Done()
 			for out := range h.blockGenCh {
+				outputsMu.Lock()
 				if outputs[idx] == nil {
 					outputs[idx] = make(map[types.LayerID]LayerOutput)
 				}
 				outputs[idx][out.Layer] = out
+				outputsMu.Unlock()
 			}
 		}(i)
 		h.newRoundClock = src.NewRoundClock
