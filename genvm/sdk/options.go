@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
