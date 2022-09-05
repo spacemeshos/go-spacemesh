@@ -33,12 +33,19 @@ type handler struct{}
 
 // Parse is noop on vault template.
 func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (core.ParseOutput, error) {
-	return core.ParseOutput{}, nil
+	return core.ParseOutput{}, core.ErrMalformed
 }
 
 // New instantiates vault state.
 func (h *handler) New(args any) (core.Template, error) {
 	spawn := args.(*SpawnArguments)
+	if spawn.InitialUnlockAmount > spawn.TotalAmount {
+		return nil, fmt.Errorf("initial %d should be less or equal to total %d", spawn.InitialUnlockAmount, spawn.TotalAmount)
+	}
+	if spawn.VestingEnd.Before(spawn.VestingStart) {
+		return nil, fmt.Errorf("vesting end %s should be atleast equal to start %s",
+			spawn.VestingEnd, spawn.VestingStart)
+	}
 	return &Vault{
 		Owner:               spawn.Owner,
 		TotalAmount:         spawn.TotalAmount,

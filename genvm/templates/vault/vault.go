@@ -63,7 +63,7 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 
 // MaxSpend is noop for this template type, principal of this account type can't submit transactions.
 func (v *Vault) MaxSpend(uint8, any) (uint64, error) {
-	return 0, nil
+	return 0, core.ErrMalformed
 }
 
 // Verify always returns false.

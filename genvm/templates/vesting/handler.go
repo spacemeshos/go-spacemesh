@@ -104,10 +104,7 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 	if method == MethodDrainVault {
 		drain := args.(*DrainVaultArguments)
 		return host.Relay(vault.TemplateAddress, drain.Vault, func(host core.Host) error {
-			return host.Handler().Exec(host, vault.MethodSpend, &vault.SpendArguments{
-				Destination: drain.Destination,
-				Amount:      drain.Amount,
-			})
+			return host.Handler().Exec(host, vault.MethodSpend, &drain.SpendArguments)
 		})
 	}
 	return h.multisig.Exec(host, method, args)
