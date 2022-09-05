@@ -377,11 +377,11 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
-	verified, err := h.SyntacticallyValidateAtx(ctx, atx)
+	vAtx, err := h.SyntacticallyValidateAtx(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}
-	err = h.ProcessAtx(ctx, verified)
+	err = h.ProcessAtx(ctx, vAtx)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
