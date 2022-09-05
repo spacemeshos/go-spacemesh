@@ -92,12 +92,12 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 }
 
 func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
-	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) {
-		atx.Verify(0, 1)
+	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) *types.VerifiedActivationTx {
+		return atx.Verify(0, 1)
 	})
 }
 
-func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx)) ([]*signing.EdSigner, []*types.ActivationTx) {
+func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx) *types.VerifiedActivationTx) ([]*signing.EdSigner, []*types.ActivationTx) {
 	t.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
@@ -115,9 +115,9 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 		activation.SignAtx(signer, atx)
 		atx.CalcAndSetID()
 		atx.CalcAndSetNodeID()
-		onAtx(atx)
+		vAtx := onAtx(atx)
 
-		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
@@ -341,12 +341,12 @@ func Test_generateBlock_UnequalHeight(t *testing.T) {
 	numProposals := 10
 	rng := rand.New(rand.NewSource(10101))
 	max := uint64(0)
-	signers, atxes := createModifiedATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) {
+	signers, atxes := createModifiedATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) *types.VerifiedActivationTx {
 		n := rng.Uint64()
-		atx.Verify(n, 1)
 		if n > max {
 			max = n
 		}
+		return atx.Verify(n, 1)
 	})
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.cdb, layerID, signers, activeSet, nil)

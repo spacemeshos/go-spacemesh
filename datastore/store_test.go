@@ -41,7 +41,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 
 	_, err = bs.Get(ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, atxs.Add(db, atx, time.Now()))
+	require.NoError(t, atxs.Add(db, atx.Verify(0, 1), time.Now()))
 	got, err := bs.Get(ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
 	var gotA types.ActivationTx

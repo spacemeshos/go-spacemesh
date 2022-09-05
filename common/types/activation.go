@@ -111,9 +111,6 @@ type ActivationTxHeader struct {
 
 	nodeID *NodeID // the id of the Node that created the ATX (public key)
 
-	// TODO(dshulyak) this is important to prevent accidental state reads
-	// before this field is set. reading empty data could lead to disastrous bugs.
-	verified       bool
 	baseTickHeight uint64
 	tickCount      uint64
 }
@@ -165,13 +162,6 @@ func (atxh *ActivationTxHeader) TickHeight() uint64 {
 	return atxh.baseTickHeight + atxh.tickCount
 }
 
-// Verify sets field extract after verification.
-func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
-	atxh.verified = true
-	atxh.baseTickHeight = baseTickHeight
-	atxh.tickCount = tickCount
-}
-
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
 // PoET membership proof. It includes ATX sequence number, the previous ATX's ID (for all but the first in the sequence),
 // the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
@@ -221,12 +211,6 @@ type InnerActivationTx struct {
 	id *ATXID // non-exported cache of the ATXID
 
 	nodeID *NodeID // the id of the Node that created the ATX (public key)
-
-	// TODO(dshulyak) this is important to prevent accidental state reads
-	// before this field is set. reading empty data could lead to disastrous bugs.
-	verified       bool
-	baseTickHeight uint64
-	tickCount      uint64
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -274,11 +258,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", uint32(atx.PubLayerID.GetEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	encoder.AddUint64("sequence_number", atx.Sequence)
-	if atx.verified {
-		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
-		encoder.AddUint64("tick_count", atx.tickCount)
-		encoder.AddUint64("weight", atx.GetWeight())
-	}
 	return nil
 }
 
@@ -325,10 +304,6 @@ func (atx *ActivationTx) Header() *ActivationTxHeader {
 
 		id:     atx.id,
 		nodeID: atx.nodeID,
-
-		verified:       atx.verified,
-		baseTickHeight: atx.baseTickHeight,
-		tickCount:      atx.tickCount,
 	}
 }
 
@@ -369,32 +344,80 @@ func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
 	atx.nodeID = nodeID
 }
 
+// Verify an ATX for a given base TickHeight and TickCount.
+func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) *VerifiedActivationTx {
+	// TODO(mafa): should we also invoke calcAndSetID() as well as calcAndSetNodeID() here? maybe after checking that all required fields are set?
+	return &VerifiedActivationTx{
+		ActivationTx: atx,
+
+		baseTickHeight: baseTickHeight,
+		tickCount:      tickCount,
+	}
+}
+
+type VerifiedActivationTx struct {
+	*ActivationTx
+
+	baseTickHeight uint64
+	tickCount      uint64
+}
+
 // GetWeight of the atx.
-func (atx *ActivationTx) GetWeight() uint64 {
-	return uint64(atx.NumUnits) * (atx.tickCount)
+func (vatx *VerifiedActivationTx) GetWeight() uint64 {
+	return uint64(vatx.NumUnits) * (vatx.tickCount)
 }
 
 // BaseTickHeight is a tick height of the positional atx.
-func (atx *ActivationTx) BaseTickHeight() uint64 {
-	return atx.baseTickHeight
+func (vatx *VerifiedActivationTx) BaseTickHeight() uint64 {
+	return vatx.baseTickHeight
 }
 
 // TickCount returns tick count from from poet proof attached to the atx.
-func (atx *ActivationTx) TickCount() uint64 {
-	return atx.tickCount
+func (vatx *VerifiedActivationTx) TickCount() uint64 {
+	return vatx.tickCount
 }
 
 // TickHeight returns a sum of base tick height and tick count.
-func (atx *ActivationTx) TickHeight() uint64 {
-	return atx.baseTickHeight + atx.tickCount
+func (vatx *VerifiedActivationTx) TickHeight() uint64 {
+	return vatx.baseTickHeight + vatx.tickCount
 }
 
-// Verify sets field extract after verification.
-// TODO(mafa): remove me after refactor
-func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) {
-	atx.verified = true
-	atx.baseTickHeight = baseTickHeight
-	atx.tickCount = tickCount
+func (vatx *VerifiedActivationTx) Header() *ActivationTxHeader {
+	return &ActivationTxHeader{
+		NIPostChallenge: vatx.NIPostChallenge,
+		Coinbase:        vatx.Coinbase,
+		NumUnits:        vatx.NumUnits,
+
+		id:     vatx.id,
+		nodeID: vatx.nodeID,
+
+		baseTickHeight: vatx.baseTickHeight,
+		tickCount:      vatx.tickCount,
+	}
+}
+
+// MarshalLogObject implements logging interface.
+func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if vatx.InitialPost != nil {
+		encoder.AddString("nipost", vatx.InitialPost.String())
+	}
+	h, err := vatx.NIPostChallenge.Hash()
+	if err == nil && h != nil {
+		encoder.AddString("challenge", h.String())
+	}
+	encoder.AddString("id", vatx.id.String())
+	encoder.AddString("sender_id", vatx.nodeID.String())
+	encoder.AddString("prev_atx_id", vatx.PrevATXID.String())
+	encoder.AddString("pos_atx_id", vatx.PositioningATX.String())
+	encoder.AddString("coinbase", vatx.Coinbase.String())
+	encoder.AddUint32("pub_layer_id", vatx.PubLayerID.Value)
+	encoder.AddUint32("epoch", uint32(vatx.PubLayerID.GetEpoch()))
+	encoder.AddUint64("num_units", uint64(vatx.NumUnits))
+	encoder.AddUint64("sequence_number", vatx.Sequence)
+	encoder.AddUint64("base_tick_height", vatx.baseTickHeight)
+	encoder.AddUint64("tick_count", vatx.tickCount)
+	encoder.AddUint64("weight", vatx.GetWeight())
+	return nil
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration

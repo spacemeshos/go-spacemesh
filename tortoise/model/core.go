@@ -135,16 +135,16 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
-		atx.Verify(1, 2)
 		activation.SignAtx(c.signer, atx)
 		atx.CalcAndSetID()
 		atx.CalcAndSetNodeID()
+		vAtx := atx.Verify(1, 2)
 
 		c.refBallot = nil
-		c.atx = atx.ID()
-		c.weight = atx.GetWeight()
+		c.atx = vAtx.ID()
+		c.weight = vAtx.GetWeight()
 
-		m.Send(MessageAtx{Atx: atx})
+		m.Send(MessageAtx{Atx: vAtx})
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {

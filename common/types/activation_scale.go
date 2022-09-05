@@ -7,6 +7,57 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
+func (t *ActivationTxHeader) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.NIPostChallenge.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Coinbase[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.NumUnits))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *ActivationTxHeader) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.NIPostChallenge.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Coinbase[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NumUnits = uint32(field)
+	}
+	return total, nil
+}
+
 func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
@@ -201,6 +252,29 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Sig = field
+	}
+	return total, nil
+}
+
+func (t *VerifiedActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.ActivationTx)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *VerifiedActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeOption[ActivationTx](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ActivationTx = field
 	}
 	return total, nil
 }

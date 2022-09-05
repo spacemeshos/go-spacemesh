@@ -210,8 +210,8 @@ type (
 	baseBallotProvider func(context.Context, ...EncodeVotesOpts) (*types.Votes, error)
 )
 
-func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
-	atxList := make([]*types.ActivationTx, 0, numATXs)
+func genATXs(lid types.LayerID, numATXs, weight int) []*types.VerifiedActivationTx {
+	atxList := make([]*types.VerifiedActivationTx, 0, numATXs)
 	for i := 0; i < numATXs; i++ {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NumUnits: uint32(weight),
@@ -221,8 +221,7 @@ func genATXs(lid types.LayerID, numATXs, weight int) []*types.ActivationTx {
 		atx.SetNodeID(&nodeID)
 		atxID := types.RandomATXID()
 		atx.SetID(&atxID)
-		atx.Verify(0, 1)
-		atxList = append(atxList, atx)
+		atxList = append(atxList, atx.Verify(0, 1))
 	}
 	return atxList
 }
@@ -1296,8 +1295,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				id := types.RandomATXID()
 				atx.SetID(&id)
 				atx.SetNodeID(&types.NodeID{})
-				atx.Verify(0, 1)
-				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
@@ -2289,8 +2287,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
-				atx.Verify(0, 1)
-				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+				require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
 				atxids = append(atxids, atxID)
 			}
 

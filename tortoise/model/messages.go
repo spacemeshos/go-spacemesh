@@ -29,7 +29,7 @@ type (
 
 	// MessageAtx is an event producing an atx.
 	MessageAtx struct {
-		Atx *types.ActivationTx
+		Atx *types.VerifiedActivationTx
 	}
 
 	// MessageBallot is an event for ballots.

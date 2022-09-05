@@ -10,24 +10,24 @@ import (
 )
 
 // Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
+func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
-		var v types.ActivationTx
+		var v types.VerifiedActivationTx
 		if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(0), &v); decodeErr != nil {
 			atx, err = nil, fmt.Errorf("decode %w", decodeErr)
 			return true
 		}
-		baseTickHeight := uint64(stmt.ColumnInt64(1))
-		tickCount := uint64(stmt.ColumnInt64(2))
 		v.SetID(&id)
-		v.Verify(baseTickHeight, tickCount)
 		nodeID := types.NodeID{}
 		stmt.ColumnBytes(3, nodeID[:])
 		v.SetNodeID(&nodeID)
-		atx, err = &v, nil
+
+		baseTickHeight := uint64(stmt.ColumnInt64(1))
+		tickCount := uint64(stmt.ColumnInt64(2))
+		atx, err = v.Verify(baseTickHeight, tickCount), nil
 		return true
 	}
 
@@ -157,7 +157,7 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 }
 
 // Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
+func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) error {
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)

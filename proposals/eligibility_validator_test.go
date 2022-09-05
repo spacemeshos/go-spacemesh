@@ -43,8 +43,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	}}
 	atx.SetID(&activeset[0])
 	atx.SetNodeID(&nid)
-	atx.Verify(0, 1)
-	require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+	require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
 
 	for _, id := range activeset[1:] {
 		nodeID := types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes())
@@ -54,10 +53,9 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 			},
 			NumUnits: defaultATXUnit,
 		}}
-		atx.Verify(0, 1)
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
-		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
 	}
 	return activeset
 }
@@ -223,8 +221,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	atx.SetID(&rb.EpochData.ActiveSet[0])
 	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
 	atx.SetNodeID(&nodeID)
-	atx.Verify(0, 1)
-	require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
+	require.NoError(t, atxs.Add(tv.cdb, atx.Verify(0, 1), time.Now()))
 
 	for _, id := range rb.EpochData.ActiveSet[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
@@ -235,8 +232,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
-		atx.Verify(0, 1)
-		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
+		require.NoError(t, atxs.Add(tv.cdb, atx.Verify(0, 1), time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
 	require.ErrorIs(t, err, errTargetEpochMismatch)
@@ -271,8 +267,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 	atx.SetID(&rb.EpochData.ActiveSet[0])
 	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
 	atx.SetNodeID(&nodeID)
-	atx.Verify(0, 1)
-	require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
+	require.NoError(t, atxs.Add(tv.cdb, atx.Verify(0, 1), time.Now()))
 
 	for _, id := range rb.EpochData.ActiveSet[1:] {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
@@ -283,8 +278,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
-		atx.Verify(0, 1)
-		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
+		require.NoError(t, atxs.Add(tv.cdb, atx.Verify(0, 1), time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
 	require.ErrorIs(t, err, ErrZeroTotalWeight)

@@ -108,7 +108,7 @@ func (h *Handler) UnsubscribeAtx(id types.ATXID) {
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
-func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
+func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
 	h.processAtxMutex.Lock()
 	defer h.processAtxMutex.Unlock()
 
@@ -147,58 +147,56 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 //   - The NIPost is valid.
 //   - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 //   - The ATX view of the previous epoch contains ActiveSetSize activations.
-func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error {
-	events.ReportNewActivation(atx)
-
+func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
 	if atx.PositioningATX == *types.EmptyATXID {
-		return fmt.Errorf("empty positioning atx")
+		return nil, fmt.Errorf("empty positioning atx")
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
-			return fmt.Errorf("validation failed: prevATX not found: %v", err)
+			return nil, fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
 
 		if prevATX.NodeID() != atx.NodeID() {
-			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
+			return nil, fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
 				atx.ShortString(), atx.NodeID(), prevATX.NodeID())
 		}
 
 		prevEp := prevATX.PubLayerID.GetEpoch()
 		curEp := atx.PubLayerID.GetEpoch()
 		if prevEp >= curEp {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
 				prevEp, prevATX.PubLayerID, curEp, atx.PubLayerID)
 		}
 
 		if prevATX.Sequence+1 != atx.Sequence {
-			return fmt.Errorf("sequence number is not one more than prev sequence number")
+			return nil, fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
 
 		if atx.InitialPost != nil {
-			return fmt.Errorf("prevATX declared, but initial Post is included")
+			return nil, fmt.Errorf("prevATX declared, but initial Post is included")
 		}
 
 		if atx.InitialPostIndices != nil {
-			return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
+			return nil, fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
-			return fmt.Errorf("no prevATX declared, but sequence number not zero")
+			return nil, fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 
 		if atx.InitialPost == nil {
-			return fmt.Errorf("no prevATX declared, but initial Post is not included")
+			return nil, fmt.Errorf("no prevATX declared, but initial Post is not included")
 		}
 
 		if atx.InitialPostIndices == nil {
-			return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
+			return nil, fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
 		}
 
 		if !bytes.Equal(atx.InitialPost.Indices, atx.InitialPostIndices) {
-			return errors.New("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
+			return nil, fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 		}
 
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
@@ -206,34 +204,32 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
 		if err := h.nipostValidator.ValidatePost(atx.NodeID().ToBytes(), atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
-			return fmt.Errorf("invalid initial Post: %v", err)
+			return nil, fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
 	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
 		posAtx, err := h.cdb.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
-			return fmt.Errorf("positioning atx not found")
+			return nil, fmt.Errorf("positioning atx not found")
 		}
 		if !atx.PubLayerID.After(posAtx.PubLayerID) {
-			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
-				atx.PubLayerID, posAtx.PubLayerID)
+			return nil, fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)", atx.PubLayerID, posAtx.PubLayerID)
 		}
 		if d := atx.PubLayerID.Difference(posAtx.PubLayerID); d > h.layersPerEpoch {
-			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
-				h.layersPerEpoch, d)
+			return nil, fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v", h.layersPerEpoch, d)
 		}
 		baseTickHeight = posAtx.TickHeight()
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
 		if !publicationEpoch.NeedsGoldenPositioningATX() {
-			return fmt.Errorf("golden atx used for atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
+			return nil, fmt.Errorf("golden atx used for atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
 	}
 
 	expectedChallengeHash, err := atx.NIPostChallenge.Hash()
 	if err != nil {
-		return fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
+		return nil, fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
 	}
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
@@ -241,10 +237,14 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	pubKey := signing.NewPublicKey(atx.NodeID().ToBytes())
 	leaves, err := h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
-		return fmt.Errorf("invalid nipost: %v", err)
+		return nil, fmt.Errorf("invalid nipost: %v", err)
 	}
-	atx.Verify(baseTickHeight, leaves/h.tickSize)
-	return nil
+
+	vAtx := atx.Verify(baseTickHeight, leaves/h.tickSize)
+
+	// TODO(mafa): instead of reporting the event immediately, should we only report it after validation passed?
+	events.ReportNewActivation(vAtx)
+	return vAtx, nil
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -282,7 +282,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 // StoreAtx stores an atx for epoch ech, it stores atx for the current epoch and adds the atx for the nodeID that
 // created it in a sorted manner by the sequence id. This function does not validate the atx and assumes all data is
 // correct and that all associated atx exist in the db. Will return error if writing to db failed.
-func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.ActivationTx) error {
+func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.VerifiedActivationTx) error {
 	h.Lock()
 	defer h.Unlock()
 
@@ -377,11 +377,11 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
-	err = h.SyntacticallyValidateAtx(ctx, atx)
+	verified, err := h.SyntacticallyValidateAtx(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}
-	err = h.ProcessAtx(ctx, atx)
+	err = h.ProcessAtx(ctx, verified)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer

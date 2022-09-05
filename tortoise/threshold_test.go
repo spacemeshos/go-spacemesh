@@ -137,10 +137,9 @@ func TestReferenceHeight(t *testing.T) {
 					},
 				}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
-				atx.Verify(0, uint64(height))
 				activation.SignAtx(signing.NewEdSigner(), atx)
 				require.NoError(t, atx.CalcAndSetNodeID())
-				require.NoError(t, atxs.Add(cdb, atx, time.Time{}))
+				require.NoError(t, atxs.Add(cdb, atx.Verify(0, uint64(height)), time.Time{}))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
 			require.NoError(t, err)

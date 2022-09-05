@@ -33,13 +33,12 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&types.NodeID{})
-		atx.Verify(0, 1)
 		if id == rb.AtxID {
 			nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
 			atx.SetNodeID(&nodeID)
 			atx.NumUnits = testedATXUnit
 		}
-		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
 	}
 	expectedWeight := util.WeightFromUint64(uint64(testedATXUnit)).Div(util.WeightFromUint64(uint64(eligibleSlots)))
 	for _, b := range blts {

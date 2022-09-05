@@ -87,8 +87,8 @@ var (
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	signer      = NewMockSigner()
-	globalAtx   = newAtx(challenge, signer, nipost, numUnits, addr1)
-	globalAtx2  = newAtx(challenge, signer, nipost, numUnits, addr2)
+	globalAtx   = newAtx(challenge, signer, nipost, numUnits, addr1).Verify(0, 1)
+	globalAtx2  = newAtx(challenge, signer, nipost, numUnits, addr2).Verify(0, 1)
 	signer1     = signing.NewEdSigner()
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
@@ -195,8 +195,8 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 		ballots, blocks), nil
 }
 
-func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.ActivationTx{
+func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
+	atxs := map[types.ATXID]*types.VerifiedActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
 	}

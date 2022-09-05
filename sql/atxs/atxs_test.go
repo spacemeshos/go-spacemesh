@@ -19,7 +19,7 @@ func TestGetATXByID(t *testing.T) {
 
 	db := sql.InMemory()
 
-	atxs := make([]*types.ActivationTx, 0)
+	atxs := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig := signing.NewEdSigner()
 		atxs = append(atxs, newAtx(sig, types.NewLayerID(uint32(i))))
@@ -44,7 +44,7 @@ func TestHasID(t *testing.T) {
 
 	db := sql.InMemory()
 
-	atxs := make([]*types.ActivationTx, 0)
+	atxs := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig := signing.NewEdSigner()
 		atxs = append(atxs, newAtx(sig, types.NewLayerID(uint32(i))))
@@ -99,7 +99,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4.Sequence = atx3.Sequence + 1
 	atx4.CalcAndSetID()
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
@@ -132,7 +132,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	atx3 := newAtx(sig2, l2)
 	atx4 := newAtx(sig2, l3)
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
@@ -176,7 +176,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 	atx3 := newAtx(sig2, l2)
 	atx4 := newAtx(sig2, l3)
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
@@ -228,7 +228,7 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, atx, got)
 }
 
-func newAtx(sig *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
+func newAtx(sig *signing.EdSigner, layerID types.LayerID) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -242,10 +242,9 @@ func newAtx(sig *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
 	bts, _ := atx.InnerBytes()
 	atx.Sig = sig.Sign(bts)
 
-	atx.Verify(0, 1)
 	atx.CalcAndSetID()
 	atx.CalcAndSetNodeID()
-	return atx
+	return atx.Verify(0, 1)
 }
 
 func TestPositioningID(t *testing.T) {
@@ -292,17 +291,17 @@ func TestPositioningID(t *testing.T) {
 						Coinbase: atx.coinbase,
 					},
 				}
-				full.Verify(atx.base, atx.count)
+				vAtx := full.Verify(atx.base, atx.count)
 
-				bts, err := full.InnerBytes()
+				bts, err := vAtx.InnerBytes()
 				require.NoError(t, err)
 				sig := signing.NewEdSigner()
-				full.Sig = sig.Sign(bts)
+				vAtx.Sig = sig.Sign(bts)
 
-				full.CalcAndSetID()
-				full.CalcAndSetNodeID()
+				vAtx.CalcAndSetID()
+				vAtx.CalcAndSetNodeID()
 
-				require.NoError(t, Add(db, full, time.Time{}))
+				require.NoError(t, Add(db, vAtx, time.Time{}))
 				ids = append(ids, full.ID())
 			}
 			rst, err := GetPositioningID(db)

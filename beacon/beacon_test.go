@@ -99,11 +99,12 @@ func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *sig
 		numUnits,
 		nil,
 	)
-	atx.Verify(0, 1)
+
 	activation.SignAtx(sig, atx)
 	atx.CalcAndSetID()
 	atx.CalcAndSetNodeID()
-	require.NoError(t, atxs.Add(db, atx, time.Now().Add(-1*time.Second)))
+
+	require.NoError(t, atxs.Add(db, atx.Verify(0, 1), time.Now().Add(-1*time.Second)))
 }
 
 func createRandomATXs(t *testing.T, db *datastore.CachedDB, lid types.LayerID, num int) {

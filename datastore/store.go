@@ -56,7 +56,7 @@ func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, err
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
 // in all databases.
-func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
+func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}

@@ -50,8 +50,7 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 	}}
 	atx.SetID(&id)
 	atx.SetNodeID(&nodeID)
-	atx.Verify(0, 1)
-	require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
+	require.NoError(tb, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
 	return atx
 }
 
@@ -195,8 +194,7 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	}}
 	atx.SetID(&atxID)
 	atx.SetNodeID(&o.nodeID)
-	atx.Verify(0, 1)
-	require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
+	require.NoError(t, atxs.Add(o.cdb, atx.Verify(0, 1), time.Now()))
 
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errZeroEpochWeight)
