@@ -144,7 +144,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		c.atx = vAtx.ID()
 		c.weight = vAtx.GetWeight()
 
-		m.Send(MessageAtx{Atx: atx})
+		m.Send(MessageAtx{Atx: vAtx.ActivationTx})
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
@@ -154,8 +154,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBallot:
 		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		// TODO(mafa): this seems wrong, but this is essentially what was done before
-		atxs.Add(c.cdb, ev.Atx.Verify(0, 0), time.Now())
+		atxs.Add(c.cdb, ev.Atx.Verify(1, 2), time.Now())
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:
