@@ -331,6 +331,7 @@ const (
 	LayerStatusTypeUnknown   = iota
 	LayerStatusTypeApproved  // approved by Hare
 	LayerStatusTypeConfirmed // confirmed by Tortoise
+	LayerStatusTypeApplied   // applied to state
 )
 
 // LayerUpdate packages up a layer with its status (which a layer does not ordinarily contain).

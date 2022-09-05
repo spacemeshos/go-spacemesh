@@ -573,6 +573,8 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 		return pb.Layer_LAYER_STATUS_APPROVED
 	case events.LayerStatusTypeConfirmed:
 		return pb.Layer_LAYER_STATUS_CONFIRMED
+	case events.LayerStatusTypeApplied:
+		return pb.Layer_LAYER_STATUS_APPLIED
 	default:
 		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}

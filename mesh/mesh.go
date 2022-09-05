@@ -418,6 +418,10 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []
 		logger.With().Error("failed to set layer hashes", lid, log.Err(err))
 		return err
 	}
+	events.ReportLayerUpdate(events.LayerUpdate{
+		LayerID: lid,
+		Status:  events.LayerStatusTypeApplied,
+	})
 	logger.With().Info("layer hashes updated",
 		lid,
 		log.String("hash", hash.ShortString()),
