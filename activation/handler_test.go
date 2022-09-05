@@ -166,10 +166,10 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
 	assert.NoError(t, err)
 
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+	vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.NoError(t, err)
 
-	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
 	assert.NoError(t, err)
 }
 
@@ -258,18 +258,18 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx.Verify(0, 1))
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
-	atx = newAtx(challenge, sig, &types.NIPost{}, 100, coinbase)
-	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
+	vAtx := newAtx(challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
+	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx.Verify(0, 1))
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
-	atx = newAtx(challenge, sig, &types.NIPost{}, 100, coinbase)
+	vAtx = newAtx(challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
 	require.NoError(t, atxs.DeleteATXsByNodeID(cdb, atx.NodeID()))
 
-	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
 	assert.ErrorIs(t, err, sql.ErrNotFound)
 
 	// Prev atx not declared but initial Post not included.
@@ -382,7 +382,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	vAtx = newActivationTx(otherSig, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
@@ -441,12 +441,12 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 
 	start = time.Now()
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+	vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	b.Logf("\nSecond syntactic validation took %v\n", time.Since(start))
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
 	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
@@ -588,12 +588,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
-	validAtx := newAtx(newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{})
+	validAtx := newAtx(newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{}).Verify(0, 1)
 	err := atxHdlr.ContextuallyValidateAtx(validAtx.Header())
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-	malformedAtx := newAtx(newChallenge(0, arbitraryAtxID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{})
+	malformedAtx := newAtx(newChallenge(0, arbitraryAtxID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{}).Verify(0, 1)
 	err = atxHdlr.ContextuallyValidateAtx(malformedAtx.Header())
 	r.ErrorIs(err, sql.ErrNotFound)
 }

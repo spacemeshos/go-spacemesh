@@ -296,17 +296,6 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return ref[:util.Min(5, len(ref))]
 }
 
-func (atx *ActivationTx) Header() *ActivationTxHeader {
-	return &ActivationTxHeader{
-		NIPostChallenge: atx.NIPostChallenge,
-		Coinbase:        atx.Coinbase,
-		NumUnits:        atx.NumUnits,
-
-		id:     atx.id,
-		nodeID: atx.nodeID,
-	}
-}
-
 // ShortString returns the first 5 characters of the ID, for logging purposes.
 func (atx *ActivationTx) ShortString() string {
 	return atx.ID().ShortString()

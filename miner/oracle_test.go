@@ -108,7 +108,7 @@ func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end ty
 			if i == 0 {
 				nid = nodeID
 			}
-			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
+			atx := genMinerATX(tb, cdb, id, publishLayer, nid).Verify(0, 1)
 			if i == 0 {
 				info.atxHdr = atx.Header()
 			}
