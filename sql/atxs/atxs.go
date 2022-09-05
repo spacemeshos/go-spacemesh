@@ -15,7 +15,7 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 		stmt.BindBytes(1, id.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
-		var v types.VerifiedActivationTx
+		var v types.ActivationTx
 		if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(0), &v); decodeErr != nil {
 			atx, err = nil, fmt.Errorf("decode %w", decodeErr)
 			return true
@@ -158,7 +158,7 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 
 // Add adds an ATX for a given ATX ID.
 func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) error {
-	buf, err := codec.Encode(atx)
+	buf, err := codec.Encode(atx.ActivationTx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}

@@ -14,9 +14,13 @@ import (
 
 const layersPerEpoch = 5
 
-func TestGetATXByID(t *testing.T) {
+func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
+	m.Run()
+}
+
+func TestGetATXByID(t *testing.T) {
 	db := sql.InMemory()
 
 	atxs := make([]*types.VerifiedActivationTx, 0)
@@ -40,8 +44,6 @@ func TestGetATXByID(t *testing.T) {
 }
 
 func TestHasID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	atxs := make([]*types.VerifiedActivationTx, 0)
@@ -66,8 +68,6 @@ func TestHasID(t *testing.T) {
 }
 
 func TestGetTimestampByID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	sig := signing.NewEdSigner()
@@ -85,8 +85,6 @@ func TestGetTimestampByID(t *testing.T) {
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	sig := signing.NewEdSigner()
@@ -116,8 +114,6 @@ func TestGetLastIDByNodeID(t *testing.T) {
 }
 
 func TestGetIDByEpochAndNodeID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	sig1 := signing.NewEdSigner()
@@ -160,8 +156,6 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 }
 
 func TestGetIDsByEpoch(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	sig1 := signing.NewEdSigner()
@@ -203,14 +197,12 @@ func TestGetBlob(t *testing.T) {
 	require.NoError(t, Add(db, atx, time.Now()))
 	buf, err := GetBlob(db, atx.ID().Bytes())
 	require.NoError(t, err)
-	encoded, err := codec.Encode(atx)
+	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
 	require.Equal(t, encoded, buf)
 }
 
 func TestAdd(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
@@ -248,7 +240,6 @@ func newAtx(sig *signing.EdSigner, layerID types.LayerID) *types.VerifiedActivat
 }
 
 func TestPositioningID(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	type header struct {
 		coinbase    types.Address
 		base, count uint64
