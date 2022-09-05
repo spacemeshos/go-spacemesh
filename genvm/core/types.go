@@ -34,6 +34,8 @@ type (
 	LayerID = types.LayerID
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/handler.go github.com/spacemeshos/go-spacemesh/genvm/core Handler
+
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
