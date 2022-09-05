@@ -112,7 +112,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 	h.processAtxMutex.Lock()
 	defer h.processAtxMutex.Unlock()
 
-	existingATX, _ := h.cdb.GetAtxByID(atx.ID())
+	existingATX, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existingATX != nil { // Already processed
 		return nil
 	}
@@ -122,7 +122,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID()),
 		atx.PubLayerID)
-	if err := h.ContextuallyValidateAtx(atx); err != nil {
+	if err := h.ContextuallyValidateAtx(atx.Header()); err != nil {
 		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID()),
@@ -155,7 +155,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		prevATX, err := h.cdb.GetAtxByID(atx.PrevATXID)
+		prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
@@ -211,7 +211,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
-		posAtx, err := h.cdb.GetAtxByID(atx.PositioningATX)
+		posAtx, err := h.cdb.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
@@ -249,7 +249,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTx) error {
+func (h *Handler) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil {
@@ -357,7 +357,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
 	}
 	logger := h.log.WithContext(ctx).WithFields(atx.ID())
-	existing, _ := h.cdb.GetAtxByID(atx.ID())
+	existing, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existing != nil {
 		logger.With().Debug("received known atx")
 		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())

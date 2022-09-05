@@ -23,28 +23,42 @@ const (
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	*sql.Database
-	logger   log.Log
-	atxCache AtxCache
+	logger      log.Log
+	atxHdrCache AtxCache
 }
 
 // NewCachedDB create an instance of a CachedDB.
 func NewCachedDB(db *sql.Database, lg log.Log) *CachedDB {
 	return &CachedDB{
-		Database: db,
-		logger:   lg,
-		atxCache: NewAtxCache(atxHdrCacheSize),
+		Database:    db,
+		logger:      lg,
+		atxHdrCache: NewAtxCache(atxHdrCacheSize),
 	}
 }
 
-// GetAtxByID returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
-// in all databases.
-func (db *CachedDB) GetAtxByID(id types.ATXID) (*types.ActivationTx, error) {
+// GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
+// is not found in the ATX DB.
+func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
-	if atx, gotIt := db.atxCache.Get(id); gotIt {
-		return atx, nil
+	if atxHeader, gotIt := db.atxHdrCache.Get(id); gotIt {
+		return atxHeader, nil
+	}
+	atx, err := db.GetFullAtx(id)
+	if err != nil {
+		return nil, fmt.Errorf("get ATXs from DB: %w", err)
+	}
+
+	return atx.Header(), nil
+}
+
+// GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
+// in all databases.
+func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
+	if id == *types.EmptyATXID {
+		return nil, errors.New("trying to fetch empty atx id")
 	}
 
 	atx, err := atxs.Get(db, id)
@@ -52,7 +66,7 @@ func (db *CachedDB) GetAtxByID(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxCache.Add(id, atx)
+	db.atxHdrCache.Add(id, atx.Header())
 	return atx, nil
 }
 
@@ -62,7 +76,7 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 		weight uint64
 		ids    []types.ATXID
 	)
-	if err := db.IterateEpochATXs(epoch, func(header *types.ActivationTx) bool {
+	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		weight += header.GetWeight()
 		ids = append(ids, header.ID())
 		return true
@@ -72,18 +86,18 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 	return weight, ids, nil
 }
 
-// IterateEpochATXs iterates over ActivationTxs that target an epoch.
-func (db *CachedDB) IterateEpochATXs(epoch types.EpochID, iter func(*types.ActivationTx) bool) error {
+// IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
+func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) bool) error {
 	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
 	if err != nil {
 		return err
 	}
 	for _, id := range ids {
-		atx, err := db.GetAtxByID(id)
+		header, err := db.GetAtxHeader(id)
 		if err != nil {
 			return err
 		}
-		if !iter(atx) {
+		if !iter(header) {
 			return nil
 		}
 	}
@@ -92,10 +106,10 @@ func (db *CachedDB) IterateEpochATXs(epoch types.EpochID, iter func(*types.Activ
 
 // GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
 // AtxHeader struct in db.
-func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTx, error) {
-	if id, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
+func (db *CachedDB) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %v", err)
-	} else if atx, err := db.GetAtxByID(id); err != nil {
+	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
 		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
 		return atx, nil

@@ -168,7 +168,7 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.NoError(t, err)
 
-	err = atxHdlr.ContextuallyValidateAtx(atx)
+	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
 	assert.NoError(t, err)
 }
 
@@ -264,7 +264,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(sig, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx)
+	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
@@ -275,7 +275,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 
 	err = SignAtx(sig, atx)
 	assert.NoError(t, err)
-	err = atxHdlr.ContextuallyValidateAtx(atx)
+	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
 	assert.ErrorIs(t, err, sql.ErrNotFound)
 
 	// Prev atx not declared but initial Post not included.
@@ -366,7 +366,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = newActivationTx(sig, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx)
+	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
@@ -376,10 +376,10 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx.ID(), id)
 
-	_, err = atxHdlr.cdb.GetAtxByID(id)
+	_, err = atxHdlr.cdb.GetAtxHeader(id)
 	assert.NoError(t, err)
 
-	_, err = atxHdlr.cdb.GetAtxByID(atx2id)
+	_, err = atxHdlr.cdb.GetAtxHeader(atx2id)
 	assert.NoError(t, err)
 
 	// test same sequence
@@ -398,7 +398,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = newActivationTx(otherSig, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(atx)
+	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, atx)
@@ -461,7 +461,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxHdlr.ContextuallyValidateAtx(atx)
+	err = atxHdlr.ContextuallyValidateAtx(atx.Header())
 	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
@@ -504,10 +504,10 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			eStart = time.Now()
 
 			for miner := 0; miner < numOfMiners; miner++ {
-				atx, err := cdb.GetAtxByID(prevAtxs[miner])
+				atx, err := cdb.GetAtxHeader(prevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
-				atx, err = cdb.GetAtxByID(pPrevAtxs[miner])
+				atx, err = cdb.GetAtxHeader(pPrevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
 			}
@@ -604,12 +604,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
 	validAtx := newAtx(newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{})
-	err := atxHdlr.ContextuallyValidateAtx(validAtx)
+	err := atxHdlr.ContextuallyValidateAtx(validAtx.Header())
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
 	malformedAtx := newAtx(newChallenge(0, arbitraryAtxID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{})
-	err = atxHdlr.ContextuallyValidateAtx(malformedAtx)
+	err = atxHdlr.ContextuallyValidateAtx(malformedAtx.Header())
 	r.ErrorIs(err, sql.ErrNotFound)
 }
 
@@ -659,7 +659,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := atxHdlr.cdb.GetAtxByID(types.ATXID{1, 1, 1})
+		_, err := atxHdlr.cdb.GetAtxHeader(types.ATXID{1, 1, 1})
 		require.ErrorIs(b, err, sql.ErrNotFound)
 	}
 	atomic.StoreUint64(&stop, 1)
@@ -754,7 +754,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
 
-	stored1, err := db.GetAtxByID(atx1.ID())
+	stored1, err := db.GetAtxHeader(atx1.ID())
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), stored1.BaseTickHeight())
 	require.Equal(t, leaves/tickSize, stored1.TickCount())
@@ -787,7 +787,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
 
-	stored2, err := db.GetAtxByID(atx2.ID())
+	stored2, err := db.GetAtxHeader(atx2.ID())
 	require.NoError(t, err)
 	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight())
 	require.Equal(t, leaves/tickSize, stored2.TickCount())

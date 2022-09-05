@@ -99,73 +99,77 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = &ATXID{}
 
-// ShortString returns the first 5 characters of the ID, for logging purposes.
-func (atx *ActivationTx) ShortString() string {
-	return atx.ID().ShortString()
+// ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
+// well as the coinbase address and total weight.
+type ActivationTxHeader struct {
+	NIPostChallenge
+	Coinbase Address
+	NumUnits uint32
+
+	// the following fields are kept private and from being serialized
+	id *ATXID // non-exported cache of the ATXID
+
+	nodeID *NodeID // the id of the Node that created the ATX (public key)
+
+	// TODO(dshulyak) this is important to prevent accidental state reads
+	// before this field is set. reading empty data could lead to disastrous bugs.
+	verified       bool
+	baseTickHeight uint64
+	tickCount      uint64
 }
 
-// Hash32 returns the ATX's ID as a Hash32.
-func (atx *ActivationTx) Hash32() Hash32 {
-	return atx.ID().Hash32()
+// ShortString returns the first 5 characters of the ID, for logging purposes.
+func (atxh *ActivationTxHeader) ShortString() string {
+	return atxh.ID().ShortString()
 }
 
 // ID returns the ATX's ID.
-func (atx *ActivationTx) ID() ATXID {
-	if atx.id == nil {
+func (atxh *ActivationTxHeader) ID() ATXID {
+	if atxh.id == nil {
 		panic("id field must be set")
 	}
-	return *atx.id
+	return *atxh.id
 }
 
 // NodeID returns the ATX's Node ID.
-func (atx *ActivationTx) NodeID() NodeID {
-	if atx.nodeID == nil {
+func (atxh *ActivationTxHeader) NodeID() NodeID {
+	if atxh.nodeID == nil {
 		panic("nodeID field must be set")
 	}
-	return *atx.nodeID
+	return *atxh.nodeID
 }
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
-func (atx *ActivationTx) TargetEpoch() EpochID {
-	return atx.PubLayerID.GetEpoch() + 1
-}
-
-// SetID sets the ATXID in this ATX's cache.
-func (atx *ActivationTx) SetID(id *ATXID) {
-	atx.id = id
-}
-
-// SetNodeID sets the Node ID in the ATX's cache.
-func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
-	atx.nodeID = nodeID
+func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
+	return atxh.PubLayerID.GetEpoch() + 1
 }
 
 // GetWeight of the atx.
-func (atx *ActivationTx) GetWeight() uint64 {
-	return uint64(atx.NumUnits) * (atx.tickCount)
+func (atxh *ActivationTxHeader) GetWeight() uint64 {
+	return uint64(atxh.NumUnits) * (atxh.tickCount)
 }
 
 // BaseTickHeight is a tick height of the positional atx.
-func (atx *ActivationTx) BaseTickHeight() uint64 {
-	return atx.baseTickHeight
+func (atxh *ActivationTxHeader) BaseTickHeight() uint64 {
+	return atxh.baseTickHeight
 }
 
 // TickCount returns tick count from from poet proof attached to the atx.
-func (atx *ActivationTx) TickCount() uint64 {
-	return atx.tickCount
+func (atxh *ActivationTxHeader) TickCount() uint64 {
+	return atxh.tickCount
 }
 
 // TickHeight returns a sum of base tick height and tick count.
-func (atx *ActivationTx) TickHeight() uint64 {
-	return atx.baseTickHeight + atx.tickCount
+func (atxh *ActivationTxHeader) TickHeight() uint64 {
+	return atxh.baseTickHeight + atxh.tickCount
 }
 
 // Verify sets field extract after verification.
-func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) {
-	atx.verified = true
-	atx.baseTickHeight = baseTickHeight
-	atx.tickCount = tickCount
+func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
+	atxh.verified = true
+	atxh.baseTickHeight = baseTickHeight
+	atxh.tickCount = tickCount
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -284,7 +288,7 @@ func (atx *ActivationTx) CalcAndSetID() {
 		panic("cannot calculate ATX ID: sig is nil")
 	}
 	id := ATXID(CalcATXHash32(atx))
-	atx.SetID(&id)
+	atx.id = &id
 }
 
 // CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
@@ -298,7 +302,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
 	nodeID := BytesToNodeID(pub)
-	atx.SetNodeID(&nodeID)
+	atx.nodeID = &nodeID
 	return nil
 }
 
@@ -311,6 +315,86 @@ func (atx *ActivationTx) GetPoetProofRef() Hash32 {
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	ref := atx.GetPoetProofRef()
 	return ref[:util.Min(5, len(ref))]
+}
+
+func (atx *ActivationTx) Header() *ActivationTxHeader {
+	return &ActivationTxHeader{
+		NIPostChallenge: atx.NIPostChallenge,
+		Coinbase:        atx.Coinbase,
+		NumUnits:        atx.NumUnits,
+
+		id:     atx.id,
+		nodeID: atx.nodeID,
+
+		verified:       atx.verified,
+		baseTickHeight: atx.baseTickHeight,
+		tickCount:      atx.tickCount,
+	}
+}
+
+// ShortString returns the first 5 characters of the ID, for logging purposes.
+func (atx *ActivationTx) ShortString() string {
+	return atx.ID().ShortString()
+}
+
+// ID returns the ATX's ID.
+func (atx *ActivationTx) ID() ATXID {
+	if atx.id == nil {
+		panic("id field must be set")
+	}
+	return *atx.id
+}
+
+// NodeID returns the ATX's Node ID.
+func (atx *ActivationTx) NodeID() NodeID {
+	if atx.nodeID == nil {
+		panic("nodeID field must be set")
+	}
+	return *atx.nodeID
+}
+
+// TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (atx *ActivationTx) TargetEpoch() EpochID {
+	return atx.PubLayerID.GetEpoch() + 1
+}
+
+// SetID sets the ATXID in this ATX's cache.
+func (atx *ActivationTx) SetID(id *ATXID) {
+	atx.id = id
+}
+
+// SetNodeID sets the Node ID in the ATX's cache.
+func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
+	atx.nodeID = nodeID
+}
+
+// GetWeight of the atx.
+func (atx *ActivationTx) GetWeight() uint64 {
+	return uint64(atx.NumUnits) * (atx.tickCount)
+}
+
+// BaseTickHeight is a tick height of the positional atx.
+func (atx *ActivationTx) BaseTickHeight() uint64 {
+	return atx.baseTickHeight
+}
+
+// TickCount returns tick count from from poet proof attached to the atx.
+func (atx *ActivationTx) TickCount() uint64 {
+	return atx.tickCount
+}
+
+// TickHeight returns a sum of base tick height and tick count.
+func (atx *ActivationTx) TickHeight() uint64 {
+	return atx.baseTickHeight + atx.tickCount
+}
+
+// Verify sets field extract after verification.
+// TODO(mafa): remove me after refactor
+func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) {
+	atx.verified = true
+	atx.baseTickHeight = baseTickHeight
+	atx.tickCount = tickCount
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration

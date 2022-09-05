@@ -78,7 +78,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range activeSets {
-		atx, err := v.cdb.GetAtxByID(atxID)
+		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
 		}
@@ -144,13 +144,13 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	return true, nil
 }
 
-func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTx, error) {
+func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
 	if ballot.AtxID == *types.EmptyATXID {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
 
 	epoch := ballot.LayerIndex.GetEpoch()
-	atx, err := v.cdb.GetAtxByID(ballot.AtxID)
+	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
 	}

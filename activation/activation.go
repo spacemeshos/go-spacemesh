@@ -681,7 +681,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 		}
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %v", err)
 	}
-	atx, err := b.cdb.GetAtxByID(id)
+	atx, err := b.cdb.GetAtxHeader(id)
 	if err != nil {
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	}

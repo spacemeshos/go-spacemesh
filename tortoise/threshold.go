@@ -42,7 +42,7 @@ func computeBallotWeight(
 }
 
 func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, error) {
-	atx, err := cdb.GetAtxByID(ballot.AtxID)
+	atx, err := cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
 		return 0, fmt.Errorf("read atx for ballot height: %w", err)
 	}
@@ -54,7 +54,7 @@ func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (util.Weight,
 		weight  uint64
 		heights []uint64
 	)
-	if err := cdb.IterateEpochATXs(epoch, func(header *types.ActivationTx) bool {
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		weight += header.GetWeight()
 		heights = append(heights, header.TickHeight())
 		return true

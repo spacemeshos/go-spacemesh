@@ -737,7 +737,7 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 	// we need to pass a map with spacetime unit allowances before any round is started
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
-		header, err := pd.cdb.GetAtxByID(id)
+		header, err := pd.cdb.GetAtxHeader(id)
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
@@ -986,7 +986,7 @@ func (pd *ProtocolDriver) getOwnWeight(epoch types.EpochID) uint64 {
 		pd.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
 		return 0
 	}
-	hdr, err := pd.cdb.GetAtxByID(atxID)
+	hdr, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
 		return 0

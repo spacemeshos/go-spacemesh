@@ -92,7 +92,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 
 func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, atxID types.ATXID, receivedTime time.Time) (category, error) {
 	minerID := m.NodeID.ShortString()
-	atxHeader, err := pd.cdb.GetAtxByID(atxID)
+	atxHeader, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		logger.Error("[proposal] failed to get ATX header", atxID, log.Err(err))
 		return invalid, fmt.Errorf("[proposal] failed to get ATX header (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
@@ -250,7 +250,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 
 	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound, log.String("miner_id", minerID))
-	atx, err := pd.cdb.GetAtxByID(atxID)
+	atx, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
 		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", types.FirstRound, minerID, atxID, err)
@@ -376,7 +376,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	minerID := types.BytesToNodeID(minerPK.Bytes()).ShortString()
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, m.RoundID, log.String("miner_id", minerID))
 
-	atx, err := pd.cdb.GetAtxByID(atxID)
+	atx, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
 		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", m.RoundID, minerID, atxID, err)

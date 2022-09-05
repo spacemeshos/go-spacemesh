@@ -701,7 +701,7 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 	var mIds []types.ATXID
 	atxs := make(map[types.ATXID]*types.ActivationTx, len(atxIds))
 	for _, id := range atxIds {
-		t, err := msh.cdb.GetAtxByID(id)
+		t, err := msh.cdb.GetFullAtx(id)
 		if err != nil {
 			msh.logger.WithContext(ctx).With().Warning("could not get atx from database", id, log.Err(err))
 			mIds = append(mIds, id)

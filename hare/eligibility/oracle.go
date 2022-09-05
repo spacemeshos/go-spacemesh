@@ -523,7 +523,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 				continue
 			}
 			seenATXIDs[id] = struct{}{}
-			atx, err := o.cdb.GetAtxByID(id)
+			atx, err := o.cdb.GetAtxHeader(id)
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
@@ -533,7 +533,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 
 	// remove miners who published ballots with bad beacons
 	for id := range badBeaconATXIDs {
-		atx, err := o.cdb.GetAtxByID(id)
+		atx, err := o.cdb.GetAtxHeader(id)
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
@@ -568,7 +568,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	// extract the nodeIDs and weights
 	activeMap := make(map[types.NodeID]uint64, len(atxids))
 	for _, atxid := range atxids {
-		atxHeader, err := o.cdb.GetAtxByID(atxid)
+		atxHeader, err := o.cdb.GetAtxHeader(atxid)
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}

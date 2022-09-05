@@ -23,7 +23,7 @@ var (
 
 type oracleCache struct {
 	epoch     types.EpochID
-	atx       *types.ActivationTx
+	atx       *types.ActivationTxHeader
 	activeSet []types.ATXID
 	proofs    map[types.LayerID][]types.VotingEligibilityProof
 }
@@ -105,7 +105,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	return o.cache.atx.ID(), o.cache.activeSet, layerProofs, nil
 }
 
-func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTx, error) {
+func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	publishEpoch := targetEpoch - 1
 	atxID, err := atxs.GetIDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
 	if err != nil {
@@ -116,7 +116,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTx,
 		return nil, fmt.Errorf("get ATX ID: %w", err)
 	}
 
-	atx, err := o.cdb.GetAtxByID(atxID)
+	atx, err := o.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		o.log.With().Error("failed to get ATX header",
 			log.Named("publish_epoch", publishEpoch),

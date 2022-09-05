@@ -246,7 +246,7 @@ func lastTransmittedAtx(t *testing.T) types.ActivationTx {
 	return signedAtx
 }
 
-func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTx, layersPerEpoch uint32) {
+func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint32) {
 	sigAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
 	err = sigAtx.CalcAndSetNodeID()
@@ -448,7 +448,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, prevAtx.Header(), prevAtx.Header(), layersPerEpoch)
 
 	// create and publish another ATX
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
@@ -457,7 +457,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, _, err = publishAtx(b, postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, publishedAtx, publishedAtx, layersPerEpoch)
+	assertLastAtx(r, publishedAtx.Header(), publishedAtx.Header(), layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
@@ -560,7 +560,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, nil, layersPerEpoch)
+	assertLastAtx(r, posAtx.Header(), nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
@@ -586,7 +586,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, posAtx.Header(), prevAtx.Header(), layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
@@ -606,7 +606,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, nil, layersPerEpoch)
+	assertLastAtx(r, posAtx.Header(), nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
@@ -626,7 +626,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, prevAtx.Header(), prevAtx.Header(), layersPerEpoch)
 
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
@@ -636,7 +636,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, _, err = publishAtx(b, postGenesisEpoch, layersPerEpoch) // 👀
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, publishedAtx, publishedAtx, layersPerEpoch)
+	assertLastAtx(r, publishedAtx.Header(), publishedAtx.Header(), layersPerEpoch)
 
 	publishedAtx2, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
@@ -717,10 +717,10 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	newAtx := lastTransmittedAtx(t)
 	r.Equal(prevATX.ID(), newAtx.PrevATXID)
 
-	posAtx, err := cdb.GetAtxByID(newAtx.PositioningATX)
+	posAtx, err := cdb.GetAtxHeader(newAtx.PositioningATX)
 	r.NoError(err)
 
-	assertLastAtx(r, posAtx, prevATX, layersPerEpoch)
+	assertLastAtx(r, posAtx, prevATX.Header(), layersPerEpoch)
 
 	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerID
@@ -914,7 +914,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, prevAtx.Header(), prevAtx.Header(), layersPerEpoch)
 
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)

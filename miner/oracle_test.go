@@ -90,7 +90,7 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 }
 
 type epochATXInfo struct {
-	atx       *types.ActivationTx
+	atxHdr    *types.ActivationTxHeader
 	activeSet []types.ATXID
 	beacon    types.Beacon
 }
@@ -111,7 +111,7 @@ func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end ty
 			}
 			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
 			if i == 0 {
-				info.atx = atx
+				info.atxHdr = atx.Header()
 			}
 		}
 		epochInfo[epoch] = info
@@ -147,7 +147,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 		require.NoError(t, err)
 
 		for _, proof := range proofs {
-			b := genBallotWithEligibility(t, o.edSigner, layer, info.atx.ID(), proof, info.activeSet, info.beacon)
+			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxHdr.ID(), proof, info.activeSet, info.beacon)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b.ID(), info.beacon, uint64(defaultAtxWeight)).Times(1)
 			eligible, err := validator.CheckEligibility(context.TODO(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
