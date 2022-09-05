@@ -14,8 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -54,8 +52,6 @@ func New(db *sql.Database, opts ...Opt) *VM {
 	}
 	wallet.Register(vm.registry)
 	multisig.Register(vm.registry)
-	vesting.Register(vm.registry)
-	vault.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}
@@ -483,7 +479,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 		template *core.Address
 		handler  core.Handler
 	)
-	if method == 0 {
+	if method == core.MethodSpawn {
 		template = &core.Address{}
 		if _, err := template.DecodeScale(decoder); err != nil {
 			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
@@ -514,7 +510,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	if _, err := args.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
 	}
-	if method == 0 {
+	if method == core.MethodSpawn {
 		if core.ComputePrincipal(*template, args) == principal {
 			// this is a self spawn. if it fails validation - discard it immediately
 			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)

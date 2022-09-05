@@ -7,10 +7,10 @@ import (
 )
 
 const (
-	// MethodSpawn identifier.
+	// MethodSpawn ...
 	MethodSpawn = 0
-	// MethodSpend identifier.
-	MethodSpend = 16
+	// MethodSpend ...
+	MethodSpend = 1
 )
 
 type (
