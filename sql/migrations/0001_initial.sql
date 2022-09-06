@@ -57,7 +57,7 @@ CREATE TABLE transactions
     layer       INT,
     block       CHAR(20),
     principal   CHAR(20),
-    nonce       UNSIGNED LONG INT,
+    nonce       BLOB,
     timestamp   INT NOT NULL,
     applied     SMALL INT DEFAULT 0
 ) WITHOUT ROWID;

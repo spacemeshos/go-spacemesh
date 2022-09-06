@@ -149,6 +149,7 @@ func (h *handler) Args(method uint8) scale.Type {
 	return nil
 }
 
+// SpendTemplate interface for the template that support Spend method.
 type SpendTemplate interface {
 	Spend(core.Host, *SpendArguments) error
 }
