@@ -492,6 +492,11 @@ func TestSyncMissingLayer(t *testing.T) {
 	})
 	require.NoError(t, blocks.Add(ts.cdb, block))
 	require.NoError(t, layers.SetHareOutput(ts.cdb, failed, block.ID()))
+	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
+		if lid != failed {
+			require.NoError(t, layers.SetHareOutput(ts.cdb, lid, types.EmptyBlockID))
+		}
+	}
 
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mLyrFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(okCh())
