@@ -101,3 +101,11 @@ type Host interface {
 	Template() Template
 	Layer() LayerID
 }
+
+//go:generate scalegen -types Payload
+
+// Payload is a generic payload for all transactions.
+type Payload struct {
+	Nonce    Nonce
+	GasPrice uint64
+}

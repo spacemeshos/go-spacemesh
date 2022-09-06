@@ -59,15 +59,14 @@ func (c *Context) Handler() Handler {
 
 // Spawn account.
 func (c *Context) Spawn(args scale.Encodable) error {
-	template := c.Header.Template
-	account, err := c.load(ComputePrincipal(template, args))
+	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, args))
 	if err != nil {
 		return err
 	}
-	if account.Template != nil {
+	if account.TemplateAddress != nil {
 		return ErrSpawned
 	}
-	handler := c.Registry.Get(template)
+	handler := c.Registry.Get(c.Header.TemplateAddress)
 	if handler == nil {
 		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
 	}
@@ -81,7 +80,7 @@ func (c *Context) Spawn(args scale.Encodable) error {
 		return fmt.Errorf("%w: %s", ErrInternal, err)
 	}
 	account.State = buf.Bytes()
-	account.Template = &template
+	account.TemplateAddress = &c.Header.TemplateAddress
 	c.change(account)
 	return nil
 }
@@ -120,11 +119,11 @@ func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) 
 	if err != nil {
 		return err
 	}
-	if account.Template == nil {
+	if account.TemplateAddress == nil {
 		return ErrNotSpawned
 	}
-	if *account.Template != remoteTemplate {
-		return fmt.Errorf("%w: %s != %s", ErrTemplateMismatch, remoteTemplate.String(), account.Template.String())
+	if *account.TemplateAddress != remoteTemplate {
+		return fmt.Errorf("%w: %s != %s", ErrTemplateMismatch, remoteTemplate.String(), account.TemplateAddress.String())
 	}
 	handler := c.Registry.Get(remoteTemplate)
 	if handler == nil {

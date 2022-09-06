@@ -15,8 +15,8 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 		account.NextNonce = uint64(stmt.ColumnInt64(2))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
 		if stmt.ColumnLen(4) > 0 {
-			account.Template = &types.Address{}
-			stmt.ColumnBytes(4, account.Template[:])
+			account.TemplateAddress = &types.Address{}
+			stmt.ColumnBytes(4, account.TemplateAddress[:])
 			account.State = make([]byte, stmt.ColumnLen(5))
 			stmt.ColumnBytes(5, account.State)
 		}
@@ -78,7 +78,7 @@ func All(db sql.Executor) ([]*types.Account, error) {
 		if stmt.ColumnLen(5) > 0 {
 			var template types.Address
 			stmt.ColumnBytes(5, template[:])
-			account.Template = &template
+			account.TemplateAddress = &template
 			account.State = make([]byte, stmt.ColumnLen(6))
 			stmt.ColumnBytes(6, account.State)
 		}
@@ -101,11 +101,11 @@ func Update(db sql.Executor, to *types.Account) error {
 		stmt.BindBool(3, to.Initialized)
 		stmt.BindInt64(4, int64(to.NextNonce))
 		stmt.BindInt64(5, int64(to.Layer.Value))
-		if to.Template == nil {
+		if to.TemplateAddress == nil {
 			stmt.BindNull(6)
 			stmt.BindNull(7)
 		} else {
-			stmt.BindBytes(6, to.Template[:])
+			stmt.BindBytes(6, to.TemplateAddress[:])
 			stmt.BindBytes(7, to.State)
 		}
 	}, nil)

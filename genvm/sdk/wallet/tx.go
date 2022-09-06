@@ -47,7 +47,7 @@ func Spawn(pk signing.PrivateKey, template core.Address, args scale.Encodable, n
 		opt(options)
 	}
 
-	payload := wallet.SpawnPayload{}
+	payload := core.Payload{}
 	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
 
@@ -73,7 +73,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	copy(spawnargs.PublicKey[:], signing.Public(pk))
 	principal := core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
 
-	payload := wallet.SpendPayload{}
+	payload := core.Payload{}
 	payload.GasPrice = options.GasPrice
 	payload.Nonce = nonce
 

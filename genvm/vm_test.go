@@ -434,14 +434,14 @@ type spawned struct {
 func (ch spawned) verify(tb testing.TB, prev, current *core.Account) {
 	tb.Helper()
 
-	require.Nil(tb, prev.Template)
+	require.Nil(tb, prev.TemplateAddress)
 	require.Nil(tb, prev.State)
 
-	require.NotNil(tb, current.Template, "account should be spawned")
-	require.Equal(tb, ch.template, *current.Template)
+	require.NotNil(tb, current.TemplateAddress, "account should be spawned")
+	require.Equal(tb, ch.template, *current.TemplateAddress)
 	require.NotNil(tb, current.State)
 
-	prev.Template = current.Template
+	prev.TemplateAddress = current.TemplateAddress
 	prev.State = current.State
 	if ch.change != nil {
 		ch.change.verify(tb, prev, current)
@@ -1271,24 +1271,24 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			desc: "Spawn",
 			tx:   tt.selfSpawn(1),
 			header: &core.Header{
-				Principal: tt.accounts[1].getAddress(),
-				Method:    0,
-				Template:  template,
-				GasPrice:  1,
-				MaxGas:    uint64(tt.estimateSpawnGas(1)),
+				Principal:       tt.accounts[1].getAddress(),
+				Method:          0,
+				TemplateAddress: template,
+				GasPrice:        1,
+				MaxGas:          uint64(tt.estimateSpawnGas(1)),
 			},
 		},
 		{
 			desc: "Spend",
 			tx:   tt.spend(0, 1, 100),
 			header: &core.Header{
-				Principal: tt.accounts[0].getAddress(),
-				Method:    1,
-				Template:  template,
-				GasPrice:  1,
-				Nonce:     core.Nonce{Counter: 1},
-				MaxSpend:  100,
-				MaxGas:    uint64(tt.estimateSpendGas(0, 1, 100, core.Nonce{Counter: 1})),
+				Principal:       tt.accounts[0].getAddress(),
+				Method:          1,
+				TemplateAddress: template,
+				GasPrice:        1,
+				Nonce:           core.Nonce{Counter: 1},
+				MaxSpend:        100,
+				MaxGas:          uint64(tt.estimateSpendGas(0, 1, 100, core.Nonce{Counter: 1})),
 			},
 		},
 		{

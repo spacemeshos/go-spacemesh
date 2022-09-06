@@ -141,8 +141,8 @@ func TestRelay(t *testing.T) {
 	t.Run("mismatched template", func(t *testing.T) {
 		cache := core.NewStagedCache(sql.InMemory())
 		require.NoError(t, cache.Update(core.Account{
-			Address:  remote,
-			Template: &core.Address{'m', 'i', 's'},
+			Address:         remote,
+			TemplateAddress: &core.Address{'m', 'i', 's'},
 		}))
 		ctx := core.Context{Loader: cache}
 		call := func(remote core.Host) error {
@@ -176,9 +176,9 @@ func TestRelay(t *testing.T) {
 					amount2 = total - amount1/2
 				)
 				require.NoError(t, cache.Update(core.Account{
-					Address:  remote,
-					Template: &template,
-					Balance:  total,
+					Address:         remote,
+					TemplateAddress: &template,
+					Balance:         total,
 				}))
 				ctx := core.Context{Loader: cache, Registry: reg}
 				ctx.PrincipalAccount.Address = principal

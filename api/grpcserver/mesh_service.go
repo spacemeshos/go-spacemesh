@@ -264,7 +264,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			Address: t.Principal.String(),
 		}
 		tx.Template = &pb.AccountId{
-			Address: t.Template.String(),
+			Address: t.TemplateAddress.String(),
 		}
 		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
