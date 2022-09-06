@@ -89,7 +89,7 @@ type HandlerRegistry interface {
 	Get(Address) Handler
 }
 
-// Host ...
+// Host API with methods and data that are required by templates.
 type Host interface {
 	Consume(uint64) error
 	Spawn(scale.Encodable) error

@@ -16,6 +16,7 @@ type Context struct {
 	Registry HandlerRegistry
 	Loader   AccountLoader
 
+	// LayerID of the block.
 	LayerID LayerID
 
 	PrincipalHandler  Handler
@@ -255,7 +256,7 @@ func (r *RemoteContext) Handler() Handler {
 
 // Transfer ...
 func (r *RemoteContext) Transfer(to Address, amount uint64) error {
-	if err := r.transfer(r.remote, to, amount, r.remote.Balance); err != nil {
+	if err := r.transfer(r.remote, to, amount, amount); err != nil {
 		return err
 	}
 	return nil
