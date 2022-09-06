@@ -106,34 +106,11 @@ type ActivationTxHeader struct {
 	Coinbase Address
 	NumUnits uint32
 
-	// the following fields are kept private and from being serialized
-	id *ATXID // non-exported cache of the ATXID
+	ID     ATXID  // the ID of the ATX
+	NodeID NodeID // the id of the Node that created the ATX (public key)
 
-	nodeID *NodeID // the id of the Node that created the ATX (public key)
-
-	baseTickHeight uint64
-	tickCount      uint64
-}
-
-// ShortString returns the first 5 characters of the ID, for logging purposes.
-func (atxh *ActivationTxHeader) ShortString() string {
-	return atxh.ID().ShortString()
-}
-
-// ID returns the ATX's ID.
-func (atxh *ActivationTxHeader) ID() ATXID {
-	if atxh.id == nil {
-		panic("id field must be set")
-	}
-	return *atxh.id
-}
-
-// NodeID returns the ATX's Node ID.
-func (atxh *ActivationTxHeader) NodeID() NodeID {
-	if atxh.nodeID == nil {
-		panic("nodeID field must be set")
-	}
-	return *atxh.nodeID
+	BaseTickHeight uint64
+	TickCount      uint64
 }
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
@@ -144,22 +121,12 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 
 // GetWeight of the atx.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
-	return uint64(atxh.NumUnits) * (atxh.tickCount)
-}
-
-// BaseTickHeight is a tick height of the positional atx.
-func (atxh *ActivationTxHeader) BaseTickHeight() uint64 {
-	return atxh.baseTickHeight
-}
-
-// TickCount returns tick count from from poet proof attached to the atx.
-func (atxh *ActivationTxHeader) TickCount() uint64 {
-	return atxh.tickCount
+	return uint64(atxh.NumUnits) * (atxh.TickCount)
 }
 
 // TickHeight returns a sum of base tick height and tick count.
 func (atxh *ActivationTxHeader) TickHeight() uint64 {
-	return atxh.baseTickHeight + atxh.tickCount
+	return atxh.BaseTickHeight + atxh.TickCount
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the

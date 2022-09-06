@@ -62,7 +62,7 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, err
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, atx.Header())
+	db.atxHdrCache.Add(id, getHeader(atx))
 	return atx, nil
 }
 
@@ -89,7 +89,7 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 	)
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		weight += header.GetWeight()
-		ids = append(ids, header.ID())
+		ids = append(ids, header.ID)
 		return true
 	}); err != nil {
 		return 0, nil, err
@@ -185,4 +185,18 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return poets.Get(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
+}
+
+func getHeader(atx *types.VerifiedActivationTx) *types.ActivationTxHeader {
+	return &types.ActivationTxHeader{
+		NIPostChallenge: atx.NIPostChallenge,
+		Coinbase:        atx.Coinbase,
+		NumUnits:        atx.NumUnits,
+
+		ID:     atx.ID(),
+		NodeID: atx.NodeID(),
+
+		BaseTickHeight: atx.BaseTickHeight(),
+		TickCount:      atx.TickCount(),
+	}
 }

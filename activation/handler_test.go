@@ -169,7 +169,7 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 	assert.NoError(t, err)
 
-	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.NoError(t, err)
 }
 
@@ -259,7 +259,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
 	vAtx := newAtx(challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
-	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
@@ -269,7 +269,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	vAtx = newAtx(challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
 	require.NoError(t, atxs.DeleteATXsByNodeID(cdb, atx.NodeID()))
 
-	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.ErrorIs(t, err, sql.ErrNotFound)
 
 	// Prev atx not declared but initial Post not included.
@@ -350,7 +350,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	vAtx = newActivationTx(sig, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
@@ -382,7 +382,7 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	vAtx = newActivationTx(otherSig, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
@@ -446,7 +446,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxHdlr.ContextuallyValidateAtx(vAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
@@ -589,12 +589,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	atxHdlr := NewHandler(datastore.NewCachedDB(sql.InMemory(), lg), nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, lg.WithName("atxHandler"))
 
 	validAtx := newAtx(newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{}).Verify(0, 1)
-	err := atxHdlr.ContextuallyValidateAtx(validAtx.Header())
+	err := atxHdlr.ContextuallyValidateAtx(validAtx)
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
 	malformedAtx := newAtx(newChallenge(0, arbitraryAtxID, goldenATXID, types.LayerID{}), sig, nil, 0, types.Address{}).Verify(0, 1)
-	err = atxHdlr.ContextuallyValidateAtx(malformedAtx.Header())
+	err = atxHdlr.ContextuallyValidateAtx(malformedAtx)
 	r.ErrorIs(err, sql.ErrNotFound)
 }
 
@@ -739,8 +739,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	stored1, err := db.GetAtxHeader(atx1.ID())
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), stored1.BaseTickHeight())
-	require.Equal(t, leaves/tickSize, stored1.TickCount())
+	require.Equal(t, uint64(0), stored1.BaseTickHeight)
+	require.Equal(t, leaves/tickSize, stored1.TickCount)
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
 	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
 
@@ -772,8 +772,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	stored2, err := db.GetAtxHeader(atx2.ID())
 	require.NoError(t, err)
-	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight())
-	require.Equal(t, leaves/tickSize, stored2.TickCount())
+	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight)
+	require.Equal(t, leaves/tickSize, stored2.TickCount)
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
 	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
 }
