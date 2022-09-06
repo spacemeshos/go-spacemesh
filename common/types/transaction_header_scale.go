@@ -16,7 +16,7 @@ func (t *TxHeader) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Template[:])
+		n, err := scale.EncodeByteArray(enc, t.TemplateAddress[:])
 		if err != nil {
 			return total, err
 		}
@@ -76,7 +76,7 @@ func (t *TxHeader) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Template[:])
+		n, err := scale.DecodeByteArray(dec, t.TemplateAddress[:])
 		if err != nil {
 			return total, err
 		}

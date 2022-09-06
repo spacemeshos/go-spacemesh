@@ -26,10 +26,14 @@ func encode(fields ...scale.Encodable) []byte {
 	return buf.Bytes()
 }
 
+func NewAggregator(unsigned []byte) *Aggregator {
+	return &Aggregator{unsigned: unsigned, parts: map[uint8]multisig.Part{}}
+}
+
 // Aggregator is a signature accumulator.
 type Aggregator struct {
-	payload []byte
-	parts   map[uint8]multisig.Part
+	unsigned []byte
+	parts    map[uint8]multisig.Part
 }
 
 // Add signature parts to the accumulator.
@@ -63,29 +67,35 @@ func (tx *Aggregator) Raw() []byte {
 	if err != nil {
 		panic(err) // buf.Write is not expected to fail
 	}
-	return append(tx.payload, buf.Bytes()...)
+	return append(tx.unsigned, buf.Bytes()...)
 }
 
 // SelfSpawn returns accumulator for self-spawn transaction.
 func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
+	args := multisig.SpawnArguments{}
+	args.PublicKeys = make([]core.PublicKey, len(pubs))
+	for i := range pubs {
+		copy(args.PublicKeys[i][:], pubs[i])
+	}
+	principal := core.ComputePrincipal(template, &args)
+	return Spawn(ref, pk, principal, template, &args, nonce, opts...)
+}
+
+// Spawn returns accumulator for spawn transaction.
+func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	payload := multisig.SpawnPayload{}
+	payload := core.Payload{}
 	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
-	payload.Arguments.PublicKeys = make([]core.PublicKey, len(pubs))
-	for i := range pubs {
-		copy(payload.Arguments.PublicKeys[i][:], pubs[i])
-	}
-	principal := core.ComputePrincipal(template, &payload.Arguments)
 
-	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
-	aggregator := &Aggregator{payload: tx, parts: map[uint8]multisig.Part{}}
+	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
 	part := multisig.Part{Ref: ref}
 	copy(part.Sig[:], sig)
 	aggregator.Add(part)
@@ -99,16 +109,18 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 		opt(options)
 	}
 
-	payload := multisig.SpendPayload{}
+	payload := core.Payload{}
 	payload.GasPrice = options.GasPrice
-	payload.Arguments.Destination = to
-	payload.Arguments.Amount = amount
 	payload.Nonce = nonce
 
-	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload)
+	args := multisig.SpendArguments{}
+	args.Destination = to
+	args.Amount = amount
+
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
-	aggregator := &Aggregator{payload: tx, parts: map[uint8]multisig.Part{}}
+	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
 	part := multisig.Part{Ref: ref}
 	copy(part.Sig[:], sig)
 	aggregator.Add(part)

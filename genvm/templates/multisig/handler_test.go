@@ -21,12 +21,7 @@ func TestKeysLimits(t *testing.T) {
 				t.Run(strconv.Itoa(n), func(t *testing.T) {
 					handler := reg.Get(address)
 					args := SpawnArguments{PublicKeys: make([]core.PublicKey, n)}
-					ctx := core.Context{}
-					ctx.Account.Balance = 1_000_000
-					ctx.Header.GasPrice = 1
-					ctx.Header.MaxGas = 1_000_000
-					ctx.Header.Principal = core.ComputePrincipal(address, &args)
-					err := handler.Exec(&ctx, methodSpawn, &args)
+					_, err := handler.New(&args)
 					if n < expectedK || n > StorageLimit {
 						require.Error(t, err)
 					} else {

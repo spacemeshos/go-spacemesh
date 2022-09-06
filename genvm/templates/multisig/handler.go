@@ -77,43 +77,42 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (out core.ParseOutput, args scale.Encodable, err error) {
+func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
 	case methodSpawn:
-		var p SpawnPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		args = &p.Arguments
-		out.GasPrice = p.GasPrice
-		out.Nonce = p.Nonce
-		out.FixedGas = h.totalGasSpawn
+		output.FixedGas = h.totalGasSpawn
 	case methodSpend:
-		var p SpendPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		args = &p.Arguments
-		out.GasPrice = p.GasPrice
-		out.Nonce.Counter = p.Nonce.Counter
-		out.Nonce.Bitfield = p.Nonce.Bitfield
-		out.FixedGas = h.totalGasSpend
+		output.FixedGas = h.totalGasSpend
 	default:
-		return out, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
-	return out, args, nil
+	var p core.Payload
+	if _, err = p.DecodeScale(decoder); err != nil {
+		err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+		return
+	}
+	output.GasPrice = p.GasPrice
+	output.Nonce = p.Nonce
+	return output, nil
 }
 
-// Init wallet.
-func (h *handler) Init(method uint8, args any, state []byte) (core.Template, error) {
-	if method == methodSpawn {
-		return &MultiSig{
-			PublicKeys: args.(*SpawnArguments).PublicKeys,
-			k:          h.k,
-		}, nil
+// New instantiates k-multisig instance.
+func (h *handler) New(args any) (core.Template, error) {
+	n := len(args.(*SpawnArguments).PublicKeys)
+	if n < int(h.k) {
+		return nil, fmt.Errorf("multisig requires atleast %d keys", h.k)
 	}
+	if n > StorageLimit {
+		return nil, fmt.Errorf("multisig supports atmost %d keys", StorageLimit)
+	}
+	return &MultiSig{
+		PublicKeys: args.(*SpawnArguments).PublicKeys,
+		k:          h.k,
+	}, nil
+}
+
+// Load k-multisig instance from stored state.
+func (h *handler) Load(state []byte) (core.Template, error) {
 	decoder := scale.NewDecoder(bytes.NewReader(state))
 	ms := MultiSig{k: h.k}
 	if _, err := ms.DecodeScale(decoder); err != nil {
@@ -126,14 +125,7 @@ func (h *handler) Init(method uint8, args any, state []byte) (core.Template, err
 func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
 	switch method {
 	case methodSpawn:
-		n := len(args.(*SpawnArguments).PublicKeys)
-		if n < int(h.k) {
-			return fmt.Errorf("multisig requires atleast %d keys", h.k)
-		}
-		if n > StorageLimit {
-			return fmt.Errorf("multisig supports atmost %d keys", StorageLimit)
-		}
-		if err := ctx.Spawn(h.address, args); err != nil {
+		if err := ctx.Spawn(args); err != nil {
 			return err
 		}
 	case methodSpend:
@@ -142,6 +134,17 @@ func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) er
 		}
 	default:
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+	}
+	return nil
+}
+
+// Args ...
+func (h *handler) Args(method uint8) scale.Type {
+	switch method {
+	case methodSpawn:
+		return &SpawnArguments{}
+	case methodSpend:
+		return &SpendArguments{}
 	}
 	return nil
 }

@@ -24,13 +24,3 @@ type Part struct {
 
 // SpendArguments ...
 type SpendArguments = wallet.SpendArguments
-
-// SpendPayload ...
-type SpendPayload = wallet.SpendPayload
-
-// SpawnPayload ...
-type SpawnPayload struct {
-	Arguments SpawnArguments
-	Nonce     core.Nonce
-	GasPrice  uint64
-}
