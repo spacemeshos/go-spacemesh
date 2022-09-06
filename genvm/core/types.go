@@ -76,3 +76,11 @@ type ParseOutput struct {
 type HandlerRegistry interface {
 	Get(Address) Handler
 }
+
+//go:generate scalegen -types Payload
+
+// Payload is a generic payload for all transactions.
+type Payload struct {
+	Nonce    Nonce
+	GasPrice uint64
+}

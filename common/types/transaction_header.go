@@ -7,14 +7,14 @@ import "github.com/spacemeshos/go-spacemesh/log"
 // TxHeader is a transaction header, with some of the fields defined directly in the tx
 // and the rest is computed by the template based on immutable state and method arguments.
 type TxHeader struct {
-	Principal   Address
-	Template    Address
-	Method      uint8
-	Nonce       Nonce
-	LayerLimits LayerLimits
-	MaxGas      uint64
-	GasPrice    uint64
-	MaxSpend    uint64
+	Principal       Address
+	TemplateAddress Address
+	Method          uint8
+	Nonce           Nonce
+	LayerLimits     LayerLimits
+	MaxGas          uint64
+	GasPrice        uint64
+	MaxSpend        uint64
 }
 
 // Fee is a MaxGas multiplied by a GasPrice.

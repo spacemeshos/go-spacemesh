@@ -4,8 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-scale/tester"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
 func FuzzSpawnArgumentsConsistency(f *testing.F) {
@@ -26,9 +28,9 @@ func TestGolden(t *testing.T) {
 		tester.GoldenTest[SpendArguments](t, filepath.Join(golden, "SpendArguments.json"))
 	})
 	t.Run("SpendPayload", func(t *testing.T) {
-		tester.GoldenTest[SpendPayload](t, filepath.Join(golden, "SpendPayload.json"))
+		tester.GoldenTest[core.Payload](t, filepath.Join(golden, "SpendPayload.json"))
 	})
 	t.Run("SpawnPayload", func(t *testing.T) {
-		tester.GoldenTest[SpawnPayload](t, filepath.Join(golden, "SpawnPayload.json"))
+		tester.GoldenTest[core.Payload](t, filepath.Join(golden, "SpawnPayload.json"))
 	})
 }

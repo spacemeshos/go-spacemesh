@@ -16,15 +16,3 @@ type SpendArguments struct {
 	Destination core.Address
 	Amount      uint64
 }
-
-// SpendPayload ...
-type SpendPayload struct {
-	Nonce    core.Nonce
-	GasPrice uint64
-}
-
-// SpawnPayload ...
-type SpawnPayload struct {
-	Nonce    core.Nonce
-	GasPrice uint64
-}

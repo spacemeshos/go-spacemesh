@@ -461,10 +461,10 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 		Account:  account,
 	}
 
-	if account.Template != nil {
-		ctx.Handler = reg.Get(*account.Template)
+	if account.TemplateAddress != nil {
+		ctx.Handler = reg.Get(*account.TemplateAddress)
 		if ctx.Handler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.Template)
+			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
 		}
 		ctx.Template, err = ctx.Handler.Load(account.State)
 		if err != nil {
@@ -473,27 +473,30 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 	}
 
 	var (
-		template *core.Address
-		handler  core.Handler
+		templateAddress *core.Address
+		handler         core.Handler
 	)
 	if method == 0 {
-		template = &core.Address{}
-		if _, err := template.DecodeScale(decoder); err != nil {
+		// the transaction is either spawn or self-spawn
+		templateAddress = &core.Address{}
+		if _, err := templateAddress.DecodeScale(decoder); err != nil {
 			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
 		}
-		handler = reg.Get(*template)
+		handler = reg.Get(*templateAddress)
 		if handler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *template)
+			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
 		}
 		if ctx.Handler == nil {
-			// need this for self-spawn
+			// spawn is not possible if principal is not spawned
+			// so this must be self-spawn, but we can't tell before decoding arguments
 			ctx.Handler = handler
 		}
 	} else {
-		if account.Template == nil {
+		// this is any other call transaction
+		if account.TemplateAddress == nil {
 			return nil, nil, nil, core.ErrNotSpawned
 		}
-		template = account.Template
+		templateAddress = account.TemplateAddress
 		handler = ctx.Handler
 	}
 	output, err := ctx.Handler.Parse(ctx, method, decoder)
@@ -502,19 +505,19 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 	}
 	args := handler.Args(method)
 	if args == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *template, method)
+		return nil, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
 	}
 	if _, err := args.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
 	}
 	if method == 0 {
-		if core.ComputePrincipal(*template, args) == principal {
+		if core.ComputePrincipal(*templateAddress, args) == principal {
 			// this is a self spawn. if it fails validation - discard it immediately
 			ctx.Template, err = ctx.Handler.New(args)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-		} else if account.Template == nil {
+		} else if account.TemplateAddress == nil {
 			return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
 		}
 	}
@@ -522,7 +525,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 	ctx.ParseOutput = output
 
 	ctx.Header.Principal = principal
-	ctx.Header.Template = *template
+	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
 	ctx.Header.MaxGas = core.ComputeGasCost(output.FixedGas, raw, storageCost)
 	ctx.Header.GasPrice = output.GasPrice

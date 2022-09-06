@@ -40,22 +40,21 @@ type Context struct {
 
 // Spawn account.
 func (c *Context) Spawn(args scale.Encodable) error {
-	template := c.Header.Template
-	address := ComputePrincipal(template, args)
+	spawned := ComputePrincipal(c.Header.TemplateAddress, args)
 	var account *types.Account
-	if address == c.Account.Address {
+	if spawned == c.Account.Address {
 		account = &c.Account
 	} else {
 		var err error
-		account, err = c.load(address)
+		account, err = c.load(spawned)
 		if err != nil {
 			return err
 		}
 	}
-	if account.Template != nil {
+	if account.TemplateAddress != nil {
 		return ErrSpawned
 	}
-	handler := c.Registry.Get(template)
+	handler := c.Registry.Get(c.Header.TemplateAddress)
 	if handler == nil {
 		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
 	}
@@ -69,7 +68,7 @@ func (c *Context) Spawn(args scale.Encodable) error {
 		return fmt.Errorf("%w: %s", ErrInternal, err)
 	}
 	account.State = buf.Bytes()
-	account.Template = &template
+	account.TemplateAddress = &c.Header.TemplateAddress
 	if account.Address != c.Account.Address {
 		c.change(account)
 	}

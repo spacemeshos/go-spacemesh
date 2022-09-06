@@ -80,26 +80,19 @@ type handler struct {
 func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
 	case methodSpawn:
-		var p SpawnPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		output.GasPrice = p.GasPrice
-		output.Nonce = p.Nonce
 		output.FixedGas = h.totalGasSpawn
 	case methodSpend:
-		var p SpendPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		output.GasPrice = p.GasPrice
-		output.Nonce = p.Nonce
 		output.FixedGas = h.totalGasSpend
 	default:
 		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
+	var p core.Payload
+	if _, err = p.DecodeScale(decoder); err != nil {
+		err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+		return
+	}
+	output.GasPrice = p.GasPrice
+	output.Nonce = p.Nonce
 	return output, nil
 }
 

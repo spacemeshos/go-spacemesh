@@ -44,7 +44,7 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.Template)
+		n, err := scale.EncodeOption(enc, t.TemplateAddress)
 		if err != nil {
 			return total, err
 		}
@@ -105,7 +105,7 @@ func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.Template = field
+		t.TemplateAddress = field
 	}
 	{
 		field, n, err := scale.DecodeByteSlice(dec)
