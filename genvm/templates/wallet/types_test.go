@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-scale/tester"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
