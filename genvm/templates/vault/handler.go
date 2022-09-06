@@ -33,7 +33,7 @@ type handler struct{}
 
 // Parse is noop on vault template.
 func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (core.ParseOutput, error) {
-	return core.ParseOutput{}, core.ErrMalformed
+	return core.ParseOutput{}, nil
 }
 
 // New instantiates vault state.

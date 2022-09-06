@@ -15,6 +15,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	sdkmultisig "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
 	sdkvesting "github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
 	sdkwallet "github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -1839,6 +1840,61 @@ func TestValidation(t *testing.T) {
 			applyGenesis().
 			addVesting(1, 3, 10, vesting.TemplateAddress3)
 		testValidation(t, tt, vesting.TemplateAddress3)
+	})
+}
+
+func TestVaultValidation(t *testing.T) {
+	tt := newTester(t).
+		addVesting(1, 1, 2, vesting.TemplateAddress1).
+		addVault(2, 100, 10, types.NewLayerID(1), types.NewLayerID(10)).
+		applyGenesis()
+	_, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil)
+	require.NoError(t, err)
+
+	t.Run("self spawn", func(t *testing.T) {
+		principal := tt.accounts[2].getAddress()
+		tx := sdk.Encode(
+			&sdk.TxVersion,
+			&principal,
+			&sdk.MethodSpawn,
+			&vault.TemplateAddress,
+			tt.accounts[2].spawnArgs(),
+		)
+		req := tt.Validation(types.NewRawTx(tx))
+		header, err := req.Parse()
+		require.NoError(t, err)
+		require.NotNil(t, header)
+		require.False(t, req.Verify())
+	})
+	t.Run("spawn", func(t *testing.T) {
+		principal := tt.accounts[1].getAddress()
+		tx := sdk.Encode(
+			&sdk.TxVersion,
+			&principal,
+			&sdk.MethodSpawn,
+			&vault.TemplateAddress,
+			tt.accounts[2].spawnArgs(),
+		)
+		req := tt.Validation(types.NewRawTx(tx))
+		header, err := req.Parse()
+		require.NoError(t, err)
+		require.NotNil(t, header)
+		require.False(t, req.Verify())
+	})
+	t.Run("spend", func(t *testing.T) {
+		principal := tt.accounts[1].getAddress()
+		tx := sdk.Encode(
+			&sdk.TxVersion,
+			&principal,
+			&sdk.MethodSpend,
+			&vault.SpendArguments{},
+		)
+		req := tt.Validation(types.NewRawTx(tx))
+		header, err := req.Parse()
+		require.NoError(t, err)
+		require.NotNil(t, header)
+		require.False(t, req.Verify())
 	})
 }
 

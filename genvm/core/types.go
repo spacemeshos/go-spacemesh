@@ -10,7 +10,7 @@ const (
 	// MethodSpawn identifier.
 	MethodSpawn = 0
 	// MethodSpend identifier.
-	MethodSpend = 16
+	MethodSpend = 1
 )
 
 type (
