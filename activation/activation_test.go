@@ -255,7 +255,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 	r.Equal(sig.NodeID(), atx.NodeID())
 	if prevAtx != nil {
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
-		r.Equal(prevAtx.ID, atx.PrevATXID)
+		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
 		r.Nil(atx.InitialPostIndices)
 	} else {
@@ -264,7 +264,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 		r.NotNil(atx.InitialPost)
 		r.NotNil(atx.InitialPostIndices)
 	}
-	r.Equal(posAtx.ID, atx.PositioningATX)
+	r.Equal(posAtx.ID(), atx.PositioningATX)
 	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)
 	r.Equal(poetRef, atx.GetPoetProofRef())
 }
