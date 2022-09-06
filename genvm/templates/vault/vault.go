@@ -32,7 +32,7 @@ func (v *Vault) isOwner(address core.Address) bool {
 	return v.Owner == address
 }
 
-func (v *Vault) available(lid core.LayerID) uint64 {
+func (v *Vault) Available(lid core.LayerID) uint64 {
 	if lid.Before(v.VestingStart) {
 		return 0
 	}
@@ -50,8 +50,8 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 	if !v.isOwner(host.Principal()) {
 		return ErrNotOwner
 	}
-	available := v.available(host.Layer()) - v.DrainedSoFar
-	if amount > available {
+	available := v.Available(host.Layer())
+	if amount > available-v.DrainedSoFar {
 		return ErrAmountNotAvailable
 	}
 	if err := host.Transfer(to, amount); err != nil {

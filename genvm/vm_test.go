@@ -199,6 +199,30 @@ func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64
 	return agg.Raw()
 }
 
+func (a *vestingAccount) spendGas() int {
+	switch a.template {
+	case vesting.TemplateAddress1:
+		return vesting.TotalGasSpend1
+	case vesting.TemplateAddress2:
+		return vesting.TotalGasSpend2
+	case vesting.TemplateAddress3:
+		return vesting.TotalGasSpend3
+	}
+	panic("unknown template")
+}
+
+func (a *vestingAccount) spawnGas() int {
+	switch a.template {
+	case vesting.TemplateAddress1:
+		return vesting.TotalGasSpawn1
+	case vesting.TemplateAddress2:
+		return vesting.TotalGasSpawn2
+	case vesting.TemplateAddress3:
+		return vesting.TotalGasSpawn3
+	}
+	panic("unknown template")
+}
+
 func (a *vestingAccount) drainGas() int {
 	switch a.template {
 	case vesting.TemplateAddress1:
@@ -1352,6 +1376,36 @@ func TestWallets(t *testing.T) {
 				withBaseReward(testBaseReward)
 		})
 	})
+	t.Run("Vesting13", func(t *testing.T) {
+		const n = 3
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress1, func(t *testing.T) *tester {
+			return newTester(t).
+				addVesting(funded, 1, n, vesting.TemplateAddress1).
+				applyGenesisWithBalance(balance).
+				addVesting(total-funded, 1, n, vesting.TemplateAddress1).
+				withBaseReward(testBaseReward)
+		})
+	})
+	t.Run("Vesting25", func(t *testing.T) {
+		const n = 5
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress2, func(t *testing.T) *tester {
+			return newTester(t).
+				addVesting(funded, 2, n, vesting.TemplateAddress2).
+				applyGenesisWithBalance(balance).
+				addVesting(total-funded, 2, n, vesting.TemplateAddress2).
+				withBaseReward(testBaseReward)
+		})
+	})
+	t.Run("Vesting310", func(t *testing.T) {
+		const n = 10
+		testWallet(t, defaultGasPrice, vesting.TemplateAddress3, func(t *testing.T) *tester {
+			return newTester(t).
+				addVesting(funded, 3, n, vesting.TemplateAddress3).
+				applyGenesisWithBalance(balance).
+				addVesting(total-funded, 3, n, vesting.TemplateAddress3).
+				withBaseReward(testBaseReward)
+		})
+	})
 }
 
 func TestRandomTransfers(t *testing.T) {
@@ -1764,6 +1818,27 @@ func TestValidation(t *testing.T) {
 			applyGenesis().
 			addMultisig(1, 3, 10, multisig.TemplateAddress3)
 		testValidation(t, tt, multisig.TemplateAddress3)
+	})
+	t.Run("Vesting13", func(t *testing.T) {
+		tt := newTester(t).
+			addVesting(1, 1, 3, vesting.TemplateAddress1).
+			applyGenesis().
+			addVesting(1, 1, 3, vesting.TemplateAddress1)
+		testValidation(t, tt, vesting.TemplateAddress1)
+	})
+	t.Run("Vesting25", func(t *testing.T) {
+		tt := newTester(t).
+			addVesting(1, 2, 5, vesting.TemplateAddress2).
+			applyGenesis().
+			addVesting(1, 2, 5, vesting.TemplateAddress2)
+		testValidation(t, tt, vesting.TemplateAddress2)
+	})
+	t.Run("Vesting310", func(t *testing.T) {
+		tt := newTester(t).
+			addVesting(1, 3, 10, vesting.TemplateAddress3).
+			applyGenesis().
+			addVesting(1, 3, 10, vesting.TemplateAddress3)
+		testValidation(t, tt, vesting.TemplateAddress3)
 	})
 }
 

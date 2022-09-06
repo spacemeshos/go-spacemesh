@@ -87,7 +87,7 @@ func (h *handler) New(args any) (core.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Vesting{Template: template}, nil
+	return &Vesting{MultiSig: template.(*multisig.MultiSig)}, nil
 }
 
 // Load instnatiates vesting state from stored state. See comment on New.
@@ -96,7 +96,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Vesting{Template: template}, nil
+	return &Vesting{MultiSig: template.(*multisig.MultiSig)}, nil
 }
 
 // Exec spawn or spend based on the method selector.
