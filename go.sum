@@ -514,7 +514,6 @@ github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7J
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
 github.com/onsi/gomega v1.13.0/go.mod h1:lRk9szgn8TxENtWd0Tp4c3wjlRfMTMH27I+3Je41yGY=
 github.com/onsi/gomega v1.20.0 h1:8W0cWlwFkflGPLltQvLRB7ZVD5HuP6ng320w2IS245Q=
-github.com/onsi/gomega v1.20.0/go.mod h1:DtrZpjmvpn2mPm4YWQa0/ALMDj9v4YxLgojwPeREyVo=
 github.com/opencontainers/runtime-spec v1.0.2 h1:UfAcuLBJB9Coz72x1hgl8O5RVzTdNiaglX6v2DM6FI0=
 github.com/opencontainers/runtime-spec v1.0.2/go.mod h1:jwyrGlmzljRJv/Fgzds9SsS/C5hL+LL3ko9hs6T5lQ0=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
@@ -625,8 +624,8 @@ github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c h1:4flg9MKhjh
 github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c/go.mod h1:7GtYsMzAZ4x93wkEwHBm8HYrgQtJkK7V31ypa80Mhmg=
 github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b h1:hqSJOwYjw/0U2hAakkbiBawTRaCTE7VaqN232KQ6ULA=
 github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b/go.mod h1:O7FscIXIKgXdfoUHUPQIDTz+VXpT2z2ISVnvnDxyMrY=
-github.com/spacemeshos/poet v0.1.1-0.20220825131009-8e11e75cd2df h1:Z1/pwID6TSeh+mrkWOEMJTHrhxeST0qhuZeQZBiJD6o=
-github.com/spacemeshos/poet v0.1.1-0.20220825131009-8e11e75cd2df/go.mod h1:IyUvLnK0r6nh1UNVVtIBAetaG1+CzQ6oHJ2OP03luRE=
+github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063 h1:GmHGuF1+cI+KnFb28kcx8TfMhhoXEqSu8WTx5Z5fBpI=
+github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063/go.mod h1:/oVBisXsazwHSqKyVmTN19QPuNymY7xny2N8Gee/tZo=
 github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797 h1:2wT5ucq/VAcmuxICG6C5JWjliNCM3KpgezBRcA8OU34=
 github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797/go.mod h1:w4bO+GobymG2LOvOMRi2lZu/z/CF6M+vcLe+96oZePU=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=

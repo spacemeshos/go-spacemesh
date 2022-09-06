@@ -32,7 +32,7 @@ require (
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c
 	github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b
-	github.com/spacemeshos/poet v0.1.1-0.20220825131009-8e11e75cd2df
+	github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063
 	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
@@ -147,7 +147,6 @@ require (
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/gomega v1.20.0 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
