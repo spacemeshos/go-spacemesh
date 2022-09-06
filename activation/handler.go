@@ -241,9 +241,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 
 	vAtx := atx.Verify(baseTickHeight, leaves/h.tickSize)
-
-	// TODO(mafa): instead of reporting the event immediately, should we only report it after validation passed?
-	events.ReportNewActivation(vAtx)
 	return vAtx, nil
 }
 
@@ -387,6 +384,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		// TODO: blacklist peer
 	}
 
+	events.ReportNewActivation(vAtx)
 	logger.With().Info("got new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil
 }

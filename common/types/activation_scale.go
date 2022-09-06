@@ -256,29 +256,6 @@ func (t *ActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *VerifiedActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeOption(enc, t.ActivationTx)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *VerifiedActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeOption[ActivationTx](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.ActivationTx = field
-	}
-	return total, nil
-}
-
 func (t *PoetProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.MerkleProof.EncodeScale(enc)
