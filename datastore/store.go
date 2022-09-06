@@ -46,12 +46,8 @@ func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, err
 	if atxHeader, gotIt := db.atxHdrCache.Get(id); gotIt {
 		return atxHeader, nil
 	}
-	atx, err := db.GetFullAtx(id)
-	if err != nil {
-		return nil, fmt.Errorf("get ATXs from DB: %w", err)
-	}
 
-	return atx.Header(), nil
+	return db.getAndCacheHeader(id)
 }
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
@@ -68,6 +64,21 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, err
 
 	db.atxHdrCache.Add(id, atx.Header())
 	return atx, nil
+}
+
+// getAndCacheHeader fetches the full atx struct from the database, caches it and returns the cached header.
+func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+	_, err := db.GetFullAtx(id)
+	if err != nil {
+		return nil, err
+	}
+
+	atxHeader, gotIt := db.atxHdrCache.Get(id)
+	if !gotIt {
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+	}
+
+	return atxHeader, nil
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
