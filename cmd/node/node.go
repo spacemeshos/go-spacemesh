@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -1071,6 +1072,28 @@ func (app *App) Start() error {
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
+	}
+
+	if savedGenFile := filesystem.PathExists(config.DefaultGenesisDataPath); savedGenFile {
+		// Then check if it agrees with the loaded genesis; panic if not
+		genData, err := ioutil.ReadFile(config.DefaultGenesisDataPath)
+		if err != nil {
+			return fmt.Errorf("Error reading saved genesis data: %s", err)
+		}
+
+		var payload config.GenesisConfig
+
+		err = json.Unmarshal(genData, &payload)
+		if err != nil {
+			return fmt.Errorf("Error decoded genesis data into JSON: %s", genData)
+		}
+
+		if expectedConfig, err_cmp := app.Config.Genesis.Compare(payload); err_cmp != nil {
+			return fmt.Errorf("Genesis data mismatch.\nExpected %s\nGot: %s", expectedConfig, genData)
+		}
+
+	} else {
+		// Persist it
 	}
 	// Note to self: Configuration should be finished after this
 	// Panic should be before this

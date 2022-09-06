@@ -1,8 +1,12 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+	"path/filepath"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -14,6 +18,10 @@ const (
 	GoldenATXIDLen = 32
 	GenesisIDLen   = 20
 	SaveToFileName = "GenesisDataChecksum"
+)
+
+var (
+	DefaultGenesisDataPath = filepath.Join(defaultHomeDir, defaultDataDirName, "/genesis.conf")
 )
 
 type GenesisConfig struct {
@@ -78,6 +86,21 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	}
 
 	return cfg
+}
+
+func (conf *GenesisConfig) Compare(cfg GenesisConfig) (string, error) {
+	if isEqual := cmp.Equal(conf, cfg); isEqual {
+		if d, err := json.Marshal(conf); err != nil {
+			return "", err
+		} else {
+			return string(d), nil
+		}
+	}
+	d, err := json.Marshal(conf)
+	if err != nil {
+		return string(d), fmt.Errorf("Err")
+	}
+
 }
 
 func DefaultTestGenesisTime() string {
