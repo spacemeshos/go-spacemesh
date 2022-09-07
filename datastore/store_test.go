@@ -47,7 +47,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	got, err := bs.Get(ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
 
-	// TODO(mafa): update with suggestion from countvonzero
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
 	require.NoError(t, gotA.CalcAndSetID())
