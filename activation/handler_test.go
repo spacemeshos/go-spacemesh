@@ -268,6 +268,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 
 	// Prev atx declared but not found.
 	vAtx, err = atx.Verify(0, 1)
+	assert.NoError(t, err)
 	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
