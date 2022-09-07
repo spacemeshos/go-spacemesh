@@ -283,6 +283,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		req := &Request{
 			vm:      v,
 			cache:   ss,
+			lid:     lctx.Layer,
 			raw:     txs[i].GetRaw(),
 			decoder: decoder,
 		}
@@ -299,10 +300,10 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 		ctx := req.ctx
 		args := req.args
-		if ctx.Account.Balance < ctx.ParseOutput.FixedGas*ctx.ParseOutput.GasPrice {
+		if ctx.PrincipalAccount.Balance < ctx.ParseOutput.FixedGas*ctx.ParseOutput.GasPrice {
 			logger.With().Warning("ineffective transaction. fixed gas not covered",
 				log.Object("header", header),
-				log.Object("account", &ctx.Account),
+				log.Object("account", &ctx.PrincipalAccount),
 				log.Uint64("fixed gas", ctx.ParseOutput.FixedGas),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
@@ -314,7 +315,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 				log.Uint64("block gas limit", v.cfg.GasLimit),
 				log.Uint64("current limit", limit),
 				log.Object("header", header),
-				log.Object("account", &ctx.Account),
+				log.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -326,17 +327,17 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		if !tx.Verified() && !req.Verify() {
 			logger.With().Warning("ineffective transaction. failed verify",
 				log.Object("header", header),
-				log.Object("account", &ctx.Account),
+				log.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
 
-		if ctx.Account.NextNonce > ctx.Header.Nonce.Counter {
+		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce.Counter {
 			logger.With().Warning("ineffective transaction. nonce too low",
 				log.Object("header", header),
-				log.Object("account", &ctx.Account),
+				log.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
 			invalidTxCount.Inc()
@@ -346,7 +347,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		t2 := time.Now()
 		logger.With().Debug("applying transaction",
 			log.Object("header", header),
-			log.Object("account", &ctx.Account),
+			log.Object("account", &ctx.PrincipalAccount),
 		)
 
 		rst := types.TransactionWithResult{}
@@ -355,12 +356,12 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			err = ctx.Handler.Exec(ctx, ctx.Header.Method, args)
+			err = ctx.PrincipalHandler.Exec(ctx, ctx.Header.Method, args)
 		}
 		if err != nil {
 			logger.With().Debug("transaction failed",
 				log.Object("header", header),
-				log.Object("account", &ctx.Account),
+				log.Object("account", &ctx.PrincipalAccount),
 				log.Err(err),
 			)
 			if errors.Is(err, core.ErrInternal) {
@@ -400,6 +401,7 @@ type Request struct {
 	vm    *VM
 	cache *core.StagedCache
 
+	lid     types.LayerID
 	raw     types.RawTx
 	decoder *scale.Decoder
 
@@ -411,7 +413,7 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, args, err := parse(r.vm.logger, r.vm.registry, r.cache, r.vm.cfg.StorageCostFactor, r.raw.Raw, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg.StorageCostFactor, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +434,7 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, storageCost uint64, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, storageCost uint64, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
@@ -456,17 +458,18 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 	logger.With().Debug("loaded account state", log.Inline(&account))
 
 	ctx := &core.Context{
-		Registry: reg,
-		Loader:   loader,
-		Account:  account,
+		Registry:         reg,
+		Loader:           loader,
+		PrincipalAccount: account,
+		LayerID:          lid,
 	}
 
 	if account.TemplateAddress != nil {
-		ctx.Handler = reg.Get(*account.TemplateAddress)
-		if ctx.Handler == nil {
+		ctx.PrincipalHandler = reg.Get(*account.TemplateAddress)
+		if ctx.PrincipalHandler == nil {
 			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
 		}
-		ctx.Template, err = ctx.Handler.Load(account.State)
+		ctx.PrincipalTemplate, err = ctx.PrincipalHandler.Load(account.State)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -476,7 +479,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 		templateAddress *core.Address
 		handler         core.Handler
 	)
-	if method == 0 {
+	if method == core.MethodSpawn {
 		// the transaction is either spawn or self-spawn
 		templateAddress = &core.Address{}
 		if _, err := templateAddress.DecodeScale(decoder); err != nil {
@@ -486,10 +489,10 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 		if handler == nil {
 			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
 		}
-		if ctx.Handler == nil {
+		if ctx.PrincipalHandler == nil {
 			// spawn is not possible if principal is not spawned
 			// so this must be self-spawn, but we can't tell before decoding arguments
-			ctx.Handler = handler
+			ctx.PrincipalHandler = handler
 		}
 	} else {
 		// this is any other call transaction
@@ -497,9 +500,9 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 			return nil, nil, nil, core.ErrNotSpawned
 		}
 		templateAddress = account.TemplateAddress
-		handler = ctx.Handler
+		handler = ctx.PrincipalHandler
 	}
-	output, err := ctx.Handler.Parse(ctx, method, decoder)
+	output, err := ctx.PrincipalHandler.Parse(ctx, method, decoder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -510,10 +513,10 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 	if _, err := args.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
 	}
-	if method == 0 {
+	if method == core.MethodSpawn {
 		if core.ComputePrincipal(*templateAddress, args) == principal {
 			// this is a self spawn. if it fails validation - discard it immediately
-			ctx.Template, err = ctx.Handler.New(args)
+			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -533,7 +536,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 
 	ctx.Args = args
 
-	maxspend, err := ctx.Template.MaxSpend(ctx.Header.Method, args)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx.Header.Method, args)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -542,7 +545,7 @@ func parse(logger log.Log, reg *registry.Registry, loader core.AccountLoader, st
 }
 
 func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
-	return ctx.Template.Verify(ctx, raw, dec)
+	return ctx.PrincipalTemplate.Verify(ctx, raw, dec)
 }
 
 // ApplyContext has information on layer and block id.

@@ -210,33 +210,40 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 	return t
 }
 
+func (t *tester) addAccount(account testAccount) {
+	t.accounts = append(t.accounts, account)
+	t.nonces = append(t.nonces, core.Nonce{})
+}
+
 func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		t.accounts = append(t.accounts, &singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
-		t.nonces = append(t.nonces, core.Nonce{})
+		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
 	}
 	return t
 }
 
+func (t *tester) createMultisig(k, n int, template core.Address) *multisigAccount {
+	pks := []ed25519.PrivateKey{}
+	pubs := [][]byte{}
+	for j := 0; j < n; j++ {
+		pub, pk, err := ed25519.GenerateKey(t.rng)
+		require.NoError(t, err)
+		pks = append(pks, pk)
+		pubs = append(pubs, pub)
+	}
+	return &multisigAccount{
+		k:        k,
+		pks:      pks,
+		address:  sdkmultisig.Address(template, pubs...),
+		template: template,
+	}
+}
+
 func (t *tester) addMultisig(total, k, n int, template core.Address) *tester {
 	for i := 0; i < total; i++ {
-		pks := []ed25519.PrivateKey{}
-		pubs := [][]byte{}
-		for j := 0; j < n; j++ {
-			pub, pk, err := ed25519.GenerateKey(t.rng)
-			require.NoError(t, err)
-			pks = append(pks, pk)
-			pubs = append(pubs, pub)
-		}
-		t.accounts = append(t.accounts, &multisigAccount{
-			k:        k,
-			pks:      pks,
-			address:  sdkmultisig.Address(template, pubs...),
-			template: template,
-		})
-		t.nonces = append(t.nonces, core.Nonce{})
+		t.addAccount(t.createMultisig(k, n, template))
 	}
 	return t
 }
@@ -1147,9 +1154,9 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				for i, rst := range results {
 					expected, exists := layer.failed[i]
 					if !exists {
-						require.Equal(t, types.TransactionSuccess.String(), rst.Status.String())
+						require.Equal(t, types.TransactionSuccess.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
 					} else {
-						require.Equal(t, types.TransactionFailure.String(), rst.Status.String())
+						require.Equal(t, types.TransactionFailure.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
 						require.Equal(t, expected.Error(), rst.Message)
 					}
 				}
