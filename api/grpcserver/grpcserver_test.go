@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/big"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -87,8 +89,8 @@ var (
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	signer      = NewMockSigner()
-	globalAtx   = newAtx(challenge, signer, nipost, numUnits, addr1).Verify(0, 1)
-	globalAtx2  = newAtx(challenge, signer, nipost, numUnits, addr2).Verify(0, 1)
+	globalAtx   *types.VerifiedActivationTx
+	globalAtx2  *types.VerifiedActivationTx
 	signer1     = signing.NewEdSigner()
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
@@ -114,7 +116,7 @@ var (
 	stateRoot = types.HexToHash32("11111")
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
@@ -126,6 +128,32 @@ func init() {
 	conStateAPI.returnTx[globalTx.ID] = globalTx
 	conStateAPI.returnTx[globalTx2.ID] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
+
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
+	if err := activation.SignAtx(signer, atx); err != nil {
+		log.Println("failed to sign atx:", err)
+		os.Exit(1)
+	}
+	var err error
+	globalAtx, err = atx.Verify(0, 1)
+	if err != nil {
+		log.Println("failed to verify atx", err)
+		os.Exit(1)
+	}
+
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
+	if err := activation.SignAtx(signer, atx2); err != nil {
+		log.Println("failed to sign atx:", err)
+		os.Exit(1)
+	}
+	globalAtx2, err = atx2.Verify(0, 1)
+	if err != nil {
+		log.Println("failed to verify atx", err)
+		os.Exit(1)
+	}
+
+	res := m.Run()
+	os.Exit(res)
 }
 
 func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
@@ -325,11 +353,11 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
+func newAtx(t *testing.T, challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
-	activation.SignAtx(sig, atx)
-	atx.CalcAndSetID()
-	atx.CalcAndSetNodeID()
+	require.NoError(t, activation.SignAtx(sig, atx))
+	require.NoError(t, atx.CalcAndSetID())
+	require.NoError(t, atx.CalcAndSetNodeID())
 	return atx
 }
 

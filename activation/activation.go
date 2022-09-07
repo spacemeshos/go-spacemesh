@@ -268,11 +268,12 @@ func (b *Builder) SmesherID() types.NodeID {
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
-	err := SignAtx(b, atx)
-	if err != nil {
+	if err := SignAtx(b, atx); err != nil {
 		return err
 	}
-	atx.CalcAndSetID()
+	if err := atx.CalcAndSetID(); err != nil {
+		return err
+	}
 	atx.SetNodeID(&b.nodeID)
 	return nil
 }

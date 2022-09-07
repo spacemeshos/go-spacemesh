@@ -135,10 +135,13 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
-		activation.SignAtx(c.signer, atx)
-		atx.CalcAndSetID()
-		atx.CalcAndSetNodeID()
-		vAtx := atx.Verify(1, 2)
+		if err := activation.SignAtx(c.signer, atx); err != nil {
+			panic(err)
+		}
+		vAtx, err := atx.Verify(1, 2)
+		if err != nil {
+			panic(err)
+		}
 
 		c.refBallot = nil
 		c.atx = vAtx.ID()
@@ -154,7 +157,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBallot:
 		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		atxs.Add(c.cdb, ev.Atx.Verify(1, 2), time.Now())
+		vAtx, err := ev.Atx.Verify(1, 2)
+		if err != nil {
+			panic(err)
+		}
+		atxs.Add(c.cdb, vAtx, time.Now())
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:

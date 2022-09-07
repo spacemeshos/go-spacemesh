@@ -229,12 +229,13 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
-func (atx *ActivationTx) CalcAndSetID() {
+func (atx *ActivationTx) CalcAndSetID() error {
 	if atx.Sig == nil {
-		panic("cannot calculate ATX ID: sig is nil")
+		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 	id := ATXID(CalcATXHash32(atx))
 	atx.id = &id
+	return nil
 }
 
 // CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
@@ -301,14 +302,24 @@ func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
 }
 
 // Verify an ATX for a given base TickHeight and TickCount.
-func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) *VerifiedActivationTx {
-	// TODO(mafa): should we also invoke calcAndSetID() as well as calcAndSetNodeID() here? maybe after checking that all required fields are set?
-	return &VerifiedActivationTx{
+func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
+	if atx.id == nil {
+		if err := atx.CalcAndSetID(); err != nil {
+			return nil, err
+		}
+	}
+	if atx.nodeID == nil {
+		if err := atx.CalcAndSetNodeID(); err != nil {
+			return nil, err
+		}
+	}
+	vAtx := &VerifiedActivationTx{
 		ActivationTx: atx,
 
 		baseTickHeight: baseTickHeight,
 		tickCount:      tickCount,
 	}
+	return vAtx, nil
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration

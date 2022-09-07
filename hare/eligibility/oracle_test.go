@@ -82,7 +82,9 @@ func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
-		require.NoError(tb, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(tb, err)
+		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
 	}
 }
 
@@ -370,7 +372,9 @@ func Test_VrfSignVerify(t *testing.T) {
 	}}
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&nid)
-	require.NoError(t, atxs.Add(o.cdb, atx1.Verify(0, 1), time.Now()))
+	vAtx1, err := atx1.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
@@ -380,7 +384,9 @@ func Test_VrfSignVerify(t *testing.T) {
 	}}
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{1})
-	require.NoError(t, atxs.Add(o.cdb, atx2.Verify(0, 1), time.Now()))
+	vAtx2, err := atx2.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
 	o.vrfVerifier = signing.VRFVerify
 
@@ -451,8 +457,9 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}}
 	atx1.SetID(&activeSet[0])
 	atx1.SetNodeID(&types.NodeID{1})
-	atx1.Verify(0, 1)
-	require.NoError(t, atxs.Add(o.cdb, atx1.Verify(0, 1), time.Now()))
+	vAtx1, err := atx1.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
 
 	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
@@ -462,8 +469,9 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}}
 	atx2.SetID(&activeSet[1])
 	atx2.SetNodeID(&types.NodeID{2})
-	atx2.Verify(0, 1)
-	require.NoError(t, atxs.Add(o.cdb, atx2.Verify(0, 1), time.Now()))
+	vAtx2, err := atx2.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
 	for _, edID := range []types.NodeID{atx1.NodeID(), atx2.NodeID()} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), edID, layer)
@@ -721,7 +729,9 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
-		require.NoError(t, atxs.Add(o.cdb, atx.Verify(0, 1), time.Now()))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
 	}
 	oldActiveSet, err := o.actives(context.TODO(), layer)
 	require.NoError(t, err)
@@ -739,7 +749,9 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 		}}
 		atx.SetID(&id)
 		atx.SetNodeID(&nodeID)
-		require.NoError(t, atxs.Add(o.cdb, atx.Verify(0, 1), time.Now()))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
 	}
 	newActiveSet, err := o.actives(context.TODO(), layer)
 	require.NoError(t, err)

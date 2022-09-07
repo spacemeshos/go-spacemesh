@@ -36,18 +36,22 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	data, err := atx.InnerBytes()
 	require.NoError(t, err)
 	atx.Sig = signer.Sign(data)
-	atx.CalcAndSetID()
-	atx.CalcAndSetNodeID()
+	require.NoError(t, atx.CalcAndSetID())
+	require.NoError(t, atx.CalcAndSetNodeID())
 
 	_, err = bs.Get(ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, atxs.Add(db, atx.Verify(0, 1), time.Now()))
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
 	got, err := bs.Get(ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
+
+	// TODO(mafa): update with suggestion from countvonzero
 	var gotA types.ActivationTx
 	require.NoError(t, codec.Decode(got, &gotA))
-	gotA.CalcAndSetID()
-	gotA.CalcAndSetNodeID()
+	require.NoError(t, gotA.CalcAndSetID())
+	require.NoError(t, gotA.CalcAndSetNodeID())
 	require.Equal(t, *atx, gotA)
 
 	_, err = bs.Get(BallotDB, atx.ID().Bytes())

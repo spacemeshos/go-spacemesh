@@ -27,8 +27,10 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
-		atx = v.Verify(baseTickHeight, tickCount)
-		err = nil
+		atx, err = v.Verify(baseTickHeight, tickCount)
+		if err != nil {
+			return false
+		}
 		return true
 	}
 

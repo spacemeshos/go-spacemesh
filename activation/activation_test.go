@@ -73,14 +73,20 @@ func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
 
 func (n *NetMock) hookToAtxPool(transmission []byte) {
 	if atx, err := types.BytesToAtx(transmission); err == nil {
-		atx.CalcAndSetID()
+		if err := atx.CalcAndSetID(); err != nil {
+			panic(err)
+		}
 		if err := atx.CalcAndSetNodeID(); err != nil {
 			panic(err)
 		}
 
 		if n.atxHdlr != nil {
 			if atxDb, ok := n.atxHdlr.(*Handler); ok {
-				if err := atxDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx.Verify(0, 1)); err != nil {
+				vAtx, err := atx.Verify(0, 1)
+				if err != nil {
+					panic(err)
+				}
+				if err := atxDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), vAtx); err != nil {
 					panic(err)
 				}
 			}
@@ -174,15 +180,16 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
+func newAtx(t testing.TB, challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
-	SignAtx(sig, atx)
-	atx.CalcAndSetID()
-	atx.CalcAndSetNodeID()
+	require.NoError(t, SignAtx(sig, atx))
+	require.NoError(t, atx.CalcAndSetID())
+	require.NoError(t, atx.CalcAndSetNodeID())
 	return atx
 }
 
 func newActivationTx(
+	t testing.TB,
 	sig *MockSigning,
 	sequence uint64,
 	prevATX types.ATXID,
@@ -194,8 +201,10 @@ func newActivationTx(
 	nipost *types.NIPost,
 ) *types.VerifiedActivationTx {
 	challenge := newChallenge(sequence, prevATX, positioningATX, pubLayerID)
-	atx := newAtx(challenge, sig, nipost, numUnits, coinbase)
-	return atx.Verify(startTick, numTicks)
+	atx := newAtx(t, challenge, sig, nipost, numUnits, coinbase)
+	vAtx, err := atx.Verify(startTick, numTicks)
+	require.NoError(t, err)
+	return vAtx
 }
 
 type LayerClockMock struct {
@@ -248,8 +257,7 @@ func lastTransmittedAtx(t *testing.T) types.ActivationTx {
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivationTx, layersPerEpoch uint32) {
 	sigAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
-	err = sigAtx.CalcAndSetNodeID()
-	r.NoError(err)
+	r.NoError(sigAtx.CalcAndSetNodeID())
 
 	atx := sigAtx
 	r.Equal(sig.NodeID(), atx.NodeID())
@@ -299,10 +307,10 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) {
 			},
 		},
 	}
-	SignAtx(sig, prevAtx)
-	prevAtx.CalcAndSetID()
-	prevAtx.CalcAndSetNodeID()
-	require.NoError(t, atxs.Add(db, prevAtx.Verify(0, 1), time.Now()))
+	require.NoError(t, SignAtx(sig, prevAtx))
+	vAtx, err := prevAtx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
 }
 
 func TestBuilder_waitForFirstATX(t *testing.T) {
@@ -440,24 +448,27 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	b := newBuilder(t, cdb, atxHdlr)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	prevAtx := newAtx(challenge, sig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPrevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// create and publish another ATX
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
-	publishedAtx.CalcAndSetID()
-	vAtx := publishedAtx.Verify(0, 1)
+	r.NoError(prevAtx.CalcAndSetID())
+	vPublishedAtx, err := publishedAtx.Verify(0, 1)
+	r.NoError(err)
 	published, _, err = publishAtx(b, postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, vAtx, vAtx, layersPerEpoch)
+	assertLastAtx(r, vPublishedAtx, vPublishedAtx, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
@@ -467,8 +478,10 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	prevAtx := newAtx(challenge, sig, nipost, 2, coinbase)
-	storeAtx(r, atxHdlr, prevAtx.Verify(0, 1), logtest.New(t).WithName("storeAtx"))
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vAtx, logtest.New(t).WithName("storeAtx"))
 
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -495,8 +508,10 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	b.publisher = net
 	net.atxHdlr = atxHdlr
 	challenge = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(layersPerEpoch+1))
-	posAtx := newAtx(challenge, sig, nipost, 2, coinbase)
-	storeAtx(r, atxHdlr, posAtx.Verify(0, 1), logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 	published, builtNipost, err = publishAtx(b, postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
@@ -510,8 +525,10 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	prevAtx := newAtx(challenge, sig, nipost, 2, coinbase)
-	storeAtx(r, atxHdlr, prevAtx.Verify(0, 1), logtest.New(t).WithName("storeAtx"))
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vAtx, logtest.New(t).WithName("storeAtx"))
 
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -535,8 +552,10 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	b.publisher = net
 	net.atxHdlr = atxHdlr
 	challenge = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3*layersPerEpoch))
-	posAtx := newAtx(challenge, sig, nipost, 2, coinbase)
-	storeAtx(r, atxHdlr, posAtx.Verify(0, 1), logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 	published, builtNIPost, err = publishAtx(b, postGenesisEpoch+3, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
@@ -553,14 +572,16 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	b := newBuilder(t, cdb, atxHdlr)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	posAtx := newAtx(challenge, otherSig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, nil, layersPerEpoch)
+	assertLastAtx(r, vPosAtx, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
@@ -573,20 +594,24 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	b := newBuilder(t, cdb, atxHdlr)
 	lid := types.NewLayerID(1)
 	challenge := newChallenge(1, prevAtxID, prevAtxID, lid.Add(layersPerEpoch))
-	posAtx := newAtx(challenge, otherSig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 
 	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), lid)
 	challenge.InitialPostIndices = initialPost.Indices
-	prevAtx := newAtx(challenge, sig, nipost, 2, coinbase).Verify(0, 1)
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
 	prevAtx.InitialPost = initialPost
-	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPrevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, vPosAtx, vPrevAtx, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
@@ -599,14 +624,16 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	b := newBuilder(t, cdb, atxHdlr)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Sub(layersPerEpoch))
-	posAtx := newAtx(challenge, otherSig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, posAtx, logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX based on the best available posAtx, as long as the node is synced
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, nil, layersPerEpoch)
+	assertLastAtx(r, vPosAtx, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
@@ -619,19 +646,21 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	b := newBuilder(t, cdb, atxHdlr)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	prevAtx := newAtx(challenge, sig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPrevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
-	publishedAtx.CalcAndSetID()
-	vAtx := publishedAtx.Verify(0, 1)
+	vAtx, err := publishedAtx.Verify(0, 1)
+	r.NoError(err)
 
 	// assert that the next ATX is in the next epoch
 	published, _, err = publishAtx(b, postGenesisEpoch, layersPerEpoch) // 👀
@@ -661,8 +690,10 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	b.initialPost = initialPost
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	posAtx := newAtx(challenge, otherSig, nipost, 2, coinbase)
-	storeAtx(r, atxHdlr, posAtx.Verify(0, 1), logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "create ATX: failed to build NIPost: NIPost builder error")
@@ -675,10 +706,10 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
-	atx := newActivationTx(sig, 1, prevAtxID, prevAtxID, types.NewLayerID(5), 1, 100, coinbase, 100, nipost)
+	atx := newActivationTx(t, sig, 1, prevAtxID, prevAtxID, types.NewLayerID(5), 1, 100, coinbase, 100, nipost)
 	storeAtx(r, atxHdlr, atx, logtest.New(t).WithName("storeAtx"))
 
-	act := newActivationTx(sig, 2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), 0, 100, coinbase, 100, nipost)
+	act := newActivationTx(t, sig, 2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), 0, 100, coinbase, 100, nipost)
 
 	bt, err := codec.Encode(act)
 	assert.NoError(t, err)
@@ -703,29 +734,33 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("storeAtx")
 	for i := postGenesisEpochLayer; i.Before(postGenesisEpochLayer.Add(3)); i = i.Add(1) {
 		challenge := newChallenge(1, prevAtxID, prevAtxID, i.Mul(layersPerEpoch))
-		atx := newAtx(challenge, sig, nipost, 2, coinbase)
-		storeAtx(r, atxHdlr, atx.Verify(0, 1), lg)
+		atx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+		vAtx, err := atx.Verify(0, 1)
+		r.NoError(err)
+		storeAtx(r, atxHdlr, vAtx, lg)
 	}
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3).Mul(layersPerEpoch))
-	prevATX := newAtx(challenge, sig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, prevATX, lg)
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPrevAtx, lg)
 
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
 
 	newAtx := lastTransmittedAtx(t)
-	r.Equal(prevATX.ID(), newAtx.PrevATXID)
+	r.Equal(prevAtx.ID(), newAtx.PrevATXID)
 
 	posAtx, err := cdb.GetFullAtx(newAtx.PositioningATX)
 	r.NoError(err)
 
-	assertLastAtx(r, posAtx, prevATX, layersPerEpoch)
+	assertLastAtx(r, posAtx, vPrevAtx, layersPerEpoch)
 
 	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerID
-	r.Equal(prevATX.PubLayerID, posAtx.PubLayerID)
+	r.Equal(prevAtx.PubLayerID, posAtx.PubLayerID)
 }
 
 func TestBuilder_SignAtx(t *testing.T) {
@@ -742,7 +777,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	challenge := newChallenge(1, prevAtx, prevAtx, types.NewLayerID(15))
-	atx := newAtx(challenge, sig, nipost, 100, coinbase)
+	atx := newAtx(t, challenge, sig, nipost, 100, coinbase)
 	atxBytes, err := codec.Encode(&atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
@@ -780,7 +815,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	nipostBuilder.poetRef = poetRef
 	npst := newNIPostWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(sig, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
+	atx := newActivationTx(t, sig, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
 	err := atxHdlr.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
@@ -806,7 +841,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	challenge = newChallenge(2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10))
-	act := newAtx(challenge, sig, npst2, 0, coinbase)
+	act := newAtx(t, challenge, sig, npst2, 0, coinbase)
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 
@@ -852,8 +887,10 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	b.initialPost = initialPost
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	posAtx := newAtx(challenge, otherSig, nipost, 2, coinbase)
-	storeAtx(r, atxHdlr, posAtx.Verify(0, 1), logtest.New(t).WithName("storeAtx"))
+	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	vPosAtx, err := posAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPosAtx, logtest.New(t).WithName("storeAtx"))
 
 	net.lastTransmission = nil
 	tries := 0
@@ -907,13 +944,15 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	require.Equal(t, 1, postSetupProvider.called)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	prevAtx := newAtx(challenge, sig, nipost, 2, coinbase).Verify(0, 1)
-	storeAtx(r, atxHdlr, prevAtx, logtest.New(t).WithName("storeAtx"))
+	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	r.NoError(err)
+	storeAtx(r, atxHdlr, vPrevAtx, logtest.New(t).WithName("storeAtx"))
 
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)

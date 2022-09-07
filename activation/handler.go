@@ -243,8 +243,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("invalid nipost: %v", err)
 	}
 
-	vAtx := atx.Verify(baseTickHeight, leaves/h.tickSize)
-	return vAtx, nil
+	return atx.Verify(baseTickHeight, leaves/h.tickSize)
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -352,7 +351,9 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 	if err != nil {
 		return errMalformedData
 	}
-	atx.CalcAndSetID()
+	if err := atx.CalcAndSetID(); err != nil {
+		return fmt.Errorf("failed to derive ID from atx: %w", err)
+	}
 	if err := atx.CalcAndSetNodeID(); err != nil {
 		return fmt.Errorf("failed to derive Node ID from ATX with sig %v: %w", atx.Sig, err)
 	}
