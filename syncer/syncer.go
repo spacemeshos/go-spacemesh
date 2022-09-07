@@ -331,17 +331,23 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	s.setStateBeforeSync(ctx)
 	syncFunc := func() bool {
 		if !s.ListenToATXGossip() {
-			logger.Info("syncing atx before everything else")
+			logger.With().Info("syncing atx before everything else", s.ticker.GetCurrentLayer())
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
-				logger.With().Info("syncing atxs for epoch", epoch)
-				if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-					logger.With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
+				if err := s.fetchEpochATX(ctx, epoch); err != nil {
 					return false
 				}
-				s.setLastSyncedATXs(epoch)
 			}
 			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
 			s.setATXSynced()
+		}
+
+		current := s.ticker.GetCurrentLayer()
+		targetEpoch := current.GetEpoch() - 1
+		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < targetEpoch {
+			// sync ATX from last epoch
+			if err := s.fetchEpochATX(ctx, targetEpoch); err != nil {
+				return false
+			}
 		}
 
 		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
@@ -463,6 +469,16 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
 		}
 	}
+	return nil
+}
+
+func (s *Syncer) fetchEpochATX(ctx context.Context, epoch types.EpochID) error {
+	s.logger.WithContext(ctx).With().Info("syncing atxs for epoch", epoch)
+	if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
+		s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
+		return err
+	}
+	s.setLastSyncedATXs(epoch)
 	return nil
 }
 
