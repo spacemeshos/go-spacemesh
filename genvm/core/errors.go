@@ -20,4 +20,6 @@ var (
 	ErrSpawned = errors.New("account already spawned")
 	// ErrNotSpawned raised if account is not spawned.
 	ErrNotSpawned = errors.New("account is not spawned")
+	// ErrMismatchedTemplate raised if target account doesn't match template account.
+	ErrTemplateMismatch = errors.New("relay template mismatch")
 )

@@ -66,7 +66,7 @@ func (mr *MockTemplateMockRecorder) MaxSpend(arg0, arg1 interface{}) *gomock.Cal
 }
 
 // Verify mocks base method.
-func (m *MockTemplate) Verify(arg0 *core.Context, arg1 []byte, arg2 *scale.Decoder) bool {
+func (m *MockTemplate) Verify(arg0 core.Host, arg1 []byte, arg2 *scale.Decoder) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)

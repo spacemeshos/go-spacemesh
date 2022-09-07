@@ -6,6 +6,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+const (
+	// MethodSpawn ...
+	MethodSpawn = 0
+	// MethodSpend ...
+	MethodSpend = 1
+)
+
 type (
 	// PublicKey is an alias to Hash32.
 	PublicKey = types.Hash32
@@ -22,17 +29,22 @@ type (
 	Header = types.TxHeader
 	// Nonce is an alias to types.Nonce.
 	Nonce = types.Nonce
+
+	// LayerID is a layer type.
+	LayerID = types.LayerID
 )
+
+//go:generate mockgen -package=mocks -destination=./mocks/handler.go github.com/spacemeshos/go-spacemesh/genvm/core Handler
 
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
-	Parse(*Context, uint8, *scale.Decoder) (ParseOutput, error)
+	Parse(Host, uint8, *scale.Decoder) (ParseOutput, error)
 	// Args returns method arguments for the method.
 	Args(uint8) scale.Type
 
 	// Exec dispatches execution request based on the method selector.
-	Exec(*Context, uint8, scale.Encodable) error
+	Exec(Host, uint8, scale.Encodable) error
 
 	// New instantiates Template from spawn arguments.
 	New(any) (Template, error)
@@ -50,7 +62,7 @@ type Template interface {
 	// if it spends more than that.
 	MaxSpend(uint8, any) (uint64, error)
 	// Verify security of the transaction.
-	Verify(*Context, []byte, *scale.Decoder) bool
+	Verify(Host, []byte, *scale.Decoder) bool
 }
 
 // AccountLoader is an interface for loading accounts.
@@ -75,6 +87,19 @@ type ParseOutput struct {
 // HandlerRegistry stores handlers for templates.
 type HandlerRegistry interface {
 	Get(Address) Handler
+}
+
+// Host API with methods and data that are required by templates.
+type Host interface {
+	Consume(uint64) error
+	Spawn(scale.Encodable) error
+	Transfer(Address, uint64) error
+	Relay(expectedTemplate, address Address, call func(Host) error) error
+
+	Principal() Address
+	Handler() Handler
+	Template() Template
+	Layer() LayerID
 }
 
 //go:generate scalegen -types Payload
