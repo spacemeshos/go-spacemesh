@@ -30,11 +30,6 @@ const (
 	StorageLimit = 10
 )
 
-const (
-	methodSpawn = 0
-	methodSpend = 1
-)
-
 func init() {
 	TemplateAddress1[len(TemplateAddress1)-1] = 2
 	TemplateAddress2[len(TemplateAddress2)-1] = 3
@@ -70,6 +65,11 @@ var (
 	TemplateAddress3 core.Address
 )
 
+// NewHandler instantiates multisig handler with a particular configuration.
+func NewHandler(address core.Address, k uint8, gasSpawn, gasSpend uint64) core.Handler {
+	return &handler{k: k, address: address, totalGasSpawn: gasSpawn, totalGasSpend: gasSpend}
+}
+
 type handler struct {
 	k, n                         uint8
 	address                      core.Address
@@ -77,11 +77,11 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
-	case methodSpawn:
+	case core.MethodSpawn:
 		output.FixedGas = h.totalGasSpawn
-	case methodSpend:
+	case core.MethodSpend:
 		output.FixedGas = h.totalGasSpend
 	default:
 		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
@@ -122,14 +122,14 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 }
 
 // Exec spawn or spend based on the method selector.
-func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
+func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
 	switch method {
-	case methodSpawn:
-		if err := ctx.Spawn(args); err != nil {
+	case core.MethodSpawn:
+		if err := host.Spawn(args); err != nil {
 			return err
 		}
-	case methodSpend:
-		if err := ctx.Template.(*MultiSig).Spend(ctx, args.(*SpendArguments)); err != nil {
+	case core.MethodSpend:
+		if err := host.Template().(SpendTemplate).Spend(host, args.(*SpendArguments)); err != nil {
 			return err
 		}
 	default:
@@ -141,10 +141,15 @@ func (h *handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) er
 // Args ...
 func (h *handler) Args(method uint8) scale.Type {
 	switch method {
-	case methodSpawn:
+	case core.MethodSpawn:
 		return &SpawnArguments{}
-	case methodSpend:
+	case core.MethodSpend:
 		return &SpendArguments{}
 	}
 	return nil
+}
+
+// SpendTemplate interface for the template that support Spend method.
+type SpendTemplate interface {
+	Spend(core.Host, *SpendArguments) error
 }

@@ -24,9 +24,9 @@ type Wallet struct {
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
 func (s *Wallet) MaxSpend(method uint8, args any) (uint64, error) {
 	switch method {
-	case methodSpawn:
+	case core.MethodSpawn:
 		return 0, nil
-	case methodSpend:
+	case core.MethodSpend:
 		return args.(*SpendArguments).Amount, nil
 	default:
 		return 0, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
@@ -34,7 +34,7 @@ func (s *Wallet) MaxSpend(method uint8, args any) (uint64, error) {
 }
 
 // Verify that transaction is signed by the owner of the PublicKey using ed25519.
-func (s *Wallet) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
+func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	sig := core.Signature{}
 	n, err := sig.DecodeScale(dec)
 	if err != nil {
@@ -45,6 +45,6 @@ func (s *Wallet) Verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool 
 }
 
 // Spend transfers an amount to the address specified in SpendArguments.
-func (s *Wallet) Spend(ctx *core.Context, args *SpendArguments) error {
-	return ctx.Transfer(args.Destination, args.Amount)
+func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
+	return host.Transfer(args.Destination, args.Amount)
 }
