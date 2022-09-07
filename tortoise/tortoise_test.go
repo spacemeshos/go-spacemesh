@@ -221,7 +221,11 @@ func genATXs(lid types.LayerID, numATXs, weight int) []*types.VerifiedActivation
 		atx.SetNodeID(&nodeID)
 		atxID := types.RandomATXID()
 		atx.SetID(&atxID)
-		atxList = append(atxList, atx.Verify(0, 1))
+		vAtx, err := atx.Verify(0, 1)
+		if err != nil {
+			panic(err)
+		}
+		atxList = append(atxList, vAtx)
 	}
 	return atxList
 }
@@ -1295,7 +1299,9 @@ func TestComputeExpectedWeight(t *testing.T) {
 				id := types.RandomATXID()
 				atx.SetID(&id)
 				atx.SetNodeID(&types.NodeID{})
-				require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
+				vAtx, err := atx.Verify(0, 1)
+				require.NoError(t, err)
+				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
@@ -2287,7 +2293,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				atx.SetNodeID(&nodeID)
 				atxID := types.RandomATXID()
 				atx.SetID(&atxID)
-				require.NoError(t, atxs.Add(cdb, atx.Verify(0, 1), time.Now()))
+				vAtx, err := atx.Verify(0, 1)
+				require.NoError(t, err)
+				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 				atxids = append(atxids, atxID)
 			}
 
@@ -2793,7 +2801,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 	cfg.LayerSize = size
 
 	// TODO(dshulyak) parametrize test with varying skipFrom, skipTo
-	// skiping layers 9, 10, 11, 12, 13
+	// skipping layers 9, 10, 11, 12, 13
 	skipFrom, skipTo := 1, 6
 
 	s := sim.New(

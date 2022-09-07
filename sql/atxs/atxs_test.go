@@ -303,16 +303,14 @@ func TestPositioningID(t *testing.T) {
 						Coinbase: atx.coinbase,
 					},
 				}
-				vAtx, err := full.Verify(atx.base, atx.count)
-				require.NoError(t, err)
 
-				bts, err := vAtx.InnerBytes()
+				bts, err := full.InnerBytes()
 				require.NoError(t, err)
 				sig := signing.NewEdSigner()
-				vAtx.Sig = sig.Sign(bts)
+				full.Sig = sig.Sign(bts)
 
-				vAtx.CalcAndSetID()
-				vAtx.CalcAndSetNodeID()
+				vAtx, err := full.Verify(atx.base, atx.count)
+				require.NoError(t, err)
 
 				require.NoError(t, Add(db, vAtx, time.Time{}))
 				ids = append(ids, full.ID())

@@ -120,15 +120,6 @@ func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
-	// These create circular dependencies so they have to be initialized
-	// after the global vars
-	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
-	block1.TxIDs = []types.TransactionID{globalTx.ID, globalTx2.ID}
-	conStateAPI.returnTx[globalTx.ID] = globalTx
-	conStateAPI.returnTx[globalTx2.ID] = globalTx2
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
 	if err := activation.SignAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
@@ -151,6 +142,15 @@ func TestMain(m *testing.M) {
 		log.Println("failed to verify atx", err)
 		os.Exit(1)
 	}
+
+	// These create circular dependencies so they have to be initialized
+	// after the global vars
+	ballot1.AtxID = globalAtx.ID()
+	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
+	block1.TxIDs = []types.TransactionID{globalTx.ID, globalTx2.ID}
+	conStateAPI.returnTx[globalTx.ID] = globalTx
+	conStateAPI.returnTx[globalTx2.ID] = globalTx2
+	types.SetLayersPerEpoch(layersPerEpoch)
 
 	res := m.Run()
 	os.Exit(res)
