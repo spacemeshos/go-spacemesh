@@ -9,9 +9,14 @@ type VerifiedActivationTx struct {
 	tickCount      uint64
 }
 
-// GetWeight of the atx.
+// GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
+// sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
+// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
+// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
+// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
+// for at least the first few years.
 func (vatx *VerifiedActivationTx) GetWeight() uint64 {
-	return uint64(vatx.NumUnits) * (vatx.tickCount)
+	return getWeight(uint64(vatx.NumUnits), (vatx.tickCount))
 }
 
 // BaseTickHeight is a tick height of the positional atx.

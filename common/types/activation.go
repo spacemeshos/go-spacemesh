@@ -133,7 +133,11 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 // to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
 // for at least the first few years.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
-	return safeMul(uint64(atxh.NumUnits), (atxh.TickCount))
+	return getWeight(uint64(atxh.NumUnits), (atxh.TickCount))
+}
+
+func getWeight(numUnits, tickCount uint64) uint64 {
+	return safeMul(numUnits, tickCount)
 }
 
 func safeMul(a, b uint64) uint64 {
