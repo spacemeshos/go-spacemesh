@@ -241,7 +241,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	challenge = newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012))
 	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID(), atxList[0].NodeID()))
+	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID(), atxList[0].ID(), atxList[0].NodeID()))
 
 	// Wrong layerId.
 	posAtx2 := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
