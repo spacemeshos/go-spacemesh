@@ -128,7 +128,7 @@ func TestMain(m *testing.M) {
 	var err error
 	globalAtx, err = atx.Verify(0, 1)
 	if err != nil {
-		log.Println("failed to verify atx", err)
+		log.Println("failed to verify atx:", err)
 		os.Exit(1)
 	}
 
@@ -139,7 +139,7 @@ func TestMain(m *testing.M) {
 	}
 	globalAtx2, err = atx2.Verify(0, 1)
 	if err != nil {
-		log.Println("failed to verify atx", err)
+		log.Println("failed to verify atx:", err)
 		os.Exit(1)
 	}
 
