@@ -14,11 +14,5 @@ type DrainVaultArguments struct {
 	vault.SpendArguments
 }
 
-// DrainVaultPayload ...
-type DrainVaultPayload = core.Payload
-
 // Part of the multisig signature.
 type Part = multisig.Part
-
-// SpendArguments are arguments for Spend call.
-type SpendArguments = multisig.SpendArguments

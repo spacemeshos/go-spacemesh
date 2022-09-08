@@ -67,7 +67,7 @@ type handler struct {
 // Parse header and arguments.
 func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	if method == MethodDrainVault {
-		var p DrainVaultPayload
+		var p core.Payload
 		if _, err = p.DecodeScale(decoder); err != nil {
 			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
 			return
@@ -104,7 +104,7 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 	if method == MethodDrainVault {
 		drain := args.(*DrainVaultArguments)
 		return host.Relay(vault.TemplateAddress, drain.Vault, func(host core.Host) error {
-			return host.Handler().Exec(host, vault.MethodSpend, &drain.SpendArguments)
+			return host.Handler().Exec(host, core.MethodSpend, &drain.SpendArguments)
 		})
 	}
 	return h.multisig.Exec(host, method, args)

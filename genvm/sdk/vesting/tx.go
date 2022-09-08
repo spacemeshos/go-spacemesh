@@ -29,7 +29,7 @@ func DrainVault(ref uint8, pk ed25519.PrivateKey, principal, vault, receiver typ
 		opt(options)
 	}
 
-	payload := vesting.DrainVaultPayload{}
+	payload := core.Payload{}
 	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
 

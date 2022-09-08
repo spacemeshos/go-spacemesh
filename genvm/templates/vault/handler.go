@@ -13,13 +13,6 @@ import (
 // TemplateAddress is an address of the vault template.
 var TemplateAddress core.Address
 
-const (
-	// MethodSpawn ...
-	MethodSpawn = core.MethodSpawn
-	// MethodSpend ...
-	MethodSpend = core.MethodSpend
-)
-
 func init() {
 	TemplateAddress[len(TemplateAddress)-1] = 9
 }
@@ -67,7 +60,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 
 // Exec spawn or spend based on the method selector.
 func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
-	if method != MethodSpend {
+	if method != core.MethodSpend {
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
 	spend := args.(*SpendArguments)
@@ -77,9 +70,9 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 // Args ...
 func (h *handler) Args(method uint8) scale.Type {
 	switch method {
-	case MethodSpawn:
+	case core.MethodSpawn:
 		return &SpawnArguments{}
-	case MethodSpend:
+	case core.MethodSpend:
 		return &SpendArguments{}
 	}
 	return nil
