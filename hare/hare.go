@@ -225,18 +225,17 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		postNumProposals.Add(float64(set.len()))
 		pids = make([]types.ProposalID, 0, set.len())
 		pids = append(pids, set.elements()...)
+		select {
+		case h.blockGenCh <- LayerOutput{
+			Ctx:       ctx,
+			Layer:     layerID,
+			Proposals: pids,
+		}:
+		case <-ctx.Done():
+		}
 	} else {
 		consensusFailCnt.Inc()
 		h.WithContext(ctx).With().Warning("hare terminated with failure", layerID)
-	}
-
-	select {
-	case h.blockGenCh <- LayerOutput{
-		Ctx:       ctx,
-		Layer:     layerID,
-		Proposals: pids,
-	}:
-	case <-ctx.Done():
 	}
 
 	if h.outOfBufferRange(layerID) {

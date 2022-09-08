@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -17,6 +16,7 @@ type Context struct {
 	Registry HandlerRegistry
 	Loader   AccountLoader
 
+	// LayerID of the block.
 	LayerID LayerID
 
 	PrincipalHandler  Handler
@@ -60,22 +60,14 @@ func (c *Context) Handler() Handler {
 
 // Spawn account.
 func (c *Context) Spawn(args scale.Encodable) error {
-	template := c.Header.Template
-	address := ComputePrincipal(template, args)
-	var account *types.Account
-	if address == c.PrincipalAccount.Address {
-		account = &c.PrincipalAccount
-	} else {
-		var err error
-		account, err = c.load(address)
-		if err != nil {
-			return err
-		}
+	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, args))
+	if err != nil {
+		return err
 	}
-	if account.Template != nil {
+	if account.TemplateAddress != nil {
 		return ErrSpawned
 	}
-	handler := c.Registry.Get(template)
+	handler := c.Registry.Get(c.Header.TemplateAddress)
 	if handler == nil {
 		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
 	}
@@ -89,10 +81,8 @@ func (c *Context) Spawn(args scale.Encodable) error {
 		return fmt.Errorf("%w: %s", ErrInternal, err)
 	}
 	account.State = buf.Bytes()
-	account.Template = &template
-	if account.Address != c.PrincipalAccount.Address {
-		c.change(account)
-	}
+	account.TemplateAddress = &c.Header.TemplateAddress
+	c.change(account)
 	return nil
 }
 
@@ -109,8 +99,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	if amount > from.Balance {
 		return ErrNoBalance
 	}
-	c.transferred += amount
-	if c.transferred > max {
+	if c.transferred+amount > max {
 		return fmt.Errorf("%w: %d", ErrMaxSpend, max)
 	}
 	// noop. only gas is consumed
@@ -118,6 +107,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 		return nil
 	}
 
+	c.transferred += amount
 	from.Balance -= amount
 	account.Balance += amount
 	c.change(account)
@@ -125,20 +115,20 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 }
 
 // Relay call to the remote account.
-func (c *Context) Relay(expectedTemplate, address Address, call func(Host) error) error {
+func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) error {
 	account, err := c.load(address)
 	if err != nil {
 		return err
 	}
-	if account.Template == nil {
+	if account.TemplateAddress == nil {
 		return ErrNotSpawned
 	}
-	if *account.Template != expectedTemplate {
-		return errors.New("account is spawned with unexpected template")
+	if *account.TemplateAddress != remoteTemplate {
+		return fmt.Errorf("%w: %s != %s", ErrTemplateMismatch, remoteTemplate.String(), account.TemplateAddress.String())
 	}
-	handler := c.Registry.Get(expectedTemplate)
+	handler := c.Registry.Get(remoteTemplate)
 	if handler == nil {
-		panic("account that was spawned with a specific template, should exist in the registry")
+		panic("template of the spawned account should exist in the registry")
 	}
 	template, err := handler.Load(account.State)
 	if err != nil {
@@ -218,6 +208,9 @@ func (c *Context) Updated() []types.Address {
 }
 
 func (c *Context) load(address types.Address) (*Account, error) {
+	if address == c.Principal() {
+		return &c.PrincipalAccount, nil
+	}
 	if c.changed == nil {
 		c.changed = map[Address]*Account{}
 	}
@@ -233,6 +226,9 @@ func (c *Context) load(address types.Address) (*Account, error) {
 }
 
 func (c *Context) change(account *Account) {
+	if account.Address == c.Principal() {
+		return
+	}
 	_, exist := c.changed[account.Address]
 	if !exist {
 		c.touched = append(c.touched, account.Address)
@@ -260,9 +256,8 @@ func (r *RemoteContext) Handler() Handler {
 
 // Transfer ...
 func (r *RemoteContext) Transfer(to Address, amount uint64) error {
-	if err := r.transfer(r.remote, to, amount, r.remote.Balance); err != nil {
+	if err := r.transfer(r.remote, to, amount, amount); err != nil {
 		return err
 	}
-	r.change(r.remote)
 	return nil
 }

@@ -264,7 +264,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			Address: t.Principal.String(),
 		}
 		tx.Template = &pb.AccountId{
-			Address: t.Template.String(),
+			Address: t.TemplateAddress.String(),
 		}
 		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
@@ -573,6 +573,8 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 		return pb.Layer_LAYER_STATUS_APPROVED
 	case events.LayerStatusTypeConfirmed:
 		return pb.Layer_LAYER_STATUS_CONFIRMED
+	case events.LayerStatusTypeApplied:
+		return pb.Layer_LAYER_STATUS_APPLIED
 	default:
 		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}

@@ -23,10 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
-var (
-	errMissingHareOutput = errors.New("missing hare output")
-	errLayerHasBlock     = errors.New("layer has block")
-)
+var errMissingHareOutput = errors.New("missing hare output")
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
@@ -82,11 +79,6 @@ func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, lo
 	gLid := types.GetEffectiveGenesis()
 	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		for i := types.NewLayerID(1); !i.After(gLid); i = i.Add(1) {
-			if i.Before(gLid) {
-				if err = setZeroBlockLayer(msh.logger, dbtx, i); err != nil {
-					return err
-				}
-			}
 			if err = layers.SetProcessed(dbtx, i); err != nil {
 				return fmt.Errorf("mesh init: %w", err)
 			}
@@ -569,6 +561,10 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 	}); err != nil {
 		return err
 	}
+	events.ReportLayerUpdate(events.LayerUpdate{
+		LayerID: lid,
+		Status:  events.LayerStatusTypeApplied,
+	})
 	return nil
 }
 
@@ -621,36 +617,11 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	msh.latestLayerInState.Store(lyr)
 }
 
-// SetZeroBlockLayer tags lyr as a layer without blocks.
+// SetZeroBlockLayer advances the latest layer in the network with a layer
+// that truly has no data.
 func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) error {
-	logger := msh.logger.WithContext(ctx)
-	if err := setZeroBlockLayer(logger, msh.cdb, lid); err != nil {
-		return err
-	}
-	msh.setLatestLayer(logger, lid)
+	msh.setLatestLayer(msh.logger.WithContext(ctx), lid)
 	return nil
-}
-
-func setZeroBlockLayer(logger log.Log, db sql.Executor, lyr types.LayerID) error {
-	logger.With().Info("tagging zero block layer", lyr)
-	// check database for layer
-	if l, err := getLayer(db, lyr); err != nil {
-		// database error
-		if !errors.Is(err, sql.ErrNotFound) {
-			logger.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
-			return err
-		}
-	} else if len(l.Blocks()) != 0 {
-		// layer exists
-		logger.With().Error("layer has blocks, cannot tag as zero block layer",
-			lyr,
-			l,
-			log.Int("num_blocks", len(l.Blocks())))
-		return errLayerHasBlock
-	}
-
-	// layer doesn't exist, need to insert new layer
-	return layers.SetHareOutput(db, lyr, types.EmptyBlockID)
 }
 
 // AddTXsFromProposal adds the TXs in a Proposal into the database.

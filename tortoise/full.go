@@ -93,7 +93,6 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 		if ballot.weight.IsNil() {
 			continue
 		}
-
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
 			if _, exist := f.empty[lid]; !exist {
 				f.empty[lid] = util.WeightFromUint64(0)
@@ -175,6 +174,11 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	if len(blocks) == 0 {
 		if isEmpty {
 			logger.With().Info("candidate layer is empty")
+		} else {
+			logger.With().Debug("margin is too low to terminate layer as empty",
+				lid,
+				log.Stringer("margin", empty),
+			)
 		}
 		return isEmpty
 	}

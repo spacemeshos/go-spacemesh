@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	// MethodSpawn identifier.
+	// MethodSpawn ...
 	MethodSpawn = 0
-	// MethodSpend identifier.
+	// MethodSpend ...
 	MethodSpend = 1
 )
 
@@ -33,6 +33,8 @@ type (
 	// LayerID is a layer type.
 	LayerID = types.LayerID
 )
+
+//go:generate mockgen -package=mocks -destination=./mocks/handler.go github.com/spacemeshos/go-spacemesh/genvm/core Handler
 
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
@@ -87,7 +89,7 @@ type HandlerRegistry interface {
 	Get(Address) Handler
 }
 
-// Host ...
+// Host API with methods and data that are required by templates.
 type Host interface {
 	Consume(uint64) error
 	Spawn(scale.Encodable) error
@@ -98,4 +100,12 @@ type Host interface {
 	Handler() Handler
 	Template() Template
 	Layer() LayerID
+}
+
+//go:generate scalegen -types Payload
+
+// Payload is a generic payload for all transactions.
+type Payload struct {
+	Nonce    Nonce
+	GasPrice uint64
 }

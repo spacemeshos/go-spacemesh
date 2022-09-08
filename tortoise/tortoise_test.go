@@ -1786,6 +1786,20 @@ func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
 	}
 }
 
+func tortoiseVotingWithCurrent(tortoise *Tortoise) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		current := types.GetEffectiveGenesis().Add(1)
+		if len(layers) > 0 {
+			current = layers[len(layers)-1].Index().Add(1)
+		}
+		votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(current))
+		if err != nil {
+			panic(err)
+		}
+		return *votes
+	}
+}
+
 func TestBaseBallotGenesis(t *testing.T) {
 	ctx := context.Background()
 
@@ -2424,40 +2438,6 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	require.Equal(t, last.Sub(2), verified)
 }
 
-func TestSwitchVerifyingByUsingFullOutput(t *testing.T) {
-	ctx := context.Background()
-	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
-	s.Setup()
-
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	cfg.Hdist = 2
-	cfg.Zdist = 2
-
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	var last, verified types.LayerID
-
-	for i := 0; i < 2; i++ {
-		last = s.Next()
-		_ = tortoise.HandleIncomingLayer(ctx, last)
-	}
-	for i := 0; i < int(cfg.Hdist)+1; i++ {
-		_ = s.Next(
-			sim.WithEmptyHareOutput(),
-		)
-	}
-	last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
-	verified = tortoise.HandleIncomingLayer(ctx, last)
-	require.True(t, tortoise.trtl.mode.isFull(), "full mode")
-	for i := 0; i < 10; i++ {
-		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
-		verified = tortoise.HandleIncomingLayer(ctx, last)
-	}
-	require.Equal(t, last.Sub(1), verified)
-	require.True(t, tortoise.trtl.mode.isVerifying(), "verifying mode")
-}
-
 func TestSwitchVerifyingByChangingGoodness(t *testing.T) {
 	ctx := context.Background()
 	const size = 10
@@ -2809,5 +2789,82 @@ func TestFutureHeight(t *testing.T) {
 			verified = tortoise.HandleIncomingLayer(context.Background(), last)
 		}
 		require.Equal(t, last.Sub(1), verified)
+	})
+}
+
+func testEmptyLayers(t *testing.T, hdist int) {
+	const size = 4
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.Hdist = uint32(hdist)
+	cfg.Zdist = 3
+	cfg.LayerSize = size
+
+	// TODO(dshulyak) parametrize test with varying skipFrom, skipTo
+	// skiping layers 9, 10, 11, 12, 13
+	skipFrom, skipTo := 1, 6
+
+	s := sim.New(
+		sim.WithLayerSize(cfg.LayerSize),
+	)
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+	)
+	tortoise := tortoiseFromSimState(
+		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+	)
+	var (
+		last     = types.GetEffectiveGenesis()
+		verified types.LayerID
+	)
+	for i := 0; i < int(skipTo); i++ {
+		opts := []sim.NextOpt{
+			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+		}
+		skipped := i >= skipFrom && i < skipTo
+		if skipped {
+			opts = append(opts, sim.WithoutHareOutput(), sim.WithNumBlocks(0))
+		} else {
+			opts = append(opts, sim.WithNumBlocks(1))
+		}
+		last = s.Next(opts...)
+		if skipped {
+			continue
+		}
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, types.GetEffectiveGenesis(), verified)
+	for i := 0; i <= int(cfg.Zdist); i++ {
+		last = s.Next(
+			sim.WithNumBlocks(1),
+			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+		)
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	expected := types.GetEffectiveGenesis().Add(uint32(skipFrom))
+	require.Equal(t, expected, verified)
+	for i := 0; i < skipTo-skipFrom-1; i++ {
+		last = s.Next(
+			sim.WithNumBlocks(1),
+			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+		)
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+		require.Equal(t, expected.Add(uint32(i)+1), verified)
+	}
+	last = s.Next(
+		sim.WithNumBlocks(1),
+		sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+	)
+	verified = tortoise.HandleIncomingLayer(ctx, last)
+	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestEmptyLayers(t *testing.T) {
+	t.Run("recovered within hdist", func(t *testing.T) {
+		testEmptyLayers(t, 10)
+	})
+	t.Run("not recovered within hdist", func(t *testing.T) {
+		testEmptyLayers(t, 5)
 	})
 }

@@ -1,6 +1,10 @@
 package sdk
 
-import "github.com/spacemeshos/go-scale"
+import (
+	"github.com/spacemeshos/go-scale"
+
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
+)
 
 // Opt modifies Options.
 type Opt func(*Options)
@@ -27,7 +31,7 @@ var (
 	TxVersion = scale.U8(0)
 
 	// MethodSpawn ...
-	MethodSpawn = scale.U8(0)
+	MethodSpawn = scale.U8(core.MethodSpawn)
 	// MethodSpend ...
-	MethodSpend = scale.U8(1)
+	MethodSpend = scale.U8(core.MethodSpend)
 )

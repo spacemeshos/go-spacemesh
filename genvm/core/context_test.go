@@ -4,16 +4,18 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"
+	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func TestTransfer(t *testing.T) {
 	t.Run("NoBalance", func(t *testing.T) {
-		ctx := core.Context{}
+		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}
 		require.ErrorIs(t, ctx.Transfer(core.Address{}, 100), core.ErrNoBalance)
 	})
 	t.Run("MaxSpend", func(t *testing.T) {
@@ -118,5 +120,91 @@ func TestApply(t *testing.T) {
 		err := ctx.Apply(updater)
 		require.NoError(t, err)
 		require.Equal(t, order, actual)
+	})
+}
+
+func TestRelay(t *testing.T) {
+	var (
+		principal = core.Address{'p', 'r', 'i'}
+		template  = core.Address{'t', 'e', 'm'}
+		remote    = core.Address{'r', 'e', 'm'}
+	)
+	t.Run("not spawned", func(t *testing.T) {
+		cache := core.NewStagedCache(sql.InMemory())
+		ctx := core.Context{Loader: cache}
+		call := func(remote core.Host) error {
+			require.Fail(t, "not expected to be called")
+			return nil
+		}
+		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrNotSpawned)
+	})
+	t.Run("mismatched template", func(t *testing.T) {
+		cache := core.NewStagedCache(sql.InMemory())
+		require.NoError(t, cache.Update(core.Account{
+			Address:         remote,
+			TemplateAddress: &core.Address{'m', 'i', 's'},
+		}))
+		ctx := core.Context{Loader: cache}
+		call := func(remote core.Host) error {
+			require.Fail(t, "not expected to be called")
+			return nil
+		}
+		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrTemplateMismatch)
+	})
+	t.Run("relayed transfer", func(t *testing.T) {
+		for _, receiver1 := range []core.Address{{'a', 'n', 'y'}, principal} {
+			t.Run(string(receiver1[:3]), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				encoded := []byte("test")
+
+				handler := mocks.NewMockHandler(ctrl)
+				tpl := mocks.NewMockTemplate(ctrl)
+				tpl.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(enc *scale.Encoder) (int, error) {
+					return scale.EncodeByteArray(enc, encoded)
+				}).AnyTimes()
+				handler.EXPECT().Load(gomock.Any()).Return(tpl, nil).AnyTimes()
+				reg := registry.New()
+				reg.Register(template, handler)
+
+				cache := core.NewStagedCache(sql.InMemory())
+				receiver2 := core.Address{'f'}
+				const (
+					total   = 1000
+					amount1 = 100
+					amount2 = total - amount1/2
+				)
+				require.NoError(t, cache.Update(core.Account{
+					Address:         remote,
+					TemplateAddress: &template,
+					Balance:         total,
+				}))
+				ctx := core.Context{Loader: cache, Registry: reg}
+				ctx.PrincipalAccount.Address = principal
+				require.NoError(t, ctx.Relay(template, remote, func(remote core.Host) error {
+					return remote.Transfer(receiver1, amount1)
+				}))
+				require.ErrorIs(t, ctx.Relay(template, remote, func(remote core.Host) error {
+					return remote.Transfer(receiver2, amount2)
+				}), core.ErrNoBalance)
+				require.NoError(t, ctx.Apply(cache))
+
+				rec1state, err := cache.Get(receiver1)
+				require.NoError(t, err)
+				require.Equal(t, amount1, int(rec1state.Balance))
+				require.NotEqual(t, encoded, rec1state.State)
+
+				rec2state, err := cache.Get(receiver2)
+				require.NoError(t, err)
+				require.Equal(t, 0, int(rec2state.Balance))
+				require.NotEqual(t, encoded, rec2state.State)
+
+				remoteState, err := cache.Get(remote)
+				require.NoError(t, err)
+				require.Equal(t, total-amount1, int(remoteState.Balance))
+				require.Equal(t, encoded, remoteState.State)
+			})
+		}
 	})
 }

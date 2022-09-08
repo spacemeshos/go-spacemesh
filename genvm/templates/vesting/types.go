@@ -15,7 +15,7 @@ type DrainVaultArguments struct {
 }
 
 // DrainVaultPayload ...
-type DrainVaultPayload = multisig.SpendPayload
+type DrainVaultPayload = core.Payload
 
 // Part of the multisig signature.
 type Part = multisig.Part

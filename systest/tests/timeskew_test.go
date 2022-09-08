@@ -14,7 +14,6 @@ import (
 )
 
 func TestShortTimeskew(t *testing.T) {
-	t.Skip()
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
@@ -59,8 +58,8 @@ func TestShortTimeskew(t *testing.T) {
 		if layer.Layer.Number.Number == stopTest {
 			return false, nil
 		}
-		if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
-			tctx.Log.Debugw("confirmed layer",
+		if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_APPLIED {
+			tctx.Log.Debugw("layer applied",
 				"layer", layer.Layer.Number.Number,
 				"hash", prettyHex(layer.Layer.Hash),
 			)

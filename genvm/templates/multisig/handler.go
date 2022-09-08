@@ -30,11 +30,6 @@ const (
 	StorageLimit = 10
 )
 
-const (
-	methodSpawn = 0
-	methodSpend = 1
-)
-
 func init() {
 	TemplateAddress1[len(TemplateAddress1)-1] = 2
 	TemplateAddress2[len(TemplateAddress2)-1] = 3
@@ -84,27 +79,20 @@ type handler struct {
 // Parse header and arguments.
 func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
-	case methodSpawn:
-		var p SpawnPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		output.GasPrice = p.GasPrice
-		output.Nonce = p.Nonce
+	case core.MethodSpawn:
 		output.FixedGas = h.totalGasSpawn
-	case methodSpend:
-		var p SpendPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		output.GasPrice = p.GasPrice
-		output.Nonce = p.Nonce
+	case core.MethodSpend:
 		output.FixedGas = h.totalGasSpend
 	default:
 		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
+	var p core.Payload
+	if _, err = p.DecodeScale(decoder); err != nil {
+		err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+		return
+	}
+	output.GasPrice = p.GasPrice
+	output.Nonce = p.Nonce
 	return output, nil
 }
 
@@ -136,11 +124,11 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 // Exec spawn or spend based on the method selector.
 func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
 	switch method {
-	case methodSpawn:
+	case core.MethodSpawn:
 		if err := host.Spawn(args); err != nil {
 			return err
 		}
-	case methodSpend:
+	case core.MethodSpend:
 		if err := host.Template().(SpendTemplate).Spend(host, args.(*SpendArguments)); err != nil {
 			return err
 		}
@@ -153,14 +141,15 @@ func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error
 // Args ...
 func (h *handler) Args(method uint8) scale.Type {
 	switch method {
-	case methodSpawn:
+	case core.MethodSpawn:
 		return &SpawnArguments{}
-	case methodSpend:
+	case core.MethodSpend:
 		return &SpendArguments{}
 	}
 	return nil
 }
 
+// SpendTemplate interface for the template that support Spend method.
 type SpendTemplate interface {
 	Spend(core.Host, *SpendArguments) error
 }

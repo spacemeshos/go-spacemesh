@@ -88,7 +88,7 @@ func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, 
 		opt(options)
 	}
 
-	payload := multisig.SpawnPayload{}
+	payload := core.Payload{}
 	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
 
@@ -109,7 +109,7 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 		opt(options)
 	}
 
-	payload := multisig.SpendPayload{}
+	payload := core.Payload{}
 	payload.GasPrice = options.GasPrice
 	payload.Nonce = nonce
 
