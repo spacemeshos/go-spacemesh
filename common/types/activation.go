@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 
@@ -104,13 +105,19 @@ var EmptyATXID = &ATXID{}
 type ActivationTxHeader struct {
 	NIPostChallenge
 	Coinbase Address
+
+	// NumUnits holds the count of space units that have been reserved by the node for the
+	// current epoch; a unit represents a configurable amount of data for PoST
 	NumUnits uint32
 
 	ID     ATXID  // the ID of the ATX
 	NodeID NodeID // the id of the Node that created the ATX (public key)
 
 	BaseTickHeight uint64
-	TickCount      uint64
+
+	// TickCount number of ticks performed by PoET; a tick represents a number of sequential
+	// hashes
+	TickCount uint64
 }
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
@@ -119,9 +126,24 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 	return atxh.PubLayerID.GetEpoch() + 1
 }
 
-// GetWeight of the atx.
+// GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
+// sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
+// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
+// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
+// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
+// for at least the first few years.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
-	return uint64(atxh.NumUnits) * (atxh.TickCount)
+	return safeMul(uint64(atxh.NumUnits), (atxh.TickCount))
+}
+
+func safeMul(a, b uint64) uint64 {
+	if a > 0 && b > math.MaxUint64/a {
+		panic("uint64 overflow")
+	}
+	if b > 0 && a > math.MaxUint64/b {
+		panic("uint64 overflow")
+	}
+	return a * b
 }
 
 // TickHeight returns a sum of base tick height and tick count.

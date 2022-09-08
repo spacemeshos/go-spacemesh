@@ -19,7 +19,7 @@ func (vatx *VerifiedActivationTx) BaseTickHeight() uint64 {
 	return vatx.baseTickHeight
 }
 
-// TickCount returns tick count from from poet proof attached to the atx.
+// TickCount returns tick count from poet proof attached to the atx.
 func (vatx *VerifiedActivationTx) TickCount() uint64 {
 	return vatx.tickCount
 }
