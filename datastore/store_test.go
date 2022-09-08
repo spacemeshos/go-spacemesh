@@ -29,6 +29,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: types.NewLayerID(22),
+				Sequence:   11,
 			},
 			NumUnits: 11,
 		},
