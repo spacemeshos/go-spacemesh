@@ -163,7 +163,7 @@ jobs:
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 50
+    timeout-minutes: 75
     concurrency: cloud-limits
     steps:
     - uses: actions/checkout@v3
