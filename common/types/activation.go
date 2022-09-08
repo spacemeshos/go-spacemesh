@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 
@@ -128,7 +127,7 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
 // sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
-// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
+// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^9.
 // PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
 // to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
 // for at least the first few years.
@@ -141,13 +140,11 @@ func getWeight(numUnits, tickCount uint64) uint64 {
 }
 
 func safeMul(a, b uint64) uint64 {
-	if a > 0 && b > math.MaxUint64/a {
+	c := a * b
+	if a > 1 && b > 1 && c/b != a {
 		panic("uint64 overflow")
 	}
-	if b > 0 && a > math.MaxUint64/b {
-		panic("uint64 overflow")
-	}
-	return a * b
+	return c
 }
 
 // TickHeight returns a sum of base tick height and tick count.

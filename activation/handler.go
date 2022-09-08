@@ -160,8 +160,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 		if prevATX.NodeID != atx.NodeID() {
 			return nil, fmt.Errorf(
-				"previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
-				atx.ShortString(), atx.NodeID(), prevATX.NodeID,
+				"previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
+				atx.ShortString(), atx.NodeID(), prevATX.ID.ShortString(), prevATX.NodeID,
 			)
 		}
 

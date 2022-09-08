@@ -1,7 +1,6 @@
 package types
 
 import (
-	"math/rand"
 	"testing"
 )
 
@@ -11,8 +10,8 @@ func BenchmarkSafeMul(b *testing.B) {
 	var c uint64
 
 	for i := 0; i < b.N; i++ {
-		int1 := uint64(rand.Int31())
-		int2 := uint64(rand.Int31())
+		int1 := uint64(i * 2)
+		int2 := uint64(i + 5)
 
 		c = safeMul(int1, int2)
 	}
@@ -24,8 +23,8 @@ func BenchmarkMul(b *testing.B) {
 	var c uint64
 
 	for i := 0; i < b.N; i++ {
-		int1 := uint64(rand.Int31())
-		int2 := uint64(rand.Int31())
+		int1 := uint64(i * 2)
+		int2 := uint64(i + 5)
 
 		c = unsafeMul(int1, int2)
 	}
