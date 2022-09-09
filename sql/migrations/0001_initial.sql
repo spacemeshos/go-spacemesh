@@ -76,7 +76,7 @@ CREATE INDEX transactions_results_addresses_by_address ON transactions_results_a
 CREATE TABLE proposal_transactions
 (
     tid     CHAR(32),
-    pid     CHAR(32),
+    pid     CHAR(20),
     layer   INT NOT NULL,
     PRIMARY KEY (tid, pid)
 ) WITHOUT ROWID;
@@ -84,7 +84,7 @@ CREATE TABLE proposal_transactions
 CREATE TABLE block_transactions
 (
     tid     CHAR(32),
-    bid     CHAR(32),
+    bid     CHAR(20),
     layer   INT NOT NULL,
     PRIMARY KEY (tid, bid)
 ) WITHOUT ROWID;
