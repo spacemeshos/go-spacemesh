@@ -163,7 +163,7 @@ jobs:
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 75
+    timeout-minutes: 50
     concurrency: cloud-limits
     steps:
     - uses: actions/checkout@v3
@@ -205,7 +205,7 @@ jobs:
       run: cd systest && make push
 
     - name: Run tests
-      timeout-minutes: 90
+      timeout-minutes: 70
       run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
     - name: Systemtest result
