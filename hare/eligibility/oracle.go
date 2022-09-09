@@ -549,7 +549,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	}
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
-	// TODO: do we want to cache tortoise active set too?
 	if safeLayerStart.GetEpoch().IsGenesis() {
 		logger.With().Debug("no hare active set for genesis layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
@@ -575,9 +574,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		activeMap[atxHeader.NodeID()] = atxHeader.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
-
-	// update cache and return
-	o.activesCache.Add(targetLayer.GetEpoch(), activeMap)
 	return activeMap, nil
 }
 

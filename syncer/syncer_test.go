@@ -280,6 +280,19 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	return current
 }
 
+func TestSynchronize_SyncEpochATXAtFirstLayer(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	lyr := startWithSyncedState(t, ts)
+
+	require.Equal(t, lyr.GetEpoch()-1, ts.syncer.getLastSyncedATXs())
+	current := lyr.Add(2)
+	ts.mTicker.advanceToLayer(current)
+	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch()-1).Return(nil)
+	ts.mLyrFetcher.EXPECT().PollLayerData(gomock.Any(), gomock.Any()).Return(okCh()).Times(2)
+
+	require.True(t, ts.syncer.synchronize(context.TODO()))
+}
+
 func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	lyr := startWithSyncedState(t, ts)

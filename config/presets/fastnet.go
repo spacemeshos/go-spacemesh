@@ -43,6 +43,9 @@ func fastnet() config.Config {
 	conf.LayerDurationSec = 15
 	conf.LayersPerEpoch = 4
 
+	conf.HareEligibility.ConfidenceParam = 2 // half epoch
+	conf.HareEligibility.EpochOffset = 0
+
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 2000
 	conf.POST.K2 = 4
