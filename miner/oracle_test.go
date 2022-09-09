@@ -41,19 +41,19 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 	return nodeID, edSigner, edSigner.VRFSigner()
 }
 
-func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.ActivationTx {
-	hdr := types.ActivationTxHeader{
+func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: publishLayer,
 		},
 		NumUnits: defaultAtxWeight,
-	}
-	hdr.Verify(0, 1)
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
+	}}
 	atx.SetID(&id)
 	atx.SetNodeID(&nodeID)
-	require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
-	return atx
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(tb, err)
+	require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+	return vAtx
 }
 
 func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibilityProof, activeSet []types.ATXID, beacon types.Beacon) *types.Ballot {
@@ -91,7 +91,7 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 }
 
 type epochATXInfo struct {
-	atxHdr    *types.ActivationTxHeader
+	atxID     types.ATXID
 	activeSet []types.ATXID
 	beacon    types.Beacon
 }
@@ -112,7 +112,7 @@ func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end ty
 			}
 			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
 			if i == 0 {
-				info.atxHdr = &atx.ActivationTxHeader
+				info.atxID = atx.ID()
 			}
 		}
 		epochInfo[epoch] = info
@@ -148,7 +148,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 		require.NoError(t, err)
 
 		for _, proof := range proofs {
-			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxHdr.ID(), proof, info.activeSet, info.beacon)
+			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b.ID(), info.beacon, uint64(defaultAtxWeight)).Times(1)
 			eligible, err := validator.CheckEligibility(context.TODO(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
@@ -187,17 +187,18 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	atxID := types.RandomATXID()
-	hdr := types.ActivationTxHeader{
+
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
 		},
 		NumUnits: 0,
-	}
-	hdr.Verify(0, 1)
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
+	}}
 	atx.SetID(&atxID)
 	atx.SetNodeID(&o.nodeID)
-	require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
 
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errZeroEpochWeight)

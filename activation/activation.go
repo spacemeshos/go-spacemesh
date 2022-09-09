@@ -268,11 +268,12 @@ func (b *Builder) SmesherID() types.NodeID {
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
-	err := SignAtx(b, atx)
-	if err != nil {
+	if err := SignAtx(b, atx); err != nil {
 		return err
 	}
-	atx.CalcAndSetID()
+	if err := atx.CalcAndSetID(); err != nil {
+		return err
+	}
 	atx.SetNodeID(&b.nodeID)
 	return nil
 }
@@ -442,7 +443,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
-		challenge.PrevATXID = prevAtx.ID()
+		challenge.PrevATXID = prevAtx.ID
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge

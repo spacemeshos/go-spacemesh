@@ -46,18 +46,13 @@ func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, err
 	if atxHeader, gotIt := db.atxHdrCache.Get(id); gotIt {
 		return atxHeader, nil
 	}
-	atx, err := db.GetFullAtx(id)
-	if err != nil {
-		return nil, fmt.Errorf("get ATXs from DB: %w", err)
-	}
 
-	db.atxHdrCache.Add(id, &atx.ActivationTxHeader)
-	return &atx.ActivationTxHeader, nil
+	return db.getAndCacheHeader(id)
 }
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
 // in all databases.
-func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
+func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -67,8 +62,23 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, &atx.ActivationTxHeader)
+	db.atxHdrCache.Add(id, getHeader(atx))
 	return atx, nil
+}
+
+// getAndCacheHeader fetches the full atx struct from the database, caches it and returns the cached header.
+func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+	_, err := db.GetFullAtx(id)
+	if err != nil {
+		return nil, err
+	}
+
+	atxHeader, gotIt := db.atxHdrCache.Get(id)
+	if !gotIt {
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+	}
+
+	return atxHeader, nil
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
@@ -79,7 +89,7 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 	)
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		weight += header.GetWeight()
-		ids = append(ids, header.ID())
+		ids = append(ids, header.ID)
 		return true
 	}); err != nil {
 		return 0, nil, err
@@ -87,7 +97,7 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 	return weight, ids, nil
 }
 
-// IterateEpochATXHeaders iterates over activation headers that target an epoch.
+// IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
 func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) bool) error {
 	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
 	if err != nil {
@@ -175,4 +185,18 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return poets.Get(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
+}
+
+func getHeader(atx *types.VerifiedActivationTx) *types.ActivationTxHeader {
+	return &types.ActivationTxHeader{
+		NIPostChallenge: atx.NIPostChallenge,
+		Coinbase:        atx.Coinbase,
+		NumUnits:        atx.NumUnits,
+
+		ID:     atx.ID(),
+		NodeID: atx.NodeID(),
+
+		BaseTickHeight: atx.BaseTickHeight(),
+		TickCount:      atx.TickCount(),
+	}
 }

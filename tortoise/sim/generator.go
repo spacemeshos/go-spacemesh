@@ -231,16 +231,19 @@ func (g *Generator) generateAtxs() {
 		} else {
 			ticks = uint64(intInRange(g.rng, g.ticksRange))
 		}
-		atx.Verify(g.prevHeight[i], ticks)
-		activation.SignAtx(sig, atx)
-		atx.CalcAndSetID()
-		atx.CalcAndSetNodeID()
+		if err := activation.SignAtx(sig, atx); err != nil {
+			panic(err)
+		}
+		vAtx, err := atx.Verify(g.prevHeight[i], ticks)
+		if err != nil {
+			panic(err)
+		}
 
 		g.prevHeight[i] += ticks
 		g.activations[i] = atx.ID()
 
 		for _, state := range g.states {
-			state.OnActivationTx(atx)
+			state.OnActivationTx(vAtx)
 		}
 	}
 }

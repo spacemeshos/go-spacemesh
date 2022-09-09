@@ -697,9 +697,9 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
-func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
 	var mIds []types.ATXID
-	atxs := make(map[types.ATXID]*types.ActivationTx, len(atxIds))
+	atxs := make(map[types.ATXID]*types.VerifiedActivationTx, len(atxIds))
 	for _, id := range atxIds {
 		t, err := msh.cdb.GetFullAtx(id)
 		if err != nil {

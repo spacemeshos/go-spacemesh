@@ -240,8 +240,8 @@ func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Pro
 			return 0, nil, errInvalidATXID
 		}
 		atx, err := g.cdb.GetAtxHeader(p.AtxID)
-		if atx.BaseTickHeight() > max {
-			max = atx.BaseTickHeight()
+		if atx.BaseTickHeight > max {
+			max = atx.BaseTickHeight
 		}
 		if err != nil {
 			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))

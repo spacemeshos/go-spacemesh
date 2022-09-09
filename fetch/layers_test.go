@@ -786,9 +786,9 @@ func genATXs(t *testing.T, num int) []*types.ActivationTx {
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := 0; i < num; i++ {
 		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
-		activation.SignAtx(sig, atx)
-		atx.CalcAndSetID()
-		atx.CalcAndSetNodeID()
+		require.NoError(t, activation.SignAtx(sig, atx))
+		require.NoError(t, atx.CalcAndSetID())
+		require.NoError(t, atx.CalcAndSetNodeID())
 		atxs = append(atxs, atx)
 	}
 	return atxs

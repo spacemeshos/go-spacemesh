@@ -140,7 +140,21 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 
 func (t *InnerActivationTx) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.ActivationTxHeader.EncodeScale(enc)
+		n, err := t.NIPostChallenge.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Coinbase[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.NumUnits))
 		if err != nil {
 			return total, err
 		}
@@ -165,11 +179,26 @@ func (t *InnerActivationTx) EncodeScale(enc *scale.Encoder) (total int, err erro
 
 func (t *InnerActivationTx) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.ActivationTxHeader.DecodeScale(dec)
+		n, err := t.NIPostChallenge.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Coinbase[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NumUnits = uint32(field)
 	}
 	{
 		field, n, err := scale.DecodeOption[NIPost](dec)

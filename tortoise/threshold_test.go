@@ -131,17 +131,16 @@ func TestReferenceHeight(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 			for i, height := range tc.heights {
-				header := types.ActivationTxHeader{
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 					NIPostChallenge: types.NIPostChallenge{
 						PubLayerID: (types.EpochID(tc.epoch) - 1).FirstLayer(),
 					},
-				}
-				header.Verify(0, uint64(height))
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
+				}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
-				activation.SignAtx(signing.NewEdSigner(), atx)
-				require.NoError(t, atx.CalcAndSetNodeID())
-				require.NoError(t, atxs.Add(cdb, atx, time.Time{}))
+				require.NoError(t, activation.SignAtx(signing.NewEdSigner(), atx))
+				vAtx, err := atx.Verify(0, uint64(height))
+				require.NoError(t, err)
+				require.NoError(t, atxs.Add(cdb, vAtx, time.Time{}))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
 			require.NoError(t, err)

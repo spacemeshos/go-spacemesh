@@ -81,8 +81,8 @@ func (t ATXID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
-// Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
-func (t ATXID) Compare(other ATXID) bool {
+// Less returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
+func (t ATXID) Less(other ATXID) bool {
 	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
 }
 
@@ -104,44 +104,19 @@ var EmptyATXID = &ATXID{}
 type ActivationTxHeader struct {
 	NIPostChallenge
 	Coinbase Address
+
+	// NumUnits holds the count of space units that have been reserved by the node for the
+	// current epoch; a unit represents a configurable amount of data for PoST
 	NumUnits uint32
 
-	// the following fields are kept private and from being serialized
-	id *ATXID // non-exported cache of the ATXID
+	ID     ATXID  // the ID of the ATX
+	NodeID NodeID // the id of the Node that created the ATX (public key)
 
-	nodeID *NodeID // the id of the Node that created the ATX (public key)
+	BaseTickHeight uint64
 
-	// TODO(dshulyak) this is important to prevent accidental state reads
-	// before this field is set. reading empty data could lead to disastrous bugs.
-	verified       bool
-	baseTickHeight uint64
-	tickCount      uint64
-}
-
-// ShortString returns the first 5 characters of the ID, for logging purposes.
-func (atxh *ActivationTxHeader) ShortString() string {
-	return atxh.ID().ShortString()
-}
-
-// Hash32 returns the ATX's ID as a Hash32.
-func (atxh *ActivationTxHeader) Hash32() Hash32 {
-	return atxh.ID().Hash32()
-}
-
-// ID returns the ATX's ID.
-func (atxh *ActivationTxHeader) ID() ATXID {
-	if atxh.id == nil {
-		panic("id field must be set")
-	}
-	return *atxh.id
-}
-
-// NodeID returns the ATX's Node ID.
-func (atxh *ActivationTxHeader) NodeID() NodeID {
-	if atxh.nodeID == nil {
-		panic("nodeID field must be set")
-	}
-	return *atxh.nodeID
+	// TickCount number of ticks performed by PoET; a tick represents a number of sequential
+	// hashes
+	TickCount uint64
 }
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
@@ -150,41 +125,31 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 	return atxh.PubLayerID.GetEpoch() + 1
 }
 
-// SetID sets the ATXID in this ATX's cache.
-func (atxh *ActivationTxHeader) SetID(id *ATXID) {
-	atxh.id = id
-}
-
-// SetNodeID sets the Node ID in the ATX's cache.
-func (atxh *ActivationTxHeader) SetNodeID(nodeID *NodeID) {
-	atxh.nodeID = nodeID
-}
-
-// GetWeight of the atx.
+// GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
+// sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
+// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^9.
+// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
+// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
+// for at least the first few years.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
-	return uint64(atxh.NumUnits) * (atxh.tickCount)
+	return getWeight(uint64(atxh.NumUnits), atxh.TickCount)
 }
 
-// BaseTickHeight is a tick height of the positional atx.
-func (atxh *ActivationTxHeader) BaseTickHeight() uint64 {
-	return atxh.baseTickHeight
+func getWeight(numUnits, tickCount uint64) uint64 {
+	return safeMul(numUnits, tickCount)
 }
 
-// TickCount returns tick count from from poet proof attached to the atx.
-func (atxh *ActivationTxHeader) TickCount() uint64 {
-	return atxh.tickCount
+func safeMul(a, b uint64) uint64 {
+	c := a * b
+	if a > 1 && b > 1 && c/b != a {
+		panic("uint64 overflow")
+	}
+	return c
 }
 
 // TickHeight returns a sum of base tick height and tick count.
 func (atxh *ActivationTxHeader) TickHeight() uint64 {
-	return atxh.baseTickHeight + atxh.tickCount
-}
-
-// Verify sets field extract after verification.
-func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
-	atxh.verified = true
-	atxh.baseTickHeight = baseTickHeight
-	atxh.tickCount = tickCount
+	return atxh.BaseTickHeight + atxh.TickCount
 }
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -192,6 +157,8 @@ func (atxh *ActivationTxHeader) Verify(baseTickHeight, tickCount uint64) {
 // the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
+	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
+	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
 	Sequence           uint64
 	PrevATXID          ATXID
 	PubLayerID         LayerID
@@ -223,9 +190,17 @@ func (challenge *NIPostChallenge) String() string {
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
-	ActivationTxHeader
+	NIPostChallenge
+	Coinbase Address
+	NumUnits uint32
+
 	NIPost      *NIPost
 	InitialPost *Post
+
+	// the following fields are kept private and from being serialized
+	id *ATXID // non-exported cache of the ATXID
+
+	nodeID *NodeID // the id of the Node that created the ATX (public key)
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -239,11 +214,10 @@ type ActivationTx struct {
 func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
-				NIPostChallenge: challenge,
-				Coinbase:        coinbase,
-				NumUnits:        uint32(numUnits),
-			},
+			NIPostChallenge: challenge,
+			Coinbase:        coinbase,
+			NumUnits:        uint32(numUnits),
+
 			NIPost:      nipost,
 			InitialPost: initialPost,
 		},
@@ -274,21 +248,17 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", uint32(atx.PubLayerID.GetEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	encoder.AddUint64("sequence_number", atx.Sequence)
-	if atx.verified {
-		encoder.AddUint64("base_tick_height", atx.baseTickHeight)
-		encoder.AddUint64("tick_count", atx.tickCount)
-		encoder.AddUint64("weight", atx.GetWeight())
-	}
 	return nil
 }
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
-func (atx *ActivationTx) CalcAndSetID() {
+func (atx *ActivationTx) CalcAndSetID() error {
 	if atx.Sig == nil {
-		panic("cannot calculate ATX ID: sig is nil")
+		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
 	id := ATXID(CalcATXHash32(atx))
-	atx.SetID(&id)
+	atx.id = &id
+	return nil
 }
 
 // CalcAndSetNodeID calculates and sets the cached Node ID field. This field must be set before calling the NodeID() method.
@@ -302,7 +272,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
 	nodeID := BytesToNodeID(pub)
-	atx.SetNodeID(&nodeID)
+	atx.nodeID = &nodeID
 	return nil
 }
 
@@ -315,6 +285,64 @@ func (atx *ActivationTx) GetPoetProofRef() Hash32 {
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	ref := atx.GetPoetProofRef()
 	return ref[:util.Min(5, len(ref))]
+}
+
+// ShortString returns the first 5 characters of the ID, for logging purposes.
+func (atx *ActivationTx) ShortString() string {
+	return atx.ID().ShortString()
+}
+
+// ID returns the ATX's ID.
+func (atx *ActivationTx) ID() ATXID {
+	if atx.id == nil {
+		panic("id field must be set")
+	}
+	return *atx.id
+}
+
+// NodeID returns the ATX's Node ID.
+func (atx *ActivationTx) NodeID() NodeID {
+	if atx.nodeID == nil {
+		panic("nodeID field must be set")
+	}
+	return *atx.nodeID
+}
+
+// TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (atx *ActivationTx) TargetEpoch() EpochID {
+	return atx.PubLayerID.GetEpoch() + 1
+}
+
+// SetID sets the ATXID in this ATX's cache.
+func (atx *ActivationTx) SetID(id *ATXID) {
+	atx.id = id
+}
+
+// SetNodeID sets the Node ID in the ATX's cache.
+func (atx *ActivationTx) SetNodeID(nodeID *NodeID) {
+	atx.nodeID = nodeID
+}
+
+// Verify an ATX for a given base TickHeight and TickCount.
+func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
+	if atx.id == nil {
+		if err := atx.CalcAndSetID(); err != nil {
+			return nil, err
+		}
+	}
+	if atx.nodeID == nil {
+		if err := atx.CalcAndSetNodeID(); err != nil {
+			return nil, err
+		}
+	}
+	vAtx := &VerifiedActivationTx{
+		ActivationTx: atx,
+
+		baseTickHeight: baseTickHeight,
+		tickCount:      tickCount,
+	}
+	return vAtx, nil
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
@@ -375,43 +403,42 @@ type Post postShared.Proof
 
 // EncodeScale implements scale codec interface.
 func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
-	if err != nil {
-		return total, err
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
-	total += n
-	n, err = scale.EncodeByteSlice(enc, p.Indices)
-	if err != nil {
-		return total, err
+	{
+		n, err := scale.EncodeByteSlice(enc, p.Indices)
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
-	total += n
 	return total, nil
 }
 
 // DecodeScale implements scale codec interface.
 func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	if field, n, err := scale.DecodeCompact32(dec); err != nil {
-		return total, err
-	} else { // nolint
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
 		total += n
 		p.Nonce = uint32(field)
 	}
-	if field, n, err := scale.DecodeByteSlice(dec); err != nil {
-		return total, err
-	} else { // nolint
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
 		total += n
 		p.Indices = field
 	}
 	return total, nil
-}
-
-// PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
-type PostMetadata struct {
-	Challenge     []byte
-	BitsPerLabel  uint8
-	LabelsPerUnit uint64
-	K1            uint32
-	K2            uint32
 }
 
 // String returns a string representation of the PostProof, for logging purposes.
@@ -427,6 +454,15 @@ func bytesToShortString(b []byte) string {
 		return "empty"
 	}
 	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:util.Min(l, 5)])
+}
+
+// PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
+type PostMetadata struct {
+	Challenge     []byte
+	BitsPerLabel  uint8
+	LabelsPerUnit uint64
+	K1            uint32
+	K2            uint32
 }
 
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
@@ -455,7 +491,7 @@ func ToATXIDs(atxs []*ActivationTx) []ATXID {
 
 // SortAtxIDs sorts a list of atx IDs in lexicographic order, in-place.
 func SortAtxIDs(ids []ATXID) []ATXID {
-	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Less(ids[j]) })
 	return ids
 }
 
