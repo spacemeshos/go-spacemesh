@@ -49,7 +49,7 @@ func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) er
 	encoder.AddString("pos_atx_id", vatx.PositioningATX.String())
 	encoder.AddString("coinbase", vatx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", vatx.PubLayerID.Value)
-	encoder.AddUint32("epoch", uint32(vatx.PubLayerID.GetEpoch()))
+	encoder.AddUint32("epoch", uint32(vatx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(vatx.NumUnits))
 	encoder.AddUint64("sequence_number", vatx.Sequence)
 	encoder.AddUint64("base_tick_height", vatx.baseTickHeight)

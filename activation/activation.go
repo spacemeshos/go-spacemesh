@@ -329,8 +329,8 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 		return false
 	}
 	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
-		if prev.PubLayerID.GetEpoch() == currEpoch {
-			// miner has ATX in previous epoch
+		if prev.PublishEpoch() == currEpoch {
+			// miner has published in the current epoch
 			return false
 		}
 	}
@@ -542,8 +542,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	logger.With().Info("new atx challenge is ready",
-		log.Stringer("target_epoch", b.challenge.PubLayerID.GetEpoch()),
-		log.Stringer("current_epoch", b.currentEpoch()))
+		log.Stringer("current_epoch", b.currentEpoch()),
+		log.Stringer("publish_epoch", b.challenge.PublishEpoch()),
+		log.Stringer("target_epoch", b.challenge.TargetEpoch()))
 
 	if b.pendingATX == nil {
 		var err error
@@ -592,7 +593,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	b.log.With().Info("challenge ready")
 
-	pubEpoch := b.challenge.PubLayerID.GetEpoch()
+	pubEpoch := b.challenge.PublishEpoch()
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
@@ -690,9 +691,9 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 }
 
 func (b *Builder) discardChallengeIfStale() bool {
-	if b.challenge != nil && b.challenge.PubLayerID.GetEpoch()+1 < b.currentEpoch() {
+	if b.challenge != nil && b.challenge.TargetEpoch() < b.currentEpoch() {
 		b.log.With().Info("atx target epoch has already passed -- starting over",
-			log.FieldNamed("target_epoch", b.challenge.PubLayerID.GetEpoch()+1),
+			log.FieldNamed("target_epoch", b.challenge.TargetEpoch()),
 			log.FieldNamed("current_epoch", b.currentEpoch()),
 		)
 		b.discardChallenge()

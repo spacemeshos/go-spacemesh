@@ -116,7 +116,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	if existingATX != nil { // Already processed
 		return nil
 	}
-	epoch := atx.PubLayerID.GetEpoch()
+	epoch := atx.PublishEpoch()
 	h.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
 		epoch,
@@ -165,8 +165,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			)
 		}
 
-		prevEp := prevATX.PubLayerID.GetEpoch()
-		curEp := atx.PubLayerID.GetEpoch()
+		prevEp := prevATX.PublishEpoch()
+		curEp := atx.PublishEpoch()
 		if prevEp >= curEp {
 			return nil, fmt.Errorf(
 				"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
@@ -224,7 +224,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 		baseTickHeight = posAtx.TickHeight()
 	} else {
-		publicationEpoch := atx.PubLayerID.GetEpoch()
+		publicationEpoch := atx.PublishEpoch()
 		if !publicationEpoch.NeedsGoldenPositioningATX() {
 			return nil, fmt.Errorf("golden atx used for atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
@@ -297,7 +297,7 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		delete(h.atxChannels, atx.ID())
 	}
 
-	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PubLayerID.GetEpoch())
+	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PublishEpoch())
 	return nil
 }
 

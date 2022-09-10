@@ -154,7 +154,7 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
 	}
-	if targetEpoch := atx.PubLayerID.GetEpoch() + 1; targetEpoch != epoch {
+	if targetEpoch := atx.TargetEpoch(); targetEpoch != epoch {
 		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}

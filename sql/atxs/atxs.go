@@ -169,7 +169,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
-		stmt.BindInt64(3, int64(atx.PubLayerID.GetEpoch()))
+		stmt.BindInt64(3, int64(atx.PublishEpoch()))
 		stmt.BindBytes(4, atx.NodeID().ToBytes())
 		stmt.BindBytes(5, buf)
 		stmt.BindInt64(6, timestamp.UnixNano())

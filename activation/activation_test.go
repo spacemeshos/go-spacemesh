@@ -299,8 +299,6 @@ func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration u
 	return net.lastTransmission != nil, builtNIPost, err
 }
 
-// ========== Tests ==========
-
 func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) {
 	prevAtx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -314,6 +312,8 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
 }
+
+// ========== Tests ==========
 
 func TestBuilder_waitForFirstATX(t *testing.T) {
 	cdb := newCachedDB(t)
