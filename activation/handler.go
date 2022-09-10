@@ -130,7 +130,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	} else {
 		h.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
-	if err := h.StoreAtx(ctx, epoch, atx); err != nil {
+	if err := h.StoreAtx(ctx, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 	return nil
@@ -278,10 +278,8 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 	return nil
 }
 
-// StoreAtx stores an atx for epoch ech, it stores atx for the current epoch and adds the atx for the nodeID that
-// created it in a sorted manner by the sequence id. This function does not validate the atx and assumes all data is
-// correct and that all associated atx exist in the db. Will return error if writing to db failed.
-func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.VerifiedActivationTx) error {
+// StoreAtx stores an ATX and notifies subscribers of the ATXID.
+func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
 	h.Lock()
 	defer h.Unlock()
 
@@ -299,7 +297,7 @@ func (h *Handler) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Ve
 		delete(h.atxChannels, atx.ID())
 	}
 
-	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), ech)
+	h.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), atx.PubLayerID.GetEpoch())
 	return nil
 }
 

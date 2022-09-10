@@ -90,7 +90,7 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 				if err != nil {
 					panic(err)
 				}
-				if err := atxDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), vAtx); err != nil {
+				if err := atxDb.StoreAtx(context.TODO(), vAtx); err != nil {
 					panic(err)
 				}
 			}
@@ -282,9 +282,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 }
 
 func storeAtx(r *require.Assertions, atxHdlr *Handler, atx *types.VerifiedActivationTx, lg log.Log) {
-	epoch := atx.PubLayerID.GetEpoch()
-	lg.Info("stored ATX in epoch %v", epoch)
-	err := atxHdlr.StoreAtx(context.TODO(), epoch, atx)
+	err := atxHdlr.StoreAtx(context.TODO(), atx)
 	r.NoError(err)
 }
 
@@ -813,7 +811,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	atx := newActivationTx(t, sig, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
-	err := atxHdlr.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
+	err := atxHdlr.StoreAtx(context.TODO(), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{
