@@ -27,11 +27,11 @@ require (
 	github.com/prometheus/common v0.37.0
 	github.com/pyroscope-io/pyroscope v0.28.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220905145225-2baea06a0206
+	github.com/spacemeshos/api/release/go v0.0.0-20220909175001-1907c2fe076e
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
-	github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c
-	github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b
+	github.com/spacemeshos/go-scale v0.0.0-20220912074327-ac6a96584caa
+	github.com/spacemeshos/merkle-tree v0.0.0-20220909175028-45e6d3500683
 	github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063
 	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
 	github.com/spf13/cobra v1.5.0
@@ -160,7 +160,6 @@ require (
 	github.com/pyroscope-io/dotnetdiag v1.2.1 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
 	github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 // indirect
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 // indirect
