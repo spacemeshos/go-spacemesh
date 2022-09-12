@@ -90,17 +90,15 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 
 func (conf *GenesisConfig) Compare(cfg GenesisConfig) (string, error) {
 	if isEqual := cmp.Equal(conf, cfg); isEqual {
+		print("CFGs are Equal!")
 		if d, err := json.Marshal(conf); err != nil {
 			return "", err
 		} else {
 			return string(d), nil
 		}
+	} else {
+		return "", fmt.Errorf("Error genesis config mismatch")
 	}
-	d, err := json.Marshal(conf)
-	if err != nil {
-		return string(d), fmt.Errorf("Err")
-	}
-
 }
 
 func DefaultTestGenesisTime() string {
@@ -199,6 +197,12 @@ func (cfg *GenesisConfig) CalcGoldenATX() types.ATXID {
 	} else {
 		return *types.EmptyATXID
 	}
+}
+
+func (cfg *GenesisConfig) CalcGenesisID() {
+	gen_id, _ := CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime)
+
+	cfg.GenesisID = gen_id.Hex()
 }
 
 func CalcGoldenATX(genesis_data []byte, genesis_time string) (types.Hash32, error) {
