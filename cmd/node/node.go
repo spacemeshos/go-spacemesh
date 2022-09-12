@@ -1089,10 +1089,21 @@ func (app *App) Start() error {
 		}
 
 		if expectedConfig, err_cmp := app.Config.Genesis.Compare(payload); err_cmp != nil {
-			return fmt.Errorf("Genesis data mismatch.\nExpected %s\nGot: %s", expectedConfig, genData)
+			return fmt.Errorf("genesis data mismatch.\nExpected %s\nGot: %s", expectedConfig, genData)
 		}
 
 	} else {
+
+		json_cfg, err := json.Marshal(app.Config.Genesis)
+		if err != nil {
+			return fmt.Errorf("failed to read genesis config into json: %s", err)
+		} else {
+			// Write to readonly file
+			if writeErr := ioutil.WriteFile(config.DefaultGenesisDataPath, json_cfg, 0444); writeErr != nil {
+				return fmt.Errorf("failed to save genesis config with data: %s to %s.\nGot error: %s",
+					string(json_cfg), config.DefaultGenesisDataPath, writeErr)
+			}
+		}
 		// Persist it
 	}
 	// Note to self: Configuration should be finished after this
