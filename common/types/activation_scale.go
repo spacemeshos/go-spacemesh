@@ -29,6 +29,34 @@ func (t *ActivationTxHeader) EncodeScale(enc *scale.Encoder) (total int, err err
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.ID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.BaseTickHeight))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.TickCount))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -54,6 +82,36 @@ func (t *ActivationTxHeader) DecodeScale(dec *scale.Decoder) (total int, err err
 		}
 		total += n
 		t.NumUnits = uint32(field)
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.ID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.BaseTickHeight = uint64(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.TickCount = uint64(field)
 	}
 	return total, nil
 }
