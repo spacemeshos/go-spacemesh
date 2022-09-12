@@ -2059,7 +2059,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		require.NoError(t, err)
 		if hareOutput != types.EmptyBlockID {
 			tortoise.trtl.validity[hareOutput] = against
-			tortoise.trtl.hareOutput[hareOutput] = against
+			tortoise.trtl.hareOutput[lid] = types.EmptyBlockID
 			unsupported[hareOutput] = struct{}{}
 		}
 	}

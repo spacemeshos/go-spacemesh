@@ -16,8 +16,7 @@ func newCommonState() commonState {
 		epochWeight:      map[types.EpochID]util.Weight{},
 		referenceHeight:  map[types.EpochID]uint64{},
 		referenceWeight:  map[types.BallotID]util.Weight{},
-		decided:          map[types.LayerID]struct{}{},
-		hareOutput:       votes{},
+		hareOutput:       map[types.LayerID]types.BlockID{},
 		validity:         votes{},
 	}
 }
@@ -66,8 +65,7 @@ type commonState struct {
 	// only if refBallot has more than 1 eligibility proof.
 	referenceWeight map[types.BallotID]util.Weight
 
-	decided    map[types.LayerID]struct{}
-	hareOutput votes
+	hareOutput map[types.LayerID]types.BlockID
 	validity   votes
 }
 
