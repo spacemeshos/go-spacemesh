@@ -24,15 +24,13 @@ type handler struct {
 	logger log.Log
 	db     *sql.Database
 	bs     *datastore.BlobStore
-	msh    meshProvider
 }
 
-func newHandler(db *sql.Database, bs *datastore.BlobStore, msh meshProvider, lg log.Log) *handler {
+func newHandler(db *sql.Database, bs *datastore.BlobStore, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		db:     db,
 		bs:     bs,
-		msh:    msh,
 	}
 }
 
@@ -47,7 +45,7 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	h.logger.WithContext(ctx).With().Debug("responded to epoch atx request",
 		epoch,
 		log.Int("count", len(atxids)))
-	bts, err := codec.Encode(atxids)
+	bts, err := codec.EncodeSlice(atxids)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize epoch atx", epoch, log.Err(err))
 		return bts, fmt.Errorf("serialize: %w", err)
@@ -56,63 +54,72 @@ func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte,
 	return bts, nil
 }
 
-// handleLayerDataReq returns the block IDs for the specified layer hash,
-// it also returns the validation vector for this data and the latest blocks received in gossip.
+// handleLayerDataReq returns all data in a layer, described in LayerData.
 func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
-	lyrID := types.BytesToLayerID(req)
-	processed := h.msh.ProcessedLayer()
-	if lyrID.After(processed) {
-		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
-	}
-	ld := &layerData{ProcessedLayer: processed}
-	var err error
+	var (
+		lyrID = types.BytesToLayerID(req)
+		ld    LayerData
+		err   error
+	)
 	ld.Hash, err = layers.GetHash(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.AggregatedHash, err = layers.GetAggregatedHash(h.db, lyrID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.Ballots, err = ballots.IDsInLayer(h.db, lyrID)
-	if err != nil {
-		// sqh.ErrNotFound should be considered a programming error since we are only responding for
-		// layers older than processed layer
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
 		return nil, errInternal
 	}
 	ld.Blocks, err = blocks.IDsInLayer(h.db, lyrID)
-	if err != nil {
-		// sqh.ErrNotFound should be considered a programming error since we are only responding for
-		// layers older than processed layer
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, errInternal
 	}
-	if ld.HareOutput, err = layers.GetHareOutput(h.db, lyrID); err != nil {
-		h.logger.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
-		return nil, errInternal
-	}
 
-	out, err := codec.Encode(ld)
+	out, err := codec.Encode(&ld)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
+		h.logger.WithContext(ctx).With().Panic("failed to serialize layer data response", log.Err(err))
 	}
 
 	return out, nil
 }
 
+// handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinions.
+func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
+	var (
+		lid = types.BytesToLayerID(req)
+		ld  LayerOpinions
+		out []byte
+		err error
+	)
+	ld.Cert, err = layers.GetCert(h.db, lid)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		h.logger.WithContext(ctx).With().Warning("failed to get certificate for layer", lid, log.Err(err))
+		return nil, errInternal
+	}
+	out, err = codec.Encode(&ld)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Panic("failed to serialize layer opinions response", log.Err(err))
+	}
+	return out, nil
+}
+
 func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
-	var requestBatch requestBatch
-	err := types.BytesToInterface(data, &requestBatch)
+	var requestBatch RequestBatch
+	err := codec.Decode(data, &requestBatch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
 		return nil, errors.New("bad request")
 	}
-	resBatch := responseBatch{
+	resBatch := ResponseBatch{
 		ID:        requestBatch.ID,
-		Responses: make([]responseMessage, 0, len(requestBatch.Requests)),
+		Responses: make([]ResponseMessage, 0, len(requestBatch.Requests)),
 	}
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
@@ -130,14 +137,14 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 				log.Int("dataSize", len(res)))
 		}
 		// add response to batch
-		m := responseMessage{
+		m := ResponseMessage{
 			Hash: r.Hash,
 			Data: res,
 		}
 		resBatch.Responses = append(resBatch.Responses, m)
 	}
 
-	bts, err := types.InterfaceToBytes(&resBatch)
+	bts, err := codec.Encode(&resBatch)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Panic("failed to serialize batch id",
 			log.String("batch_hash", resBatch.ID.ShortString()))

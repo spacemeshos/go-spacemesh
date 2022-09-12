@@ -3,6 +3,7 @@ package sim
 import (
 	"math/rand"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -110,10 +111,14 @@ type Generator struct {
 
 	nextLayer types.LayerID
 	// key is when to return => value is the layer to return
-	reordered   map[types.LayerID]types.LayerID
-	layers      []*types.Layer
-	units       [2]int
+	reordered map[types.LayerID]types.LayerID
+	layers    []*types.Layer
+	units     [2]int
+
 	activations []types.ATXID
+	ticksRange  [2]int
+	ticks       []uint64
+	prevHeight  []uint64
 
 	keys []*signing.EdSigner
 }
@@ -131,19 +136,38 @@ func WithSetupMinerRange(low, high int) SetupOpt {
 // WithSetupUnitsRange adjusts units of the ATXs, which will directly affect block weight.
 func WithSetupUnitsRange(low, high int) SetupOpt {
 	return func(conf *setupConf) {
-		conf.Units = [2]int{low, high}
+		conf.UnitsRange = [2]int{low, high}
+	}
+}
+
+// WithSetupTicksRange configures range of atxs, that will be randomly chosen by atxs.
+func WithSetupTicksRange(low, high int) SetupOpt {
+	return func(conf *setupConf) {
+		conf.TicksRange = [2]int{low, high}
+	}
+}
+
+// WithSetupTicks configures ticks for every atx.
+func WithSetupTicks(ticks ...uint64) SetupOpt {
+	return func(conf *setupConf) {
+		if len(ticks) > 0 {
+			conf.Ticks = ticks
+		}
 	}
 }
 
 type setupConf struct {
-	Miners [2]int
-	Units  [2]int
+	Miners     [2]int
+	UnitsRange [2]int
+	TicksRange [2]int
+	Ticks      []uint64
 }
 
 func defaultSetupConf() setupConf {
 	return setupConf{
-		Miners: [2]int{30, 30},
-		Units:  [2]int{10, 10},
+		Miners:     [2]int{30, 30},
+		UnitsRange: [2]int{10, 10},
+		TicksRange: [2]int{10, 10},
 	}
 }
 
@@ -170,7 +194,12 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	for _, opt := range opts {
 		opt(&conf)
 	}
-	g.units = conf.Units
+	if conf.Ticks != nil && conf.Miners[0] != conf.Miners[1] && len(conf.Ticks) != conf.Miners[0] {
+		g.logger.Panic("if conf.Ticks is provided it should be equal to the constant number of conf.Miners")
+	}
+	g.units = conf.UnitsRange
+	g.ticks = conf.Ticks
+	g.ticksRange = conf.TicksRange
 	if len(g.layers) == 0 {
 		g.layers = append(g.layers, types.GenesisLayer())
 	}
@@ -179,6 +208,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
+	g.prevHeight = make([]uint64, miners)
 
 	for i := 0; i < miners; i++ {
 		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
@@ -188,19 +218,32 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
-		address := types.Address{}
-		_, _ = g.rng.Read(address[:])
+		sig := signing.NewEdSigner()
+		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(address.Bytes()),
 			PubLayerID: g.nextLayer.Sub(1),
 		}
 		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
-		atx.Verify(1, 2)
+		var ticks uint64
+		if g.ticks != nil {
+			ticks = g.ticks[i]
+		} else {
+			ticks = uint64(intInRange(g.rng, g.ticksRange))
+		}
+		if err := activation.SignAtx(sig, atx); err != nil {
+			panic(err)
+		}
+		vAtx, err := atx.Verify(g.prevHeight[i], ticks)
+		if err != nil {
+			panic(err)
+		}
+
+		g.prevHeight[i] += ticks
 		g.activations[i] = atx.ID()
 
 		for _, state := range g.states {
-			state.OnActivationTx(atx)
+			state.OnActivationTx(vAtx)
 		}
 	}
 }

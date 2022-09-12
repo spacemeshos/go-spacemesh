@@ -158,7 +158,7 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pub := ballot.SmesherID(); bytes.Compare(atx.NodeID[:], pub.Bytes()) != 0 {
+	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID.ToBytes(), pub.Bytes()) {
 		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
 	}
 	return atx, nil

@@ -9,13 +9,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+// concurrentRand provides a concurrency safe random number generator, required
+// because sources created by math/rand.NewSource are not safe for concurrent
+// use.
+type concurrentRand struct {
+	r  *rand.Rand
+	mu sync.Mutex
+}
+
+func newConcurrentRand() *concurrentRand {
+	return &concurrentRand{
+		r: rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
+}
+
+func (cr *concurrentRand) Intn(n int) int {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.r.Intn(n)
+}
 
 // AddrBook provides a concurrency safe address manager for caching potential
 // peers on the network. based on bitcoin's AddrBook.
@@ -26,7 +46,7 @@ type AddrBook struct {
 	path   string
 
 	mu              sync.RWMutex
-	rand            *rand.Rand
+	rand            *concurrentRand
 	key             [32]byte
 	addrIndex       map[peer.ID]*knownAddress
 	addrNew         []map[peer.ID]*knownAddress
@@ -49,7 +69,7 @@ func NewAddrBook(cfg *Config, logger log.Log) *AddrBook {
 		cfg:    cfg,
 		logger: logger,
 		path:   path,
-		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
+		rand:   newConcurrentRand(),
 	}
 	am.reset()
 	am.loadPeers(am.path)

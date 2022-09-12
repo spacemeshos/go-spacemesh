@@ -106,6 +106,20 @@ func (mr *MockfetcherMockRecorder) GetLayerData(arg0, arg1, arg2, arg3 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*Mockfetcher)(nil).GetLayerData), arg0, arg1, arg2, arg3)
 }
 
+// GetLayerOpinions mocks base method.
+func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 types.LayerID, arg2 func([]byte, p2p.Peer, int), arg3 func(error, p2p.Peer, int)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerOpinions indicates an expected call of GetLayerOpinions.
+func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3)
+}
+
 // RegisterPeerHashes mocks base method.
 func (m *Mockfetcher) RegisterPeerHashes(arg0 p2p.Peer, arg1 []types.Hash32) {
 	m.ctrl.T.Helper()
@@ -214,6 +228,43 @@ func (m *MockblockHandler) HandleSyncedBlock(arg0 context.Context, arg1 []byte) 
 func (mr *MockblockHandlerMockRecorder) HandleSyncedBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedBlock", reflect.TypeOf((*MockblockHandler)(nil).HandleSyncedBlock), arg0, arg1)
+}
+
+// MockcertHandler is a mock of certHandler interface.
+type MockcertHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockcertHandlerMockRecorder
+}
+
+// MockcertHandlerMockRecorder is the mock recorder for MockcertHandler.
+type MockcertHandlerMockRecorder struct {
+	mock *MockcertHandler
+}
+
+// NewMockcertHandler creates a new mock instance.
+func NewMockcertHandler(ctrl *gomock.Controller) *MockcertHandler {
+	mock := &MockcertHandler{ctrl: ctrl}
+	mock.recorder = &MockcertHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockcertHandler) EXPECT() *MockcertHandlerMockRecorder {
+	return m.recorder
+}
+
+// HandleSyncedCertificate mocks base method.
+func (m *MockcertHandler) HandleSyncedCertificate(arg0 context.Context, arg1 types.LayerID, arg2 *types.Certificate) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleSyncedCertificate", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleSyncedCertificate indicates an expected call of HandleSyncedCertificate.
+func (mr *MockcertHandlerMockRecorder) HandleSyncedCertificate(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedCertificate", reflect.TypeOf((*MockcertHandler)(nil).HandleSyncedCertificate), arg0, arg1, arg2)
 }
 
 // MockballotHandler is a mock of ballotHandler interface.
@@ -416,17 +467,17 @@ func (mr *MockmeshProviderMockRecorder) ProcessedLayer() *gomock.Call {
 }
 
 // SetZeroBlockLayer mocks base method.
-func (m *MockmeshProvider) SetZeroBlockLayer(arg0 types.LayerID) error {
+func (m *MockmeshProvider) SetZeroBlockLayer(arg0 context.Context, arg1 types.LayerID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetZeroBlockLayer", arg0)
+	ret := m.ctrl.Call(m, "SetZeroBlockLayer", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetZeroBlockLayer indicates an expected call of SetZeroBlockLayer.
-func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0, arg1)
 }
 
 // Mockhost is a mock of host interface.

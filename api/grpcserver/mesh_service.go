@@ -117,7 +117,7 @@ func (s MeshService) getFilteredTransactions(from types.LayerID, address types.A
 	return txs, nil
 }
 
-func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
+func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice
 	// but to read all of them.
 	// TODO: index activations by layer (and maybe by coinbase)
@@ -264,7 +264,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			Address: t.Principal.String(),
 		}
 		tx.Template = &pb.AccountId{
-			Address: t.Template.String(),
+			Address: t.TemplateAddress.String(),
 		}
 		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
@@ -282,11 +282,11 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 	return tx
 }
 
-func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
+func convertActivation(a *types.VerifiedActivationTx) (*pb.Activation, error) {
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
-		SmesherId: &pb.SmesherId{Id: a.NodeID.ToBytes()},
+		SmesherId: &pb.SmesherId{Id: a.NodeID().ToBytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
@@ -479,7 +479,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			log.Info("activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent := <-activationsCh:
-			activation := activationEvent.(events.ActivationTx).ActivationTx
+			activation := activationEvent.(events.ActivationTx).VerifiedActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
 				pbActivation, err := convertActivation(activation)
@@ -573,6 +573,8 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 		return pb.Layer_LAYER_STATUS_APPROVED
 	case events.LayerStatusTypeConfirmed:
 		return pb.Layer_LAYER_STATUS_CONFIRMED
+	case events.LayerStatusTypeApplied:
+		return pb.Layer_LAYER_STATUS_APPLIED
 	default:
 		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}

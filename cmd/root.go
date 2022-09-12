@@ -219,10 +219,19 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&config.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		config.SMESHING.Opts.Throttle, "")
 
-	/**========================Consensus Flags ========================== **/
+	/**======================== Consensus Flags ========================== **/
 
 	cmd.PersistentFlags().Uint32Var(&config.LayersPerEpoch, "layers-per-epoch",
 		config.LayersPerEpoch, "number of layers in epoch")
+
+	/**======================== PoET Flags ========================== **/
+
+	cmd.PersistentFlags().DurationVar(&config.POET.PhaseShift, "phase-shift",
+		config.POET.PhaseShift, "phase shift of poet server")
+	cmd.PersistentFlags().DurationVar(&config.POET.CycleGap, "cycle-gap",
+		config.POET.CycleGap, "cycle gap of poet server")
+	cmd.PersistentFlags().DurationVar(&config.POET.GracePeriod, "grace-period",
+		config.POET.GracePeriod, "propagation time for ATXs in the network")
 
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())

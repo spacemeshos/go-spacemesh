@@ -12,14 +12,9 @@ import (
 
 const (
 	// TotalGasSpawn is consumed from principal in case of successful spawn.
-	TotalGasSpawn = 200
+	TotalGasSpawn = 100
 	// TotalGasSpend is consumed from principal in case of successful spend.
 	TotalGasSpend = 100
-)
-
-const (
-	methodSpawn = 0
-	methodSpend = 1
 )
 
 func init() {
@@ -40,39 +35,32 @@ var (
 type handler struct{}
 
 // Parse header and arguments.
-func (*handler) Parse(ctx *core.Context, method uint8, decoder *scale.Decoder) (header core.Header, args scale.Encodable, err error) {
+func (*handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	switch method {
-	case methodSpawn:
-		var p SpawnPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		args = &p.Arguments
-		header.GasPrice = p.GasPrice
-		header.MaxGas = TotalGasSpawn
-	case methodSpend:
-		var p SpendPayload
-		if _, err = p.DecodeScale(decoder); err != nil {
-			err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
-			return
-		}
-		args = &p.Arguments
-		header.GasPrice = p.GasPrice
-		header.Nonce.Counter = p.Nonce.Counter
-		header.Nonce.Bitfield = p.Nonce.Bitfield
-		header.MaxGas = TotalGasSpend
+	case core.MethodSpawn:
+		output.FixedGas = TotalGasSpawn
+	case core.MethodSpend:
+		output.FixedGas = TotalGasSpend
 	default:
-		return header, args, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
-	return header, args, nil
+	var p core.Payload
+	if _, err = p.DecodeScale(decoder); err != nil {
+		err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+		return
+	}
+	output.GasPrice = p.GasPrice
+	output.Nonce = p.Nonce
+	return output, nil
 }
 
-// Init wallet.
-func (*handler) Init(method uint8, args any, state []byte) (core.Template, error) {
-	if method == 0 {
-		return New(args.(*SpawnArguments)), nil
-	}
+// New instatiates single sig wallet with spawn arguments.
+func (*handler) New(args any) (core.Template, error) {
+	return New(args.(*SpawnArguments)), nil
+}
+
+// Load single sig wallet from stored state.
+func (*handler) Load(state []byte) (core.Template, error) {
 	decoder := scale.NewDecoder(bytes.NewReader(state))
 	var wallet Wallet
 	if _, err := wallet.DecodeScale(decoder); err != nil {
@@ -82,24 +70,29 @@ func (*handler) Init(method uint8, args any, state []byte) (core.Template, error
 }
 
 // Exec spawn or spend based on the method selector.
-func (*handler) Exec(ctx *core.Context, method uint8, args scale.Encodable) error {
+func (*handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
 	switch method {
-	case methodSpawn:
-		if err := ctx.Consume(TotalGasSpawn); err != nil {
+	case core.MethodSpawn:
+		if err := host.Spawn(args); err != nil {
 			return err
 		}
-		if err := ctx.Spawn(TemplateAddress, args); err != nil {
-			return err
-		}
-	case methodSpend:
-		if err := ctx.Consume(TotalGasSpend); err != nil {
-			return err
-		}
-		if err := ctx.Template.(*Wallet).Spend(ctx, args.(*SpendArguments)); err != nil {
+	case core.MethodSpend:
+		if err := host.Template().(*Wallet).Spend(host, args.(*SpendArguments)); err != nil {
 			return err
 		}
 	default:
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
+	}
+	return nil
+}
+
+// Args ...
+func (h *handler) Args(method uint8) scale.Type {
+	switch method {
+	case core.MethodSpawn:
+		return &SpawnArguments{}
+	case core.MethodSpend:
+		return &SpendArguments{}
 	}
 	return nil
 }

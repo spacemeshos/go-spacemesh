@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -10,51 +11,72 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
-// computeBallotWeight compute and assign ballot weight to the weights map.
+// computeBallotWeight compute ballot weight.
 func computeBallotWeight(
 	cdb *datastore.CachedDB,
-	referenceWeights, weights map[types.BallotID]util.Weight,
+	referenceWeights map[types.BallotID]util.Weight,
 	ballot *types.Ballot,
 	layerSize,
 	layersPerEpoch uint32,
 ) (util.Weight, error) {
-	var (
-		reference, actual util.Weight
-		err               error
-		exist             bool
-	)
-	refBallotID := ballot.ID()
+	ref := ballot.ID()
 	if ballot.EpochData == nil {
 		if ballot.RefBallot == types.EmptyBallotID {
 			return util.Weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 		}
-		refBallotID = ballot.RefBallot
+		ref = ballot.RefBallot
 	}
-	if reference, exist = referenceWeights[refBallotID]; !exist {
+	var (
+		reference util.Weight
+		err       error
+		exist     bool
+	)
+	if reference, exist = referenceWeights[ref]; !exist {
 		reference, err = proposals.ComputeWeightPerEligibility(cdb, ballot, layerSize, layersPerEpoch)
 		if err != nil {
 			return util.Weight{}, fmt.Errorf("get ballot weight %w", err)
 		}
-		referenceWeights[refBallotID] = reference
+		referenceWeights[ref] = reference
 	}
-	actual = reference.Copy().Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs))))
-	weights[ballot.ID()] = actual
-	return actual, nil
+	return reference.Copy().Mul(util.WeightFromInt64(int64(len(ballot.EligibilityProofs)))), nil
 }
 
-func computeEpochWeight(cdb *datastore.CachedDB, epochWeights map[types.EpochID]util.Weight, eid types.EpochID) (util.Weight, error) {
-	layerWeight, exist := epochWeights[eid]
-	if exist {
-		return layerWeight, nil
-	}
-	epochWeight, _, err := cdb.GetEpochWeight(eid)
+func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, error) {
+	atx, err := cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
-		return util.Weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
+		return 0, fmt.Errorf("read atx for ballot height: %w", err)
 	}
-	layerWeight = util.WeightFromUint64(epochWeight)
-	layerWeight = layerWeight.Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
-	epochWeights[eid] = layerWeight
-	return layerWeight, nil
+	return atx.TickHeight(), nil
+}
+
+func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (util.Weight, uint64, error) {
+	var (
+		weight  uint64
+		heights []uint64
+	)
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		weight += header.GetWeight()
+		heights = append(heights, header.TickHeight())
+		return true
+	}); err != nil {
+		return util.Weight{}, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
+	}
+	return util.WeightFromUint64(weight).
+		Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch()))), getMedian(heights), nil
+}
+
+func getMedian(heights []uint64) uint64 {
+	if len(heights) == 0 {
+		return 0
+	}
+	sort.Slice(heights, func(i, j int) bool {
+		return heights[i] < heights[j]
+	})
+	mid := len(heights) / 2
+	if len(heights)%2 == 0 {
+		return (heights[mid-1] + heights[mid]) / 2
+	}
+	return heights[mid]
 }
 
 // computes weight for (from, to] layers.

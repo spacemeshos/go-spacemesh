@@ -1,7 +1,6 @@
 package grpcserver
 
-// Hide deprecated protobuf version error.
-// nolint: staticcheck
+//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -9,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/big"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,11 +25,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -36,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -81,15 +83,14 @@ var (
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	addr1       = wallet.Address(signer1.PublicKey().Bytes())
 	addr2       = wallet.Address(signer2.PublicKey().Bytes())
-	pub, _, _   = ed25519.GenerateKey(nil)
-	nodeID      = types.BytesToNodeID(pub)
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
-	nipost      = NewNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx   = newAtx(challenge, nipost, addr1)
-	globalAtx2  = newAtx(challenge, nipost, addr2)
+	nipost      = newNIPostWithChallenge(&chlng, poetRef)
+	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	signer      = NewMockSigner()
+	globalAtx   *types.VerifiedActivationTx
+	globalAtx2  *types.VerifiedActivationTx
 	signer1     = signing.NewEdSigner()
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
@@ -115,9 +116,32 @@ var (
 	stateRoot = types.HexToHash32("11111")
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
+
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
+	if err := activation.SignAtx(signer, atx); err != nil {
+		log.Println("failed to sign atx:", err)
+		os.Exit(1)
+	}
+	var err error
+	globalAtx, err = atx.Verify(0, 1)
+	if err != nil {
+		log.Println("failed to verify atx:", err)
+		os.Exit(1)
+	}
+
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
+	if err := activation.SignAtx(signer, atx2); err != nil {
+		log.Println("failed to sign atx:", err)
+		os.Exit(1)
+	}
+	globalAtx2, err = atx2.Verify(0, 1)
+	if err != nil {
+		log.Println("failed to verify atx:", err)
+		os.Exit(1)
+	}
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
@@ -127,9 +151,12 @@ func init() {
 	conStateAPI.returnTx[globalTx.ID] = globalTx
 	conStateAPI.returnTx[globalTx2.ID] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
 }
 
-func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: challenge,
 		Post: &types.Post{
@@ -144,11 +171,7 @@ func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 	}
 }
 
-type NetworkMock struct {
-	lock         sync.Mutex
-	broadCastErr bool
-	broadcasted  []byte
-}
+type NetworkMock struct{}
 
 func (s *NetworkMock) PeerCount() uint64 {
 	return 0
@@ -200,8 +223,8 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 		ballots, blocks), nil
 }
 
-func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.ActivationTx{
+func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
+	atxs := map[types.ATXID]*types.VerifiedActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
 	}
@@ -213,7 +236,6 @@ type ConStateAPIMock struct {
 	layerApplied map[types.TransactionID]*types.LayerID
 	balances     map[types.Address]*big.Int
 	nonces       map[types.Address]uint64
-	err          error
 
 	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
@@ -236,9 +258,9 @@ func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64) {
 func (t *ConStateAPIMock) GetAllAccounts() (res []*types.Account, err error) {
 	for address, balance := range t.balances {
 		res = append(res, &types.Account{
-			Address: address,
-			Balance: balance.Uint64(),
-			Nonce:   t.nonces[address],
+			Address:   address,
+			Balance:   balance.Uint64(),
+			NextNonce: t.nonces[address],
 		})
 	}
 	return res, nil
@@ -305,6 +327,7 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
 	if nonce == 0 {
 		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
+			types.Nonce{},
 			sdk.WithGasPrice(0),
 		))
 		tx.MaxGas = wallet.TotalGasSpawn
@@ -321,30 +344,38 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return &tx
 }
 
-func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
-	challenge := types.NIPostChallenge{
-		NodeID:         nodeID,
+func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
 	}
-	return challenge
 }
 
-func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
-	activationTx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
-				NIPostChallenge: challenge,
-				Coinbase:        coinbase,
-				NumUnits:        numUnits,
-			},
-			NIPost: nipost,
-		},
-	}
-	activationTx.CalcAndSetID()
-	return activationTx
+func newAtx(t *testing.T, challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
+	require.NoError(t, activation.SignAtx(sig, atx))
+	require.NoError(t, atx.CalcAndSetID())
+	require.NoError(t, atx.CalcAndSetNodeID())
+	return atx
+}
+
+func NewMockSigner() *MockSigning {
+	return &MockSigning{signing.NewEdSigner()}
+}
+
+// TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
+type MockSigning struct {
+	signer *signing.EdSigner
+}
+
+func (ms *MockSigning) NodeID() types.NodeID {
+	return types.BytesToNodeID(ms.signer.PublicKey().Bytes())
+}
+
+func (ms *MockSigning) Sign(m []byte) []byte {
+	return ms.signer.Sign(m)
 }
 
 // PostAPIMock is a mock for Post API.
@@ -416,7 +447,7 @@ func (*SmeshingAPIMock) StopSmeshing(bool) error {
 }
 
 func (*SmeshingAPIMock) SmesherID() types.NodeID {
-	return nodeID
+	return signer.NodeID()
 }
 
 func (*SmeshingAPIMock) Coinbase() types.Address {
@@ -552,7 +583,7 @@ func TestNodeService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -682,7 +713,7 @@ func TestGlobalStateService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -971,7 +1002,7 @@ func TestSmesherService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -1020,7 +1051,7 @@ func TestSmesherService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			nodeAddr := types.GenerateAddress(nodeID[:])
+			nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
 			resAddr, err := types.StringToAddress(res.AccountId.Address)
 			require.NoError(t, err)
 			require.Equal(t, nodeAddr.String(), resAddr.String())
@@ -1096,7 +1127,7 @@ func TestMeshService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -1635,13 +1666,13 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	req.NoError(err)
 
 	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
-	serializedTx, err := types.InterfaceToBytes(globalTx)
+	serializedTx, err := codec.Encode(globalTx)
 	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)
@@ -1686,7 +1717,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -1719,7 +1750,7 @@ func TestTransactionService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2033,16 +2064,16 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
 				continue
 			}
-			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
+			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().ToBytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
 				continue
 			}
-			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
+			if !bytes.Equal(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) {
 				continue
 			}
 			if a.NumUnits != uint32(globalAtx.NumUnits) {
@@ -2080,7 +2111,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2179,7 +2210,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2281,7 +2312,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2388,7 +2419,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2500,7 +2531,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
+		require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
@@ -2519,18 +2550,6 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 
 	default:
 		require.Fail(t, fmt.Sprintf("inner account data item has wrong data type: %T", dataItem))
-	}
-}
-
-func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	// We should check more data elements here but this isn't really implemented yet so for now
-	// just check one as a sanity check
-	case *pb.AccountData_Receipt:
-		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type: "+fmt.Sprintf("%T", dataItem))
 	}
 }
 
@@ -2555,16 +2574,6 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
-}
-
-func checkGlobalStateDataReceipt(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_Receipt:
-		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2608,7 +2617,7 @@ func TestMultiService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
@@ -2697,7 +2706,7 @@ func TestDebugService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, conn.Close()) }()
 	c := pb.NewDebugServiceClient(conn)
@@ -2762,7 +2771,7 @@ func TestGatewayService(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	defer func() { require.NoError(t, conn.Close()) }()
@@ -2802,13 +2811,13 @@ func TestEventsReceived(t *testing.T) {
 
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
-	conn1, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn1, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn1.Close())
 	}()
 
-	conn2, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn2, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn2.Close())

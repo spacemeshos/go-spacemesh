@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -20,7 +21,7 @@ type PoetListener struct {
 // HandlePoetProofMessage is a receiver for broadcast messages.
 func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	var proofMessage types.PoetProofMessage
-	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
+	if err := codec.Decode(msg, &proofMessage); err != nil {
 		l.log.WithContext(ctx).With().Error("failed to unmarshal poet membership proof", log.Err(err))
 		return pubsub.ValidationReject
 	}

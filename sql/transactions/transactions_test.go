@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"context"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 
 	var raw []byte
 	if nonce == 0 {
-		raw = wallet.SelfSpawn(principal.PrivateKey(), sdk.WithGasPrice(fee))
+		raw = wallet.SelfSpawn(principal.PrivateKey(), types.Nonce{}, sdk.WithGasPrice(fee))
 	} else {
 		raw = wallet.Spend(principal.PrivateKey(), dest, amount,
 			types.Nonce{Counter: nonce}, sdk.WithGasPrice(fee))
@@ -379,7 +380,13 @@ func TestDiscardNonceBelow(t *testing.T) {
 	numTXs := 10
 	received := time.Now()
 	txs := make([]*types.Transaction, 0, numTXs*2)
-	for nonce := uint64(0); nonce < uint64(numTXs); nonce++ {
+
+	tx := createTX(t, signer, types.Address{1}, 0, 191, 1)
+	require.NoError(t, Add(db, tx, received))
+	txs = append(txs, tx)
+
+	// start nonce from math.MaxInt64+1 to validate sqlite comparison in DiscardNonceBelow
+	for nonce := uint64(math.MaxInt64 + 1); nonce < uint64(math.MaxInt64+numTXs); nonce++ {
 		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1)
 		require.NoError(t, Add(db, tx, received))
 		txs = append(txs, tx)
@@ -690,7 +697,8 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	rng := rand.New(rand.NewSource(1001))
 	signer := signing.NewEdSignerFromRand(rng)
 	numTXs := 13
-	nonce := uint64(987)
+	// use math.MaxInt64+1 to validate nonce sqlite comparison in GetAcctPendingFromNonce
+	nonce := uint64(math.MaxInt64 + 1)
 	received := time.Now()
 	for i := 0; i < numTXs; i++ {
 		tx := createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)

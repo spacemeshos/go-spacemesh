@@ -52,7 +52,7 @@ type ConservativeState interface {
 
 // MeshAPI is an api for getting mesh status about layers/blocks/rewards.
 type MeshAPI interface {
-	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
+	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]*types.Reward, error)
 	LatestLayer() types.LayerID

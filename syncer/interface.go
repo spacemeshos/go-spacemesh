@@ -14,7 +14,8 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayerContent(context.Context, types.LayerID) chan fetch.LayerPromiseResult
+	PollLayerData(context.Context, types.LayerID) chan fetch.LayerPromiseResult
+	PollLayerOpinions(context.Context, types.LayerID) chan fetch.LayerPromiseResult
 	GetEpochATXs(context.Context, types.EpochID) error
 }
 

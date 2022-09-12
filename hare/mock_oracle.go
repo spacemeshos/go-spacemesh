@@ -2,12 +2,13 @@ package hare
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
-	"hash/fnv"
 	"math"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -25,11 +26,11 @@ func newHasherU32() *hasherU32 {
 }
 
 func (h *hasherU32) Hash(values ...[]byte) uint32 {
-	fnv := fnv.New32()
+	hsh := hash.New()
 	for _, b := range values {
-		fnv.Write(b)
+		hsh.Write(b)
 	}
-	return fnv.Sum32()
+	return binary.LittleEndian.Uint32(hsh.Sum([]byte{}))
 }
 
 func (h *hasherU32) MaxValue() uint32 {
@@ -84,8 +85,6 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	}
 
 	if committeeSize > numClients {
-		/*log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
-		committeeSize, numClients)*/
 		return 0
 	}
 

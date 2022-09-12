@@ -66,15 +66,15 @@ func (mr *MockTemplateMockRecorder) MaxSpend(arg0, arg1 interface{}) *gomock.Cal
 }
 
 // Verify mocks base method.
-func (m *MockTemplate) Verify(arg0 *core.Context, arg1 []byte) bool {
+func (m *MockTemplate) Verify(arg0 core.Host, arg1 []byte, arg2 *scale.Decoder) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", arg0, arg1)
+	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockTemplateMockRecorder) Verify(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockTemplateMockRecorder) Verify(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockTemplate)(nil).Verify), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockTemplate)(nil).Verify), arg0, arg1, arg2)
 }

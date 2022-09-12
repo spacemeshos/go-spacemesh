@@ -116,9 +116,9 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte)
 	switch {
 	case err == nil:
 		return pubsub.ValidationAccept
-	case errors.Is(err, errMalformedData) == true:
+	case errors.Is(err, errMalformedData):
 		return pubsub.ValidationReject
-	case errors.Is(err, errKnownProposal) == true:
+	case errors.Is(err, errKnownProposal):
 		return pubsub.ValidationIgnore
 	default:
 		h.logger.WithContext(ctx).With().Error("failed to process proposal gossip", log.Err(err))
@@ -275,7 +275,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 
 	t1 := time.Now()
-	if err := ballots.Add(h.cdb, b); err != nil {
+	if err := h.mesh.AddBallot(b); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 		}

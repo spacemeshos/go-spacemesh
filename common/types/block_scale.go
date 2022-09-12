@@ -206,3 +206,143 @@ func (t *BlockContextualValidity) DecodeScale(dec *scale.Decoder) (total int, er
 	}
 	return total, nil
 }
+
+func (t *Certificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.BlockID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSlice(enc, t.Signatures)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *Certificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.BlockID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSlice[CertifyMessage](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Signatures = field
+	}
+	return total, nil
+}
+
+func (t *CertifyMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.CertifyContent.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *CertifyMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.CertifyContent.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Signature = field
+	}
+	return total, nil
+}
+
+func (t *CertifyContent) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.LayerID.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.BlockID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact16(enc, uint16(t.EligibilityCnt))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Proof)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *CertifyContent) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.LayerID.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.BlockID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.EligibilityCnt = uint16(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Proof = field
+	}
+	return total, nil
+}

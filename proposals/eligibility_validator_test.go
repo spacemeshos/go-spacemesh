@@ -34,30 +34,32 @@ func genActiveSet() types.ATXIDList {
 func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID) types.ATXIDList {
 	t.Helper()
 	activeset := types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
-	for i, id := range activeset {
-		var h types.ActivationTxHeader
-		if i == 0 {
-			h = types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     nid,
-					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				},
-				NumUnits: testedATXUnit,
-			}
-			h.Verify(0, 1)
-		} else {
-			h = types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes()),
-					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				},
-				NumUnits: defaultATXUnit,
-			}
-			h.Verify(0, 1)
-		}
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
+
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+		},
+		NumUnits: testedATXUnit,
+	}}
+	atx.SetID(&activeset[0])
+	atx.SetNodeID(&nid)
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+
+	for _, id := range activeset[1:] {
+		nodeID := types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes())
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+			},
+			NumUnits: defaultATXUnit,
+		}}
 		atx.SetID(&id)
-		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		atx.SetNodeID(&nodeID)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 	}
 	return activeset
 }
@@ -213,29 +215,32 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	for i, id := range rb.EpochData.ActiveSet {
-		var h types.ActivationTxHeader
-		if i == 0 {
-			h = types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
-					PubLayerID: epoch.FirstLayer(),
-				},
-				NumUnits: testedATXUnit,
-			}
-			h.Verify(0, 1)
-		} else {
-			h = types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				},
-				NumUnits: defaultATXUnit,
-			}
-			h.Verify(0, 1)
-		}
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
+
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: epoch.FirstLayer(),
+		},
+		NumUnits: testedATXUnit,
+	}}
+	atx.SetID(&rb.EpochData.ActiveSet[0])
+	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+	atx.SetNodeID(&nodeID)
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
+
+	for _, id := range rb.EpochData.ActiveSet[1:] {
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+			},
+			NumUnits: defaultATXUnit,
+		}}
 		atx.SetID(&id)
-		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
+		atx.SetNodeID(&types.NodeID{})
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
 	require.ErrorIs(t, err, errTargetEpochMismatch)
@@ -260,29 +265,32 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	for i, id := range rb.EpochData.ActiveSet {
-		var h types.ActivationTxHeader
-		if i == 0 {
-			h = types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
-					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				},
-				NumUnits: 0,
-			}
-			h.Verify(0, 1)
-		} else {
-			h = types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
-				},
-				NumUnits: 0,
-			}
-			h.Verify(0, 1)
-		}
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: h}}
+
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+		},
+		NumUnits: 0,
+	}}
+	atx.SetID(&rb.EpochData.ActiveSet[0])
+	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+	atx.SetNodeID(&nodeID)
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
+
+	for _, id := range rb.EpochData.ActiveSet[1:] {
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
+			},
+			NumUnits: 0,
+		}}
 		atx.SetID(&id)
-		require.NoError(t, atxs.Add(tv.cdb, atx, time.Now()))
+		atx.SetNodeID(&types.NodeID{})
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
 	require.ErrorIs(t, err, ErrZeroTotalWeight)
@@ -307,7 +315,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := signing.NewEdSignerFromRand(rand.New(rand.NewSource(2222)))
 	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
-	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{7, 7, 7})
+	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{10})
 	rb := blts[0]
 	require.Len(t, rb.EligibilityProofs, 2)
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]

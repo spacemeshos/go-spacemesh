@@ -102,7 +102,6 @@ func (hpc *HashPeersCache) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash
 	for _, hash := range hashes {
 		hpc.Add(hash, peer)
 	}
-	return
 }
 
 // AddPeersFromHash adds peers from one hash to others.
@@ -119,5 +118,4 @@ func (hpc *HashPeersCache) AddPeersFromHash(fromHash types.Hash32, toHashes []ty
 			hpc.add(hash, peer)
 		}
 	}
-	return
 }

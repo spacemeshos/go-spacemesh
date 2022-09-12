@@ -29,9 +29,9 @@ var (
 	instanceID6 = types.NewLayerID(6)
 )
 
-func mustEncode(tb testing.TB, value interface{}) []byte {
+func mustEncode(tb testing.TB, msg Message) []byte {
 	tb.Helper()
-	buf, err := codec.Encode(value)
+	buf, err := codec.Encode(&msg)
 	require.NoError(tb, err)
 	return buf
 }
@@ -333,7 +333,7 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	closeBrokerAndWait(t, broker.Broker)
 }
 
-func newMockGossipMsg(msg *Message) *Msg {
+func newMockGossipMsg(msg Message) *Msg {
 	return &Msg{msg, nil, ""}
 }
 
@@ -615,15 +615,15 @@ func Test_validate(t *testing.T) {
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = types.NewLayerID(1)
 	b.setLatestLayer(types.NewLayerID(2))
-	e := b.validate(context.TODO(), m.Message)
+	e := b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
 	m.InnerMsg.InstanceID = types.NewLayerID(2)
-	e = b.validate(context.TODO(), m.Message)
+	e = b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errRegistration.Error())
 
 	m.InnerMsg.InstanceID = types.NewLayerID(3)
-	e = b.validate(context.TODO(), m.Message)
+	e = b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errEarlyMsg.Error())
 
 	m.InnerMsg.InstanceID = types.NewLayerID(2)
@@ -633,14 +633,14 @@ func Test_validate(t *testing.T) {
 	b.syncState[2] = false
 	b.mu.Unlock()
 
-	e = b.validate(context.TODO(), m.Message)
+	e = b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errNotSynced.Error())
 
 	b.mu.Lock()
 	b.syncState[2] = true
 	b.mu.Unlock()
 
-	e = b.validate(context.TODO(), m.Message)
+	e = b.validate(context.TODO(), &m.Message)
 	r.Nil(e)
 
 	closeBrokerAndWait(t, b.Broker)

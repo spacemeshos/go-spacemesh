@@ -1,9 +1,11 @@
 package wallet
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -13,7 +15,8 @@ import (
 func FuzzVerify(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		wallet := Wallet{}
-		wallet.Verify(&core.Context{}, data)
+		dec := scale.NewDecoder(bytes.NewReader(data))
+		wallet.Verify(&core.Context{}, data, dec)
 	})
 }
 
@@ -41,15 +44,15 @@ func TestVerify(t *testing.T) {
 
 	t.Run("Invalid", func(t *testing.T) {
 		buf64 := types.Bytes64{}
-		require.False(t, wallet.Verify(&core.Context{}, buf64[:]))
+		require.False(t, wallet.Verify(&core.Context{}, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
 	})
 	t.Run("Empty", func(t *testing.T) {
-		require.False(t, wallet.Verify(&core.Context{}, nil))
+		require.False(t, wallet.Verify(&core.Context{}, nil, scale.NewDecoder(bytes.NewBuffer(nil))))
 	})
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
 		hash := core.Hash(msg)
 		sig := ed25519.Sign(pk, hash[:])
-		require.True(t, wallet.Verify(&core.Context{}, append(msg, sig...)))
+		require.True(t, wallet.Verify(&core.Context{}, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))))
 	})
 }

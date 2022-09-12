@@ -78,15 +78,20 @@ func TestFullCountVotes(t *testing.T) {
 		Abstain          []int    // [layer]
 		ATX              int
 	}
-	type testBlock struct{}
-
+	type testBlock struct {
+		Height uint64
+	}
+	type testAtx struct {
+		BaseHeight, TickCount uint64
+	}
+	const localHeight = 100
 	rng := mrand.New(mrand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
-	getDiff := func(layers [][]types.BlockID, choices [][2]int) []types.BlockID {
+	getDiff := func(layers [][]types.Block, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID
 		for _, choice := range choices {
-			rst = append(rst, layers[choice[0]][choice[1]])
+			rst = append(rst, layers[choice[0]][choice[1]].ID())
 		}
 		return rst
 	}
@@ -95,7 +100,7 @@ func TestFullCountVotes(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc         string
-		activeset    []uint32       // list of weights in activeset
+		activeset    []testAtx      // list of atxs
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
@@ -103,7 +108,7 @@ func TestFullCountVotes(t *testing.T) {
 	}{
 		{
 			desc:      "TwoLayersSupport",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -126,7 +131,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "ConflictWithBase",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -161,7 +166,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeights",
-			activeset: []uint32{80, 40, 20},
+			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -191,7 +196,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
-			activeset: []uint32{80, 40, 20},
+			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -218,7 +223,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneLayerSupport",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			}, layerBallots: [][]testBallot{
@@ -234,7 +239,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAbstain",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -251,7 +256,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "OneBlockAagaisnt",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -268,7 +273,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "MajorityAgainst",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -285,7 +290,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "NoVotes",
-			activeset: []uint32{10, 10, 10},
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 10}, {TickCount: 10}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 			},
@@ -295,18 +300,43 @@ func TestFullCountVotes(t *testing.T) {
 			target: [2]int{0, 0},
 			expect: util.WeightFromFloat64(0),
 		},
+		{
+			desc:      "FutureVotes",
+			activeset: []testAtx{{TickCount: 10}, {TickCount: 12}},
+			layerBlocks: [][]testBlock{
+				{{Height: 11}},
+			},
+			layerBallots: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 0}}}, // ignored
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 0}}}, // counted
+				},
+				{
+					{ATX: 0, Base: [2]int{1, 1}}, // ignored
+					{ATX: 1, Base: [2]int{1, 0}}, // counted regardless of the base ballot choice
+				},
+			},
+			target: [2]int{0, 0},
+			expect: util.WeightFromFloat64(4),
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
 			cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 			var activeset []types.ATXID
-			for i, weight := range tc.activeset {
-				header := makeAtxHeaderWithWeight(weight)
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
+			for i := range tc.activeset {
+				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+					NIPostChallenge: types.NIPostChallenge{},
+					NumUnits:        1,
+				}}
 				atxid := types.ATXID{byte(i + 1)}
 				atx.SetID(&atxid)
-				require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+				atx.SetNodeID(&types.NodeID{1})
+				vAtx, err := atx.Verify(tc.activeset[i].BaseHeight, tc.activeset[i].TickCount)
+				require.NoError(t, err)
+				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 				activeset = append(activeset, atxid)
 			}
 
@@ -314,20 +344,21 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
 
-			var blocks [][]types.BlockID
+			var blocks [][]types.Block
 			for i, layer := range tc.layerBlocks {
-				var layerBlocks []types.BlockID
+				var layerBlocks []types.Block
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
-					b := &types.Block{}
+					b := types.Block{}
 					b.LayerIndex = lid
+					b.TickHeight = layer[j].Height
 					b.TxIDs = types.RandomTXSet(j)
 					b.Initialize()
-					layerBlocks = append(layerBlocks, b.ID())
+					layerBlocks = append(layerBlocks, b)
 				}
-
+				consensus.referenceHeight[lid.GetEpoch()] = localHeight
 				for _, block := range layerBlocks {
-					consensus.onBlock(lid, block)
+					consensus.onBlock(lid, &block)
 				}
 				blocks = append(blocks, layerBlocks)
 			}
@@ -366,8 +397,154 @@ func TestFullCountVotes(t *testing.T) {
 
 				consensus.full.countVotes(logger)
 			}
-			bid := blocks[tc.target[0]][tc.target[1]]
-			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())
+			block := blocks[tc.target[0]][tc.target[1]]
+			var target *blockInfo
+			for _, info := range consensus.blocks[block.LayerIndex] {
+				if info.id == block.ID() {
+					target = &info
+				}
+			}
+			require.NotNil(t, target)
+			require.Equal(t, tc.expect.String(), target.weight.String())
+		})
+	}
+}
+
+func TestFullVerify(t *testing.T) {
+	const emptyThreshold = 20
+	type testBlock struct {
+		height, margin int
+	}
+	for _, tc := range []struct {
+		desc      string
+		blocks    []testBlock
+		threshold uint64
+		validity  []sign
+	}{
+		{
+			desc:      "support",
+			blocks:    []testBlock{{margin: 11}},
+			threshold: 10,
+			validity:  []sign{support},
+		},
+		{
+			desc:      "abstain",
+			blocks:    []testBlock{{margin: 10}},
+			threshold: emptyThreshold + 1,
+		},
+		{
+			desc: "abstain before support",
+			blocks: []testBlock{
+				{margin: 10, height: 10},
+				{margin: 11, height: 20},
+			},
+			threshold: emptyThreshold + 1,
+		},
+		{
+			desc: "abstain after support",
+			blocks: []testBlock{
+				{margin: 10, height: 30},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{against, support},
+		},
+		{
+			desc: "abstained same height",
+			blocks: []testBlock{
+				{margin: 11, height: 20},
+				{margin: 10, height: 20},
+			},
+			threshold: emptyThreshold + 1,
+		},
+		{
+			desc: "support after against",
+			blocks: []testBlock{
+				{margin: -11, height: 10},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{against, support},
+		},
+		{
+			desc: "only against",
+			blocks: []testBlock{
+				{margin: -11, height: 10},
+				{margin: -11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{against, against},
+		},
+		{
+			desc: "support same height",
+			blocks: []testBlock{
+				{margin: 11, height: 10},
+				{margin: 11, height: 10},
+			},
+			threshold: 10,
+			validity:  []sign{support, support},
+		},
+		{
+			desc: "support different height",
+			blocks: []testBlock{
+				{margin: 11, height: 10},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{support, support},
+		},
+		{
+			desc: "support abstain support",
+			blocks: []testBlock{
+				{margin: 11, height: 10},
+				{margin: 10, height: 11},
+				{margin: 11, height: 20},
+			},
+			threshold: 10,
+			validity:  []sign{support, against, support},
+		},
+		{
+			desc: "against abstain support",
+			blocks: []testBlock{
+				{margin: -11, height: 10},
+				{margin: 10, height: 10},
+				{margin: 11, height: 10},
+			},
+			threshold: emptyThreshold + 1,
+		},
+		{
+			desc:      "empty layer",
+			threshold: 10,
+			validity:  []sign{},
+		},
+		{
+			desc:      "empty layer not verified",
+			threshold: emptyThreshold + 1,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			lid := types.LayerID{}
+			full := newFullTortoise(Config{}, &commonState{
+				blocks:   map[types.LayerID][]blockInfo{},
+				validity: votes{},
+			})
+			full.globalThreshold = util.WeightFromUint64(tc.threshold)
+			full.empty[lid] = util.WeightFromInt64(int64(emptyThreshold))
+			for i, block := range tc.blocks {
+				id := types.BlockID{uint8(i) + 1}
+				full.blocks[lid] = append(full.blocks[lid], blockInfo{
+					id:     id,
+					height: uint64(block.height),
+					weight: util.WeightFromInt64(int64(block.margin)),
+				})
+			}
+			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
+			if tc.validity != nil {
+				for i, expect := range tc.validity {
+					id := types.BlockID{uint8(i) + 1}
+					require.Equal(t, expect, full.validity[id])
+				}
+			}
 		})
 	}
 }

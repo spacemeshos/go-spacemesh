@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: '1.18.2'
+  go-version: '1.18'
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -33,7 +33,7 @@ jobs:
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -55,9 +55,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
       - name: fmt, tidy, lint
@@ -74,9 +74,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
       - name: setup env
@@ -96,9 +96,9 @@ jobs:
       - name: disable TCP/UDP offload
         run: sudo ethtool -K eth0 tx off rx off
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: set up go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
       - name: setup env
@@ -151,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: push to dockerhub
         run: make dockerpush
 
@@ -163,10 +163,10 @@ jobs:
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 50
+    timeout-minutes: 60
     concurrency: cloud-limits
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v3
 
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
@@ -181,7 +181,7 @@ jobs:
       run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
 
     - name: Login to Docker Hub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
@@ -205,7 +205,7 @@ jobs:
       run: cd systest && make push
 
     - name: Run tests
-      timeout-minutes: 60
+      timeout-minutes: 50
       run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
     - name: Systemtest result

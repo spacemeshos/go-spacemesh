@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apiappsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -60,8 +62,8 @@ type NodeClient struct {
 
 // deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address)
 // and output ip of the poet.
-func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) error {
-	args := []string{}
+func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) (*NodeClient, error) {
+	var args []string
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
@@ -90,7 +92,7 @@ func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags 
 		)
 	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return fmt.Errorf("create poet: %w", err)
+		return nil, fmt.Errorf("create poet: %w", err)
 	}
 	svc := corev1.Service(name, ctx.Namespace).
 		WithLabels(labels).
@@ -102,14 +104,18 @@ func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags 
 		)
 	_, err = ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return fmt.Errorf("apply poet service: %w", err)
+		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	_, err = waitPod(ctx, *pod.Name)
+	ppod, err := waitNode(ctx, *pod.Name, Poet)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return ppod, nil
+}
+
+func deletePoet(ctx *testcontext.Context, name string) error {
+	return ctx.Client.CoreV1().Pods(ctx.Namespace).Delete(ctx, name, apimetav1.DeleteOptions{})
 }
 
 func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
@@ -187,12 +193,12 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 		eg.Go(func() error {
 			setname := fmt.Sprintf("%s-%d", name, i)
 			idx := i % ctx.PoetSize
-			finalFlags[len(finalFlags)-1] = PoetEndpoint(poetEndpoint(idx))
+			finalFlags[len(finalFlags)-1] = PoetEndpoint(MakePoetEndpoint(idx))
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
 			podname := fmt.Sprintf("%s-0", setname)
-			node, err := waitSmesher(ctx, podname)
+			node, err := waitNode(ctx, podname, Smesher)
 			if err != nil {
 				return err
 			}
@@ -208,14 +214,10 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	for node := range clients {
 		rst = append(rst, node)
 	}
+	sort.Slice(rst, func(i, j int) bool {
+		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)
+	})
 	return rst, nil
-}
-
-func deleteNodes(ctx *testcontext.Context, typename, podname string) ([]*NodeClient, error) {
-	if err := deleteNode(ctx, setName(podname)); err != nil {
-		return nil, err
-	}
-	return discoverNodes(ctx, typename)
 }
 
 func deleteNode(ctx *testcontext.Context, podname string) error {
@@ -327,7 +329,17 @@ func deployNode(ctx *testcontext.Context, name string, applabels map[string]stri
 	return nil
 }
 
-func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error) {
+// PodType indicates the type of pod.
+type PodType int
+
+const (
+	// Smesher ...
+	Smesher PodType = iota
+	// Poet ...
+	Poet
+)
+
+func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClient, error) {
 	attempt := func() (*NodeClient, error) {
 		pod, err := waitPod(tctx, podname)
 		if err != nil {
@@ -335,6 +347,13 @@ func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error)
 		}
 		if pod == nil {
 			return nil, nil
+		}
+		if pt == Poet {
+			return &NodeClient{
+				Node: Node{
+					Name: podname,
+				},
+			}, nil
 		}
 		set, err := getStatefulSet(tctx, setName(podname))
 		if err != nil {
@@ -351,7 +370,7 @@ func waitSmesher(tctx *testcontext.Context, podname string) (*NodeClient, error)
 		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
 		defer cancel()
 		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
-			grpc.WithInsecure(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)
 		if err != nil {
@@ -463,4 +482,9 @@ func CycleGap(d time.Duration) DeploymentFlag {
 // PhaseShift ...
 func PhaseShift(d time.Duration) DeploymentFlag {
 	return DurationFlag("--phase-shift", d)
+}
+
+// GracePeriod ...
+func GracePeriod(d time.Duration) DeploymentFlag {
+	return DurationFlag("--grace-period", d)
 }

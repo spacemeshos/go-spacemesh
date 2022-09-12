@@ -231,7 +231,7 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) t
 func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.trtl.onBlock(block.LayerIndex, block.ID())
+	t.trtl.onBlock(block.LayerIndex, block)
 }
 
 // OnBallot should be called every time new ballot is received.

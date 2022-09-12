@@ -141,8 +141,8 @@ func TestFailedNodes(t *testing.T) {
 		i := i
 		client := cl.Client(i)
 		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
-				tctx.Log.Debugw("confirmed layer",
+			if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_APPLIED {
+				tctx.Log.Debugw("layer applied",
 					"client", client.Name,
 					"layer", layer.Layer.Number.Number,
 					"hash", prettyHex(layer.Layer.Hash),

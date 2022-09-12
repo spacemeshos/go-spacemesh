@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -90,25 +91,24 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	return tpd
 }
 
-func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, nodeID types.NodeID, weight uint) {
-	header := types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nodeID,
-			PubLayerID: lid,
-		},
-		NumUnits: uint32(weight),
-	}
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: header}}
-	atx.Verify(0, 1)
-	id := types.RandomATXID()
-	atx.SetID(&id)
-	require.NoError(t, atxs.Add(db, atx, time.Now().Add(-1*time.Second)))
+func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint) {
+	atx := types.NewActivationTx(
+		types.NIPostChallenge{PubLayerID: lid},
+		types.Address{},
+		nil,
+		numUnits,
+		nil,
+	)
+
+	require.NoError(t, activation.SignAtx(sig, atx))
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, vAtx, time.Now().Add(-1*time.Second)))
 }
 
 func createRandomATXs(t *testing.T, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
-		nodeID := types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes())
-		createATX(t, db, lid, nodeID, 1)
+		createATX(t, db, lid, signing.NewEdSigner(), 1)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestBeacon(t *testing.T) {
 	tpd.onNewEpoch(context.TODO(), types.EpochID(0))
 	tpd.onNewEpoch(context.TODO(), types.EpochID(1))
 	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
-	createATX(t, tpd.store, lid, tpd.nodeID, 1)
+	createATX(t, tpd.store, lid, tpd.edSigner, 1)
 	createRandomATXs(t, tpd.store, lid, numATXs-1)
 	tpd.onNewEpoch(context.TODO(), types.EpochID(2))
 
@@ -230,7 +230,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
-		createATX(t, tpd.store, lid, tpd.nodeID, 199)
+		createATX(t, tpd.store, lid, tpd.edSigner, 199)
 		createRandomATXs(t, tpd.store, lid, numATXs-1)
 	}
 	finalLayer := types.NewLayerID(types.GetLayersPerEpoch() * uint32(epoch))
@@ -715,7 +715,7 @@ func TestBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("000000024250000012345678")),
+			result: string(util.Hex2Bytes("084250e259d148")),
 		},
 	}
 
@@ -726,41 +726,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 
 			result := buildProposal(tc.epoch, logtest.New(t))
 			r.Equal(tc.result, string(result))
-		})
-	}
-}
-
-func TestBeacon_signMessage(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	edSgn := signing.NewEdSigner()
-
-	tt := []struct {
-		name    string
-		message interface{}
-		result  []byte
-	}{
-		{
-			name:    "Case 1",
-			message: []byte{},
-			result:  edSgn.Sign([]byte{0, 0, 0, 0}),
-		},
-		{
-			name:    "Case 2",
-			message: &struct{ Test int }{Test: 0x12345678},
-			result:  edSgn.Sign([]byte{0x12, 0x34, 0x56, 0x78}),
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := signMessage(edSgn, tc.message, logtest.New(t))
-			r.Equal(string(tc.result), string(result))
 		})
 	}
 }
@@ -781,12 +746,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000001")),
+			result: vrfSigner.Sign(util.Hex2Bytes("08425004")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000002")),
+			result: vrfSigner.Sign(util.Hex2Bytes("08425008")),
 		},
 	}
 

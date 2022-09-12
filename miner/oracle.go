@@ -74,7 +74,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	if o.cache.epoch == epoch { // use the cached value
 		layerProofs = o.cache.proofs[lid]
 		logger.With().Info("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
-		return o.cache.atx.ID(), o.cache.activeSet, layerProofs, nil
+		return o.cache.atx.ID, o.cache.activeSet, layerProofs, nil
 	}
 
 	// calculate the proof
@@ -102,7 +102,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	layerProofs = o.cache.proofs[lid]
 	logger.With().Info("got eligibility for proposals", log.Int("num_proposals", len(layerProofs)))
 
-	return o.cache.atx.ID(), o.cache.activeSet, layerProofs, nil
+	return o.cache.atx.ID, o.cache.activeSet, layerProofs, nil
 }
 
 func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {

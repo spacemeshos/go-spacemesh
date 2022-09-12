@@ -3,6 +3,7 @@ package layers
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -54,7 +55,7 @@ func GetWeakCoin(db sql.Executor, lid types.LayerID) (bool, error) {
 // SetHareOutput for the layer to a block id.
 func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) error {
 	if _, err := db.Exec(`insert into layers (id, hare_output) values (?1, ?2) 
-					on conflict(id) do update set hare_output=?2;`,
+					on conflict(id) do update set hare_output=?2 where hare_output is null and cert is null;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, output[:])
@@ -62,6 +63,47 @@ func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) err
 		return fmt.Errorf("set hare output %s: %w", lid, err)
 	}
 	return nil
+}
+
+// SetHareOutputWithCert sets the hare output for the layer with a block certificate.
+func SetHareOutputWithCert(db sql.Executor, lid types.LayerID, cert *types.Certificate) error {
+	output := cert.BlockID
+	data, err := codec.Encode(cert)
+	if err != nil {
+		return fmt.Errorf("encode cert %w", err)
+	}
+	if _, err = db.Exec(`insert into layers (id, hare_output, cert) values (?1, ?2, ?3)
+					on conflict(id) do update set hare_output=?2, cert=?3 where cert is null;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBytes(2, output[:])
+			stmt.BindBytes(3, data[:])
+		}, nil); err != nil {
+		return fmt.Errorf("set hare output w cert %s: %w", lid, err)
+	}
+	return nil
+}
+
+// GetCert returns the certificate of the hare out for the specified layer.
+func GetCert(db sql.Executor, lid types.LayerID) (*types.Certificate, error) {
+	var (
+		cert types.Certificate
+		err  error
+		rows int
+	)
+	if rows, err = db.Exec("select cert from layers where id = ?1 and cert is not null;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Value))
+	}, func(stmt *sql.Statement) bool {
+		data := make([]byte, stmt.ColumnLen(0))
+		stmt.ColumnBytes(0, data[:])
+		err = codec.Decode(data, &cert)
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("get cert %s: %w", lid, err)
+	} else if rows == 0 {
+		return nil, fmt.Errorf("%w get cert %s", sql.ErrNotFound, lid)
+	}
+	return &cert, nil
 }
 
 // GetHareOutput for layer.

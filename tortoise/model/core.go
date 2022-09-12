@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -130,17 +131,23 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 
 		nipost := types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(c.signer.PublicKey().Bytes()),
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
-		atx.Verify(1, 2)
-		c.refBallot = nil
-		c.atx = atx.ID()
-		c.weight = atx.GetWeight()
+		if err := activation.SignAtx(c.signer, atx); err != nil {
+			panic(err)
+		}
+		vAtx, err := atx.Verify(1, 2)
+		if err != nil {
+			panic(err)
+		}
 
-		m.Send(MessageAtx{Atx: atx})
+		c.refBallot = nil
+		c.atx = vAtx.ID()
+		c.weight = vAtx.GetWeight()
+
+		m.Send(MessageAtx{Atx: vAtx.ActivationTx})
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
@@ -150,7 +157,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBallot:
 		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		atxs.Add(c.cdb, ev.Atx, time.Now())
+		vAtx, err := ev.Atx.Verify(1, 2)
+		if err != nil {
+			panic(err)
+		}
+		atxs.Add(c.cdb, vAtx, time.Now())
 	case MessageBeacon:
 		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
 	case MessageCoinflip:

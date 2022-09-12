@@ -10,7 +10,7 @@ import (
 )
 
 // Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
+func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -20,15 +20,21 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 			atx, err = nil, fmt.Errorf("decode %w", decodeErr)
 			return true
 		}
+		v.SetID(&id)
+		nodeID := types.NodeID{}
+		stmt.ColumnBytes(3, nodeID[:])
+		v.SetNodeID(&nodeID)
+
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
-		v.SetID(&id)
-		v.Verify(baseTickHeight, tickCount)
-		atx, err = &v, nil
+		atx, err = v.Verify(baseTickHeight, tickCount)
+		if err != nil {
+			return false
+		}
 		return true
 	}
 
-	if rows, err := db.Exec("select atx, base_tick_height, tick_count from atxs where id = ?1;", enc, dec); err != nil {
+	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher from atxs where id = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)
@@ -154,8 +160,8 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 }
 
 // Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
-	buf, err := codec.Encode(atx)
+func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) error {
+	buf, err := codec.Encode(atx.ActivationTx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -164,7 +170,7 @@ func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PubLayerID.GetEpoch()))
-		stmt.BindBytes(4, atx.NodeID.ToBytes())
+		stmt.BindBytes(4, atx.NodeID().ToBytes())
 		stmt.BindBytes(5, buf)
 		stmt.BindInt64(6, timestamp.UnixNano())
 		stmt.BindInt64(7, int64(atx.BaseTickHeight()))

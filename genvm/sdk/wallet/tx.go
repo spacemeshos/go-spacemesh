@@ -21,11 +21,6 @@ const (
 	TotalGasSpend = wallet.TotalGasSpend
 )
 
-var (
-	zero = scale.U8(0)
-	one  = scale.U8(1)
-)
-
 func encode(fields ...scale.Encodable) []byte {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
@@ -38,19 +33,30 @@ func encode(fields ...scale.Encodable) []byte {
 	return buf.Bytes()
 }
 
-// SelfSpawn create spawn transaction.
-func SelfSpawn(pk signing.PrivateKey, opts ...sdk.Opt) []byte {
+// SelfSpawn creates a self-spawn transaction.
+func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	args := wallet.SpawnArguments{}
+	copy(args.PublicKey[:], signing.Public(pk))
+	return Spawn(pk, wallet.TemplateAddress, &args, nonce, opts...)
+}
+
+// Spawn creates a spawn transaction.
+func Spawn(pk signing.PrivateKey, template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	payload := wallet.SpawnPayload{}
+	payload := core.Payload{}
+	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
-	copy(payload.Arguments.PublicKey[:], signing.Public(pk))
-	principal := core.ComputePrincipal(wallet.TemplateAddress, &payload.Arguments)
 
-	tx := encode(&zero, &principal, &zero, &wallet.TemplateAddress, &payload)
+	public := &core.PublicKey{}
+	copy(public[:], signing.Public(pk))
+	// note that principal is computed from pk
+	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
+
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
@@ -67,13 +73,15 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	copy(spawnargs.PublicKey[:], signing.Public(pk))
 	principal := core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
 
-	payload := wallet.SpendPayload{}
+	payload := core.Payload{}
 	payload.GasPrice = options.GasPrice
-	payload.Arguments.Destination = to
-	payload.Arguments.Amount = amount
 	payload.Nonce = nonce
 
-	tx := encode(&zero, &principal, &one, &payload)
+	args := wallet.SpendArguments{}
+	args.Destination = to
+	args.Amount = amount
+
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
 	hh := hash.Sum(tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)

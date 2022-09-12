@@ -7,14 +7,14 @@ import (
 	"strings"
 
 	"golang.org/x/sync/errgroup"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error) {
+func discoverNodes(ctx *testcontext.Context, name string, pt PodType) ([]*NodeClient, error) {
 	pods, err := ctx.Client.CoreV1().Pods(ctx.Namespace).List(ctx,
-		v1.ListOptions{LabelSelector: labelSelector(nodeLabels(name))})
+		apimetav1.ListOptions{LabelSelector: labelSelector(nodeLabels(name))})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods name=%s: %w", name, err)
 	}
@@ -26,7 +26,7 @@ func discoverNodes(ctx *testcontext.Context, name string) ([]*NodeClient, error)
 	for _, pod := range pods.Items {
 		pod := pod
 		eg.Go(func() error {
-			client, err := waitSmesher(ctx, pod.Name)
+			client, err := waitNode(ctx, pod.Name, pt)
 			if err != nil {
 				return err
 			}

@@ -37,7 +37,10 @@ func GetNumEligibleSlots(weight, totalWeight uint64, committeeSize uint32, layer
 	return uint32(numberOfEligibleBlocks), nil
 }
 
-type vrfMessage struct {
+//go:generate scalegen -types VrfMessage
+
+// VrfMessage is a verification message.
+type VrfMessage struct {
 	Beacon  types.Beacon
 	Epoch   types.EpochID
 	Counter uint32
@@ -45,7 +48,7 @@ type vrfMessage struct {
 
 // SerializeVRFMessage serializes a message for generating/verifying a VRF signature.
 func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint32) ([]byte, error) {
-	m := vrfMessage{
+	m := VrfMessage{
 		Beacon:  beacon,
 		Epoch:   epoch,
 		Counter: counter,

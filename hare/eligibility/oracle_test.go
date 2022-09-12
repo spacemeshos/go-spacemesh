@@ -73,17 +73,18 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 
 func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) {
 	for i, id := range activeSet {
-		hdr := types.ActivationTxHeader{
+		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				PubLayerID: lid,
 			},
 			NumUnits: uint32(i + 1),
-		}
-		hdr.Verify(0, 1)
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
+		}}
 		atx.SetID(&id)
-		require.NoError(tb, atxs.Add(cdb, atx, time.Now()))
+		atx.SetNodeID(&nodeID)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(tb, err)
+		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
 	}
 }
 
@@ -362,28 +363,30 @@ func Test_VrfSignVerify(t *testing.T) {
 		}
 	}
 	prevEpoch := layer.GetEpoch() - 1
-	hdr1 := types.ActivationTxHeader{
+
+	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     nid,
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 1 * 1024,
-	}
-	hdr1.Verify(0, 1)
-	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr1}}
+	}}
 	atx1.SetID(&activeSet[0])
-	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
-	hdr2 := types.ActivationTxHeader{
+	atx1.SetNodeID(&nid)
+	vAtx1, err := atx1.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
+
+	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.NodeID{1},
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 9 * 1024,
-	}
-	hdr2.Verify(0, 1)
-	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr2}}
+	}}
 	atx2.SetID(&activeSet[1])
-	require.NoError(t, atxs.Add(o.cdb, atx2, time.Now()))
+	atx2.SetNodeID(&types.NodeID{1})
+	vAtx2, err := atx2.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
 	o.vrfVerifier = signing.VRFVerify
 
@@ -445,30 +448,32 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	prevEpoch := layer.GetEpoch() - 1
-	hdr1 := types.ActivationTxHeader{
+
+	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.NodeID{1},
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 1 * 1024,
-	}
-	hdr1.Verify(0, 1)
-	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr1}}
+	}}
 	atx1.SetID(&activeSet[0])
-	require.NoError(t, atxs.Add(o.cdb, atx1, time.Now()))
-	hdr2 := types.ActivationTxHeader{
+	atx1.SetNodeID(&types.NodeID{1})
+	vAtx1, err := atx1.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx1, time.Now()))
+
+	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			NodeID:     types.NodeID{2},
 			PubLayerID: prevEpoch.FirstLayer(),
 		},
 		NumUnits: 9 * 1024,
-	}
-	hdr1.Verify(0, 1)
-	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr2}}
+	}}
 	atx2.SetID(&activeSet[1])
-	require.NoError(t, atxs.Add(o.cdb, atx2, time.Now()))
+	atx2.SetNodeID(&types.NodeID{2})
+	vAtx2, err := atx2.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
-	for _, edID := range []types.NodeID{atx1.NodeID, atx2.NodeID} {
+	for _, edID := range []types.NodeID{atx1.NodeID(), atx2.NodeID()} {
 		v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), edID, layer)
 		require.NoError(t, err)
 		require.True(t, v)
@@ -715,17 +720,18 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	activeSet := types.RandomActiveSet(numMiners)
 	prevEpoch := layer.GetEpoch() - 1
 	for i, id := range activeSet {
-		hdr := types.ActivationTxHeader{
+		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID([]byte(strconv.Itoa(i))),
 				PubLayerID: prevEpoch.FirstLayer(),
 			},
 			NumUnits: uint32(i + 1),
-		}
-		hdr.Verify(0, 1)
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
+		}}
 		atx.SetID(&id)
-		require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
+		atx.SetNodeID(&nodeID)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
 	}
 	oldActiveSet, err := o.actives(context.TODO(), layer)
 	require.NoError(t, err)
@@ -734,17 +740,18 @@ func TestActives_TortoiseActiveSet(t *testing.T) {
 	// tortoise active set is not cached. same layer may yield different answer
 	activeSet = types.RandomActiveSet(numMiners)
 	for i, id := range activeSet {
-		hdr := types.ActivationTxHeader{
+		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i)))
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				NodeID:     types.BytesToNodeID([]byte(strconv.Itoa(numMiners + i))),
 				PubLayerID: prevEpoch.FirstLayer(),
 			},
 			NumUnits: uint32(numMiners + i + 1),
-		}
-		hdr.Verify(0, 1)
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
+		}}
 		atx.SetID(&id)
-		require.NoError(t, atxs.Add(o.cdb, atx, time.Now()))
+		atx.SetNodeID(&nodeID)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
 	}
 	newActiveSet, err := o.actives(context.TODO(), layer)
 	require.NoError(t, err)

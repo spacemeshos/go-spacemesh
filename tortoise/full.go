@@ -15,7 +15,7 @@ func newFullTortoise(config Config, common *commonState) *full {
 		votes:        map[types.BallotID]votes{},
 		abstain:      map[types.BallotID]map[types.LayerID]struct{}{},
 		base:         map[types.BallotID]types.BallotID{},
-		weights:      map[types.BlockID]util.Weight{},
+		empty:        map[types.LayerID]util.Weight{},
 		delayedQueue: list.New(),
 	}
 }
@@ -28,14 +28,14 @@ type full struct {
 	abstain map[types.BallotID]map[types.LayerID]struct{}
 	base    map[types.BallotID]types.BallotID
 
+	// weight of the ballots that vote that a particular layer is empty
+	empty map[types.LayerID]util.Weight
 	// counted weights up to this layer.
 	//
 	// counting votes is what makes full tortoise expensive during rerun.
 	// we want to wait until verifying can't make progress before they are counted.
 	// storing them in current version is cheap.
 	counted types.LayerID
-	// counted weights of all blocks up to counted layer.
-	weights map[types.BlockID]util.Weight
 	// queue of the ballots with bad beacon
 	delayedQueue *list.List
 }
@@ -52,10 +52,6 @@ func (f *full) onBallot(ballot *tortoiseBallot) {
 	f.base[ballot.id] = ballot.base
 	f.votes[ballot.id] = ballot.votes
 	f.abstain[ballot.id] = ballot.abstain
-}
-
-func (f *full) onBlock(block types.BlockID) {
-	f.weights[block] = util.WeightFromUint64(0)
 }
 
 func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.LayerID, block types.BlockID) sign {
@@ -75,28 +71,49 @@ func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.Lay
 	return sign
 }
 
-func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []types.BallotID) {
-	var delayed []types.BallotID
+func (f *full) abstained(ballot types.BallotID, blocklid types.LayerID) bool {
+	_, exist := f.abstain[ballot][blocklid]
+	if exist {
+		return true
+	}
+	base, exist := f.base[ballot]
+	if !exist {
+		return false
+	}
+	return f.abstained(base, blocklid)
+}
+
+func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []ballotInfo) {
+	var delayed []ballotInfo
 	for _, ballot := range ballots {
-		if f.shouldBeDelayed(ballot, ballotlid) {
+		if f.shouldBeDelayed(ballot.id, ballotlid) {
 			delayed = append(delayed, ballot)
 			continue
 		}
-		ballotWeight := f.ballotWeight[ballot]
-		if ballotWeight.IsNil() {
+		if ballot.weight.IsNil() {
 			continue
 		}
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
-			for _, block := range f.blocks[lid] {
-				vote := f.getVote(logger, ballot, lid, block)
-				current := f.weights[block]
-				switch vote {
-				case support:
-					current = current.Add(ballotWeight)
-				case against:
-					current = current.Sub(ballotWeight)
+			if _, exist := f.empty[lid]; !exist {
+				f.empty[lid] = util.WeightFromUint64(0)
+			}
+			blocks := f.blocks[lid]
+			empty := true
+			for i := range blocks {
+				block := &blocks[i]
+				if block.height > ballot.height {
+					continue
 				}
-				f.weights[block] = current
+				switch f.getVote(logger, ballot.id, lid, block.id) {
+				case support:
+					empty = false
+					block.weight.Add(ballot.weight)
+				case against:
+					block.weight.Sub(ballot.weight)
+				}
+			}
+			if empty && !f.abstained(ballot.id, lid) {
+				f.empty[lid].Add(ballot.weight)
 			}
 		}
 	}
@@ -148,32 +165,35 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("local_threshold", f.localThreshold),
 		log.Stringer("global_threshold", f.globalThreshold),
 	)
-
+	empty, exists := f.empty[lid]
+	if !exists {
+		return false
+	}
+	isEmpty := empty.Cmp(f.globalThreshold) > 0
 	blocks := f.blocks[lid]
-	// necessary only to log debug only once for each block
-	decisions := make([]sign, 0, len(blocks))
-
-	for _, block := range blocks {
-		current := f.weights[block]
-		decision := sign(current.Cmp(f.globalThreshold))
-		if decision == abstain {
-			logger.With().Info("candidate layer is not verified. not enough weight in votes",
-				log.Stringer("block", block),
-				log.Stringer("voting_weight", current),
+	if len(blocks) == 0 {
+		if isEmpty {
+			logger.With().Info("candidate layer is empty")
+		} else {
+			logger.With().Debug("margin is too low to terminate layer as empty",
+				lid,
+				log.Stringer("margin", empty),
 			)
-			return false
 		}
-		decisions = append(decisions, decision)
+		return isEmpty
 	}
-	for i, block := range blocks {
-		logger.With().Debug("full tortoise decided on a block",
-			log.Stringer("block", block),
-			log.Stringer("decision", decisions[i]),
-		)
-		f.validity[block] = decisions[i]
-	}
-	logger.With().Info("candidate layer is verified")
-	return true
+	return verifyLayer(
+		logger,
+		blocks,
+		f.validity,
+		func(block blockInfo) sign {
+			decision := sign(block.weight.Cmp(f.globalThreshold))
+			if decision == neutral && isEmpty {
+				return against
+			}
+			return decision
+		},
+	)
 }
 
 // shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
@@ -185,5 +205,5 @@ func (f *full) shouldBeDelayed(ballotID types.BallotID, ballotlid types.LayerID)
 
 type delayedBallots struct {
 	lid     types.LayerID
-	ballots []types.BallotID
+	ballots []ballotInfo
 }

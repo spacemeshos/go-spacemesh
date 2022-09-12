@@ -220,11 +220,15 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			ballots[2]: start.Add(2),
 			ballots[3]: start.Add(2),
 		}
-		state.ballotWeight = map[types.BallotID]util.Weight{
-			ballots[0]: ballotWeight,
-			ballots[1]: ballotWeight,
-			ballots[2]: ballotWeight,
-			ballots[3]: ballotWeight,
+		state.ballots = map[types.LayerID][]ballotInfo{
+			start.Add(1): {
+				{id: ballots[0], weight: ballotWeight},
+				{id: ballots[1], weight: ballotWeight},
+			},
+			start.Add(2): {
+				{id: ballots[2], weight: ballotWeight},
+				{id: ballots[3], weight: ballotWeight},
+			},
 		}
 		return state
 	}
@@ -368,29 +372,41 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	}
 }
 
-func TestVerifyingVerifyLayers(t *testing.T) {
+func TestVerifying_Verify(t *testing.T) {
 	require.Equal(t, 4, int(types.GetLayersPerEpoch()))
-	start := types.NewLayerID(0)
+	start := types.GetEffectiveGenesis()
+	verified := start
+	processed := start.Add(4)
+	epochWeight := map[types.EpochID]util.Weight{
+		2: util.WeightFromUint64(10),
+		3: util.WeightFromUint64(10),
+	}
+	const localHeight = 100
+	referenceHeight := map[types.EpochID]uint64{
+		2: localHeight,
+		3: localHeight,
+	}
+	config := Config{
+		LocalThreshold:                  big.NewRat(1, 10),
+		GlobalThreshold:                 big.NewRat(7, 10),
+		VerifyingModeVerificationWindow: 10,
+		Hdist:                           10,
+	}
+
 	for _, tc := range []struct {
-		desc                string
-		epochWeight         map[types.EpochID]util.Weight
-		layersWeight        map[types.LayerID]util.Weight
-		abstainedWeight     map[types.LayerID]util.Weight
-		totalWeight         util.Weight
-		verified, processed types.LayerID
-		blocks              map[types.LayerID][]types.BlockID
-		localOpinion        votes
-		config              Config
+		desc            string
+		layersWeight    map[types.LayerID]util.Weight
+		abstainedWeight map[types.LayerID]util.Weight
+		totalWeight     util.Weight
+		blocks          map[types.LayerID][]blockInfo
+		localOpinion    votes
 
 		expected            types.LayerID
 		expectedTotalWeight util.Weight
+		expectedValidity    map[types.BlockID]sign
 	}{
 		{
-			desc: "All",
-			epochWeight: map[types.EpochID]util.Weight{
-				0: util.WeightFromUint64(10),
-				1: util.WeightFromUint64(10),
-			},
+			desc: "sanity",
 			layersWeight: map[types.LayerID]util.Weight{
 				start.Add(1): util.WeightFromUint64(8),
 				start.Add(2): util.WeightFromUint64(8),
@@ -399,24 +415,21 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			},
 			abstainedWeight: map[types.LayerID]util.Weight{},
 			totalWeight:     util.WeightFromUint64(32),
-			verified:        start,
-			processed:       start.Add(4),
-			blocks:          map[types.LayerID][]types.BlockID{},
-			localOpinion:    votes{},
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{1}}},
+				start.Add(2): {{id: types.BlockID{2}}},
+				start.Add(3): {{id: types.BlockID{3}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{2}: support,
+				{3}: support,
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
 		},
 		{
-			desc: "Abstained",
-			epochWeight: map[types.EpochID]util.Weight{
-				0: util.WeightFromUint64(10),
-				1: util.WeightFromUint64(10),
-			},
+			desc: "with abstained votes",
 			layersWeight: map[types.LayerID]util.Weight{
 				start.Add(1): util.WeightFromUint64(8),
 				start.Add(2): util.WeightFromUint64(8),
@@ -427,25 +440,22 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 				start.Add(2): util.WeightFromUint64(2),
 				start.Add(3): util.WeightFromUint64(4),
 			},
-			totalWeight:  util.WeightFromUint64(34),
-			verified:     start,
-			processed:    start.Add(4),
-			blocks:       map[types.LayerID][]types.BlockID{},
-			localOpinion: votes{},
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
+			totalWeight: util.WeightFromUint64(34),
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{1}}},
+				start.Add(2): {{id: types.BlockID{2}}},
+				start.Add(3): {{id: types.BlockID{3}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{2}: support,
+				{3}: support,
 			},
 			expected:            start.Add(2),
 			expectedTotalWeight: util.WeightFromUint64(18),
 		},
 		{
-			desc: "Some",
-			epochWeight: map[types.EpochID]util.Weight{
-				0: util.WeightFromUint64(10),
-				1: util.WeightFromUint64(10),
-			},
+			desc: "some crossed threshold",
 			layersWeight: map[types.LayerID]util.Weight{
 				start.Add(1): util.WeightFromUint64(12),
 				start.Add(2): util.WeightFromUint64(14),
@@ -454,22 +464,21 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			},
 			abstainedWeight: map[types.LayerID]util.Weight{},
 			totalWeight:     util.WeightFromUint64(36),
-			verified:        start,
-			processed:       start.Add(4),
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{1}}},
+				start.Add(2): {{id: types.BlockID{2}}},
+				start.Add(3): {{id: types.BlockID{3}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{2}: support,
+				{3}: support,
 			},
 			expected:            start.Add(1),
 			expectedTotalWeight: util.WeightFromUint64(24),
 		},
 		{
-			desc: "Undecided",
-			epochWeight: map[types.EpochID]util.Weight{
-				0: util.WeightFromUint64(10),
-				1: util.WeightFromUint64(10),
-			},
+			desc: "hare undecided",
 			layersWeight: map[types.LayerID]util.Weight{
 				start.Add(1): util.WeightFromUint64(10),
 				start.Add(2): util.WeightFromUint64(10),
@@ -478,19 +487,211 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			},
 			abstainedWeight: map[types.LayerID]util.Weight{},
 			totalWeight:     util.WeightFromUint64(40),
-			verified:        start,
-			processed:       start.Add(4),
-			blocks: map[types.LayerID][]types.BlockID{
-				start.Add(3): {{1}},
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{1}}},
+				start.Add(2): {{id: types.BlockID{2}}},
+				start.Add(3): {{id: types.BlockID{3}}},
 			},
-			localOpinion: votes{{1}: abstain},
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
+			localOpinion: votes{
+				{1}: support,
+				{2}: support,
+				{3}: abstain,
 			},
 			expected:            start.Add(2),
 			expectedTotalWeight: util.WeightFromUint64(20),
+		},
+		{
+			desc: "multiple blocks",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(40),
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{1}}, {id: types.BlockID{2}}, {id: types.BlockID{3}}},
+				start.Add(2): {{id: types.BlockID{4}}},
+				start.Add(3): {{id: types.BlockID{5}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{4}: support,
+				{5}: support,
+			},
+			expected:            start.Add(3),
+			expectedTotalWeight: util.WeightFromUint64(10),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "multiple blocks hare lowest",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(40),
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {
+					{id: types.BlockID{1}, height: 10},
+					{id: types.BlockID{2}, height: 20},
+					{id: types.BlockID{3}, height: 30},
+				},
+				start.Add(2): {{id: types.BlockID{4}}},
+				start.Add(3): {{id: types.BlockID{5}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{4}: support,
+				{5}: support,
+			},
+			expected:            start.Add(3),
+			expectedTotalWeight: util.WeightFromUint64(10),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "multiple blocks hare highest",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(40),
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{4}}},
+				start.Add(2): {
+					{id: types.BlockID{1}, height: 30},
+					{id: types.BlockID{2}, height: 10},
+					{id: types.BlockID{3}, height: 20},
+				},
+				start.Add(3): {{id: types.BlockID{5}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{4}: support,
+				{5}: support,
+			},
+			expected:            start.Add(3),
+			expectedTotalWeight: util.WeightFromUint64(10),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "multiple blocks higher than local height",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(40),
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{4}}},
+				start.Add(2): {
+					{id: types.BlockID{1}, height: 30},
+					{id: types.BlockID{2}, height: localHeight + 1},
+					{id: types.BlockID{3}, height: localHeight + 1},
+				},
+				start.Add(3): {{id: types.BlockID{5}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{4}: support,
+				{5}: support,
+			},
+			expected:            start.Add(3),
+			expectedTotalWeight: util.WeightFromUint64(10),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "hare output higher than local height",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight: map[types.LayerID]util.Weight{},
+			totalWeight:     util.WeightFromUint64(40),
+			blocks: map[types.LayerID][]blockInfo{
+				start.Add(1): {{id: types.BlockID{4}}},
+				start.Add(2): {
+					{id: types.BlockID{1}, height: localHeight + 1},
+				},
+				start.Add(3): {{id: types.BlockID{5}}},
+			},
+			localOpinion: votes{
+				{1}: support,
+				{4}: support,
+				{5}: support,
+			},
+			expected:            start.Add(1),
+			expectedTotalWeight: util.WeightFromUint64(30),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: abstain,
+				{4}: support,
+			},
+		},
+		{
+			desc: "all empty layers",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(10),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight:     map[types.LayerID]util.Weight{},
+			totalWeight:         util.WeightFromUint64(40),
+			blocks:              map[types.LayerID][]blockInfo{},
+			localOpinion:        votes{},
+			expected:            start.Add(3),
+			expectedTotalWeight: util.WeightFromUint64(10),
+			expectedValidity:    map[types.BlockID]sign{},
+		},
+		{
+			desc: "some empty layers are not verified",
+			layersWeight: map[types.LayerID]util.Weight{
+				start.Add(1): util.WeightFromUint64(10),
+				start.Add(2): util.WeightFromUint64(10),
+				start.Add(3): util.WeightFromUint64(4),
+				start.Add(4): util.WeightFromUint64(10),
+			},
+			abstainedWeight:     map[types.LayerID]util.Weight{},
+			totalWeight:         util.WeightFromUint64(34),
+			blocks:              map[types.LayerID][]blockInfo{},
+			localOpinion:        votes{},
+			expected:            start.Add(1),
+			expectedTotalWeight: util.WeightFromUint64(24),
+			expectedValidity:    map[types.BlockID]sign{},
 		},
 	} {
 		tc := tc
@@ -498,28 +699,39 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			logger := logtest.New(t)
 
 			state := newCommonState()
-			state.epochWeight = tc.epochWeight
-			state.verified = tc.verified
-			state.processed = tc.processed
-			state.last = tc.processed
+			state.epochWeight = epochWeight
+			state.referenceHeight = referenceHeight
+			state.verified = verified
+			state.processed = processed
+			state.last = processed
 			state.blocks = tc.blocks
 			state.hareOutput = tc.localOpinion
 
-			state.localThreshold, state.globalThreshold = computeThresholds(logger, tc.config, mode{},
+			state.localThreshold, state.globalThreshold = computeThresholds(
+				logger, config, mode{},
 				state.verified.Add(1), state.processed, state.processed,
 				state.epochWeight,
 			)
 
-			v := newVerifying(tc.config, &state)
+			v := newVerifying(config, &state)
 			v.goodWeight = tc.layersWeight
 			v.totalGoodWeight = tc.totalWeight
 			v.abstainedWeight = tc.abstainedWeight
-			iterateLayers(tc.verified.Add(1), tc.processed.Sub(1), func(lid types.LayerID) bool {
+			for lid, blocks := range state.blocks {
+				for _, block := range blocks {
+					v.onBlock(types.NewExistingBlock(block.id, types.InnerBlock{
+						LayerIndex: lid,
+						TickHeight: block.height,
+					}))
+				}
+			}
+
+			iterateLayers(verified.Add(1), processed.Sub(1), func(lid types.LayerID) bool {
 				if !v.verify(logger, lid) {
 					return false
 				}
 				state.verified = lid
-				state.localThreshold, state.globalThreshold = computeThresholds(logger, tc.config, mode{},
+				state.localThreshold, state.globalThreshold = computeThresholds(logger, config, mode{},
 					state.verified.Add(1), state.processed, state.processed,
 					state.epochWeight,
 				)
@@ -527,6 +739,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			})
 			require.Equal(t, tc.expected, state.verified)
 			require.Equal(t, tc.expectedTotalWeight.String(), v.totalGoodWeight.String())
+			for block, sig := range tc.expectedValidity {
+				require.Equal(t, sig, state.validity[block])
+			}
 		})
 	}
 }

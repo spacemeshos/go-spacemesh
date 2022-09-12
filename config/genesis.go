@@ -97,7 +97,7 @@ func (conf *GenesisConfig) Compare(cfg GenesisConfig) (string, error) {
 			return string(d), nil
 		}
 	} else {
-		return "", fmt.Errorf("Error genesis config mismatch")
+		return "", fmt.Errorf("genesis config mismatch")
 	}
 }
 

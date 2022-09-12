@@ -186,7 +186,7 @@ func TestFixedRolacle_Export(t *testing.T) {
 
 	// when requesting a bigger committee size everyone should be eligible
 
-	m := oracle.Export(0, numOfClients)
+	m := oracle.Export(types.RandomHash(), numOfClients)
 
 	for _, s := range ids {
 		_, ok := m[s]

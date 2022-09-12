@@ -79,13 +79,13 @@ type State struct {
 	k           uint32       // the round counter (k%4 is the round number); it should be first in struct for alignment because atomics are used
 	ki          uint32       // indicates when S was first committed upon
 	s           *Set         // the set of values
-	certificate *certificate // the certificate
+	certificate *Certificate // the certificate
 }
 
 // Msg is the wrapper of the protocol's message.
 // Messages are sent as type Message. Upon receiving, the public key is added to this wrapper (public key extraction).
 type Msg struct {
-	*Message
+	Message
 	PubKey    *signing.PublicKey
 	RequestID string
 }
@@ -97,7 +97,7 @@ func (m *Msg) String() string {
 // Bytes returns the message as bytes (without the public key).
 // It panics if the message erred on unmarshal.
 func (m *Msg) Bytes() []byte {
-	buf, err := codec.Encode(m.Message)
+	buf, err := codec.Encode(&m.Message)
 	if err != nil {
 		log.Panic("could not marshal innermsg before send")
 	}
@@ -107,7 +107,7 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier stateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQuerier) (*Msg, error) {
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
@@ -367,7 +367,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 		return
 	}
 
-	if m.Message == nil {
+	if m.Message.InnerMsg == nil {
 		logger.Error("onEarlyMessage called with nil message")
 		return
 	}

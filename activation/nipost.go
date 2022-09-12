@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
@@ -53,7 +55,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 		return
 	} else if len(bts) > 0 {
 		var state BuilderState
-		if err := types.BytesToInterface(bts, &state); err != nil {
+		if err := codec.Decode(bts, &state); err != nil {
 			nb.log.With().Error("cannot load nipost state", log.Err(err))
 		}
 		if state.Challenge == challenge {
@@ -65,7 +67,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 }
 
 func (nb *NIPostBuilder) persist() {
-	if bts, err := types.InterfaceToBytes(nb.state); err != nil {
+	if bts, err := codec.Encode(nb.state); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 		return
 	} else if err := niposts.Add(nb.db, nipostBuildStateKey(), bts); err != nil {
@@ -118,6 +120,7 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 		NIPost: &types.NIPost{},
 	}
 	nb.poetProver = poetProver
+	nb.log.With().Info("updated poet proof service client")
 }
 
 // BuildNIPost uses the given challenge to build a NIPost. "atxExpired" and "stop" are channels for early termination of
@@ -143,16 +146,23 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		poetChallenge := challenge
 		nb.state.Challenge = *challenge
 
-		nb.log.Debug("submitting challenge to poet proving service (poet id: %x, challenge: %x)",
-			nb.state.PoetServiceID, poetChallenge)
+		nb.log.With().Debug("submitting challenge to poet proving service",
+			log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
+			log.Stringer("challenge", poetChallenge))
 
 		round, err := nb.poetProver.Submit(ctx, *poetChallenge)
 		if err != nil {
+			nb.log.With().Error("failed to submit challenge to poet proving service",
+				log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
+				log.Stringer("challenge", poetChallenge),
+				log.Err(err))
 			return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
 		}
 
-		nb.log.Info("challenge submitted to poet proving service (poet id: %x, round id: %v, challenge: %x)",
-			nb.state.PoetServiceID, round.ID, poetChallenge)
+		nb.log.With().Info("challenge submitted to poet proving service",
+			log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
+			log.String("round_id", round.ID),
+			log.Stringer("challenge", poetChallenge))
 
 		nipost.Challenge = poetChallenge
 		nb.state.PoetRound = round
@@ -174,7 +184,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
 			nb.log.With().Panic("failed to fetch membership for poet proof",
-				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state
+				log.Binary("challenge", nb.state.PoetProofRef)) // TODO: handle inconsistent state
 		}
 		if !membership[*nipost.Challenge] {
 			round := nb.state.PoetRound
@@ -189,7 +199,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	// Phase 2: Post execution.
 	if nipost.Post == nil {
 		nb.log.With().Info("starting post execution",
-			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
+			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
 		if err != nil {
@@ -197,7 +207,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		}
 
 		nb.log.With().Info("finished post execution",
-			log.Duration("duration", time.Now().Sub(startTime)))
+			log.Duration("duration", time.Since(startTime)))
 
 		nipost.Post = proof
 		nipost.PostMetadata = proofMetadata
@@ -212,18 +222,4 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	}
 	nb.persist()
 	return nipost, nil
-}
-
-// NewNIPostWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
-func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
-	return &types.NIPost{
-		Challenge: challenge,
-		Post: &types.Post{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge: poetRef,
-		},
-	}
 }

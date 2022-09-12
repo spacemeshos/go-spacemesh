@@ -5,8 +5,8 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/libp2p/go-eventbus"
-	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p/core/event"
+	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -76,11 +76,11 @@ func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bo
 }
 
 // ReportNewActivation reports a new activation.
-func ReportNewActivation(activation *types.ActivationTx) {
+func ReportNewActivation(activation *types.VerifiedActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	activationTxEvent := ActivationTx{ActivationTx: activation}
+	activationTxEvent := ActivationTx{VerifiedActivationTx: activation}
 	if reporter != nil {
 		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
@@ -331,6 +331,7 @@ const (
 	LayerStatusTypeUnknown   = iota
 	LayerStatusTypeApproved  // approved by Hare
 	LayerStatusTypeConfirmed // confirmed by Tortoise
+	LayerStatusTypeApplied   // applied to state
 )
 
 // LayerUpdate packages up a layer with its status (which a layer does not ordinarily contain).
@@ -377,9 +378,9 @@ type Transaction struct {
 	Valid       bool
 }
 
-// ActivationTx wraps *types.ActivationTx.
+// ActivationTx wraps *types.VerifiedActivationTx.
 type ActivationTx struct {
-	*types.ActivationTx
+	*types.VerifiedActivationTx
 }
 
 // Status indicates status change event.

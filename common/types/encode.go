@@ -44,12 +44,3 @@ func BytesToTransaction(buf []byte) (*Transaction, error) {
 func BytesToLayerID(b []byte) LayerID {
 	return NewLayerID(util.BytesToUint32(b))
 }
-
-var (
-	// FIXME(dshulyak) refactor rest of the code to use codec module.
-
-	// InterfaceToBytes is an alias to codec.Encode.
-	InterfaceToBytes = codec.Encode
-	// BytesToInterface is an alias to codec.Decode.
-	BytesToInterface = codec.Decode
-)

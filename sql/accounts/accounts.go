@@ -12,11 +12,11 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 	_, err := db.Exec(query, enc, func(stmt *sql.Statement) bool {
 		account.Balance = uint64(stmt.ColumnInt64(0))
 		account.Initialized = stmt.ColumnInt(1) > 0
-		account.Nonce = uint64(stmt.ColumnInt64(2))
+		account.NextNonce = uint64(stmt.ColumnInt64(2))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(3)))
 		if stmt.ColumnLen(4) > 0 {
-			account.Template = &types.Address{}
-			stmt.ColumnBytes(4, account.Template[:])
+			account.TemplateAddress = &types.Address{}
+			stmt.ColumnBytes(4, account.TemplateAddress[:])
 			account.State = make([]byte, stmt.ColumnLen(5))
 			stmt.ColumnBytes(5, account.State)
 		}
@@ -44,7 +44,7 @@ func Has(db sql.Executor, address types.Address) (bool, error) {
 
 // Latest latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
-	account, err := load(db, address, "select balance, initialized, nonce, layer_updated, template, state from accounts where address = ?1;", func(stmt *sql.Statement) {
+	account, err := load(db, address, "select balance, initialized, next_nonce, layer_updated, template, state from accounts where address = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
 	})
 	if err != nil {
@@ -55,7 +55,7 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
-	account, err := load(db, address, "select balance, initialized, nonce, layer_updated, template, state from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
+	account, err := load(db, address, "select balance, initialized, next_nonce, layer_updated, template, state from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address.Bytes())
 		stmt.BindInt64(2, int64(layer.Value))
 	})
@@ -68,17 +68,17 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 // All returns all latest accounts.
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
-	_, err := db.Exec("select address, balance, initialized, nonce, max(layer_updated), template, state from accounts group by address;", nil, func(stmt *sql.Statement) bool {
+	_, err := db.Exec("select address, balance, initialized, next_nonce, max(layer_updated), template, state from accounts group by address;", nil, func(stmt *sql.Statement) bool {
 		var account types.Account
 		stmt.ColumnBytes(0, account.Address[:])
 		account.Balance = uint64(stmt.ColumnInt64(1))
 		account.Initialized = stmt.ColumnInt(2) > 0
-		account.Nonce = uint64(stmt.ColumnInt64(3))
+		account.NextNonce = uint64(stmt.ColumnInt64(3))
 		account.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(4)))
 		if stmt.ColumnLen(5) > 0 {
 			var template types.Address
 			stmt.ColumnBytes(5, template[:])
-			account.Template = &template
+			account.TemplateAddress = &template
 			account.State = make([]byte, stmt.ColumnLen(6))
 			stmt.ColumnBytes(6, account.State)
 		}
@@ -94,18 +94,18 @@ func All(db sql.Executor) ([]*types.Account, error) {
 // Update account state at a certain layer.
 func Update(db sql.Executor, to *types.Account) error {
 	_, err := db.Exec(`insert into 
-	accounts (address, balance, initialized, nonce, layer_updated, template, state) 
+	accounts (address, balance, initialized, next_nonce, layer_updated, template, state) 
 	values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, to.Address.Bytes())
 		stmt.BindInt64(2, int64(to.Balance))
 		stmt.BindBool(3, to.Initialized)
-		stmt.BindInt64(4, int64(to.Nonce))
+		stmt.BindInt64(4, int64(to.NextNonce))
 		stmt.BindInt64(5, int64(to.Layer.Value))
-		if to.Template == nil {
+		if to.TemplateAddress == nil {
 			stmt.BindNull(6)
 			stmt.BindNull(7)
 		} else {
-			stmt.BindBytes(6, to.Template[:])
+			stmt.BindBytes(6, to.TemplateAddress[:])
 			stmt.BindBytes(7, to.State)
 		}
 	}, nil)

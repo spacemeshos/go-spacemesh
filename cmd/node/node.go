@@ -79,6 +79,7 @@ const (
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
 	HareLogger             = "hare"
+	BlockCertLogger        = "blockCert"
 	BlockGenLogger         = "blockGenerator"
 	BlockHandlerLogger     = "blockHandler"
 	TxHandlerLogger        = "txHandler"
@@ -272,6 +273,7 @@ type App struct {
 	clock            TickProvider
 	hare             HareService
 	blockGen         *blocks.Generator
+	certifier        *blocks.Certifier
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
@@ -415,8 +417,6 @@ func (app *App) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	dbStorepath string,
 	sgn *signing.EdSigner,
-	isFixedOracle bool,
-	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
@@ -458,12 +458,6 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
-	var verifier blockValidityVerifier
-	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
-	}
-
 	genesisAccts := app.Config.Genesis.Accounts.ToAccounts()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
@@ -490,10 +484,17 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
+	var verifier blockValidityVerifier
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
+
 	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
+
 	// FIXME latest layer in state is not exactly the latest verified layer
 	// https://github.com/spacemeshos/go-spacemesh/issues/3318
 	verified := msh.LatestLayerInState()
@@ -535,9 +536,22 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
+	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+
+	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol,
+		blocks.WithCertContext(ctx),
+		blocks.WithCertConfig(blocks.CertConfig{
+			CommitteeSize:    app.Config.HARE.N,
+			CertifyThreshold: app.Config.HARE.F + 1,
+			NumLayersToKeep:  app.Config.Tortoise.Zdist,
+		}),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
+
 	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
+		Cert:     app.certifier,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
@@ -548,25 +562,16 @@ func (app *App) initServices(ctx context.Context,
 
 	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
-		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
+		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
+		HareDelayLayers:  app.Config.Tortoise.Zdist,
+		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
-	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
-	var hOracle hare.Rolacle
-	if isFixedOracle {
-		// fixed rolacle, take the provided rolacle
-		hOracle = rolacle
-	} else {
-		// regular oracle, build and use it
-		hOracle = eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
-		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
-	}
-
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped,
+	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			LayerSize:      layerSize,
@@ -619,8 +624,13 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, cdb, atxHandler, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
-	)
+		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
+		activation.WithContext(ctx),
+		activation.WithPoetConfig(activation.PoetConfig{
+			PhaseShift:  app.Config.POET.PhaseShift,
+			CycleGap:    app.Config.POET.CycleGap,
+			GracePeriod: app.Config.POET.GracePeriod,
+		}))
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
@@ -652,6 +662,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("hare message handler missing")
 	}
 	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
+	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -722,6 +733,7 @@ func (app *App) startServices(ctx context.Context) error {
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start()
+	app.certifier.Start()
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -866,6 +878,11 @@ func (app *App) stopServices() {
 	if app.blockGen != nil {
 		app.log.Info("stopping blockGen")
 		app.blockGen.Stop()
+	}
+
+	if app.certifier != nil {
+		app.log.Info("stopping certifier")
+		app.certifier.Stop()
 	}
 
 	if app.layerFetch != nil {
@@ -1112,8 +1129,6 @@ func (app *App) Start() error {
 		nodeID,
 		dbStorepath,
 		app.edSgn,
-		false,
-		nil,
 		uint32(app.Config.LayerAvgSize),
 		poetClient,
 		vrfSigner,

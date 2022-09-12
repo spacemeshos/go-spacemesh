@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -28,7 +29,7 @@ func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublishe
 
 func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 	tb.Helper()
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := codec.Encode(&msg)
 	require.NoError(tb, err)
 	return buf
 }
@@ -353,7 +354,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	broadcaster := mocks.NewMockPublisher(ctrl)
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 		msg := weakcoin.Message{}
-		require.NoError(t, types.BytesToInterface(data, &msg))
+		require.NoError(t, codec.Decode(data, &msg))
 		sig = msg.Signature
 		return nil
 	}).AnyTimes()

@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
@@ -20,9 +21,10 @@ import (
 )
 
 const (
-	atxProtocol     = "/atx/1"
-	lyrDataProtocol = "/layerdata/1"
-	fetchProtocol   = "/fetch/2"
+	atxProtocol     = "ax/1"
+	lyrDataProtocol = "ld/1"
+	lyrOpnsProtocol = "lp/1"
+	hashProtocol    = "hs/1"
 
 	batchMaxSize = 20
 	cacheSize    = 1000
@@ -50,32 +52,34 @@ type request struct {
 	retries              int
 }
 
-// requestMessage is the on the wire message that will be send to the peer for hash query.
-type requestMessage struct {
+//go:generate scalegen -types RequestMessage,ResponseMessage,RequestBatch,ResponseBatch
+
+// RequestMessage is sent to the peer for hash query.
+type RequestMessage struct {
 	Hint datastore.Hint
 	Hash types.Hash32
 }
 
-// responseMessage is the on the wire message that will be send to the this node as response,.
-type responseMessage struct {
+// ResponseMessage is sent to the node as a response.
+type ResponseMessage struct {
 	Hash types.Hash32
 	Data []byte
 }
 
-// requestBatch is a batch of requests and a hash of all requests as ID.
-type requestBatch struct {
+// RequestBatch is a batch of requests and a hash of all requests as ID.
+type RequestBatch struct {
 	ID       types.Hash32
-	Requests []requestMessage
+	Requests []RequestMessage
 }
 
 type batchInfo struct {
-	requestBatch
+	RequestBatch
 	peer p2p.Peer
 }
 
 // SetID calculates the hash of all requests and sets it as this batches ID.
 func (b *batchInfo) SetID() {
-	bts, err := types.InterfaceToBytes(b.Requests)
+	bts, err := codec.EncodeSlice(b.Requests)
 	if err != nil {
 		return
 	}
@@ -83,19 +87,19 @@ func (b *batchInfo) SetID() {
 }
 
 // ToMap converts the array of requests to map so it can be easily invalidated.
-func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
-	m := make(map[types.Hash32]requestMessage)
+func (b batchInfo) ToMap() map[types.Hash32]RequestMessage {
+	m := make(map[types.Hash32]RequestMessage)
 	for _, r := range b.Requests {
 		m[r.Hash] = r
 	}
 	return m
 }
 
-// responseBatch is the response struct send for a requestBatch. the responseBatch ID must be the same
-// as stated in requestBatch even if not all Data is present.
-type responseBatch struct {
+// ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
+// as stated in RequestBatch even if not all Data is present.
+type ResponseBatch struct {
 	ID        types.Hash32
-	Responses []responseMessage
+	Responses []ResponseMessage
 }
 
 // Config is the configuration file of the Fetch component.
@@ -135,6 +139,7 @@ type Fetch struct {
 	host    host
 	atxSrv  server.Requestor
 	lyrSrv  server.Requestor
+	opnSrv  server.Requestor
 	hashSrv server.Requestor
 
 	// activeRequests contains requests that are not processed
@@ -153,7 +158,7 @@ type Fetch struct {
 }
 
 // newFetch creates a new Fetch struct.
-func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, hashS server.Requestor, logger log.Log) *Fetch {
+func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, opnS, hashS server.Requestor, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
@@ -161,6 +166,7 @@ func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, hashS ser
 		host:            h,
 		atxSrv:          atxS,
 		lyrSrv:          lyrS,
+		opnSrv:          opnS,
 		hashSrv:         hashS,
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
@@ -269,8 +275,8 @@ func (f *Fetch) receiveResponse(data []byte) {
 		return
 	}
 
-	var response responseBatch
-	err := types.BytesToInterface(data, &response)
+	var response ResponseBatch
+	err := codec.Decode(data, &response)
 	if err != nil {
 		f.log.With().Error("response was unclear, maybe leaking", log.Err(err))
 		return
@@ -363,12 +369,12 @@ func (f *Fetch) receiveResponse(data []byte) {
 
 // this is the main function that sends the hash request to the peer.
 func (f *Fetch) requestHashBatchFromPeers() {
-	var requestList []requestMessage
+	var requestList []RequestMessage
 	f.activeReqM.Lock()
 	// only send one request per hash
 	for hash, reqs := range f.activeRequests {
 		f.log.With().Debug("batching hash request", log.String("hash", hash.ShortString()))
-		requestList = append(requestList, requestMessage{Hash: hash, Hint: reqs[0].hint})
+		requestList = append(requestList, RequestMessage{Hash: hash, Hint: reqs[0].hint})
 		// move the processed requests to pending
 		f.pendingRequests[hash] = append(f.pendingRequests[hash], reqs...)
 		delete(f.activeRequests, hash)
@@ -378,7 +384,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	f.send(requestList)
 }
 
-func (f *Fetch) send(requests []requestMessage) {
+func (f *Fetch) send(requests []RequestMessage) {
 	if len(requests) == 0 {
 		return
 	}
@@ -395,9 +401,9 @@ func (f *Fetch) send(requests []requestMessage) {
 	}
 }
 
-func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]requestMessage {
+func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]RequestMessage {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	peer2requests := make(map[p2p.Peer][]requestMessage)
+	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
 
 	for _, req := range requests {
@@ -408,17 +414,17 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 
 		_, ok := peer2requests[p]
 		if !ok {
-			peer2requests[p] = []requestMessage{req}
+			peer2requests[p] = []RequestMessage{req}
 		} else {
 			peer2requests[p] = append(peer2requests[p], req)
 		}
 	}
 
 	// split every peer's requests into batches of f.cfg.BatchSize each
-	result := make(map[p2p.Peer][][]requestMessage)
+	result := make(map[p2p.Peer][][]RequestMessage)
 	for peer, requests := range peer2requests {
 		if len(requests) < f.cfg.BatchSize {
-			result[peer] = [][]requestMessage{
+			result[peer] = [][]RequestMessage{
 				requests,
 			}
 			continue
@@ -436,7 +442,7 @@ func (f *Fetch) organizeRequests(requests []requestMessage) map[p2p.Peer][][]req
 }
 
 // sendBatch dispatches batched request messages to provided peer.
-func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
+func (f *Fetch) sendBatch(p p2p.Peer, requests []RequestMessage) error {
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
@@ -455,7 +461,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, requests []requestMessage) error {
 		f.handleHashError(batch.ID, err)
 	}
 
-	bytes, err := types.InterfaceToBytes(&batch.requestBatch)
+	bytes, err := codec.Encode(&batch.RequestBatch)
 	if err != nil {
 		f.handleHashError(batch.ID, err)
 	}
@@ -575,13 +581,21 @@ func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) 
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, lid types.LayerID, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
-	remotePeers := f.host.GetPeers()
-	numPeers := len(remotePeers)
+	return poll(ctx, f.lyrSrv, f.host.GetPeers(), lid.Bytes(), okCB, errCB)
+}
+
+// GetLayerOpinions get opinions on data in the specified layer from peers.
+func (f *Fetch) GetLayerOpinions(ctx context.Context, lid types.LayerID, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
+	return poll(ctx, f.opnSrv, f.host.GetPeers(), lid.Bytes(), okCB, errCB)
+}
+
+func poll(ctx context.Context, srv server.Requestor, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
+	numPeers := len(peers)
 	if numPeers == 0 {
 		return errNoPeers
 	}
 
-	for _, p := range remotePeers {
+	for _, p := range peers {
 		peer := p
 		okFunc := func(data []byte) {
 			okCB(data, peer, numPeers)
@@ -589,7 +603,7 @@ func (f *Fetch) GetLayerData(ctx context.Context, lid types.LayerID, okCB func([
 		errFunc := func(err error) {
 			errCB(err, peer, numPeers)
 		}
-		if err := f.lyrSrv.Request(ctx, peer, lid.Bytes(), okFunc, errFunc); err != nil {
+		if err := srv.Request(ctx, peer, req, okFunc, errFunc); err != nil {
 			errFunc(err)
 		}
 	}

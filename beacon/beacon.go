@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -467,12 +468,8 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 		return
 	}
 	oldest := epoch - numEpochsToKeep
-	if _, ok := pd.beacons[oldest]; ok {
-		delete(pd.beacons, oldest)
-	}
-	if _, ok := pd.beaconsFromBallots[oldest]; ok {
-		delete(pd.beaconsFromBallots, oldest)
-	}
+	delete(pd.beacons, oldest)
+	delete(pd.beaconsFromBallots, oldest)
 }
 
 // listens to new layers.
@@ -655,7 +652,12 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 		VRFSignature: proposedSignature,
 	}
 
-	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
 	logger.With().Info("beacon proposal sent", log.String("message", m.String()))
 }
 
@@ -739,7 +741,7 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
-		ua[string(header.NodeID[:])] += uint64(header.NumUnits)
+		ua[string(header.NodeID.ToBytes())] += uint64(header.NumUnits)
 	}
 
 	pd.weakCoin.StartEpoch(ctx, epoch, ua)
@@ -787,7 +789,12 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		return err
 	}
 
-	sig := signMessage(pd.edSigner, mb, pd.logger)
+	encoded, err := codec.Encode(&mb)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := pd.edSigner.Sign(encoded)
+
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		Signature:              sig,
@@ -798,7 +805,12 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		types.FirstRound,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, serialized)
 	return nil
 }
 
@@ -824,7 +836,11 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig := signMessage(pd.edSigner, mb, pd.logger)
+	encoded, err := codec.Encode(&mb)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := pd.edSigner.Sign(encoded)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
@@ -836,7 +852,12 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		round,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, serialized)
 	return nil
 }
 
@@ -925,36 +946,28 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 	return signature
 }
 
-func signMessage(signer signing.Signer, message interface{}, logger log.Log) []byte {
-	encoded, err := types.InterfaceToBytes(message)
-	if err != nil {
-		logger.With().Panic("failed to serialize message for signing", log.Err(err))
-	}
-	return signer.Sign(encoded)
+//go:generate scalegen -types BuildProposalMessage
+
+// BuildProposalMessage is a message for buildProposal below.
+type BuildProposalMessage struct {
+	Prefix string
+	Epoch  uint32
 }
 
 func buildProposal(epoch types.EpochID, logger log.Log) []byte {
-	message := &struct {
-		Prefix string
-		Epoch  uint32
-	}{
+	message := &BuildProposalMessage{
 		Prefix: proposalPrefix,
 		Epoch:  uint32(epoch),
 	}
 
-	b, err := types.InterfaceToBytes(message)
+	b, err := codec.Encode(message)
 	if err != nil {
 		logger.With().Panic("failed to serialize proposal", log.Err(err))
 	}
 	return b
 }
 
-func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, data interface{}) {
-	serialized, err := types.InterfaceToBytes(data)
-	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
-	}
-
+func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) {
 	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
 	pd.eg.Go(func() error {
 		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {

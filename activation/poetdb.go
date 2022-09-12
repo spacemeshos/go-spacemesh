@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -59,7 +60,7 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 // ValidateAndStoreMsg validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 	var proofMessage types.PoetProofMessage
-	if err := types.BytesToInterface(data, &proofMessage); err != nil {
+	if err := codec.Decode(data, &proofMessage); err != nil {
 		return fmt.Errorf("parse message: %w", err)
 	}
 	return db.ValidateAndStore(&proofMessage)
@@ -91,7 +92,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 
 // StoreProof saves the poet proof in local db.
 func (db *PoetDb) StoreProof(ref []byte, proofMessage *types.PoetProofMessage) error {
-	messageBytes, err := types.InterfaceToBytes(proofMessage)
+	messageBytes, err := codec.Encode(proofMessage)
 	if err != nil {
 		return fmt.Errorf("could not marshal proof message: %w", err)
 	}
@@ -177,7 +178,7 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
 	}
 	var proofMessage types.PoetProofMessage
-	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {
+	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef[:5], err)
 	}
 	return membershipSliceToMap(proofMessage.Members), nil
@@ -190,7 +191,7 @@ func (db *PoetDb) GetProof(proofRef []byte) (*types.PoetProof, error) {
 		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
 	}
 	var proofMessage types.PoetProofMessage
-	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {
+	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef[:5], err)
 	}
 	return &proofMessage.PoetProof, nil

@@ -10,15 +10,15 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
@@ -32,13 +32,18 @@ var (
 	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
 )
 
-const defaultPoetRetryInterval = 5 * time.Second
-
-type poetNumberOfTickProvider struct{}
-
-func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 1
+// PoetConfig is the configuration to interact with the poet server.
+type PoetConfig struct {
+	PhaseShift  time.Duration `mapstructure:"phase-shift"`
+	CycleGap    time.Duration `mapstructure:"cycle-gap"`
+	GracePeriod time.Duration `mapstructure:"grace-period"`
 }
+
+func DefaultPoetConfig() PoetConfig {
+	return PoetConfig{}
+}
+
+const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
@@ -53,11 +58,6 @@ type atxHandler interface {
 
 type signer interface {
 	Sign(m []byte) []byte
-}
-
-type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
 }
 
 type syncer interface {
@@ -115,6 +115,7 @@ type Builder struct {
 	parentCtx             context.Context
 	stop                  func()
 	exited                chan struct{}
+	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
 }
@@ -147,27 +148,35 @@ func WithContext(ctx context.Context) BuilderOption {
 	}
 }
 
+// WithPoetConfig sets the poet config.
+func WithPoetConfig(c PoetConfig) BuilderOption {
+	return func(b *Builder) {
+		b.poetCfg = c
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
-		parentCtx:         context.Background(),
-		signer:            signer,
-		nodeID:            nodeID,
-		coinbaseAccount:   conf.CoinbaseAccount,
-		goldenATXID:       conf.GoldenATXID,
-		layersPerEpoch:    conf.LayersPerEpoch,
-		cdb:               cdb,
-		atxHandler:        hdlr,
-		publisher:         publisher,
-		nipostBuilder:     nipostBuilder,
-		postSetupProvider: postSetupProvider,
-		layerClock:        layerClock,
-		syncer:            syncer,
-		log:               log,
-		poetRetryInterval: defaultPoetRetryInterval,
+		parentCtx:             context.Background(),
+		signer:                signer,
+		nodeID:                nodeID,
+		coinbaseAccount:       conf.CoinbaseAccount,
+		goldenATXID:           conf.GoldenATXID,
+		layersPerEpoch:        conf.LayersPerEpoch,
+		cdb:                   cdb,
+		atxHandler:            hdlr,
+		publisher:             publisher,
+		nipostBuilder:         nipostBuilder,
+		postSetupProvider:     postSetupProvider,
+		layerClock:            layerClock,
+		syncer:                syncer,
+		log:                   log,
+		poetRetryInterval:     defaultPoetRetryInterval,
+		poetClientInitializer: defaultPoetClientFunc,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -259,7 +268,14 @@ func (b *Builder) SmesherID() types.NodeID {
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
-	return SignAtx(b, atx)
+	if err := SignAtx(b, atx); err != nil {
+		return err
+	}
+	if err := atx.CalcAndSetID(); err != nil {
+		return err
+	}
+	atx.SetNodeID(&b.nodeID)
+	return nil
 }
 
 func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
@@ -281,6 +297,8 @@ func (b *Builder) run(ctx context.Context) {
 	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
 		return
 	}
+
+	b.waitForFirstATX(ctx)
 
 	b.loop(ctx)
 }
@@ -304,6 +322,54 @@ func (b *Builder) generateProof() error {
 	return nil
 }
 
+func (b *Builder) waitForFirstATX(ctx context.Context) bool {
+	currentLayer := b.layerClock.GetCurrentLayer()
+	currEpoch := currentLayer.GetEpoch()
+	if currEpoch == 0 { // genesis miner
+		return false
+	}
+	if prev, err := b.cdb.GetPrevAtx(b.nodeID); err == nil {
+		if prev.PubLayerID.GetEpoch() == currEpoch {
+			// miner has ATX in previous epoch
+			return false
+		}
+	}
+
+	// miner didn't publish ATX that targets current epoch.
+
+	// this estimate work if the majority of the nodes use poet servers that are configured the same way.
+	// TODO: do better when nodes use different poet services
+	window := b.poetCfg.PhaseShift - b.poetCfg.CycleGap + b.poetCfg.GracePeriod
+	windowEnd := b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(window)
+	wait := time.Until(windowEnd)
+	if wait <= 0 { // missed the window. wait for the next epoch
+		waitTill := (currEpoch + 1).FirstLayer()
+		b.log.WithContext(ctx).With().Info("waiting till next epoch to build atx",
+			log.Stringer("current_epoch", currEpoch),
+			log.Stringer("wait_till", waitTill),
+			log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
+		select {
+		case <-ctx.Done():
+			return false
+		case <-b.layerClock.AwaitLayer(waitTill):
+			wait = window
+		}
+	}
+	timer := time.NewTimer(wait)
+	b.log.WithContext(ctx).With().Info("waiting for the poet window expires",
+		log.Duration("wait", wait))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+	}
+	b.log.WithContext(ctx).With().Info("ready to build first atx",
+		log.Stringer("current_layer", b.layerClock.GetCurrentLayer()),
+		log.Stringer("current_epoch", b.layerClock.GetCurrentLayer().GetEpoch()))
+	return true
+}
+
 // loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
 	var poetRetryTimer *time.Timer
@@ -318,20 +384,22 @@ func (b *Builder) loop(ctx context.Context) {
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CAS(client, nil)
+			b.pendingPoetClient.CompareAndSwap(client, nil)
 		}
 
+		ctx := log.WithNewSessionID(ctx)
 		if err := b.PublishActivationTx(ctx); err != nil {
 			if errors.Is(err, ErrStopRequested) {
 				return
 			}
-			b.log.With().Error("error attempting to publish atx",
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
+				b.discardChallenge()
 				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
 				if poetRetryTimer == nil {
@@ -365,7 +433,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		return ErrStopRequested
 	case <-syncedCh:
 	}
-	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
+	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -375,7 +443,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
-		challenge.PrevATXID = prevAtx.ID()
+		challenge.PrevATXID = prevAtx.ID
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
@@ -387,14 +455,16 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 
 // UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
 func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
+	b.log.With().Debug("request to update poet service", log.String("target", target))
 	client := b.poetClientInitializer(target)
 	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 	// Maybe it should be provided during update.
-	_, err := client.PoetServiceID(ctx)
+	sid, err := client.PoetServiceID(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
 	b.pendingPoetClient.Store(unsafe.Pointer(&client))
+	b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	return nil
 }
 
@@ -428,7 +498,7 @@ func getNIPostKey() []byte {
 }
 
 func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	bts, err := types.InterfaceToBytes(ch)
+	bts, err := codec.Encode(ch)
 	if err != nil {
 		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
@@ -447,12 +517,12 @@ func (b *Builder) loadChallenge() error {
 	}
 
 	if len(bts) > 0 {
-		tp := &types.NIPostChallenge{}
-		if err = types.BytesToInterface(bts, tp); err != nil {
+		var tp types.NIPostChallenge
+		if err = codec.Decode(bts, &tp); err != nil {
 			return fmt.Errorf("parse NIPost challenge: %w", err)
 		}
 
-		b.challenge = tp
+		b.challenge = &tp
 	}
 	return nil
 }
@@ -460,48 +530,52 @@ func (b *Builder) loadChallenge() error {
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
+	logger := b.log.WithContext(ctx)
 	if b.challenge != nil {
-		b.log.With().Info("using existing atx challenge", b.currentEpoch())
+		logger.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
-		b.log.With().Info("building new atx challenge", b.currentEpoch())
+		logger.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
-			b.log.Error(err.Error())
 			return fmt.Errorf("failed to build new atx challenge: %w", err)
 		}
 	}
 
-	b.log.With().Info("new atx challenge is ready", b.currentEpoch())
+	logger.With().Info("new atx challenge is ready",
+		log.Stringer("target_epoch", b.challenge.PubLayerID.GetEpoch()),
+		log.Stringer("current_epoch", b.currentEpoch()))
 
 	if b.pendingATX == nil {
 		var err error
 		b.pendingATX, err = b.createAtx(ctx)
 		if err != nil {
-			b.log.Error(err.Error())
 			return fmt.Errorf("create ATX: %w", err)
 		}
 	}
 
 	atx := b.pendingATX
-	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
-	defer b.atxHandler.UnsubscribeAtx(atx.ID())
-	size, err := b.signAndBroadcast(ctx, atx)
-	if err != nil {
-		b.log.Error(err.Error())
-		return fmt.Errorf("sign and broadcast: %w", err)
+	if err := b.SignAtx(atx); err != nil {
+		return fmt.Errorf("sign: %w", err)
 	}
 
-	b.log.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
+	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
+	defer b.atxHandler.UnsubscribeAtx(atx.ID())
+	size, err := b.broadcast(ctx, atx)
+	if err != nil {
+		return fmt.Errorf("broadcast: %w", err)
+	}
+
+	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
 
 	select {
 	case <-atxReceived:
-		b.log.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
+		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		syncedCh := make(chan struct{})
 		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
-			b.log.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
+			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
 		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
@@ -526,9 +600,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	}
 
 	// the following method waits for a PoET proof, which should take ~1 epoch
-	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
+	expireLayer := (pubEpoch + 2).FirstLayer()
+	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
 
-	b.log.With().Info("building NIPost")
+	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
 
 	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
 	if err != nil {
@@ -564,7 +639,14 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		initialPost = b.initialPost
 	}
 
-	return types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPost), nil
+	atx := types.NewActivationTx(
+		*b.challenge,
+		b.Coinbase(),
+		nipost,
+		b.postSetupProvider.LastOpts().NumUnits,
+		initialPost,
+	)
+	return atx, nil
 }
 
 func (b *Builder) currentEpoch() types.EpochID {
@@ -579,11 +661,8 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	if err := b.SignAtx(atx); err != nil {
-		return 0, fmt.Errorf("failed to sign ATX: %v", err)
-	}
-	buf, err := types.InterfaceToBytes(atx)
+func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
+	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}
@@ -622,24 +701,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 	return false
 }
 
-// ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
-func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
-	bts, err := signedAtx.InnerBytes()
-	if err != nil {
-		return nil, fmt.Errorf("inner bytes of ATX: %w", err)
-	}
-
-	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
-	}
-
-	pub := signing.NewPublicKey(pubKey)
-	return pub, nil
-}
-
-// SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
+// SignAtx signs the atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
 func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()

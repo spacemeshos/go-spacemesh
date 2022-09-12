@@ -34,7 +34,6 @@ type HareWrapper struct {
 	hare        []*Hare
 	initialSets []*Set // all initial sets
 	outputs     map[types.LayerID][]*Set
-	name        string
 }
 
 func newHareWrapper(totalCp uint32) *HareWrapper {
@@ -45,12 +44,6 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs
-}
-
-func (his *HareWrapper) fill(set *Set, begin, end int) {
-	for i := begin; i <= end; i++ {
-		his.initialSets[i] = set
-	}
 }
 
 func (his *HareWrapper) waitForTermination() {
@@ -140,7 +133,7 @@ func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
 	totalNodes := 15
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -381,7 +374,7 @@ func Test_multipleCPs(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -411,6 +404,7 @@ func Test_multipleCPs(t *testing.T) {
 	var pubsubs []*pubsub.PubSub
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
+	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
@@ -422,7 +416,9 @@ func Test_multipleCPs(t *testing.T) {
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		outputsWaitGroup.Add(1)
 		go func(idx int) {
+			defer outputsWaitGroup.Done()
 			for out := range h.blockGenCh {
 				if outputs[idx] == nil {
 					outputs[idx] = make(map[types.LayerID]LayerOutput)
@@ -455,6 +451,7 @@ func Test_multipleCPs(t *testing.T) {
 	for _, h := range test.hare {
 		close(h.blockGenCh)
 	}
+	outputsWaitGroup.Wait()
 	for _, out := range outputs {
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
 			require.NotNil(t, out[lid])
@@ -473,7 +470,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
 	test := newHareWrapper(totalCp)
 	totalNodes := 10
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, WakeupDelta: 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -503,6 +500,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	var pubsubs []*pubsub.PubSub
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	outputs := make([]map[types.LayerID]LayerOutput, totalNodes)
+	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
@@ -515,7 +513,9 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
 		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
 		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		outputsWaitGroup.Add(1)
 		go func(idx int) {
+			defer outputsWaitGroup.Done()
 			for out := range h.blockGenCh {
 				if outputs[idx] == nil {
 					outputs[idx] = make(map[types.LayerID]LayerOutput)
@@ -548,6 +548,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	for _, h := range test.hare {
 		close(h.blockGenCh)
 	}
+	outputsWaitGroup.Wait()
 	for _, out := range outputs {
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(finalLyr); lid = lid.Add(1) {
 			require.NotNil(t, out[lid])

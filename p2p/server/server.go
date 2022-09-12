@@ -9,9 +9,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -46,6 +46,8 @@ func WithContext(ctx context.Context) Opt {
 
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
+
+//go:generate scalegen -types Response
 
 // Response is a server response.
 type Response struct {

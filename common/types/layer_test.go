@@ -2,17 +2,12 @@ package types
 
 import (
 	"math"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-)
 
-func genByte32() [32]byte {
-	var x [32]byte
-	rand.Read(x[:])
-	return x
-}
+	"github.com/spacemeshos/go-spacemesh/codec"
+)
 
 func TestLayerIDWraparound(t *testing.T) {
 	var (
@@ -76,10 +71,10 @@ func TestLayerIDString(t *testing.T) {
 
 func TestLayerIDBinaryEncoding(t *testing.T) {
 	lid := NewLayerID(100)
-	buf, err := InterfaceToBytes(&lid)
+	buf, err := codec.Encode(&lid)
 	require.NoError(t, err)
 	decoded := LayerID{}
-	require.NoError(t, BytesToInterface(buf, &decoded))
+	require.NoError(t, codec.Decode(buf, &decoded))
 	require.Equal(t, lid, decoded)
 }
 

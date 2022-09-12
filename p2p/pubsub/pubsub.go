@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,25 +51,28 @@ const (
 	OpportunisticGraftScoreThreshold = 3.5
 
 	// AtxProtocol is the protocol id for ATXs.
-	AtxProtocol = "/sm/ax/1"
+	AtxProtocol = "ax1"
 	// PoetProofProtocol is the protocol id for PoetProof.
-	PoetProofProtocol = "/sm/pt/1"
+	PoetProofProtocol = "pt1"
 	// ProposalProtocol is the protocol id for block proposals.
-	ProposalProtocol = "/sm/pp/1"
+	ProposalProtocol = "pp1"
 	// TxProtocol iis the protocol id for transactions.
-	TxProtocol = "/sm/tx/1"
+	TxProtocol = "tx1"
 
 	// HareProtocol is the protocol id for hare messages.
-	HareProtocol = "/sm/hr/1"
+	HareProtocol = "hr1"
+
+	// BlockCertify is the protocol id for block certification.
+	BlockCertify = "bc1"
 
 	// BeaconWeakCoinProtocol is the protocol id for beacon weak coin.
-	BeaconWeakCoinProtocol = "/sm/bw/1"
+	BeaconWeakCoinProtocol = "bw1"
 	// BeaconProposalProtocol is the protocol id for beacon proposals.
-	BeaconProposalProtocol = "/sm/bp/1"
+	BeaconProposalProtocol = "bp1"
 	// BeaconFirstVotesProtocol is the protocol id for beacon first vote.
-	BeaconFirstVotesProtocol = "/sm/bf/1"
+	BeaconFirstVotesProtocol = "bf1"
 	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
-	BeaconFollowingVotesProtocol = "/sm/bo/1"
+	BeaconFollowingVotesProtocol = "bo1"
 )
 
 // DefaultConfig for PubSub.

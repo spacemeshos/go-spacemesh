@@ -28,6 +28,35 @@ func TestStepCreate(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestStepDeletePoets(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	tctx.Log.Debugw("deleting poet servers", "poets", cl.Poets())
+	require.NoError(t, cl.DeletePoets(tctx))
+}
+
+func TestStepRedeployPoets(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+
+	require.Zero(t, cl.Poets())
+	tctx.Log.Debug("adding poet servers")
+	require.NoError(t, cl.AddPoet(tctx))
+
+	for i := 0; i < cl.Total(); i++ {
+		node := cl.Client(i)
+		idx := i % tctx.PoetSize
+		target := cluster.MakePoetEndpoint(idx)
+		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poet", target)
+		updated, err := updatePoetServer(tctx, node, target)
+		require.NoError(t, err)
+		require.True(t, updated)
+	}
+}
+
 func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
@@ -96,7 +125,7 @@ func TestStepTransactions(t *testing.T) {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
 				defer cancel()
-				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey))
+				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, types.Nonce{}))
 				if err != nil {
 					return err
 				}
@@ -207,11 +236,11 @@ func TestStepVerifyConsistency(t *testing.T) {
 					return err
 				}
 				layers[i] = layer
-				if bytes.Compare(layer.Hash, reference.Hash) != 0 {
+				if !bytes.Equal(layer.Hash, reference.Hash) {
 					return fmt.Errorf("hash doesn't match reference %s in layer %d: %x != %x",
 						node.Name, reference.Number.Number, layer.Hash, reference.Hash)
 				}
-				if bytes.Compare(layer.RootStateHash, reference.RootStateHash) != 0 {
+				if !bytes.Equal(layer.RootStateHash, reference.RootStateHash) {
 					return fmt.Errorf("state hash doesn't match reference %s in layer %d: %x != %x",
 						node.Name, reference.Number.Number, layer.RootStateHash, reference.RootStateHash)
 				}

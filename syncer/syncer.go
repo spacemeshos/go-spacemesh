@@ -19,15 +19,14 @@ import (
 
 // Configuration is the config params for syncer.
 type Configuration struct {
-	SyncInterval time.Duration
+	SyncInterval     time.Duration
+	HareDelayLayers  uint32
+	SyncCertDistance uint32
 }
 
 const (
 	outOfSyncThreshold  uint32 = 3 // see notSynced
 	numGossipSyncLayers uint32 = 2 // see gossipSync
-
-	// the max amount of layer delays syncer can tolerate before it tries to validate a layer.
-	maxHareDelayLayers uint32 = 10
 )
 
 type syncState uint32
@@ -59,10 +58,10 @@ func (s syncState) String() string {
 }
 
 var (
-	errShuttingDown      = errors.New("shutting down")
-	errBeaconUnavailable = errors.New("beacon unavailable")
-	errHareInCharge      = errors.New("hare in charge of layer")
-	errATXsNotSynced     = errors.New("ATX not synced")
+	errShuttingDown       = errors.New("shutting down")
+	errHareInCharge       = errors.New("hare in charge of layer")
+	errATXsNotSynced      = errors.New("ATX not synced")
+	errBeaconNotAvailable = errors.New("beacon not available")
 )
 
 // Syncer is responsible to keep the node in sync with the network.
@@ -71,7 +70,7 @@ type Syncer struct {
 
 	conf          Configuration
 	ticker        layerTicker
-	beacons       system.BeaconGetter
+	beacon        system.BeaconGetter
 	mesh          *mesh.Mesh
 	lyrProcessor  layerProcessor
 	fetcher       layerFetcher
@@ -91,8 +90,6 @@ type Syncer struct {
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
-	forceSyncCh chan struct{}
-
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
 	eg          errgroup.Group
@@ -102,13 +99,22 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons system.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(
+	ctx context.Context,
+	conf Configuration,
+	ticker layerTicker,
+	beacon system.BeaconGetter,
+	mesh *mesh.Mesh,
+	fetcher layerFetcher,
+	patrol layerPatrol,
+	logger log.Log,
+) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
 		logger:        logger,
 		conf:          conf,
 		ticker:        ticker,
-		beacons:       beacons,
+		beacon:        beacon,
 		mesh:          mesh,
 		lyrProcessor:  mesh,
 		fetcher:       fetcher,
@@ -116,7 +122,6 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beac
 		syncTimer:     time.NewTicker(conf.SyncInterval),
 		validateTimer: time.NewTicker(conf.SyncInterval * 3),
 		awaitSyncedCh: make([]chan struct{}, 0),
-		forceSyncCh:   make(chan struct{}, 1),
 		shutdownCtx:   shutdownCtx,
 		cancelFunc:    cancel,
 	}
@@ -189,9 +194,6 @@ func (s *Syncer) Start(ctx context.Context) {
 				case <-s.syncTimer.C:
 					s.logger.WithContext(ctx).Debug("synchronize on tick")
 					s.synchronize(ctx)
-				case <-s.forceSyncCh:
-					s.logger.WithContext(ctx).Debug("force synchronize")
-					s.synchronize(ctx)
 				}
 			}
 		})
@@ -202,27 +204,11 @@ func (s *Syncer) Start(ctx context.Context) {
 				case <-s.shutdownCtx.Done():
 					return nil
 				case <-s.validateTimer.C:
-					s.processLayers(ctx)
+					_ = s.processLayers(ctx)
 				}
 			}
 		})
 	})
-}
-
-// ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
-// ForceSync will be ignored.
-func (s *Syncer) ForceSync(ctx context.Context) bool {
-	s.logger.WithContext(ctx).Debug("executing ForceSync")
-	if s.isClosed() {
-		s.logger.WithContext(ctx).Info("shutting down. dropping ForceSync request")
-		return false
-	}
-	if len(s.forceSyncCh) > 0 {
-		s.logger.WithContext(ctx).Info("another ForceSync already in progress. dropping this one")
-		return false
-	}
-	s.forceSyncCh <- struct{}{}
-	return true
 }
 
 func (s *Syncer) isClosed() bool {
@@ -345,17 +331,23 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	s.setStateBeforeSync(ctx)
 	syncFunc := func() bool {
 		if !s.ListenToATXGossip() {
-			logger.Info("syncing atx before everything else")
+			logger.With().Info("syncing atx before everything else", s.ticker.GetCurrentLayer())
 			for epoch := s.getLastSyncedATXs() + 1; epoch <= s.ticker.GetCurrentLayer().GetEpoch(); epoch++ {
-				logger.With().Info("syncing atxs for epoch", epoch)
-				if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-					s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
+				if err := s.fetchEpochATX(ctx, epoch); err != nil {
 					return false
 				}
-				s.setLastSyncedATXs(epoch)
 			}
 			logger.With().Info("atxs synced to epoch", s.getLastSyncedATXs())
 			s.setATXSynced()
+		}
+
+		current := s.ticker.GetCurrentLayer()
+		targetEpoch := current.GetEpoch() - 1
+		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < targetEpoch {
+			// sync ATX from last epoch
+			if err := s.fetchEpochATX(ctx, targetEpoch); err != nil {
+				return false
+			}
 		}
 
 		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
@@ -364,11 +356,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 				logger.With().Warning("failed to fetch missing layer", missing, log.Err(err))
 				return false
 			}
-		}
-		// no need to sync a layer that's already processed (advanced by the hare)
-		processed := s.mesh.ProcessedLayer()
-		if s.getLastSyncedLayer().Before(processed) {
-			s.setLastSyncedLayer(processed)
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
@@ -469,19 +456,69 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 		return errors.New("shutdown")
 	}
 
-	s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
-	if err := s.getLayerFromPeers(ctx, layerID); err != nil {
+	s.logger.WithContext(ctx).With().Info("polling layer data", layerID)
+	if err := s.fetchLayerData(ctx, layerID); err != nil {
 		return err
 	}
 
+	// best effort polling opinions up to this layer
+	s.logger.WithContext(ctx).With().Info("polling layer opinions", layerID)
+	cutoff := s.certCutoffLayer()
+	for lid := cutoff; !lid.After(layerID); lid = lid.Add(1) {
+		if err := s.fetchLayerOpinions(ctx, lid); err != nil {
+			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
+		}
+	}
 	return nil
 }
 
-func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) error {
-	bch := s.fetcher.PollLayerContent(ctx, layerID)
-	res := <-bch
-	if res.Err != nil {
-		return fmt.Errorf("PollLayerContent: %w", res.Err)
+func (s *Syncer) fetchEpochATX(ctx context.Context, epoch types.EpochID) error {
+	s.logger.WithContext(ctx).With().Info("syncing atxs for epoch", epoch)
+	if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
+		s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
+		return err
+	}
+	s.setLastSyncedATXs(epoch)
+	return nil
+}
+
+func (s *Syncer) fetchLayerData(ctx context.Context, layerID types.LayerID) error {
+	ch := s.fetcher.PollLayerData(ctx, layerID)
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return fmt.Errorf("PollLayerData: %w", res.Err)
+		}
+	case <-ctx.Done():
+	}
+	return nil
+}
+
+func (s *Syncer) certCutoffLayer() types.LayerID {
+	cutoff := types.GetEffectiveGenesis()
+	last := s.mesh.ProcessedLayer()
+	if last.Uint32() > s.conf.SyncCertDistance {
+		limit := last.Sub(s.conf.SyncCertDistance)
+		if limit.After(cutoff) {
+			cutoff = limit
+		}
+	}
+	return cutoff
+}
+
+func (s *Syncer) fetchLayerOpinions(ctx context.Context, layerID types.LayerID) error {
+	cutoff := s.certCutoffLayer()
+	if !layerID.After(cutoff) {
+		return nil
+	}
+
+	ch := s.fetcher.PollLayerOpinions(ctx, layerID)
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return fmt.Errorf("PollLayerOpinions: %w", res.Err)
+		}
+	case <-ctx.Done():
 	}
 	return nil
 }
@@ -494,6 +531,7 @@ func minLayer(a, b types.LayerID) types.LayerID {
 }
 
 func (s *Syncer) processLayers(ctx context.Context) error {
+	ctx = log.WithNewSessionID(ctx)
 	if !s.ListenToATXGossip() {
 		return errATXsNotSynced
 	}
@@ -515,10 +553,9 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
-		epoch := lid.GetEpoch()
-		if _, err := s.beacons.GetBeacon(epoch); err != nil {
-			s.logger.With().Info("skip validating layer: beacon not available", lid, epoch)
-			return errBeaconUnavailable
+		if _, err := s.beacon.GetBeacon(lid.GetEpoch()); err != nil {
+			s.logger.WithContext(ctx).With().Debug("beacon not available", lid)
+			return errBeaconNotAvailable
 		}
 
 		if s.patrol.IsHareInCharge(lid) {
@@ -527,18 +564,21 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			if current.After(lid) {
 				lag = current.Sub(lid.Uint32())
 			}
-			if lag.Value < maxHareDelayLayers {
-				s.logger.With().Info("skip validating layer: hare still working", lid)
+			if lag.Value < s.conf.HareDelayLayers {
+				s.logger.WithContext(ctx).With().Info("skip validating layer: hare still working", lid)
 				return errHareInCharge
 			}
 		}
 
+		if err := s.fetchLayerOpinions(ctx, lid); err != nil {
+			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
+		}
+
 		if err := s.lyrProcessor.ProcessLayer(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", log.Err(err))
-			return fmt.Errorf("process layer: %w", err)
+			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
 		}
 	}
-	s.logger.With().Info("end of state sync",
+	s.logger.WithContext(ctx).With().Info("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("processed", s.mesh.ProcessedLayer()))

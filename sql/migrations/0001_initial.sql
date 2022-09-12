@@ -28,6 +28,7 @@ CREATE TABLE layers
     id              INT PRIMARY KEY DESC,
     weak_coin       SMALL INT,
     hare_output     VARCHAR,
+    cert            BLOB,
     processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
@@ -56,7 +57,7 @@ CREATE TABLE transactions
     layer       INT,
     block       CHAR(20),
     principal   CHAR(20),
-    nonce       UNSIGNED LONG INT,
+    nonce       BLOB,
     timestamp   INT NOT NULL,
     applied     SMALL INT DEFAULT 0
 ) WITHOUT ROWID;
@@ -75,7 +76,7 @@ CREATE INDEX transactions_results_addresses_by_address ON transactions_results_a
 CREATE TABLE proposal_transactions
 (
     tid     CHAR(32),
-    pid     CHAR(32),
+    pid     CHAR(20),
     layer   INT NOT NULL,
     PRIMARY KEY (tid, pid)
 ) WITHOUT ROWID;
@@ -83,7 +84,7 @@ CREATE TABLE proposal_transactions
 CREATE TABLE block_transactions
 (
     tid     CHAR(32),
-    bid     CHAR(32),
+    bid     CHAR(20),
     layer   INT NOT NULL,
     PRIMARY KEY (tid, bid)
 ) WITHOUT ROWID;
@@ -143,7 +144,7 @@ CREATE TABLE accounts
     address        CHAR(20),
     balance        UNSIGNED LONG INT,
     initialized    BOOL,
-    nonce          UNSIGNED LONG INT,
+    next_nonce     UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
     template       CHAR(20),
     state          BLOB,

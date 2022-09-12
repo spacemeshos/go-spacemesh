@@ -94,6 +94,8 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 		gens[i].Setup(
 			WithSetupMinerRange(share, share),
 			WithSetupUnitsRange(g.units[0], g.units[1]),
+			WithSetupTicksRange(g.ticksRange[0], g.ticksRange[1]),
+			WithSetupTicks(g.ticks...),
 		)
 
 		leftover -= share
@@ -101,6 +103,8 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 	g.Setup(
 		WithSetupMinerRange(leftover, leftover),
 		WithSetupUnitsRange(g.units[0], g.units[1]),
+		WithSetupTicksRange(g.ticksRange[0], g.ticksRange[1]),
+		WithSetupTicks(g.ticks...),
 	)
 	return append([]*Generator{g}, gens...)
 }
@@ -138,6 +142,7 @@ func (g *Generator) mergeActivations(other *Generator) {
 				state.OnActivationTx(atx)
 			}
 			g.activations = append(g.activations, atxid)
+			g.prevHeight = append(g.prevHeight, atx.TickHeight())
 		}
 	}
 }

@@ -25,20 +25,22 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, ballots.Add(cdb, rb))
 	for _, id := range rb.EpochData.ActiveSet {
-		hdr := types.ActivationTxHeader{
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
 			},
 			NumUnits: defaultATXUnit,
-		}
-		hdr.Verify(0, 1)
-		if id == rb.AtxID {
-			hdr.NodeID = types.BytesToNodeID(signer.PublicKey().Bytes())
-			hdr.NumUnits = testedATXUnit
-		}
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{ActivationTxHeader: hdr}}
+		}}
 		atx.SetID(&id)
-		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		atx.SetNodeID(&types.NodeID{})
+		if id == rb.AtxID {
+			nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+			atx.SetNodeID(&nodeID)
+			atx.NumUnits = testedATXUnit
+		}
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 	}
 	expectedWeight := util.WeightFromUint64(uint64(testedATXUnit)).Div(util.WeightFromUint64(uint64(eligibleSlots)))
 	for _, b := range blts {

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -60,7 +61,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg
 	logger := pd.logger.WithContext(ctx)
 
 	var m ProposalMessage
-	if err := types.BytesToInterface(msg, &m); err != nil {
+	if err := codec.Decode(msg, &m); err != nil {
 		logger.With().Warning("received malformed beacon proposal", log.String("sender", peer.String()), log.Err(err))
 		return errMalformedMessage
 	}
@@ -220,7 +221,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.String("sender", peer.String()))
 
 	var m FirstVotingMessage
-	if err := types.BytesToInterface(msg, &m); err != nil {
+	if err := codec.Decode(msg, &m); err != nil {
 		logger.With().Warning("received invalid first votes", log.Binary("message", msg), log.Err(err))
 		return errMalformedMessage
 	}
@@ -263,7 +264,7 @@ func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, m
 
 func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, types.ATXID, error) {
 	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
-	messageBytes, err := types.InterfaceToBytes(m.FirstVotingMessageBody)
+	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
 		logger.With().Panic("failed to serialize first voting message", log.Err(err))
 	}
@@ -348,7 +349,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 
 	var m FollowingVotingMessage
-	if err := types.BytesToInterface(msg, &m); err != nil {
+	if err := codec.Decode(msg, &m); err != nil {
 		logger.With().Warning("received malformed following votes", log.Binary("message", msg), log.Err(err))
 		return errMalformedMessage
 	}
@@ -394,7 +395,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Pee
 
 func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, types.ATXID, error) {
 	round := m.RoundID
-	messageBytes, err := types.InterfaceToBytes(m.FollowingVotingMessageBody)
+	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Panic("failed to serialize voting message", log.Err(err))
 	}

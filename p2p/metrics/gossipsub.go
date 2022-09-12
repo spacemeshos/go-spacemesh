@@ -3,9 +3,9 @@ package metrics
 import (
 	"sync"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -60,7 +60,7 @@ func (g *GossipCollector) AddPeer(id peer.ID, proto protocol.ID) {
 // RemovePeer is invoked when a peer is removed.
 func (g *GossipCollector) RemovePeer(id peer.ID) {
 	g.peers.Lock()
-	proto, _ := g.peers.m[id]
+	proto := g.peers.m[id]
 	delete(g.peers.m, id)
 	g.peers.Unlock()
 

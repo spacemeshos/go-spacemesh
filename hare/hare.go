@@ -172,6 +172,10 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 func (h *Hare) setLastLayer(layerID types.LayerID) {
+	if layerID == (types.LayerID{}) {
+		// layers starts from 0. nothing to do here.
+		return
+	}
 	h.layerLock.Lock()
 	defer h.layerLock.Unlock()
 	if layerID.After(h.lastLayer) {
@@ -220,18 +224,18 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		set := output.Set()
 		postNumProposals.Add(float64(set.len()))
 		pids = make([]types.ProposalID, 0, set.len())
-		for _, v := range set.elements() {
-			pids = append(pids, v)
+		pids = append(pids, set.elements()...)
+		select {
+		case h.blockGenCh <- LayerOutput{
+			Ctx:       ctx,
+			Layer:     layerID,
+			Proposals: pids,
+		}:
+		case <-ctx.Done():
 		}
 	} else {
 		consensusFailCnt.Inc()
 		h.WithContext(ctx).With().Warning("hare terminated with failure", layerID)
-	}
-
-	h.blockGenCh <- LayerOutput{
-		Ctx:       ctx,
-		Layer:     layerID,
-		Proposals: pids,
 	}
 
 	if h.outOfBufferRange(layerID) {
@@ -433,7 +437,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
-			if h.layerClock.LayerToTime(layer).Sub(time.Now()) > (time.Duration(h.config.WakeupDelta) * time.Second) {
+			if time.Since(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
 				h.With().Warning("missed hare window, skipping layer", layer)
 				continue
 			}

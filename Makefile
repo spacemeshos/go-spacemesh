@@ -70,7 +70,9 @@ install:
 	go run scripts/check-go-version.go --major 1 --minor 18
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.45.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
+	go install github.com/spacemeshos/go-scale/scalegen
+	go install github.com/golang/mock/mockgen
 .PHONY: install
 
 build: go-spacemesh
@@ -114,7 +116,7 @@ endif
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
 docker-local-build: go-spacemesh hare p2p harness
-	cd build; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
+	cd build; docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
 
@@ -126,6 +128,14 @@ test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 test: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -v -p 1 $(UNIT_TESTS)
 .PHONY: test
+
+generate: get-libs
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
+.PHONY: generate
+
+staticcheck: get-libs
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
+.PHONY: staticcheck
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive

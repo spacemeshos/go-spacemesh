@@ -3,7 +3,7 @@ package metrics
 import (
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p/core/network"
 	ma "github.com/multiformats/go-multiaddr"
 
 	"github.com/spacemeshos/go-spacemesh/metrics"

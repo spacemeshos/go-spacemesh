@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/genproto/googleapis/rpc/code"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -215,7 +216,7 @@ func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address 
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx, wallet.SelfSpawn(cluster.Private(account)), client)
+	_, err := submitTransaction(ctx, wallet.SelfSpawn(cluster.Private(account), types.Nonce{}), client)
 	return err
 }
 
@@ -277,6 +278,17 @@ func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*spacemesh
 		return nil, err
 	}
 	return getLayer(ctx, node, resp.Status.VerifiedLayer.Number)
+}
+
+func updatePoetServer(ctx context.Context, node *cluster.NodeClient, target string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	svc := spacemeshv1.NewNodeServiceClient(node)
+	resp, err := svc.UpdatePoetServer(ctx, &spacemeshv1.UpdatePoetServerRequest{Url: target})
+	if err != nil {
+		return false, err
+	}
+	return resp.Status.Code == int32(code.Code_OK), nil
 }
 
 type txClient struct {

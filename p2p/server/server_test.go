@@ -7,6 +7,7 @@ import (
 	"time"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,4 +79,12 @@ func TestServer(t *testing.T) {
 	t.Run("NotConnected", func(t *testing.T) {
 		require.ErrorIs(t, client.Request(ctx, "unknown", request, respHandler, respErrHandler), ErrNotConnected)
 	})
+}
+
+func FuzzResponseConsistency(f *testing.F) {
+	tester.FuzzConsistency[Response](f)
+}
+
+func FuzzResponseSafety(f *testing.F) {
+	tester.FuzzSafety[Response](f)
 }

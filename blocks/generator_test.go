@@ -12,12 +12,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -40,10 +42,10 @@ func testConfig() Config {
 
 type testGenerator struct {
 	*Generator
-	ctrl       *gomock.Controller
 	mockMesh   *mocks.MockmeshProvider
 	mockCState *mocks.MockconservativeState
 	mockFetch  *smocks.MockProposalFetcher
+	mockCert   *mocks.Mockcertifier
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
@@ -53,10 +55,11 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
 		mockCState: mocks.NewMockconservativeState(ctrl),
 		mockFetch:  smocks.NewMockProposalFetcher(ctrl),
+		mockCert:   mocks.NewMockcertifier(ctrl),
 	}
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	tg.Generator = NewGenerator(cdb, tg.mockCState, tg.mockMesh, tg.mockFetch, WithGeneratorLogger(lg), WithConfig(testConfig()))
+	tg.Generator = NewGenerator(cdb, tg.mockCState, tg.mockMesh, tg.mockFetch, tg.mockCert, WithGeneratorLogger(lg), WithConfig(testConfig()))
 	return tg
 }
 
@@ -89,12 +92,12 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 }
 
 func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
-	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) {
-		atx.Verify(0, 1)
+	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+		return atx.Verify(0, 1)
 	})
 }
 
-func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx)) ([]*signing.EdSigner, []*types.ActivationTx) {
+func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error)) ([]*signing.EdSigner, []*types.ActivationTx) {
 	t.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
@@ -102,13 +105,20 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 		signer := signing.NewEdSigner()
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
-		nipostChallenge := types.NIPostChallenge{
-			NodeID:     types.BytesToNodeID(signer.PublicKey().Bytes()),
-			PubLayerID: lid,
-		}
-		atx := types.NewActivationTx(nipostChallenge, address, nil, numUint, nil)
-		onAtx(atx)
-		require.NoError(t, atxs.Add(cdb, atx, time.Now()))
+		atx := types.NewActivationTx(
+			types.NIPostChallenge{PubLayerID: lid},
+			address,
+			nil,
+			numUint,
+			nil,
+		)
+		require.NoError(t, activation.SignAtx(signer, atx))
+		require.NoError(t, atx.CalcAndSetID())
+		require.NoError(t, atx.CalcAndSetNodeID())
+		vAtx, err := onAtx(atx)
+		require.NoError(t, err)
+
+		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
@@ -206,9 +216,19 @@ func Test_processHareOutput(t *testing.T) {
 			checkRewards(t, atxes, expWeight, block.Rewards)
 			return nil
 		})
+	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, got types.BlockID) error {
+			require.Equal(t, block.ID(), got)
+			return nil
+		})
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
+			require.Equal(t, block.ID(), got)
+			return nil
+		})
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, got types.BlockID) error {
-			require.Equal(t, got, block.ID())
+			require.Equal(t, block.ID(), got)
 			return nil
 		})
 	require.NoError(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID, Proposals: pids}))
@@ -217,11 +237,9 @@ func Test_processHareOutput(t *testing.T) {
 func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
-	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ types.LayerID, got types.BlockID) error {
-			require.Equal(t, got, types.EmptyBlockID)
-			return nil
-		})
+	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil)
 	require.NoError(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.TODO(), Layer: layerID}))
 }
 
@@ -250,6 +268,16 @@ func Test_processHareOutput_ProcessFailed(t *testing.T) {
 			// the expected weight for each eligibility is `numUnit` * 1/3
 			expWeight := util.WeightFromInt64(numUint * 1 / 3)
 			checkRewards(t, atxes, expWeight, block.Rewards)
+			return nil
+		})
+	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, got types.BlockID) error {
+			require.Equal(t, block.ID(), got)
+			return nil
+		})
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
+			require.Equal(t, block.ID(), got)
 			return nil
 		})
 	errUnknown := errors.New("unknown")
@@ -314,12 +342,12 @@ func Test_generateBlock_UnequalHeight(t *testing.T) {
 	numProposals := 10
 	rng := rand.New(rand.NewSource(10101))
 	max := uint64(0)
-	signers, atxes := createModifiedATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) {
+	signers, atxes := createModifiedATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
 		n := rng.Uint64()
-		atx.Verify(n, 1)
 		if n > max {
 			max = n
 		}
+		return atx.Verify(n, 1)
 	})
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.cdb, layerID, signers, activeSet, nil)

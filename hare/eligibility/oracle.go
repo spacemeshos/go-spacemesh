@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -22,6 +23,24 @@ import (
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./oracle.go
+
+const (
+	// HarePreRound ...
+	HarePreRound uint32 = math.MaxUint32
+	// CertifyRound is not part of the hare protocol, but it shares the same oracle for eligibility.
+	CertifyRound uint32 = math.MaxUint32 >> 1
+)
+
+const (
+	// HareStatusRound ...
+	HareStatusRound uint32 = iota
+	// HareProposalRound ...
+	HareProposalRound
+	// HareCommitRound ...
+	HareCommitRound
+	// HareNotifyRound ...
+	HareNotifyRound
+)
 
 const (
 	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
@@ -530,7 +549,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 	}
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
-	// TODO: do we want to cache tortoise active set too?
 	if safeLayerStart.GetEpoch().IsGenesis() {
 		logger.With().Debug("no hare active set for genesis layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
@@ -556,9 +574,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[ty
 		activeMap[atxHeader.NodeID] = atxHeader.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
-
-	// update cache and return
-	o.activesCache.Add(targetLayer.GetEpoch(), activeMap)
 	return activeMap, nil
 }
 

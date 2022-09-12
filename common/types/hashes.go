@@ -175,7 +175,7 @@ func CalcHash32(data []byte) Hash32 {
 
 // CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.
 func CalcATXHash32(atx *ActivationTx) Hash32 {
-	bytes, err := codec.Encode(&atx.ActivationTxHeader)
+	bytes, err := codec.Encode(atx)
 	if err != nil {
 		panic("could not Serialize atx")
 	}

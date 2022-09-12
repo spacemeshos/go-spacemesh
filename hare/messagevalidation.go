@@ -277,7 +277,7 @@ var (
 )
 
 // validate the provided aggregated messages by the provided validators.
-func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, aggMsg *aggregatedMessages, validators []func(m *Msg) bool) error {
+func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, aggMsg *AggregatedMessages, validators []func(m *Msg) bool) error {
 	if validators == nil {
 		return errNilValidators
 	}
@@ -305,7 +305,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
 		// check if exist in cache of valid messages
-		if pub := v.validMsgsTracker.PublicKey(innerMsg); pub != nil {
+		if pub := v.validMsgsTracker.PublicKey(&innerMsg); pub != nil {
 			// validate unique sender
 			if _, exist := senders[pub.String()]; exist { // pub already exist
 				return errDupSender
@@ -357,7 +357,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 
 	defer func(startTime time.Time) {
 		logger.With().Debug("svp validation duration",
-			log.String("duration", time.Now().Sub(startTime).String()))
+			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
 	proposalIter := iterationFromCounter(msg.InnerMsg.K)
 	validateSameIteration := func(m *Msg) bool {
@@ -410,12 +410,12 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 	return true
 }
 
-func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *certificate) bool {
+func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *Certificate) bool {
 	logger := v.WithContext(ctx)
 
 	defer func(startTime time.Time) {
 		logger.With().Debug("certificate validation duration",
-			log.String("duration", time.Now().Sub(startTime).String()))
+			log.String("duration", time.Since(startTime).String()))
 	}(time.Now())
 
 	if cert == nil {
@@ -451,11 +451,11 @@ func (v *syntaxContextValidator) validateCertificate(ctx context.Context, cert *
 }
 
 func validateCommitType(m *Msg) bool {
-	return messageType(m.InnerMsg.Type) == commit
+	return MessageType(m.InnerMsg.Type) == commit
 }
 
 func validateStatusType(m *Msg) bool {
-	return messageType(m.InnerMsg.Type) == status
+	return MessageType(m.InnerMsg.Type) == status
 }
 
 // validate SVP for type A (where all Ki=-1).

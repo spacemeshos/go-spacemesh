@@ -9,46 +9,30 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"
+	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func TestSpawn(t *testing.T) {
-	t.Run("OnlySelf", func(t *testing.T) {
-		template := core.Address{1}
-		args := core.PublicKey{1}
-		ctx := core.Context{}
-		require.ErrorIs(t, ctx.Spawn(template, &args), core.ErrSpawn)
-	})
-	t.Run("UpdateTemplate", func(t *testing.T) {
-		template := core.Address{1}
-		args := core.PublicKey{1}
-		ctx := core.Context{}
-		ctx.Header.Principal = core.ComputePrincipal(template, &args)
-		require.NoError(t, ctx.Spawn(template, &args))
-		require.Equal(t, &template, ctx.Account.Template)
-	})
-}
-
 func TestTransfer(t *testing.T) {
 	t.Run("NoBalance", func(t *testing.T) {
-		ctx := core.Context{}
+		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}
 		require.ErrorIs(t, ctx.Transfer(core.Address{}, 100), core.ErrNoBalance)
 	})
 	t.Run("MaxSpend", func(t *testing.T) {
 		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}
-		ctx.Account.Balance = 1000
+		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 100
 		require.NoError(t, ctx.Transfer(core.Address{1}, 50))
 		require.ErrorIs(t, ctx.Transfer(core.Address{2}, 100), core.ErrMaxSpend)
 	})
 	t.Run("ReducesBalance", func(t *testing.T) {
 		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}
-		ctx.Account.Balance = 1000
+		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000
 		for _, amount := range []uint64{50, 100, 200, 255} {
-			before := ctx.Account.Balance
+			before := ctx.PrincipalAccount.Balance
 			require.NoError(t, ctx.Transfer(core.Address{uint8(amount)}, amount))
-			after := ctx.Account.Balance
+			after := ctx.PrincipalAccount.Balance
 			require.Equal(t, amount, before-after)
 		}
 	})
@@ -62,67 +46,50 @@ func TestConsume(t *testing.T) {
 	})
 	t.Run("MaxGas", func(t *testing.T) {
 		ctx := core.Context{}
-		ctx.Account.Balance = 200
+		ctx.PrincipalAccount.Balance = 200
 		ctx.Header.GasPrice = 2
 		ctx.Header.MaxGas = 10
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
 	})
 	t.Run("ReducesBalance", func(t *testing.T) {
 		ctx := core.Context{}
-		ctx.Account.Balance = 1000
+		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.GasPrice = 1
 		ctx.Header.MaxGas = 1000
 		for _, amount := range []uint64{50, 100, 200, 255} {
-			before := ctx.Account.Balance
+			before := ctx.PrincipalAccount.Balance
 			require.NoError(t, ctx.Consume(amount))
-			after := ctx.Account.Balance
+			after := ctx.PrincipalAccount.Balance
 			require.Equal(t, amount, before-after)
 		}
 	})
 }
 
 func TestApply(t *testing.T) {
-	t.Run("UpdatesNonceAndState", func(t *testing.T) {
+	t.Run("UpdatesNonce", func(t *testing.T) {
 		ss := core.NewStagedCache(sql.InMemory())
 		ctx := core.Context{Loader: ss}
-		ctx.Account.Address = core.Address{1}
+		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.Header.Nonce = core.Nonce{Counter: 10}
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		template := mocks.NewMockTemplate(ctrl)
-		rst := []byte{1, 1, 1}
-		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
-			return scale.EncodeByteArray(encoder, rst)
-		})
-		ctx.Template = template
 		err := ctx.Apply(ss)
 		require.NoError(t, err)
 
-		account, err := ss.Get(ctx.Account.Address)
+		account, err := ss.Get(ctx.PrincipalAccount.Address)
 		require.NoError(t, err)
-		require.Equal(t, ctx.Account.Nonce, account.Nonce)
-		require.Equal(t, rst, account.State)
+		require.Equal(t, ctx.PrincipalAccount.NextNonce, account.NextNonce)
 	})
 	t.Run("ConsumeMaxGas", func(t *testing.T) {
 		ss := core.NewStagedCache(sql.InMemory())
 
 		ctx := core.Context{Loader: ss}
-		ctx.Account.Balance = 1000
+		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.GasPrice = 2
 		ctx.Header.MaxGas = 10
 
-		ctx.Account.Address = core.Address{1}
+		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.Header.Nonce = core.Nonce{Counter: 10}
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		template := mocks.NewMockTemplate(ctrl)
-		rst := []byte{1, 1, 1}
-		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
-			return scale.EncodeByteArray(encoder, rst)
-		})
-		ctx.Template = template
 		require.NoError(t, ctx.Consume(5))
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
 		err := ctx.Apply(ss)
@@ -131,10 +98,10 @@ func TestApply(t *testing.T) {
 	})
 	t.Run("PreserveTransferOrder", func(t *testing.T) {
 		ctx := core.Context{Loader: core.NewStagedCache(sql.InMemory())}
-		ctx.Account.Address = core.Address{1}
-		ctx.Account.Balance = 1000
+		ctx.PrincipalAccount.Address = core.Address{1}
+		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000
-		order := []core.Address{ctx.Account.Address}
+		order := []core.Address{ctx.PrincipalAccount.Address}
 		for _, amount := range []uint64{50, 100, 200, 255} {
 			address := core.Address{uint8(amount)}
 			require.NoError(t, ctx.Transfer(address, amount))
@@ -143,12 +110,6 @@ func TestApply(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		template := mocks.NewMockTemplate(ctrl)
-		rst := []byte{1, 1, 1}
-		template.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(encoder *scale.Encoder) (int, error) {
-			return scale.EncodeByteArray(encoder, rst)
-		})
-		ctx.Template = template
 
 		updater := mocks.NewMockAccountUpdater(ctrl)
 		actual := []core.Address{}
@@ -159,5 +120,91 @@ func TestApply(t *testing.T) {
 		err := ctx.Apply(updater)
 		require.NoError(t, err)
 		require.Equal(t, order, actual)
+	})
+}
+
+func TestRelay(t *testing.T) {
+	var (
+		principal = core.Address{'p', 'r', 'i'}
+		template  = core.Address{'t', 'e', 'm'}
+		remote    = core.Address{'r', 'e', 'm'}
+	)
+	t.Run("not spawned", func(t *testing.T) {
+		cache := core.NewStagedCache(sql.InMemory())
+		ctx := core.Context{Loader: cache}
+		call := func(remote core.Host) error {
+			require.Fail(t, "not expected to be called")
+			return nil
+		}
+		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrNotSpawned)
+	})
+	t.Run("mismatched template", func(t *testing.T) {
+		cache := core.NewStagedCache(sql.InMemory())
+		require.NoError(t, cache.Update(core.Account{
+			Address:         remote,
+			TemplateAddress: &core.Address{'m', 'i', 's'},
+		}))
+		ctx := core.Context{Loader: cache}
+		call := func(remote core.Host) error {
+			require.Fail(t, "not expected to be called")
+			return nil
+		}
+		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrTemplateMismatch)
+	})
+	t.Run("relayed transfer", func(t *testing.T) {
+		for _, receiver1 := range []core.Address{{'a', 'n', 'y'}, principal} {
+			t.Run(string(receiver1[:3]), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				encoded := []byte("test")
+
+				handler := mocks.NewMockHandler(ctrl)
+				tpl := mocks.NewMockTemplate(ctrl)
+				tpl.EXPECT().EncodeScale(gomock.Any()).DoAndReturn(func(enc *scale.Encoder) (int, error) {
+					return scale.EncodeByteArray(enc, encoded)
+				}).AnyTimes()
+				handler.EXPECT().Load(gomock.Any()).Return(tpl, nil).AnyTimes()
+				reg := registry.New()
+				reg.Register(template, handler)
+
+				cache := core.NewStagedCache(sql.InMemory())
+				receiver2 := core.Address{'f'}
+				const (
+					total   = 1000
+					amount1 = 100
+					amount2 = total - amount1/2
+				)
+				require.NoError(t, cache.Update(core.Account{
+					Address:         remote,
+					TemplateAddress: &template,
+					Balance:         total,
+				}))
+				ctx := core.Context{Loader: cache, Registry: reg}
+				ctx.PrincipalAccount.Address = principal
+				require.NoError(t, ctx.Relay(template, remote, func(remote core.Host) error {
+					return remote.Transfer(receiver1, amount1)
+				}))
+				require.ErrorIs(t, ctx.Relay(template, remote, func(remote core.Host) error {
+					return remote.Transfer(receiver2, amount2)
+				}), core.ErrNoBalance)
+				require.NoError(t, ctx.Apply(cache))
+
+				rec1state, err := cache.Get(receiver1)
+				require.NoError(t, err)
+				require.Equal(t, amount1, int(rec1state.Balance))
+				require.NotEqual(t, encoded, rec1state.State)
+
+				rec2state, err := cache.Get(receiver2)
+				require.NoError(t, err)
+				require.Equal(t, 0, int(rec2state.Balance))
+				require.NotEqual(t, encoded, rec2state.State)
+
+				remoteState, err := cache.Get(remote)
+				require.NoError(t, err)
+				require.Equal(t, total-amount1, int(remoteState.Balance))
+				require.Equal(t, encoded, remoteState.State)
+			})
+		}
 	})
 }

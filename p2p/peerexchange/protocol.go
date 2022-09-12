@@ -7,9 +7,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"go.uber.org/atomic"
 
@@ -51,8 +51,8 @@ func (p *peerExchange) handler(stream network.Stream) {
 	logger := p.logger.WithFields(log.String("protocol", protocolName),
 		log.String("from", stream.Conn().RemotePeer().Pretty())).With()
 
-	var port uint16
-	if _, err := codec.DecodeFrom(stream, &port); err != nil {
+	port, _, err := codec.DecodeCompact16(stream)
+	if err != nil {
 		logger.Warning("failed to decode request into address", log.Err(err))
 		return
 	}
@@ -92,7 +92,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
 	wr := bufio.NewWriter(stream)
-	_, err := codec.EncodeTo(wr, response)
+	_, err = codec.EncodeStringSlice(wr, response)
 	if err == nil {
 		err = wr.Flush()
 	}
@@ -130,12 +130,12 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook
 
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err := codec.EncodeTo(stream, p.ExternalPort()); err != nil {
+	if _, err := codec.EncodeCompact16(stream, p.ExternalPort()); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 
-	addrs := []string{}
-	if _, err := codec.DecodeFrom(bufio.NewReader(stream), &addrs); err != nil {
+	addrs, _, err := codec.DecodeStringSlice(bufio.NewReader(stream))
+	if err != nil {
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}
 

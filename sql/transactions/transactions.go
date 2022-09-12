@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -42,7 +43,7 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 			if header != nil {
 				stmt.BindBytes(3, header)
 				stmt.BindBytes(6, tx.Principal[:])
-				stmt.BindInt64(7, int64(tx.Nonce.Counter))
+				stmt.BindBytes(7, util.Uint64ToBytesBigEndian(tx.Nonce.Counter))
 			}
 
 			stmt.BindInt64(8, received.UnixNano())
@@ -184,7 +185,7 @@ func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) err
 	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where principal = ?1 and nonce < ?2 and applied != ?6`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
-			stmt.BindInt64(2, int64(nonce))
+			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(nonce))
 			stmt.BindInt64(3, stateDiscarded)
 			stmt.BindInt64(4, int64(types.LayerID{}.Value))
 			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
@@ -201,7 +202,7 @@ func DiscardByAcctNonce(db sql.Executor, applied types.TransactionID, lid types.
 	_, err := db.Exec(`update transactions set applied = ?4, layer = ?5, block = ?6 where principal = ?1 and nonce = ?2 and id != ?3`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, addr.Bytes())
-			stmt.BindInt64(2, int64(nonce))
+			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(nonce))
 			stmt.BindBytes(3, applied.Bytes())
 			stmt.BindInt64(4, stateDiscarded)
 			stmt.BindInt64(5, int64(lid.Value))
@@ -298,10 +299,7 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 		}, func(stmt *sql.Statement) bool {
 			applied := stmt.ColumnInt(5)
 			tx, err = decodeTransaction(id, applied, stmt)
-			if err != nil {
-				return false
-			}
-			return true
+			return err == nil
 		})
 	if err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
@@ -389,7 +387,7 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
 			stmt.BindBytes(2, address.Bytes())
-			stmt.BindInt64(3, int64(from))
+			stmt.BindBytes(3, util.Uint64ToBytesBigEndian(from))
 		}, "get acct pending from nonce")
 }
 
