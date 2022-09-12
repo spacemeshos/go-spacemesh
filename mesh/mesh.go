@@ -610,6 +610,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		logger.With().Error("failed to save hare output", log.Err(err))
 		return err
 	}
+	msh.trtl.OnHareOutput(layerID, blockID)
 	return msh.ProcessLayer(ctx, layerID)
 }
 

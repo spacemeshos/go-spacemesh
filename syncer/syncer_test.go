@@ -565,6 +565,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 
 	// simulate hare advancing the mesh forward
+	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
 	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 

@@ -19,5 +19,6 @@ type conservativeState interface {
 type tortoise interface {
 	OnBallot(*types.Ballot)
 	OnBlock(*types.Block)
+	OnHareOutput(types.LayerID, types.BlockID)
 	HandleIncomingLayer(context.Context, types.LayerID) types.LayerID
 }

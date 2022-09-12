@@ -167,3 +167,15 @@ func (mr *MocktortoiseMockRecorder) OnBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBlock", reflect.TypeOf((*Mocktortoise)(nil).OnBlock), arg0)
 }
+
+// OnHareOutput mocks base method.
+func (m *Mocktortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnHareOutput", arg0, arg1)
+}
+
+// OnHareOutput indicates an expected call of OnHareOutput.
+func (mr *MocktortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*Mocktortoise)(nil).OnHareOutput), arg0, arg1)
+}
