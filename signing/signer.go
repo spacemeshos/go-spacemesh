@@ -23,7 +23,7 @@ type GenesisBoundEdVerifier struct {
 }
 
 func (s *GenesisBoundEdSigner) Sign(m []byte) []byte {
-	msg := append(m, s.genesis_id[:]...)
+	msg := append(s.genesis_id[:], m...)
 	return s.signer.Sign(msg)
 }
 
@@ -31,7 +31,7 @@ func (v *GenesisBoundEdVerifier) Verify(pubkey *PublicKey, message []byte, sign 
 	if len(message) < 20 {
 		return false
 	}
-	gen_id_extracted := message[len(message)-20:]
+	gen_id_extracted := message[0:20]
 	if string(gen_id_extracted[:]) != string(v.genesis_id[:]) {
 		return false
 	}
