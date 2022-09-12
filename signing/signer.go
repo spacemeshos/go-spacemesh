@@ -12,6 +12,33 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type GenesisBoundEdSigner struct {
+	genesis_id [20]byte
+	signer     EdSigner
+}
+
+type GenesisBoundEdVerifier struct {
+	genesis_id [20]byte
+	verifier   EDVerifier
+}
+
+func (s *GenesisBoundEdSigner) Sign(m []byte) []byte {
+	msg := append(m, s.genesis_id[:]...)
+	return s.signer.Sign(msg)
+}
+
+func (v *GenesisBoundEdVerifier) Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
+	if len(message) < 20 {
+		return false
+	}
+	gen_id_extracted := message[len(message)-20:]
+	if string(gen_id_extracted[:]) != string(v.genesis_id[:]) {
+		return false
+	}
+	return v.verifier.Verify(pubkey, message, sign)
+
+}
+
 // PrivateKey is an alias to spacemeshos/ed25519.PrivateKey.
 type PrivateKey = ed25519.PrivateKey
 
