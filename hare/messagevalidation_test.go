@@ -63,16 +63,14 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
 	res, err := ev.validateRole(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.False(t, res)
 }
 
 func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg = nil
 	res, err := ev.validateRole(context.TODO(), m)
@@ -81,21 +79,30 @@ func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
+	sig := signing.NewEdSigner()
+	builder := newMessageBuilder().
+		SetType(pre).
+		SetInstanceID(types.NewLayerID(1)).
+		SetRoundCounter(k).
+		SetKi(ki).
+		SetValues(NewDefaultEmptySet()).
+		SetPubKey(sig.PublicKey()).
+		SetEligibilityCount(1)
+	builder.Sign(sig)
+	m := builder.Build()
+
 	res, err := ev.validateRole(context.TODO(), m)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// TODO: remove comment after inceptions problem is addressed
 	// assert.False(t, res)
 	assert.True(t, res)
 }
 
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 10, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	myErr := errors.New("my error")
@@ -108,10 +115,9 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 10, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 
@@ -122,10 +128,9 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_Success(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	ev := newEligibilityValidator(mo, 10, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 

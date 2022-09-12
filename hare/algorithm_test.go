@@ -160,7 +160,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
 		Broker: newBroker("self", &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			10, limit, util.NewCloser(), logtest.New(tb).WithName(testName)),
+			4, limit, util.NewCloser(), logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
@@ -184,13 +184,14 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
-	inbox, _ := broker.Register(context.TODO(), proc.ID())
+	inbox, err := broker.Register(context.TODO(), proc.ID())
+	require.NoError(t, err)
 	proc.SetInbox(inbox)
 	proc.s = NewSetFromValues(value1)
-	err := proc.Start(context.TODO())
-	assert.Equal(t, nil, err)
 	err = proc.Start(context.TODO())
-	assert.Equal(t, "instance already started", err.Error())
+	require.NoError(t, err)
+	err = proc.Start(context.TODO())
+	require.Error(t, err, "instance already started")
 
 	closeBrokerAndWait(t, broker.Broker)
 }
@@ -318,7 +319,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
-		10, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
+		4, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
 }

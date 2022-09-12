@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -113,6 +114,20 @@ func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
 	return p
 }
 
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(4)
+	instanceID0 = types.GetEffectiveGenesis()
+	instanceID1 = instanceID0.Add(1)
+	instanceID2 = instanceID1.Add(1)
+	instanceID3 = instanceID2.Add(1)
+	instanceID4 = instanceID3.Add(1)
+	instanceID5 = instanceID4.Add(1)
+	instanceID6 = instanceID5.Add(1)
+
+	res := m.Run()
+	os.Exit(res)
+}
+
 func TestHare_New(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -205,7 +220,6 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 }
 
 func TestHare_onTick(t *testing.T) {
-	types.SetLayersPerEpoch(4)
 	cfg := config.DefaultConfig()
 	cfg.N = 2
 	cfg.F = 1
@@ -275,7 +289,6 @@ func TestHare_onTick(t *testing.T) {
 }
 
 func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
-	types.SetLayersPerEpoch(4)
 	cfg := config.DefaultConfig()
 	cfg.N = 2
 	cfg.F = 1
@@ -335,7 +348,6 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 }
 
 func TestHare_onTick_SomeBadBallots(t *testing.T) {
-	types.SetLayersPerEpoch(4)
 	cfg := config.DefaultConfig()
 	cfg.N = 2
 	cfg.F = 1
@@ -392,7 +404,6 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 }
 
 func TestHare_onTick_NoGoodBallots(t *testing.T) {
-	types.SetLayersPerEpoch(4)
 	cfg := config.DefaultConfig()
 	cfg.N = 2
 	cfg.F = 1
@@ -448,7 +459,6 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 }
 
 func TestHare_onTick_NoBeacon(t *testing.T) {
-	types.SetLayersPerEpoch(4)
 	lyr := types.NewLayerID(199)
 
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
@@ -463,7 +473,6 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 }
 
 func TestHare_onTick_NotSynced(t *testing.T) {
-	types.SetLayersPerEpoch(4)
 	lyr := types.NewLayerID(199)
 
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
