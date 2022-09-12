@@ -33,6 +33,8 @@ const (
 	epochOffset       uint32 = 3
 )
 
+var sig = signing.NewEdSigner()
+
 type testOracle struct {
 	*Oracle
 	mBeacon *smocks.MockBeaconGetter
@@ -62,7 +64,8 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-			_ = b.Initialize() // this ballot is not signed, but we don't care about the error
+			b.Signature = sig.Sign(b.Bytes())
+			require.NoError(tb, b.Initialize())
 			require.NoError(tb, ballots.Add(cdb, b))
 		}
 	}
@@ -155,7 +158,8 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-		_ = b.Initialize()
+		b.Signature = sig.Sign(b.Bytes())
+		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	res, err := o.CalcEligibility(context.TODO(), layer, 1, 1, nid, []byte{})
@@ -358,7 +362,8 @@ func Test_VrfSignVerify(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-			_ = b.Initialize()
+			b.Signature = sig.Sign(b.Bytes())
+			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}
@@ -444,7 +449,8 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-		_ = b.Initialize()
+		b.Signature = sig.Sign(b.Bytes())
+		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
 	prevEpoch := layer.GetEpoch() - 1
@@ -626,7 +632,8 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 			} else {
 				b.EpochData = &types.EpochData{ActiveSet: atxIDs, Beacon: beacon}
 			}
-			_ = b.Initialize()
+			b.Signature = sig.Sign(b.Bytes())
+			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}
@@ -657,7 +664,8 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: atxIDs}
-			_ = b.Initialize()
+			b.Signature = sig.Sign(b.Bytes())
+			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
 	}

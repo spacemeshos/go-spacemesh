@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -32,8 +33,11 @@ const (
 	testTickSize = 1
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
 }
 
 var (
@@ -314,7 +318,6 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) {
 }
 
 func TestBuilder_waitForFirstATX(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	net.atxHdlr = atxHdlr
@@ -344,7 +347,6 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 }
 
 func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	net.atxHdlr = atxHdlr
@@ -439,7 +441,6 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
@@ -563,7 +564,6 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
@@ -585,7 +585,6 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
@@ -615,7 +614,6 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
@@ -637,7 +635,6 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
@@ -726,7 +723,6 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	r := require.New(t)
 
-	types.SetLayersPerEpoch(layersPerEpoch)
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)

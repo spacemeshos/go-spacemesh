@@ -323,8 +323,6 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 }
 
 func TestHandler_ValidateAndInsertSorted(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	cdb := newCachedDB(t)
 	atxHdlr := getATXHandler(t, cdb)
 	coinbase := types.GenerateAddress([]byte("aaaa"))
@@ -669,8 +667,6 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 
 // Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
 func TestHandler_FetchAtxReferences(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	mockFetch := mocks.NewMockFetcher(gomock.NewController(t))
 	atxHdlr := NewHandler(newCachedDB(t), mockFetch, layersPerEpoch, testTickSize,
 		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxHandler"))

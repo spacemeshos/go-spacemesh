@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -71,7 +72,6 @@ type testProtocolDriver struct {
 }
 
 func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
-	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
 	tpd := &testProtocolDriver{
 		mClock: mocks.NewMocklayerClock(ctrl),
@@ -110,6 +110,13 @@ func createRandomATXs(t *testing.T, db *datastore.CachedDB, lid types.LayerID, n
 	for i := 0; i < num; i++ {
 		createATX(t, db, lid, signing.NewEdSigner(), 1)
 	}
+}
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(3)
+
+	res := m.Run()
+	os.Exit(res)
 }
 
 func TestBeacon(t *testing.T) {
@@ -396,7 +403,6 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	t.Parallel()
 
-	types.SetLayersPerEpoch(3)
 	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
@@ -426,7 +432,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	t.Parallel()
 
-	types.SetLayersPerEpoch(3)
 	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
@@ -486,7 +491,6 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 	t.Parallel()
 
-	types.SetLayersPerEpoch(3)
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
@@ -520,7 +524,6 @@ func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 	t.Parallel()
 
-	types.SetLayersPerEpoch(3)
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
@@ -554,7 +557,6 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 	t.Parallel()
 
-	types.SetLayersPerEpoch(3)
 	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),

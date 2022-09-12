@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	mrand "math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -31,8 +32,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
-func init() {
+var sig = signing.NewEdSigner()
+
+func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(4)
+
+	res := m.Run()
+	os.Exit(res)
 }
 
 func newCachedDB(t *testing.T, logger log.Log) *datastore.CachedDB {
@@ -1560,7 +1566,8 @@ func randomBallot(tb testing.TB, lyrID types.LayerID, refBallotID types.BallotID
 	ballot := types.RandomBallot()
 	ballot.LayerIndex = lyrID
 	ballot.RefBallot = refBallotID
-	ballot.Initialize()
+	ballot.Signature = signing.NewEdSigner().Sign(ballot.Bytes())
+	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
 
@@ -1571,7 +1578,8 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	ballot.Initialize()
+	ballot.Signature = signing.NewEdSigner().Sign(ballot.Bytes())
+	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
 
@@ -2319,7 +2327,8 @@ func TestComputeBallotWeight(t *testing.T) {
 					ballot.RefBallot = blts[b.RefBallot].ID()
 				}
 
-				ballot.Initialize()
+				ballot.Signature = sig.Sign(ballot.Bytes())
+				require.NoError(t, ballot.Initialize())
 				blts = append(blts, ballot)
 
 				weight, err := computeBallotWeight(cdb, refWeights, ballot, tc.layerSize, tc.layersPerEpoch)
