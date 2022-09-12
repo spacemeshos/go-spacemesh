@@ -29,8 +29,9 @@ type Context struct {
 	// TODO all templates for genesis will support transfers to only one account.
 	// i keep it for the purposes of testing and validation (e.g we can implement more complex templates)
 	// but it can be simplified down to one variable
-	touched []Address
-	changed map[Address]*Account
+	touched    []Address
+	changed    map[Address]*Account
+	genesis_id [20]byte
 }
 
 // Spawn account.

@@ -41,6 +41,12 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
+func WithGenesisId(id [20]byte) Opt {
+	return func(vm *VM) {
+		vm.genesis_id = id
+	}
+}
+
 // New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
@@ -58,10 +64,11 @@ func New(db *sql.Database, opts ...Opt) *VM {
 
 // VM handles modifications to the account state.
 type VM struct {
-	logger   log.Log
-	db       *sql.Database
-	cfg      Config
-	registry *registry.Registry
+	logger     log.Log
+	db         *sql.Database
+	cfg        Config
+	registry   *registry.Registry
+	genesis_id [20]byte
 }
 
 // Validation initializes validation request.
