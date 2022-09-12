@@ -2867,3 +2867,35 @@ func TestEmptyLayers(t *testing.T) {
 		testEmptyLayers(t, 5)
 	})
 }
+
+func TestOnHareOutput(t *testing.T) {
+	t.Run("empty after zdist to support", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		cfg.Zdist = 3
+		cfg.Hdist = cfg.Zdist + 3
+		cfg.LayerSize = size
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		verified := tortoise.HandleIncomingLayer(ctx, s.Next(sim.WithoutHareOutput(), sim.WithNumBlocks(1)))
+		for i := 0; i <= int(cfg.Zdist); i++ {
+			verified = tortoise.HandleIncomingLayer(ctx, s.Next(sim.WithNumBlocks(1)))
+		}
+		require.Equal(t, types.GetEffectiveGenesis(), verified)
+		empty := s.Layer(0)
+		tortoise.OnHareOutput(empty.Index(), empty.Blocks()[0].ID())
+		last := s.Next(sim.WithNumBlocks(1))
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+		require.Equal(t, last.Sub(1), verified)
+	})
+}

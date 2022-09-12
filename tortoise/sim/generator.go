@@ -247,3 +247,8 @@ func (g *Generator) generateAtxs() {
 		}
 	}
 }
+
+// Layer returns generated layer.
+func (g *Generator) Layer(i int) *types.Layer {
+	return g.layers[i+1]
+}

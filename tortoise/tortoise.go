@@ -762,7 +762,29 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		return
 	}
 	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID))
-	t.hareOutput[lid] = bid
+	previous, exists := t.hareOutput[lid]
+	if !exists || (exists && previous != bid) {
+		t.hareOutput[lid] = bid
+		if lid.Before(t.minprocessed) && t.mode.isVerifying() && withinHdist(t.Config, lid, t.last) {
+			t.logger.With().Info("local opinion changed within hdist",
+				lid,
+				log.Stringer("verified", t.verified),
+				log.Stringer("previous", previous),
+				log.Stringer("new", bid),
+			)
+			t.verifying.resetWeights()
+
+			// if local opinion within hdist was changed about the layer
+			// that was already verified we need to revert that
+			t.verified = minLayer(t.verified, lid)
+			for target := t.verified; !target.After(t.processed); target = target.Add(1) {
+				if target.GetEpoch().IsGenesis() {
+					continue
+				}
+				t.verifying.countVotes(t.logger, target, t.getTortoiseBallots(target))
+			}
+		}
+	}
 }
 
 func (t *turtle) onBallot(ballot *types.Ballot) error {
@@ -892,13 +914,17 @@ func isUndecided(config Config, decided map[types.LayerID]types.BlockID, lid, la
 	return !lid.Before(limit)
 }
 
-func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
+func withinHdist(config Config, lid, last types.LayerID) bool {
 	genesis := types.GetEffectiveGenesis()
 	limit := types.GetEffectiveGenesis()
-	if state.last.After(genesis.Add(config.Hdist)) {
-		limit = state.last.Sub(config.Hdist)
+	if last.After(genesis.Add(config.Hdist)) {
+		limit = last.Sub(config.Hdist)
 	}
-	if !lid.Before(limit) {
+	return !lid.Before(limit)
+}
+
+func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
+	if withinHdist(config, lid, state.last) {
 		vote, exist := state.hareOutput[lid]
 		if !exist && isUndecided(config, state.hareOutput, lid, state.last) {
 			return abstain, reasonHareOutput

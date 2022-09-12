@@ -244,6 +244,14 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	}
 }
 
+// OnHareOutput should be called when hare terminated or certificate for a block
+// was synced from a peer.
+func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.onHareOutput(lid, bid)
+}
+
 // WaitReady waits until state will be reloaded from disk.
 func (t *Tortoise) WaitReady(ctx context.Context) error {
 	select {
