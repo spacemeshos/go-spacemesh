@@ -25,6 +25,7 @@ type nextConf struct {
 	Reorder          uint32
 	FailHare         bool
 	EmptyHare        bool
+	HareOutputIndex  int
 	Coinflip         bool
 	LayerSize        int
 	NumBlocks        int
@@ -92,6 +93,13 @@ func WithBlockTickHeights(heights ...uint64) NextOpt {
 func WithNumBlocks(num int) NextOpt {
 	return func(c *nextConf) {
 		c.NumBlocks = num
+	}
+}
+
+// WithHareOutputIndex sets the index of the block that will be stored as a hare output.
+func WithHareOutputIndex(i int) NextOpt {
+	return func(c *nextConf) {
+		c.HareOutputIndex = i
 	}
 }
 
@@ -205,7 +213,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	if !cfg.FailHare {
 		hareOutput := types.EmptyBlockID
 		if !cfg.EmptyHare && len(layer.BlocksIDs()) > 0 {
-			hareOutput = layer.BlocksIDs()[0]
+			hareOutput = layer.BlocksIDs()[cfg.HareOutputIndex]
 		}
 		for _, state := range g.states {
 			state.OnHareOutput(layer.Index(), hareOutput)

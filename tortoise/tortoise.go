@@ -778,6 +778,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			// that was already verified we need to revert that
 			t.verified = minLayer(t.verified, lid)
 			for target := t.verified; !target.After(t.processed); target = target.Add(1) {
+				// TODO(dshulyak) this condition can be removed together with genesis ballot
 				if target.GetEpoch().IsGenesis() {
 					continue
 				}
