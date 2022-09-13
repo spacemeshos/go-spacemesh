@@ -202,10 +202,8 @@ func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*t
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
-// TODO(dshulyak) open an issue to split this method into:
-// - TallyVotes()
-// - OnLayer(LayerID)
-// - Verified() LayerID
+//
+// TODO(dshulyak) open an issue to split this method into.
 func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) types.LayerID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -252,8 +250,8 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 // was synced from a peer.
 // This method is expected to be called any number of times, with layers in any order.
 //
-// This method should be called with EmptyBlockID if node received proof of malicious behaviour,
-// such as signing same block id by members of the same commitee.
+// This method should be called with EmptyBlockID if node received proof of malicious behavior,
+// such as signing same block id by members of the same committee.
 func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
