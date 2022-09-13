@@ -185,7 +185,7 @@ func (b *Ballot) Initialize() error {
 	if b.Signature == nil {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
-	b.ballotID = BallotID(CalcBallotHash32(b).ToHash20())
+	b.ballotID = BallotID(CalcObjectHash32(b).ToHash20())
 
 	data := b.Bytes()
 	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)

@@ -27,11 +27,11 @@ require (
 	github.com/prometheus/common v0.37.0
 	github.com/pyroscope-io/pyroscope v0.28.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v0.0.0-20220909175001-1907c2fe076e
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220905145225-2baea06a0206
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
-	github.com/spacemeshos/go-scale v0.0.0-20220912074327-ac6a96584caa
-	github.com/spacemeshos/merkle-tree v0.0.0-20220909175028-45e6d3500683
+	github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c
+	github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b
 	github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063
 	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
 	github.com/spf13/cobra v1.5.0
@@ -40,9 +40,9 @@ require (
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
-	golang.org/x/net v0.0.0-20220907135653-1e95f45603a7
-	golang.org/x/sync v0.0.0-20220907140024-f12130a52804
-	google.golang.org/genproto v0.0.0-20220908141613-51c1cc9bc6d0
+	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c
+	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde
+	google.golang.org/genproto v0.0.0-20220902135211-223410557253
 	google.golang.org/grpc v1.49.0
 	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.25.0
@@ -85,7 +85,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
@@ -147,8 +147,6 @@ require (
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/ginkgo/v2 v2.1.6 // indirect
-	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -179,7 +177,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/oauth2 v0.0.0-20220822191816-0ebed06d0094 // indirect
-	golang.org/x/sys v0.0.0-20220908164124-27713097b956 // indirect
+	golang.org/x/sys v0.0.0-20220818161305-2296e01440c6 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect

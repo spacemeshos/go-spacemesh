@@ -173,20 +173,11 @@ func CalcHash32(data []byte) Hash32 {
 	return hash.Sum(data)
 }
 
-// CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.
-func CalcATXHash32(atx *ActivationTx) Hash32 {
-	bytes, err := codec.Encode(atx)
+// CalcObjectHash32 returns the 32-byte sha256 sum of the scale serialization of the object.
+func CalcObjectHash32(obj scale.Encodable) Hash32 {
+	bytes, err := codec.Encode(obj)
 	if err != nil {
-		panic("could not serialize ATX")
-	}
-	return CalcHash32(bytes)
-}
-
-// CalcBallotHash32 returns the 32-byte sha256 sum of serialization of the given Ballot.
-func CalcBallotHash32(ballot *Ballot) Hash32 {
-	bytes, err := codec.Encode(ballot)
-	if err != nil {
-		panic("could not serialize Ballot")
+		panic("could not serialize object")
 	}
 	return CalcHash32(bytes)
 }
