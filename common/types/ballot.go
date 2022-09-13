@@ -182,8 +182,12 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("ballot already initialized")
 	}
 
+	if b.Signature == nil {
+		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
+	}
+	b.ballotID = BallotID(CalcObjectHash32(b).ToHash20())
+
 	data := b.Bytes()
-	b.ballotID = BallotID(CalcHash32(data).ToHash20())
 	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
