@@ -256,7 +256,7 @@ func (atx *ActivationTx) CalcAndSetID() error {
 	if atx.Sig == nil {
 		return fmt.Errorf("cannot calculate ATX ID: sig is nil")
 	}
-	id := ATXID(CalcATXHash32(atx))
+	id := ATXID(CalcObjectHash32(atx))
 	atx.id = &id
 	return nil
 }
