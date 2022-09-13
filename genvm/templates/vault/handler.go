@@ -58,7 +58,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 	return vault, nil
 }
 
-// Exec spawn or spend based on the method selector.
+// Exec supports only MethodSpend.
 func (h *handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
 	if method != core.MethodSpend {
 		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
