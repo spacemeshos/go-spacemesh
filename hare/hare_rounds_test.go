@@ -118,7 +118,6 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, c
 }
 
 func Test_HarePreRoundEmptySet(t *testing.T) {
-	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
 
@@ -164,7 +163,6 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 		t.SkipNow()
 	}
 
-	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
 	m := [layers][nodes]int{}
@@ -197,7 +195,6 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
 	m := [layers][nodes]int{}
@@ -230,7 +227,6 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
 	m := [layers][nodes]int{}
@@ -263,7 +259,6 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
 	m := [layers][nodes]int{}
@@ -296,7 +291,6 @@ func Test_HareComplete(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
 	m := [layers][nodes]int{}
