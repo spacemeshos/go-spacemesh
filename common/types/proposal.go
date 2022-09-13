@@ -87,7 +87,7 @@ func (p *Proposal) Initialize() error {
 		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", pPubKey.ShortString(), p.Ballot.SmesherID().ShortString())
 	}
 
-	p.proposalID = ProposalID(CalcProposalHash32(p).ToHash20())
+	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
 	return nil
 }
 
