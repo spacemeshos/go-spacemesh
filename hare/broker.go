@@ -71,6 +71,7 @@ func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, s
 		tasks:          make(chan func()),
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
+		minDeleted:     types.GetEffectiveGenesis(),
 		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
 	}

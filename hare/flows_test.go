@@ -150,8 +150,8 @@ func Test_consensusIterations(t *testing.T) {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
-		p2pm := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		proc, broker := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
+		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1, t.Name())
 		test.procs = append(test.procs, proc)
 		test.brokers = append(test.brokers, broker)
 		i++
@@ -368,7 +368,6 @@ func NewSimRoundClock(s pubsub.PublishSubsciber, clocks map[types.LayerID]*Share
 func Test_multipleCPs(t *testing.T) {
 	logtest.SetupGlobal(t)
 
-	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(3)
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
@@ -464,7 +463,6 @@ func Test_multipleCPs(t *testing.T) {
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
 
-	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(4)
 	finalLyr := types.GetEffectiveGenesis().Add(totalCp)
