@@ -174,6 +174,11 @@ func Test_HandleCertifyMessage(t *testing.T) {
 			expected: pubsub.ValidationAccept,
 		},
 		{
+			name:     "genesis",
+			expected: pubsub.ValidationIgnore,
+			diff:     -10,
+		},
+		{
 			name:     "boundary - early",
 			expected: pubsub.ValidationAccept,
 			diff:     -1 * int(numEarlyLayers),

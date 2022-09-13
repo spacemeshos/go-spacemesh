@@ -306,8 +306,12 @@ func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
 
 func expectedLayer(clock layerClock, lid types.LayerID, waitLayers uint32) bool {
 	current := clock.GetCurrentLayer()
+	start := types.GetEffectiveGenesis()
+	if current.Uint32() > waitLayers+1 {
+		start = current.Sub(waitLayers + 1)
+	}
 	// only accept early msgs within a range and with limited size to prevent DOS
-	return !lid.Before(current.Sub(waitLayers+1)) && !lid.After(current.Add(numEarlyLayers))
+	return !lid.Before(start) && !lid.After(current.Add(numEarlyLayers))
 }
 
 func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error {
