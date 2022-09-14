@@ -133,6 +133,17 @@ func (challenge *NIPostChallenge) String() string {
 		challenge.PositioningATX.ShortString())
 }
 
+// TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (challenge *NIPostChallenge) TargetEpoch() EpochID {
+	return challenge.PubLayerID.GetEpoch() + 1
+}
+
+// PublishEpoch returns the publishing epoch of the NIPostChallenge.
+func (challenge *NIPostChallenge) PublishEpoch() EpochID {
+	return challenge.PubLayerID.GetEpoch()
+}
+
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
@@ -192,7 +203,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
-	encoder.AddUint32("epoch", uint32(atx.PubLayerID.GetEpoch()))
+	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	return nil
@@ -253,12 +264,6 @@ func (atx *ActivationTx) NodeID() NodeID {
 		panic("nodeID field must be set")
 	}
 	return *atx.nodeID
-}
-
-// TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
-// to participate thanks to the ATX.
-func (atx *ActivationTx) TargetEpoch() EpochID {
-	return atx.PubLayerID.GetEpoch() + 1
 }
 
 // SetID sets the ATXID in this ATX's cache.

@@ -20,12 +20,6 @@ type ActivationTxHeader struct {
 	TickCount uint64
 }
 
-// TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
-// to participate thanks to the ATX.
-func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
-	return atxh.PubLayerID.GetEpoch() + 1
-}
-
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
 // sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
 // Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^9.

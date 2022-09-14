@@ -104,7 +104,7 @@ func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, at
 		return invalid, fmt.Errorf("[proposal] failed to get ATX timestamp (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
 	}
 
-	atxEpoch := atxHeader.PubLayerID.GetEpoch()
+	atxEpoch := atxHeader.PublishEpoch()
 	nextEpochStart := pd.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
 	logger = logger.WithFields(

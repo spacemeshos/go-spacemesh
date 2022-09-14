@@ -61,11 +61,11 @@ func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
 	epoch1 := types.EpochID(1)
 	atx1 := newActivationTx(t, sig, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
-	r.NoError(atxHdlr.StoreAtx(context.TODO(), epoch1, atx1))
+	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx1))
 
 	epoch2 := types.EpochID(2)
 	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
-	r.NoError(atxHdlr.StoreAtx(context.TODO(), epoch2, atx2))
+	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx2))
 
 	atxid, err := atxs.GetLastIDByNodeID(cdb, sig.NodeID())
 	r.NoError(err)
@@ -89,7 +89,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	poetRef := []byte{0x76, 0x45}
 	npst := newNIPostWithChallenge(&chlng, poetRef)
 	posATX := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, 100, coinbase1, 100, npst)
-	err := atxHdlr.StoreAtx(context.TODO(), 0, posATX)
+	err := atxHdlr.StoreAtx(context.TODO(), posATX)
 	assert.NoError(t, err)
 	atxList := []*types.VerifiedActivationTx{
 		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1012), 0, 100, coinbase1, 100, &types.NIPost{}),
@@ -163,7 +163,7 @@ func TestHandler_ValidateAtx(t *testing.T) {
 	atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	err = SignAtx(sig, atx)
 	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), prevAtx)
 	assert.NoError(t, err)
 
 	vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
@@ -200,9 +200,9 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	npst := newNIPostWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 	posAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
-	err := atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
+	err := atxHdlr.StoreAtx(context.TODO(), prevAtx)
 	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, posAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), posAtx)
 	assert.NoError(t, err)
 
 	// Wrong sequence.
@@ -247,7 +247,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	posAtx2 := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
 	err = SignAtx(sig, atx)
 	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, posAtx2)
+	err = atxHdlr.StoreAtx(context.TODO(), posAtx2)
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012))
 	atx = newAtx(t, challenge, sig, npst, 100, coinbase)
@@ -257,7 +257,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	// Atx already exists.
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
 	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
@@ -269,7 +269,7 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 	// Prev atx declared but not found.
 	vAtx, err = atx.Verify(0, 1)
 	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
 	vAtx, err = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
@@ -332,17 +332,17 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	npst := newNIPostWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 
-	err := atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
+	err := atxHdlr.StoreAtx(context.TODO(), prevAtx)
 	assert.NoError(t, err)
 
 	// wrong sequence
 	vAtx := newActivationTx(t, sig, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 
 	vAtx = newActivationTx(t, sig, 2, vAtx.ID(), vAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 	atx2id := vAtx.ID()
 
@@ -353,14 +353,14 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 
 	vAtx, err = atx.Verify(0, 100)
 	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 
 	vAtx = newActivationTx(t, sig, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 
 	id, err := atxs.GetLastIDByNodeID(cdb, sig.NodeID())
@@ -377,22 +377,22 @@ func TestHandler_ValidateAndInsertSorted(t *testing.T) {
 	otherSig := NewMockSigner()
 
 	prevAtx = newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
-	err = atxHdlr.StoreAtx(context.TODO(), 1, prevAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), prevAtx)
 	assert.NoError(t, err)
 	vAtx = newActivationTx(t, otherSig, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 	atxID := atx.ID()
 
 	vAtx = newActivationTx(t, otherSig, 2, atxID, atx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 
 	vAtx = newActivationTx(t, otherSig, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxHdlr.ContextuallyValidateAtx(vAtx)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
-	err = atxHdlr.StoreAtx(context.TODO(), 1, vAtx)
+	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
 	assert.NoError(t, err)
 }
 
@@ -441,7 +441,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	r.NoError(err)
-	r.NoError(atxHdlr.StoreAtx(context.TODO(), 1, vPrevAtx))
+	r.NoError(atxHdlr.StoreAtx(context.TODO(), vPrevAtx))
 
 	start := time.Now()
 	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
@@ -489,7 +489,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			vAtx, err := atx.Verify(0, 1)
 			r.NoError(err)
-			storeAtx(r, atxHdlr, vAtx, lg.WithName("storeAtx"))
+			require.NoError(b, atxHdlr.StoreAtx(context.TODO(), vAtx))
 		}
 		// noinspection GoNilness
 		posAtx = atx.ID()
@@ -547,7 +547,7 @@ func TestHandler_TopAtx(t *testing.T) {
 
 func createAndStoreAtx(t *testing.T, atxHdlr *Handler, layer types.LayerID) (*types.VerifiedActivationTx, error) {
 	atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, layer, 0, 100, coinbase, 100, &types.NIPost{})
-	err := atxHdlr.StoreAtx(context.TODO(), atx.TargetEpoch(), atx)
+	err := atxHdlr.StoreAtx(context.TODO(), atx)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +570,7 @@ func TestHandler_AwaitAtx(t *testing.T) {
 	default:
 	}
 
-	err := atxHdlr.StoreAtx(context.TODO(), atx.TargetEpoch(), atx)
+	err := atxHdlr.StoreAtx(context.TODO(), atx)
 	r.NoError(err)
 	r.Len(atxHdlr.atxChannels, 0) // after notifying subscribers, channel is cleared
 
@@ -647,7 +647,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 				if !assert.NoError(b, err) {
 					return
 				}
-				if !assert.NoError(b, atxHdlr.StoreAtx(context.TODO(), types.EpochID(1), vAtx)) {
+				if !assert.NoError(b, atxHdlr.StoreAtx(context.TODO(), vAtx)) {
 					return
 				}
 				if atomic.LoadUint64(&stop) == 1 {
