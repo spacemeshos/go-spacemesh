@@ -20,13 +20,13 @@ import (
 )
 
 var (
-	instanceID0 = types.NewLayerID(0)
-	instanceID1 = types.NewLayerID(1)
-	instanceID2 = types.NewLayerID(2)
-	instanceID3 = types.NewLayerID(3)
-	instanceID4 = types.NewLayerID(4)
-	instanceID5 = types.NewLayerID(5)
-	instanceID6 = types.NewLayerID(6)
+	instanceID0 types.LayerID
+	instanceID1 types.LayerID
+	instanceID2 types.LayerID
+	instanceID3 types.LayerID
+	instanceID4 types.LayerID
+	instanceID5 types.LayerID
+	instanceID6 types.LayerID
 )
 
 func mustEncode(tb testing.TB, msg Message) []byte {
@@ -281,9 +281,12 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 
-	inbox1, _ := broker.Register(context.TODO(), instanceID1)
-	inbox2, _ := broker.Register(context.TODO(), instanceID2)
-	inbox3, _ := broker.Register(context.TODO(), instanceID3)
+	inbox1, err := broker.Register(context.TODO(), instanceID1)
+	require.NoError(t, err)
+	inbox2, err := broker.Register(context.TODO(), instanceID2)
+	require.NoError(t, err)
+	inbox3, err := broker.Register(context.TODO(), instanceID3)
+	require.NoError(t, err)
 
 	var wg sync.WaitGroup
 	wg.Add(5)
@@ -310,7 +313,6 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	}()
 	waitForMessages(t, inbox3, instanceID3, msgCount)
 
-	assert.True(t, true)
 	wg.Wait()
 	closeBrokerAndWait(t, broker.Broker)
 }
@@ -349,10 +351,10 @@ func TestBroker_Send(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", nil))
 
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
-	msg.InnerMsg.InstanceID = types.NewLayerID(2)
+	msg.InnerMsg.InstanceID = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
-	msg.InnerMsg.InstanceID = types.NewLayerID(1)
+	msg.InnerMsg.InstanceID = instanceID1
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 	// nothing happens since this is an invalid InnerMsg
 
@@ -463,19 +465,19 @@ func Test_newMsg(t *testing.T) {
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 
 	_, e := newMsg(context.TODO(), logtest.New(t), m, sq)
-	assert.Nil(t, e)
+	assert.NoError(t, e)
 }
 
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 
 	b := buildBroker(t, t.Name())
-	r.Equal(types.NewLayerID(0), b.getLatestLayer())
-	b.updateLatestLayer(context.TODO(), types.NewLayerID(1))
-	r.Equal(types.NewLayerID(1), b.getLatestLayer())
+	r.Equal(instanceID0, b.getLatestLayer())
+	b.updateLatestLayer(context.TODO(), instanceID1)
+	r.Equal(instanceID1, b.getLatestLayer())
 
-	b.updateLatestLayer(context.TODO(), types.NewLayerID(2))
-	r.Equal(types.NewLayerID(2), b.getLatestLayer())
+	b.updateLatestLayer(context.TODO(), instanceID2)
+	r.Equal(instanceID2, b.getLatestLayer())
 
 	closeBrokerAndWait(t, b.Broker)
 }
@@ -485,15 +487,15 @@ func TestBroker_updateSynchronicity(t *testing.T) {
 
 	b := buildBroker(t, t.Name())
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
-	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+	b.updateSynchronicity(context.TODO(), instanceID1)
+	r.True(b.isSynced(context.TODO(), instanceID1))
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
-	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+	b.updateSynchronicity(context.TODO(), instanceID1)
+	r.True(b.isSynced(context.TODO(), instanceID1))
 
-	b.updateSynchronicity(context.TODO(), types.NewLayerID(2))
-	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+	b.updateSynchronicity(context.TODO(), instanceID2)
+	r.False(b.isSynced(context.TODO(), instanceID2))
 
 	closeBrokerAndWait(t, b.Broker)
 }
@@ -502,13 +504,13 @@ func TestBroker_isSynced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+	r.True(b.isSynced(context.TODO(), instanceID1))
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
-	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+	r.True(b.isSynced(context.TODO(), instanceID1))
+	r.False(b.isSynced(context.TODO(), instanceID2))
 
-	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+	r.False(b.isSynced(context.TODO(), instanceID2))
 
 	closeBrokerAndWait(t, b.Broker)
 }
@@ -518,15 +520,15 @@ func TestBroker_Register4(t *testing.T) {
 	b := buildBroker(t, t.Name())
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.Start(context.TODO())
-	c, e := b.Register(context.TODO(), types.NewLayerID(1))
-	r.Nil(e)
+	c, e := b.Register(context.TODO(), instanceID1)
+	r.NoError(e)
 
 	b.mu.RLock()
-	r.Equal(b.outbox[1], c)
+	r.Equal(b.outbox[instanceID1.Value], c)
 	b.mu.RUnlock()
 
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	_, e = b.Register(context.TODO(), types.NewLayerID(2))
+	_, e = b.Register(context.TODO(), instanceID2)
 	r.NotNil(e)
 
 	closeBrokerAndWait(t, b.Broker)
@@ -594,7 +596,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	b.mu.RUnlock()
 
 	r.True(ok)
-	r.NotEqual(true, v)
+	r.False(v)
 
 	// valid but not early
 	m.InnerMsg.InstanceID = instanceID6
@@ -613,31 +615,31 @@ func Test_validate(t *testing.T) {
 	b := buildBroker(t, t.Name())
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m.InnerMsg.InstanceID = types.NewLayerID(1)
-	b.setLatestLayer(types.NewLayerID(2))
+	m.InnerMsg.InstanceID = instanceID1
+	b.setLatestLayer(instanceID2)
 	e := b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
-	m.InnerMsg.InstanceID = types.NewLayerID(2)
+	m.InnerMsg.InstanceID = instanceID2
 	e = b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errRegistration.Error())
 
-	m.InnerMsg.InstanceID = types.NewLayerID(3)
+	m.InnerMsg.InstanceID = instanceID3
 	e = b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errEarlyMsg.Error())
 
-	m.InnerMsg.InstanceID = types.NewLayerID(2)
+	m.InnerMsg.InstanceID = instanceID2
 
 	b.mu.Lock()
-	b.outbox[2] = make(chan *Msg)
-	b.syncState[2] = false
+	b.outbox[instanceID2.Value] = make(chan *Msg)
+	b.syncState[instanceID2.Value] = false
 	b.mu.Unlock()
 
 	e = b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errNotSynced.Error())
 
 	b.mu.Lock()
-	b.syncState[2] = true
+	b.syncState[instanceID2.Value] = true
 	b.mu.Unlock()
 
 	e = b.validate(context.TODO(), &m.Message)
@@ -650,8 +652,8 @@ func TestBroker_clean(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 
-	ten := types.NewLayerID(10)
-	for i := types.NewLayerID(1); i.Before(ten); i = i.Add(1) {
+	ten := instanceID0.Add(10)
+	for i := instanceID1; i.Before(ten); i = i.Add(1) {
 		b.mu.Lock()
 		b.syncState[i.Uint32()] = true
 		b.mu.Unlock()
@@ -664,9 +666,9 @@ func TestBroker_clean(t *testing.T) {
 	b.mu.Unlock()
 
 	b.cleanOldLayers()
-	r.Equal(types.NewLayerID(4), b.minDeleted)
+	r.Equal(ten.Sub(2), b.minDeleted)
 	b.mu.RLock()
-	r.Equal(5, len(b.syncState))
+	r.Equal(1, len(b.syncState))
 	b.mu.RUnlock()
 
 	b.mu.Lock()
@@ -690,16 +692,16 @@ func TestBroker_Flow(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m.InnerMsg.InstanceID = types.NewLayerID(1)
+	m.InnerMsg.InstanceID = instanceID1
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m.Message))
 
-	ch1, e := b.Register(context.TODO(), types.NewLayerID(1))
+	ch1, e := b.Register(context.TODO(), instanceID1)
 	r.Nil(e)
 	<-ch1
 
 	m2 := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m2.InnerMsg.InstanceID = types.NewLayerID(2)
-	ch2, e := b.Register(context.TODO(), types.NewLayerID(2))
+	m2.InnerMsg.InstanceID = instanceID2
+	ch2, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)
 
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m.Message))
@@ -709,16 +711,16 @@ func TestBroker_Flow(t *testing.T) {
 	<-ch2
 	<-ch1
 
-	b.Register(context.TODO(), types.NewLayerID(3))
-	b.Register(context.TODO(), types.NewLayerID(4))
-	b.Unregister(context.TODO(), types.NewLayerID(2))
+	b.Register(context.TODO(), instanceID3)
+	b.Register(context.TODO(), instanceID4)
+	b.Unregister(context.TODO(), instanceID2)
 	r.Equal(instanceID0, b.minDeleted)
 
 	// check still receiving msgs on ch1
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m.Message))
 	<-ch1
 
-	b.Unregister(context.TODO(), types.NewLayerID(1))
+	b.Unregister(context.TODO(), instanceID1)
 	r.Equal(instanceID2, b.minDeleted)
 
 	closeBrokerAndWait(t, b.Broker)

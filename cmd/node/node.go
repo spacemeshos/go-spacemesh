@@ -543,6 +543,7 @@ func (app *App) initServices(ctx context.Context,
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.F + 1,
+			WaitSigLayers:    app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))

@@ -36,6 +36,7 @@ var (
 type CertConfig struct {
 	CommitteeSize    int
 	CertifyThreshold int
+	WaitSigLayers    uint32
 	NumLayersToKeep  uint32
 }
 
@@ -43,6 +44,7 @@ func defaultCertConfig() CertConfig {
 	return CertConfig{
 		CommitteeSize:    10,
 		CertifyThreshold: 6,
+		WaitSigLayers:    5,
 		NumLayersToKeep:  5,
 	}
 }
@@ -304,10 +306,14 @@ func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
 	return false
 }
 
-func expectedLayer(clock layerClock, lid types.LayerID) bool {
+func expectedLayer(clock layerClock, lid types.LayerID, waitLayers uint32) bool {
 	current := clock.GetCurrentLayer()
+	start := types.GetEffectiveGenesis()
+	if current.Uint32() > waitLayers+1 {
+		start = current.Sub(waitLayers + 1)
+	}
 	// only accept early msgs within a range and with limited size to prevent DOS
-	return !lid.Before(current) && !lid.After(current.Add(numEarlyLayers))
+	return !lid.Before(start) && !lid.After(current.Add(numEarlyLayers))
 }
 
 func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error {
@@ -325,7 +331,7 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		return errBeaconNotAvailable
 	}
 
-	if !expectedLayer(c.layerClock, lid) {
+	if !expectedLayer(c.layerClock, lid, c.cfg.WaitSigLayers) {
 		logger.Debug("received message for unexpected layer")
 		return errUnexpectedMsg
 	}
