@@ -37,14 +37,18 @@ type Context struct {
 	// TODO all templates for genesis will support transfers to only one account.
 	// i keep it for the purposes of testing and validation (e.g we can implement more complex templates)
 	// but it can be simplified down to one variable
-	touched    []Address
-	changed    map[Address]*Account
-	genesis_id [20]byte
+	touched   []Address
+	changed   map[Address]*Account
+	GenesisID [20]byte
 }
 
 // Principal returns address of the account that signed transaction.
 func (c *Context) Principal() Address {
 	return c.PrincipalAccount.Address
+}
+
+func (c *Context) GenesisId() [20]byte {
+	return c.GenesisID
 }
 
 // Layer returns block layer id.

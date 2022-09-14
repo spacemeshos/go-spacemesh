@@ -9,7 +9,12 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+)
+
+const (
+	TestGenesisId = "1e459123cf26ee0de56d9e2ef6a30f8317c797e1"
 )
 
 func TestVerify(t *testing.T) {
@@ -76,9 +81,14 @@ func TestVerify(t *testing.T) {
 						copy(key[:], pub)
 						ms.PublicKeys = append(ms.PublicKeys, key)
 					}
+					ctx := core.Context{}
+					var id [20]byte
+					copy(id[:], util.Hex2Bytes(TestGenesisId))
+					fmt.Println("GENESIS ID PLACED IN CTX: ", id)
+					ctx.GenesisID = id
 					require.Equal(t, tc.verified,
 						ms.Verify(
-							&core.Context{},
+							&ctx,
 							append(message, tc.signature...),
 							scale.NewDecoder(bytes.NewReader(tc.signature)),
 						),
@@ -173,7 +183,7 @@ func pullWithDups(k int) (rst []int) {
 func prepSigFromKeys(tb testing.TB, message []byte, privates []ed25519.PrivateKey, refs ...int) []byte {
 	tb.Helper()
 	sigs := Signatures{}
-	hash := core.Hash(message)
+	hash := core.Hash(util.Hex2Bytes(TestGenesisId), message)
 	for _, ref := range refs {
 		sig := core.Signature{}
 		copy(sig[:], ed25519.Sign(privates[ref], hash[:]))

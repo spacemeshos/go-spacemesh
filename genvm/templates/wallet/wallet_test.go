@@ -9,7 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+)
+
+const (
+	TestGenesisId = "1e459123cf26ee0de56d9e2ef6a30f8317c797e1"
 )
 
 func FuzzVerify(f *testing.F) {
@@ -42,17 +47,22 @@ func TestVerify(t *testing.T) {
 	copy(spawn.PublicKey[:], pub)
 	wallet := New(spawn)
 
+	ctx := core.Context{}
+	var id [20]byte
+	copy(id[:], util.Hex2Bytes(TestGenesisId))
+	ctx.GenesisID = id
+
 	t.Run("Invalid", func(t *testing.T) {
 		buf64 := types.Bytes64{}
-		require.False(t, wallet.Verify(&core.Context{}, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
+		require.False(t, wallet.Verify(&ctx, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
 	})
 	t.Run("Empty", func(t *testing.T) {
-		require.False(t, wallet.Verify(&core.Context{}, nil, scale.NewDecoder(bytes.NewBuffer(nil))))
+		require.False(t, wallet.Verify(&ctx, nil, scale.NewDecoder(bytes.NewBuffer(nil))))
 	})
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
-		hash := core.Hash(msg)
+		hash := core.Hash(ctx.GenesisID[:], msg)
 		sig := ed25519.Sign(pk, hash[:])
-		require.True(t, wallet.Verify(&core.Context{}, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))))
+		require.True(t, wallet.Verify(&ctx, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))))
 	})
 }

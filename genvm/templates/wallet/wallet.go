@@ -40,7 +40,9 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	if err != nil {
 		return false
 	}
-	hash := core.Hash(raw[:len(raw)-n])
+	genesis_id := host.GenesisId()
+	raw_tx := raw[:len(raw)-n]
+	hash := core.Hash(genesis_id[:], raw_tx)
 	return ed25519.Verify(ed25519.PublicKey(s.PublicKey[:]), hash[:], sig[:])
 }
 

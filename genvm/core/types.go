@@ -100,6 +100,7 @@ type Host interface {
 	Handler() Handler
 	Template() Template
 	Layer() LayerID
+	GenesisId() [20]byte
 }
 
 //go:generate scalegen -types Payload
