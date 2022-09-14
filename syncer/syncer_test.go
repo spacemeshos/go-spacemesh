@@ -58,7 +58,7 @@ type testSyncer struct {
 	mLyrPatrol    *mocks.MocklayerPatrol
 	mLyrProcessor *mocks.MocklayerProcessor
 	mConState     *mmocks.MockconservativeState
-	mTortoise     *mmocks.Mocktortoise
+	mTortoise     *smocks.MockTortoise
 }
 
 func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, defaultMocked bool) *testSyncer {
@@ -70,7 +70,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, de
 
 	ctrl := gomock.NewController(t)
 	mcs := mmocks.NewMockconservativeState(ctrl)
-	mtrt := mmocks.NewMocktortoise(ctrl)
+	mtrt := smocks.NewMockTortoise(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	if defaultMocked {
 		mcs.EXPECT().GetStateRoot().AnyTimes()
