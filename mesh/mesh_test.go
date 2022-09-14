@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 type testMesh struct {
 	*Mesh
 	mockState    *mocks.MockconservativeState
-	mockTortoise *mocks.Mocktortoise
+	mockTortoise *smocks.MockTortoise
 }
 
 func createTestMesh(t *testing.T) *testMesh {
@@ -38,7 +39,7 @@ func createTestMesh(t *testing.T) *testMesh {
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		mockState:    mocks.NewMockconservativeState(ctrl),
-		mockTortoise: mocks.NewMocktortoise(ctrl),
+		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
 	msh, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockTortoise, tm.mockState, lg)
 	require.NoError(t, err)

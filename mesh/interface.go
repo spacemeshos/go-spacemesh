@@ -15,10 +15,3 @@ type conservativeState interface {
 	LinkTXsWithProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
 	LinkTXsWithBlock(types.LayerID, types.BlockID, []types.TransactionID) error
 }
-
-type tortoise interface {
-	OnBallot(*types.Ballot)
-	OnBlock(*types.Block)
-	OnHareOutput(types.LayerID, types.BlockID)
-	HandleIncomingLayer(context.Context, types.LayerID) types.LayerID
-}
