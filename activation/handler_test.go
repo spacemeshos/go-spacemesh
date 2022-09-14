@@ -489,7 +489,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			vAtx, err := atx.Verify(0, 1)
 			r.NoError(err)
-			storeAtx(r, atxHdlr, vAtx, lg.WithName("storeAtx"))
+			require.NoError(b, atxHdlr.StoreAtx(context.TODO(), vAtx))
 		}
 		// noinspection GoNilness
 		posAtx = atx.ID()
