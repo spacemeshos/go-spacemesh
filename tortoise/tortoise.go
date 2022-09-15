@@ -763,27 +763,28 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	}
 	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID))
 	previous, exists := t.hareOutput[lid]
-	if !exists || (exists && previous != bid) {
-		t.hareOutput[lid] = bid
-		if lid.Before(t.minprocessed) && t.mode.isVerifying() && withinHdist(t.Config, lid, t.last) {
-			t.logger.With().Info("local opinion changed within hdist",
-				lid,
-				log.Stringer("verified", t.verified),
-				log.Stringer("previous", previous),
-				log.Stringer("new", bid),
-			)
-			t.verifying.resetWeights()
+	if exists && previous == bid {
+		return
+	}
+	t.hareOutput[lid] = bid
+	if lid.Before(t.minprocessed) && t.mode.isVerifying() && withinHdist(t.Config, lid, t.last) {
+		t.logger.With().Info("local opinion changed within hdist",
+			lid,
+			log.Stringer("verified", t.verified),
+			log.Stringer("previous", previous),
+			log.Stringer("new", bid),
+		)
+		t.verifying.resetWeights()
 
-			// if local opinion within hdist was changed about the layer
-			// that was already verified we need to revert that
-			t.verified = minLayer(t.verified, lid)
-			for target := t.verified; !target.After(t.processed); target = target.Add(1) {
-				// TODO(dshulyak) this condition can be removed together with genesis ballot
-				if target.GetEpoch().IsGenesis() {
-					continue
-				}
-				t.verifying.countVotes(t.logger, target, t.getTortoiseBallots(target))
+		// if local opinion within hdist was changed about the layer
+		// that was already verified we need to revert that
+		t.verified = minLayer(t.verified, lid)
+		for target := t.verified; !target.After(t.processed); target = target.Add(1) {
+			// TODO(dshulyak) this condition can be removed together with genesis ballot
+			if target.GetEpoch().IsGenesis() {
+				continue
 			}
+			t.verifying.countVotes(t.logger, target, t.getTortoiseBallots(target))
 		}
 	}
 }
