@@ -25,7 +25,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
 	github.com/prometheus/common v0.37.0
-	github.com/pyroscope-io/pyroscope v0.28.1
+	github.com/pyroscope-io/pyroscope v0.29.0
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.4.1-0.20220905145225-2baea06a0206
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
