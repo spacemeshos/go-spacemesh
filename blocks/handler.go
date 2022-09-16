@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -60,9 +61,13 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 		logger.With().Error("malformed block", log.Err(err))
 		return errMalformedData
 	}
-
 	// set the block ID when received
 	b.Initialize()
+
+	if err := vm.ValidateRewards(b.Rewards); err != nil {
+		return err
+	}
+
 	logger = logger.WithFields(b.ID())
 
 	if exists, err := blocks.Has(h.db, b.ID()); err != nil {

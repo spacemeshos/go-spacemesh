@@ -41,6 +41,9 @@ func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.Transact
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
 			TxIDs:      txIDs,
+			Rewards: []types.AnyReward{
+				{Weight: types.RatNum{Num: 1, Denom: 1}},
+			},
 		},
 	}
 	block.Initialize()
@@ -51,11 +54,14 @@ func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.Transact
 
 func Test_HandleBlockData_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
-	layerID := types.NewLayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), []byte("malformed")), errMalformedData)
+}
 
-	_, data := createBlockData(t, layerID, txIDs)
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), data[1:]), errMalformedData)
+func Test_HandleBlockData_InvalidRewards(t *testing.T) {
+	th := createTestHandler(t)
+	buf, err := codec.Encode(&types.Block{})
+	require.NoError(t, err)
+	require.Error(t, th.HandleSyncedBlock(context.TODO(), buf))
 }
 
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
