@@ -608,12 +608,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	var conn *grpc.ClientConn
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 5*time.Second, 100*time.Millisecond)
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, conn.Close())
 	})
