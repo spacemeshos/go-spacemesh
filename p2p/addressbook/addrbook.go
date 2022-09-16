@@ -380,7 +380,7 @@ func (a *AddrBook) GetAddresses() []*AddrInfo {
 }
 
 // GetAddressesNotConnectedSince returns all the addresses which have not
-// been successfully connected to since `date`
+// been successfully connected to since `date`.
 func (a *AddrBook) GetAddressesNotConnectedSince(date time.Time) []*AddrInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
