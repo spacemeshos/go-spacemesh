@@ -426,16 +426,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	r.NoError(err)
-	c := pb.NewNodeServiceClient(conn)
-
-	// We expect this one to fail
-	const message = "Hello World"
-	_, err = c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message},
-	})
-	r.ErrorContains(err, "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	r.ErrorContains(err, "context deadline exceeded")
 
 	resetFlags()
 	events.CloseEventReporter()
@@ -451,10 +443,11 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
-	c = pb.NewNodeServiceClient(conn)
+	c := pb.NewNodeServiceClient(conn)
 
 	// call echo and validate result
 	// We expect this one to succeed
+	const message = "Hello World"
 	response, err := c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
