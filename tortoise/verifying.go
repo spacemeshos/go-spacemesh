@@ -233,7 +233,6 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 		logger.With().Debug("ballot is not good. ballot has a bad beacon")
 		return bad
 	}
-
 	baselid := v.ballotLayer[ballot.base]
 
 	for block, vote := range ballot.votes {

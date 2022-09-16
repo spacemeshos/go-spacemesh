@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 type testMesh struct {
 	*Mesh
 	mockState    *mocks.MockconservativeState
-	mockTortoise *mocks.Mocktortoise
+	mockTortoise *smocks.MockTortoise
 }
 
 func createTestMesh(t *testing.T) *testMesh {
@@ -38,7 +39,7 @@ func createTestMesh(t *testing.T) *testMesh {
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		mockState:    mocks.NewMockconservativeState(ctrl),
-		mockTortoise: mocks.NewMocktortoise(ctrl),
+		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
 	msh, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockTortoise, tm.mockState, lg)
 	require.NoError(t, err)
@@ -270,6 +271,7 @@ func TestMesh_ProcessLayerPerHareOutput(t *testing.T) {
 
 	for i := gPlus1; !i.After(gPlus5); i = i.Add(1) {
 		toApply := layerBlocks[i]
+		tm.mockTortoise.EXPECT().OnHareOutput(toApply.LayerIndex, toApply.ID())
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(i.Sub(1))
 		tm.mockState.EXPECT().ApplyLayer(context.TODO(), toApply).Return(nil)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
@@ -301,6 +303,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus1).Return(gLyr)
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks1[0]).Return(nil)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus1, blocks1[0].ID())
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus1, blocks1[0].ID()))
 	got, err := layers.GetHareOutput(tm.cdb, gPlus1)
 	require.NoError(t, err)
@@ -311,6 +314,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus3).Return(gLyr)
 	// will try to apply state for gPlus2
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus3, blocks3[0].ID())
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus3, blocks3[0].ID())
 	require.ErrorIs(t, err, errMissingHareOutput)
 	got, err = layers.GetHareOutput(tm.cdb, gPlus3)
@@ -322,6 +326,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus5).Return(gLyr)
 	// will try to apply state for gPlus2
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus5, blocks5[0].ID())
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus5, blocks5[0].ID())
 	require.ErrorIs(t, err, errMissingHareOutput)
 	got, err = layers.GetHareOutput(tm.cdb, gPlus5)
@@ -338,6 +343,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), gPlus2Block).Return(nil)
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks3[0]).Return(nil)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(2)
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus2, blocks2[0].ID())
 	err = tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, blocks2[0].ID())
 	require.ErrorIs(t, err, errMissingHareOutput)
 	got, err = layers.GetHareOutput(tm.cdb, gPlus2)
@@ -354,6 +360,7 @@ func TestMesh_ProcessLayerPerHareOutput_OutOfOrder(t *testing.T) {
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), gPlus4Block).Return(nil)
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks5[0]).Return(nil)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil).Times(2)
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus4, blocks4[0].ID())
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus4, blocks4[0].ID()))
 	got, err = layers.GetHareOutput(tm.cdb, gPlus4)
 	require.NoError(t, err)
@@ -368,6 +375,7 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	gPlus1 := gLyr.Add(1)
 	blocks1 := createLayerBlocks(t, tm.Mesh, gPlus1, false)
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus1, blocks1[0].ID())
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus1).Return(gLyr)
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks1[0]).Return(nil)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
@@ -380,6 +388,7 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 
 	gPlus2 := gLyr.Add(2)
 	createLayerBlocks(t, tm.Mesh, gPlus2, false)
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus2, types.EmptyBlockID)
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus2).Return(gPlus1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, types.EmptyBlockID))
@@ -418,6 +427,7 @@ func TestMesh_Revert(t *testing.T) {
 
 	for i := gPlus1; i.Before(gPlus4); i = i.Add(1) {
 		hareOutput := layerBlocks[i]
+		tm.mockTortoise.EXPECT().OnHareOutput(i, hareOutput.ID())
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(i.Sub(1))
 		tm.mockState.EXPECT().ApplyLayer(context.TODO(), hareOutput).Return(nil)
 		tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
@@ -440,6 +450,7 @@ func TestMesh_Revert(t *testing.T) {
 		require.NoError(t, tm.UpdateBlockValidity(blk.ID(), lyr, true))
 	}
 
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus4, blocks4[0].ID())
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus4).Return(gPlus3)
 	tm.mockState.EXPECT().RevertState(gPlus1).Return(types.Hash32{}, nil)
 	for i := gPlus2; !i.After(gPlus4); i = i.Add(1) {
@@ -463,6 +474,7 @@ func TestMesh_Revert(t *testing.T) {
 	require.Equal(t, types.CalcBlocksHash32(types.ToBlockIDs(sortBlocks(blocks2[1:])), nil), h)
 
 	// another new layer won't cause a revert
+	tm.mockTortoise.EXPECT().OnHareOutput(gPlus5, blocks5[0].ID())
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus5).Return(gPlus4)
 	tm.mockState.EXPECT().ApplyLayer(context.TODO(), blocks5[0]).Return(nil)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)

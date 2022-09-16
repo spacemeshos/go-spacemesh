@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -31,7 +32,7 @@ type Mesh struct {
 	cdb    *datastore.CachedDB
 
 	conState conservativeState
-	trtl     tortoise
+	trtl     system.Tortoise
 
 	mu sync.Mutex
 	// latestLayer is the latest layer this node had seen from blocks
@@ -53,7 +54,7 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, trtl tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
@@ -610,6 +611,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		logger.With().Error("failed to save hare output", log.Err(err))
 		return err
 	}
+	msh.trtl.OnHareOutput(layerID, blockID)
 	return msh.ProcessLayer(ctx, layerID)
 }
 

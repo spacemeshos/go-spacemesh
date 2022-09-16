@@ -28,12 +28,13 @@ const defaultCnt = uint16(2)
 
 type testCertifier struct {
 	*Certifier
-	db      *sql.Database
-	nid     types.NodeID
-	mOracle *hmocks.MockRolacle
-	mPub    *pubsubmock.MockPublisher
-	mClk    *mocks.MocklayerClock
-	mb      *smocks.MockBeaconGetter
+	db        *sql.Database
+	nid       types.NodeID
+	mOracle   *hmocks.MockRolacle
+	mPub      *pubsubmock.MockPublisher
+	mClk      *mocks.MocklayerClock
+	mb        *smocks.MockBeaconGetter
+	mtortoise *smocks.MockTortoise
 }
 
 func newTestCertifier(t *testing.T) *testCertifier {
@@ -47,7 +48,8 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mp := pubsubmock.NewMockPublisher(ctrl)
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
-	c := NewCertifier(db, mo, nid, signer, mp, mc, mb, WithCertifierLogger(logtest.New(t)))
+	mtortoise := smocks.NewMockTortoise(ctrl)
+	c := NewCertifier(db, mo, nid, signer, mp, mc, mb, mtortoise, WithCertifierLogger(logtest.New(t)))
 	return &testCertifier{
 		Certifier: c,
 		db:        db,
@@ -56,6 +58,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 		mPub:      mp,
 		mClk:      mc,
 		mb:        mb,
+		mtortoise: mtortoise,
 	}
 }
 
@@ -139,6 +142,7 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 		BlockID:    b.ID(),
 		Signatures: sigs,
 	}
+	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert))
 	verifySaved(t, tc.db, b.LayerIndex, b.ID(), numMsgs)
 }
@@ -234,6 +238,7 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
 	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
+	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 		if i < cutoff {

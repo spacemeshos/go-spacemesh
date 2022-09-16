@@ -77,7 +77,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 		t.blockLayer[blk.ID()] = genesis
 		t.blocks[genesis] = []blockInfo{{id: blk.ID()}}
 		t.validity[blk.ID()] = support
-		t.hareOutput[blk.ID()] = support
+		t.hareOutput[genesisLayer.Index()] = blk.ID()
 	}
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
@@ -91,7 +91,6 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.evicted = genesis.Sub(1)
 	t.minprocessed = genesis
 	t.full.counted = genesis
-	t.decided[genesis] = struct{}{}
 }
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
@@ -147,11 +146,10 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.ballots, lid)
 		for _, block := range t.blocks[lid] {
 			delete(t.blockLayer, block.id)
-			delete(t.hareOutput, block.id)
 			delete(t.validity, block.id)
 		}
 		delete(t.blocks, lid)
-		delete(t.decided, lid)
+		delete(t.hareOutput, lid)
 		delete(t.verifying.goodWeight, lid)
 		delete(t.verifying.abstainedWeight, lid)
 		delete(t.verifying.layerReferenceHeight, lid)
@@ -290,7 +288,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, blid, last types.LayerID
 			// because there are no blocks
 			// therefore we should not pick base ballot that votes abstain on
 			// layer outside zdist if layer is empty
-			if !isUndecided(t.Config, t.decided, lid, last) && t.full.abstained(ballotID, lid) {
+			if !isUndecided(t.Config, t.hareOutput, lid, last) && t.full.abstained(ballotID, lid) {
 				t.logger.With().Debug("ballot votes abstain on a layer without blocks. can't use as a base ballot",
 					ballotID,
 					lid,
@@ -342,7 +340,7 @@ func (t *turtle) encodeVotes(
 	for lid := startlid; lid.Before(last); lid = lid.Add(1) {
 		logger := logger.WithFields(log.Named("block_layer", lid))
 
-		if isUndecided(t.Config, t.decided, lid, last) {
+		if isUndecided(t.Config, t.hareOutput, lid, last) {
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
 		}
@@ -495,7 +493,7 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 		return err
 	}
 	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
-		if isUndecided(t.Config, t.decided, process, t.last) {
+		if isUndecided(t.Config, t.hareOutput, process, t.last) {
 			t.logger.With().Info("gap in the layers received by tortoise",
 				lid,
 				log.Stringer("undecided", process),
@@ -764,9 +762,30 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		return
 	}
 	t.logger.With().Debug("on hare output", lid, bid, log.Bool("empty", bid == types.EmptyBlockID))
-	t.decided[lid] = struct{}{}
-	if bid != types.EmptyBlockID {
-		t.hareOutput[bid] = support
+	previous, exists := t.hareOutput[lid]
+	if exists && previous == bid {
+		return
+	}
+	t.hareOutput[lid] = bid
+	if lid.Before(t.minprocessed) && t.mode.isVerifying() && withinHdist(t.Config, lid, t.last) {
+		t.logger.With().Info("local opinion changed within hdist",
+			lid,
+			log.Stringer("verified", t.verified),
+			log.Stringer("previous", previous),
+			log.Stringer("new", bid),
+		)
+		t.verifying.resetWeights()
+
+		// if local opinion within hdist was changed about the layer
+		// that was already verified we need to revert that
+		t.verified = minLayer(t.verified, lid)
+		for target := t.verified; !target.After(t.processed); target = target.Add(1) {
+			// TODO(dshulyak) this condition can be removed together with genesis ballot
+			if target.GetEpoch().IsGenesis() {
+				continue
+			}
+			t.verifying.countVotes(t.logger, target, t.getTortoiseBallots(target))
+		}
 	}
 }
 
@@ -885,7 +904,7 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.last.Sub(t.Hdist)
 }
 
-func isUndecided(config Config, decided map[types.LayerID]struct{}, lid, last types.LayerID) bool {
+func isUndecided(config Config, decided map[types.LayerID]types.BlockID, lid, last types.LayerID) bool {
 	if _, exists := decided[lid]; exists {
 		return false
 	}
@@ -897,19 +916,23 @@ func isUndecided(config Config, decided map[types.LayerID]struct{}, lid, last ty
 	return !lid.Before(limit)
 }
 
-func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
+func withinHdist(config Config, lid, last types.LayerID) bool {
 	genesis := types.GetEffectiveGenesis()
 	limit := types.GetEffectiveGenesis()
-	if state.last.After(genesis.Add(config.Hdist)) {
-		limit = state.last.Sub(config.Hdist)
+	if last.After(genesis.Add(config.Hdist)) {
+		limit = last.Sub(config.Hdist)
 	}
-	if !lid.Before(limit) {
-		vote, exist := state.hareOutput[block]
-		if exist {
-			return vote, reasonHareOutput
-		}
-		if isUndecided(config, state.decided, lid, state.last) {
+	return !lid.Before(limit)
+}
+
+func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
+	if withinHdist(config, lid, state.last) {
+		vote, exist := state.hareOutput[lid]
+		if !exist && isUndecided(config, state.hareOutput, lid, state.last) {
 			return abstain, reasonHareOutput
+		}
+		if vote == block {
+			return support, reasonHareOutput
 		}
 		return against, reasonHareOutput
 	}

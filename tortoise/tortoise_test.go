@@ -2067,7 +2067,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		require.NoError(t, err)
 		if hareOutput != types.EmptyBlockID {
 			tortoise.trtl.validity[hareOutput] = against
-			tortoise.trtl.hareOutput[hareOutput] = against
+			tortoise.trtl.hareOutput[lid] = types.EmptyBlockID
 			unsupported[hareOutput] = struct{}{}
 		}
 	}
@@ -2875,4 +2875,58 @@ func TestEmptyLayers(t *testing.T) {
 	t.Run("not recovered within hdist", func(t *testing.T) {
 		testEmptyLayers(t, 5)
 	})
+}
+
+func TestOnHareOutput(t *testing.T) {
+	const size = 4
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.Zdist = 3
+	cfg.Hdist = cfg.Zdist + 3
+	cfg.LayerSize = size
+
+	for _, tc := range []struct {
+		desc          string
+		failedOptions []sim.NextOpt // options for the failed layer
+		genDistance   int
+	}{
+		{
+			desc:          "empty after abstain",
+			failedOptions: []sim.NextOpt{sim.WithoutHareOutput()},
+			genDistance:   int(cfg.Zdist), // after zdist minprocessed is updated
+		},
+		{
+			desc:          "empty",
+			failedOptions: []sim.NextOpt{sim.WithEmptyHareOutput()},
+			genDistance:   int(cfg.Zdist - 1),
+		},
+		{
+			desc:          "different hare output",
+			failedOptions: []sim.NextOpt{sim.WithHareOutputIndex(1)},
+			genDistance:   int(cfg.Zdist - 1),
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := sim.New(
+				sim.WithLayerSize(cfg.LayerSize),
+			)
+			s.Setup(
+				sim.WithSetupMinerRange(size, size),
+			)
+			tortoise := tortoiseFromSimState(
+				s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+			)
+			verified := tortoise.HandleIncomingLayer(ctx, s.Next(tc.failedOptions...))
+			for i := 0; i <= tc.genDistance; i++ {
+				verified = tortoise.HandleIncomingLayer(ctx, s.Next())
+			}
+			require.Equal(t, types.GetEffectiveGenesis(), verified)
+			empty := s.Layer(0)
+			tortoise.OnHareOutput(empty.Index(), empty.Blocks()[0].ID())
+			last := s.Next(sim.WithNumBlocks(1))
+			verified = tortoise.HandleIncomingLayer(ctx, last)
+			require.Equal(t, last.Sub(1), verified)
+		})
+	}
 }
