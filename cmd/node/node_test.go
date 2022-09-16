@@ -426,45 +426,31 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	const message = "Hello World"
-
-	var conn *grpc.ClientConn
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 2*time.Second, 100*time.Millisecond)
-
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	r.NoError(err)
 	c := pb.NewNodeServiceClient(conn)
 
 	// We expect this one to fail
+	const message = "Hello World"
 	_, err = c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
-	r.Error(err)
-	r.Contains(err.Error(), "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
-	r.NoError(conn.Close())
+	r.ErrorContains(err, "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
 
 	resetFlags()
 	events.CloseEventReporter()
 
-	// Test starting the server from the commandline
+	// Test starting the server from the command line
 	// uses Cmd.Run from above
 	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(port, app.Config.API.GrpcServerPort)
-	r.Equal(true, app.Config.API.StartNodeService)
+	r.True(app.Config.API.StartNodeService)
 
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 2*time.Second, 100*time.Millisecond)
-	defer conn.Close()
-
+	conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	r.NoError(err)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c = pb.NewNodeServiceClient(conn)
 
 	// call echo and validate result
@@ -610,9 +596,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, conn.Close())
-	})
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
 
 	wg.Add(1)
@@ -741,15 +725,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		wg.Done()
 	}()
 
-	var conn *grpc.ClientConn
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 5*time.Second, 100*time.Millisecond)
-	defer func() {
-		r.NoError(conn.Close())
-	}()
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	r.NoError(err)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
 	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}))
