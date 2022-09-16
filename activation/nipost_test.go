@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -205,19 +206,21 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
-	defer func() {
-		err = poetProver.Teardown(true)
-		r.NoError(err)
-	}()
+	tb.Cleanup(func() {
+		err := poetProver.Teardown(true)
+		if assert.NoError(tb, err, "failed to tear down harness") {
+			tb.Log("harness torn down")
+		}
+	})
 
 	var postProvider PostSetupProvider
 	postProvider, err = NewPostSetupManager(minerID, postCfg, logtest.New(tb))
 	r.NoError(err)
 	r.NotNil(postProvider)
-	defer func() {
+	tb.Cleanup(func() {
 		r.NoError(postProvider.LastError())
 		r.NoError(postProvider.StopSession(true))
-	}()
+	})
 
 	done, err := postProvider.StartSession(postSetupOpts)
 	r.NoError(err)
