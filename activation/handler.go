@@ -152,6 +152,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("empty positioning atx")
 	}
 
+	// if no previous ATX: IdPositioningAtx MUST be set and valid
+	// if previous ATX: IdPositioningAtx MUST NOT be set
 	if atx.PrevATXID != *types.EmptyATXID {
 		prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
@@ -206,6 +208,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		// as expected from the initial Post.
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
+
+		// TODO hash nodeid + id pos atx for validation just like during creation of proof (VRF PUB Key == nodeid)
 		if err := h.nipostValidator.ValidatePost(atx.NodeID().ToBytes(), atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
 			return nil, fmt.Errorf("invalid initial Post: %v", err)
 		}

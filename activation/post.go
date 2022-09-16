@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync"
@@ -260,7 +261,9 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
+	posAtx := make([]byte, 8) // TODO(mafa): fetch from store
+	commitment := sha256.Sum256(append(mgr.id, posAtx...))
+	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment[:])
 	if err != nil {
 		mgr.mu.Lock()
 		mgr.state = postSetupStateError

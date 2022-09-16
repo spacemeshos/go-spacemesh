@@ -111,6 +111,8 @@ type NIPostChallenge struct {
 	PubLayerID         LayerID
 	PositioningATX     ATXID
 	InitialPostIndices []byte
+
+	// TODO add positioning ATX for VRF (IdPositioningAtx ?)
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
