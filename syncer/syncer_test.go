@@ -58,7 +58,7 @@ type testSyncer struct {
 	mLyrPatrol    *mocks.MocklayerPatrol
 	mLyrProcessor *mocks.MocklayerProcessor
 	mConState     *mmocks.MockconservativeState
-	mTortoise     *mmocks.Mocktortoise
+	mTortoise     *smocks.MockTortoise
 }
 
 func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, defaultMocked bool) *testSyncer {
@@ -70,7 +70,7 @@ func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration, de
 
 	ctrl := gomock.NewController(t)
 	mcs := mmocks.NewMockconservativeState(ctrl)
-	mtrt := mmocks.NewMocktortoise(ctrl)
+	mtrt := smocks.NewMockTortoise(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	if defaultMocked {
 		mcs.EXPECT().GetStateRoot().AnyTimes()
@@ -565,6 +565,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 
 	// simulate hare advancing the mesh forward
+	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
 	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 

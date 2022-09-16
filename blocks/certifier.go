@@ -95,6 +95,7 @@ type Certifier struct {
 	publisher  pubsub.Publisher
 	layerClock layerClock
 	beacon     system.BeaconGetter
+	tortoise   system.Tortoise
 
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
@@ -102,7 +103,7 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *sql.Database, o hare.Rolacle, n types.NodeID, s *signing.EdSigner, p pubsub.Publisher, lc layerClock, b system.BeaconGetter,
+	db *sql.Database, o hare.Rolacle, n types.NodeID, s *signing.EdSigner, p pubsub.Publisher, lc layerClock, b system.BeaconGetter, tortoise system.Tortoise,
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
@@ -116,6 +117,7 @@ func NewCertifier(
 		publisher:   p,
 		layerClock:  lc,
 		beacon:      b,
+		tortoise:    tortoise,
 		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
 	}
 	for _, opt := range opts {
@@ -426,5 +428,6 @@ func (c *Certifier) save(logger log.Log, lid types.LayerID, cert *types.Certific
 		logger.Error("failed to save block cert", log.Err(err))
 		return err
 	}
+	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
 }

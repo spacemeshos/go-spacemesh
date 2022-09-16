@@ -140,6 +140,13 @@ func maxLayer(i, j types.LayerID) types.LayerID {
 	return j
 }
 
+func minLayer(i, j types.LayerID) types.LayerID {
+	if i.Before(j) {
+		return i
+	}
+	return j
+}
+
 func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]sign, getDecision func(blockInfo) sign) bool {
 	// order blocks by height in ascending order
 	// if there is a support before any abstain

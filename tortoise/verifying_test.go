@@ -83,8 +83,8 @@ func TestVerifyingDetermineGoodness(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				hareOutput: votes{
-					blocks[0]: against,
+				hareOutput: map[types.LayerID]types.BlockID{
+					types.NewLayerID(10): types.EmptyBlockID,
 				},
 			},
 			ballot: tortoiseBallot{
@@ -106,10 +106,8 @@ func TestVerifyingDetermineGoodness(t *testing.T) {
 					blocks[1]: types.NewLayerID(10),
 					blocks[2]: types.NewLayerID(10),
 				},
-				hareOutput: votes{
-					blocks[0]: support,
-					blocks[1]: against,
-					blocks[2]: against,
+				hareOutput: map[types.LayerID]types.BlockID{
+					types.NewLayerID(10): blocks[0],
 				},
 			},
 			ballot: tortoiseBallot{
@@ -165,10 +163,8 @@ func TestVerifyingDetermineGoodness(t *testing.T) {
 					blocks[1]: types.NewLayerID(10),
 					blocks[2]: types.NewLayerID(10),
 				},
-				hareOutput: votes{
-					blocks[0]: support,
-					blocks[1]: against,
-					blocks[2]: against,
+				hareOutput: map[types.LayerID]types.BlockID{
+					types.NewLayerID(10): blocks[0],
 				},
 			},
 			ballot: tortoiseBallot{
@@ -204,10 +200,9 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	)
 	genCommonState := func() commonState {
 		state := newCommonState()
-		state.hareOutput = votes{
-			blocks[0]: support,
-			blocks[1]: support,
-			blocks[2]: against,
+		state.hareOutput = map[types.LayerID]types.BlockID{
+			start.Add(1): blocks[0],
+			start.Add(2): types.EmptyBlockID,
 		}
 		state.blockLayer = map[types.BlockID]types.LayerID{
 			blocks[0]: start.Add(1),
@@ -391,6 +386,7 @@ func TestVerifying_Verify(t *testing.T) {
 		GlobalThreshold:                 big.NewRat(7, 10),
 		VerifyingModeVerificationWindow: 10,
 		Hdist:                           10,
+		Zdist:                           1,
 	}
 
 	for _, tc := range []struct {
@@ -399,7 +395,7 @@ func TestVerifying_Verify(t *testing.T) {
 		abstainedWeight map[types.LayerID]util.Weight
 		totalWeight     util.Weight
 		blocks          map[types.LayerID][]blockInfo
-		localOpinion    votes
+		localOpinion    map[types.LayerID]types.BlockID
 
 		expected            types.LayerID
 		expectedTotalWeight util.Weight
@@ -420,10 +416,10 @@ func TestVerifying_Verify(t *testing.T) {
 				start.Add(2): {{id: types.BlockID{2}}},
 				start.Add(3): {{id: types.BlockID{3}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{2}: support,
-				{3}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {1},
+				start.Add(2): {2},
+				start.Add(3): {3},
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
@@ -446,10 +442,10 @@ func TestVerifying_Verify(t *testing.T) {
 				start.Add(2): {{id: types.BlockID{2}}},
 				start.Add(3): {{id: types.BlockID{3}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{2}: support,
-				{3}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {1},
+				start.Add(2): {2},
+				start.Add(3): {3},
 			},
 			expected:            start.Add(2),
 			expectedTotalWeight: util.WeightFromUint64(18),
@@ -469,10 +465,10 @@ func TestVerifying_Verify(t *testing.T) {
 				start.Add(2): {{id: types.BlockID{2}}},
 				start.Add(3): {{id: types.BlockID{3}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{2}: support,
-				{3}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {1},
+				start.Add(2): {2},
+				start.Add(3): {3},
 			},
 			expected:            start.Add(1),
 			expectedTotalWeight: util.WeightFromUint64(24),
@@ -492,10 +488,9 @@ func TestVerifying_Verify(t *testing.T) {
 				start.Add(2): {{id: types.BlockID{2}}},
 				start.Add(3): {{id: types.BlockID{3}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{2}: support,
-				{3}: abstain,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {1},
+				start.Add(2): {2},
 			},
 			expected:            start.Add(2),
 			expectedTotalWeight: util.WeightFromUint64(20),
@@ -515,10 +510,10 @@ func TestVerifying_Verify(t *testing.T) {
 				start.Add(2): {{id: types.BlockID{4}}},
 				start.Add(3): {{id: types.BlockID{5}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{4}: support,
-				{5}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {1},
+				start.Add(2): {4},
+				start.Add(3): {5},
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
@@ -549,10 +544,10 @@ func TestVerifying_Verify(t *testing.T) {
 				start.Add(2): {{id: types.BlockID{4}}},
 				start.Add(3): {{id: types.BlockID{5}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{4}: support,
-				{5}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {1},
+				start.Add(2): {4},
+				start.Add(3): {5},
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
@@ -583,10 +578,10 @@ func TestVerifying_Verify(t *testing.T) {
 				},
 				start.Add(3): {{id: types.BlockID{5}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{4}: support,
-				{5}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {4},
+				start.Add(2): {1},
+				start.Add(3): {5},
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
@@ -617,10 +612,10 @@ func TestVerifying_Verify(t *testing.T) {
 				},
 				start.Add(3): {{id: types.BlockID{5}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{4}: support,
-				{5}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {4},
+				start.Add(2): {1},
+				start.Add(3): {5},
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
@@ -649,10 +644,10 @@ func TestVerifying_Verify(t *testing.T) {
 				},
 				start.Add(3): {{id: types.BlockID{5}}},
 			},
-			localOpinion: votes{
-				{1}: support,
-				{4}: support,
-				{5}: support,
+			localOpinion: map[types.LayerID]types.BlockID{
+				start.Add(1): {4},
+				start.Add(2): {1},
+				start.Add(3): {5},
 			},
 			expected:            start.Add(1),
 			expectedTotalWeight: util.WeightFromUint64(30),
@@ -672,7 +667,7 @@ func TestVerifying_Verify(t *testing.T) {
 			abstainedWeight:     map[types.LayerID]util.Weight{},
 			totalWeight:         util.WeightFromUint64(40),
 			blocks:              map[types.LayerID][]blockInfo{},
-			localOpinion:        votes{},
+			localOpinion:        map[types.LayerID]types.BlockID{},
 			expected:            start.Add(3),
 			expectedTotalWeight: util.WeightFromUint64(10),
 			expectedValidity:    map[types.BlockID]sign{},
@@ -688,7 +683,7 @@ func TestVerifying_Verify(t *testing.T) {
 			abstainedWeight:     map[types.LayerID]util.Weight{},
 			totalWeight:         util.WeightFromUint64(34),
 			blocks:              map[types.LayerID][]blockInfo{},
-			localOpinion:        votes{},
+			localOpinion:        map[types.LayerID]types.BlockID{},
 			expected:            start.Add(1),
 			expectedTotalWeight: util.WeightFromUint64(24),
 			expectedValidity:    map[types.BlockID]sign{},
