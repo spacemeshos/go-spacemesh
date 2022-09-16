@@ -426,7 +426,12 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(100*time.Millisecond),
+	)
 	r.ErrorContains(err, "context deadline exceeded")
 
 	resetFlags()
@@ -440,7 +445,12 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.Equal(port, app.Config.API.GrpcServerPort)
 	r.True(app.Config.API.StartNodeService)
 
-	conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err = grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(2*time.Second),
+	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
@@ -587,7 +597,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
@@ -718,7 +733,12 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		wg.Done()
 	}()
 
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
