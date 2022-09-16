@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,14 +69,14 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// Create new identity.
 	signer1, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err := ioutil.ReadDir(tempdir)
+	infos, err := os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
 	// Load existing identity.
 	signer2, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err = ioutil.ReadDir(tempdir)
+	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 	r.Equal(signer1.PublicKey(), signer2.PublicKey())
@@ -89,7 +89,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// Create new identity.
 	signer3, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err = ioutil.ReadDir(tempdir)
+	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 2)
 	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
@@ -394,7 +394,7 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
@@ -991,7 +991,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	coinbaseAddressBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
 	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
-	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
 	smApp.edSgn = edSgn
