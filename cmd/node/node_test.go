@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,14 +69,14 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// Create new identity.
 	signer1, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err := ioutil.ReadDir(tempdir)
+	infos, err := os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
 	// Load existing identity.
 	signer2, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err = ioutil.ReadDir(tempdir)
+	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 	r.Equal(signer1.PublicKey(), signer2.PublicKey())
@@ -89,7 +89,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// Create new identity.
 	signer3, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err = ioutil.ReadDir(tempdir)
+	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 2)
 	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
@@ -394,7 +394,7 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
@@ -426,49 +426,38 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	const message = "Hello World"
-
-	var conn *grpc.ClientConn
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 2*time.Second, 100*time.Millisecond)
-
-	r.NoError(err)
-	c := pb.NewNodeServiceClient(conn)
-
-	// We expect this one to fail
-	_, err = c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message},
-	})
-	r.Error(err)
-	r.Contains(err.Error(), "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
-	r.NoError(conn.Close())
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(100*time.Millisecond),
+	)
+	r.ErrorContains(err, "context deadline exceeded")
 
 	resetFlags()
 	events.CloseEventReporter()
 
-	// Test starting the server from the commandline
+	// Test starting the server from the command line
 	// uses Cmd.Run from above
 	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(port, app.Config.API.GrpcServerPort)
-	r.Equal(true, app.Config.API.StartNodeService)
+	r.True(app.Config.API.StartNodeService)
 
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 2*time.Second, 100*time.Millisecond)
-	defer conn.Close()
-
+	conn, err = grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(2*time.Second),
+	)
 	r.NoError(err)
-	c = pb.NewNodeServiceClient(conn)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
+	c := pb.NewNodeServiceClient(conn)
 
 	// call echo and validate result
 	// We expect this one to succeed
+	const message = "Hello World"
 	response, err := c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
@@ -561,6 +550,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	t.Cleanup(func() {
+		err := poetHarness.Teardown(true)
+		if assert.NoError(t, err, "failed to tear down harness") {
+			t.Log("harness torn down")
+		}
+	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
@@ -602,15 +597,14 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	var conn *grpc.ClientConn
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 5*time.Second, 100*time.Millisecond)
-	t.Cleanup(func() {
-		require.NoError(t, conn.Close())
-	})
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
 
 	wg.Add(1)
@@ -739,15 +733,14 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		wg.Done()
 	}()
 
-	var conn *grpc.ClientConn
-	require.Eventually(t, func() bool {
-		var err error
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return err == nil
-	}, 5*time.Second, 100*time.Millisecond)
-	defer func() {
-		r.NoError(conn.Close())
-	}()
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
+	r.NoError(err)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
 	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}))
@@ -989,7 +982,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	coinbaseAddressBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
 	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
-	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
 
 	smApp.host = host
 	smApp.edSgn = edSgn
