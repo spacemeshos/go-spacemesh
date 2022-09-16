@@ -7,6 +7,7 @@ import (
 	erewards "github.com/spacemeshos/economics/rewards"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -19,23 +20,14 @@ func ValidateRewards(rewards []types.AnyReward) error {
 		return fmt.Errorf("empty rewards")
 	}
 	unique := map[core.Address]struct{}{}
-	base := rewards[0].Weight.Denom
-	total := uint64(0)
 	for _, reward := range rewards {
 		if reward.Weight.Num == 0 || reward.Weight.Denom == 0 {
 			return fmt.Errorf("reward with invalid (zeroed) weight (%d/%d) included into the block for %v", reward.Weight.Num, reward.Weight.Denom, reward.Coinbase)
-		}
-		if base != reward.Weight.Denom {
-			return fmt.Errorf("all rewards must have the same base %d != %d", base, reward.Weight.Denom)
 		}
 		if _, exists := unique[reward.Coinbase]; exists {
 			return fmt.Errorf("multiple rewards for the same coinbase %v", reward.Coinbase)
 		}
 		unique[reward.Coinbase] = struct{}{}
-		total += reward.Weight.Num
-	}
-	if total != base {
-		return fmt.Errorf("total %d is inconsistent with a base %d", total, base)
 	}
 	return nil
 }
@@ -46,15 +38,18 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 		subsidy                     = erewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
 		total                       = subsidy + fees
 		transferred                 uint64
+		totalWeight                 = util.WeightFromUint64(0)
 	)
 	for _, blockReward := range blockRewards {
-		fraction := new(big.Int).SetUint64(blockReward.Weight.Num)
-		base := new(big.Int).SetUint64(blockReward.Weight.Denom)
+		totalWeight.Add(util.WeightFromNumDenom(blockReward.Weight.Num, blockReward.Weight.Denom))
+	}
+	for _, blockReward := range blockRewards {
+		relative := util.WeightFromNumDenom(blockReward.Weight.Num, blockReward.Weight.Denom).Div(totalWeight)
 
 		totalReward := new(big.Int).SetUint64(total)
 		totalReward.
-			Mul(totalReward, fraction).
-			Quo(totalReward, base)
+			Mul(totalReward, relative.Num()).
+			Quo(totalReward, relative.Denom())
 		if !totalReward.IsUint64() {
 			return fmt.Errorf("%w: total reward %v for %v overflows uint64",
 				core.ErrInternal, totalReward, blockReward.Coinbase)
@@ -62,8 +57,8 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 
 		subsidyReward := new(big.Int).SetUint64(subsidy)
 		subsidyReward.
-			Mul(subsidyReward, fraction).
-			Quo(subsidyReward, base)
+			Mul(subsidyReward, relative.Num()).
+			Quo(subsidyReward, relative.Denom())
 		if !subsidyReward.IsUint64() {
 			return fmt.Errorf("%w: subsidy reward %v for %v overflows uint64",
 				core.ErrInternal, subsidyReward, blockReward.Coinbase)

@@ -70,48 +70,6 @@ func TestValidateRewards(t *testing.T) {
 			err: true,
 		},
 		{
-			desc: "inconsistent base",
-			rewards: []types.AnyReward{
-				{
-					Coinbase: types.Address{1},
-					Weight:   types.RatNum{Num: 2, Denom: 4},
-				},
-				{
-					Coinbase: types.Address{3},
-					Weight:   types.RatNum{Num: 1, Denom: 2},
-				},
-			},
-			err: true,
-		},
-		{
-			desc: "total overflow",
-			rewards: []types.AnyReward{
-				{
-					Coinbase: types.Address{1},
-					Weight:   types.RatNum{Num: 2, Denom: 3},
-				},
-				{
-					Coinbase: types.Address{3},
-					Weight:   types.RatNum{Num: 2, Denom: 3},
-				},
-			},
-			err: true,
-		},
-		{
-			desc: "total underflow",
-			rewards: []types.AnyReward{
-				{
-					Coinbase: types.Address{1},
-					Weight:   types.RatNum{Num: 1, Denom: 3},
-				},
-				{
-					Coinbase: types.Address{3},
-					Weight:   types.RatNum{Num: 1, Denom: 3},
-				},
-			},
-			err: true,
-		},
-		{
 			desc: "multiple per coinbase",
 			rewards: []types.AnyReward{
 				{
