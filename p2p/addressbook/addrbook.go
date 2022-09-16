@@ -295,9 +295,7 @@ func (a *AddrBook) getAddressFromBuckets(buckets []map[peer.ID]*knownAddress) *k
 	}
 }
 
-// AddressCache returns the current address cache.  It must be treated as
-// read-only (but since it is a copy now, this is not as dangerous).
-func (a *AddrBook) AddressCache() []*AddrInfo {
+func (a *AddrBook) GetKnownAddressesCache() []*knownAddress {
 	allAddr := a.GetAddresses()
 
 	numAddresses := len(allAddr) * a.cfg.GetAddrPercent / 100
@@ -307,7 +305,7 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 		numAddresses = len(allAddr)
 	}
 
-	result := make([]*AddrInfo, 0, numAddresses)
+	result := make([]*knownAddress, 0, numAddresses)
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	for i := 0; i < numAddresses; i++ {
@@ -319,8 +317,19 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 			ka = a.getAddressFromBuckets(a.addrNew)
 		}
 		if ka != nil {
-			result = append(result, ka.Addr)
+			result = append(result, ka)
 		}
+	}
+	return result
+}
+
+// AddressCache returns the current address cache.  It must be treated as
+// read-only (but since it is a copy now, this is not as dangerous).
+func (a *AddrBook) AddressCache() []*AddrInfo {
+	knownAddresses := a.GetKnownAddressesCache()
+	result := make([]*AddrInfo, 0, len(knownAddresses))
+	for _, address := range knownAddresses {
+		result = append(result, address.Addr)
 	}
 	return result
 }
@@ -370,8 +379,9 @@ func (a *AddrBook) GetAddresses() []*AddrInfo {
 	return addrs
 }
 
-// GetAllAddressesUsedBefore returns all the addresses used before the given time.
-func (a *AddrBook) GetAllAddressesUsedBefore(date time.Time) []*AddrInfo {
+// GetAddressesNotConnectedSince returns all the addresses which have not
+// been successfully connected to since `date`
+func (a *AddrBook) GetAddressesNotConnectedSince(date time.Time) []*AddrInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -382,7 +392,7 @@ func (a *AddrBook) GetAllAddressesUsedBefore(date time.Time) []*AddrInfo {
 
 	addrs := make([]*AddrInfo, 0, addrIndexLen)
 	for _, v := range a.addrIndex {
-		if v.LastSeen.Before(date) {
+		if v.LastSuccess.Before(date) {
 			addrs = append(addrs, v.Addr)
 		}
 	}

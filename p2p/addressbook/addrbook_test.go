@@ -186,12 +186,13 @@ func TestAddrBook_GetAllAddressesUsedBefore(t *testing.T) {
 	info := genRandomInfo(t, rng)
 	require.Equal(t, 0, len(n.GetAddresses()))
 	n.AddAddress(info, info)
+	n.Good(info.ID)
 
-	require.Equal(t, 1, len(n.GetAllAddressesUsedBefore(time.Now())))
-	require.Equal(t, 0, len(n.GetAllAddressesUsedBefore(time.Now().Add(-1*time.Minute))))
+	require.Equal(t, 1, len(n.GetAddressesNotConnectedSince(time.Now())))
+	require.Equal(t, 0, len(n.GetAddressesNotConnectedSince(time.Now().Add(-1*time.Minute))))
 
-	time.Sleep(2 * time.Second)
-	require.Equal(t, 1, len(n.GetAllAddressesUsedBefore(time.Now().Add(-1*time.Second))))
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, 1, len(n.GetAddressesNotConnectedSince(time.Now().Add(-1*time.Millisecond))))
 }
 
 func TestAddrBook_RemoveAddress(t *testing.T) {

@@ -78,7 +78,7 @@ func (d *Discovery) GetAddresses() []*addressbook.AddrInfo {
 // - peer was attempted to connect X time in ago (defined in config).
 func (d *Discovery) GetRandomPeers(n int) []*addressbook.AddrInfo {
 	lastUsageDate := time.Now().Add(-1 * d.cfg.CheckPeersUsedBefore)
-	allPeers := d.book.GetAllAddressesUsedBefore(lastUsageDate)
+	allPeers := d.book.GetAddressesNotConnectedSince(lastUsageDate)
 	peers := d.filterPeers(allPeers)
 	if len(peers) == 0 {
 		d.logger.Info("no peers to check")

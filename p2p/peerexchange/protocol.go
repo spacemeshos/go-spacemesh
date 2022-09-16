@@ -41,7 +41,6 @@ func newPeerExchange(h host.Host, rt *addressbook.AddrBook, listen uint16, log l
 		listen: atomic.NewUint32(uint32(listen)),
 	}
 	h.SetStreamHandler(protocolName, ga.handler)
-	h.EventBus()
 	return ga
 }
 
@@ -79,10 +78,19 @@ func (p *peerExchange) handler(stream network.Stream) {
 		}
 		p.book.AddAddress(info, info)
 	}
-	results := p.book.AddressCache()
+
+	results := p.book.GetKnownAddressesCache()
+	// Filter out addresses that have not been connected for a while
+	aliveAddresses := make([]*addressbook.AddrInfo, len(results))
+	validAfterTs := time.Now().Add(time.Minute * 10)
+	for _, address := range results {
+		if address.LastSuccess.After(validAfterTs) {
+			aliveAddresses = append(aliveAddresses, address.Addr)
+		}
+	}
 
 	response := make([]string, 0, len(results))
-	for _, addr := range results {
+	for _, addr := range aliveAddresses {
 		if addr.ID == stream.Conn().RemotePeer() {
 			continue
 		}
