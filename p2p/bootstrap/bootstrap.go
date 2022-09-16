@@ -102,11 +102,10 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 	defer b.host.Network().StopNotify(notifier)
 
 	var (
-		outbound           int
-		discoveryBootstrap bool
-		peers              = map[peer.ID]network.Direction{}
-		limit              = make(chan struct{}, 1)
-		ticker             = time.NewTicker(b.cfg.Timeout)
+		outbound int
+		peers    = map[peer.ID]network.Direction{}
+		limit    = make(chan struct{}, 1)
+		ticker   = time.NewTicker(b.cfg.Timeout)
 	)
 	defer ticker.Stop()
 
@@ -147,12 +146,6 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 				Direction:     hs.Direction,
 				Connectedness: network.Connected,
 			})
-			if len(peers) >= b.cfg.TargetOutbound && !discoveryBootstrap {
-				// NOTE(dshulyak) this is a hack to support logic in tests that expects a message
-				// to be printed once
-				discoveryBootstrap = true
-				b.logger.Event().Info("discovery_bootstrap", log.Int("peers", len(peers)))
-			}
 		case pid := <-disconnected:
 			_, exist := peers[pid]
 			if exist && b.host.Network().Connectedness(pid) == network.NotConnected {
