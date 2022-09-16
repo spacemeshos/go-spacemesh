@@ -81,7 +81,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 
 	results := p.book.GetKnownAddressesCache()
 	// Filter out addresses that have not been connected for a while
-	aliveAddresses := make([]*addressbook.AddrInfo, len(results))
+	aliveAddresses := make([]*addressbook.AddrInfo, 0, len(results))
 	validAfterTs := time.Now().Add(time.Minute * 10)
 	for _, address := range results {
 		if address.LastSuccess.After(validAfterTs) {
