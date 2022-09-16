@@ -561,6 +561,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	t.Cleanup(func() {
+		err := poetHarness.Teardown(true)
+		if assert.NoError(t, err, "failed to tear down harness") {
+			t.Log("harness torn down")
+		}
+	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
