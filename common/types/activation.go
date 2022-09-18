@@ -106,13 +106,14 @@ var EmptyATXID = &ATXID{}
 type NIPostChallenge struct {
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
-	Sequence           uint64
-	PrevATXID          ATXID
-	PubLayerID         LayerID
-	PositioningATX     ATXID
-	InitialPostIndices []byte
+	Sequence       uint64
+	PrevATXID      ATXID
+	PubLayerID     LayerID
+	PositioningATX ATXID
 
-	// TODO add positioning ATX for VRF (IdPositioningAtx ?)
+	// CommitmentATX is the ATX used as a commitment when initializing the PoST of the node.
+	CommitmentATX      ATXID
+	InitialPostIndices []byte
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.

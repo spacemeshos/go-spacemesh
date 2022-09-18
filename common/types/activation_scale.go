@@ -37,6 +37,13 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
+		n, err := scale.EncodeByteArray(enc, t.CommitmentATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteSlice(enc, t.InitialPostIndices)
 		if err != nil {
 			return total, err
@@ -71,6 +78,13 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.CommitmentATX[:])
 		if err != nil {
 			return total, err
 		}
