@@ -152,8 +152,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("empty positioning atx")
 	}
 
-	// if no previous ATX: IdPositioningAtx MUST be set and valid
-	// if previous ATX: IdPositioningAtx MUST NOT be set
+	// if no previous ATX: commitmentATX MUST be set and valid
+	// if previous ATX: commitmentATX MUST NOT be set
 	if atx.PrevATXID != *types.EmptyATXID {
 		prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
