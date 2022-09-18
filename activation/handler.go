@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync"
@@ -16,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -209,8 +209,9 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
 
-		// TODO hash nodeid + id pos atx for validation just like during creation of proof (VRF PUB Key == nodeid)
-		if err := h.nipostValidator.ValidatePost(atx.NodeID().ToBytes(), atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
+		// TODO(mafa): commitmentATX is on a different ATX (the initial one without a prevAtx)
+		commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), atx.CommitmentATX[:]...))
+		if err := h.nipostValidator.ValidatePost(commitment[:], atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
 			return nil, fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
@@ -241,8 +242,9 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	pubKey := signing.NewPublicKey(atx.NodeID().ToBytes())
-	leaves, err := h.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
+	// TODO(mafa): commitmentATX is on a different ATX (the initial one without a prevAtx)
+	commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), atx.CommitmentATX[:]...))
+	leaves, err := h.nipostValidator.Validate(commitment[:], atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %v", err)
 	}

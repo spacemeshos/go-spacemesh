@@ -35,7 +35,8 @@ func init() {
 func TestPostSetupManager(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	lastStatus := &PostSetupStatus{}
@@ -92,7 +93,8 @@ func TestPostSetupManager(t *testing.T) {
 func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Verify the initial status.
@@ -119,7 +121,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	// req.Equal(lastStatus, mgr.Status())
 
 	// Re-instantiate `PostSetupManager`.
-	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t))
+	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Verify the initial status.
@@ -134,7 +136,8 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req := require.New(t)
 	ch := make([]byte, 32)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Attempt to generate proof.
@@ -147,11 +150,11 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	<-doneChan
 
 	// Generate proof.
-	_, _, err = mgr.GenerateProof(make([]byte, 32))
+	_, _, err = mgr.GenerateProof(ch)
 	req.NoError(err)
 
 	// Re-instantiate `PostSetupManager`.
-	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t))
+	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Attempt to generate proof.
@@ -162,7 +165,8 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Verify that the status stream works properly when called *before* session started.
@@ -203,7 +207,8 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Verify that the status stream works properly when called *after* session started (yet before it ended).
@@ -245,7 +250,8 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Verify state.
@@ -290,7 +296,8 @@ func TestPostSetupManager_Stop(t *testing.T) {
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Create data.

@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -158,9 +158,8 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 func TestPostSetup(t *testing.T) {
 	r := require.New(t)
 
-	var postSetupProvider PostSetupProvider
-	var err error
-	postSetupProvider, err = NewPostSetupManager(minerID, postCfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	postSetupProvider, err := NewPostSetupManager(minerID, postCfg, logtest.New(t), cdb, goldenATXID)
 	r.NoError(err)
 	r.NotNil(postSetupProvider)
 
@@ -169,8 +168,7 @@ func TestPostSetup(t *testing.T) {
 
 	poetDb := &poetDbMock{}
 
-	nb := NewNIPostBuilder(minerID, postSetupProvider, poetProvider,
-		poetDb, sql.InMemory(), logtest.New(t))
+	nb := NewNIPostBuilder(minerID, postSetupProvider, poetProvider, poetDb, sql.InMemory(), logtest.New(t))
 
 	done, err := postSetupProvider.StartSession(postSetupOpts)
 	r.NoError(err)
@@ -198,7 +196,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 	nipost := buildNIPost(t, r, postCfg, nipostChallenge, poetDb)
 
-	err := validateNIPost(minerID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
+	err := validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.NoError(err)
 }
 
@@ -213,8 +211,8 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 		}
 	})
 
-	var postProvider PostSetupProvider
-	postProvider, err = NewPostSetupManager(minerID, postCfg, logtest.New(tb))
+	cdb := newCachedDB(tb)
+	postProvider, err := NewPostSetupManager(minerID, postCfg, logtest.New(tb), cdb, goldenATXID)
 	r.NoError(err)
 	r.NotNil(postProvider)
 	tb.Cleanup(func() {
@@ -245,7 +243,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	copy(minerIDNotInitialized, []byte("not initialized"))
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 
-	postProvider, err := NewPostSetupManager(minerIDNotInitialized, postCfg, logtest.New(t))
+	cdb := newCachedDB(t)
+	postProvider, err := NewPostSetupManager(minerIDNotInitialized, postCfg, logtest.New(t), cdb, goldenATXID)
 	r.NoError(err)
 	r.NotNil(postProvider)
 	defer func() {
@@ -276,7 +275,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	err = validateNIPost(minerIDNotInitialized, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerIDNotInitialized, goldenATXID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.NoError(err)
 }
 
@@ -356,51 +355,52 @@ func TestValidator_Validate(t *testing.T) {
 
 	nipost := buildNIPost(t, r, postCfg, nipostChallenge, poetDb)
 
-	err := validateNIPost(minerID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
+	err := validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.NoError(err)
 
-	err = validateNIPost(minerID, nipost, types.BytesToHash([]byte("lerner")), poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, types.BytesToHash([]byte("lerner")), poetDb, postCfg, postSetupOpts.NumUnits)
 	r.Contains(err.Error(), "invalid `Challenge`")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	err = validateNIPost(minerID, &newNIPost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, &newNIPost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.Contains(err.Error(), "invalid Post")
 
 	newPostCfg := postCfg
 	newPostCfg.MinNumUnits = postSetupOpts.NumUnits + 1
-	err = validateNIPost(minerID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postSetupOpts.NumUnits))
 
 	newPostCfg = postCfg
 	newPostCfg.MaxNumUnits = postSetupOpts.NumUnits - 1
-	err = validateNIPost(minerID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postSetupOpts.NumUnits))
 
 	newPostCfg = postCfg
 	newPostCfg.LabelsPerUnit = uint(nipost.PostMetadata.LabelsPerUnit) + 1
-	err = validateNIPost(minerID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 
 	newPostCfg = postCfg
 	newPostCfg.BitsPerLabel = uint(nipost.PostMetadata.BitsPerLabel) + 1
-	err = validateNIPost(minerID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
 
 	newPostCfg = postCfg
 	newPostCfg.K1 = uint(nipost.PostMetadata.K2) - 1
-	err = validateNIPost(minerID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", newPostCfg.K1, nipost.PostMetadata.K1))
 
 	newPostCfg = postCfg
 	newPostCfg.K2 = uint(nipost.PostMetadata.K2) + 1
-	err = validateNIPost(minerID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
+func validateNIPost(minerID []byte, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
-	_, err := v.Validate(*signing.NewPublicKey(minerID), nipost, challenge, numUnits)
+	commitment := sha256.Sum256(append(minerID, commitmentAtx.Bytes()...))
+	_, err := v.Validate(commitment[:], nipost, challenge, numUnits)
 	return err
 }
 

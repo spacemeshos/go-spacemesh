@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Validator contains the dependencies required to validate NIPosts.
@@ -30,7 +29,7 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
+func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
@@ -67,7 +66,7 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, ex
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
-	if err := v.ValidatePost(minerID.Bytes(), nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := v.ValidatePost(commitment, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 

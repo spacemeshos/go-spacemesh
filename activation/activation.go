@@ -441,6 +441,8 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
+		// TODO(mafa): add atx used for commitment in post
+		challenge.CommitmentATX = *types.EmptyATXID
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID

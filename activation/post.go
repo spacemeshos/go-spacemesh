@@ -398,7 +398,11 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 		return nil, nil, errNotComplete
 	}
 
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, mgr.id)
+	// TODO(mafa): posAtx for the commitment should probably be injected into the PostSetupManager instead of being determined by it
+	// TODO(mafa): id field in post package should be renamed to commitment otherwise error messages are confusing
+	posAtx := types.ATXID(types.HexToHash32("77777"))
+	commitment := sha256.Sum256(append(mgr.id, posAtx.Bytes()...))
+	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, commitment[:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
