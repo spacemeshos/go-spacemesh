@@ -12,7 +12,10 @@ import (
 	"github.com/spacemeshos/post/proving"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type (
@@ -71,9 +74,11 @@ var _ PostSetupProvider = (*PostSetupManager)(nil)
 type PostSetupManager struct {
 	mu sync.Mutex
 
-	id     []byte
-	cfg    PostConfig
-	logger log.Log
+	id          []byte
+	cfg         PostConfig
+	logger      log.Log
+	db          *datastore.CachedDB
+	goldenATXID types.ATXID
 
 	state             postSetupState
 	initCompletedChan chan struct{}
@@ -112,11 +117,13 @@ type PostSetupStatus struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id []byte, cfg PostConfig, logger log.Log) (*PostSetupManager, error) {
+func NewPostSetupManager(id []byte, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:                id,
 		cfg:               cfg,
 		logger:            logger,
+		db:                db,
+		goldenATXID:       goldenATXID,
 		state:             postSetupStateNotStarted,
 		initCompletedChan: make(chan struct{}),
 		startedChan:       make(chan struct{}),
@@ -261,28 +268,33 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	posAtx := make([]byte, 8) // TODO(mafa): fetch from store
-	commitment := sha256.Sum256(append(mgr.id, posAtx...))
+	posAtx, err := mgr.getPosAtxID()
+	if err != nil {
+		mgr.mu.Lock()
+		mgr.state = postSetupStateError
+		mgr.lastErr = err
+		mgr.mu.Unlock()
+		return nil, fmt.Errorf("get positioning atx: %w", err)
+	}
+
+	commitment := sha256.Sum256(append(mgr.id, posAtx.Bytes()...))
 	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment[:])
 	if err != nil {
 		mgr.mu.Lock()
 		mgr.state = postSetupStateError
 		mgr.lastErr = err
 		mgr.mu.Unlock()
-
 		return nil, fmt.Errorf("new initializer: %w", err)
 	}
 
 	newInit.SetLogger(mgr.logger)
 
 	mgr.mu.Lock()
-
 	mgr.init = newInit
 	mgr.lastOpts = &opts
 	mgr.lastErr = nil
 	close(mgr.startedChan)
 	mgr.doneChan = make(chan struct{})
-
 	mgr.mu.Unlock()
 
 	go func() {
@@ -329,6 +341,18 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	}()
 
 	return mgr.doneChan, nil
+}
+
+func (mgr *PostSetupManager) getPosAtxID() (types.ATXID, error) {
+	posAtx, err := atxs.GetPositioningID(mgr.db)
+	if errors.Is(err, sql.ErrNotFound) {
+		mgr.logger.With().Info("using golden atx as positioning atx", posAtx)
+		return mgr.goldenATXID, nil
+	}
+	if err != nil {
+		return *types.EmptyATXID, fmt.Errorf("get positioning atx: %w", err)
+	}
+	return posAtx, nil
 }
 
 // StopSession stops the current Post setup data creation session
