@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -457,7 +458,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
-	genesisAccts := app.Config.Genesis.ToAccounts()
+	genesisAccts := app.Config.Genesis.Accounts.ToList()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
 		if err != nil {
@@ -470,7 +471,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.Genesis.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -1068,14 +1069,16 @@ func (app *App) Start() error {
 	/* Initialize all protocol services */
 
 	dbStorepath := app.Config.DataDir()
-	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
 
 	lg.Info("initializing p2p services")
+
+	app.Config.NetworkIdFromGenesis(app.Config.Genesis)
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
@@ -1087,6 +1090,10 @@ func (app *App) Start() error {
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
+	}
+
+	if err = app.checkStoredGenCfg(); err != nil {
+		return fmt.Errorf("failed to check stored genesis config: %w", err)
 	}
 
 	if err = app.initServices(ctx,
@@ -1163,4 +1170,35 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 		return nil, fmt.Errorf("mapstructure decode: %w", err)
 	}
 	return rst, nil
+}
+
+func (app *App) checkStoredGenCfg() error {
+	if savedGenFile := filesystem.PathExists(config.DefaultGenesisDataPath); savedGenFile {
+		genData, err := ioutil.ReadFile(config.DefaultGenesisDataPath)
+		if err != nil {
+			return fmt.Errorf("Error reading saved genesis data: %s", err)
+		}
+
+		var payload config.GenesisConfig
+
+		err = json.Unmarshal(genData, &payload)
+		if err != nil {
+			return fmt.Errorf("Error decoded genesis data into json: %s", genData)
+		}
+		if expectedConfig, err_cmp := app.Config.Genesis.Compare(&payload); err_cmp != nil {
+			return fmt.Errorf("genesis data mismatch.\nExpected %s\nGot: %v", expectedConfig, app.Config.Genesis)
+		}
+	} else {
+		json_cfg, err := json.Marshal(app.Config.Genesis)
+		if err != nil {
+			return fmt.Errorf("failed to read genesis config into json: %s", err)
+		} else {
+			if writeErr := ioutil.WriteFile(config.DefaultGenesisDataPath, json_cfg, 0444); writeErr != nil {
+				return fmt.Errorf("failed to save genesis config with data: %s to %s.\nGot error: %s",
+					string(json_cfg), config.DefaultGenesisDataPath, writeErr)
+			}
+		}
+	}
+
+	return nil
 }

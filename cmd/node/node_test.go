@@ -560,7 +560,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+	app, err := initSingleInstance(logger, *cfg, 0, config.DefaultTestGenesisTime(),
 		path, eligibility.New(logtest.New(t)),
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
@@ -709,8 +709,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-		app.Config.Genesis = &apiConfig.GenesisConfig{
+		app.Config.Genesis.GenesisTime = config.DefaultTestGenesisTime()
+		app.Config.Genesis.Accounts = &apiConfig.GenesisAccountConfig{
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
 			},
@@ -909,7 +909,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
 		for _, key := range keys {
-			require.EqualValues(t, conf.Genesis.Accounts[key], value)
+			require.EqualValues(t, conf.Genesis.Accounts.Accounts[key], value)
 		}
 	})
 }
@@ -959,11 +959,11 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
-	cfg.GoldenATXID = "0x5678"
+	cfg.Genesis.GoldenATXID = "0x5678"
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
-	cfg.Genesis = apiConfig.DefaultTestGenesisConfig()
+	cfg.Genesis = config.DefaultTestGenesisConfig()
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
@@ -977,7 +977,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
-	smApp.Config.GenesisTime = genesisTime
+	smApp.Config.Genesis.GenesisTime = genesisTime
 
 	coinbaseAddressBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))

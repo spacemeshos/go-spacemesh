@@ -34,13 +34,19 @@ type Context struct {
 	// an amount transfrered to other accounts
 	transferred uint64
 
-	touched []Address
-	changed map[Address]*Account
+	touched   []Address
+	changed   map[Address]*Account
+	GenesisID [20]byte
 }
 
 // Principal returns address of the account that signed transaction.
 func (c *Context) Principal() Address {
 	return c.PrincipalAccount.Address
+}
+
+// GenesisId returns genesis id.
+func (c *Context) GenesisId() [20]byte {
+	return c.GenesisID
 }
 
 // Layer returns block layer id.

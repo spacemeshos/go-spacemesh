@@ -11,12 +11,10 @@ metrics = false
 metrics-port = 2020
 oracle_server = "http://localhost:3030"
 oracle_server_worldid = 0
-genesis-time = "2019-02-13T17:02:00+00:00"
 layer-duration-sec = "5"
 block-cache-size = "20"
 hdist = "5"
 coinbase = "0x1234"
-golden-atx = "0x5678"
 
 # Node Config
 [p2p]
@@ -104,3 +102,9 @@ atx-builder = "info"
 hare-beacon = "info"
 beacon = "info"
 weakCoin = "info"
+
+[genesis]
+#genesis-id = ""
+golden-atx = "0x5678"
+genesis-time = "2019-02-13T17:02:00+00:00"
+genesis-extra-data = "mainnet"

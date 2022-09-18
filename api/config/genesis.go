@@ -7,13 +7,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// GenesisConfig defines accounts that will exist in state at genesis.
-type GenesisConfig struct {
+// GenesisAccountConfig defines accounts that will exist in state at genesis.
+type GenesisAccountConfig struct {
 	Accounts map[string]uint64 `mapstructure:"accounts"`
 }
 
-// ToAccounts creates list of types.Account instance from config.
-func (g *GenesisConfig) ToAccounts() []types.Account {
+// ToList creates list of types.Account instance from config.
+func (g *GenesisAccountConfig) ToList() []types.Account {
 	var rst []types.Account
 	for addr, balance := range g.Accounts {
 		genesisAddr, err := types.StringToAddress(addr)
@@ -34,18 +34,18 @@ const Account1Private = "0x2dcddb8e0ddd2269f536da5768e890790f2b84366e0fb8396bdcd
 // Account2Private is the private key for second test account.
 const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df4084d306b49feaf3d38b6ef430933ebedeb073af7bec018e8d2e379fa47df6a9fa07a6a8344"
 
-// DefaultGenesisConfig is the default configuration for the node.
-func DefaultGenesisConfig() *GenesisConfig {
+// DefaultGenesisAccountConfig is the default configuration for the node.
+func DefaultGenesisAccountConfig() *GenesisAccountConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	return &GenesisConfig{
+	return &GenesisAccountConfig{
 		Accounts: generateGenesisAccounts(),
 	}
 }
 
-// DefaultTestGenesisConfig is the default test configuration for the node.
-func DefaultTestGenesisConfig() *GenesisConfig {
+// DefaultTestGenesisAccountConfig is the default test configuration for the node.
+func DefaultTestGenesisAccountConfig() *GenesisAccountConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	return &GenesisConfig{
+	return &GenesisAccountConfig{
 		Accounts: generateGenesisAccounts(),
 	}
 }

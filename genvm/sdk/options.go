@@ -16,13 +16,21 @@ func Defaults() *Options {
 
 // Options to modify common transaction fields.
 type Options struct {
-	GasPrice uint64
+	GasPrice  uint64
+	GenesisId [20]byte
 }
 
 // WithGasPrice modifies GasPrice.
 func WithGasPrice(price uint64) Opt {
 	return func(opts *Options) {
 		opts.GasPrice = price
+	}
+}
+
+// WithGenesisId modifies GenesisId.
+func WithGenesisId(id [20]byte) Opt {
+	return func(opts *Options) {
+		opts.GenesisId = id
 	}
 }
 
