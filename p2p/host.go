@@ -34,6 +34,7 @@ func DefaultConfig() Config {
 		CheckTimeout:         30 * time.Second,
 		CheckPeersNumber:     10,
 		CheckPeersUsedBefore: 30 * time.Minute,
+		peerExchange:         peerexchange.DefaultPeerExchangeConfig(),
 	}
 }
 
@@ -59,6 +60,8 @@ type Config struct {
 	CheckTimeout         time.Duration
 	CheckPeersNumber     int
 	CheckPeersUsedBefore time.Duration
+
+	peerExchange peerexchange.PeerExchangeConfig `mapstructure:"peer-exchange"`
 }
 
 // New initializes libp2p host configured for spacemesh.

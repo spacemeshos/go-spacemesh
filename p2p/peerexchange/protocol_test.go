@@ -42,7 +42,7 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 
 		port, err := routablePort(h)
 		require.NoError(t, err)
-		protocols = append(protocols, newPeerExchange(h, book, port, logger))
+		protocols = append(protocols, newPeerExchange(h, book, port, logger, DefaultPeerExchangeConfig()))
 	}
 	for _, proto := range protocols {
 		for _, proto2 := range protocols {
