@@ -143,7 +143,6 @@ func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([
 					out = append(out, a)
 					r.book.AddAddress(a, cr.Src)
 				}
-
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()

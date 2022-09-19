@@ -86,8 +86,8 @@ func NewAddrBook(cfg *Config, logger log.Log) *AddrBook {
 }
 
 // WasRecentlyRemoved checks if peer ID was recently removed.
-// If peer is in the cache, then it returns the time when peer was removed
-// If the peer was not in the cache, returns (nil, false)
+// If peer is in the cache, then it returns the time when peer was removed.
+// If the peer was not in the cache, returns (nil, false).
 func (a *AddrBook) WasRecentlyRemoved(id peer.ID) (removedAt *time.Time, wasRemoved bool) {
 	if removedAt, ok := a.recentlyRemoved.Peek(id); ok {
 		r := removedAt.(time.Time)

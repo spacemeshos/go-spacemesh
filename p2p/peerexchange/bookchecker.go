@@ -73,7 +73,6 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 		} else {
 			d.book.AddAddress(newAddr, addresses[0])
 		}
-
 	}
 }
 
