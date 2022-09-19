@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -80,15 +79,11 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	return cfg
 }
 
-func (gc *GenesisConfig) Compare(payload *GenesisConfig) (string, error) {
-	if isEqual := cmp.Equal(gc, payload); isEqual {
-		return "", nil
+func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
+	if diff := cmp.Diff(payload, gc); diff != "" {
+		return fmt.Errorf("config files mismatches (-want +got):\n%s", diff)
 	}
-	if b, err := json.Marshal(payload); err != nil {
-		return "", fmt.Errorf("failed to marshal: %w", err)
-	} else {
-		return string(b), fmt.Errorf("genesis config mismatch")
-	}
+	return nil
 }
 
 func DefaultTestGenesisTime() string {

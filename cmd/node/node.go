@@ -1181,12 +1181,11 @@ func (app *App) checkAndStoreGenesisConfig() error {
 
 		var payload config.GenesisConfig
 
-		err = json.Unmarshal(genesisData, &payload)
-		if err != nil {
+		if err = json.Unmarshal(genesisData, &payload); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if expectedConfig, err := app.Config.Genesis.Compare(&payload); err != nil {
-			return fmt.Errorf("genesis data mismatch.\nExpected %s\nGot: %v", expectedConfig, app.Config.Genesis)
+		if err = app.Config.Genesis.Compare(&payload); err != nil {
+			return fmt.Errorf("failed to compare stored genesis config file: %w", err)
 		}
 		return nil
 	}
