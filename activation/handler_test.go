@@ -53,12 +53,20 @@ func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 	}
 }
 
-func TestHandler_GetNodeLastAtxId(t *testing.T) {
+func TestHandler_StoreAtx(t *testing.T) {
+	// Arrange
 	r := require.New(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(func() { ctrl.Finish() })
 
-	cdb := newCachedDB(t)
-	atxHdlr := getATXHandler(t, cdb)
+	log := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), log)
+	validator := amocks.NewMocknipostValidator(ctrl)
+	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, log)
+
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
+
+	// Act
 	epoch1 := types.EpochID(1)
 	atx1 := newActivationTx(t, sig, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx1))
@@ -67,121 +75,96 @@ func TestHandler_GetNodeLastAtxId(t *testing.T) {
 	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx2))
 
+	// Assert
 	atxid, err := atxs.GetLastIDByNodeID(cdb, sig.NodeID())
 	r.NoError(err)
 	r.Equal(atx2.ID(), atxid, "atx2.ShortString(): %v", atx2.ShortString())
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {
+	// Arrange
+	r := require.New(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(func() { ctrl.Finish() })
+
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
-	t.Cleanup(func() {
-		types.SetLayersPerEpoch(layers)
-	})
+	t.Cleanup(func() { types.SetLayersPerEpoch(layers) })
 
-	cdb := newCachedDB(t)
-	atxHdlr := getATXHandler(t, cdb)
+	log := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), log)
+	validator := amocks.NewMocknipostValidator(ctrl)
+	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, log)
 
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
 	coinbase2 := types.GenerateAddress([]byte("bbbb"))
 	coinbase3 := types.GenerateAddress([]byte("cccc"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
+	numTicks := uint64(100)
+	numUnits := uint(100)
+
 	npst := newNIPostWithChallenge(&chlng, poetRef)
-	posATX := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, 100, coinbase1, 100, npst)
-	err := atxHdlr.StoreAtx(context.TODO(), posATX)
-	assert.NoError(t, err)
+	posATX := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, numTicks, coinbase1, numUnits, npst)
+	r.NoError(atxHdlr.StoreAtx(context.TODO(), posATX))
+
+	// Act
 	atxList := []*types.VerifiedActivationTx{
-		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1012), 0, 100, coinbase1, 100, &types.NIPost{}),
-		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1300), 0, 100, coinbase2, 100, &types.NIPost{}),
-		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1435), 0, 100, coinbase3, 100, &types.NIPost{}),
+		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1012), 0, numTicks, coinbase1, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1300), 0, numTicks, coinbase2, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1435), 0, numTicks, coinbase3, numUnits, &types.NIPost{}),
 	}
 	for _, atx := range atxList {
 		hash, err := atx.NIPostChallenge.Hash()
-		assert.NoError(t, err)
+		r.NoError(err)
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
-	}
 
-	err = processAtxs(atxHdlr, atxList)
-	assert.NoError(t, err)
+		r.NoError(atxHdlr.ProcessAtx(context.TODO(), atx))
+	}
 
 	// check that further atxList don't affect current epoch count
 	atxList2 := []*types.VerifiedActivationTx{
-		newActivationTx(t, sig, 1, atxList[0].ID(), atxList[0].ID(), types.NewLayerID(2012), 0, 100, coinbase1, 100, &types.NIPost{}),
-		newActivationTx(t, sig, 1, atxList[1].ID(), atxList[1].ID(), types.NewLayerID(2300), 0, 100, coinbase2, 100, &types.NIPost{}),
-		newActivationTx(t, sig, 1, atxList[2].ID(), atxList[2].ID(), types.NewLayerID(2435), 0, 100, coinbase3, 100, &types.NIPost{}),
+		newActivationTx(t, sig, 1, atxList[0].ID(), atxList[0].ID(), types.NewLayerID(2012), 0, numTicks, coinbase1, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 1, atxList[1].ID(), atxList[1].ID(), types.NewLayerID(2300), 0, numTicks, coinbase2, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 1, atxList[2].ID(), atxList[2].ID(), types.NewLayerID(2435), 0, numTicks, coinbase3, numUnits, &types.NIPost{}),
 	}
 	for _, atx := range atxList2 {
 		hash, err := atx.NIPostChallenge.Hash()
 		assert.NoError(t, err)
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
+
+		r.NoError(atxHdlr.ProcessAtx(context.TODO(), atx))
 	}
-	err = processAtxs(atxHdlr, atxList2)
-	assert.NoError(t, err)
 
-	assertEpochWeight(t, cdb, 2, 100*100*4) // 1 posATX + 3 from `atxList`
-	assertEpochWeight(t, cdb, 3, 100*100*3) // 3 from `atxList2`
-}
+	// Assert
+	// 1 posATX + 3 atx from `atxList`; weight = 4 * numTicks * numUnit
+	epochWeight, _, err := cdb.GetEpochWeight(2)
+	r.NoError(err)
+	r.Equal(4*numTicks*uint64(numUnits), epochWeight)
 
-func assertEpochWeight(t *testing.T, cdb *datastore.CachedDB, epochID types.EpochID, expectedWeight uint64) {
-	epochWeight, _, err := cdb.GetEpochWeight(epochID)
-	assert.NoError(t, err)
-	assert.Equal(t, int(expectedWeight), int(epochWeight),
-		fmt.Sprintf("expectedWeight (%d) != epochWeight (%d)", expectedWeight, epochWeight))
+	// 3 atx from `atxList2`; weight = 3 * numTicks * numUnit
+	epochWeight, _, err = cdb.GetEpochWeight(3)
+	r.NoError(err)
+	r.Equal(3*numTicks*uint64(numUnits), epochWeight)
 }
 
 func TestHandler_ValidateAtx(t *testing.T) {
-	atxHdlr := getATXHandler(t, newCachedDB(t))
+	// Arrange
+	a := assert.New(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(func() { ctrl.Finish() })
 
-	sig1 := NewMockSigner()
-	sig2 := NewMockSigner()
-	sig3 := NewMockSigner()
-	coinbase1 := types.GenerateAddress([]byte("aaaa"))
-	coinbase2 := types.GenerateAddress([]byte("bbbb"))
-	coinbase3 := types.GenerateAddress([]byte("cccc"))
-	atxs := []*types.VerifiedActivationTx{
-		newActivationTx(t, sig1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase1, 100, &types.NIPost{}),
-		newActivationTx(t, sig2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase2, 100, &types.NIPost{}),
-		newActivationTx(t, sig3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase3, 100, &types.NIPost{}),
-	}
-	poetRef := []byte{0x12, 0x21}
-	for _, atx := range atxs {
-		hash, err := atx.NIPostChallenge.Hash()
-		assert.NoError(t, err)
-		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
-	}
-
-	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase1, 100, &types.NIPost{})
-	hash, err := prevAtx.NIPostChallenge.Hash()
-	assert.NoError(t, err)
-	prevAtx.NIPost = newNIPostWithChallenge(hash, poetRef)
-
-	challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012))
-	atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	hash, err = atx.NIPostChallenge.Hash()
-	assert.NoError(t, err)
-	atx.NIPost = newNIPostWithChallenge(hash, poetRef)
-	err = SignAtx(sig, atx)
-	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), prevAtx)
-	assert.NoError(t, err)
-
-	vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.NoError(t, err)
-
-	err = atxHdlr.ContextuallyValidateAtx(vAtx)
-	assert.NoError(t, err)
-}
-
-func TestHandler_ValidateAtxErrors(t *testing.T) {
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
-	t.Cleanup(func() {
-		types.SetLayersPerEpoch(layers)
-	})
+	t.Cleanup(func() { types.SetLayersPerEpoch(layers) })
 
-	cdb := newCachedDB(t)
-	atxHdlr := getATXHandler(t, cdb)
+	log := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), log)
+	validator := amocks.NewMocknipostValidator(ctrl)
+	validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
+	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, log)
+
 	otherSig := NewMockSigner()
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
@@ -193,133 +176,170 @@ func TestHandler_ValidateAtxErrors(t *testing.T) {
 		newActivationTx(t, sig2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 		newActivationTx(t, sig3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 	}
-	require.NoError(t, processAtxs(atxHdlr, atxList))
+	for _, atx := range atxList {
+		a.NoError(atxHdlr.ProcessAtx(context.TODO(), atx))
+	}
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
 	npst := newNIPostWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 	posAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
-	err := atxHdlr.StoreAtx(context.TODO(), prevAtx)
-	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), posAtx)
-	assert.NoError(t, err)
+	a.NoError(atxHdlr.StoreAtx(context.TODO(), prevAtx))
+	a.NoError(atxHdlr.StoreAtx(context.TODO(), posAtx))
 
-	// Wrong sequence.
-	challenge := newChallenge(0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
-	atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
+	// Act & Assert
 
-	// Wrong positioning atx.
-	challenge = newChallenge(1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos atx but found 1011")
+	t.Run("valid atx", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		hash, err := atx.NIPostChallenge.Hash()
+		a.NoError(err)
+		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
+		a.NoError(SignAtx(sig, atx))
 
-	// Empty positioning atx.
-	challenge = newChallenge(1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "empty positioning atx")
+		vAtx, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.NoError(err)
+		a.NoError(atxHdlr.ContextuallyValidateAtx(vAtx))
+	})
 
-	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 0.
-	challenge = newChallenge(0, *types.EmptyATXID, goldenATXID, types.NewLayerID(0))
-	atx = newAtx(t, challenge, sig, &types.NIPost{PostMetadata: &types.PostMetadata{}}, 3, coinbase)
-	atx.InitialPost = initialPost
-	atx.InitialPostIndices = initialPost.Indices
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "golden atx used for atx in epoch 0, but is only valid in epoch 1")
+	t.Run("wrong sequence", func(t *testing.T) {
+		challenge := newChallenge(0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "sequence number is not one more than prev sequence number")
+	})
 
-	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 2.
-	challenge = newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(2000))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "golden atx used for atx in epoch 2, but is only valid in epoch 1")
+	t.Run("wrong positioning atx", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "expected distance of one epoch (1000 layers) from pos atx but found 1011")
+	})
 
-	// Wrong prevATx.
-	challenge = newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID(), atxList[0].ID(), atxList[0].NodeID()))
+	t.Run("empty positioning atx", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "empty positioning atx")
+	})
 
-	// Wrong layerId.
-	posAtx2 := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
-	err = SignAtx(sig, atx)
-	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), posAtx2)
-	assert.NoError(t, err)
-	challenge = newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, npst, 100, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "atx layer (1012) must be after positioning atx layer (1020)")
+	// Using Golden ATX in epochs other than 1 is not allowed.
+	t.Run("golden atx as posAtx in epoch 0", func(t *testing.T) {
+		challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.NewLayerID(0))
+		challenge.CommitmentATX = prevAtx.ID()
+		atx := newAtx(t, challenge, sig, &types.NIPost{PostMetadata: &types.PostMetadata{}}, 3, coinbase)
+		atx.InitialPost = initialPost
+		atx.InitialPostIndices = initialPost.Indices
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "golden atx used for atx in epoch 0, but is only valid in epoch 1")
+	})
 
-	// Atx already exists.
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
-	assert.NoError(t, err)
-	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	vAtx, err = atx.Verify(0, 1)
-	require.NoError(t, err)
-	err = atxHdlr.ContextuallyValidateAtx(vAtx)
-	assert.EqualError(t, err, "last atx is not the one referenced")
+	t.Run("golden atx as posAtx in epoch 2", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(2000))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "golden atx used for atx in epoch 2, but is only valid in epoch 1")
+	})
 
-	// Prev atx declared but not found.
-	vAtx, err = atx.Verify(0, 1)
-	assert.NoError(t, err)
-	err = atxHdlr.StoreAtx(context.TODO(), vAtx)
-	assert.NoError(t, err)
-	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
-	vAtx, err = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.DeleteATXsByNodeID(cdb, atx.NodeID()))
+	t.Run("invalid prevAtx", func(t *testing.T) {
+		challenge := newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.ErrorContains(err, "previous atx belongs to different miner")
+		a.ErrorContains(err, fmt.Sprintf("atx.ID: %v", atx.ShortString()))
+		a.ErrorContains(err, fmt.Sprintf("atx.NodeID: %v", atx.NodeID()))
+		a.ErrorContains(err, fmt.Sprintf("prevAtx.ID: %v", atxList[0].ID()))
+		a.ErrorContains(err, fmt.Sprintf("prevAtx.NodeID: %v", atxList[0].NodeID()))
+	})
 
-	err = atxHdlr.ContextuallyValidateAtx(vAtx)
-	assert.ErrorIs(t, err, sql.ErrNotFound)
+	t.Run("wrong layer id", func(t *testing.T) {
+		posAtx2 := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
+		a.NoError(atxHdlr.StoreAtx(context.TODO(), posAtx2))
+		challenge := newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, npst, 100, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "atx layer (1012) must be after positioning atx layer (1020)")
+	})
 
-	// Prev atx not declared but initial Post not included.
-	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "no prevATX declared, but initial Post is not included")
+	t.Run("atx already exists", func(t *testing.T) {
+		challenge := newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		vAtx, err := atx.Verify(0, 1)
+		a.NoError(err)
+		a.NoError(atxHdlr.StoreAtx(context.TODO(), vAtx))
 
-	// Prev atx not declared but initial Post indices not included.
-	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	atx.InitialPost = initialPost
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "no prevATX declared, but initial Post indices is not included in challenge")
+		challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
+		atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		vAtx, err = atx.Verify(0, 1)
+		a.NoError(err)
+		err = atxHdlr.ContextuallyValidateAtx(vAtx)
+		a.EqualError(err, "last atx is not the one referenced")
+	})
 
-	// Challenge and initial Post indices mismatch.
-	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	atx.InitialPost = initialPost
-	atx.InitialPostIndices = append([]byte{}, initialPost.Indices...)
-	atx.InitialPostIndices[0]++
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
+	t.Run("prevAtx declared but not found", func(t *testing.T) {
+		challenge := newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		vAtx, err := atx.Verify(0, 1)
+		a.NoError(err)
+		a.NoError(atxHdlr.StoreAtx(context.TODO(), vAtx))
 
-	// Prev atx declared but initial Post is included.
-	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	atx.InitialPost = initialPost
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "prevATX declared, but initial Post is included")
+		challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12))
+		vAtx, err = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase).Verify(0, 1)
+		a.NoError(err)
+		a.NoError(atxs.DeleteATXsByNodeID(cdb, atx.NodeID()))
 
-	// Prev atx declared but initial Post indices is included.
-	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	atx.InitialPostIndices = initialPost.Indices
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "prevATX declared, but initial Post indices is included in challenge")
+		err = atxHdlr.ContextuallyValidateAtx(vAtx)
+		a.ErrorIs(err, sql.ErrNotFound)
+	})
 
-	// Prev atx has publication layer in the same epoch as the atx.
-	challenge = newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(100))
-	atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-	_, err = atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
+	t.Run("prevAtx not declared but initial Post not included", func(t *testing.T) {
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "no prevATX declared, but initial Post is not included")
+	})
+
+	t.Run("prevAtx not declared but initial Post indices not included", func(t *testing.T) {
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		atx.InitialPost = initialPost
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "no prevATX declared, but initial Post indices is not included in challenge")
+	})
+
+	t.Run("challenge and initial Post indices mismatch", func(t *testing.T) {
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		atx.InitialPost = initialPost
+		atx.InitialPostIndices = append([]byte{}, initialPost.Indices...)
+		atx.InitialPostIndices[0]++
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
+	})
+
+	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		atx.InitialPost = initialPost
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "prevATX declared, but initial Post is included")
+	})
+
+	t.Run("prevAtx declared but initial Post indices is included", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		atx.InitialPostIndices = initialPost.Indices
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "prevATX declared, but initial Post indices is included in challenge")
+	})
+
+	t.Run("prevAtx has publication layer in the same epoch as the atx", func(t *testing.T) {
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(100))
+		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
+		a.EqualError(err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
+	})
 }
 
 func TestHandler_ValidateAndInsertSorted(t *testing.T) {

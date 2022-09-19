@@ -49,7 +49,7 @@ type Handler struct {
 
 // NewHandler returns a data handler for ATX.
 func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *Handler {
-	db := &Handler{
+	return &Handler{
 		cdb:             cdb,
 		layersPerEpoch:  layersPerEpoch,
 		tickSize:        tickSize,
@@ -59,7 +59,6 @@ func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch 
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
 	}
-	return db
 }
 
 var closedChan = make(chan struct{})
@@ -207,6 +206,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 
 		if atx.CommitmentATX == *types.EmptyATXID {
+			// TODO(mafa): not just check if it's empty but also if the referenced ATX is valid (i.e. is in DB)
 			return nil, fmt.Errorf("no prevATX declared, but commitmentATX is not included")
 		}
 
@@ -222,6 +222,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
+		// TODO(mafa): check if the ATXs are validated in the right sequence (posATX must be present before initial ATX of a node)
 		posAtx, err := h.cdb.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return nil, fmt.Errorf("positioning atx not found")
