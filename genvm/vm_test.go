@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/spacemeshos/economics/rewards"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
@@ -32,8 +34,7 @@ import (
 )
 
 const (
-	testBaseReward = 1000
-	testGasLimit   = 100_000_000
+	testGasLimit = 100_000_000
 )
 
 func testContext(lid types.LayerID) ApplyContext {
@@ -296,11 +297,6 @@ func (t *tester) persistent() *tester {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(logtest.New(t)))
-	return t
-}
-
-func (t *tester) withBaseReward(reward uint64) *tester {
-	t.VM.cfg.BaseReward = reward
 	return t
 }
 
@@ -992,7 +988,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					rewards: []reward{{address: 10, share: 1}},
 					expected: map[int]change{
-						10: earned{amount: testBaseReward + ref.estimateSpawnGas(0)},
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0)},
 					},
 				},
 				{
@@ -1012,8 +1008,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
-						10: earned{amount: testBaseReward / 2},
-						11: earned{amount: testBaseReward / 2},
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
+						11: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
 					},
 				},
 				{
@@ -1022,8 +1018,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
 					expected: map[int]change{
-						10: earned{amount: (testBaseReward + ref.estimateSpawnGas(10)) / 2},
-						11: earned{amount: (testBaseReward + ref.estimateSpawnGas(11)) / 2},
+						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10)) / 2},
+						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11)) / 2},
 					},
 				},
 			},
@@ -1046,7 +1042,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					headers:     map[int]struct{}{0: {}, 1: {}},
 					rewards:     []reward{{address: 10, share: 1}},
 					expected: map[int]change{
-						10: earned{amount: testBaseReward},
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(1))},
 					},
 				},
 			},
@@ -1172,7 +1168,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						20: earned{amount: ref.estimateSpawnGas(0) +
 							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1}) +
 							ref.estimateSpawnGas(11) - 1 +
-							testBaseReward},
+							int(rewards.TotalSubsidyAtLayer(0))},
 					},
 				},
 			},
@@ -1274,13 +1270,14 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			tt := genTester(t)
-
+			next := types.GetEffectiveGenesis()
 			for i, layer := range tc.layers {
 				var txs []types.RawTx
 				for _, gen := range layer.txs {
 					txs = append(txs, gen.gen(tt))
 				}
-				lid := types.NewLayerID(uint32(i + 1))
+				lid := next
+				next = next.Add(1)
 				ctx := testContext(lid)
 				if layer.gasLimit > 0 {
 					tt = tt.withGasLimit(layer.gasLimit)
@@ -1343,8 +1340,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addSingleSig(funded).
 				applyGenesisWithBalance(balance).
-				addSingleSig(total - funded).
-				withBaseReward(testBaseReward)
+				addSingleSig(total - funded)
 		})
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
@@ -1353,8 +1349,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addMultisig(funded, 1, n, multisig.TemplateAddress1).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 1, n, multisig.TemplateAddress1).
-				withBaseReward(testBaseReward)
+				addMultisig(total-funded, 1, n, multisig.TemplateAddress1)
 		})
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
@@ -1363,8 +1358,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addMultisig(funded, 2, n, multisig.TemplateAddress2).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 2, n, multisig.TemplateAddress2).
-				withBaseReward(testBaseReward)
+				addMultisig(total-funded, 2, n, multisig.TemplateAddress2)
 		})
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
@@ -1373,8 +1367,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addMultisig(funded, 3, n, multisig.TemplateAddress3).
 				applyGenesisWithBalance(balance).
-				addMultisig(total-funded, 3, n, multisig.TemplateAddress3).
-				withBaseReward(testBaseReward)
+				addMultisig(total-funded, 3, n, multisig.TemplateAddress3)
 		})
 	})
 	t.Run("Vesting13", func(t *testing.T) {
@@ -1383,8 +1376,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addVesting(funded, 1, n, vesting.TemplateAddress1).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 1, n, vesting.TemplateAddress1).
-				withBaseReward(testBaseReward)
+				addVesting(total-funded, 1, n, vesting.TemplateAddress1)
 		})
 	})
 	t.Run("Vesting25", func(t *testing.T) {
@@ -1393,8 +1385,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addVesting(funded, 2, n, vesting.TemplateAddress2).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 2, n, vesting.TemplateAddress2).
-				withBaseReward(testBaseReward)
+				addVesting(total-funded, 2, n, vesting.TemplateAddress2)
 		})
 	})
 	t.Run("Vesting310", func(t *testing.T) {
@@ -1403,8 +1394,7 @@ func TestWallets(t *testing.T) {
 			return newTester(t).
 				addVesting(funded, 3, n, vesting.TemplateAddress3).
 				applyGenesisWithBalance(balance).
-				addVesting(total-funded, 3, n, vesting.TemplateAddress3).
-				withBaseReward(testBaseReward)
+				addVesting(total-funded, 3, n, vesting.TemplateAddress3)
 		})
 	})
 }
@@ -1417,12 +1407,12 @@ func TestRandomTransfers(t *testing.T) {
 		addMultisig(10, 3, 10, multisig.TemplateAddress3).
 		applyGenesis()
 
-	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
+	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
 		notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
-	for i := 0; i < 1000; i++ {
-		lid := types.NewLayerID(2).Add(uint32(i))
+	for i := 1; i < 1000; i++ {
+		lid := types.GetEffectiveGenesis().Add(uint32(i))
 		skipped, _, err := tt.Apply(testContext(lid),
 			notVerified(tt.randSpendN(20, 10)...), nil)
 		require.NoError(tt, err)
@@ -1431,7 +1421,7 @@ func TestRandomTransfers(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
-	skipped, _, err := tt.Apply(testContext(types.NewLayerID(1)),
+	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
 		notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
@@ -1628,7 +1618,7 @@ func TestVestingWithVault(t *testing.T) {
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).
 			addVesting(vestingAccounts, 1, 2, vestingTemplate).
-			addVault(10, total, initial, types.NewLayerID(start), types.NewLayerID(end)).
+			addVault(10, total, initial, types.GetEffectiveGenesis().Add(start-1), types.GetEffectiveGenesis().Add(end-1)).
 			applyGenesis()
 	}
 	ref := genTester(t)
@@ -1848,7 +1838,7 @@ func TestVaultValidation(t *testing.T) {
 		addVesting(1, 1, 2, vesting.TemplateAddress1).
 		addVault(2, 100, 10, types.NewLayerID(1), types.NewLayerID(10)).
 		applyGenesis()
-	_, _, err := tt.Apply(ApplyContext{Layer: types.NewLayerID(1)},
+	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},
 		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil)
 	require.NoError(t, err)
 
@@ -1938,6 +1928,13 @@ func BenchmarkValidation(b *testing.B) {
 	})
 }
 
+func TestBeforeEffectiveGenesis(t *testing.T) {
+	// sanity check that layers before effective genesis are not pushed to vm
+	tt := newTester(t)
+	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis().Sub(1)}, nil, nil)
+	require.ErrorIs(t, err, core.ErrInternal)
+}
+
 func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	tt := newTester(t).addSingleSig(10).applyGenesis()
 
@@ -1945,7 +1942,7 @@ func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.Hash32{}, root)
 
-	lid := types.NewLayerID(1)
+	lid := types.GetEffectiveGenesis()
 	skipped, _, err := tt.Apply(testContext(lid), notVerified(
 		tt.selfSpawn(0),
 		tt.selfSpawn(1),
@@ -2029,4 +2026,9 @@ func notVerified(raw ...types.RawTx) []types.Transaction {
 		rst = append(rst, types.Transaction{RawTx: tx})
 	}
 	return rst
+}
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(2)
+	os.Exit(m.Run())
 }

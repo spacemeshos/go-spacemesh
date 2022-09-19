@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 
 	"github.com/spacemeshos/go-scale"
@@ -61,6 +62,11 @@ type InnerBlock struct {
 // for doing math around weight inside go-spacemesh codebase, use util.Weight.
 type RatNum struct {
 	Num, Denom uint64
+}
+
+// String implements fmt.Stringer interface for RatNum.
+func (r *RatNum) String() string {
+	return fmt.Sprintf("%d/%d", r.Num, r.Denom)
 }
 
 // AnyReward contains the reward information.

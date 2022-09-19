@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -23,19 +24,22 @@ func TestHTTPPoet(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	assert := require.New(t)
+	r := require.New(t)
 
 	c, err := NewHTTPPoetHarness(true)
-	assert.NoError(err)
-	assert.NotNil(c)
-	defer func() {
+	r.NoError(err)
+	r.NotNil(c)
+
+	t.Cleanup(func() {
 		err := c.Teardown(true)
-		assert.NoError(err)
-	}()
+		if assert.NoError(t, err, "failed to tear down harness") {
+			t.Log("harness torn down")
+		}
+	})
 
 	for _, testCase := range httpPoetTestCases {
 		success := t.Run(testCase.name, func(t1 *testing.T) {
-			testCase.test(c, assert)
+			testCase.test(c, r)
 		})
 
 		if !success {
