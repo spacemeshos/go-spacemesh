@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/spf13/viper"
+
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/spf13/viper"
 )
 
 const (
