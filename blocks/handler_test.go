@@ -61,7 +61,7 @@ func Test_HandleBlockData_InvalidRewards(t *testing.T) {
 	th := createTestHandler(t)
 	buf, err := codec.Encode(&types.Block{})
 	require.NoError(t, err)
-	require.Error(t, th.HandleSyncedBlock(context.TODO(), buf))
+	require.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), buf), errInvalidRewards)
 }
 
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {

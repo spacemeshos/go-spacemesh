@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	errMalformedData = errors.New("malformed data")
-	errDuplicateTX   = errors.New("duplicate TxID in proposal")
+	errMalformedData  = errors.New("malformed data")
+	errInvalidRewards = errors.New("invalid rewards")
+	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )
 
 // Handler processes Block fetched from peers during sync.
@@ -65,7 +66,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 	b.Initialize()
 
 	if err := vm.ValidateRewards(b.Rewards); err != nil {
-		return err
+		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())
 	}
 
 	logger = logger.WithFields(b.ID())
