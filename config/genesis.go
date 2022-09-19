@@ -89,7 +89,7 @@ func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
 }
 
 func DefaultTestGenesisTime() string {
-	return "2019-02-13T17:02:00+00:00"
+	return "2022-12-25T00:00:00+00:00"
 }
 
 func DefaultTestnetGenesisTime() string {
