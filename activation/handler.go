@@ -152,8 +152,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("empty positioning atx")
 	}
 
-	// if no previous ATX: commitmentATX MUST be set and valid
-	// if previous ATX: commitmentATX MUST NOT be set
 	if atx.PrevATXID != *types.EmptyATXID {
 		prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
@@ -187,6 +185,10 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		if atx.InitialPostIndices != nil {
 			return nil, fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
 		}
+
+		if atx.CommitmentATX != *types.EmptyATXID {
+			return nil, fmt.Errorf("prevATX declared, but commitment ATX is included")
+		}
 	} else {
 		if atx.Sequence != 0 {
 			return nil, fmt.Errorf("no prevATX declared, but sequence number not zero")
@@ -204,12 +206,15 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return nil, fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 		}
 
+		if atx.CommitmentATX == *types.EmptyATXID {
+			return nil, fmt.Errorf("no prevATX declared, but commitmentATX is not included")
+		}
+
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
 		// as expected from the initial Post.
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
 
-		// TODO(mafa): commitmentATX is on a different ATX (the initial one without a prevAtx)
 		commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), atx.CommitmentATX[:]...))
 		if err := h.nipostValidator.ValidatePost(commitment[:], atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
 			return nil, fmt.Errorf("invalid initial Post: %v", err)
@@ -242,8 +247,20 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	// TODO(mafa): commitmentATX is on a different ATX (the initial one without a prevAtx)
-	commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), atx.CommitmentATX[:]...))
+	commitmentATX := atx.CommitmentATX
+	if atx.CommitmentATX == *types.EmptyATXID {
+		id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.NodeID())
+		if err != nil {
+			return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
+		}
+		initialATX, err := h.cdb.GetAtxHeader(id)
+		if err != nil {
+			return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
+		}
+		commitmentATX = initialATX.CommitmentATX
+	}
+
+	commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), commitmentATX[:]...))
 	leaves, err := h.nipostValidator.Validate(commitment[:], atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %v", err)

@@ -75,6 +75,29 @@ func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err err
 	return timestamp, err
 }
 
+// GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
+func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.ToBytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select id from atxs 
+		where smesher = ?1
+		order by epoch asc, timestamp asc
+		limit 1;`, enc, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+	} else if rows == 0 {
+		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+	}
+
+	return id, err
+}
+
 // GetLastIDByNodeID gets the last ATX ID for a given node ID.
 func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {

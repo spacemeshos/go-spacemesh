@@ -730,6 +730,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 				PositioningATX:     goldenATXID,
 				InitialPostIndices: []byte{1},
 				PubLayerID:         types.NewLayerID(1).Add(layersPerEpoch),
+
+				CommitmentATX: goldenATXID,
 			},
 			NumUnits: units,
 			NIPost: &types.NIPost{
