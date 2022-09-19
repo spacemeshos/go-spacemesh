@@ -103,7 +103,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 		}
 		// Filter out addresses that have not been connected for a while
 		// but optimistically keep addresses we have not tried yet.
-		if addr.LastAttempt.IsZero() || now.Sub(addr.LastSuccess) > p.config.stalePeerTimeout {
+		if addr.LastAttempt.IsZero() || now.Sub(addr.LastSuccess) < p.config.stalePeerTimeout {
 			response = append(response, addr.Addr.RawAddr)
 		}
 	}
