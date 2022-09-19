@@ -1193,7 +1193,7 @@ func (app *App) checkAndStoreGenesisConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis config: %w", err)
 	}
-	if err = ioutil.WriteFile(config.DefaultGenesisDataPath, jsonCfg, 0444); err != nil {
+	if err = ioutil.WriteFile(config.DefaultGenesisDataPath, jsonCfg, 0o444); err != nil {
 		return fmt.Errorf("failed to write genesis config file: %w", err)
 	}
 	return nil
