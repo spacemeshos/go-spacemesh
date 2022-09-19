@@ -186,7 +186,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], instanceID1, t.Name())
 		test.procs = append(test.procs, proc)
@@ -222,7 +222,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], instanceID1, t.Name())
 		test.procs = append(test.procs, proc)
@@ -266,7 +266,7 @@ func TestAllDifferentSet(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], instanceID1, t.Name())
 		test.procs = append(test.procs, proc)
@@ -305,7 +305,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	honestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], instanceID1, t.Name())
 		test.brokers = append(test.brokers, broker)
@@ -318,7 +318,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, false, cfg, oracle,
 			&delayeadPubSub{ps: ps, sendDelay: 5 * time.Second},
@@ -359,7 +359,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	honestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], instanceID1, t.Name())
 		test.procs = append(test.procs, proc)
@@ -372,7 +372,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		proc, broker := createConsensusProcess(t, false, cfg, oracle,
 			&delayeadPubSub{ps: ps, recvDelay: 5 * time.Second},

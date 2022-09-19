@@ -558,7 +558,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := p2p.Upgrade(mesh.Hosts()[0])
+	h, err := p2p.Upgrade(mesh.Hosts()[0], t.TempDir())
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
 		path, eligibility.New(logtest.New(t)),
@@ -702,7 +702,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
 
 		// Avoid waiting for new connections.
-		app.Config.P2P.TargetOutbound = 0
+		app.Config.P2P.Bootstrap.TargetOutbound = 0
 
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
@@ -921,7 +921,7 @@ func getTestDefaultConfig() *config.Config {
 		return nil
 	}
 	// is set to 0 to make sync start immediately when node starts
-	cfg.P2P.TargetOutbound = 0
+	cfg.P2P.Bootstrap.TargetOutbound = 0
 
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.MinNumUnits = 2

@@ -140,7 +140,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	require.NoError(t, err)
 	hosts := []*p2p.Host{}
 	for _, h := range mesh.Hosts() {
-		fh, err := p2p.Upgrade(h)
+		fh, err := p2p.Upgrade(h, t.TempDir())
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = fh.Stop() })
 		hosts = append(hosts, fh)

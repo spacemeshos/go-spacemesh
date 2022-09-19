@@ -148,7 +148,7 @@ func Test_consensusIterations(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		p2pm := &p2pManipulator{nd: ps, stalledLayer: instanceID1, err: errors.New("fake err")}
 		proc, broker := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], instanceID1, t.Name())
@@ -406,7 +406,7 @@ func Test_multipleCPs(t *testing.T) {
 	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
@@ -501,7 +501,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	var outputsWaitGroup sync.WaitGroup
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig(), false)
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}

@@ -27,13 +27,27 @@ const (
 
 // Config for Discovery.
 type Config struct {
-	Bootnodes            []string
-	DataDir              string
-	CheckInterval        time.Duration      // Interval to check for dead|alive peers in the book.
-	CheckTimeout         time.Duration      // Timeout to connect while node check for dead|alive peers in the book.
-	CheckPeersNumber     int                // Number of peers to check for dead|alive peers in the book.
-	CheckPeersUsedBefore time.Duration      // Time to wait before checking for dead|alive peers in the book.
-	PeerExchange         PeerExchangeConfig // Configuration for Peer Exchange protocol
+	Bootnodes []string `mapstructure:"bootnodes"`
+	// Interval to check for dead|alive peers in the book.
+	CheckInterval time.Duration `mapstructure:"check-interval"`
+	// Timeout to connect while node check for dead|alive peers in the book.
+	CheckTimeout time.Duration `mapstructure:"check-timeout"`
+	// Number of peers to check for dead|alive peers in the book.
+	CheckPeersNumber int `mapstructure:"check-peers-number"`
+	// Time to wait before checking for dead|alive peers in the book.
+	CheckPeersUsedBefore time.Duration `mapstructure:"check-peers-used-before"`
+	// Configuration for Peer Exchange protocol
+	PeerExchange PeerExchangeConfig `mapstructure:"peer-exchange"`
+}
+
+func DefaultDiscoveryConfig() Config {
+	return Config{
+		CheckInterval:        3 * time.Minute,
+		CheckTimeout:         30 * time.Second,
+		CheckPeersNumber:     10,
+		CheckPeersUsedBefore: 10 * time.Minute,
+		PeerExchange:         DefaultPeerExchangeConfig(),
+	}
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -50,7 +64,7 @@ type Discovery struct {
 }
 
 // New creates a Discovery instance.
-func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
+func New(logger log.Log, h host.Host, config Config, dataDir string) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Discovery{
 		cfg:    config,
@@ -58,7 +72,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		host:   h,
 		cancel: cancel,
 		book: addressbook.NewAddrBook(
-			addressbook.DefaultAddressBookConfigWithDataDir(config.DataDir),
+			addressbook.DefaultAddressBookConfigWithDataDir(dataDir),
 			logger,
 		),
 	}

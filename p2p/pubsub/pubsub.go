@@ -77,21 +77,23 @@ const (
 
 // DefaultConfig for PubSub.
 func DefaultConfig() Config {
-	return Config{Flood: true}
+	return Config{
+		Flood:          true,
+		MaxMessageSize: 200 << 10,
+	}
 }
 
 // Config for PubSub.
 type Config struct {
 	// TODO(dshulyak) change it to NoFlood
-	Flood          bool
-	IsBootnode     bool
-	MaxMessageSize int
+	Flood          bool `mapstructure:"flood"`
+	MaxMessageSize int  `mapstructure:"max-message-size"`
 }
 
 // New creates PubSub instance.
-func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub, error) {
+func New(ctx context.Context, logger log.Log, h host.Host, cfg Config, isBootnode bool) (*PubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
-	opts := getOptions(cfg)
+	opts := getOptions(cfg, isBootnode)
 	ps, err := pubsub.NewGossipSub(ctx, h, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gossipsub instance: %w", err)
@@ -159,7 +161,7 @@ func msgID(msg *pb.Message) string {
 	return string(hasher.Sum(nil))
 }
 
-func getOptions(cfg Config) []pubsub.Option {
+func getOptions(cfg Config, isBootnode bool) []pubsub.Option {
 	options := []pubsub.Option{
 		// Gossipsubv1.1 configuration
 		pubsub.WithFloodPublish(cfg.Flood),
@@ -214,7 +216,7 @@ func getOptions(cfg Config) []pubsub.Option {
 	}
 
 	// enable Peer eXchange on bootstrappers
-	if cfg.IsBootnode {
+	if isBootnode {
 		// turn off the mesh for bootnodes -- only do gossip and PX
 		pubsub.GossipSubD = 0
 		pubsub.GossipSubDscore = 0

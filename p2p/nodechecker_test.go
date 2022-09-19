@@ -308,13 +308,13 @@ func generateNode(t *testing.T, bootNode string) *hostWrapper {
 	}
 
 	cnf := DefaultConfig()
-	cnf.CheckPeersUsedBefore = time.Millisecond * 1
+	cnf.Discovery.CheckPeersUsedBefore = time.Millisecond * 1
+	dataDir := t.TempDir()
 	if bootNode != "" {
 		// adding address to bootstrap list is has random part.
 		// for make it more predictable - create book object, set address as connected and persist peers.
 		// next time book will restore conf from this file and return this address for bootstrap.
-		cnf.DataDir = t.TempDir()
-		addrBookConf := addressbook.DefaultAddressBookConfigWithDataDir(cnf.DataDir)
+		addrBookConf := addressbook.DefaultAddressBookConfigWithDataDir(dataDir)
 		book := addressbook.NewAddrBook(addrBookConf, logtest.New(t))
 		bootAddr, err := addressbook.ParseAddrInfo(bootNode)
 		require.NoError(t, err)
@@ -324,9 +324,9 @@ func generateNode(t *testing.T, bootNode string) *hostWrapper {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		book.Persist(ctx)
-		cnf.Bootnodes = append(cnf.Bootnodes, bootNode)
+		cnf.Discovery.Bootnodes = append(cnf.Discovery.Bootnodes, bootNode)
 	}
-	h, err := Upgrade(node, WithConfig(cnf))
+	h, err := Upgrade(node, dataDir, WithConfig(cnf))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

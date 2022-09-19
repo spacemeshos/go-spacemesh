@@ -15,59 +15,44 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:               "/ip4/0.0.0.0/tcp/7513",
-		Flood:                true,
-		TargetOutbound:       5,
-		LowPeers:             40,
-		HighPeers:            100,
-		GracePeersShutdown:   30 * time.Second,
-		BootstrapTimeout:     10 * time.Second,
-		MaxMessageSize:       200 << 10,
-		CheckInterval:        3 * time.Minute,
-		CheckTimeout:         30 * time.Second,
-		CheckPeersNumber:     10,
-		CheckPeersUsedBefore: 30 * time.Minute,
-		peerExchange:         peerexchange.DefaultPeerExchangeConfig(),
+		Listen:             "/ip4/0.0.0.0/tcp/7513",
+		LowPeers:           40,
+		HighPeers:          100,
+		GracePeersShutdown: 30 * time.Second,
+		Discovery:          peerexchange.DefaultDiscoveryConfig(),
+		Pubsub:             pubsub.DefaultConfig(),
+		Bootstrap:          bootstrap.DefaultConfig(),
 	}
 }
 
 // Config for all things related to p2p layer.
 type Config struct {
-	DataDir            string
 	LogLevel           log.Level
-	GracePeersShutdown time.Duration
-	BootstrapTimeout   time.Duration
-	MaxMessageSize     int
+	GracePeersShutdown time.Duration `mapstructure:"grace-peers-shutdown"`
+	DisableNatPort     bool          `mapstructure:"disable-natport"`
+	Listen             string        `mapstructure:"listen"`
+	NetworkID          uint32        `mapstructure:"network-id"`
+	LowPeers           int           `mapstructure:"low-peers"`
+	HighPeers          int           `mapstructure:"high-peers"`
 
-	DisableNatPort bool     `mapstructure:"disable-natport"`
-	Flood          bool     `mapstructure:"flood"`
-	Listen         string   `mapstructure:"listen"`
-	NetworkID      uint32   `mapstructure:"network-id"`
-	Bootnodes      []string `mapstructure:"bootnodes"`
-	TargetOutbound int      `mapstructure:"target-outbound"`
-	LowPeers       int      `mapstructure:"low-peers"`
-	HighPeers      int      `mapstructure:"high-peers"`
-
-	// Discovery book check section.
-	CheckInterval        time.Duration
-	CheckTimeout         time.Duration
-	CheckPeersNumber     int
-	CheckPeersUsedBefore time.Duration
-
-	peerExchange peerexchange.PeerExchangeConfig `mapstructure:"peer-exchange"`
+	Pubsub    pubsub.Config       `mapstructure:"pubsub"`
+	Discovery peerexchange.Config `mapstructure:"discovery"`
+	Bootstrap bootstrap.Config    `mapstructure:"bootstrap"`
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, error) {
+func New(_ context.Context, logger log.Log, cfg Config, dataDir string, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
-	key, err := EnsureIdentity(cfg.DataDir)
+	key, err := EnsureIdentity(dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +66,7 @@ func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, err
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
 	}
 	// TODO(dshulyak) remove this part
-	for _, p := range cfg.Bootnodes {
+	for _, p := range cfg.Discovery.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
 		if err != nil {
 			return nil, fmt.Errorf("can't create peer addr from %s: %w", p, err)
@@ -122,5 +107,5 @@ func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, err
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
 	opts = append(opts, WithConfig(cfg), WithLog(logger))
-	return Upgrade(h, opts...)
+	return Upgrade(h, dataDir, opts...)
 }

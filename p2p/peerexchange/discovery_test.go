@@ -40,7 +40,7 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 			bootnode = best
 		}
 		cfg.Bootnodes = append(cfg.Bootnodes, bootnode.RawAddr)
-		instance, err := New(logger, h, cfg)
+		instance, err := New(logger, h, cfg, t.TempDir())
 		require.NoError(t, err)
 		t.Cleanup(instance.Stop)
 		instances = append(instances, instance)
@@ -119,7 +119,7 @@ func TestDiscovery_PrefereRoutablePort(t *testing.T) {
 	addrmock.EXPECT().Addrs().DoAndReturn(func() []ma.Multiaddr {
 		return returned
 	}).AnyTimes()
-	discovery, err := New(logtest.New(t), ph, Config{})
+	discovery, err := New(logtest.New(t), ph, Config{}, t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(discovery.Stop)
 

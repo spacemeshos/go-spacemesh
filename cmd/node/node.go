@@ -986,8 +986,8 @@ func (app *App) getIdentityFile() (string, error) {
 
 func (app *App) startSyncer(ctx context.Context) {
 	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
-		log.Int("outbound", app.Config.P2P.TargetOutbound))
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
+		log.Int("outbound", app.Config.P2P.Bootstrap.TargetOutbound))
+	_, err := app.host.WaitPeers(ctx, app.Config.P2P.Bootstrap.TargetOutbound)
 	if err != nil {
 		return
 	}
@@ -1078,11 +1078,12 @@ func (app *App) Start() error {
 	lg.Info("initializing p2p services")
 
 	cfg := app.Config.P2P
-	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
+	dataDir := filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
 	app.host, err = p2p.New(ctx, p2plog, cfg,
+		dataDir,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {

@@ -34,7 +34,7 @@ func fastnet() config.Config {
 	conf.HARE.RoundDuration = 2
 	conf.HARE.WakeupDelta = 3
 
-	conf.P2P.TargetOutbound = 10
+	conf.P2P.Bootstrap.TargetOutbound = 10
 
 	conf.Genesis = &apiConfig.GenesisConfig{}
 

@@ -25,8 +25,15 @@ type EventSpacemeshPeer struct {
 
 // Config for bootstrap.
 type Config struct {
-	TargetOutbound int
-	Timeout        time.Duration
+	TargetOutbound int           `mapstructure:"target-outbound"`
+	Timeout        time.Duration `mapstructure:"timeout"`
+}
+
+func DefaultConfig() Config {
+	return Config{
+		TargetOutbound: 5,
+		Timeout:        10 * time.Second,
+	}
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./bootstrap.go
