@@ -1092,8 +1092,8 @@ func (app *App) Start() error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.checkStoredGenCfg(); err != nil {
-		return fmt.Errorf("failed to check stored genesis config: %w", err)
+	if err = app.checkAndStoreGenesisConfig(); err != nil {
+		return fmt.Errorf("failed to check and store genesis config: %w", err)
 	}
 
 	if err = app.initServices(ctx,
@@ -1172,33 +1172,30 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 	return rst, nil
 }
 
-func (app *App) checkStoredGenCfg() error {
-	if savedGenFile := filesystem.PathExists(config.DefaultGenesisDataPath); savedGenFile {
-		genData, err := ioutil.ReadFile(config.DefaultGenesisDataPath)
+func (app *App) checkAndStoreGenesisConfig() error {
+	if exists := filesystem.PathExists(config.DefaultGenesisDataPath); exists {
+		genesisData, err := ioutil.ReadFile(config.DefaultGenesisDataPath)
 		if err != nil {
-			return fmt.Errorf("Error reading saved genesis data: %s", err)
+			return fmt.Errorf("failed to read stored genesis config file: %s", err)
 		}
 
 		var payload config.GenesisConfig
 
-		err = json.Unmarshal(genData, &payload)
+		err = json.Unmarshal(genesisData, &payload)
 		if err != nil {
-			return fmt.Errorf("Error decoded genesis data into json: %s", genData)
+			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if expectedConfig, err_cmp := app.Config.Genesis.Compare(&payload); err_cmp != nil {
+		if expectedConfig, err := app.Config.Genesis.Compare(&payload); err != nil {
 			return fmt.Errorf("genesis data mismatch.\nExpected %s\nGot: %v", expectedConfig, app.Config.Genesis)
 		}
-	} else {
-		json_cfg, err := json.Marshal(app.Config.Genesis)
-		if err != nil {
-			return fmt.Errorf("failed to read genesis config into json: %s", err)
-		} else {
-			if writeErr := ioutil.WriteFile(config.DefaultGenesisDataPath, json_cfg, 0444); writeErr != nil {
-				return fmt.Errorf("failed to save genesis config with data: %s to %s.\nGot error: %s",
-					string(json_cfg), config.DefaultGenesisDataPath, writeErr)
-			}
-		}
+		return nil
 	}
-
+	jsonCfg, err := json.Marshal(app.Config.Genesis)
+	if err != nil {
+		return fmt.Errorf("failed to marshal genesis config: %w", err)
+	}
+	if err = ioutil.WriteFile(config.DefaultGenesisDataPath, jsonCfg, 0444); err != nil {
+		return fmt.Errorf("failed to write genesis config file: %w", err)
+	}
 	return nil
 }

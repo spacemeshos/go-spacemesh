@@ -76,13 +76,7 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 		GoldenATXID: DefaultTestGoldenATXId().Hash32().Hex(),
 		ExtraData:   DefaultGenesisExtraData(),
 	}
-
-	if genesisId, err := CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime); err == nil {
-		cfg.GenesisID = genesisId.Hex()
-	} else {
-		cfg.GenesisID = ""
-	}
-
+	cfg.GenesisID = CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime).Hex()
 	return cfg
 }
 
@@ -110,33 +104,15 @@ func DefaultGenesisTime() string {
 }
 
 func DefaultGoldenATXId() types.ATXID {
-	genesis_time := DefaultGenesisTime()
-	genesis_extra_data := []byte(DefaultGenesisExtraData())
-	if id, err := CalcGoldenATX(genesis_extra_data, genesis_time); err == nil {
-		return types.ATXID(id)
-	} else {
-		return *types.EmptyATXID
-	}
+	return types.ATXID(CalcGoldenATX([]byte(DefaultGenesisExtraData()), DefaultGenesisTime()))
 }
 
 func DefaultTestGoldenATXId() types.ATXID {
-	genesis_time := DefaultTestGenesisTime()
-	genesis_extra_data := []byte(DefaultTestGenesisExtraData())
-	if id, err := CalcGoldenATX(genesis_extra_data, genesis_time); err == nil {
-		return types.ATXID(id)
-	} else {
-		return *types.EmptyATXID
-	}
+	return types.ATXID(CalcGoldenATX([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()))
 }
 
 func DefaultTestnetGoldenATXId() types.ATXID {
-	genesis_time := DefaultTestnetGenesisTime()
-	genesis_extra_data := []byte(DefaultTestnetGenesisExtraData())
-	if id, err := CalcGoldenATX(genesis_extra_data, genesis_time); err == nil {
-		return types.ATXID(id)
-	} else {
-		return *types.EmptyATXID
-	}
+	return types.ATXID(CalcGoldenATX([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()))
 }
 
 func DefaultTestnetGenesisExtraData() string {
@@ -151,55 +127,30 @@ func DefaultGenesisExtraData() string {
 	return "mainnet"
 }
 
-func (cfg *GenesisConfig) Validate() (err error) {
-	return nil
-}
-
-func (cfg *GenesisConfig) SaveToFile() (file_path string, err error) {
-	return "", nil
-}
-
-func CalcGenesisId(genesis_extra_data []byte, genesis_time string) (types.Hash20, error) {
-	data_len := len(genesis_extra_data)
-	genesis_time_b := []byte(genesis_time)
-	if data_len < ExtraDataLen {
+func CalcGenesisId(genesisExtraData []byte, genesisTime string) types.Hash20 {
+	dataLen := len(genesisExtraData)
+	genesisTimeB := []byte(genesisTime)
+	hasher := hash.New()
+	hasher.Write(genesisTimeB)
+	if dataLen < ExtraDataLen {
 		padded := make([]byte, ExtraDataLen)
-		copy(padded[0:data_len], genesis_extra_data)
-		hasher := hash.New()
-		hasher.Write(genesis_time_b)
+		copy(padded[0:dataLen], genesisExtraData)
 		hasher.Write(padded)
-		digest := hasher.Sum([]byte{})
-		return types.BytesToHash(digest).ToHash20(), nil
 	} else {
-		hasher := hash.New()
-		hasher.Write(genesis_time_b)
-		hasher.Write(genesis_extra_data)
-		digest := hasher.Sum([]byte{})
-		return types.BytesToHash(digest).ToHash20(), nil
+		hasher.Write(genesisExtraData)
 	}
+	digest := hasher.Sum([]byte{})
+	return types.BytesToHash(digest).ToHash20()
 }
 
 func (cfg *GenesisConfig) CalcGoldenATX() types.ATXID {
-	genesis_time := cfg.GenesisTime
-	genesis_data := cfg.ExtraData
-
-	if id, err := CalcGoldenATX([]byte(genesis_data), genesis_time); err == nil {
-		return types.ATXID(id)
-	} else {
-		return *types.EmptyATXID
-	}
+	return types.ATXID(CalcGoldenATX([]byte(cfg.ExtraData), cfg.GenesisTime))
 }
 
 func (cfg *GenesisConfig) CalcGenesisID() {
-	gen_id, _ := CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime)
-
-	cfg.GenesisID = gen_id.Hex()
+	cfg.GenesisID = CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime).Hex()
 }
 
-func CalcGoldenATX(genesis_data []byte, genesis_time string) (types.Hash32, error) {
-	if id, err := CalcGenesisId([]byte(genesis_data), genesis_time); err == nil {
-		return id.ToHash32(), nil
-	} else {
-		return types.Hash32{}, err
-	}
+func CalcGoldenATX(genesisData []byte, genesisTime string) types.Hash32 {
+	return CalcGenesisId([]byte(genesisData), genesisTime).ToHash32()
 }
