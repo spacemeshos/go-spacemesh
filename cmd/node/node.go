@@ -1173,8 +1173,9 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 }
 
 func (app *App) checkAndStoreGenesisConfig() error {
-	if exists := filesystem.PathExists(config.DefaultGenesisDataPath); exists {
-		genesisData, err := ioutil.ReadFile(config.DefaultGenesisDataPath)
+	genesisConfigPath := filepath.Join(config.DefaultGenesisDataDir, config.DefaultGenesisConfigFileName)
+	if exists := filesystem.PathExists(genesisConfigPath); exists {
+		genesisData, err := ioutil.ReadFile(genesisConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to read stored genesis config file: %s", err)
 		}
@@ -1193,7 +1194,11 @@ func (app *App) checkAndStoreGenesisConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis config: %w", err)
 	}
-	if err = ioutil.WriteFile(config.DefaultGenesisDataPath, jsonCfg, 0o444); err != nil {
+	err = filesystem.ExistOrCreate(config.DefaultGenesisDataDir)
+	if err != nil {
+		return fmt.Errorf("failed to setup genesis data dir: %w", err)
+	}
+	if err = ioutil.WriteFile(genesisConfigPath, jsonCfg, 0o444); err != nil {
 		return fmt.Errorf("failed to write genesis config file: %w", err)
 	}
 	return nil

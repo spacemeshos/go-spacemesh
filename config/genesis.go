@@ -14,13 +14,15 @@ import (
 )
 
 const (
-	ExtraDataLen   = 255
-	GoldenATXIDLen = 32
-	GenesisIDLen   = 20
-	SaveToFileName = "GenesisDataChecksum"
+	ExtraDataLen                 = 255
+	GoldenATXIDLen               = 32
+	GenesisIDLen                 = 20
+	SaveToFileName               = "GenesisDataChecksum"
+	DefaultGenesisConfigFileDir  = "data"
+	DefaultGenesisConfigFileName = "genesis.conf"
 )
 
-var DefaultGenesisDataPath = filepath.Join(defaultDataDir, "/genesis.conf")
+var DefaultGenesisDataDir = filepath.Join(defaultDataDir, DefaultGenesisConfigFileDir, "/")
 
 type GenesisConfig struct {
 	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
