@@ -64,7 +64,16 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 			continue
 		}
 		// update node address in book.
-		d.book.AddAddress(newAddr, addresses[0])
+		if removedAt, ok := d.book.WasRecentlyRemoved(newAddr.ID); ok {
+			d.logger.With().Debug(
+				"Skipped adding an address for a recently removed peer",
+				log.String("peer", newAddr.ID.Pretty()),
+				log.Time("removedAt", *removedAt),
+			)
+		} else {
+			d.book.AddAddress(newAddr, addresses[0])
+		}
+
 	}
 }
 

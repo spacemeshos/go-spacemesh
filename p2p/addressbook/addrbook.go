@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -54,6 +55,9 @@ type AddrBook struct {
 	anchorPeers     []*knownAddress // Anchor peers. store active connections, and use some of them when node starts.
 	lastAnchorPeers []*knownAddress // Anchor peers from last node start. Used only for bootstrap. New connections come to anchorPeers
 
+	// Cache of recently removed peers.
+	recentlyRemoved *lru.Cache
+
 	nTried int
 	nNew   int
 }
@@ -65,15 +69,36 @@ func NewAddrBook(cfg *Config, logger log.Log) *AddrBook {
 	if len(cfg.DataDir) != 0 {
 		path = filepath.Join(cfg.DataDir, peersFileName)
 	}
+	cache, err := lru.New(cfg.RemovedPeersCacheSize)
+	if err != nil {
+		log.With().Panic("Failed to create removed peers cache", log.Err(err), log.Int("size", cfg.RemovedPeersCacheSize))
+	}
 	am := AddrBook{
-		cfg:    cfg,
-		logger: logger,
-		path:   path,
-		rand:   newConcurrentRand(),
+		cfg:             cfg,
+		logger:          logger,
+		path:            path,
+		rand:            newConcurrentRand(),
+		recentlyRemoved: cache,
 	}
 	am.reset()
 	am.loadPeers(am.path)
 	return &am
+}
+
+// WasRecentlyRemoved checks if peer ID was recently removed.
+// If peer is in the cache, then it returns the time when peer was removed
+// If the peer was not in the cache, returns (nil, false)
+func (a *AddrBook) WasRecentlyRemoved(id peer.ID) (removedAt *time.Time, wasRemoved bool) {
+	if removedAt, ok := a.recentlyRemoved.Peek(id); ok {
+		r := removedAt.(time.Time)
+		return &r, ok
+	}
+	return nil, false
+}
+
+func (a *AddrBook) removePeer(id peer.ID) {
+	delete(a.addrIndex, id)
+	a.recentlyRemoved.Add(id, time.Now())
 }
 
 // updateAddress is a helper function to either update an address already known
@@ -415,7 +440,7 @@ func (a *AddrBook) expireNew(bucket int) {
 			v.refs--
 			if v.refs == 0 {
 				a.nNew--
-				delete(a.addrIndex, k)
+				a.removePeer(k)
 			}
 			continue
 		}
@@ -432,7 +457,7 @@ func (a *AddrBook) expireNew(bucket int) {
 		oldest.refs--
 		if oldest.refs == 0 {
 			a.nNew--
-			delete(a.addrIndex, key)
+			a.removePeer(key)
 		}
 	}
 }
@@ -579,7 +604,7 @@ func (a *AddrBook) RemoveAddress(pid peer.ID) {
 		}
 	}
 
-	delete(a.addrIndex, pid)
+	a.removePeer(pid)
 }
 
 // reset resets the address manager by reinitialising the random source and allocating fresh empty bucket storage.
