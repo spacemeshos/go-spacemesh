@@ -24,7 +24,7 @@ const (
 	messageTimeout = 10 * time.Second
 )
 
-// Peer Exchange protocol configuration
+// Peer Exchange protocol configuration.
 type PeerExchangeConfig struct {
 	// Peers that have not been successfully connected to for
 	// this time are considered stale and not shared with other peers
