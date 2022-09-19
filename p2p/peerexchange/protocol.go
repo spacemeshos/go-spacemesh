@@ -84,7 +84,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 	aliveAddresses := make([]*addressbook.AddrInfo, 0, len(results))
 	validAfterTs := time.Now().Add(time.Minute * 10)
 	for _, address := range results {
-		if address.LastSuccess.After(validAfterTs) {
+		if address.LastAttempt.IsZero() || address.LastSuccess.After(validAfterTs) {
 			aliveAddresses = append(aliveAddresses, address.Addr)
 		}
 	}
