@@ -140,14 +140,14 @@ func CalcGenesisId(genesisExtraData []byte, genesisTime string) types.Hash20 {
 	return types.BytesToHash(digest).ToHash20()
 }
 
-func (cfg *GenesisConfig) CalcGoldenATX() types.ATXID {
-	return types.ATXID(CalcGoldenATX([]byte(cfg.ExtraData), cfg.GenesisTime))
-}
-
 func (cfg *GenesisConfig) CalcGenesisID() {
 	cfg.GenesisID = CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime).Hex()
 }
 
 func CalcGoldenATX(genesisData []byte, genesisTime string) types.Hash32 {
 	return CalcGenesisId([]byte(genesisData), genesisTime).ToHash32()
+}
+
+func (cfg *GenesisConfig) CalcGoldenATX() {
+	cfg.GoldenATXID = types.ATXID(CalcGoldenATX([]byte(cfg.ExtraData), cfg.GenesisTime)).Hash32().Hex()
 }

@@ -709,12 +709,10 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
+		app.Config.Genesis.Accounts = apiConfig.DefaultGenesisAccountConfig()
 		app.Config.Genesis.GenesisTime = config.DefaultTestGenesisTime()
-		app.Config.Genesis.Accounts = &apiConfig.GenesisAccountConfig{
-			Accounts: map[string]uint64{
-				address.String(): 100_000_000,
-			},
-		}
+		app.Config.Genesis.CalcGenesisID()
+		app.Config.Genesis.CalcGoldenATX()
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
