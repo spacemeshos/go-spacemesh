@@ -80,21 +80,17 @@ func (p *peerExchange) handler(stream network.Stream) {
 	}
 
 	results := p.book.GetKnownAddressesCache()
-	// Filter out addresses that have not been connected for a while
-	aliveAddresses := make([]*addressbook.AddrInfo, 0, len(results))
-	validAfterTs := time.Now().Add(-time.Minute * 10)
-	for _, address := range results {
-		if address.LastAttempt.IsZero() || address.LastSuccess.After(validAfterTs) {
-			aliveAddresses = append(aliveAddresses, address.Addr)
-		}
-	}
-
 	response := make([]string, 0, len(results))
-	for _, addr := range aliveAddresses {
-		if addr.ID == stream.Conn().RemotePeer() {
+	now := time.Now()
+	for _, addr := range results {
+		if addr.Addr.ID == stream.Conn().RemotePeer() {
 			continue
 		}
-		response = append(response, addr.RawAddr)
+		// Filter out addresses that have not been connected for a while
+		// but optimistically keep addresses we have not tried yet.
+		if addr.LastAttempt.IsZero() || now.Sub(addr.LastSuccess) > 10*time.Minute {
+			response = append(response, addr.Addr.RawAddr)
+		}
 	}
 	// todo: limit results to message size
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
