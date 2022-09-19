@@ -20,7 +20,7 @@ const (
 	SaveToFileName = "GenesisDataChecksum"
 )
 
-var DefaultGenesisDataPath = filepath.Join(defaultHomeDir, defaultDataDirName, "/genesis.conf")
+var DefaultGenesisDataPath = filepath.Join(defaultDataDir, "/genesis.conf")
 
 type GenesisConfig struct {
 	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
