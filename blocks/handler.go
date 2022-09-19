@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -14,8 +15,9 @@ import (
 )
 
 var (
-	errMalformedData = errors.New("malformed data")
-	errDuplicateTX   = errors.New("duplicate TxID in proposal")
+	errMalformedData  = errors.New("malformed data")
+	errInvalidRewards = errors.New("invalid rewards")
+	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )
 
 // Handler processes Block fetched from peers during sync.
@@ -60,9 +62,13 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 		logger.With().Error("malformed block", log.Err(err))
 		return errMalformedData
 	}
-
 	// set the block ID when received
 	b.Initialize()
+
+	if err := vm.ValidateRewards(b.Rewards); err != nil {
+		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())
+	}
+
 	logger = logger.WithFields(b.ID())
 
 	if exists, err := blocks.Has(h.db, b.ID()); err != nil {

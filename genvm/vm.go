@@ -37,6 +37,20 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
+// Config defines the configuration options for vm.
+type Config struct {
+	GasLimit          uint64
+	StorageCostFactor uint64 `mapstructure:"vm-storage-cost-factor"`
+}
+
+// DefaultConfig returns the default RewardConfig.
+func DefaultConfig() Config {
+	return Config{
+		GasLimit:          100_000_000,
+		StorageCostFactor: 2,
+	}
+}
+
 // WithConfig updates config on the vm.
 func WithConfig(cfg Config) Opt {
 	return func(vm *VM) {
@@ -175,6 +189,11 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 
 // Apply transactions.
 func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+	if lctx.Layer.Before(types.GetEffectiveGenesis()) {
+		return nil, nil, fmt.Errorf("%w: applying layer %s before effective genesis %s",
+			core.ErrInternal, lctx.Layer, types.GetEffectiveGenesis(),
+		)
+	}
 	t1 := time.Now()
 	tx, err := v.db.TxImmediate(context.Background())
 	if err != nil {
@@ -192,12 +211,10 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	t3 := time.Now()
 	blockDurationTxs.Observe(float64(time.Since(t2)))
 
-	// TODO(dshulyak) why it fails if there are no rewards?
-	if len(blockRewards) > 0 {
-		if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
-			return nil, nil, err
-		}
+	if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
+		return nil, nil, err
 	}
+
 	t4 := time.Now()
 	blockDurationRewards.Observe(float64(time.Since(t3)))
 
@@ -242,29 +259,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		log.Stringer("state_hash", hash),
 	)
 	return skipped, results, nil
-}
-
-func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fees uint64, blockRewards []types.AnyReward) error {
-	finalRewards, err := calculateRewards(v.logger, v.cfg, lctx.Layer, fees, blockRewards)
-	if err != nil {
-		return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-	}
-	for _, reward := range finalRewards {
-		if err := rewards.Add(tx, reward); err != nil {
-			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		account, err := ss.Get(reward.Coinbase)
-		if err != nil {
-			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		account.Balance += reward.TotalReward
-		if err := ss.Update(account); err != nil {
-			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
-		rewardsCount.Add(float64(reward.TotalReward))
-	}
-	feesCount.Add(float64(fees))
-	return nil
 }
 
 func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transaction) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {

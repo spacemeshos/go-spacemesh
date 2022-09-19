@@ -41,7 +41,7 @@ func (v *Vault) Available(lid core.LayerID) uint64 {
 	}
 	incremental := new(big.Int).SetUint64(v.TotalAmount - v.InitialUnlockAmount)
 	incremental.Mul(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
-	incremental.Div(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
+	incremental.Quo(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
 	return v.InitialUnlockAmount + incremental.Uint64()
 }
 
