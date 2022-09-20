@@ -22,22 +22,24 @@ var errInternal = errors.New("unspecified error returned by peer")
 
 type handler struct {
 	logger log.Log
-	db     *sql.Database
+	cdb    *datastore.CachedDB
 	bs     *datastore.BlobStore
+	msh    meshProvider
 }
 
-func newHandler(db *sql.Database, bs *datastore.BlobStore, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
-		db:     db,
+		cdb:    cdb,
 		bs:     bs,
+		msh:    m,
 	}
 }
 
 // handleEpochATXIDsReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
-	atxids, err := atxs.GetIDsByEpoch(h.db, epoch)
+	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("get epoch ATXs for epoch %v: %w", epoch, err)
 	}
@@ -61,22 +63,12 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 		ld    LayerData
 		err   error
 	)
-	ld.Hash, err = layers.GetHash(h.db, lyrID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get layer hash", lyrID, log.Err(err))
-		return nil, errInternal
-	}
-	ld.AggregatedHash, err = layers.GetAggregatedHash(h.db, lyrID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lyrID, log.Err(err))
-		return nil, errInternal
-	}
-	ld.Ballots, err = ballots.IDsInLayer(h.db, lyrID)
+	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer ballots", lyrID, log.Err(err))
 		return nil, errInternal
 	}
-	ld.Blocks, err = blocks.IDsInLayer(h.db, lyrID)
+	ld.Blocks, err = blocks.IDsInLayer(h.cdb, lyrID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get layer blocks", lyrID, log.Err(err))
 		return nil, errInternal
@@ -84,28 +76,60 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 
 	out, err := codec.Encode(&ld)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Panic("failed to serialize layer data response", log.Err(err))
+		h.logger.WithContext(ctx).With().Fatal("failed to serialize layer data response", log.Err(err))
 	}
-
 	return out, nil
 }
 
-// handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinions.
+// handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinion.
 func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
-		lid = types.BytesToLayerID(req)
-		ld  LayerOpinions
-		out []byte
-		err error
+		lid           = types.BytesToLayerID(req)
+		blockValidity []types.BlockContextualValidity
+		lo            LayerOpinion
+		out           []byte
+		err           error
 	)
-	ld.Cert, err = layers.GetCert(h.db, lid)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get certificate for layer", lid, log.Err(err))
+
+	lo.EpochWeight, _, err = h.cdb.GetEpochWeight(lid.GetEpoch())
+	if err != nil {
+		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", lid, lid.GetEpoch(), log.Err(err))
 		return nil, errInternal
 	}
-	out, err = codec.Encode(&ld)
+	lo.AggregatedHash, err = layers.GetAggregatedHash(h.cdb, lid)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		h.logger.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lid, log.Err(err))
+		return nil, errInternal
+	}
+	lo.Verified = h.msh.LastVerified()
+
+	lo.Cert, err = layers.GetCert(h.cdb, lid)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		h.logger.WithContext(ctx).With().Warning("failed to get certificate", lid, log.Err(err))
+		return nil, errInternal
+	}
+	if !lid.After(lo.Verified) {
+		blockValidity, err = blocks.ContextualValidity(h.cdb, lid)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			h.logger.WithContext(ctx).With().Warning("failed to get block validity", lid, log.Err(err))
+			return nil, errInternal
+		}
+		if len(blockValidity) == 0 {
+			// the layer is verified and is empty
+			lo.Valid = append(lo.Valid, types.EmptyBlockID)
+		} else {
+			for _, bv := range blockValidity {
+				if bv.Validity {
+					lo.Valid = append(lo.Valid, bv.ID)
+				} else {
+					lo.Invalid = append(lo.Invalid, bv.ID)
+				}
+			}
+		}
+	}
+	out, err = codec.Encode(&lo)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Panic("failed to serialize layer opinions response", log.Err(err))
+		h.logger.WithContext(ctx).With().Fatal("failed to serialize layer opinions response", log.Err(err))
 	}
 	return out, nil
 }
