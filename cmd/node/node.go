@@ -1092,7 +1092,7 @@ func (app *App) Start() error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.checkAndStoreGenesisConfig(); err != nil {
+	if err = app.checkAndStoreGenesisConfig(config.DefaultGenesisDataDir, config.DefaultGenesisConfigFileName); err != nil {
 		return fmt.Errorf("failed to check and store genesis config: %w", err)
 	}
 
@@ -1172,8 +1172,8 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 	return rst, nil
 }
 
-func (app *App) checkAndStoreGenesisConfig() error {
-	genesisConfigPath := filepath.Join(config.DefaultGenesisDataDir, config.DefaultGenesisConfigFileName)
+func (app *App) checkAndStoreGenesisConfig(genesisDataDir, genesisConfigFileName string) error {
+	genesisConfigPath := filepath.Join(genesisDataDir, genesisConfigFileName)
 	if exists := filesystem.PathExists(genesisConfigPath); exists {
 		genesisData, err := ioutil.ReadFile(genesisConfigPath)
 		if err != nil {
@@ -1194,7 +1194,7 @@ func (app *App) checkAndStoreGenesisConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis config: %w", err)
 	}
-	err = filesystem.ExistOrCreate(config.DefaultGenesisDataDir)
+	err = filesystem.ExistOrCreate(genesisDataDir)
 	if err != nil {
 		return fmt.Errorf("failed to setup genesis data dir: %w", err)
 	}

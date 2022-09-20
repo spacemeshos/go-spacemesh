@@ -29,13 +29,6 @@ type GenesisConfig struct {
 	GenesisID   string
 }
 
-type GenesisConfigResolved struct {
-	ExtraData   [255]byte
-	GoldenATXID types.ATXID
-	GenesisTime string
-	GenesisID   types.Hash20
-}
-
 func GenesisViper() *viper.Viper {
 	genesisVip := viper.New()
 	return genesisVip

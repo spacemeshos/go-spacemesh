@@ -1000,3 +1000,34 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	return smApp, err
 }
+
+func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	t.Run("Saving new genesis config", func(t *testing.T) {
+		t.Parallel()
+		app := &App{}
+		app.Config = &config.Config{Genesis: config.DefaultTestGenesisConfig()}
+		tempDir := t.TempDir()
+
+		err := app.checkAndStoreGenesisConfig(tempDir, config.DefaultGenesisConfigFileName)
+		r.NoError(err)
+	})
+
+	t.Run("Mismatching genesis configs", func(t *testing.T) {
+		t.Parallel()
+		app := &App{}
+		app.Config = &config.Config{Genesis: config.DefaultTestGenesisConfig()}
+		tempDir := t.TempDir()
+
+		err := app.checkAndStoreGenesisConfig(tempDir, config.DefaultGenesisConfigFileName)
+		r.NoError(err)
+
+		app.Config.Genesis.GenesisTime = time.Now().Add(time.Hour).Format(time.RFC3339)
+
+		err = app.checkAndStoreGenesisConfig(tempDir, config.DefaultGenesisConfigFileName)
+		r.Error(err)
+		r.ErrorContains(err, "config files mismatches")
+	})
+}
