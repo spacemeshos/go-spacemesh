@@ -907,7 +907,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
 		for _, key := range keys {
-			require.EqualValues(t, conf.Genesis.Accounts.Accounts[key], value)
+			require.EqualValues(t, conf.Genesis.Accounts.Data[key], value)
 		}
 	})
 }

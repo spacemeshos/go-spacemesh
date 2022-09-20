@@ -36,7 +36,7 @@ type Context struct {
 
 	touched   []Address
 	changed   map[Address]*Account
-	GenesisID [20]byte
+	GenesisID types.Hash20
 }
 
 // Principal returns address of the account that signed transaction.
@@ -45,7 +45,7 @@ func (c *Context) Principal() Address {
 }
 
 // GenesisId returns genesis id.
-func (c *Context) GenesisId() [20]byte {
+func (c *Context) GenesisId() types.Hash20 {
 	return c.GenesisID
 }
 

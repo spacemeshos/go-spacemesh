@@ -15,9 +15,6 @@ import (
 
 const (
 	ExtraDataLen                 = 255
-	GoldenATXIDLen               = 32
-	GenesisIDLen                 = 20
-	SaveToFileName               = "GenesisDataChecksum"
 	DefaultGenesisConfigFileDir  = "data"
 	DefaultGenesisConfigFileName = "genesis.conf"
 )
@@ -25,7 +22,7 @@ const (
 var DefaultGenesisDataDir = filepath.Join(defaultDataDir, DefaultGenesisConfigFileDir, "/")
 
 type GenesisConfig struct {
-	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
+	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"accounts"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
 	GoldenATXID string                          `mapstructure:"golden-atx"`
 	ExtraData   string                          `mapstructure:"genesis-extra-data"`
@@ -56,7 +53,7 @@ func defaultGenesisConfig() *GenesisConfig {
 func DefaultTestnetGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
 		Accounts: &apiConfig.GenesisAccountConfig{
-			Accounts: map[string]uint64{
+			Data: map[string]uint64{
 				"stest1qqqqqqygdpsq62p4qxfyng8h2mm4f4d94vt7huqqu9mz3": 100000000000000000,
 				"stest1qqqqqqylzg8ypces4llx4gnat0dyntqfvr0h6mcprcz66": 100000000000000000,
 				"stest1qqqqqq90akdpc97206485eu4m0rmacd3mxfv0wsdrea6k": 100000000000000000,

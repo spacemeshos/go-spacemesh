@@ -9,13 +9,13 @@ import (
 
 // GenesisAccountConfig defines accounts that will exist in state at genesis.
 type GenesisAccountConfig struct {
-	Accounts map[string]uint64 `mapstructure:"accounts"`
+	Data map[string]uint64 `mapstructure:"data"`
 }
 
 // ToList creates list of types.Account instance from config.
 func (g *GenesisAccountConfig) ToList() []types.Account {
 	var rst []types.Account
-	for addr, balance := range g.Accounts {
+	for addr, balance := range g.Data {
 		genesisAddr, err := types.StringToAddress(addr)
 		if err != nil {
 			log.Panic("could not create address from genesis config `%s`: %s", addr, err.Error())
@@ -38,7 +38,7 @@ const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df
 func DefaultGenesisAccountConfig() *GenesisAccountConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return &GenesisAccountConfig{
-		Accounts: generateGenesisAccounts(),
+		Data: generateGenesisAccounts(),
 	}
 }
 
@@ -46,7 +46,7 @@ func DefaultGenesisAccountConfig() *GenesisAccountConfig {
 func DefaultTestGenesisAccountConfig() *GenesisAccountConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return &GenesisAccountConfig{
-		Accounts: generateGenesisAccounts(),
+		Data: generateGenesisAccounts(),
 	}
 }
 
