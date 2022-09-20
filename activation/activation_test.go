@@ -129,7 +129,7 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Has
 	return newNIPostWithChallenge(challenge, np.poetRef), nil
 }
 
-// TODO(mafa): use gomock instead of this
+// TODO(mafa): use gomock instead of this.
 type NIPostErrBuilderMock struct{}
 
 func (np *NIPostErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
@@ -138,7 +138,7 @@ func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan
 	return nil, fmt.Errorf("NIPost builder error")
 }
 
-// TODO(mafa): use gomock instead of this; see handler_test.go for examples
+// TODO(mafa): use gomock instead of this; see handler_test.go for examples.
 type ValidatorMock struct{}
 
 func (*ValidatorMock) Validate([]byte, *types.NIPost, types.Hash32, uint) (uint64, error) {
@@ -149,7 +149,7 @@ func (*ValidatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uin
 	return nil
 }
 
-// TODO(mafa): use gomock instead of this
+// TODO(mafa): use gomock instead of this.
 type FaultyNetMock struct {
 	bt     []byte
 	retErr bool
