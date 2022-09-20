@@ -1078,8 +1078,6 @@ func (app *App) Start() error {
 
 	lg.Info("initializing p2p services")
 
-	app.Config.NetworkIdFromGenesis(app.Config.Genesis)
-
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)

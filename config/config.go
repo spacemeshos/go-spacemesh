@@ -12,7 +12,6 @@ import (
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -209,8 +208,4 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 // SetConfigFile overrides the default config file path.
 func (cfg *BaseConfig) SetConfigFile(file string) {
 	cfg.ConfigFile = file
-}
-
-func (cfg *Config) NetworkIdFromGenesis(genCfg *GenesisConfig) {
-	cfg.P2P.NetworkID = util.BytesToUint32(util.FromHex(cfg.Genesis.GenesisID))
 }
