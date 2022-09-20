@@ -104,7 +104,5 @@ beacon = "info"
 weakCoin = "info"
 
 [genesis]
-#genesis-id = ""
-golden-atx = "0x5678"
 genesis-time = "2019-02-13T17:02:00+00:00"
 genesis-extradata = "mainnet"
