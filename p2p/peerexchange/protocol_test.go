@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -29,6 +30,15 @@ func buildPeer(t *testing.T, l log.Log, h host.Host, config PeerExchangeConfig) 
 	port, err := routablePort(h)
 	require.NoError(t, err)
 	return newPeerExchange(h, book, port, l, config)
+}
+
+func contains[T any](array []T, object T) bool {
+	for _, elem := range array {
+		if assert.ObjectsAreEqual(object, elem) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDiscovery_LearnAddress(t *testing.T) {
@@ -89,19 +99,25 @@ func TestDiscovery_FilteringAddresses(t *testing.T) {
 	require.NoError(t, err)
 	peerB.book.AddAddress(info, best)
 
-	// Check if never attempted address is returned
-	addresses, err := peerA.Request(context.TODO(), peerB.h.ID())
-	require.NoError(t, err)
-	require.Contains(t, addresses, info)
-	peerB.book.Good(info.ID)
+	// Check if never attempted address is eventually returned
+	// The returned addresses are randomly picked so try in a
+	// tight loop.
+	require.Eventually(t, func() bool {
+		addresses, err := peerA.Request(context.TODO(), peerB.h.ID())
+		require.NoError(t, err)
+		return contains(addresses, info)
+	}, time.Second, time.Nanosecond)
 
+	peerB.book.Good(info.ID)
 	// Wait for `info` to become stale
 	time.Sleep(10 * time.Millisecond)
 
-	// Check if stale address is not returned
-	addresses, err = peerA.Request(context.TODO(), peerB.h.ID())
-	require.NoError(t, err)
-	require.NotContains(t, addresses, info)
+	// Check if stale address is "never" returned
+	for i := 1; i <= 10; i++ {
+		addresses, err := peerA.Request(context.TODO(), peerB.h.ID())
+		require.NoError(t, err)
+		assert.NotContains(t, addresses, info)
+	}
 }
 
 func checkDNSAddress(addresses []*addressbook.AddrInfo, dns string) bool {
