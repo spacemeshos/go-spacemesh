@@ -199,6 +199,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	}
 
 	conf := config.DefaultConfig()
+
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
@@ -1090,7 +1091,7 @@ func (app *App) Start() error {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err = app.checkAndStoreGenesisConfig(config.DefaultGenesisDataDir, config.DefaultGenesisConfigFileName); err != nil {
+	if err = app.checkAndStoreGenesisConfig(); err != nil {
 		return fmt.Errorf("failed to check and store genesis config: %w", err)
 	}
 
@@ -1170,8 +1171,8 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 	return rst, nil
 }
 
-func (app *App) checkAndStoreGenesisConfig(genesisDataDir, genesisConfigFileName string) error {
-	genesisConfigPath := filepath.Join(genesisDataDir, genesisConfigFileName)
+func (app *App) checkAndStoreGenesisConfig() error {
+	genesisConfigPath := filepath.Join(app.Config.Genesis.Path, config.DefaultGenesisConfigFileName)
 	if exists := filesystem.PathExists(genesisConfigPath); exists {
 		genesisData, err := ioutil.ReadFile(genesisConfigPath)
 		if err != nil {
@@ -1192,7 +1193,7 @@ func (app *App) checkAndStoreGenesisConfig(genesisDataDir, genesisConfigFileName
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis config: %w", err)
 	}
-	err = filesystem.ExistOrCreate(genesisDataDir)
+	err = filesystem.ExistOrCreate(app.Config.Genesis.Path)
 	if err != nil {
 		return fmt.Errorf("failed to setup genesis data dir: %w", err)
 	}

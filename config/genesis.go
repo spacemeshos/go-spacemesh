@@ -18,14 +18,13 @@ const (
 	DefaultGenesisConfigFileName = "genesis.conf"
 )
 
-var DefaultGenesisDataDir = filepath.Join(defaultDataDir, DefaultGenesisConfigFileDir, "/")
-
 type GenesisConfig struct {
 	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"accounts"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
-	ExtraData   string                          `mapstructure:"genesis-extra-data"`
-	GoldenATXID string                          `mapstructure:"golden-atx"`
+	ExtraData   string                          `mapstructure:"genesis-extradata"`
+	GoldenATXID string
 	GenesisID   string
+	Path        string
 }
 
 func defaultGenesisConfig() *GenesisConfig {
@@ -34,6 +33,7 @@ func defaultGenesisConfig() *GenesisConfig {
 		GenesisTime: DefaultGenesisTime(),
 		GoldenATXID: DefaultGoldenATXId().Hash32().Hex(),
 		ExtraData:   DefaultGenesisExtraData(),
+		Path:        DefaultGenesisDataDir(),
 	}
 }
 
@@ -52,6 +52,7 @@ func DefaultTestnetGenesisConfig() *GenesisConfig {
 		ExtraData:   DefaultTestnetGenesisExtraData(),
 		GoldenATXID: DefaultTestnetGoldenATXId().Hash32().Hex(),
 		GenesisID:   CalcGenesisId([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()).Hex(),
+		Path:        DefaultGenesisDataDir(),
 	}
 }
 
@@ -62,6 +63,7 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 		ExtraData:   DefaultTestGenesisExtraData(),
 		GoldenATXID: DefaultTestGoldenATXId().Hash32().Hex(),
 		GenesisID:   CalcGenesisId([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()).Hex(),
+		Path:        DefaultGenesisDataDir(),
 	}
 }
 
@@ -70,6 +72,10 @@ func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
 		return fmt.Errorf("config files mismatch (-want +got):\n%s", diff)
 	}
 	return nil
+}
+
+func DefaultGenesisDataDir() string {
+	return filepath.Join(defaultDataDir, DefaultGenesisConfigFileDir)
 }
 
 func DefaultGenesisTime() string {
