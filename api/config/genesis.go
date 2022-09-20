@@ -9,7 +9,7 @@ import (
 
 // GenesisAccountConfig defines accounts that will exist in state at genesis.
 type GenesisAccountConfig struct {
-	Data map[string]uint64 `mapstructure:"data"`
+	Data map[string]uint64 `mapstructure:"accounts"`
 }
 
 // ToList creates list of types.Account instance from config.
