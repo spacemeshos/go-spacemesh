@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/spf13/viper"
 
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -24,14 +23,9 @@ var DefaultGenesisDataDir = filepath.Join(defaultDataDir, DefaultGenesisConfigFi
 type GenesisConfig struct {
 	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"accounts"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
-	GoldenATXID string                          `mapstructure:"golden-atx"`
 	ExtraData   string                          `mapstructure:"genesis-extra-data"`
+	GoldenATXID string                          `mapstructure:"golden-atx"`
 	GenesisID   string
-}
-
-func GenesisViper() *viper.Viper {
-	genesisVip := viper.New()
-	return genesisVip
 }
 
 func defaultGenesisConfig() *GenesisConfig {
@@ -55,63 +49,63 @@ func DefaultTestnetGenesisConfig() *GenesisConfig {
 			},
 		},
 		GenesisTime: DefaultTestnetGenesisTime(),
-		GoldenATXID: DefaultGoldenATXId().Hash32().Hex(),
 		ExtraData:   DefaultTestnetGenesisExtraData(),
+		GoldenATXID: DefaultTestnetGoldenATXId().Hash32().Hex(),
+		GenesisID:   CalcGenesisId([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()).Hex(),
 	}
 }
 
 func DefaultTestGenesisConfig() *GenesisConfig {
-	cfg := &GenesisConfig{
+	return &GenesisConfig{
 		Accounts:    apiConfig.DefaultTestGenesisAccountConfig(),
 		GenesisTime: DefaultTestGenesisTime(),
+		ExtraData:   DefaultTestGenesisExtraData(),
 		GoldenATXID: DefaultTestGoldenATXId().Hash32().Hex(),
-		ExtraData:   DefaultGenesisExtraData(),
+		GenesisID:   CalcGenesisId([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()).Hex(),
 	}
-	cfg.GenesisID = CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime).Hex()
-	return cfg
 }
 
 func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
 	if diff := cmp.Diff(payload, gc); diff != "" {
-		return fmt.Errorf("config files mismatches (-want +got):\n%s", diff)
+		return fmt.Errorf("config files mismatch (-want +got):\n%s", diff)
 	}
 	return nil
-}
-
-func DefaultTestGenesisTime() string {
-	return "2022-12-25T00:00:00+00:00"
-}
-
-func DefaultTestnetGenesisTime() string {
-	return DefaultTestGenesisTime()
 }
 
 func DefaultGenesisTime() string {
 	return time.Now().Format(time.RFC3339)
 }
 
+func DefaultGenesisExtraData() string {
+	return "mainnet"
+}
+
 func DefaultGoldenATXId() types.ATXID {
 	return types.ATXID(CalcGoldenATX([]byte(DefaultGenesisExtraData()), DefaultGenesisTime()))
 }
 
-func DefaultTestGoldenATXId() types.ATXID {
-	return types.ATXID(CalcGoldenATX([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()))
-}
-
-func DefaultTestnetGoldenATXId() types.ATXID {
-	return types.ATXID(CalcGoldenATX([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()))
-}
-
-func DefaultTestnetGenesisExtraData() string {
-	return "testnet"
+func DefaultTestGenesisTime() string {
+	return "2022-12-25T00:00:00+00:00"
 }
 
 func DefaultTestGenesisExtraData() string {
 	return DefaultGenesisExtraData()
 }
 
-func DefaultGenesisExtraData() string {
-	return "mainnet"
+func DefaultTestGoldenATXId() types.ATXID {
+	return types.ATXID(CalcGoldenATX([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()))
+}
+
+func DefaultTestnetGenesisTime() string {
+	return DefaultTestGenesisTime()
+}
+
+func DefaultTestnetGenesisExtraData() string {
+	return "testnet"
+}
+
+func DefaultTestnetGoldenATXId() types.ATXID {
+	return types.ATXID(CalcGoldenATX([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()))
 }
 
 func CalcGenesisId(genesisExtraData []byte, genesisTime string) types.Hash20 {

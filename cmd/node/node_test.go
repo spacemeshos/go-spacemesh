@@ -1007,18 +1007,15 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 
 	t.Run("Saving new genesis config", func(t *testing.T) {
 		t.Parallel()
-		app := &App{}
-		app.Config = &config.Config{Genesis: config.DefaultTestGenesisConfig()}
-		tempDir := t.TempDir()
+		app := &App{Config: &config.Config{Genesis: config.DefaultTestGenesisConfig()}}
 
-		err := app.checkAndStoreGenesisConfig(tempDir, config.DefaultGenesisConfigFileName)
+		err := app.checkAndStoreGenesisConfig(t.TempDir(), config.DefaultGenesisConfigFileName)
 		r.NoError(err)
 	})
 
 	t.Run("Mismatching genesis configs", func(t *testing.T) {
 		t.Parallel()
-		app := &App{}
-		app.Config = &config.Config{Genesis: config.DefaultTestGenesisConfig()}
+		app := &App{Config: &config.Config{Genesis: config.DefaultTestGenesisConfig()}}
 		tempDir := t.TempDir()
 
 		err := app.checkAndStoreGenesisConfig(tempDir, config.DefaultGenesisConfigFileName)
@@ -1028,6 +1025,6 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 
 		err = app.checkAndStoreGenesisConfig(tempDir, config.DefaultGenesisConfigFileName)
 		r.Error(err)
-		r.ErrorContains(err, "config files mismatches")
+		r.ErrorContains(err, "config files mismatch")
 	})
 }
