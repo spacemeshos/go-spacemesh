@@ -104,6 +104,8 @@ jobs:
       - name: setup env
         run: make
       - name: unit tests
+        env:
+          GOTESTSUM_FORMAT: testname
         run: make test
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
