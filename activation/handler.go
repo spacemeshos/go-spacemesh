@@ -67,7 +67,7 @@ func init() {
 	close(closedChan)
 }
 
-// AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip.
+// AwaitAtx returns a channel that will receive notification when the specified atx with id is received via gossip.
 func (h *Handler) AwaitAtx(id types.ATXID) chan struct{} {
 	h.Lock()
 	defer h.Unlock()
@@ -154,7 +154,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	if atx.PrevATXID != *types.EmptyATXID {
 		prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
 		if err != nil {
-			return nil, fmt.Errorf("validation failed: prevATX not found: %v", err)
+			return nil, fmt.Errorf("validation failed: prevATX not found: %w", err)
 		}
 
 		if prevATX.NodeID != atx.NodeID() {
@@ -186,7 +186,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 
 		if atx.CommitmentATX != *types.EmptyATXID {
-			return nil, fmt.Errorf("prevATX declared, but commitment ATX is included")
+			return nil, fmt.Errorf("prevATX declared, but commitmentATX is included")
 		}
 	} else {
 		if atx.Sequence != 0 {
@@ -206,8 +206,25 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 
 		if atx.CommitmentATX == *types.EmptyATXID {
-			// TODO(mafa): not just check if it's empty but also if the referenced ATX is valid (i.e. is in DB)
-			return nil, fmt.Errorf("no prevATX declared, but commitmentATX is not included")
+			return nil, fmt.Errorf("no prevATX declared, but commitmentATX is missing")
+		}
+
+		if atx.CommitmentATX != h.goldenATXID {
+			commitmentAtx, err := h.cdb.GetAtxHeader(atx.CommitmentATX)
+			if err != nil {
+				return nil, fmt.Errorf("commitment atx not found")
+			}
+			if !atx.PubLayerID.After(commitmentAtx.PubLayerID) {
+				return nil, fmt.Errorf("atx layer (%v) must be after commitment atx layer (%v)", atx.PubLayerID, commitmentAtx.PubLayerID)
+			}
+			if d := atx.PubLayerID.Difference(commitmentAtx.PubLayerID); d > h.layersPerEpoch {
+				return nil, fmt.Errorf("expected distance of one epoch (%v layers) from commitment atx but found %v", h.layersPerEpoch, d)
+			}
+		} else {
+			publicationEpoch := atx.PublishEpoch()
+			if !publicationEpoch.NeedsGoldenPositioningATX() {
+				return nil, fmt.Errorf("golden atx used for commitment atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
+			}
 		}
 
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
@@ -222,7 +239,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	}
 	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
-		// TODO(mafa): check if the ATXs are validated in the right sequence (posATX must be present before initial ATX of a node)
 		posAtx, err := h.cdb.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return nil, fmt.Errorf("positioning atx not found")
@@ -231,13 +247,13 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return nil, fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)", atx.PubLayerID, posAtx.PubLayerID)
 		}
 		if d := atx.PubLayerID.Difference(posAtx.PubLayerID); d > h.layersPerEpoch {
-			return nil, fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v", h.layersPerEpoch, d)
+			return nil, fmt.Errorf("expected distance of one epoch (%v layers) from positioning atx but found %v", h.layersPerEpoch, d)
 		}
 		baseTickHeight = posAtx.TickHeight()
 	} else {
 		publicationEpoch := atx.PublishEpoch()
 		if !publicationEpoch.NeedsGoldenPositioningATX() {
-			return nil, fmt.Errorf("golden atx used for atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
+			return nil, fmt.Errorf("golden atx used for positioning atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
 	}
 
@@ -309,7 +325,6 @@ func (h *Handler) StoreAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 
 	if err := atxs.Add(h.cdb, atx, time.Now()); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
-			// exists - how should we handle this?
 			return nil
 		}
 		return fmt.Errorf("add atx to db: %w", err)
