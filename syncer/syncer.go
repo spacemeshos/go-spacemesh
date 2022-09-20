@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -69,10 +70,11 @@ type Syncer struct {
 	logger log.Log
 
 	conf          Configuration
+	db            *sql.Database
 	ticker        layerTicker
 	beacon        system.BeaconGetter
 	mesh          *mesh.Mesh
-	lyrProcessor  layerProcessor
+	certHandler   certHandler
 	fetcher       layerFetcher
 	patrol        layerPatrol
 	syncOnce      sync.Once
@@ -86,9 +88,9 @@ type Syncer struct {
 	lastLayerSynced   atomic.Value
 	lastATXsSynced    atomic.Value
 
+	mu sync.Mutex
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
-	awaitSyncedMu sync.Mutex
 
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
@@ -102,21 +104,24 @@ type Syncer struct {
 func NewSyncer(
 	ctx context.Context,
 	conf Configuration,
+	db *sql.Database,
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
 	fetcher layerFetcher,
 	patrol layerPatrol,
+	ch certHandler,
 	logger log.Log,
 ) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
 		logger:        logger,
 		conf:          conf,
+		db:            db,
 		ticker:        ticker,
 		beacon:        beacon,
 		mesh:          mesh,
-		lyrProcessor:  mesh,
+		certHandler:   ch,
 		fetcher:       fetcher,
 		patrol:        patrol,
 		syncTimer:     time.NewTicker(conf.SyncInterval),
@@ -150,8 +155,8 @@ func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 		close(ch)
 		return
 	}
-	s.awaitSyncedMu.Lock()
-	defer s.awaitSyncedMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
 }
 
@@ -246,8 +251,8 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 			return
 		}
 		// notify subscribes
-		s.awaitSyncedMu.Lock()
-		defer s.awaitSyncedMu.Unlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		for _, ch := range s.awaitSyncedCh {
 			close(ch)
 		}
@@ -413,11 +418,6 @@ func (s *Syncer) dataSynced() bool {
 	return current.Uint32() <= 1 || !s.getLastSyncedLayer().Before(current.Sub(1))
 }
 
-func (s *Syncer) stateSynced() bool {
-	current := s.ticker.GetCurrentLayer()
-	return current.Uint32() <= 1 || !s.mesh.ProcessedLayer().Before(current.Sub(1))
-}
-
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
@@ -460,15 +460,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	if err := s.fetchLayerData(ctx, layerID); err != nil {
 		return err
 	}
-
-	// best effort polling opinions up to this layer
-	s.logger.WithContext(ctx).With().Info("polling layer opinions", layerID)
-	cutoff := s.certCutoffLayer()
-	for lid := cutoff; !lid.After(layerID); lid = lid.Add(1) {
-		if err := s.fetchLayerOpinions(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
-		}
-	}
 	return nil
 }
 
@@ -491,96 +482,5 @@ func (s *Syncer) fetchLayerData(ctx context.Context, layerID types.LayerID) erro
 		}
 	case <-ctx.Done():
 	}
-	return nil
-}
-
-func (s *Syncer) certCutoffLayer() types.LayerID {
-	cutoff := types.GetEffectiveGenesis()
-	last := s.mesh.ProcessedLayer()
-	if last.Uint32() > s.conf.SyncCertDistance {
-		limit := last.Sub(s.conf.SyncCertDistance)
-		if limit.After(cutoff) {
-			cutoff = limit
-		}
-	}
-	return cutoff
-}
-
-func (s *Syncer) fetchLayerOpinions(ctx context.Context, layerID types.LayerID) error {
-	cutoff := s.certCutoffLayer()
-	if !layerID.After(cutoff) {
-		return nil
-	}
-
-	ch := s.fetcher.PollLayerOpinions(ctx, layerID)
-	select {
-	case res := <-ch:
-		if res.Err != nil {
-			return fmt.Errorf("PollLayerOpinions: %w", res.Err)
-		}
-	case <-ctx.Done():
-	}
-	return nil
-}
-
-func minLayer(a, b types.LayerID) types.LayerID {
-	if a.Before(b) {
-		return a
-	}
-	return b
-}
-
-func (s *Syncer) processLayers(ctx context.Context) error {
-	ctx = log.WithNewSessionID(ctx)
-	if !s.ListenToATXGossip() {
-		return errATXsNotSynced
-	}
-
-	s.logger.WithContext(ctx).With().Info("processing synced layers",
-		log.Stringer("processed", s.mesh.ProcessedLayer()),
-		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()))
-
-	start := minLayer(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
-	if !start.Before(s.getLastSyncedLayer()) {
-		return nil
-	}
-
-	for lid := start.Add(1); !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
-		if s.isClosed() {
-			return errShuttingDown
-		}
-
-		// layers should be processed in order. once we skip one layer, there is no point
-		// continuing with later layers. return on error
-		if _, err := s.beacon.GetBeacon(lid.GetEpoch()); err != nil {
-			s.logger.WithContext(ctx).With().Debug("beacon not available", lid)
-			return errBeaconNotAvailable
-		}
-
-		if s.patrol.IsHareInCharge(lid) {
-			lag := types.NewLayerID(0)
-			current := s.ticker.GetCurrentLayer()
-			if current.After(lid) {
-				lag = current.Sub(lid.Uint32())
-			}
-			if lag.Value < s.conf.HareDelayLayers {
-				s.logger.WithContext(ctx).With().Info("skip validating layer: hare still working", lid)
-				return errHareInCharge
-			}
-		}
-
-		if err := s.fetchLayerOpinions(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
-		}
-
-		if err := s.lyrProcessor.ProcessLayer(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
-		}
-	}
-	s.logger.WithContext(ctx).With().Info("end of state sync",
-		log.Bool("state_synced", s.stateSynced()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
 	return nil
 }

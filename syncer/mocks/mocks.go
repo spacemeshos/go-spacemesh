@@ -73,6 +73,20 @@ func (m *MocklayerFetcher) EXPECT() *MocklayerFetcherMockRecorder {
 	return m.recorder
 }
 
+// GetBlocks mocks base method.
+func (m *MocklayerFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlocks", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetBlocks indicates an expected call of GetBlocks.
+func (mr *MocklayerFetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MocklayerFetcher)(nil).GetBlocks), arg0, arg1)
+}
+
 // GetEpochATXs mocks base method.
 func (m *MocklayerFetcher) GetEpochATXs(arg0 context.Context, arg1 types.EpochID) error {
 	m.ctrl.T.Helper()
@@ -88,10 +102,10 @@ func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(arg0, arg1 interface{}) *go
 }
 
 // PollLayerData mocks base method.
-func (m *MocklayerFetcher) PollLayerData(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
+func (m *MocklayerFetcher) PollLayerData(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseData {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PollLayerData", arg0, arg1)
-	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
+	ret0, _ := ret[0].(chan fetch.LayerPromiseData)
 	return ret0
 }
 
@@ -102,10 +116,10 @@ func (mr *MocklayerFetcherMockRecorder) PollLayerData(arg0, arg1 interface{}) *g
 }
 
 // PollLayerOpinions mocks base method.
-func (m *MocklayerFetcher) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
+func (m *MocklayerFetcher) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseOpinions {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1)
-	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
+	ret0, _ := ret[0].(chan fetch.LayerPromiseOpinions)
 	return ret0
 }
 
@@ -152,39 +166,39 @@ func (mr *MocklayerPatrolMockRecorder) IsHareInCharge(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHareInCharge", reflect.TypeOf((*MocklayerPatrol)(nil).IsHareInCharge), arg0)
 }
 
-// MocklayerProcessor is a mock of layerProcessor interface.
-type MocklayerProcessor struct {
+// MockcertHandler is a mock of certHandler interface.
+type MockcertHandler struct {
 	ctrl     *gomock.Controller
-	recorder *MocklayerProcessorMockRecorder
+	recorder *MockcertHandlerMockRecorder
 }
 
-// MocklayerProcessorMockRecorder is the mock recorder for MocklayerProcessor.
-type MocklayerProcessorMockRecorder struct {
-	mock *MocklayerProcessor
+// MockcertHandlerMockRecorder is the mock recorder for MockcertHandler.
+type MockcertHandlerMockRecorder struct {
+	mock *MockcertHandler
 }
 
-// NewMocklayerProcessor creates a new mock instance.
-func NewMocklayerProcessor(ctrl *gomock.Controller) *MocklayerProcessor {
-	mock := &MocklayerProcessor{ctrl: ctrl}
-	mock.recorder = &MocklayerProcessorMockRecorder{mock}
+// NewMockcertHandler creates a new mock instance.
+func NewMockcertHandler(ctrl *gomock.Controller) *MockcertHandler {
+	mock := &MockcertHandler{ctrl: ctrl}
+	mock.recorder = &MockcertHandlerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocklayerProcessor) EXPECT() *MocklayerProcessorMockRecorder {
+func (m *MockcertHandler) EXPECT() *MockcertHandlerMockRecorder {
 	return m.recorder
 }
 
-// ProcessLayer mocks base method.
-func (m *MocklayerProcessor) ProcessLayer(arg0 context.Context, arg1 types.LayerID) error {
+// HandleSyncedCertificate mocks base method.
+func (m *MockcertHandler) HandleSyncedCertificate(arg0 context.Context, arg1 types.LayerID, arg2 *types.Certificate) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessLayer", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleSyncedCertificate", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ProcessLayer indicates an expected call of ProcessLayer.
-func (mr *MocklayerProcessorMockRecorder) ProcessLayer(arg0, arg1 interface{}) *gomock.Call {
+// HandleSyncedCertificate indicates an expected call of HandleSyncedCertificate.
+func (mr *MockcertHandlerMockRecorder) HandleSyncedCertificate(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayer", reflect.TypeOf((*MocklayerProcessor)(nil).ProcessLayer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedCertificate", reflect.TypeOf((*MockcertHandler)(nil).HandleSyncedCertificate), arg0, arg1, arg2)
 }
