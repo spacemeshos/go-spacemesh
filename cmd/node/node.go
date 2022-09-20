@@ -1184,9 +1184,7 @@ func (app *App) checkAndStoreGenesisConfig() error {
 		if err = json.Unmarshal(genesisData, &payload); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if err = app.Config.Genesis.Compare(&payload); err != nil {
-			return fmt.Errorf("failed to compare stored genesis config file: %w", err)
-		}
+		app.Config.Genesis.ExitOnDiff(&payload)
 		return nil
 	}
 	jsonCfg, err := json.Marshal(app.Config.Genesis)

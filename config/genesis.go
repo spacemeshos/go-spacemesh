@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -67,11 +68,11 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	}
 }
 
-func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
+func (gc *GenesisConfig) ExitOnDiff(payload *GenesisConfig) {
 	if diff := cmp.Diff(payload, gc); diff != "" {
-		return fmt.Errorf("config files mismatch (-want +got):\n%s", diff)
+		fmt.Printf("config files mismatch (-want +got):\n%s", diff)
+		os.Exit(1)
 	}
-	return nil
 }
 
 func DefaultGenesisDataDir() string {
