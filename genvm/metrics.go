@@ -113,13 +113,25 @@ var (
 	feesCount = metrics.NewCounter(
 		"fees",
 		namespace,
-		"Fees in coins",
+		"Transaction fees",
+		[]string{},
+	).WithLabelValues()
+	subsidyCount = metrics.NewCounter(
+		"subsidy",
+		namespace,
+		"Estimated subsidy",
 		[]string{},
 	).WithLabelValues()
 	rewardsCount = metrics.NewCounter(
 		"rewards",
 		namespace,
 		"Total rewards including issuence and fees",
+		[]string{},
+	).WithLabelValues()
+	burntCount = metrics.NewCounter(
+		"rewards_burn",
+		namespace,
+		"Burnt amount of issuence and fees",
 		[]string{},
 	).WithLabelValues()
 )

@@ -407,8 +407,10 @@ func TestDiscardNonceBelow(t *testing.T) {
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
 		return AddResult(dtx, txs[0].ID, &types.TransactionResult{Layer: lid, Block: bid})
 	}))
-	cutoff := uint64(numTXs) / 2
+	cutoff := math.MaxInt64 + uint64(numTXs)/2
 	require.NoError(t, DiscardNonceBelow(db, principal, cutoff))
+	expDiscarded := numTXs/2 - 1
+	numDiscarded := 0
 	for _, tx := range txs {
 		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
 		if tx.Principal == principal {
@@ -416,10 +418,12 @@ func TestDiscardNonceBelow(t *testing.T) {
 				expected = makeMeshTX(tx, lid, bid, received, types.APPLIED)
 			} else if tx.Nonce.Counter < cutoff {
 				expected.State = types.DISCARDED
+				numDiscarded++
 			}
 		}
 		getAndCheckMeshTX(t, db, tx.ID, expected)
 	}
+	require.Equal(t, expDiscarded, numDiscarded)
 }
 
 func TestDiscardByAcctNonce(t *testing.T) {
