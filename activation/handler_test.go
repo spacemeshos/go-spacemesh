@@ -30,16 +30,6 @@ func getATXHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
 	return NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(tb))
 }
 
-func processAtxs(db *Handler, atxs []*types.VerifiedActivationTx) error {
-	for _, atx := range atxs {
-		err := db.ProcessAtx(context.TODO(), atx)
-		if err != nil {
-			return fmt.Errorf("process ATX: %w", err)
-		}
-	}
-	return nil
-}
-
 func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: challenge,

@@ -353,14 +353,6 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(t *testing.T, challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
-	require.NoError(t, activation.SignAtx(sig, atx))
-	require.NoError(t, atx.CalcAndSetID())
-	require.NoError(t, atx.CalcAndSetNodeID())
-	return atx
-}
-
 func NewMockSigner() *MockSigning {
 	return &MockSigning{signing.NewEdSigner()}
 }
