@@ -177,13 +177,6 @@ func (t *Nonce) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeCompact8(enc, uint8(t.Bitfield))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
@@ -195,14 +188,6 @@ func (t *Nonce) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Counter = uint64(field)
-	}
-	{
-		field, n, err := scale.DecodeCompact8(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Bitfield = uint8(field)
 	}
 	return total, nil
 }

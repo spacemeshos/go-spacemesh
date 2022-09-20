@@ -268,8 +268,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 		}
 		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
-			Counter:  t.Nonce.Counter,
-			Bitfield: uint32(t.Nonce.Bitfield),
+			Counter: t.Nonce.Counter,
 		}
 		tx.Limits = &pb.LayerLimits{
 			Min: t.LayerLimits.Min,
