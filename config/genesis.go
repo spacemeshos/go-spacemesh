@@ -1,8 +1,8 @@
 package config
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -20,7 +20,7 @@ const (
 )
 
 type GenesisConfig struct {
-	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"accounts"`
+	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
 	ExtraData   string                          `mapstructure:"genesis-extradata"`
 	GoldenATXID string
@@ -68,11 +68,12 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	}
 }
 
-func (gc *GenesisConfig) ExitOnDiff(payload *GenesisConfig) {
+func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
 	if diff := cmp.Diff(payload, gc); diff != "" {
 		fmt.Printf("config files mismatch (-want +got):\n%s", diff)
-		os.Exit(1)
+		return errors.New("config files mismatch")
 	}
+	return nil
 }
 
 func DefaultGenesisDataDir() string {

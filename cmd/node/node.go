@@ -1092,6 +1092,9 @@ func (app *App) Start() error {
 	}
 
 	if err = app.checkAndStoreGenesisConfig(); err != nil {
+		if errors.Is(err, errors.New("config files mismatch")) {
+			os.Exit(1)
+		}
 		return fmt.Errorf("failed to check and store genesis config: %w", err)
 	}
 
@@ -1184,7 +1187,9 @@ func (app *App) checkAndStoreGenesisConfig() error {
 		if err = json.Unmarshal(genesisData, &payload); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		app.Config.Genesis.ExitOnDiff(&payload)
+		if err = app.Config.Genesis.Compare(&payload); err != nil {
+			return fmt.Errorf("failed to compare stored genesis config file: %w", err)
+		}
 		return nil
 	}
 	jsonCfg, err := json.Marshal(app.Config.Genesis)
