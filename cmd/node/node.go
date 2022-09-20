@@ -1092,9 +1092,6 @@ func (app *App) Start() error {
 	}
 
 	if err = app.checkAndStoreGenesisConfig(); err != nil {
-		if errors.Is(err, errors.New("config files mismatch")) {
-			os.Exit(1)
-		}
 		return fmt.Errorf("failed to check and store genesis config: %w", err)
 	}
 

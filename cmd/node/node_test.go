@@ -1028,6 +1028,6 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 
 		err = app.checkAndStoreGenesisConfig()
 		r.Error(err)
-		r.ErrorContains(err, "config files mismatch")
+		r.ErrorContains(err, "failed to match config files")
 	})
 }

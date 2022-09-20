@@ -71,7 +71,7 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
 	if diff := cmp.Diff(payload, gc); diff != "" {
 		fmt.Printf("config files mismatch (-want +got):\n%s", diff)
-		return errors.New("config files mismatch")
+		return errors.New("failed to match config files")
 	}
 	return nil
 }
