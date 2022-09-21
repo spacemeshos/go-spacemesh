@@ -560,7 +560,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, config.DefaultTestGenesisTime(),
+	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
@@ -709,8 +709,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		app.Config.Genesis.Accounts = apiConfig.DefaultGenesisAccountConfig()
-		app.Config.Genesis.GenesisTime = config.DefaultTestGenesisTime()
+		app.Config.Genesis = config.DefaultTestGenesisConfig()
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
