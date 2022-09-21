@@ -59,7 +59,7 @@ type PostSetupProvider interface {
 	Benchmark(p PostSetupComputeProvider) (int, error)
 	StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
 	StopSession(deleteFiles bool) error
-	GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error)
+	GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error)
 	LastError() error
 	LastOpts() *PostSetupOpts
 	Config() PostConfig
@@ -366,7 +366,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 }
 
 // GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 	state := mgr.state
 	mgr.mu.Unlock()
@@ -375,10 +375,8 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 		return nil, nil, errNotComplete
 	}
 
-	// TODO(mafa): posAtx for the commitment should probably be injected into the PostSetupManager instead of being determined by it
 	// TODO(mafa): id field in post package should be renamed to commitment otherwise error messages are confusing
-	posAtx := types.ATXID(types.HexToHash32("77777"))
-	commitment := sha256.Sum256(append(mgr.id, posAtx.Bytes()...))
+	commitment := sha256.Sum256(append(mgr.id, commitmentAtx.Bytes()...))
 	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, commitment[:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)

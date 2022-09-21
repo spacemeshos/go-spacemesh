@@ -48,7 +48,7 @@ const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
+	BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, timeout chan struct{}) (*types.NIPost, error)
 }
 
 type atxHandler interface {
@@ -337,7 +337,7 @@ func (b *Builder) generateProof() error {
 	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
-		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
+		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *b.commitmentAtx)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
@@ -631,7 +631,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
 
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
+	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, *b.commitmentAtx, atxExpired)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}

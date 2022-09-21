@@ -134,7 +134,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Attempt to generate proof.
-	_, _, err = mgr.GenerateProof(ch)
+	_, _, err = mgr.GenerateProof(ch, goldenATXID)
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
@@ -143,7 +143,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	<-doneChan
 
 	// Generate proof.
-	_, _, err = mgr.GenerateProof(ch)
+	_, _, err = mgr.GenerateProof(ch, goldenATXID)
 	req.NoError(err)
 
 	// Re-instantiate `PostSetupManager`.
@@ -151,7 +151,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Attempt to generate proof.
-	_, _, err = mgr.GenerateProof(ch)
+	_, _, err = mgr.GenerateProof(ch, goldenATXID)
 	req.ErrorIs(err, errNotComplete)
 }
 

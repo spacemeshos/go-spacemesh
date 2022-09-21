@@ -13,7 +13,6 @@ COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-export GO111MODULE := on
 export CGO_ENABLED := 1
 export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
 
@@ -121,9 +120,8 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
-test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
-
 test: get-libs
+	UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: test
 

@@ -116,15 +116,15 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 
 type NIPostBuilderMock struct {
 	poetRef         []byte
-	buildNIPostFunc func(challenge *types.Hash32) (*types.NIPost, error)
+	buildNIPostFunc func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error)
 	SleepTime       int
 }
 
 func (np NIPostBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, _ chan struct{}) (*types.NIPost, error) {
 	if np.buildNIPostFunc != nil {
-		return np.buildNIPostFunc(challenge)
+		return np.buildNIPostFunc(challenge, commitmentAtx)
 	}
 	return newNIPostWithChallenge(challenge, np.poetRef), nil
 }
@@ -134,7 +134,7 @@ type NIPostErrBuilderMock struct{}
 
 func (np *NIPostErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
-func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, error) {
+func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, types.ATXID, chan struct{}) (*types.NIPost, error) {
 	return nil, fmt.Errorf("NIPost builder error")
 }
 
@@ -283,7 +283,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 
 func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration uint32) (published, builtNIPost bool, err error) {
 	net.lastTransmission = nil
-	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, error) {
+	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error) {
 		builtNIPost = true
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
 		return newNIPostWithChallenge(challenge, poetBytes), nil
@@ -486,6 +486,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
@@ -493,6 +494,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	published, builtNipost, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.False(published)
@@ -533,6 +535,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	published, builtNIPost, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
@@ -795,6 +798,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	}
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
@@ -823,6 +827,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	// test load in correct epoch
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	err = b.PublishActivationTx(context.TODO())
@@ -833,6 +838,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
 	got, err := niposts.Get(cdb, getNIPostKey())
@@ -841,6 +847,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	// test load challenge in later epoch - NIPost should be truncated
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
@@ -884,7 +891,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	tries := 0
 	builderConfirmation := make(chan struct{})
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
-	nipostBuilder.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, error) {
+	nipostBuilder.buildNIPostFunc = func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error) {
 		tries++
 		if tries == expectedTries {
 			close(builderConfirmation)
@@ -927,6 +934,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	postSetupProvider := &postSetupProviderMock{}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, postSetupProvider,
 		layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)

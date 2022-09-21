@@ -405,7 +405,7 @@ func (p *PostAPIMock) StopSession(deleteFiles bool) error {
 	return nil
 }
 
-func (p *PostAPIMock) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (p *PostAPIMock) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
 	return &types.Post{}, &types.PostMetadata{}, nil
 }
 
