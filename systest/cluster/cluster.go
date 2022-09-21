@@ -482,14 +482,6 @@ func genSigner() *signer {
 	return &signer{Pub: pub, PK: pk}
 }
 
-func extractNames(nodes []*NodeClient) []string {
-	var rst []string
-	for _, n := range nodes {
-		rst = append(rst, n.Name)
-	}
-	return rst
-}
-
 func extractP2PEndpoints(nodes []*NodeClient) []string {
 	var rst []string
 	for _, n := range nodes {

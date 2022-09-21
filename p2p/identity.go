@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -30,7 +29,7 @@ func genIdentity() (crypto.PrivKey, error) {
 
 func identityInfoFromDir(dir string) (*identityInfo, error) {
 	path := filepath.Join(dir, keyFilename)
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
@@ -82,7 +81,7 @@ func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := ioutil.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
 			return nil, fmt.Errorf("write identity data: %w", err)
 		}
 		return key, nil

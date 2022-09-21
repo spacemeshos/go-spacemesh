@@ -5,8 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"google.golang.org/grpc"
-
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -30,7 +28,6 @@ func Contains(a []string, x string) int {
 // tests and may be used for any other purpose.
 type Harness struct {
 	server *server
-	conn   *grpc.ClientConn
 }
 
 func newHarnessDefaultServerConfig(args []string) (*Harness, error) {

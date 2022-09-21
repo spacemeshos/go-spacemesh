@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -136,7 +135,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		data, _ := ioutil.ReadAll(res.Body)
+		data, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("response status code: %d, body: %s", res.StatusCode, string(data))
 	}
 

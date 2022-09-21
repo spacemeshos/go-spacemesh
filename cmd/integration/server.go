@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -41,7 +40,6 @@ type server struct {
 	errChan chan error
 	// quit channel for an out source to quit process
 	quit chan struct{}
-	wg   sync.WaitGroup
 	buff *bytes.Buffer
 }
 
@@ -77,30 +75,5 @@ func (s *server) start(args []string) error {
 
 	log.With().Info("exiting integration server")
 
-	return nil
-}
-
-// shutdown terminates the running node server process, and cleans up
-// all files/directories created by it.
-func (s *server) shutdown() error {
-	if err := s.stop(); err != nil {
-		return fmt.Errorf("stop: %w", err)
-	}
-
-	return nil
-}
-
-// stop kills the server running process, since it doesn't support
-// RPC-driven stop functionality.
-func (s *server) stop() error {
-	// Do nothing if the process is not running.
-	if err := s.cmd.Process.Kill(); err != nil {
-		return fmt.Errorf("failed to kill process: %w", err)
-	}
-
-	close(s.quit)
-	s.wg.Wait()
-
-	s.quit = nil
 	return nil
 }

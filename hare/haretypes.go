@@ -346,13 +346,6 @@ func (s *Set) add(id types.ProposalID) {
 	s.values[id] = struct{}{}
 }
 
-func (s *Set) remove(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	delete(s.values, id)
-}
-
 func (s *Set) elements() []types.ProposalID {
 	s.valuesMu.RLock()
 	defer s.valuesMu.RUnlock()
