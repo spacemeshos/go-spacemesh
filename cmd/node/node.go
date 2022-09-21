@@ -459,7 +459,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
-	genesisAccts := app.Config.Genesis.Accounts.ToList()
+	genesisAccts := app.Config.Genesis.ToAccountList()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
 		if err != nil {

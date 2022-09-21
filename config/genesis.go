@@ -11,6 +11,7 @@ import (
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -23,14 +24,14 @@ const (
 )
 
 type GenesisConfig struct {
-	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
-	GenesisTime string                          `mapstructure:"genesis-time"`
-	ExtraData   string                          `mapstructure:"genesis-extradata"`
+	Accounts    map[string]uint64 `mapstructure:"accounts"`
+	GenesisTime string            `mapstructure:"genesis-time"`
+	ExtraData   string            `mapstructure:"genesis-extradata"`
 }
 
 func defaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
-		Accounts:    apiConfig.DefaultGenesisAccountConfig(),
+		Accounts:    apiConfig.DefaultGenesisAccounts(),
 		GenesisTime: time.Now().Format(time.RFC3339),
 		ExtraData:   defaultGenesisExtraData,
 	}
@@ -42,10 +43,26 @@ func GenesisDataDir(dataDirParent string) string {
 
 func DefaultTestGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
-		Accounts:    apiConfig.DefaultTestGenesisAccountConfig(),
+		Accounts:    apiConfig.DefaultTestGenesisAccounts(),
 		GenesisTime: DefaultTestGenesisTime,
 		ExtraData:   defaultTestGenesisExtraData,
 	}
+}
+
+// ToAccountList creates list of types.Account instance from config.
+func (g *GenesisConfig) ToAccountList() []types.Account {
+	var rst []types.Account
+	for addr, balance := range g.Accounts {
+		genesisAddr, err := types.StringToAddress(addr)
+		if err != nil {
+			log.Panic("could not create address from genesis config `%s`: %s", addr, err.Error())
+		}
+		rst = append(rst, types.Account{
+			Address: genesisAddr,
+			Balance: balance,
+		})
+	}
+	return rst
 }
 
 func (gc *GenesisConfig) Compare(stored *GenesisConfig, path string) error {

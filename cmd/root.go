@@ -65,7 +65,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.OptFilterThreshold, "optimistic-filtering-threshold",
 		config.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
-	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts.Data), "accounts", "a",
+	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
 
 	/** ======================== P2P Flags ========================== **/
