@@ -44,11 +44,6 @@ func (c *Context) Principal() Address {
 	return c.PrincipalAccount.Address
 }
 
-// GenesisId returns genesis id.
-func (c *Context) GenesisId() types.Hash20 {
-	return c.GenesisID
-}
-
 // Layer returns block layer id.
 func (c *Context) Layer() LayerID {
 	return c.LayerID

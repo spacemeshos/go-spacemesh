@@ -3,7 +3,6 @@ package sdk
 import (
 	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
@@ -17,8 +16,7 @@ func Defaults() *Options {
 
 // Options to modify common transaction fields.
 type Options struct {
-	GasPrice  uint64
-	GenesisId types.Hash20
+	GasPrice uint64
 }
 
 // WithGasPrice modifies GasPrice.
