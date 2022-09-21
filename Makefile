@@ -7,7 +7,7 @@ include Makefile-gpu.Inc
 #include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
-TEST_LOG_LEVEL ?=
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -63,7 +63,6 @@ DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
-
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 18
@@ -121,16 +120,15 @@ docker-local-build: go-spacemesh hare p2p harness
 endif
 
 test: get-libs
-	UNIT_TESTS = $(shell go list ./...  | grep -v systest)
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
 .PHONY: generate
 
 staticcheck: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
 .PHONY: staticcheck
 
 test-tidy:
