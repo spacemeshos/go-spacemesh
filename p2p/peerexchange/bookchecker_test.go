@@ -131,6 +131,7 @@ func TestDiscovery_GetRandomPeers(t *testing.T) {
 	t.Run("check last usage address", func(t *testing.T) {
 		// trigger update last usage date
 		d.book.AddAddress(oldNode, best)
+		d.book.Good(oldNode.ID)
 		require.Eventually(t, func() bool {
 			return d.book.NumAddresses() == 4
 		}, 4*time.Second, 100*time.Millisecond)
