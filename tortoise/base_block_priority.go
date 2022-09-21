@@ -8,31 +8,21 @@ import (
 
 // prioritizeBallots will sort ballots inplace according to internal prioritization.
 func prioritizeBallots(
-	ballots []types.BallotID,
+	ballots []*ballotInfoV2,
 	disagreements map[types.BallotID]types.LayerID,
-	ballotLayer map[types.BallotID]types.LayerID,
-	badBeaconBallots map[types.BallotID]struct{},
 ) {
 	sort.Slice(ballots, func(i, j int) bool {
-		ibid := ballots[i]
-		jbid := ballots[j]
-
-		// use ballots with bad beacons only as a last resort
-		_, ibad := badBeaconBallots[ibid]
-		_, jbad := badBeaconBallots[jbid]
-		if ibad != jbad {
-			return !ibad
-		}
-
+		iballot := ballots[i]
+		jballot := ballots[j]
 		// prioritize ballots with less disagreements to a local opinion
-		if disagreements[ibid] != disagreements[jbid] {
-			return disagreements[ibid].After(disagreements[jbid])
+		if disagreements[iballot.id] != disagreements[jballot.id] {
+			return disagreements[iballot.id].After(disagreements[jballot.id])
 		}
 		// prioritize ballots from higher layers
-		if ballotLayer[ibid] != ballotLayer[jbid] {
-			return ballotLayer[ibid].After(ballotLayer[jbid])
+		if iballot.layer != jballot.layer {
+			return iballot.layer.After(jballot.layer)
 		}
 		// otherwise just sort deterministically
-		return ibid.Compare(jbid)
+		return iballot.id.Compare(jballot.id)
 	})
 }

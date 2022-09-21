@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -37,30 +36,18 @@ func (a sign) String() string {
 	}
 }
 
-type votes map[types.BlockID]sign
-
-type tortoiseBallot struct {
-	id, base types.BallotID
-	votes    votes
-	abstain  map[types.LayerID]struct{}
-	weight   util.Weight
-	height   uint64
-}
-
 func persistContextualValidity(logger log.Log,
 	updater blockValidityUpdater,
 	from, to types.LayerID,
-	blocks map[types.LayerID][]blockInfo,
-	validity votes,
+	layers map[types.LayerID]layerInfo,
 ) error {
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
-		for _, block := range blocks[lid] {
-			sign := validity[block.id]
-			if sign == abstain {
+		for _, block := range layers[lid].blocks {
+			if block.validity == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
 			}
-			err = updater.UpdateBlockValidity(block.id, lid, sign == support)
+			err = updater.UpdateBlockValidity(block.id, lid, block.validity == support)
 			if err != nil {
 				err = fmt.Errorf("saving validity for %s: %w", block.id, err)
 				return false
@@ -147,7 +134,7 @@ func minLayer(i, j types.LayerID) types.LayerID {
 	return j
 }
 
-func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]sign, getDecision func(blockInfo) sign) bool {
+func verifyLayer(logger log.Log, blocks []blockInfoV2, getDecision func(blockInfoV2) sign) bool {
 	// order blocks by height in ascending order
 	// if there is a support before any abstain
 	// and a previous height is lower than the current one
@@ -159,7 +146,7 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 	})
 	var (
 		decisions = make([]sign, 0, len(blocks))
-		supported blockInfo
+		supported blockInfoV2
 		positive  bool
 	)
 	for _, block := range blocks {
@@ -167,7 +154,7 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 		logger.With().Debug("decision for a block",
 			block.id,
 			log.Stringer("decision", decision),
-			log.Stringer("weight", block.weight),
+			log.Stringer("weight", block.margin),
 			log.Uint64("height", block.height),
 		)
 		if decision == abstain {
@@ -184,7 +171,7 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 		decisions = append(decisions, decision)
 	}
 	for i, decision := range decisions {
-		validity[blocks[i].id] = decision
+		blocks[i].validity = decision
 	}
 
 	logger.With().Info("candidate layer is verified",
@@ -192,9 +179,9 @@ func verifyLayer(logger log.Log, blocks []blockInfo, validity map[types.BlockID]
 			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 				for i := range blocks {
 					encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-						encoder.AddString("decision", decisions[i].String())
+						encoder.AddString("decision", blocks[i].validity.String())
 						encoder.AddString("id", blocks[i].id.String())
-						encoder.AddString("weight", blocks[i].weight.String())
+						encoder.AddString("weight", blocks[i].margin.String())
 						encoder.AddUint64("height", blocks[i].height)
 						return nil
 					}))

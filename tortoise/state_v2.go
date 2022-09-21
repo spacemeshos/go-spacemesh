@@ -1,0 +1,135 @@
+package tortoise
+
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+)
+
+type (
+	weight = util.Weight
+	vote   = sign
+
+	layerInfo struct {
+		lid            types.LayerID
+		hareTerminated bool
+
+		empty  weight
+		blocks []blockInfoV2
+
+		verifying struct {
+			good, abstained weight
+			referenceHeight uint64
+		}
+	}
+
+	blockInfoV2 struct {
+		id     types.BlockID
+		layer  types.LayerID
+		height uint64
+
+		hare     vote
+		validity vote
+		margin   weight
+	}
+
+	layerVote struct {
+		layer  *layerInfo
+		vote   vote
+		blocks []blockVote
+	}
+
+	blockVote struct {
+		block *blockInfoV2
+		vote  vote
+	}
+
+	ballotInfoV2 struct {
+		id     types.BallotID
+		base   *ballotInfoV2
+		layer  types.LayerID
+		height uint64
+		weight weight
+		beacon types.Beacon
+
+		votes []layerVote
+
+		goodness goodness
+	}
+
+	state struct {
+		// last received layer
+		// TODO should be last layer according to the clock
+		last types.LayerID
+		// last verified layer
+		verified types.LayerID
+		// historicallyVerified matters only for local opinion for verifying tortoise
+		// during rerun. for live tortoise it is identical to the verified layer.
+		historicallyVerified types.LayerID
+		// last processed layer
+		minprocessed, processed types.LayerID
+		// last evicted layer
+		evicted types.LayerID
+
+		localThreshold  weight
+		globalThreshold weight
+
+		// epochWeight average weight per layer of atx's that target keyed epoch
+		epochWeight map[types.EpochID]weight
+		// referenceHeight is a median height from all atxs that target keyed epoch
+		referenceHeight map[types.EpochID]uint64
+		beacons         map[types.EpochID]types.Beacon
+		// referenceWeight stores atx weight divided by the total number of eligibilities.
+		// it is computed together with refBallot weight. it is not equal to refBallot
+		// only if refBallot has more than 1 eligibility proof.
+		referenceWeight map[types.BallotID]weight
+
+		layers  map[types.LayerID]layerInfo
+		ballots map[types.LayerID][]ballotInfoV2
+
+		// to efficiently find base and reference ballots
+		ballotRefs map[types.BallotID]*ballotInfoV2
+		// to efficiently decode exceptions
+		blockRefs map[types.BlockID]*blockInfoV2
+	}
+)
+
+func newState() *state {
+	return &state{
+		epochWeight:     map[types.EpochID]util.Weight{},
+		referenceHeight: map[types.EpochID]uint64{},
+		beacons:         map[types.EpochID]types.Beacon{},
+		referenceWeight: map[types.BallotID]util.Weight{},
+
+		layers:     map[types.LayerID]layerInfo{},
+		ballots:    map[types.LayerID][]ballotInfoV2{},
+		ballotRefs: map[types.BallotID]*ballotInfoV2{},
+		blockRefs:  map[types.BlockID]*blockInfoV2{},
+	}
+}
+
+func (s *state) layer(lid types.LayerID) *layerInfo {
+	layer, exist := s.layers[lid]
+	if !exist {
+		layer = layerInfo{lid: lid}
+		s.layers[lid] = layer
+	}
+	return &layer
+}
+
+func (s *state) addBallot(ballot ballotInfoV2) {
+	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
+	s.ballotRefs[ballot.id] = &ballot
+}
+
+func copyVotes(evicted types.LayerID, votes []layerVote) []layerVote {
+	eid := 0
+	for i := range votes {
+		if !evicted.Before(votes[i].layer.lid) {
+			eid = i
+			break
+		}
+	}
+	rst := make([]layerVote, len(votes)-eid)
+	copy(rst, votes[eid:])
+	return rst
+}
