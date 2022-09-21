@@ -578,7 +578,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Config.LayerDurationSec = 2
 		app.Config.DataDirParent = path
 		app.Config.LOGGING = cfg.LOGGING
-		app.Config.Genesis.Path = filepath.Join(path, config.DefaultGenesisConfigFileName)
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -712,7 +711,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		app.Config.Genesis.Accounts = apiConfig.DefaultGenesisAccountConfig()
 		app.Config.Genesis.GenesisTime = config.DefaultTestGenesisTime()
-		app.Config.Genesis.Path = filepath.Join(path, config.DefaultGenesisConfigFileName)
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -1007,7 +1005,7 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 	t.Run("Saving new genesis config", func(t *testing.T) {
 		t.Parallel()
 		app := &App{Config: &config.Config{Genesis: config.DefaultTestGenesisConfig()}}
-		app.Config.Genesis.Path = t.TempDir()
+		app.Config.DataDirParent = t.TempDir()
 
 		err := app.checkAndStoreGenesisConfig()
 		r.NoError(err)
@@ -1016,7 +1014,7 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 	t.Run("Mismatching genesis configs", func(t *testing.T) {
 		t.Parallel()
 		app := &App{Config: &config.Config{Genesis: config.DefaultTestGenesisConfig()}}
-		app.Config.Genesis.Path = t.TempDir()
+		app.Config.DataDirParent = t.TempDir()
 
 		err := app.checkAndStoreGenesisConfig()
 		r.NoError(err)

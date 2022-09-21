@@ -1172,7 +1172,7 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 }
 
 func (app *App) checkAndStoreGenesisConfig() error {
-	genesisConfigPath := filepath.Join(app.Config.Genesis.Path, config.DefaultGenesisConfigFileName)
+	genesisConfigPath := filepath.Join(config.GenesisDataDir(app.Config.DataDirParent), config.DefaultGenesisConfigFileName)
 	if exists := filesystem.PathExists(genesisConfigPath); exists {
 		genesisData, err := ioutil.ReadFile(genesisConfigPath)
 		if err != nil {
@@ -1184,8 +1184,8 @@ func (app *App) checkAndStoreGenesisConfig() error {
 		if err = json.Unmarshal(genesisData, &storedGenesisConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if err = app.Config.Genesis.Compare(&storedGenesisConfig); err != nil {
-			return fmt.Errorf("failed to compare stored genesis config file: %w", err)
+		if err = app.Config.Genesis.Compare(&storedGenesisConfig, genesisConfigPath); err != nil {
+			return fmt.Errorf("genesis config changed from previous run: %w", err)
 		}
 		return nil
 	}
@@ -1193,7 +1193,7 @@ func (app *App) checkAndStoreGenesisConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis config: %w", err)
 	}
-	err = filesystem.ExistOrCreate(app.Config.Genesis.Path)
+	err = filesystem.ExistOrCreate(config.GenesisDataDir(app.Config.DataDirParent))
 	if err != nil {
 		return fmt.Errorf("failed to setup genesis data dir: %w", err)
 	}

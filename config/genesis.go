@@ -23,7 +23,6 @@ type GenesisConfig struct {
 	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
 	ExtraData   string                          `mapstructure:"genesis-extradata"`
-	Path        string
 }
 
 func defaultGenesisConfig() *GenesisConfig {
@@ -31,7 +30,6 @@ func defaultGenesisConfig() *GenesisConfig {
 		Accounts:    apiConfig.DefaultGenesisAccountConfig(),
 		GenesisTime: DefaultGenesisTime(),
 		ExtraData:   DefaultGenesisExtraData(),
-		Path:        DefaultGenesisDataDir(),
 	}
 }
 
@@ -48,7 +46,6 @@ func DefaultTestnetGenesisConfig() *GenesisConfig {
 		},
 		GenesisTime: DefaultTestnetGenesisTime(),
 		ExtraData:   DefaultTestnetGenesisExtraData(),
-		Path:        DefaultGenesisDataDir(),
 	}
 }
 
@@ -57,20 +54,19 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 		Accounts:    apiConfig.DefaultTestGenesisAccountConfig(),
 		GenesisTime: DefaultTestGenesisTime(),
 		ExtraData:   DefaultTestGenesisExtraData(),
-		Path:        DefaultGenesisDataDir(),
 	}
 }
 
-func (gc *GenesisConfig) Compare(payload *GenesisConfig) error {
-	if diff := cmp.Diff(payload, gc); diff != "" {
-		fmt.Printf("config files mismatch (-want +got):\n%s", diff)
+func (gc *GenesisConfig) Compare(stored *GenesisConfig, path string) error {
+	if diff := cmp.Diff(stored, gc); diff != "" {
+		fmt.Printf("Stored config file location:\n%s\nConfig files mismatch (-want +got):\n%s", path, diff)
 		return errors.New("failed to match config files")
 	}
 	return nil
 }
 
-func DefaultGenesisDataDir() string {
-	return filepath.Join(defaultDataDir, DefaultGenesisConfigFileDir)
+func GenesisDataDir(dataDirParent string) string {
+	return filepath.Join(dataDirParent, DefaultGenesisConfigFileDir)
 }
 
 func DefaultGenesisTime() string {
