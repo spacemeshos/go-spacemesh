@@ -250,7 +250,7 @@ func setup(t *testing.T, hosts []host.Host) []*Discovery {
 
 	for _, h := range hosts {
 		logger := logtest.New(t).Named(h.ID().Pretty())
-		cfg := Config{
+		cfg := DiscoveryConfig{
 			CheckPeersUsedBefore: 2 * time.Second,
 			CheckTimeout:         30 * time.Second,
 			CheckPeersNumber:     10,

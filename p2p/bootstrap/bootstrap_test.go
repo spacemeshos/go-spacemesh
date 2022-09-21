@@ -34,7 +34,7 @@ func TestBootstrapEmitEvents(t *testing.T) {
 
 	boot, err := NewBootstrap(
 		logtest.New(t),
-		Config{TargetOutbound: 5, Timeout: 5 * time.Second},
+		BootstrapConfig{TargetOutbound: 5, Timeout: 5 * time.Second},
 		h,
 		discovery,
 	)
@@ -98,7 +98,7 @@ func TestBootstrapCancelDiscoveryContext(t *testing.T) {
 
 	boot, err := NewBootstrap(
 		logtest.New(t),
-		Config{TargetOutbound: n - 1, Timeout: 5 * time.Second},
+		BootstrapConfig{TargetOutbound: n - 1, Timeout: 5 * time.Second},
 		h,
 		discovery,
 	)

@@ -25,8 +25,7 @@ const (
 	BootNodeTag = "bootnode"
 )
 
-// Config for Discovery.
-type Config struct {
+type DiscoveryConfig struct {
 	Bootnodes []string `mapstructure:"bootnodes"`
 	// Interval to check for dead|alive peers in the book.
 	CheckInterval time.Duration `mapstructure:"check-interval"`
@@ -40,8 +39,8 @@ type Config struct {
 	PeerExchange PeerExchangeConfig `mapstructure:"peer-exchange"`
 }
 
-func DefaultDiscoveryConfig() Config {
-	return Config{
+func DefaultDiscoveryConfig() DiscoveryConfig {
+	return DiscoveryConfig{
 		CheckInterval:        3 * time.Minute,
 		CheckTimeout:         30 * time.Second,
 		CheckPeersNumber:     10,
@@ -54,7 +53,7 @@ func DefaultDiscoveryConfig() Config {
 type Discovery struct {
 	logger log.Log
 	host   host.Host
-	cfg    Config
+	cfg    DiscoveryConfig
 
 	cancel context.CancelFunc
 	eg     errgroup.Group
@@ -64,7 +63,7 @@ type Discovery struct {
 }
 
 // New creates a Discovery instance.
-func New(logger log.Log, h host.Host, config Config, dataDir string) (*Discovery, error) {
+func New(logger log.Log, h host.Host, config DiscoveryConfig, dataDir string) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Discovery{
 		cfg:    config,

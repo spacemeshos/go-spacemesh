@@ -28,9 +28,9 @@ func DefaultConfig() Config {
 		LowPeers:           40,
 		HighPeers:          100,
 		GracePeersShutdown: 30 * time.Second,
-		Discovery:          peerexchange.DefaultDiscoveryConfig(),
-		Pubsub:             pubsub.DefaultConfig(),
-		Bootstrap:          bootstrap.DefaultConfig(),
+		DiscoveryConfig:    peerexchange.DefaultDiscoveryConfig(),
+		PubsubConfig:       pubsub.DefaultConfig(),
+		BootstrapConfig:    bootstrap.DefaultConfig(),
 	}
 }
 
@@ -44,9 +44,9 @@ type Config struct {
 	LowPeers           int           `mapstructure:"low-peers"`
 	HighPeers          int           `mapstructure:"high-peers"`
 
-	Pubsub    pubsub.Config       `mapstructure:"pubsub"`
-	Discovery peerexchange.Config `mapstructure:"discovery"`
-	Bootstrap bootstrap.Config    `mapstructure:"bootstrap"`
+	pubsub.PubsubConfig          `mapstructure:",squash"`
+	peerexchange.DiscoveryConfig `mapstructure:",squash"`
+	bootstrap.BootstrapConfig    `mapstructure:",squash"`
 }
 
 // New initializes libp2p host configured for spacemesh.
@@ -66,7 +66,7 @@ func New(_ context.Context, logger log.Log, cfg Config, dataDir string, opts ...
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
 	}
 	// TODO(dshulyak) remove this part
-	for _, p := range cfg.Discovery.Bootnodes {
+	for _, p := range cfg.DiscoveryConfig.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
 		if err != nil {
 			return nil, fmt.Errorf("can't create peer addr from %s: %w", p, err)

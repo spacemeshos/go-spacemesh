@@ -23,14 +23,13 @@ type EventSpacemeshPeer struct {
 	Connectedness network.Connectedness
 }
 
-// Config for bootstrap.
-type Config struct {
+type BootstrapConfig struct {
 	TargetOutbound int           `mapstructure:"target-outbound"`
-	Timeout        time.Duration `mapstructure:"timeout"`
+	Timeout        time.Duration `mapstructure:"bootstrap-timeout"`
 }
 
-func DefaultConfig() Config {
-	return Config{
+func DefaultConfig() BootstrapConfig {
+	return BootstrapConfig{
 		TargetOutbound: 5,
 		Timeout:        10 * time.Second,
 	}
@@ -44,7 +43,7 @@ type Discovery interface {
 }
 
 // NewBootstrap create Bootstrap instance.
-func NewBootstrap(logger log.Log, cfg Config, h host.Host, discovery Discovery) (*Bootstrap, error) {
+func NewBootstrap(logger log.Log, cfg BootstrapConfig, h host.Host, discovery Discovery) (*Bootstrap, error) {
 	// TODO(dshulyak) refactor to option and merge Bootstrap with Peers to avoid unnecessary event
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &Bootstrap{
@@ -72,7 +71,7 @@ func NewBootstrap(logger log.Log, cfg Config, h host.Host, discovery Discovery) 
 // Bootstrap enforces required number of outbound connections.
 type Bootstrap struct {
 	logger log.Log
-	cfg    Config
+	cfg    BootstrapConfig
 
 	host      host.Host
 	discovery Discovery

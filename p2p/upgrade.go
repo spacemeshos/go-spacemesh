@@ -89,11 +89,11 @@ func Upgrade(h host.Host, dataDir string, opts ...Opt) (*Host, error) {
 		opt(fh)
 	}
 	cfg := fh.cfg
-	bootnode, err := isBootnode(h, cfg.Discovery.Bootnodes)
+	bootnode, err := isBootnode(h, cfg.DiscoveryConfig.Bootnodes)
 	if err != nil {
 		return nil, fmt.Errorf("check node as bootnode: %w", err)
 	}
-	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, cfg.Pubsub, bootnode); err != nil {
+	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, cfg.PubsubConfig, bootnode); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
 	fh.Peers = bootstrap.StartPeers(h,
@@ -101,10 +101,10 @@ func Upgrade(h host.Host, dataDir string, opts ...Opt) (*Host, error) {
 		bootstrap.WithContext(fh.ctx),
 		bootstrap.WithNodeReporter(fh.nodeReporter),
 	)
-	if fh.discovery, err = peerexchange.New(fh.logger, h, cfg.Discovery, dataDir); err != nil {
+	if fh.discovery, err = peerexchange.New(fh.logger, h, cfg.DiscoveryConfig, dataDir); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
-	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, cfg.Bootstrap, fh, fh.discovery); err != nil {
+	if fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, cfg.BootstrapConfig, fh, fh.discovery); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
 	fh.hs = handshake.New(fh, cfg.NetworkID, handshake.WithLog(fh.logger))

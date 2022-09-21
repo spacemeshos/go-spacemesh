@@ -32,7 +32,7 @@ func testnet() config.Config {
 	conf.HARE.RoundDuration = 10
 	conf.HARE.WakeupDelta = 10
 
-	conf.P2P.Bootstrap.TargetOutbound = 10
+	conf.P2P.BootstrapConfig.TargetOutbound = 10
 
 	conf.Genesis = &apiConfig.GenesisConfig{
 		Accounts: map[string]uint64{

@@ -986,8 +986,8 @@ func (app *App) getIdentityFile() (string, error) {
 
 func (app *App) startSyncer(ctx context.Context) {
 	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
-		log.Int("outbound", app.Config.P2P.Bootstrap.TargetOutbound))
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.Bootstrap.TargetOutbound)
+		log.Int("outbound", app.Config.P2P.BootstrapConfig.TargetOutbound))
+	_, err := app.host.WaitPeers(ctx, app.Config.P2P.BootstrapConfig.TargetOutbound)
 	if err != nil {
 		return
 	}

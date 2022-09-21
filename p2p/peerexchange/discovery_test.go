@@ -32,7 +32,7 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 
 	for _, h := range mesh.Hosts() {
 		logger := logtest.New(t).Named(h.ID().Pretty())
-		cfg := Config{}
+		cfg := DiscoveryConfig{}
 
 		best, err := bestHostAddress(h)
 		require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestDiscovery_PrefereRoutablePort(t *testing.T) {
 	addrmock.EXPECT().Addrs().DoAndReturn(func() []ma.Multiaddr {
 		return returned
 	}).AnyTimes()
-	discovery, err := New(logtest.New(t), ph, Config{}, t.TempDir())
+	discovery, err := New(logtest.New(t), ph, DiscoveryConfig{}, t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(discovery.Stop)
 

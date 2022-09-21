@@ -76,22 +76,21 @@ const (
 )
 
 // DefaultConfig for PubSub.
-func DefaultConfig() Config {
-	return Config{
+func DefaultConfig() PubsubConfig {
+	return PubsubConfig{
 		Flood:          true,
 		MaxMessageSize: 200 << 10,
 	}
 }
 
-// Config for PubSub.
-type Config struct {
+type PubsubConfig struct {
 	// TODO(dshulyak) change it to NoFlood
 	Flood          bool `mapstructure:"flood"`
 	MaxMessageSize int  `mapstructure:"max-message-size"`
 }
 
 // New creates PubSub instance.
-func New(ctx context.Context, logger log.Log, h host.Host, cfg Config, isBootnode bool) (*PubSub, error) {
+func New(ctx context.Context, logger log.Log, h host.Host, cfg PubsubConfig, isBootnode bool) (*PubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
 	opts := getOptions(cfg, isBootnode)
 	ps, err := pubsub.NewGossipSub(ctx, h, opts...)
@@ -161,7 +160,7 @@ func msgID(msg *pb.Message) string {
 	return string(hasher.Sum(nil))
 }
 
-func getOptions(cfg Config, isBootnode bool) []pubsub.Option {
+func getOptions(cfg PubsubConfig, isBootnode bool) []pubsub.Option {
 	options := []pubsub.Option{
 		// Gossipsubv1.1 configuration
 		pubsub.WithFloodPublish(cfg.Flood),

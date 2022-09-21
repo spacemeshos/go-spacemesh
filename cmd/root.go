@@ -74,8 +74,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "listen",
 		config.P2P.Listen, "address for listening")
-	cmd.PersistentFlags().BoolVar(&config.P2P.Pubsub.Flood, "flood",
-		config.P2P.Pubsub.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
+	cmd.PersistentFlags().BoolVar(&config.P2P.PubsubConfig.Flood, "flood",
+		config.P2P.PubsubConfig.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
 	cmd.PersistentFlags().BoolVar(&config.P2P.DisableNatPort, "disable-natport",
 		config.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
 	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
@@ -85,10 +85,10 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "high-peers",
 		config.P2P.HighPeers,
 		"high watermark for the number of connections; once reached, connections are pruned until low watermark remains")
-	cmd.PersistentFlags().IntVar(&config.P2P.Bootstrap.TargetOutbound, "target-outbound",
-		config.P2P.Bootstrap.TargetOutbound, "target outbound connections")
-	cmd.PersistentFlags().StringSliceVar(&config.P2P.Discovery.Bootnodes, "bootnodes",
-		config.P2P.Discovery.Bootnodes, "entrypoints into the network")
+	cmd.PersistentFlags().IntVar(&config.P2P.BootstrapConfig.TargetOutbound, "target-outbound",
+		config.P2P.BootstrapConfig.TargetOutbound, "target outbound connections")
+	cmd.PersistentFlags().StringSliceVar(&config.P2P.DiscoveryConfig.Bootnodes, "bootnodes",
+		config.P2P.DiscoveryConfig.Bootnodes, "entrypoints into the network")
 
 	/** ======================== TIME Flags ========================== **/
 
