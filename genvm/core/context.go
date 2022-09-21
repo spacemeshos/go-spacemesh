@@ -34,9 +34,8 @@ type Context struct {
 	// an amount transfrered to other accounts
 	transferred uint64
 
-	touched   []Address
-	changed   map[Address]*Account
-	GenesisID types.Hash20
+	touched []Address
+	changed map[Address]*Account
 }
 
 // Principal returns address of the account that signed transaction.
