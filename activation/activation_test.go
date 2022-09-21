@@ -247,6 +247,7 @@ func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builde
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, hdlr, net, nipostBuilderMock, &postSetupProviderMock{},
 		layerClockMock, &mockSyncer{}, logtest.New(tb).WithName("atxBuilder"))
 	b.initialPost = initialPost
+	b.commitmentAtx = &goldenATXID
 	return b
 }
 
@@ -677,6 +678,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	nipostBuilder := &NIPostErrBuilderMock{} // 👀 mock that returns error from BuildNIPost()
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	b.initialPost = initialPost
+	b.commitmentAtx = &goldenATXID
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
@@ -870,6 +872,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		WithPoetRetryInterval(retryInterval),
 	)
 	b.initialPost = initialPost
+	b.commitmentAtx = &goldenATXID
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)

@@ -371,6 +371,7 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 }
 
 // PostAPIMock is a mock for Post API.
+// TODO(mafa): replace this mock with the generated mock.
 type PostAPIMock struct{}
 
 // A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
@@ -396,7 +397,7 @@ func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 

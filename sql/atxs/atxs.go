@@ -219,8 +219,8 @@ func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-// GetPositioningID returns atx id from the last epoch with the highest tick height.
-func GetPositioningID(db sql.Executor) (types.ATXID, error) {
+// GetAtxIDWithMaxHeight returns the ID of the atx from the last epoch with the highest (or tied for the highest) tick height.
+func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
 	var (
 		rst types.ATXID
 		max uint64

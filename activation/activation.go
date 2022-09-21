@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
@@ -106,6 +107,7 @@ type Builder struct {
 	postSetupProvider PostSetupProvider
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
+	commitmentAtx     *types.ATXID
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
@@ -215,7 +217,17 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	b.exited = exited
 	b.mu.Unlock()
 
-	doneChan, err := b.postSetupProvider.StartSession(opts)
+	if b.commitmentAtx == nil {
+		atx, err := b.getCommitmentAtxID()
+		if err != nil {
+			close(exited)
+			b.started.Store(false)
+			return fmt.Errorf("failed to start post setup session: %w", err)
+		}
+		b.commitmentAtx = &atx
+	}
+
+	doneChan, err := b.postSetupProvider.StartSession(opts, *b.commitmentAtx)
 	if err != nil {
 		close(exited)
 		b.started.Store(false)
@@ -239,6 +251,18 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	}()
 
 	return nil
+}
+
+func (b *Builder) getCommitmentAtxID() (types.ATXID, error) {
+	posAtx, err := atxs.GetAtxIDWithMaxHeight(b.cdb)
+	if errors.Is(err, sql.ErrNotFound) {
+		b.log.With().Info("using golden atx as commitment atx", posAtx)
+		return b.goldenATXID, nil
+	}
+	if err != nil {
+		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
+	}
+	return posAtx, nil
 }
 
 // StopSmeshing stops the atx builder.
@@ -441,8 +465,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
-		// TODO(mafa): add atx used for commitment in post
-		challenge.CommitmentATX = *types.EmptyATXID
+		challenge.CommitmentATX = *b.commitmentAtx
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID

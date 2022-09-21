@@ -61,7 +61,7 @@ func TestPostSetupManager(t *testing.T) {
 	}()
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts)
+	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 	req.Equal(opts, *mgr.LastOpts())
@@ -70,7 +70,7 @@ func TestPostSetupManager(t *testing.T) {
 	// req.Equal(lastStatus, mgr.Status())
 
 	// Create data (same opts).
-	doneChan, err = mgr.StartSession(opts)
+	doneChan, err = mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 	req.Equal(opts, *mgr.LastOpts())
@@ -81,7 +81,7 @@ func TestPostSetupManager(t *testing.T) {
 	req.NoError(err)
 
 	// Create data (same opts, after deletion).
-	doneChan, err = mgr.StartSession(opts)
+	doneChan, err = mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 	req.Equal(opts, *mgr.LastOpts())
@@ -104,15 +104,8 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
 	req.Equal(nil, status.LastError)
 
-	//var lastStatus = &PostSetupStatus{}
-	//go func() {
-	//	for status := range mgr.StatusChan() {
-	//		lastStatus = status
-	//	}
-	//}()
-
 	// Create data.
-	doneChan, err := mgr.StartSession(opts)
+	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 
@@ -145,7 +138,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts)
+	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 
@@ -194,7 +187,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 
 	// Create data.
 	time.Sleep(1 * time.Second) // Short delay.
-	doneChan, err := mgr.StartSession(opts)
+	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 	wg.Wait()
@@ -237,7 +230,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 	}()
 
 	// Create data.
-	doneChan, err := mgr.StartSession(longerSetupOpts)
+	doneChan, err := mgr.StartSession(longerSetupOpts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 	wg.Wait()
@@ -259,7 +252,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Equal(postSetupStateNotStarted, status.State)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts)
+	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 
@@ -284,7 +277,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Equal(postSetupStateNotStarted, status.State)
 
 	// Create data again.
-	doneChan, err = mgr.StartSession(opts)
+	doneChan, err = mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 
@@ -301,7 +294,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.NoError(err)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(longerSetupOpts)
+	doneChan, err := mgr.StartSession(longerSetupOpts, goldenATXID)
 	req.NoError(err)
 
 	// Wait a bit for the setup to proceed.
@@ -329,7 +322,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.Equal(uint64(0), status.NumLabelsWritten)
 
 	// Continue to create data.
-	doneChan, err = mgr.StartSession(longerSetupOpts)
+	doneChan, err = mgr.StartSession(longerSetupOpts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 

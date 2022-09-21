@@ -63,7 +63,7 @@ func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error)
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(opts PostSetupOpts) (chan struct{}, error) {
+func (p *postSetupProviderMock) StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return p.sessionChan, nil
 }
 
@@ -170,7 +170,7 @@ func TestPostSetup(t *testing.T) {
 
 	nb := NewNIPostBuilder(minerID, postSetupProvider, poetProvider, poetDb, sql.InMemory(), logtest.New(t))
 
-	done, err := postSetupProvider.StartSession(postSetupOpts)
+	done, err := postSetupProvider.StartSession(postSetupOpts, goldenATXID)
 	r.NoError(err)
 	<-done
 	defer func() {
@@ -220,7 +220,7 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 		r.NoError(postProvider.StopSession(true))
 	})
 
-	done, err := postProvider.StartSession(postSetupOpts)
+	done, err := postProvider.StartSession(postSetupOpts, goldenATXID)
 	r.NoError(err)
 	<-done
 
@@ -267,7 +267,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
-	done, err := postProvider.StartSession(postSetupOpts)
+	done, err := postProvider.StartSession(postSetupOpts, goldenATXID)
 	r.NoError(err)
 	<-done
 

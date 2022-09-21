@@ -372,7 +372,7 @@ func TestPositioningID(t *testing.T) {
 				require.NoError(t, Add(db, vAtx, time.Time{}))
 				ids = append(ids, full.ID())
 			}
-			rst, err := GetPositioningID(db)
+			rst, err := GetAtxIDWithMaxHeight(db)
 			if len(tc.atxs) == 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {

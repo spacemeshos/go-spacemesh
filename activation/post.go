@@ -14,8 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type (
@@ -59,7 +57,7 @@ type PostSetupProvider interface {
 	StatusChan() <-chan *PostSetupStatus
 	ComputeProviders() []PostSetupComputeProvider
 	Benchmark(p PostSetupComputeProvider) (int, error)
-	StartSession(opts PostSetupOpts) (chan struct{}, error)
+	StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
 	StopSession(deleteFiles bool) error
 	GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error)
 	LastError() error
@@ -232,7 +230,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
-func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, error) {
+func (mgr *PostSetupManager) StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	mgr.mu.Lock()
 	state := mgr.state
 	mgr.mu.Unlock()
@@ -268,16 +266,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	posAtx, err := mgr.getPosAtxID()
-	if err != nil {
-		mgr.mu.Lock()
-		mgr.state = postSetupStateError
-		mgr.lastErr = err
-		mgr.mu.Unlock()
-		return nil, fmt.Errorf("get positioning atx: %w", err)
-	}
-
-	commitment := sha256.Sum256(append(mgr.id, posAtx.Bytes()...))
+	commitment := sha256.Sum256(append(mgr.id, commitmentAtx.Bytes()...))
 	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment[:])
 	if err != nil {
 		mgr.mu.Lock()
@@ -341,18 +330,6 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	}()
 
 	return mgr.doneChan, nil
-}
-
-func (mgr *PostSetupManager) getPosAtxID() (types.ATXID, error) {
-	posAtx, err := atxs.GetPositioningID(mgr.db)
-	if errors.Is(err, sql.ErrNotFound) {
-		mgr.logger.With().Info("using golden atx as positioning atx", posAtx)
-		return mgr.goldenATXID, nil
-	}
-	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("get positioning atx: %w", err)
-	}
-	return posAtx, nil
 }
 
 // StopSession stops the current Post setup data creation session

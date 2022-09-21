@@ -351,7 +351,7 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 
 // GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
 func (h *Handler) GetPosAtxID() (types.ATXID, error) {
-	id, err := atxs.GetPositioningID(h.cdb)
+	id, err := atxs.GetAtxIDWithMaxHeight(h.cdb)
 	if err != nil {
 		return *types.EmptyATXID, fmt.Errorf("failed to get positioning atx: %w", err)
 	}
