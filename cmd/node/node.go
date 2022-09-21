@@ -1184,8 +1184,8 @@ func (app *App) checkAndStoreGenesisConfig() error {
 		if err = json.Unmarshal(genesisData, &storedGenesisConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if err = app.Config.Genesis.Compare(&storedGenesisConfig, genesisConfigPath); err != nil {
-			return fmt.Errorf("genesis config changed from previous run: %w", err)
+		if err = app.Config.Genesis.Compare(&storedGenesisConfig); err != nil {
+			return fmt.Errorf("genesis config %s changed from previous run: %w", genesisConfigPath, err)
 		}
 		return nil
 	}

@@ -57,9 +57,9 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	}
 }
 
-func (gc *GenesisConfig) Compare(stored *GenesisConfig, path string) error {
+func (gc *GenesisConfig) Compare(stored *GenesisConfig) error {
 	if diff := cmp.Diff(stored, gc); diff != "" {
-		fmt.Printf("Stored config file location:\n%s\nConfig files mismatch (-want +got):\n%s", path, diff)
+		fmt.Printf("Config files mismatch (-want +got):\n%s", diff)
 		return errors.New("failed to match config files")
 	}
 	return nil
