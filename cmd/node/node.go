@@ -472,7 +472,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(config.CalcGoldenATX([]byte(app.Config.Genesis.ExtraData), app.Config.Genesis.GenesisTime))
+	goldenATXID := types.ATXID(config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime).ToHash32())
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -1184,7 +1184,7 @@ func (app *App) checkAndStoreGenesisConfig() error {
 		if err = json.Unmarshal(genesisData, &storedGenesisConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if err = app.Config.Genesis.Compare(&storedGenesisConfig); err != nil {
+		if err = app.Config.Genesis.Compare(&storedGenesisConfig, genesisConfigPath); err != nil {
 			return fmt.Errorf("genesis config %s changed from previous run: %w", genesisConfigPath, err)
 		}
 		return nil

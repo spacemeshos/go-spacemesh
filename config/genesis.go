@@ -57,9 +57,9 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 	}
 }
 
-func (gc *GenesisConfig) Compare(stored *GenesisConfig) error {
+func (gc *GenesisConfig) Compare(stored *GenesisConfig, path string) error {
 	if diff := cmp.Diff(stored, gc); diff != "" {
-		fmt.Printf("Config files mismatch (-want +got):\n%s", diff)
+		fmt.Printf("Genesis config %s changed from previous run (-want +got):\n%s", path, diff)
 		return errors.New("failed to match config files")
 	}
 	return nil
@@ -78,7 +78,7 @@ func DefaultGenesisExtraData() string {
 }
 
 func DefaultGoldenATXId() types.ATXID {
-	return types.ATXID(CalcGoldenATX([]byte(DefaultGenesisExtraData()), DefaultGenesisTime()))
+	return types.ATXID(CalcGenesisID(DefaultGenesisExtraData(), DefaultGenesisTime()).ToHash32())
 }
 
 func DefaultTestGenesisTime() string {
@@ -90,7 +90,7 @@ func DefaultTestGenesisExtraData() string {
 }
 
 func DefaultTestGoldenATXId() types.ATXID {
-	return types.ATXID(CalcGoldenATX([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()))
+	return types.ATXID(CalcGenesisID(DefaultTestGenesisExtraData(), DefaultTestGenesisTime()).ToHash32())
 }
 
 func DefaultTestnetGenesisTime() string {
@@ -102,17 +102,13 @@ func DefaultTestnetGenesisExtraData() string {
 }
 
 func DefaultTestnetGoldenATXId() types.ATXID {
-	return types.ATXID(CalcGoldenATX([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()))
+	return types.ATXID(CalcGenesisID(DefaultTestnetGenesisExtraData(), DefaultTestnetGenesisTime()).ToHash32())
 }
 
-func CalcGenesisID(genesisExtraData []byte, genesisTime string) types.Hash20 {
+func CalcGenesisID(genesisExtraData, genesisTime string) types.Hash20 {
 	hasher := hash.New()
 	hasher.Write([]byte(genesisTime))
-	hasher.Write(genesisExtraData)
+	hasher.Write([]byte(genesisExtraData))
 	digest := hasher.Sum([]byte{})
 	return types.BytesToHash(digest).ToHash20()
-}
-
-func CalcGoldenATX(genesisData []byte, genesisTime string) types.Hash32 {
-	return CalcGenesisID([]byte(genesisData), genesisTime).ToHash32()
 }
