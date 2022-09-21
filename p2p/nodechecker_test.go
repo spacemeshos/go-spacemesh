@@ -308,7 +308,7 @@ func generateNode(t *testing.T, bootNode string) *hostWrapper {
 	}
 
 	cnf := DefaultConfig()
-	cnf.Discovery.CheckPeersUsedBefore = time.Millisecond * 1
+	cnf.DiscoveryConfig.CheckPeersUsedBefore = time.Millisecond * 1
 	dataDir := t.TempDir()
 	if bootNode != "" {
 		// adding address to bootstrap list is has random part.
@@ -324,7 +324,7 @@ func generateNode(t *testing.T, bootNode string) *hostWrapper {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		book.Persist(ctx)
-		cnf.Discovery.Bootnodes = append(cnf.Discovery.Bootnodes, bootNode)
+		cnf.DiscoveryConfig.Bootnodes = append(cnf.DiscoveryConfig.Bootnodes, bootNode)
 	}
 	h, err := Upgrade(node, dataDir, WithConfig(cnf))
 	require.NoError(t, err)
