@@ -133,8 +133,16 @@ func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([
 					continue
 				}
 				seen[a.ID] = struct{}{}
-				out = append(out, a)
-				r.book.AddAddress(a, cr.Src)
+				if removedAt, ok := r.book.WasRecentlyRemoved(a.ID); ok {
+					r.logger.With().Debug(
+						"Skipped adding an address for a recently removed peer",
+						log.String("peer", a.ID.Pretty()),
+						log.Time("removedAt", *removedAt),
+					)
+				} else {
+					out = append(out, a)
+					r.book.AddAddress(a, cr.Src)
+				}
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()

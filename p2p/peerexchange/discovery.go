@@ -29,10 +29,11 @@ const (
 type Config struct {
 	Bootnodes            []string
 	DataDir              string
-	CheckInterval        time.Duration // Interval to check for dead|alive peers in the book.
-	CheckTimeout         time.Duration // Timeout to connect while node check for dead|alive peers in the book.
-	CheckPeersNumber     int           // Number of peers to check for dead|alive peers in the book.
-	CheckPeersUsedBefore time.Duration // Time to wait before checking for dead|alive peers in the book.
+	CheckInterval        time.Duration      // Interval to check for dead|alive peers in the book.
+	CheckTimeout         time.Duration      // Timeout to connect while node check for dead|alive peers in the book.
+	CheckPeersNumber     int                // Number of peers to check for dead|alive peers in the book.
+	CheckPeersUsedBefore time.Duration      // Time to wait before checking for dead|alive peers in the book.
+	PeerExchange         PeerExchangeConfig // Configuration for Peer Exchange protocol
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -80,7 +81,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	}
 	d.book.AddAddresses(bootnodes, best)
 
-	protocol := newPeerExchange(h, d.book, portFromHost(logger, h), logger)
+	protocol := newPeerExchange(h, d.book, portFromHost(logger, h), logger, config.PeerExchange)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
 	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
 	if err != nil {
