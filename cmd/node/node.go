@@ -472,7 +472,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(types.HexToHash32(app.Config.Genesis.GoldenATXID))
+	goldenATXID := types.ATXID(config.CalcGoldenATX([]byte(app.Config.Genesis.ExtraData), app.Config.Genesis.GenesisTime))
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -1179,12 +1179,12 @@ func (app *App) checkAndStoreGenesisConfig() error {
 			return fmt.Errorf("failed to read stored genesis config file: %s", err)
 		}
 
-		var payload config.GenesisConfig
+		var storedGenesisConfig config.GenesisConfig
 
-		if err = json.Unmarshal(genesisData, &payload); err != nil {
+		if err = json.Unmarshal(genesisData, &storedGenesisConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
 		}
-		if err = app.Config.Genesis.Compare(&payload); err != nil {
+		if err = app.Config.Genesis.Compare(&storedGenesisConfig); err != nil {
 			return fmt.Errorf("failed to compare stored genesis config file: %w", err)
 		}
 		return nil

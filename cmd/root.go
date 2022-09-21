@@ -48,8 +48,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
-	cmd.PersistentFlags().StringVar(&config.Genesis.GoldenATXID, "golden-atx",
-		config.Genesis.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().Uint64Var(&config.TickSize, "tick-size", config.TickSize, "number of poet leaves in a single tick")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")

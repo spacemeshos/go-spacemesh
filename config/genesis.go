@@ -23,8 +23,6 @@ type GenesisConfig struct {
 	Accounts    *apiConfig.GenesisAccountConfig `mapstructure:"genesis-api"`
 	GenesisTime string                          `mapstructure:"genesis-time"`
 	ExtraData   string                          `mapstructure:"genesis-extradata"`
-	GoldenATXID string
-	GenesisID   string
 	Path        string
 }
 
@@ -32,7 +30,6 @@ func defaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
 		Accounts:    apiConfig.DefaultGenesisAccountConfig(),
 		GenesisTime: DefaultGenesisTime(),
-		GoldenATXID: DefaultGoldenATXId().Hash32().Hex(),
 		ExtraData:   DefaultGenesisExtraData(),
 		Path:        DefaultGenesisDataDir(),
 	}
@@ -51,8 +48,6 @@ func DefaultTestnetGenesisConfig() *GenesisConfig {
 		},
 		GenesisTime: DefaultTestnetGenesisTime(),
 		ExtraData:   DefaultTestnetGenesisExtraData(),
-		GoldenATXID: DefaultTestnetGoldenATXId().Hash32().Hex(),
-		GenesisID:   CalcGenesisId([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()).Hex(),
 		Path:        DefaultGenesisDataDir(),
 	}
 }
@@ -62,8 +57,6 @@ func DefaultTestGenesisConfig() *GenesisConfig {
 		Accounts:    apiConfig.DefaultTestGenesisAccountConfig(),
 		GenesisTime: DefaultTestGenesisTime(),
 		ExtraData:   DefaultTestGenesisExtraData(),
-		GoldenATXID: DefaultTestGoldenATXId().Hash32().Hex(),
-		GenesisID:   CalcGenesisId([]byte(DefaultTestGenesisExtraData()), DefaultTestGenesisTime()).Hex(),
 		Path:        DefaultGenesisDataDir(),
 	}
 }
@@ -116,30 +109,14 @@ func DefaultTestnetGoldenATXId() types.ATXID {
 	return types.ATXID(CalcGoldenATX([]byte(DefaultTestnetGenesisExtraData()), DefaultTestnetGenesisTime()))
 }
 
-func CalcGenesisId(genesisExtraData []byte, genesisTime string) types.Hash20 {
-	dataLen := len(genesisExtraData)
-	genesisTimeB := []byte(genesisTime)
+func CalcGenesisID(genesisExtraData []byte, genesisTime string) types.Hash20 {
 	hasher := hash.New()
-	hasher.Write(genesisTimeB)
-	if dataLen < ExtraDataLen {
-		padded := make([]byte, ExtraDataLen)
-		copy(padded[0:dataLen], genesisExtraData)
-		hasher.Write(padded)
-	} else {
-		hasher.Write(genesisExtraData)
-	}
+	hasher.Write([]byte(genesisTime))
+	hasher.Write(genesisExtraData)
 	digest := hasher.Sum([]byte{})
 	return types.BytesToHash(digest).ToHash20()
 }
 
-func (cfg *GenesisConfig) CalcGenesisID() {
-	cfg.GenesisID = CalcGenesisId([]byte(cfg.ExtraData), cfg.GenesisTime).Hex()
-}
-
 func CalcGoldenATX(genesisData []byte, genesisTime string) types.Hash32 {
-	return CalcGenesisId([]byte(genesisData), genesisTime).ToHash32()
-}
-
-func (cfg *GenesisConfig) CalcGoldenATX() {
-	cfg.GoldenATXID = types.ATXID(CalcGoldenATX([]byte(cfg.ExtraData), cfg.GenesisTime)).Hash32().Hex()
+	return CalcGenesisID([]byte(genesisData), genesisTime).ToHash32()
 }

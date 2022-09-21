@@ -712,8 +712,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		app.Config.Genesis.Accounts = apiConfig.DefaultGenesisAccountConfig()
 		app.Config.Genesis.GenesisTime = config.DefaultTestGenesisTime()
-		app.Config.Genesis.CalcGenesisID()
-		app.Config.Genesis.CalcGoldenATX()
 		app.Config.Genesis.Path = filepath.Join(path, config.DefaultGenesisConfigFileName)
 
 		// This will block. We need to run the full app here to make sure that
@@ -959,7 +957,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
-	cfg.Genesis.GoldenATXID = "0x5678"
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
