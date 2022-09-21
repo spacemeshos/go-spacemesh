@@ -24,24 +24,38 @@ const (
 	messageTimeout = 10 * time.Second
 )
 
+// Peer Exchange protocol configuration.
+type PeerExchangeConfig struct {
+	// Peers that have not been successfully connected to for
+	// this time are considered stale and not shared with other peers
+	stalePeerTimeout time.Duration `mapstructure:"stale-peer-timeout"`
+}
+
+func DefaultPeerExchangeConfig() PeerExchangeConfig {
+	return PeerExchangeConfig{
+		stalePeerTimeout: time.Minute * 30,
+	}
+}
+
 type peerExchange struct {
 	listen *atomic.Uint32
 
 	h      host.Host
 	book   *addressbook.AddrBook
 	logger log.Log
+	config PeerExchangeConfig
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *addressbook.AddrBook, listen uint16, log log.Log) *peerExchange {
+func newPeerExchange(h host.Host, rt *addressbook.AddrBook, listen uint16, log log.Log, config PeerExchangeConfig) *peerExchange {
 	ga := &peerExchange{
 		h:      h,
 		book:   rt,
 		logger: log,
 		listen: atomic.NewUint32(uint32(listen)),
+		config: config,
 	}
 	h.SetStreamHandler(protocolName, ga.handler)
-	h.EventBus()
 	return ga
 }
 
@@ -79,14 +93,19 @@ func (p *peerExchange) handler(stream network.Stream) {
 		}
 		p.book.AddAddress(info, info)
 	}
-	results := p.book.AddressCache()
 
+	results := p.book.GetKnownAddressesCache()
 	response := make([]string, 0, len(results))
+	now := time.Now()
 	for _, addr := range results {
-		if addr.ID == stream.Conn().RemotePeer() {
+		if addr.Addr.ID == stream.Conn().RemotePeer() {
 			continue
 		}
-		response = append(response, addr.RawAddr)
+		// Filter out addresses that have not been connected for a while
+		// but optimistically keep addresses we have not tried yet.
+		if addr.LastAttempt.IsZero() || now.Sub(addr.LastSuccess) < p.config.stalePeerTimeout {
+			response = append(response, addr.Addr.RawAddr)
+		}
 	}
 	// todo: limit results to message size
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))

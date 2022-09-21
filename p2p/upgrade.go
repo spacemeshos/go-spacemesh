@@ -112,6 +112,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		CheckTimeout:         cfg.CheckTimeout,
 		CheckInterval:        cfg.CheckInterval,
 		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
+		PeerExchange:         cfg.peerExchange,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
