@@ -83,6 +83,7 @@ func main() {
 		log.With().Error("harness: an error has occurred while generating a new harness:", log.Err(err))
 		log.Panic("error occurred while generating a new harness")
 	}
+	defer h.server.stop()
 
 	// listen on error channel, quit when process stops
 	go func() {

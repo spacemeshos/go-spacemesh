@@ -225,9 +225,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
 func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, error) {
-	mgr.mu.Lock()
-	state := mgr.state
-	mgr.mu.Unlock()
+	state := mgr.getState()
 
 	if state == postSetupStateInProgress {
 		return nil, fmt.Errorf("post setup session in progress")
@@ -363,9 +361,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 // GenerateProof generates a new Post.
 func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
-	mgr.mu.Lock()
-	state := mgr.state
-	mgr.mu.Unlock()
+	state := mgr.getState()
 
 	if state != postSetupStateComplete {
 		return nil, nil, errNotComplete
@@ -413,4 +409,11 @@ func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
 // Config returns the Post protocol config.
 func (mgr *PostSetupManager) Config() PostConfig {
 	return mgr.cfg
+}
+
+func (mgr *PostSetupManager) getState() postSetupState {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	return mgr.state
 }
