@@ -50,6 +50,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+const (
+	defaultTestGenesisTime      = "2022-12-25T00:00:00+00:00"
+	defaultTestGenesisExtraData = "test"
+)
+
+func DefaultTestGenesisConfig() *config.GenesisConfig {
+	return &config.GenesisConfig{
+		Accounts:    config.GenerateDefaultGenesisAccounts(),
+		GenesisTime: defaultTestGenesisTime,
+		ExtraData:   defaultTestGenesisExtraData,
+	}
+}
+
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -709,7 +722,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		app.Config.Genesis = config.DefaultTestGenesisConfig()
+		app.Config.Genesis = DefaultTestGenesisConfig()
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -957,7 +970,7 @@ func getTestDefaultConfig() *config.Config {
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
-	cfg.Genesis = config.DefaultTestGenesisConfig()
+	cfg.Genesis = DefaultTestGenesisConfig()
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
@@ -1006,7 +1019,7 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 		app := &App{
 			Config: &config.Config{
 				BaseConfig: config.BaseConfig{DataDirParent: t.TempDir()},
-				Genesis:    config.DefaultTestGenesisConfig(),
+				Genesis:    DefaultTestGenesisConfig(),
 			},
 			log: log.NewNop(),
 		}
@@ -1022,7 +1035,7 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 		app := &App{
 			Config: &config.Config{
 				BaseConfig: config.BaseConfig{DataDirParent: t.TempDir()},
-				Genesis:    config.DefaultTestGenesisConfig(),
+				Genesis:    DefaultTestGenesisConfig(),
 			},
 			log: log.NewNop(),
 		}

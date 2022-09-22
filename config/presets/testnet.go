@@ -7,6 +7,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 )
 
+const (
+	defaultTestnetGenesisTime      = "2022-12-25T00:00:00+00:00"
+	defaultTestnetGenesisExtraData = "testnet"
+)
+
 func init() {
 	register("testnet", testnet())
 }
@@ -75,7 +80,7 @@ func defaultTestnetGenesisConfig() *config.GenesisConfig {
 			"stest1qqqqqq9jpsarr7tnyv0qr0edddwqpg3vcya4cccauypts": 100000000000000000,
 			"stest1qqqqqq8lpq7f5ghqt569nvpl8kldv8r66ms2yzgudsd5t": 100000000000000000,
 		},
-		GenesisTime: config.DefaultTestGenesisTime,
-		ExtraData:   "testnet",
+		GenesisTime: defaultTestnetGenesisTime,
+		ExtraData:   defaultTestnetGenesisExtraData,
 	}
 }
