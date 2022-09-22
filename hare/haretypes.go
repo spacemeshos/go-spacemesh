@@ -96,7 +96,7 @@ func NewSet(data []types.ProposalID) *Set {
 	s.initWithSize(len(data))
 
 	// SAFETY: It's safe not to lock here as `s` was just
-	// created and nobody else has a access to it yet.
+	// created and nobody else has access to it yet.
 	for _, bid := range data {
 		s.values[bid] = struct{}{}
 	}
