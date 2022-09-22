@@ -9,6 +9,9 @@ include Makefile-gpu.Inc
 DOCKER_HUB ?= spacemeshos
 TEST_LOG_LEVEL ?=
 
+# Extra flags passed to `go test|build|run`
+GOFLAGS ?=
+
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
@@ -84,13 +87,13 @@ get-libs: get-gpu-setup #get-svm
 .PHONY: get-libs
 
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) $(GOTAGS) $(GOFLAGS) .
 hare p2p: get-libs
-	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) $(GOFLAGS).
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
+	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) $(GOFLAGS).
 harness: get-libs
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) $(GOFLAGS) .
 .PHONY: hare p2p harness go-spacemesh gen-p2p-identity
 
 tidy:
@@ -124,7 +127,7 @@ endif
 test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 
 test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) gotestsum -- -timeout 0 -p 1 $(GOFLAGS) $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
@@ -173,7 +176,7 @@ cover:
 	@echo "mode: count" > cover-all.out
 	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
 	  $(foreach pkg,$(PKGS),\
-		go test -coverprofile=cover.out -covermode=count $(pkg);\
+		go test -coverprofile=cover.out -covermode=count $(GOFLAGS) $(pkg);\
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
 .PHONY: cover

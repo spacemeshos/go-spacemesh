@@ -113,6 +113,41 @@ jobs:
         if: always() # always run even if the previous step fails
         with:
           report_paths: '**/unit-tests.xml'
+
+  # Run unit tests with race detector enabled
+  # It takes significantly longer to run tests hence
+  # it is not currently required to finish for `ci-stage1`.
+  race-detection-unittests:
+    runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # should take around 45 mins
+    timeout-minutes: 60
+    steps:
+        # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
+        # https://github.com/actions/virtual-environments/issues/1187
+      - name: disable TCP/UDP offload
+        run: sudo ethtool -K eth0 tx off rx off
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make
+      - name: unit tests
+        env:
+          GOFLAGS: -race
+          GOTESTSUM_FORMAT: standard-verbose
+          GOTESTSUM_JUNITFILE: unit-tests.xml
+        run: make test
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v3
+        if: always()
+        with:
+          report_paths: '**/unit-tests.xml'
+
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
