@@ -66,9 +66,7 @@ jobs:
           make tidy
           make test-fmt
       - name: staticcheck
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          make staticcheck
+        run: make staticcheck
 
   golangci-lint:
     runs-on: ubuntu-latest

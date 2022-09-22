@@ -74,6 +74,7 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 .PHONY: install
 
 build: go-spacemesh
