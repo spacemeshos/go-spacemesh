@@ -3,6 +3,7 @@ package hare
 import (
 	"bytes"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,4 +110,22 @@ func TestSet_ToSlice(t *testing.T) {
 	res := s.ToSlice()
 	sort.Slice(arr, func(i, j int) bool { return bytes.Compare(arr[i].Bytes(), arr[j].Bytes()) == -1 })
 	assert.Equal(t, arr, res) // check result is sorted, required for order of set in commit msgs
+}
+
+// Test concurrent ID calculation.
+func TestSet_Id_Concurrent(t *testing.T) {
+	set := NewEmptySet(lowDefaultSize)
+
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for worker := 0; worker < 5; worker++ {
+		go func() {
+			for i := 0; i < 100; i++ {
+				set.Add(types.RandomProposalID())
+				set.ID()
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
