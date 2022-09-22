@@ -1003,7 +1003,14 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 
 	t.Run("Saving new genesis config", func(t *testing.T) {
 		t.Parallel()
-		app := &App{Config: &config.Config{Genesis: config.DefaultTestGenesisConfig()}}
+		app := &App{
+			Config: &config.Config{
+				BaseConfig: config.BaseConfig{DataDirParent: t.TempDir()},
+				Genesis:    config.DefaultTestGenesisConfig(),
+			},
+			log: log.NewNop(),
+		}
+
 		app.Config.DataDirParent = t.TempDir()
 
 		err := app.checkAndStoreGenesisConfig()
@@ -1012,8 +1019,13 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 
 	t.Run("Mismatching genesis configs", func(t *testing.T) {
 		t.Parallel()
-		app := &App{Config: &config.Config{Genesis: config.DefaultTestGenesisConfig()}}
-		app.Config.DataDirParent = t.TempDir()
+		app := &App{
+			Config: &config.Config{
+				BaseConfig: config.BaseConfig{DataDirParent: t.TempDir()},
+				Genesis:    config.DefaultTestGenesisConfig(),
+			},
+			log: log.NewNop(),
+		}
 
 		err := app.checkAndStoreGenesisConfig()
 		r.NoError(err)
@@ -1022,6 +1034,6 @@ func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
 
 		err = app.checkAndStoreGenesisConfig()
 		r.Error(err)
-		r.ErrorContains(err, "failed to match config files")
+		r.ErrorContains(err, "failed to match config file")
 	})
 }

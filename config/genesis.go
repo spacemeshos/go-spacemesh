@@ -2,8 +2,6 @@ package config
 
 import (
 	"errors"
-	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -15,7 +13,6 @@ import (
 )
 
 const (
-	DefaultGenesisConfigFileDir  = "data"
 	DefaultGenesisConfigFileName = "genesis.conf"
 	defaultGenesisExtraData      = "mainnet"
 
@@ -35,10 +32,6 @@ func defaultGenesisConfig() *GenesisConfig {
 		GenesisTime: time.Now().Format(time.RFC3339),
 		ExtraData:   defaultGenesisExtraData,
 	}
-}
-
-func GenesisDataDir(dataDirParent string) string {
-	return filepath.Join(dataDirParent, DefaultGenesisConfigFileDir)
 }
 
 func DefaultTestGenesisConfig() *GenesisConfig {
@@ -65,10 +58,10 @@ func (g *GenesisConfig) ToAccountList() []types.Account {
 	return rst
 }
 
-func (gc *GenesisConfig) Compare(stored *GenesisConfig, path string) error {
+func (gc *GenesisConfig) Compare(stored *GenesisConfig, path string, lg log.Log) error {
 	if diff := cmp.Diff(stored, gc); diff != "" {
-		fmt.Printf("Genesis config %s changed from previous run (-want +got):\n%s", path, diff)
-		return errors.New("failed to match config files")
+		lg.Error("Genesis config %s changed from previous run (-want +got):\n%s", path, diff)
+		return errors.New("failed to match config file")
 	}
 	return nil
 }
