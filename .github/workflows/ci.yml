@@ -131,6 +131,8 @@ jobs:
             cache-
       - name: setup env
         run: make
+      - name: Clear test cache
+        run: make clear-test-cache
       - name: unit tests
         env:
           GOTESTSUM_FORMAT: testname
