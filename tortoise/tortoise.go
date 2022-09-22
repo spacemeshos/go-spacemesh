@@ -74,6 +74,13 @@ func (t *turtle) cloneTurtleParams() *turtle {
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
 	genesis := genesisLayer.Index()
+	for _, ballot := range genesisLayer.Ballots() {
+		t.ballotRefs[ballot.ID()] = &ballotInfoV2{
+			id:       ballot.ID(),
+			layer:    ballot.LayerIndex,
+			goodness: good,
+		}
+	}
 	t.last = genesis
 	t.processed = genesis
 	t.verified = genesis
@@ -250,32 +257,25 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 		if lvote.layer.lid.Before(ballot.base.layer) {
 			break
 		}
-		if len(lvote.blocks) == 0 {
-			// it is not possible to encode against for empty layer
-			// because there are no blocks
-			// therefore we should not pick base ballot that votes abstain on
-			// layer outside zdist if layer is empty
-			if lvote.vote == abstain && lvote.layer.hareTerminated && !withinDistance(t.Zdist, lvote.layer.lid, last) {
-				t.logger.With().Debug("ballot votes abstain on a layer without blocks. can't use as a base ballot",
-					ballot.id,
-					lvote.layer.lid,
-				)
-				return types.LayerID{}, nil
-			}
+		if lvote.vote == abstain && (lvote.layer.hareTerminated || !withinDistance(t.Zdist, lvote.layer.lid, last)) {
+			t.logger.With().Debug("ballot votes abstain on a layer without blocks. can't use as a base ballot",
+				ballot.id,
+				lvote.layer.lid,
+			)
+			return types.LayerID{}, nil
 		}
 		for _, bvote := range lvote.blocks {
-			block := bvote.block
-			localVote, _, err := t.getFullVote(ctx, bvote.block.layer, block)
+			vote, _, err := t.getFullVote(ctx, bvote.block)
 			if err != nil {
 				return types.LayerID{}, err
 			}
-			if localVote != bvote.vote {
+			if vote != bvote.vote {
 				t.logger.With().Debug("found disagreement on a block",
 					ballot.id,
-					block.id,
+					bvote.block.id,
 					log.Stringer("block_layer", lvote.layer.lid),
 					log.Stringer("ballot_layer", ballot.layer),
-					log.Stringer("local_vote", localVote),
+					log.Stringer("local_vote", vote),
 					log.Stringer("vote", bvote.vote),
 				)
 				return lvote.layer.lid, nil
@@ -299,6 +299,38 @@ func (t *turtle) encodeVotes(
 	votes := &types.Votes{
 		Base: base.id,
 	}
+	// encode difference with local opinion between [start, base.layer)
+	for i := len(base.votes) - 1; i >= 0; i-- {
+		lvote := base.votes[i]
+		if lvote.layer.lid.Before(start) {
+			break
+		}
+		if lvote.vote == abstain && lvote.layer.hareTerminated {
+			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
+		}
+		for _, bvote := range lvote.blocks {
+			block := bvote.block
+			vote, _, err := t.getFullVote(ctx, block)
+			if err != nil {
+				return nil, err
+			}
+			// ballot vote is consistent with local opinion, exception is not necessary
+			if vote == bvote.vote {
+				continue
+			}
+			switch vote {
+			case support:
+				votes.Support = append(votes.Support, block.id)
+			case against:
+				votes.Against = append(votes.Against, block.id)
+			case abstain:
+				logger.With().Error("layers that are not terminated should have been encoded earlier",
+					block.id, block.layer,
+				)
+			}
+		}
+	}
+	// encode votes after base ballot votes [base layer, last)
 	for lid := base.layer; lid.Before(last); lid = lid.Add(1) {
 		layer := t.layer(lid)
 		if !layer.hareTerminated && withinDistance(t.Zdist, lid, last) {
@@ -306,7 +338,7 @@ func (t *turtle) encodeVotes(
 			continue
 		}
 		for _, block := range layer.blocks {
-			vote, _, err := t.getFullVote(ctx, lid, block)
+			vote, _, err := t.getFullVote(ctx, block)
 			if err != nil {
 				return nil, err
 			}
@@ -333,7 +365,7 @@ func (t *turtle) encodeVotes(
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
 // outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
-func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, block *blockInfoV2) (sign, voteReason, error) {
+func (t *turtle) getFullVote(ctx context.Context, block *blockInfoV2) (sign, voteReason, error) {
 	vote, reason := getLocalVote(&t.state, t.Config, block)
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
@@ -345,7 +377,7 @@ func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, block *bloc
 	coin, err := layers.GetWeakCoin(t.cdb, t.last)
 	if err != nil {
 		return 0, "", fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
-			t.last, block.id, lid)
+			t.last, block.id, block.layer)
 	}
 	if coin {
 		return support, reasonCoinflip, nil

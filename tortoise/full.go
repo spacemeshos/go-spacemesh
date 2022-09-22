@@ -46,19 +46,21 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			if ballot.votes[i].vote == abstain {
 				continue
 			}
-			if len(ballot.votes[i].blocks) == 0 {
-				ballot.votes[i].layer.empty = ballot.votes[i].layer.empty.Add(ballot.weight)
-			}
+			empty := true
 			for _, bvote := range ballot.votes[i].blocks {
 				if bvote.block.height > ballot.height {
 					continue
 				}
 				switch bvote.vote {
 				case support:
+					empty = false
 					bvote.block.margin = bvote.block.margin.Add(ballot.weight)
 				case against:
 					bvote.block.margin = bvote.block.margin.Sub(ballot.weight)
 				}
+			}
+			if empty {
+				ballot.votes[i].layer.empty = ballot.votes[i].layer.empty.Add(ballot.weight)
 			}
 		}
 	}

@@ -272,12 +272,12 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	if child.goodness != good {
 		return
 	}
-	for i := range votes[original:] {
-		lvote := &votes[original+i]
-		for j := range lvote.blocks {
-			bvote := &lvote.blocks[j]
-			local, _ := getLocalVote(state, config, bvote.block)
-			if bvote.vote != local {
+	// TODO extract this code as it needs to be re-executed when opinion changes
+	ovotes := votes[original:]
+	for i := range ovotes {
+		for j := range ovotes[i].blocks {
+			local, _ := getLocalVote(state, config, ovotes[i].blocks[j].block)
+			if ovotes[i].blocks[j].vote != local {
 				child.goodness = bad
 				return
 			}
