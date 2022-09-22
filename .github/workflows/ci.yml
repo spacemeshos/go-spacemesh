@@ -124,8 +124,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
           restore-keys: |
+            cache-go-${{ env.go-version }}-unittests-
             cache-go-${{ env.go-version }}-
             cache-
       - name: setup env
