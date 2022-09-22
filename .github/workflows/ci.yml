@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: "1.18"
+  go-version: '1.18'
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -112,7 +112,7 @@ jobs:
         uses: mikepenz/action-junit-report@v3
         if: always() # always run even if the previous step fails
         with:
-          report_paths: "**/unit-tests.xml"
+          report_paths: '**/unit-tests.xml'
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
@@ -175,14 +175,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - id: "auth"
-        uses: "google-github-actions/auth@v0"
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
         with:
           # GCP_CREDENTIALS is minified JSON of service account
-          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
       - name: Configure gcloud
-        uses: "google-github-actions/setup-gcloud@v0"
+        uses: 'google-github-actions/setup-gcloud@v0'
 
       - name: Configure kubectl
         run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
