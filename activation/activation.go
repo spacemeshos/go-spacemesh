@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/store"
 )
 
 var (
@@ -73,8 +73,6 @@ type SmeshingProvider interface {
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
-	MinGas() uint64
-	SetMinGas(value uint64)
 }
 
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
@@ -215,17 +213,26 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	exited := make(chan struct{})
 	ctx, b.stop = context.WithCancel(b.parentCtx)
 	b.exited = exited
-	b.mu.Unlock()
 
 	if b.commitmentAtx == nil {
-		atx, err := b.getCommitmentAtxID()
-		if err != nil {
+		err := b.loadCommitmentAtx()
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			atx, err := b.getCommitmentAtxID()
+			if err != nil {
+				close(exited)
+				b.started.Store(false)
+				return fmt.Errorf("failed to start post setup session: %w", err)
+			}
+			b.commitmentAtx = &atx
+		case err != nil:
 			close(exited)
 			b.started.Store(false)
 			return fmt.Errorf("failed to start post setup session: %w", err)
 		}
-		b.commitmentAtx = &atx
 	}
+
+	b.mu.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts, *b.commitmentAtx)
 	if err != nil {
@@ -508,58 +515,62 @@ func (b *Builder) Coinbase() types.Address {
 	return b.coinbaseAccount
 }
 
-// MinGas [...].
-func (b *Builder) MinGas() uint64 {
-	panic("not implemented")
-}
-
-// SetMinGas [...].
-func (b *Builder) SetMinGas(value uint64) {
-	panic("not implemented")
-}
-
-func getNIPostKey() []byte {
-	return []byte("NIPost")
-}
-
 func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	bts, err := codec.Encode(ch)
-	if err != nil {
-		return fmt.Errorf("serialize NIPost challenge: %w", err)
-	}
-
-	if err := niposts.Add(b.cdb, getNIPostKey(), bts); err != nil {
-		return fmt.Errorf("put NIPost challenge to database: %w", err)
-	}
-
-	return nil
+	return store.AddNIPostChallenge(b.cdb, ch)
 }
 
 func (b *Builder) loadChallenge() error {
-	bts, err := niposts.Get(b.cdb, getNIPostKey())
+	nipost, err := store.GetNIPostChallenge(b.cdb)
 	if err != nil {
-		return fmt.Errorf("get NIPost challenge from store: %w", err)
+		return err
 	}
-
-	if len(bts) > 0 {
-		var tp types.NIPostChallenge
-		if err = codec.Decode(bts, &tp); err != nil {
-			return fmt.Errorf("parse NIPost challenge: %w", err)
-		}
-
-		b.challenge = &tp
-	}
+	b.challenge = nipost
 	return nil
+}
+
+func (b *Builder) discardChallenge() {
+	b.challenge = nil
+	b.pendingATX = nil
+	if err := store.ClearNIPostChallenge(b.cdb); err != nil {
+		b.log.Error("failed to discard NIPost challenge: %v", err)
+	}
+}
+
+func (b *Builder) storeCommitmentAtx(id types.ATXID) error {
+	return store.AddCommitmentATX(b.cdb, id)
+}
+
+func (b *Builder) loadCommitmentAtx() error {
+	id, err := store.GetCommitmentATX(b.cdb)
+	if err != nil {
+		return err
+	}
+	b.commitmentAtx = &id
+	return nil
+}
+
+func (b *Builder) discardCommitmentAtx() {
+	b.commitmentAtx = nil
+	if err := store.ClearCommitmentAtx(b.cdb); err != nil {
+		b.log.Error("failed to discard NIPost challenge: %v", err)
+	}
 }
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
 	logger := b.log.WithContext(ctx)
+	if b.commitmentAtx == nil {
+		logger.With().Info("loading commitment atx")
+		if err := b.loadCommitmentAtx(); err != nil {
+			return fmt.Errorf("failed to load commitment atx: %v", err)
+		}
+	}
+
 	if b.challenge != nil {
-		logger.With().Info("using existing atx challenge", b.currentEpoch())
+		logger.With().Info("using existing atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
 	} else {
-		logger.With().Info("building new atx challenge", b.currentEpoch())
+		logger.With().Info("building new atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
 		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to build new atx challenge: %w", err)
@@ -677,14 +688,6 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 func (b *Builder) currentEpoch() types.EpochID {
 	return b.layerClock.GetCurrentLayer().GetEpoch()
-}
-
-func (b *Builder) discardChallenge() {
-	b.challenge = nil
-	b.pendingATX = nil
-	if err := niposts.Add(b.cdb, getNIPostKey(), []byte{}); err != nil {
-		b.log.Error("failed to discard NIPost challenge: %v", err)
-	}
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {

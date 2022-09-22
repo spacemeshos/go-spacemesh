@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/store"
 )
 
 // ========== Vars / Consts ==========
@@ -841,7 +841,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b.commitmentAtx = &goldenATXID
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
-	got, err := niposts.Get(cdb, getNIPostKey())
+	got, err := store.GetNIPostChallenge(cdb)
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -854,8 +854,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
-	got, err = niposts.Get(cdb, getNIPostKey())
-	require.NoError(t, err)
+	got, err = store.GetNIPostChallenge(cdb)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }
 
