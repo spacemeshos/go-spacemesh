@@ -1583,6 +1583,33 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	return ballot
 }
 
+func TestBallotHasGoodBeacon(t *testing.T) {
+	layerID := types.GetEffectiveGenesis().Add(1)
+	epochBeacon := types.RandomBeacon()
+	ballot := randomRefBallot(t, layerID, epochBeacon)
+
+	mockBeacons := smocks.NewMockBeaconGetter(gomock.NewController(t))
+	trtl := defaultTurtle(t)
+	trtl.beacons = mockBeacons
+
+	logger := logtest.New(t)
+	// good beacon
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
+	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, epochBeacon))
+	assert.NotContains(t, trtl.badBeaconBallots, ballot.ID())
+
+	// bad beacon
+	beacon := types.RandomBeacon()
+	require.NotEqual(t, epochBeacon, beacon)
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
+	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, beacon))
+	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
+
+	// ask a bad beacon again won't cause a lookup since it's cached
+	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, beacon))
+	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
+}
+
 func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	ctx := context.Background()
 
@@ -1630,12 +1657,12 @@ func TestObjectsNotProcessedBeforeRefencedHeight(t *testing.T) {
 		tortoise.OnBallot(ballot)
 	}
 
-	require.Empty(t, tortoise.trtl.blockRefs[last])
-	require.Empty(t, tortoise.trtl.ballotRefs[last])
+	require.Empty(t, tortoise.trtl.layers[last])
+	require.Empty(t, tortoise.trtl.ballots[last])
 
 	_ = tortoise.HandleIncomingLayer(ctx, last)
-	require.NotEmpty(t, tortoise.trtl.blockRefs[last])
-	require.NotEmpty(t, tortoise.trtl.ballotRefs[last])
+	require.NotEmpty(t, tortoise.trtl.layers[last])
+	require.NotEmpty(t, tortoise.trtl.ballots[last])
 	verified := tortoise.HandleIncomingLayer(ctx, s.Next())
 	require.Equal(t, last, verified)
 }
@@ -2017,15 +2044,17 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		hareOutput, err := layers.GetHareOutput(s.GetState(0).DB, lid)
 		require.NoError(t, err)
 		if hareOutput != types.EmptyBlockID {
-			tortoise.trtl.validity[hareOutput] = against
-			tortoise.trtl.hareOutput[lid] = types.EmptyBlockID
+			layer := tortoise.trtl.layer(lid)
+			for _, block := range layer.blocks {
+				block.validity = against
+				block.hare = against
+			}
 			unsupported[hareOutput] = struct{}{}
 		}
 	}
 
 	// remove good ballots and genesis to make tortoise select one of the later blocks.
-	delete(tortoise.trtl.ballotRefs, genesis)
-	tortoise.trtl.verifying.goodBallots = map[types.BallotID]goodness{}
+	delete(tortoise.trtl.ballots, genesis)
 
 	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
@@ -2121,7 +2150,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			blks, err := blocks.IDsInLayer(s.GetState(0).DB, tc.lid)
 			require.NoError(t, err)
 			for _, bid := range blks {
-				vote, _ := getLocalVote(&tortoise.trtl.commonState, cfg, tc.lid, bid)
+				vote, _ := getLocalVote(&tortoise.trtl.state, cfg, tortoise.trtl.blockRefs[bid])
 				if tc.expected == support {
 					hareOutput, err := layers.GetHareOutput(s.GetState(0).DB, tc.lid)
 					require.NoError(t, err)
@@ -2628,16 +2657,16 @@ func TestStateManagement(t *testing.T) {
 		evicted := tortoise.trtl.evicted
 		require.Equal(t, verified.Sub(window).Sub(1), evicted)
 		for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
-			require.Empty(t, tortoise.trtl.blockRefs[lid])
-			require.Empty(t, tortoise.trtl.ballotRefs[lid])
+			require.Empty(t, tortoise.trtl.layers[lid])
+			require.Empty(t, tortoise.trtl.ballots[lid])
 		}
 
 		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
-			for _, block := range tortoise.trtl.blockRefs[lid] {
-				require.Contains(t, tortoise.trtl.blockLayer, block.id, "layer %s", lid)
+			for _, block := range tortoise.trtl.layers[lid].blocks {
+				require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
 			}
-			for _, ballot := range tortoise.trtl.ballotRefs[lid] {
-				require.Contains(t, tortoise.trtl.ballotLayer, ballot.id, "layer %s", lid)
+			for _, ballot := range tortoise.trtl.ballots[lid] {
+				require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
 			}
 		}
 	})
@@ -2660,17 +2689,16 @@ func TestStateManagement(t *testing.T) {
 		evicted := tortoise.trtl.evicted
 		require.Equal(t, verified.Sub(window).Sub(1), evicted)
 		for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
-			require.Empty(t, tortoise.trtl.blockRefs[lid])
-			require.Empty(t, tortoise.trtl.ballotRefs[lid])
+			require.Empty(t, tortoise.trtl.layers[lid])
+			require.Empty(t, tortoise.trtl.ballots[lid])
 		}
 
 		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
-			for _, block := range tortoise.trtl.blockRefs[lid] {
-				require.Contains(t, tortoise.trtl.blockLayer, block.id, "layer %s", lid)
+			for _, block := range tortoise.trtl.layers[lid].blocks {
+				require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
 			}
-			for _, ballot := range tortoise.trtl.ballotRefs[lid] {
-				require.Contains(t, tortoise.trtl.full.votes, ballot.id, "layer %s", lid)
-				require.Contains(t, tortoise.trtl.ballotLayer, ballot.id, "layer %s", lid)
+			for _, ballot := range tortoise.trtl.ballots[lid] {
+				require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
 			}
 		}
 	})

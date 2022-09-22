@@ -52,8 +52,8 @@ const (
 	canBeGood
 )
 
-func checkCanBeGood(ballot *ballotInfoV2) bool {
-	return ballot.goodness == good || ballot.goodness == canBeGood
+func checkCanBeGood(value goodness) bool {
+	return value == good || value == canBeGood
 }
 
 func newVerifying(config Config, state *state) *verifying {
@@ -73,21 +73,26 @@ type verifying struct {
 
 func (v *verifying) resetWeights() {
 	v.totalGoodWeight = util.WeightFromUint64(0)
+	for lid := v.verified.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
+		layer := v.layer(lid)
+		layer.verifying.good = weight{}
+		layer.verifying.abstained = weight{}
+	}
 }
 
 func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []ballotInfoV2) bool {
 	n := 0
 	for _, ballot := range ballots {
-		if checkCanBeGood(ballot.base) && checkCanBeGood(&ballot) {
+		if checkCanBeGood(ballot.base.goodness) && checkCanBeGood(ballot.goodness) {
 			logger.With().Debug("marking ballots that can be good as good",
 				log.Stringer("ballot_layer", lid),
 				log.Stringer("ballot", ballot.id),
 				log.Stringer("base_ballot", ballot.base.id),
 			)
+			ballot.base.goodness = good
+			ballot.goodness = good
 			n++
 		}
-		ballot.base.goodness = good
-		ballot.goodness = good
 	}
 	return n > 0
 }
@@ -145,11 +150,11 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	if verifyLayer(
 		logger,
 		layer.blocks,
-		func(block blockInfoV2) sign {
+		func(block *blockInfoV2) sign {
 			if block.height > layer.verifying.referenceHeight {
 				return neutral
 			}
-			decision, _ := getLocalVote(v.state, v.Config, &block)
+			decision, _ := getLocalVote(v.state, v.Config, block)
 			return decision
 		},
 	) {
@@ -160,8 +165,10 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 }
 
 func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots []ballotInfoV2) (util.Weight, int) {
-	sum := util.WeightFromUint64(0)
-	n := 0
+	var (
+		sum weight
+		n   int
+	)
 	for _, ballot := range ballots {
 		if ballot.goodness == bad {
 			continue
@@ -180,46 +187,50 @@ func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots 
 			continue
 		}
 		sum = sum.Add(ballot.weight)
-		// abstained weight
+		// FIXME abstained weight
 		n++
 	}
 	return sum, n
 }
 
 func decodeExceptions(logger log.Log, config Config, state *state, base, child *ballotInfoV2, exceptions *types.Votes) {
+	child.goodness = good
+	if _, exist := state.badBeaconBallots[child.id]; exist {
+		child.goodness = bad
+	}
+
+	// inherit opinion from the base ballot by copying base ballots in range (evicted layer, base layer)
 	votes := copyVotes(state.evicted, base.votes)
 	original := len(votes)
+	// add opinions from the local state [base layer, ballot layer)
 	for lid := base.layer; lid.Before(child.layer); lid = lid.Add(1) {
 		layer := state.layer(lid)
 		lvote := layerVote{
 			layer: layer,
+			vote:  against,
 		}
-		for i := range layer.blocks {
-			block := &layer.blocks[i]
+		for _, block := range layer.blocks {
 			lvote.blocks = append(lvote.blocks, blockVote{
 				block: block,
 				vote:  against,
 			})
 		}
-		votes = append(votes, layerVote{
-			layer: layer,
-			vote:  against,
-		})
+		votes = append(votes, lvote)
 	}
-	child.goodness = good
+
+	// update exceptions
 	for _, bid := range exceptions.Support {
 		block := state.blockRefs[bid]
 		for i := len(votes) - 1; i >= 0; i-- {
-			lvote := &votes[i]
-			if lvote.layer.lid == block.layer {
-				if lvote.layer.lid.Before(base.layer) {
+			if votes[i].layer.lid == block.layer {
+				if votes[i].layer.lid.Before(base.layer) {
 					child.goodness = bad
 				}
-				for i := range lvote.blocks {
-					bvote := &lvote.blocks[i]
-					if bvote.block.id == bid {
-						bvote.vote = support
+				for j := range votes[i].blocks {
+					if votes[i].blocks[j].block.id == bid {
+						votes[i].blocks[j].vote = support
 					}
+					break
 				}
 				break
 			}
@@ -228,16 +239,15 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	for _, bid := range exceptions.Against {
 		block := state.blockRefs[bid]
 		for i := len(votes) - 1; i >= 0; i-- {
-			lvote := &votes[i]
-			if lvote.layer.lid == block.layer {
-				if lvote.layer.lid.Before(base.layer) {
+			if votes[i].layer.lid == block.layer {
+				if votes[i].layer.lid.Before(base.layer) {
 					child.goodness = bad
 				}
-				for i := range lvote.blocks {
-					bvote := &lvote.blocks[i]
-					if bvote.block.id == bid {
-						bvote.vote = against
+				for j := range votes[i].blocks {
+					if votes[i].blocks[j].block.id == bid {
+						votes[i].blocks[j].vote = against
 					}
+					break
 				}
 				break
 			}
@@ -246,16 +256,16 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	for _, lid := range exceptions.Abstain {
 		child.goodness = abstained
 		for i := len(votes) - 1; i >= 0; i-- {
-			lvote := &votes[i]
-			if lvote.layer.lid == lid {
-				if lvote.layer.lid.Before(base.layer) {
+			if votes[i].layer.lid == lid {
+				if votes[i].layer.lid.Before(base.layer) {
 					child.goodness = bad
 				}
-				lvote.vote = abstain
+				votes[i].vote = abstain
 				break
 			}
 		}
 	}
+	child.votes = votes
 	if base.goodness != good && child.goodness == abstained {
 		child.goodness = bad
 	}

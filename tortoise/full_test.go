@@ -57,16 +57,19 @@ func TestFullBallotFilter(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			state := newCommonState()
+			state := newState()
 			state.badBeaconBallots = tc.badBeaconBallots
 			state.last = tc.last
 
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
 
-			f := newFullTortoise(config, &state)
+			f := newFullTortoise(config, state)
 
-			require.Equal(t, tc.expect, f.shouldBeDelayed(tc.ballot, tc.ballotlid))
+			require.Equal(t, tc.expect, f.shouldBeDelayed(ballotInfoV2{
+				id:    tc.ballot,
+				layer: tc.ballotlid,
+			}))
 		})
 	}
 }
@@ -343,6 +346,10 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise := defaultAlgorithm(t, cdb)
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
+			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfoV2{
+				goodness: good,
+				layer:    genesis,
+			}
 
 			var blocks [][]types.Block
 			for i, layer := range tc.layerBlocks {
@@ -398,14 +405,14 @@ func TestFullCountVotes(t *testing.T) {
 				consensus.full.countVotes(logger)
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
-			var target *blockInfo
-			for _, info := range consensus.blocks[block.LayerIndex] {
+			var target *blockInfoV2
+			for _, info := range consensus.layer(block.LayerIndex).blocks {
 				if info.id == block.ID() {
-					target = &info
+					target = info
 				}
 			}
 			require.NotNil(t, target)
-			require.Equal(t, tc.expect.String(), target.weight.String())
+			require.Equal(t, tc.expect.String(), target.margin.String())
 		})
 	}
 }
@@ -524,25 +531,25 @@ func TestFullVerify(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			lid := types.LayerID{}
-			full := newFullTortoise(Config{}, &commonState{
-				blocks:   map[types.LayerID][]blockInfo{},
-				validity: votes{},
-			})
+			full := newFullTortoise(Config{}, newState())
 			full.globalThreshold = util.WeightFromUint64(tc.threshold)
-			full.empty[lid] = util.WeightFromInt64(int64(emptyThreshold))
+			layer := full.layer(lid)
+			layer.empty = util.WeightFromInt64(int64(emptyThreshold))
 			for i, block := range tc.blocks {
-				id := types.BlockID{uint8(i) + 1}
-				full.blocks[lid] = append(full.blocks[lid], blockInfo{
-					id:     id,
+				block := &blockInfoV2{
+					id:     types.BlockID{uint8(i) + 1},
+					layer:  lid,
 					height: uint64(block.height),
-					weight: util.WeightFromInt64(int64(block.margin)),
-				})
+					margin: util.WeightFromInt64(int64(block.margin)),
+				}
+				layer.blocks = append(layer.blocks, block)
+				full.state.blockRefs[block.id] = block
 			}
 			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
 					id := types.BlockID{uint8(i) + 1}
-					require.Equal(t, expect, full.validity[id])
+					require.Equal(t, expect, full.state.blockRefs[id].validity)
 				}
 			}
 		})

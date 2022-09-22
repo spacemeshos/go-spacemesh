@@ -40,28 +40,25 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			continue
 		}
 		for i := len(ballot.votes) - 1; i >= 0; i-- {
-			lvote := &ballot.votes[i]
-			if !lvote.layer.lid.After(f.verified) {
+			if !ballot.votes[i].layer.lid.After(f.verified) {
 				break
 			}
-			if lvote.vote == abstain {
+			if ballot.votes[i].vote == abstain {
 				continue
 			}
-			empty := true
-			for _, bvote := range lvote.blocks {
+			if len(ballot.votes[i].blocks) == 0 {
+				ballot.votes[i].layer.empty = ballot.votes[i].layer.empty.Add(ballot.weight)
+			}
+			for _, bvote := range ballot.votes[i].blocks {
 				if bvote.block.height > ballot.height {
 					continue
 				}
 				switch bvote.vote {
 				case support:
-					empty = false
-					bvote.block.margin.Add(ballot.weight)
+					bvote.block.margin = bvote.block.margin.Add(ballot.weight)
 				case against:
-					bvote.block.margin.Sub(ballot.weight)
+					bvote.block.margin = bvote.block.margin.Sub(ballot.weight)
 				}
-			}
-			if empty {
-				lvote.layer.empty.Add(ballot.weight)
 			}
 		}
 	}
@@ -129,7 +126,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	return verifyLayer(
 		logger,
 		layer.blocks,
-		func(block blockInfoV2) sign {
+		func(block *blockInfoV2) sign {
 			decision := sign(block.margin.Cmp(f.globalThreshold))
 			if decision == neutral && empty {
 				return against
@@ -142,8 +139,8 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 // shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
 // long time ago.
 func (f *full) shouldBeDelayed(ballot ballotInfoV2) bool {
-	beacon := f.beacons[ballot.layer.GetEpoch()]
-	return beacon != ballot.beacon && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
+	_, bad := f.badBeaconBallots[ballot.id]
+	return bad && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
 }
 
 type delayedBallots struct {

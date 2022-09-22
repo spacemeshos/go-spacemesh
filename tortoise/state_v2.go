@@ -9,17 +9,19 @@ type (
 	weight = util.Weight
 	vote   = sign
 
+	verifyingInfo struct {
+		good, abstained weight
+		referenceHeight uint64
+	}
+
 	layerInfo struct {
 		lid            types.LayerID
 		hareTerminated bool
 
 		empty  weight
-		blocks []blockInfoV2
+		blocks []*blockInfoV2
 
-		verifying struct {
-			good, abstained weight
-			referenceHeight uint64
-		}
+		verifying verifyingInfo
 	}
 
 	blockInfoV2 struct {
@@ -43,9 +45,15 @@ type (
 		vote  vote
 	}
 
+	baseInfo struct {
+		id       types.BallotID
+		layer    types.LayerID
+		goodness goodness
+	}
+
 	ballotInfoV2 struct {
 		id     types.BallotID
-		base   *ballotInfoV2
+		base   baseInfo
 		layer  types.LayerID
 		height uint64
 		weight weight
@@ -77,13 +85,13 @@ type (
 		epochWeight map[types.EpochID]weight
 		// referenceHeight is a median height from all atxs that target keyed epoch
 		referenceHeight map[types.EpochID]uint64
-		beacons         map[types.EpochID]types.Beacon
 		// referenceWeight stores atx weight divided by the total number of eligibilities.
 		// it is computed together with refBallot weight. it is not equal to refBallot
 		// only if refBallot has more than 1 eligibility proof.
-		referenceWeight map[types.BallotID]weight
+		referenceWeight  map[types.BallotID]weight
+		badBeaconBallots map[types.BallotID]struct{}
 
-		layers  map[types.LayerID]layerInfo
+		layers  map[types.LayerID]*layerInfo
 		ballots map[types.LayerID][]ballotInfoV2
 
 		// to efficiently find base and reference ballots
@@ -95,12 +103,12 @@ type (
 
 func newState() *state {
 	return &state{
-		epochWeight:     map[types.EpochID]util.Weight{},
-		referenceHeight: map[types.EpochID]uint64{},
-		beacons:         map[types.EpochID]types.Beacon{},
-		referenceWeight: map[types.BallotID]util.Weight{},
+		epochWeight:      map[types.EpochID]util.Weight{},
+		referenceHeight:  map[types.EpochID]uint64{},
+		badBeaconBallots: map[types.BallotID]struct{}{},
+		referenceWeight:  map[types.BallotID]util.Weight{},
 
-		layers:     map[types.LayerID]layerInfo{},
+		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]ballotInfoV2{},
 		ballotRefs: map[types.BallotID]*ballotInfoV2{},
 		blockRefs:  map[types.BlockID]*blockInfoV2{},
@@ -110,10 +118,10 @@ func newState() *state {
 func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
-		layer = layerInfo{lid: lid}
+		layer = &layerInfo{lid: lid}
 		s.layers[lid] = layer
 	}
-	return &layer
+	return layer
 }
 
 func (s *state) addBallot(ballot ballotInfoV2) {

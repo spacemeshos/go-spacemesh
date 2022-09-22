@@ -39,7 +39,7 @@ func (a sign) String() string {
 func persistContextualValidity(logger log.Log,
 	updater blockValidityUpdater,
 	from, to types.LayerID,
-	layers map[types.LayerID]layerInfo,
+	layers map[types.LayerID]*layerInfo,
 ) error {
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
@@ -134,7 +134,7 @@ func minLayer(i, j types.LayerID) types.LayerID {
 	return j
 }
 
-func verifyLayer(logger log.Log, blocks []blockInfoV2, getDecision func(blockInfoV2) sign) bool {
+func verifyLayer(logger log.Log, blocks []*blockInfoV2, getDecision func(*blockInfoV2) sign) bool {
 	// order blocks by height in ascending order
 	// if there is a support before any abstain
 	// and a previous height is lower than the current one
@@ -146,8 +146,7 @@ func verifyLayer(logger log.Log, blocks []blockInfoV2, getDecision func(blockInf
 	})
 	var (
 		decisions = make([]sign, 0, len(blocks))
-		supported blockInfoV2
-		positive  bool
+		supported *blockInfoV2
 	)
 	for _, block := range blocks {
 		decision := getDecision(block)
@@ -159,13 +158,12 @@ func verifyLayer(logger log.Log, blocks []blockInfoV2, getDecision func(blockInf
 		)
 		if decision == abstain {
 			// all blocks with the same height should be finalized
-			if positive && block.height > supported.height {
+			if supported != nil && block.height > supported.height {
 				decision = against
 			} else {
 				return false
 			}
 		} else if decision == support {
-			positive = true
 			supported = block
 		}
 		decisions = append(decisions, decision)

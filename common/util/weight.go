@@ -34,8 +34,7 @@ type Weight struct {
 // Add adds `other` to weight.
 func (w Weight) Add(other Weight) Weight {
 	if w.Rat == nil {
-		w.Rat = new(big.Rat).Set(other.Rat)
-		return w
+		w.Rat = new(big.Rat)
 	}
 	w.Rat.Add(w.Rat, other.Rat)
 	return w
@@ -45,6 +44,9 @@ func (w Weight) Add(other Weight) Weight {
 func (w Weight) Sub(other Weight) Weight {
 	if other.Rat == nil {
 		return w
+	}
+	if w.Rat == nil {
+		w.Rat = new(big.Rat)
 	}
 	w.Rat.Sub(w.Rat, other.Rat)
 	return w
