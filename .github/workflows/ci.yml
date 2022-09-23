@@ -60,6 +60,14 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
           make
@@ -79,6 +87,14 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: golangci-lint
@@ -101,8 +117,19 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-unittests-
+            cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
+      - name: Clear test cache
+        run: make clear-test-cache
       - name: unit tests
         env:
           GOTESTSUM_FORMAT: testname
