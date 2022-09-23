@@ -10,7 +10,7 @@ import (
 )
 
 func TestPrioritizeBlocks(t *testing.T) {
-	ballots := []*ballotInfoV2{
+	ballots := []*ballotInfo{
 		{id: types.BallotID{1}},
 		{id: types.BallotID{2}},
 		{id: types.BallotID{3}},
@@ -18,7 +18,7 @@ func TestPrioritizeBlocks(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		desc             string
-		input            []*ballotInfoV2
+		input            []*ballotInfo
 		disagrements     map[types.BallotID]types.LayerID
 		badBeaconBallots map[types.BallotID]struct{}
 		expect           []types.BallotID
@@ -44,7 +44,7 @@ func TestPrioritizeBlocks(t *testing.T) {
 				ballots[2].id: types.NewLayerID(9),
 				ballots[3].id: types.NewLayerID(9),
 			},
-			input: []*ballotInfoV2{
+			input: []*ballotInfo{
 				{id: ballots[0].id},
 				{id: ballots[1].id, layer: types.NewLayerID(9)},
 				{id: ballots[2].id, layer: types.NewLayerID(10)},
@@ -69,7 +69,7 @@ func TestPrioritizeBlocks(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			rst := make([]*ballotInfoV2, len(tc.input))
+			rst := make([]*ballotInfo, len(tc.input))
 			copy(rst, tc.input)
 
 			rng := rand.New(rand.NewSource(10001))

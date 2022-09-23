@@ -29,8 +29,8 @@ type full struct {
 	delayedQueue *list.List
 }
 
-func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfoV2) {
-	var delayed []*ballotInfoV2
+func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfo) {
+	var delayed []*ballotInfo
 	for _, ballot := range ballots {
 		if f.shouldBeDelayed(ballot) {
 			delayed = append(delayed, ballot)
@@ -40,7 +40,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfoV2) {
 			continue
 		}
 		for i := len(ballot.votes) - 1; i >= 0; i-- {
-			if !ballot.votes[i].layer.lid.After(f.verified) {
+			if !ballot.votes[i].lid.After(f.verified) {
 				break
 			}
 			if ballot.votes[i].vote == abstain {
@@ -48,19 +48,19 @@ func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfoV2) {
 			}
 			empty := true
 			for _, bvote := range ballot.votes[i].blocks {
-				if bvote.block.height > ballot.height {
+				if bvote.height > ballot.height {
 					continue
 				}
 				switch bvote.vote {
 				case support:
 					empty = false
-					bvote.block.margin = bvote.block.margin.Add(ballot.weight)
+					bvote.margin = bvote.margin.Add(ballot.weight)
 				case against:
-					bvote.block.margin = bvote.block.margin.Sub(ballot.weight)
+					bvote.margin = bvote.margin.Sub(ballot.weight)
 				}
 			}
 			if empty {
-				ballot.votes[i].layer.empty = ballot.votes[i].layer.empty.Add(ballot.weight)
+				ballot.votes[i].empty = ballot.votes[i].empty.Add(ballot.weight)
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	return verifyLayer(
 		logger,
 		layer.blocks,
-		func(block *blockInfoV2) sign {
+		func(block *blockInfo) sign {
 			decision := sign(block.margin.Cmp(f.globalThreshold))
 			if decision == neutral && empty {
 				return against
@@ -140,12 +140,12 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 
 // shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
 // long time ago.
-func (f *full) shouldBeDelayed(ballot *ballotInfoV2) bool {
+func (f *full) shouldBeDelayed(ballot *ballotInfo) bool {
 	_, bad := f.badBeaconBallots[ballot.id]
 	return bad && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
 }
 
 type delayedBallots struct {
 	lid     types.LayerID
-	ballots []*ballotInfoV2
+	ballots []*ballotInfo
 }

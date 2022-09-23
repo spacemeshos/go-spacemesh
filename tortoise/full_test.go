@@ -66,7 +66,7 @@ func TestFullBallotFilter(t *testing.T) {
 
 			f := newFullTortoise(config, state)
 
-			require.Equal(t, tc.expect, f.shouldBeDelayed(&ballotInfoV2{
+			require.Equal(t, tc.expect, f.shouldBeDelayed(&ballotInfo{
 				id:    tc.ballot,
 				layer: tc.ballotlid,
 			}))
@@ -346,7 +346,7 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise := defaultAlgorithm(t, cdb)
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
-			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfoV2{
+			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfo{
 				layer: genesis,
 			}
 
@@ -404,7 +404,7 @@ func TestFullCountVotes(t *testing.T) {
 				consensus.full.countVotes(logger)
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
-			var target *blockInfoV2
+			var target *blockInfo
 			for _, info := range consensus.layer(block.LayerIndex).blocks {
 				if info.id == block.ID() {
 					target = info
@@ -535,7 +535,7 @@ func TestFullVerify(t *testing.T) {
 			layer := full.layer(lid)
 			layer.empty = util.WeightFromInt64(int64(emptyThreshold))
 			for i, block := range tc.blocks {
-				block := &blockInfoV2{
+				block := &blockInfo{
 					id:     types.BlockID{uint8(i) + 1},
 					layer:  lid,
 					height: uint64(block.height),

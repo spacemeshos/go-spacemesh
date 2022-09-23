@@ -21,13 +21,13 @@ func TestVerifyingProcessLayer(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc         string
-		ballots      [][]*ballotInfoV2
+		ballots      [][]*ballotInfo
 		layerWeights []util.Weight
 		total        []util.Weight
 	}{
 		{
 			desc: "AllGood",
-			ballots: [][]*ballotInfoV2{
+			ballots: [][]*ballotInfo{
 				{
 					{
 						id: ballots[0],
@@ -59,7 +59,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		},
 		{
 			desc: "AllBad",
-			ballots: [][]*ballotInfoV2{
+			ballots: [][]*ballotInfo{
 				{
 					{
 						id:       ballots[0],
@@ -84,7 +84,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		},
 		{
 			desc: "GoodInFirstLayer",
-			ballots: [][]*ballotInfoV2{
+			ballots: [][]*ballotInfo{
 				{
 					{
 						id:     ballots[0],
@@ -117,7 +117,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
 			v := newVerifying(Config{}, newState())
-			v.ballotRefs[goodbase] = &ballotInfoV2{
+			v.ballotRefs[goodbase] = &ballotInfo{
 				id: goodbase,
 			}
 
@@ -170,7 +170,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(8),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
 					},
 				},
@@ -178,7 +178,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(8),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -186,7 +186,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(6),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -206,7 +206,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(8),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
 					},
 				},
@@ -215,7 +215,7 @@ func TestVerifying_Verify(t *testing.T) {
 						good:      util.WeightFromUint64(8),
 						abstained: util.WeightFromUint64(2),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -224,7 +224,7 @@ func TestVerifying_Verify(t *testing.T) {
 						good:      util.WeightFromUint64(6),
 						abstained: util.WeightFromUint64(4),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -246,7 +246,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(12),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
 					},
 				},
@@ -254,7 +254,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(14),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -262,7 +262,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(2),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -282,7 +282,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
 					},
 				},
@@ -290,7 +290,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -298,7 +298,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{3}, hare: neutral, layer: start.Add(3)},
 					},
 				},
@@ -319,7 +319,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
 						{id: types.BlockID{2}, hare: against, layer: start.Add(1)},
 						{id: types.BlockID{3}, hare: against, layer: start.Add(1)},
@@ -329,7 +329,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{4}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -337,7 +337,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -365,7 +365,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, height: 10, layer: start.Add(1)},
 						{id: types.BlockID{2}, hare: against, height: 20, layer: start.Add(1)},
 						{id: types.BlockID{3}, hare: against, height: 30, layer: start.Add(1)},
@@ -375,7 +375,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{4}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -383,7 +383,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -411,7 +411,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, height: 30, layer: start.Add(1)},
 						{id: types.BlockID{2}, hare: against, height: 20, layer: start.Add(1)},
 						{id: types.BlockID{3}, hare: against, height: 10, layer: start.Add(1)},
@@ -421,7 +421,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{4}, hare: support, layer: start.Add(2)},
 					},
 				},
@@ -429,7 +429,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -457,7 +457,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{4}, hare: support, layer: start.Add(1)},
 					},
 				},
@@ -465,7 +465,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, height: 20, layer: start.Add(2)},
 						{id: types.BlockID{2}, hare: against, height: localHeight + 1, layer: start.Add(2)},
 						{id: types.BlockID{3}, hare: against, height: localHeight + 1, layer: start.Add(2)},
@@ -475,7 +475,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
 					},
 				},
@@ -503,7 +503,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{4}, hare: support, layer: start.Add(1)},
 					},
 				},
@@ -511,7 +511,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{1}, hare: support, height: localHeight + 1, layer: start.Add(2)},
 					},
 				},
@@ -519,7 +519,7 @@ func TestVerifying_Verify(t *testing.T) {
 					verifying: verifyingInfo{
 						good: util.WeightFromUint64(10),
 					},
-					blocks: []*blockInfoV2{
+					blocks: []*blockInfo{
 						{id: types.BlockID{5}, hare: neutral, layer: start.Add(3)},
 					},
 				},

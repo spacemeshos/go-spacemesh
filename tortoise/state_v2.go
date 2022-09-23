@@ -19,12 +19,12 @@ type (
 		hareTerminated bool
 
 		empty  weight
-		blocks []*blockInfoV2
+		blocks []*blockInfo
 
 		verifying verifyingInfo
 	}
 
-	blockInfoV2 struct {
+	blockInfo struct {
 		id     types.BlockID
 		layer  types.LayerID
 		height uint64
@@ -62,12 +62,12 @@ type (
 		badBeaconBallots map[types.BallotID]struct{}
 
 		layers  map[types.LayerID]*layerInfo
-		ballots map[types.LayerID][]*ballotInfoV2
+		ballots map[types.LayerID][]*ballotInfo
 
 		// to efficiently find base and reference ballots
-		ballotRefs map[types.BallotID]*ballotInfoV2
+		ballotRefs map[types.BallotID]*ballotInfo
 		// to efficiently decode exceptions
-		blockRefs map[types.BlockID]*blockInfoV2
+		blockRefs map[types.BlockID]*blockInfo
 	}
 )
 
@@ -79,9 +79,9 @@ func newState() *state {
 		referenceWeight:  map[types.BallotID]util.Weight{},
 
 		layers:     map[types.LayerID]*layerInfo{},
-		ballots:    map[types.LayerID][]*ballotInfoV2{},
-		ballotRefs: map[types.BallotID]*ballotInfoV2{},
-		blockRefs:  map[types.BlockID]*blockInfoV2{},
+		ballots:    map[types.LayerID][]*ballotInfo{},
+		ballotRefs: map[types.BallotID]*ballotInfo{},
+		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
 }
 
@@ -94,12 +94,12 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	return layer
 }
 
-func (s *state) addBallot(ballot *ballotInfoV2) {
+func (s *state) addBallot(ballot *ballotInfo) {
 	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
-func (s *state) updateRefHeight(layer *layerInfo, block *blockInfoV2) {
+func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
 	}
@@ -111,14 +111,14 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfoV2) {
 
 type (
 	layerVote struct {
-		layer  *layerInfo
+		*layerInfo
 		vote   vote
 		blocks []blockVote
 	}
 
 	blockVote struct {
-		block *blockInfoV2
-		vote  vote
+		*blockInfo
+		vote vote
 	}
 
 	baseInfo struct {
@@ -126,7 +126,7 @@ type (
 		layer types.LayerID
 	}
 
-	ballotInfoV2 struct {
+	ballotInfo struct {
 		id     types.BallotID
 		base   baseInfo
 		layer  types.LayerID
@@ -140,10 +140,10 @@ type (
 	}
 )
 
-func (b *ballotInfoV2) copyVotes(evicted types.LayerID) []layerVote {
+func (b *ballotInfo) copyVotes(evicted types.LayerID) []layerVote {
 	eid := 0
 	for i := range b.votes {
-		if !evicted.Before(b.votes[i].layer.lid) {
+		if !evicted.Before(b.votes[i].lid) {
 			eid = i
 			break
 		}
@@ -153,11 +153,11 @@ func (b *ballotInfoV2) copyVotes(evicted types.LayerID) []layerVote {
 	return rst
 }
 
-func (v *ballotInfoV2) updateBlockVote(block *blockInfoV2, vote sign) {
+func (v *ballotInfo) updateBlockVote(block *blockInfo, vote sign) {
 	for i := len(v.votes) - 1; i >= 0; i-- {
-		if v.votes[i].layer.lid == block.layer {
+		if v.votes[i].lid == block.layer {
 			for j := range v.votes[i].blocks {
-				if v.votes[i].blocks[j].block.id == block.id {
+				if v.votes[i].blocks[j].id == block.id {
 					v.votes[i].blocks[j].vote = vote
 					return
 				}
@@ -166,9 +166,9 @@ func (v *ballotInfoV2) updateBlockVote(block *blockInfoV2, vote sign) {
 	}
 }
 
-func (v *ballotInfoV2) updateLayerVote(lid types.LayerID, vote sign) {
+func (v *ballotInfo) updateLayerVote(lid types.LayerID, vote sign) {
 	for i := len(v.votes) - 1; i >= 0; i-- {
-		if v.votes[i].layer.lid == lid {
+		if v.votes[i].lid == lid {
 			v.votes[i].vote = abstain
 			return
 		}

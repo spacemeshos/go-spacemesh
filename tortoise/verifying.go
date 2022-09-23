@@ -58,7 +58,7 @@ func (v *verifying) resetWeights() {
 	}
 }
 
-func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfoV2) bool {
+func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfo) bool {
 	n := 0
 	for _, ballot := range ballots {
 		base, exist := v.ballotRefs[ballot.base.id]
@@ -79,7 +79,7 @@ func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfoV2) bool {
 	return n > 0
 }
 
-func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*ballotInfoV2) {
+func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*ballotInfo) {
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
 	var (
 		sum = util.WeightFromUint64(0)
@@ -167,7 +167,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	if verifyLayer(
 		logger,
 		layer.blocks,
-		func(block *blockInfoV2) sign {
+		func(block *blockInfo) sign {
 			if block.height > layer.verifying.referenceHeight {
 				return neutral
 			}
@@ -181,7 +181,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	return false
 }
 
-func decodeExceptions(logger log.Log, config Config, state *state, base, child *ballotInfoV2, exceptions *types.Votes) {
+func decodeExceptions(logger log.Log, config Config, state *state, base, child *ballotInfo, exceptions *types.Votes) {
 	child.goodness |= base.goodness
 	if _, exist := state.badBeaconBallots[child.id]; exist {
 		child.goodness |= conditionBadBeacon
@@ -192,13 +192,13 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	for lid := base.layer; lid.Before(child.layer); lid = lid.Add(1) {
 		layer := state.layer(lid)
 		lvote := layerVote{
-			layer: layer,
-			vote:  against,
+			layerInfo: layer,
+			vote:      against,
 		}
 		for _, block := range layer.blocks {
 			lvote.blocks = append(lvote.blocks, blockVote{
-				block: block,
-				vote:  against,
+				blockInfo: block,
+				vote:      against,
 			})
 		}
 		votes = append(votes, lvote)
@@ -248,14 +248,14 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	)
 }
 
-func validateConsistency(config Config, state *state, ballot *ballotInfoV2) bool {
+func validateConsistency(config Config, state *state, ballot *ballotInfo) bool {
 	for i := len(ballot.votes) - 1; i >= 0; i-- {
 		lvote := ballot.votes[i]
-		if lvote.layer.lid.Before(ballot.base.layer) {
+		if lvote.lid.Before(ballot.base.layer) {
 			break
 		}
 		for j := range lvote.blocks {
-			local, _ := getLocalVote(state, config, lvote.blocks[j].block)
+			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
 			if vote := lvote.blocks[j].vote; vote != local {
 				ballot.goodness |= conditionNotConsistent
 				return false

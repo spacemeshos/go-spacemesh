@@ -8,7 +8,7 @@ import (
 
 // prioritizeBallots will sort ballots inplace according to internal prioritization.
 func prioritizeBallots(
-	ballots []*ballotInfoV2,
+	ballots []*ballotInfo,
 	disagreements map[types.BallotID]types.LayerID,
 	badBeaconBallots map[types.BallotID]struct{},
 ) {

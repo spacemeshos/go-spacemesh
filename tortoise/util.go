@@ -134,7 +134,7 @@ func minLayer(i, j types.LayerID) types.LayerID {
 	return j
 }
 
-func verifyLayer(logger log.Log, blocks []*blockInfoV2, getDecision func(*blockInfoV2) sign) bool {
+func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInfo) sign) bool {
 	// order blocks by height in ascending order
 	// if there is a support before any abstain
 	// and a previous height is lower than the current one
@@ -146,7 +146,7 @@ func verifyLayer(logger log.Log, blocks []*blockInfoV2, getDecision func(*blockI
 	})
 	var (
 		decisions = make([]sign, 0, len(blocks))
-		supported *blockInfoV2
+		supported *blockInfo
 	)
 	for _, block := range blocks {
 		decision := getDecision(block)
