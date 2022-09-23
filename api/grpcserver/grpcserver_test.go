@@ -1161,7 +1161,7 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.NetID(context.Background(), &pb.NetIDRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(genesisID), response.Netid.Value)
+			require.Equal(t, genesisID, response.Netid.Value)
 		}},
 		{"LayerDuration", func(t *testing.T) {
 			logtest.SetupGlobal(t)

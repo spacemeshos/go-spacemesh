@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -42,7 +43,7 @@ const (
 
 // HandshakeMessage is a handshake message.
 type HandshakeMessage struct { // nolint
-	GenesisID uint64
+	GenesisID types.Hash20
 }
 
 // HandshakeAck is a handshake ack.
@@ -51,7 +52,7 @@ type HandshakeAck struct { // nolint
 }
 
 // New instantiates handshake protocol for the host.
-func New(h host.Host, genesisID uint64, opts ...Opt) *Handshake {
+func New(h host.Host, genesisID types.Hash20, opts ...Opt) *Handshake {
 	ctx, cancel := context.WithCancel(context.Background())
 	hs := &Handshake{
 		logger:    log.NewNop(),
@@ -81,7 +82,7 @@ type Handshake struct {
 	logger log.Log
 
 	emitter   event.Emitter
-	genesisID uint64
+	genesisID types.Hash20
 	h         host.Host
 
 	cancel context.CancelFunc
@@ -164,10 +165,11 @@ func (h *Handshake) handler(stream network.Stream) {
 	if _, err := codec.DecodeFrom(stream, &msg); err != nil {
 		return
 	}
-	if msg.GenesisID != h.genesisID {
+	msgGenesisID, handshakeGenesisID := msg.GenesisID.Big().Uint64(), h.genesisID.Big().Uint64()
+	if msgGenesisID != handshakeGenesisID {
 		h.logger.Warning("network id mismatch",
-			log.Uint64("genesis-id", h.genesisID),
-			log.Uint64("peer-genesis-id", msg.GenesisID),
+			log.Uint64("genesis-id", handshakeGenesisID),
+			log.Uint64("peer-genesis-id", msgGenesisID),
 			log.String("peer-id", stream.Conn().RemotePeer().String()),
 			log.String("peer-address", stream.Conn().LocalMultiaddr().String()),
 		)

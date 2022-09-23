@@ -9,7 +9,7 @@ import (
 
 func (t *HandshakeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact64(enc, t.GenesisID)
+		n, err := scale.EncodeByteArray(enc, t.GenesisID[:])
 		if err != nil {
 			return total, err
 		}
@@ -20,12 +20,11 @@ func (t *HandshakeMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 
 func (t *HandshakeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeCompact64(dec)
+		n, err := scale.DecodeByteArray(dec, t.GenesisID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.GenesisID = field
 	}
 	return total, nil
 }

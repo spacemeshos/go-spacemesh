@@ -7,17 +7,19 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestHandshake(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(3)
 	require.NoError(t, err)
-	const netid = 1001
-	hs1 := New(mesh.Hosts()[0], netid)
+	genesisID := types.Hash20{48, 29, 252, 229, 229, 174, 157, 108, 84, 53, 111, 208, 231, 2, 102, 52, 98, 247, 61, 190}
+	hs1 := New(mesh.Hosts()[0], genesisID)
 	t.Cleanup(hs1.Stop)
-	hs2 := New(mesh.Hosts()[1], netid)
+	hs2 := New(mesh.Hosts()[1], genesisID)
 	t.Cleanup(hs2.Stop)
-	hs3 := New(mesh.Hosts()[2], netid+1)
+	hs3 := New(mesh.Hosts()[2], types.Hash20{})
 	t.Cleanup(hs3.Stop)
 
 	require.NoError(t, hs1.Request(context.TODO(), hs2.h.ID()))

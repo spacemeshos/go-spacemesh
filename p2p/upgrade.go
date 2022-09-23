@@ -6,6 +6,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
@@ -122,7 +123,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}, fh, fh.discovery); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
-	fh.hs = handshake.New(fh, 123, handshake.WithLog(fh.logger)) // TODO
+	fh.hs = handshake.New(fh, types.Hash20{}, handshake.WithLog(fh.logger)) // TODO
 	return fh, nil
 }
 
