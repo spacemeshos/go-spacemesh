@@ -803,7 +803,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
