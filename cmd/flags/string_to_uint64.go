@@ -9,8 +9,7 @@ import (
 
 // StringToUint64Value is a flag type for string to uint64 values.
 type StringToUint64Value struct {
-	value   map[string]uint64
-	changed bool
+	value map[string]uint64
 }
 
 // NewStringToUint64Value creates instance.

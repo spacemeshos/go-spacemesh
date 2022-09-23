@@ -33,10 +33,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-const (
-	testGasLimit = 100_000_000
-)
-
 func testContext(lid types.LayerID) ApplyContext {
 	return ApplyContext{
 		Layer: lid,
@@ -1598,9 +1594,6 @@ func TestVestingWithVault(t *testing.T) {
 		total   = 11_000
 		start   = 2
 		end     = 4
-
-		balance         = 1_000_000_000
-		defaultGasPrice = 1
 
 		vestingAccounts = 20 // number of funded vesting accounts
 		vaultAccounts   = 10 // number of funded vault accounts

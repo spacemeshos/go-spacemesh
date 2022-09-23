@@ -80,16 +80,6 @@ func (s *server) start(args []string) error {
 	return nil
 }
 
-// shutdown terminates the running node server process, and cleans up
-// all files/directories created by it.
-func (s *server) shutdown() error {
-	if err := s.stop(); err != nil {
-		return fmt.Errorf("stop: %w", err)
-	}
-
-	return nil
-}
-
 // stop kills the server running process, since it doesn't support
 // RPC-driven stop functionality.
 func (s *server) stop() error {

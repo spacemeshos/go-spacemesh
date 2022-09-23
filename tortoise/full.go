@@ -40,14 +40,6 @@ type full struct {
 	delayedQueue *list.List
 }
 
-func (f *full) processBallots(ballots []tortoiseBallot) {
-	for _, ballot := range ballots {
-		f.base[ballot.id] = ballot.base
-		f.votes[ballot.id] = ballot.votes
-		f.abstain[ballot.id] = ballot.abstain
-	}
-}
-
 func (f *full) onBallot(ballot *tortoiseBallot) {
 	f.base[ballot.id] = ballot.base
 	f.votes[ballot.id] = ballot.votes
