@@ -363,7 +363,6 @@ func (t *turtle) encodeVotes(
 			case support:
 				votes.Support = append(votes.Support, block.id)
 			case against:
-				votes.Against = append(votes.Against, block.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
 					block.id, lid,
