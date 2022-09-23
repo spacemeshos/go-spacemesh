@@ -9,7 +9,7 @@ import (
 type condition uint8
 
 func (g condition) notConsistent() bool {
-	return g&conditionNotConsistent > 0
+	return g == conditionNotConsistent
 }
 
 func (g condition) abstained() bool {
@@ -61,13 +61,14 @@ func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfoV2) bool {
 		if !exist {
 			continue
 		}
-		if ballot.goodness.isCounted() {
+		if ballot.goodness.notConsistent() {
 			logger.With().Debug("marking ballots that can be good as good",
 				log.Stringer("ballot_layer", ballot.layer),
 				log.Stringer("ballot", ballot.id),
 				log.Stringer("base_ballot", ballot.base.id),
 			)
 			base.goodness = 0
+			ballot.goodness = 0
 			n++
 		}
 	}
@@ -85,12 +86,14 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 		if !exist {
 			continue
 		}
-		ballot.goodness &= ^conditionNotConsistent
-		if !(base.goodness.isGood() && ballot.goodness.isCounted()) {
+		if !base.goodness.isGood() {
 			continue
 		}
-		if !validateConsistency(v.Config, v.state, ballot) {
-			continue
+		if !ballot.goodness.isCounted() {
+			ballot.goodness &= ^conditionNotConsistent
+			if !validateConsistency(v.Config, v.state, ballot) {
+				continue
+			}
 		}
 		if ballot.weight.IsNil() {
 			logger.With().Debug("ballot weight is nil", ballot.id)

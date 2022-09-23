@@ -21,17 +21,17 @@ func TestPrioritizeBlocks(t *testing.T) {
 		input            []*ballotInfoV2
 		disagrements     map[types.BallotID]types.LayerID
 		badBeaconBallots map[types.BallotID]struct{}
-		expect           []*ballotInfoV2
+		expect           []types.BallotID
 	}{
 		{
 			desc:   "SortLexically",
 			input:  ballots,
-			expect: ballots,
+			expect: []types.BallotID{ballots[0].id, ballots[1].id, ballots[2].id, ballots[3].id},
 		},
 		{
 			desc:   "PrioritizeWithHigherDisagreementLayer",
 			input:  ballots,
-			expect: append([]*ballotInfoV2{ballots[3], ballots[2]}, ballots[:2]...),
+			expect: []types.BallotID{ballots[3].id, ballots[2].id, ballots[0].id, ballots[1].id},
 			disagrements: map[types.BallotID]types.LayerID{
 				ballots[2].id: types.NewLayerID(9),
 				ballots[3].id: types.NewLayerID(10),
@@ -39,22 +39,22 @@ func TestPrioritizeBlocks(t *testing.T) {
 		},
 		{
 			desc:   "PrioritizeByHigherLayer",
-			expect: append([]*ballotInfoV2{ballots[2], ballots[1]}, ballots[0], ballots[3]),
+			expect: []types.BallotID{ballots[2].id, ballots[3].id, ballots[1].id, ballots[0].id},
 			disagrements: map[types.BallotID]types.LayerID{
 				ballots[2].id: types.NewLayerID(9),
 				ballots[3].id: types.NewLayerID(9),
 			},
 			input: []*ballotInfoV2{
-				{id: types.BallotID{1}},
-				{id: types.BallotID{2}, layer: types.NewLayerID(9)},
-				{id: types.BallotID{3}, layer: types.NewLayerID(10)},
-				{id: types.BallotID{4}},
+				{id: ballots[0].id},
+				{id: ballots[1].id, layer: types.NewLayerID(9)},
+				{id: ballots[2].id, layer: types.NewLayerID(10)},
+				{id: ballots[3].id},
 			},
 		},
 		{
 			desc:   "PrioritizeBallotsWithGoodBeacon",
 			input:  ballots,
-			expect: []*ballotInfoV2{ballots[1], ballots[2], ballots[3], ballots[0]},
+			expect: []types.BallotID{ballots[1].id, ballots[2].id, ballots[3].id, ballots[0].id},
 			disagrements: map[types.BallotID]types.LayerID{
 				ballots[0].id: types.NewLayerID(8),
 				ballots[1].id: types.NewLayerID(9),
@@ -78,7 +78,9 @@ func TestPrioritizeBlocks(t *testing.T) {
 			})
 
 			prioritizeBallots(rst, tc.disagrements, tc.badBeaconBallots)
-			require.Equal(t, tc.expect, rst)
+			for i := range tc.expect {
+				require.Equal(t, tc.expect[i], rst[i].id)
+			}
 		})
 	}
 }

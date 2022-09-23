@@ -121,12 +121,9 @@ func TestRerunDistanceVoteCounting(t *testing.T) {
 func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWindow int, expectedValidity bool) {
 	genesis := types.GetEffectiveGenesis()
 	ctx := context.Background()
-	const size = 4
+	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
-	s.Setup(
-		sim.WithSetupMinerRange(size, size),
-		sim.WithSetupUnitsRange(2, 2),
-	)
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
