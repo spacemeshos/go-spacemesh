@@ -24,6 +24,10 @@ func (g condition) isGood() bool {
 	return g == 0
 }
 
+func (g condition) ignored() bool {
+	return g&conditionBadBeacon > 0 || g&conditionVotesBeforeBase > 0
+}
+
 const (
 	conditionBadBeacon condition = 1 << iota
 	conditionVotesBeforeBase
@@ -89,8 +93,11 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 		if !base.goodness.isGood() {
 			continue
 		}
-		if !ballot.goodness.isCounted() {
-			ballot.goodness &= ^conditionNotConsistent
+		if ballot.goodness.ignored() {
+			continue
+		}
+		if ballot.goodness.notConsistent() {
+			ballot.goodness &^= conditionNotConsistent
 			if !validateConsistency(v.Config, v.state, ballot) {
 				continue
 			}
@@ -236,7 +243,8 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 		log.Stringer("base", child.base.id),
 		log.Uint32("base layer", child.base.layer.Value),
 		log.Bool("base good", base.goodness.isGood()),
-		log.Bool("counted", child.goodness.isCounted()),
+		log.Bool("ignored", child.goodness.ignored()),
+		log.Bool("consistent", !child.goodness.notConsistent()),
 	)
 }
 
@@ -244,7 +252,7 @@ func validateConsistency(config Config, state *state, ballot *ballotInfoV2) bool
 	for i := len(ballot.votes) - 1; i >= 0; i-- {
 		lvote := ballot.votes[i]
 		if lvote.layer.lid.Before(ballot.base.layer) {
-			return true
+			break
 		}
 		for j := range lvote.blocks {
 			local, _ := getLocalVote(state, config, lvote.blocks[j].block)
