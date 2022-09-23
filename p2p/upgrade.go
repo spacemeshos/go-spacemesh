@@ -122,7 +122,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}, fh, fh.discovery); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
-	fh.hs = handshake.New(fh, cfg.NetworkID, handshake.WithLog(fh.logger))
+	fh.hs = handshake.New(fh, 123, handshake.WithLog(fh.logger)) // TODO
 	return fh, nil
 }
 

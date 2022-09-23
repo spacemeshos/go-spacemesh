@@ -426,9 +426,9 @@ func PoetEndpoint(endpoint string) DeploymentFlag {
 }
 
 // NetworkID flag.
-func NetworkID(id uint32) DeploymentFlag {
-	return DeploymentFlag{Name: "--network-id", Value: strconv.Itoa(int(id))}
-}
+// func NetworkID(id uint32) DeploymentFlag {
+// 	return DeploymentFlag{Name: "--network-id", Value: strconv.Itoa(int(id))}
+// }
 
 // TargetOutbound flag.
 func TargetOutbound(target int) DeploymentFlag {

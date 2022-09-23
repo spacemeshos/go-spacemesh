@@ -49,7 +49,6 @@ type Config struct {
 	DisableNatPort bool     `mapstructure:"disable-natport"`
 	Flood          bool     `mapstructure:"flood"`
 	Listen         string   `mapstructure:"listen"`
-	NetworkID      uint32   `mapstructure:"network-id"`
 	Bootnodes      []string `mapstructure:"bootnodes"`
 	TargetOutbound int      `mapstructure:"target-outbound"`
 	LowPeers       int      `mapstructure:"low-peers"`

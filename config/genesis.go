@@ -85,3 +85,7 @@ func CalcGenesisID(genesisExtraData, genesisTime string) types.Hash20 {
 	digest := hasher.Sum([]byte{})
 	return types.BytesToHash(digest).ToHash20()
 }
+
+func (gc *GenesisConfig) GenesisID() uint64 {
+	return CalcGenesisID(gc.ExtraData, gc.GenesisTime).Big().Uint64()
+}
