@@ -28,10 +28,8 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
 		atx, err = v.Verify(baseTickHeight, tickCount)
-		if err != nil {
-			return false
-		}
-		return true
+
+		return err == nil
 	}
 
 	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher from atxs where id = ?1;", enc, dec); err != nil {

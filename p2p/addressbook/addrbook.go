@@ -10,7 +10,6 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -41,7 +40,6 @@ func (cr *concurrentRand) Intn(n int) int {
 // AddrBook provides a concurrency safe address manager for caching potential
 // peers on the network. based on bitcoin's AddrBook.
 type AddrBook struct {
-	host   host.Host
 	cfg    *Config
 	logger log.Log
 	path   string

@@ -62,12 +62,6 @@ func withConf(conf config) GenOpt {
 	}
 }
 
-func withLayers(layers []*types.Layer) GenOpt {
-	return func(g *Generator) {
-		g.layers = layers
-	}
-}
-
 type config struct {
 	Path           string
 	LayerSize      uint32

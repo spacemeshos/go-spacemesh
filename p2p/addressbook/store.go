@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 
@@ -120,7 +120,7 @@ func (a *AddrBook) decodeFrom(path string) error {
 	}
 	defer r.Close()
 
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return errors.Wrap(err, "error reading file")
 	}

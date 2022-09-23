@@ -73,6 +73,8 @@ jobs:
           make
           make tidy
           make test-fmt
+      - name: staticcheck
+        run: make staticcheck
 
   golangci-lint:
     runs-on: ubuntu-latest
