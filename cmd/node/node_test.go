@@ -571,7 +571,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := p2p.Upgrade(mesh.Hosts()[0])
+	h, err := p2p.Upgrade(mesh.Hosts()[0], config.CalcGenesisID(cfg.Genesis.ExtraData, cfg.Genesis.GenesisTime))
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),

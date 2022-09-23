@@ -1083,7 +1083,7 @@ func (app *App) Start() error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg,
+	app.host, err = p2p.New(ctx, p2plog, cfg, config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {

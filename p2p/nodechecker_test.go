@@ -19,6 +19,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
@@ -326,7 +327,8 @@ func generateNode(t *testing.T, bootNode string) *hostWrapper {
 		book.Persist(ctx)
 		cnf.Bootnodes = append(cnf.Bootnodes, bootNode)
 	}
-	h, err := Upgrade(node, WithConfig(cnf))
+	genesisID := types.Hash20{48, 29, 252, 229, 229, 174, 157, 108, 84, 53, 111, 208, 231, 2, 102, 52, 98, 247, 61, 190}
+	h, err := Upgrade(node, genesisID, WithConfig(cnf))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

@@ -47,6 +47,14 @@ func WithNodeReporter(reporter func()) Opt {
 	}
 }
 
+// WithNodeReporter updates reporter that is notified every time when
+// node added or removed a peer.
+func WithGenesisID(reporter func()) Opt {
+	return func(fh *Host) {
+		fh.nodeReporter = reporter
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -79,7 +87,7 @@ func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 }
 
 // Upgrade creates Host instance from host.Host.
-func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
+func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:    context.Background(),
 		cfg:    DefaultConfig(),
@@ -123,7 +131,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}, fh, fh.discovery); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
-	fh.hs = handshake.New(fh, types.Hash20{}, handshake.WithLog(fh.logger)) // TODO
+	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger)) // TODO
 	return fh, nil
 }
 
