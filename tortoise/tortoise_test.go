@@ -2034,8 +2034,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		genesis        = types.GetEffectiveGenesis()
 	)
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(1, sim.WithEmptyHareOutput()),
-		sim.WithSequence(2),
+		sim.WithSequence(3, sim.WithNumBlocks(1)),
 	) {
 		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -2055,8 +2054,10 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		}
 	}
 
-	// remove good ballots and genesis to make tortoise select one of the later blocks.
-	delete(tortoise.trtl.ballots, genesis)
+	// remove good ballots and genesis to make tortoise select one of the later ballots.
+	for _, ballot := range tortoise.trtl.ballotRefs {
+		ballot.goodness = conditionBadBeacon
+	}
 
 	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)

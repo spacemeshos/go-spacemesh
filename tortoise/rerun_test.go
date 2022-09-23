@@ -121,9 +121,12 @@ func TestRerunDistanceVoteCounting(t *testing.T) {
 func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWindow int, expectedValidity bool) {
 	genesis := types.GetEffectiveGenesis()
 	ctx := context.Background()
-	const size = 10
+	const size = 4
 	s := sim.New(sim.WithLayerSize(size))
-	s.Setup(sim.WithSetupUnitsRange(2, 2))
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+		sim.WithSetupUnitsRange(2, 2),
+	)
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
@@ -138,13 +141,13 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	misverified := genesis.Add(firstBatch)
 
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput()),
+		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 		// in this layer voting is malicious. it doesn't support previous layer so there will be no valid blocks in it
-		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput()),
-		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput()),
+		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 		// in this layer we skip previously malicious voting.
-		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput()),
-		sim.WithSequence(10, sim.WithEmptyHareOutput()),
+		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
 		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -162,7 +165,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err)
-		require.Equal(tb, expectedValidity, validity, "validity for block %s", blk)
+		require.Equal(tb, expectedValidity, validity, "validity for block %s layer %s", blk, misverified)
 	}
 }
 

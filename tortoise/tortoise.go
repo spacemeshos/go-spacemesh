@@ -264,8 +264,8 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 	// using it as a mark that the votes for block are completely consistent
 	// with a local opinion. so if two blocks have consistent histories select block
 	// from a higher layer as it is more consistent.
-	consistent := last
-	if basedis, exists := disagreements[ballot.base.id]; exists && basedis != consistent {
+	consistent := ballot.layer
+	if basedis, exists := disagreements[ballot.base.id]; exists && basedis != ballot.base.layer {
 		return basedis, nil
 	}
 
@@ -311,7 +311,7 @@ func (t *turtle) encodeVotes(
 ) (*types.Votes, error) {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Stringer("base layer", base.layer),
-		log.Stringer("last layer", last),
+		log.Stringer("voting layer", last),
 	)
 	votes := &types.Votes{
 		Base: base.id,
@@ -337,8 +337,10 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
+				logger.With().Debug("support before base ballot", block.id, block.layer)
 				votes.Support = append(votes.Support, block.id)
 			case against:
+				logger.With().Debug("explicit against before base ballot", block.id, block.layer)
 				votes.Against = append(votes.Against, block.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
@@ -351,6 +353,7 @@ func (t *turtle) encodeVotes(
 	for lid := base.layer; lid.Before(last); lid = lid.Add(1) {
 		layer := t.layer(lid)
 		if !layer.hareTerminated && withinDistance(t.Zdist, lid, last) {
+			logger.With().Debug("voting abstain on the layer", lid)
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
 		}
@@ -361,8 +364,10 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
+				logger.With().Debug("support after base ballot", block.id, block.layer)
 				votes.Support = append(votes.Support, block.id)
 			case against:
+				logger.With().Debug("implicit against after base ballot", block.id, block.layer)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
 					block.id, lid,

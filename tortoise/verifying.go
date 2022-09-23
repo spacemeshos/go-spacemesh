@@ -24,13 +24,8 @@ func (g condition) isGood() bool {
 	return g == 0
 }
 
-func (g condition) canBeGood() bool {
-	return g.isGood() || g == conditionNotGoodBase
-}
-
 const (
-	conditionNotGoodBase condition = 1 << iota
-	conditionBadBeacon
+	conditionBadBeacon condition = 1 << iota
 	conditionVotesBeforeBase
 	conditionAbstained
 	conditionNotConsistent
@@ -66,14 +61,13 @@ func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfoV2) bool {
 		if !exist {
 			continue
 		}
-		if base.goodness.canBeGood() && ballot.goodness.canBeGood() {
+		if ballot.goodness.isCounted() {
 			logger.With().Debug("marking ballots that can be good as good",
 				log.Stringer("ballot_layer", ballot.layer),
 				log.Stringer("ballot", ballot.id),
 				log.Stringer("base_ballot", ballot.base.id),
 			)
 			base.goodness = 0
-			ballot.goodness = 0
 			n++
 		}
 	}
@@ -178,6 +172,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 }
 
 func decodeExceptions(logger log.Log, config Config, state *state, base, child *ballotInfoV2, exceptions *types.Votes) {
+	child.goodness |= base.goodness
 	if _, exist := state.badBeaconBallots[child.id]; exist {
 		child.goodness |= conditionBadBeacon
 	}
@@ -231,14 +226,14 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 		layer := state.layer(lid)
 		layer.verifying.abstained = layer.verifying.abstained.Add(child.weight)
 	}
+	validateConsistency(config, state, child)
 	logger.With().Debug("decoded votes for ballot",
 		child.id,
 		child.layer,
 		log.Stringer("base", child.base.id),
 		log.Uint32("base layer", child.base.layer.Value),
-		log.Bool("good", child.goodness.isGood()),
-		log.Bool("abstained", child.goodness.abstained()),
-		log.Int("goodness", int(child.goodness)),
+		log.Bool("base good", base.goodness.isGood()),
+		log.Bool("counted", child.goodness.isCounted()),
 	)
 }
 

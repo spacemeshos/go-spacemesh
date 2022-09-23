@@ -64,12 +64,12 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					{
 						id:       ballots[0],
 						weight:   ballotWeight,
-						goodness: conditionNotGoodBase,
+						goodness: conditionBadBeacon,
 					},
 					{
 						id:       ballots[1],
 						weight:   ballotWeight,
-						goodness: conditionNotGoodBase,
+						goodness: conditionBadBeacon,
 					},
 				},
 				{
@@ -105,7 +105,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					{
 						id:       ballots[2],
 						weight:   ballotWeight,
-						goodness: conditionNotGoodBase,
+						goodness: conditionBadBeacon,
 					},
 				},
 			},
