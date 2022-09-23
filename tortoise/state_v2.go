@@ -88,7 +88,7 @@ func newState() *state {
 func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
-		layer = &layerInfo{lid: lid}
+		layer = &layerInfo{lid: lid, empty: util.WeightFromUint64(0)}
 		s.layers[lid] = layer
 	}
 	return layer

@@ -78,10 +78,26 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 		binfo := ballotInfoV2{
 			id:       ballot.ID(),
 			layer:    ballot.LayerIndex,
+			weight:   util.WeightFromUint64(0),
 			goodness: good,
 		}
 		t.ballots[genesis] = append(t.ballots[genesis], binfo)
 		t.ballotRefs[ballot.ID()] = &binfo
+	}
+	t.layers[genesis] = &layerInfo{
+		lid:            genesis,
+		empty:          util.WeightFromUint64(0),
+		hareTerminated: true,
+	}
+	for _, block := range genesisLayer.Blocks() {
+		blinfo := &blockInfoV2{
+			id:       block.ID(),
+			layer:    genesis,
+			hare:     support,
+			validity: support,
+		}
+		t.layers[genesis].blocks = append(t.layers[genesis].blocks, blinfo)
+		t.blockRefs[blinfo.id] = blinfo
 	}
 	t.last = genesis
 	t.processed = genesis
@@ -639,6 +655,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 		id:     block.ID(),
 		layer:  block.LayerIndex,
 		height: block.TickHeight,
+		margin: util.WeightFromUint64(0),
 	}
 	layer := t.state.layer(block.LayerIndex)
 	layer.blocks = append(layer.blocks, blockv2)
@@ -662,6 +679,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		previous types.BlockID
 		exists   bool
 	)
+	layer.hareTerminated = true
 	for i := range layer.blocks {
 		block := layer.blocks[i]
 		if block.hare == support {

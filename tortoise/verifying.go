@@ -166,11 +166,11 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 
 func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots []ballotInfoV2) (util.Weight, int) {
 	var (
-		sum weight
+		sum = util.WeightFromUint64(0)
 		n   int
 	)
 	for _, ballot := range ballots {
-		if ballot.goodness == bad {
+		if ballot.goodness != good && ballot.goodness != abstained {
 			continue
 		}
 		if ballot.weight.IsNil() {
@@ -217,18 +217,25 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 		}
 		votes = append(votes, lvote)
 	}
-
 	// update exceptions
 	child.votes = votes
 	for _, bid := range exceptions.Support {
-		block := state.blockRefs[bid]
+		block, exist := state.blockRefs[bid]
+		if !exist {
+			child.goodness = bad
+			continue
+		}
 		if block.layer.Before(base.layer) {
 			child.goodness = bad
 		}
 		child.updateBlockVote(block, support)
 	}
 	for _, bid := range exceptions.Against {
-		block := state.blockRefs[bid]
+		block, exist := state.blockRefs[bid]
+		if !exist {
+			child.goodness = bad
+			continue
+		}
 		if block.layer.Before(base.layer) {
 			child.goodness = bad
 		}
@@ -244,7 +251,7 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	if base.goodness != good && child.goodness == abstained {
 		child.goodness = bad
 	}
-	if child.goodness != good {
+	if child.goodness == bad {
 		return
 	}
 	// TODO extract this code as it needs to be re-executed when opinion changes
@@ -252,13 +259,27 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	for i := range ovotes {
 		for j := range ovotes[i].blocks {
 			local, _ := getLocalVote(state, config, ovotes[i].blocks[j].block)
-			if ovotes[i].blocks[j].vote != local {
+			if vote := ovotes[i].blocks[j].vote; vote != local {
 				child.goodness = bad
+				logger.With().Debug("not consistent with local opinion",
+					child.id,
+					child.layer,
+					ovotes[i].blocks[j].block.id,
+					log.Stringer("vote", vote),
+					log.Stringer("local", local),
+				)
 				return
 			}
 		}
 	}
-	if base.goodness != good {
+	if base.goodness != good && child.goodness == good {
 		child.goodness = canBeGood
 	}
+	logger.With().Debug("decoded votes for ballot",
+		child.id,
+		child.layer,
+		log.Stringer("base", child.base.id),
+		log.Uint32("base layer", child.base.layer.Value),
+		log.Stringer("goodness", child.goodness),
+	)
 }

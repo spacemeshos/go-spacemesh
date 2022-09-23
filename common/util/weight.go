@@ -36,6 +36,9 @@ func (w Weight) Add(other Weight) Weight {
 	if w.Rat == nil {
 		w.Rat = new(big.Rat)
 	}
+	if other.Rat == nil {
+		return w
+	}
 	w.Rat.Add(w.Rat, other.Rat)
 	return w
 }
