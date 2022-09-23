@@ -96,9 +96,9 @@ func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byt
 		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", lid, lid.GetEpoch(), log.Err(err))
 		return nil, errInternal
 	}
-	lo.AggregatedHash, err = layers.GetAggregatedHash(h.cdb, lid)
+	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("failed to get aggregated layer hash", lid, log.Err(err))
+		h.logger.WithContext(ctx).With().Warning("failed to get prev agg hash", lid, log.Err(err))
 		return nil, errInternal
 	}
 	lo.Verified = h.msh.LastVerified()

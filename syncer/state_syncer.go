@@ -17,8 +17,11 @@ import (
 
 var (
 	errNoOpinionsAvailable = errors.New("no layer opinions available from peers")
-	errNoOpinionsAdopted   = errors.New("no opinions are adopted from peers")
-	errCertificateMissing  = errors.New("certificates missing from all peers")
+	errNoBetterOpinions    = errors.New("no better opinions from peer")
+	errNoCertAdopted       = errors.New("no certificate adopted from peers")
+	errNoValidityAdopted   = errors.New("no validity adopted from peers")
+	errMissingCertificate  = errors.New("certificate missing from all peers")
+	errMissingValidity     = errors.New("validity missing from all peers")
 )
 
 func minLayer(a, b types.LayerID) types.LayerID {
@@ -160,8 +163,6 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 		return nil
 	}
 
-	sortOpinions(opinions)
-
 	needCert, err := s.needCert(logger, lid)
 	if err != nil {
 		return err
@@ -175,25 +176,33 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 		return nil
 	}
 
-	numCert := 0
+	var prevHash types.Hash32
+	if needValidity {
+		prevHash, err = layers.GetAggregatedHash(s.db, lid.Sub(1))
+		if err != nil {
+			logger.With().Error("failed to get prev agg hash", log.Err(err))
+			return fmt.Errorf("opinions prev hash: %w", err)
+		}
+	}
+
+	sortOpinions(opinions)
+	var noBetter, noCert, noValidity int
 	for _, opn := range opinions {
 		if !opn.Verified.After(latestVerified) {
+			noBetter++
 			logger.With().Debug("node has same/higher verified layer than peers",
 				log.Stringer("verified", latestVerified),
 				log.Stringer("peers_verified", opn.Verified))
 			continue
 		}
 
-		if opn.Cert != nil {
-			numCert++
-		}
-
 		// TODO: detect multiple hare certificate in the same network
 		// https://github.com/spacemeshos/go-spacemesh/issues/3467
 		if needCert {
 			if opn.Cert == nil {
+				noCert++
 				logger.With().Debug("peer has no cert", log.Inline(opn))
-			} else if err := s.adoptCert(ctx, lid, opn); err != nil {
+			} else if err = s.adoptCert(ctx, lid, opn.Cert); err != nil {
 				logger.With().Warning("failed to adopt cert", log.Inline(opn), log.Err(err))
 			} else {
 				logger.With().Info("adopted cert from peer", log.Inline(opn))
@@ -202,11 +211,18 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 		}
 		if needValidity {
 			if len(opn.Valid) == 0 && len(opn.Invalid) == 0 {
-				logger.With().Debug("peer has no block validity", log.Inline(opn))
-			} else if err := s.adoptValidity(ctx, opn); err != nil {
-				logger.With().Warning("failed to adopt block validity", log.Inline(opn), log.Err(err))
+				noValidity++
+				logger.With().Debug("peer has no validity", log.Inline(opn))
+			} else if opn.PrevAggHash != prevHash {
+				logger.With().Warning("peer has different prev hash",
+					log.Inline(opn),
+					log.Stringer("node_hash", prevHash))
+			} else if err = s.adoptValidity(ctx, opn.Valid, opn.Invalid); err != nil {
+				logger.With().Warning("failed to adopt validity", log.Inline(opn), log.Err(err))
 			} else {
-				logger.With().Info("adopted validity from peer", log.Inline(opn))
+				logger.With().Info("adopted validity from peer",
+					log.Inline(opn),
+					log.Stringer("node_hash", prevHash))
 				needValidity = false
 			}
 		}
@@ -214,10 +230,20 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 			return nil
 		}
 	}
-	if needCert && numCert == 0 {
-		return errCertificateMissing
+	numPeers := len(opinions)
+	if noBetter == numPeers {
+		return errNoBetterOpinions
 	}
-	return errNoOpinionsAdopted
+	if needCert {
+		if noCert == numPeers {
+			return errMissingCertificate
+		}
+		return errNoCertAdopted
+	}
+	if noValidity == numPeers {
+		return errMissingValidity
+	}
+	return errNoValidityAdopted
 }
 
 func (s *Syncer) certCutoffLayer() types.LayerID {
@@ -233,27 +259,27 @@ func (s *Syncer) certCutoffLayer() types.LayerID {
 	return cutoff
 }
 
-func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, opinion *fetch.LayerOpinion) error {
-	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, opinion.Cert); err != nil {
-		return fmt.Errorf("state sync adopt cert: %w", err)
+func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
+	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, cert); err != nil {
+		return fmt.Errorf("opnions adopt cert: %w", err)
 	}
 	return nil
 }
 
-func (s *Syncer) adoptValidity(ctx context.Context, opinion *fetch.LayerOpinion) error {
-	all := opinion.Valid
-	all = append(all, opinion.Invalid...)
+func (s *Syncer) adoptValidity(ctx context.Context, valid, invalid []types.BlockID) error {
+	all := valid
+	all = append(all, invalid...)
 	if len(all) > 0 {
 		if err := s.fetcher.GetBlocks(ctx, all); err != nil {
 			return fmt.Errorf("opinions get blocks: %w", err)
 		}
 	}
-	for _, bid := range opinion.Valid {
+	for _, bid := range valid {
 		if err := blocks.SetValid(s.db, bid); err != nil {
 			return fmt.Errorf("opinions set valid: %w", err)
 		}
 	}
-	for _, bid := range opinion.Invalid {
+	for _, bid := range invalid {
 		if err := blocks.SetInvalid(s.db, bid); err != nil {
 			return fmt.Errorf("opinions set invalid: %w", err)
 		}

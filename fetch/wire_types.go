@@ -17,7 +17,7 @@ type LayerData struct {
 // LayerOpinion is the response for opinion for a given layer.
 type LayerOpinion struct {
 	EpochWeight    uint64
-	AggregatedHash types.Hash32
+	PrevAggHash    types.Hash32
 	Verified       types.LayerID
 	Valid, Invalid []types.BlockID
 	Cert           *types.Certificate
@@ -40,6 +40,7 @@ func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("peer", lo.peer.String())
 	encoder.AddUint64("epoch_weight", lo.EpochWeight)
 	encoder.AddUint32("verified", lo.Verified.Uint32())
+	encoder.AddString("prev_hash", lo.PrevAggHash.String())
 	if lo.Cert != nil {
 		encoder.AddString("cert_block_id", lo.Cert.BlockID.String())
 	}

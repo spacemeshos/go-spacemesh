@@ -55,7 +55,7 @@ func (t *LayerOpinion) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.AggregatedHash[:])
+		n, err := scale.EncodeByteArray(enc, t.PrevAggHash[:])
 		if err != nil {
 			return total, err
 		}
@@ -102,7 +102,7 @@ func (t *LayerOpinion) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.EpochWeight = uint64(field)
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.AggregatedHash[:])
+		n, err := scale.DecodeByteArray(dec, t.PrevAggHash[:])
 		if err != nil {
 			return total, err
 		}

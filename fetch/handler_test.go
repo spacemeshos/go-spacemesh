@@ -146,7 +146,7 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), got.EpochWeight)
-			require.Equal(t, aggHash, got.AggregatedHash)
+			require.Equal(t, aggHash, got.PrevAggHash)
 			require.Equal(t, tc.verified, got.Verified)
 			if tc.missingCert {
 				require.Nil(t, got.Cert)
