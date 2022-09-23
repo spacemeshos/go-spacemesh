@@ -68,7 +68,6 @@ jobs:
           key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             cache-go-${{ env.go-version }}-
-            cache-
       - name: fmt, tidy, lint
         run: |
           make
@@ -96,7 +95,6 @@ jobs:
           key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             cache-go-${{ env.go-version }}-
-            cache-
       - name: setup env
         run: make
       - name: golangci-lint
@@ -128,7 +126,6 @@ jobs:
           restore-keys: |
             cache-go-${{ env.go-version }}-unittests-
             cache-go-${{ env.go-version }}-
-            cache-
       - name: setup env
         run: make
       - name: Clear test cache
