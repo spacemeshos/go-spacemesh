@@ -68,7 +68,7 @@ func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, gen
 		}
 	}
 	aggHash := types.RandomHash()
-	require.NoError(t, layers.SetHashes(db, lid, types.RandomHash(), aggHash))
+	require.NoError(t, layers.SetHashes(db, lid.Sub(1), types.RandomHash(), aggHash))
 	return blks, aggHash
 }
 
