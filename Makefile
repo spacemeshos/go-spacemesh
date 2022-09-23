@@ -122,6 +122,10 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
+# Clear tests cache
+clear-test-cache:
+	go clean -testcache
+
 test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 
 test: get-libs
