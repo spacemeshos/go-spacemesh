@@ -828,8 +828,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	// test load in correct epoch
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	b.commitmentAtx = &goldenATXID
-	err = b.loadChallenge()
-	assert.NoError(t, err)
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	challenge = newChallenge(2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10))
