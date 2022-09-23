@@ -450,13 +450,6 @@ func (*SmeshingAPIMock) Coinbase() types.Address {
 func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
 }
 
-func (*SmeshingAPIMock) MinGas() uint64 {
-	return 0
-}
-
-func (*SmeshingAPIMock) SetMinGas(value uint64) {
-}
-
 type GenesisTimeMock struct {
 	t time.Time
 }

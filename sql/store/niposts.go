@@ -8,8 +8,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-const NIPostChallengeKey = "NIPost"
-const NIPostBuilderStateKey = "NIPostBuilderState"
+const (
+	NIPostChallengeKey    = "NIPost"
+	NIPostBuilderStateKey = "NIPostBuilderState"
+)
 
 // AddNIPostChallenge adds the data for nipost to the key-value store.
 func AddNIPostChallenge(db sql.Executor, ch *types.NIPostChallenge) error {
