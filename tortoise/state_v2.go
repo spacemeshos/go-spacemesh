@@ -62,7 +62,7 @@ type (
 		badBeaconBallots map[types.BallotID]struct{}
 
 		layers  map[types.LayerID]*layerInfo
-		ballots map[types.LayerID][]ballotInfoV2
+		ballots map[types.LayerID][]*ballotInfoV2
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfoV2
@@ -79,7 +79,7 @@ func newState() *state {
 		referenceWeight:  map[types.BallotID]util.Weight{},
 
 		layers:     map[types.LayerID]*layerInfo{},
-		ballots:    map[types.LayerID][]ballotInfoV2{},
+		ballots:    map[types.LayerID][]*ballotInfoV2{},
 		ballotRefs: map[types.BallotID]*ballotInfoV2{},
 		blockRefs:  map[types.BlockID]*blockInfoV2{},
 	}
@@ -94,9 +94,19 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	return layer
 }
 
-func (s *state) addBallot(ballot ballotInfoV2) {
+func (s *state) addBallot(ballot *ballotInfoV2) {
 	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
-	s.ballotRefs[ballot.id] = &ballot
+	s.ballotRefs[ballot.id] = ballot
+}
+
+func (s *state) updateRefHeight(layer *layerInfo, block *blockInfoV2) {
+	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
+		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
+	}
+	if block.height <= s.referenceHeight[block.layer.GetEpoch()] &&
+		block.height > layer.verifying.referenceHeight {
+		layer.verifying.referenceHeight = block.height
+	}
 }
 
 type (
@@ -112,9 +122,8 @@ type (
 	}
 
 	baseInfo struct {
-		id       types.BallotID
-		layer    types.LayerID
-		goodness goodness
+		id    types.BallotID
+		layer types.LayerID
 	}
 
 	ballotInfoV2 struct {
@@ -127,7 +136,7 @@ type (
 
 		votes []layerVote
 
-		goodness goodness
+		goodness condition
 	}
 )
 
@@ -153,7 +162,6 @@ func (v *ballotInfoV2) updateBlockVote(block *blockInfoV2, vote sign) {
 					return
 				}
 			}
-			return
 		}
 	}
 }
@@ -162,7 +170,7 @@ func (v *ballotInfoV2) updateLayerVote(lid types.LayerID, vote sign) {
 	for i := len(v.votes) - 1; i >= 0; i-- {
 		if v.votes[i].layer.lid == lid {
 			v.votes[i].vote = abstain
-			break
+			return
 		}
 	}
 }

@@ -66,7 +66,7 @@ func TestFullBallotFilter(t *testing.T) {
 
 			f := newFullTortoise(config, state)
 
-			require.Equal(t, tc.expect, f.shouldBeDelayed(ballotInfoV2{
+			require.Equal(t, tc.expect, f.shouldBeDelayed(&ballotInfoV2{
 				id:    tc.ballot,
 				layer: tc.ballotlid,
 			}))
@@ -347,8 +347,7 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
 			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfoV2{
-				goodness: good,
-				layer:    genesis,
+				layer: genesis,
 			}
 
 			var blocks [][]types.Block

@@ -1601,7 +1601,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
-	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
 	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, beacon))
 	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
 
@@ -1791,7 +1791,7 @@ func TestBaseBallotGenesis(t *testing.T) {
 
 	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
-	require.Empty(t, votes.Support)
+	require.Len(t, votes.Support, 1)
 	require.Empty(t, votes.Against)
 	require.Empty(t, votes.Abstain)
 	require.Equal(t, types.GenesisBallotID, votes.Base)

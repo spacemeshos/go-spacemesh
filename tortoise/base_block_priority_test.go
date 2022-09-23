@@ -39,7 +39,7 @@ func TestPrioritizeBlocks(t *testing.T) {
 		},
 		{
 			desc:   "PrioritizeByHigherLayer",
-			expect: append([]*ballotInfoV2{ballots[3], ballots[2]}, ballots[:2]...),
+			expect: append([]*ballotInfoV2{ballots[2], ballots[1]}, ballots[0], ballots[3]),
 			disagrements: map[types.BallotID]types.LayerID{
 				ballots[2].id: types.NewLayerID(9),
 				ballots[3].id: types.NewLayerID(9),

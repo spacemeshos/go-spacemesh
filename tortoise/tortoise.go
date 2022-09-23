@@ -75,14 +75,13 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
 	genesis := genesisLayer.Index()
 	for _, ballot := range genesisLayer.Ballots() {
-		binfo := ballotInfoV2{
-			id:       ballot.ID(),
-			layer:    ballot.LayerIndex,
-			weight:   util.WeightFromUint64(0),
-			goodness: good,
+		binfo := &ballotInfoV2{
+			id:     ballot.ID(),
+			layer:  ballot.LayerIndex,
+			weight: util.WeightFromUint64(0),
 		}
 		t.ballots[genesis] = append(t.ballots[genesis], binfo)
-		t.ballotRefs[ballot.ID()] = &binfo
+		t.ballotRefs[ballot.ID()] = binfo
 	}
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
@@ -204,7 +203,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 					continue
 				}
 				disagreements[ballot.id] = dis
-				choices = append(choices, &ballot)
+				choices = append(choices, ballot)
 			}
 		}
 
@@ -246,8 +245,8 @@ func (t *turtle) getGoodBallot(logger log.Log) *ballotInfoV2 {
 			if ballot.weight.IsNil() {
 				continue
 			}
-			if ballot.goodness == good {
-				choices = append(choices, &ballot)
+			if ballot.goodness.isGood() {
+				choices = append(choices, ballot)
 			}
 		}
 		if len(choices) > 0 {
@@ -261,12 +260,12 @@ func (t *turtle) getGoodBallot(logger log.Log) *ballotInfoV2 {
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ballot ballotInfoV2, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
+func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ballot *ballotInfoV2, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
 	// using it as a mark that the votes for block are completely consistent
 	// with a local opinion. so if two blocks have consistent histories select block
 	// from a higher layer as it is more consistent.
 	consistent := last
-	if basedis := disagreements[ballot.base.id]; basedis != consistent {
+	if basedis, exists := disagreements[ballot.base.id]; exists && basedis != consistent {
 		return basedis, nil
 	}
 
@@ -276,7 +275,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 			break
 		}
 		if lvote.vote == abstain && (lvote.layer.hareTerminated || !withinDistance(t.Zdist, lvote.layer.lid, last)) {
-			t.logger.With().Debug("ballot votes abstain on a layer without blocks. can't use as a base ballot",
+			t.logger.With().Debug("ballot votes abstain on a terminated layer. can't use as a base ballot",
 				ballot.id,
 				lvote.layer.lid,
 			)
@@ -522,7 +521,7 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target t
 	// try to find a cut with ballots that can be good (see verifying tortoise for definition)
 	// if there are such ballots try to bootstrap verifying tortoise by marking them good
 	t.verifying.resetWeights()
-	if t.verifying.markGoodCut(logger, target, t.ballots[target]) {
+	if t.verifying.markGoodCut(logger, t.ballots[target]) {
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
 		for lid := target; !lid.After(counted); lid = lid.Add(1) {
@@ -660,13 +659,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	layer := t.state.layer(block.LayerIndex)
 	layer.blocks = append(layer.blocks, blockv2)
 	t.state.blockRefs[block.ID()] = blockv2
-	if layer.verifying.referenceHeight == 0 {
-		layer.verifying.referenceHeight = t.layer(lid.Sub(1)).verifying.referenceHeight
-	}
-	if block.TickHeight <= t.referenceHeight[block.LayerIndex.GetEpoch()] &&
-		block.TickHeight > layer.verifying.referenceHeight {
-		layer.verifying.referenceHeight = block.TickHeight
-	}
+	t.state.updateRefHeight(layer, blockv2)
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
@@ -779,19 +772,18 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		log.Stringer("weight", weight),
 		log.Uint64("height", height),
 	)
-	ballotv2 := ballotInfoV2{
+	ballotv2 := &ballotInfoV2{
 		id: ballot.ID(),
 		base: baseInfo{
-			id:       base.id,
-			layer:    base.layer,
-			goodness: base.goodness,
+			id:    base.id,
+			layer: base.layer,
 		},
 		layer:  ballot.LayerIndex,
 		weight: weight,
 		height: height,
 		beacon: beacon,
 	}
-	decodeExceptions(t.logger, t.Config, &t.state, base, &ballotv2, &ballot.Votes)
+	decodeExceptions(t.logger, t.Config, &t.state, base, ballotv2, &ballot.Votes)
 	t.state.addBallot(ballotv2)
 	return nil
 }
@@ -805,8 +797,7 @@ func (t *turtle) markBeaconWithBadBallot(logger log.Log, bid types.BallotID, lay
 	if err != nil {
 		return err
 	}
-	good := beacon == epochBeacon
-	if !good {
+	if beacon != epochBeacon {
 		logger.With().Warning("ballot has different beacon",
 			layerID,
 			bid,

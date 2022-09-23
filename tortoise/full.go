@@ -29,8 +29,8 @@ type full struct {
 	delayedQueue *list.List
 }
 
-func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []ballotInfoV2) {
-	var delayed []ballotInfoV2
+func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfoV2) {
+	var delayed []*ballotInfoV2
 	for _, ballot := range ballots {
 		if f.shouldBeDelayed(ballot) {
 			delayed = append(delayed, ballot)
@@ -66,7 +66,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 	}
 	if len(delayed) > 0 {
 		f.delayedQueue.PushBack(delayedBallots{
-			lid:     ballotlid,
+			lid:     delayed[0].layer,
 			ballots: delayed,
 		})
 	}
@@ -88,13 +88,13 @@ func (f *full) countLayerVotes(logger log.Log, lid types.LayerID) {
 		)
 
 		f.countVotesFromBallots(
-			logger.WithFields(log.Bool("delayed", true)), delayed.lid, delayed.ballots)
+			logger.WithFields(log.Bool("delayed", true)), delayed.ballots)
 
 		next := front.Next()
 		f.delayedQueue.Remove(front)
 		front = next
 	}
-	f.countVotesFromBallots(logger, lid, f.ballots[lid])
+	f.countVotesFromBallots(logger, f.ballots[lid])
 }
 
 func (f *full) countVotes(logger log.Log) {
@@ -140,12 +140,12 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 
 // shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
 // long time ago.
-func (f *full) shouldBeDelayed(ballot ballotInfoV2) bool {
+func (f *full) shouldBeDelayed(ballot *ballotInfoV2) bool {
 	_, bad := f.badBeaconBallots[ballot.id]
 	return bad && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
 }
 
 type delayedBallots struct {
 	lid     types.LayerID
-	ballots []ballotInfoV2
+	ballots []*ballotInfoV2
 }

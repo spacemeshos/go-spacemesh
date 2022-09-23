@@ -1,60 +1,40 @@
 package tortoise
 
 import (
-	"fmt"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type goodness uint8
+type condition uint8
 
-func (g goodness) String() string {
-	switch g {
-	case bad:
-		return "bad"
-	case abstained:
-		return "abstained"
-	case good:
-		return "good"
-	case canBeGood:
-		return "can be good"
-	default:
-		panic(fmt.Sprintf("unknown goodness %d", g))
-	}
+func (g condition) notConsistent() bool {
+	return g&conditionNotConsistent > 0
+}
+
+func (g condition) abstained() bool {
+	return g&conditionAbstained > 0
+}
+
+func (g condition) isCounted() bool {
+	return g.isGood() || g.abstained()
+}
+
+func (g condition) isGood() bool {
+	return g == 0
+}
+
+func (g condition) canBeGood() bool {
+	return g.isGood() || g == conditionNotGoodBase
 }
 
 const (
-	bad goodness = iota
-	// ballots may vote abstain for a layer if the hare instance didn't terminate
-	// for that layer. verifying tortoise counts weight from those ballots
-	// but it doesn't count weight for abstained layers.
-	//
-	// for voting tortoise still prioritizes good ballots, ballots that selects base ballot
-	// that abstained will be marked as a bad ballot. this condition is necessary
-	// to simplify implementation. otherwise verifying tortoise needs to copy abstained
-	// votes from base ballot if they tortoise hasn't terminated yet.
-	//
-	// Example:
-	// Block: 0x01 Layer: 9
-	// Ballot: 0xaa Layer: 11 Votes: {Base: 0x01, Support: [0x01], Abstain: [10]}
-	// Assuming that Support is consistent with local opinion verifying tortoise
-	// will count the weight from this ballot for layer 9, but not for layer 10.
-	abstained
-	// good ballot must:
-	// - agree on a beacon value
-	// - don't vote on blocks before base ballot
-	// - have consistent votes with local opinion
-	// - have a good base ballot.
-	good
-	// canBeGood is the same as good, but doesn't require good base ballot.
-	canBeGood
+	conditionNotGoodBase condition = 1 << iota
+	conditionBadBeacon
+	conditionVotesBeforeBase
+	conditionAbstained
+	conditionNotConsistent
 )
-
-func checkCanBeGood(value goodness) bool {
-	return value == good || value == canBeGood
-}
 
 func newVerifying(config Config, state *state) *verifying {
 	return &verifying{
@@ -76,42 +56,75 @@ func (v *verifying) resetWeights() {
 	for lid := v.verified.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
 		layer.verifying.good = weight{}
-		layer.verifying.abstained = weight{}
 	}
 }
 
-func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []ballotInfoV2) bool {
+func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfoV2) bool {
 	n := 0
 	for _, ballot := range ballots {
-		if checkCanBeGood(ballot.base.goodness) && checkCanBeGood(ballot.goodness) {
+		base, exist := v.ballotRefs[ballot.base.id]
+		if !exist {
+			continue
+		}
+		if base.goodness.canBeGood() && ballot.goodness.canBeGood() {
 			logger.With().Debug("marking ballots that can be good as good",
-				log.Stringer("ballot_layer", lid),
+				log.Stringer("ballot_layer", ballot.layer),
 				log.Stringer("ballot", ballot.id),
 				log.Stringer("base_ballot", ballot.base.id),
 			)
-			ballot.base.goodness = good
-			ballot.goodness = good
+			base.goodness = 0
+			ballot.goodness = 0
 			n++
 		}
 	}
 	return n > 0
 }
 
-func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []ballotInfoV2) {
+func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*ballotInfoV2) {
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
-
-	goodWeight, goodBallotsCount := v.countGoodBallots(logger, lid, ballots)
+	var (
+		sum = util.WeightFromUint64(0)
+		n   int
+	)
+	for _, ballot := range ballots {
+		base, exist := v.ballotRefs[ballot.base.id]
+		if !exist {
+			continue
+		}
+		ballot.goodness &= ^conditionNotConsistent
+		if !(base.goodness.isGood() && ballot.goodness.isCounted()) {
+			continue
+		}
+		if !validateConsistency(v.Config, v.state, ballot) {
+			continue
+		}
+		if ballot.weight.IsNil() {
+			logger.With().Debug("ballot weight is nil", ballot.id)
+			continue
+		}
+		// get height of the max votable block
+		if refheight := v.layer(lid.Sub(1)).verifying.referenceHeight; refheight > ballot.height {
+			logger.With().Debug("reference height is higher than the ballot height",
+				ballot.id,
+				log.Uint64("reference height", refheight),
+				log.Uint64("ballot height", ballot.height),
+			)
+			continue
+		}
+		sum = sum.Add(ballot.weight)
+		n++
+	}
 
 	layer := v.layer(lid)
-	layer.verifying.good = goodWeight
-	v.totalGoodWeight = v.totalGoodWeight.Add(goodWeight)
+	layer.verifying.good = sum
+	v.totalGoodWeight = v.totalGoodWeight.Add(sum)
 
 	logger.With().Debug("counted weight from good ballots",
-		log.Stringer("good_weight", goodWeight),
+		log.Stringer("good_weight", sum),
 		log.Stringer("total_good_weight", v.totalGoodWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
-		log.Int("good_ballots_count", goodBallotsCount),
+		log.Int("good_ballots_count", n),
 	)
 }
 
@@ -164,44 +177,12 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	return false
 }
 
-func (v *verifying) countGoodBallots(logger log.Log, lid types.LayerID, ballots []ballotInfoV2) (util.Weight, int) {
-	var (
-		sum = util.WeightFromUint64(0)
-		n   int
-	)
-	for _, ballot := range ballots {
-		if ballot.goodness != good && ballot.goodness != abstained {
-			continue
-		}
-		if ballot.weight.IsNil() {
-			logger.With().Debug("ballot weight is nil", ballot.id)
-			continue
-		}
-		// get height of the max votable block
-		if refheight := v.layer(lid.Sub(1)).verifying.referenceHeight; refheight > ballot.height {
-			logger.With().Debug("reference height is higher than the ballot height",
-				ballot.id,
-				log.Uint64("reference height", refheight),
-				log.Uint64("ballot height", ballot.height),
-			)
-			continue
-		}
-		sum = sum.Add(ballot.weight)
-		// FIXME abstained weight
-		n++
-	}
-	return sum, n
-}
-
 func decodeExceptions(logger log.Log, config Config, state *state, base, child *ballotInfoV2, exceptions *types.Votes) {
-	child.goodness = good
 	if _, exist := state.badBeaconBallots[child.id]; exist {
-		child.goodness = bad
+		child.goodness |= conditionBadBeacon
 	}
-
 	// inherit opinion from the base ballot by copying votes in range (evicted layer, base layer)
 	votes := base.copyVotes(state.evicted)
-	original := len(votes)
 	// add opinions from the local state [base layer, ballot layer)
 	for lid := base.layer; lid.Before(child.layer); lid = lid.Add(1) {
 		layer := state.layer(lid)
@@ -222,64 +203,58 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	for _, bid := range exceptions.Support {
 		block, exist := state.blockRefs[bid]
 		if !exist {
-			child.goodness = bad
+			child.goodness |= conditionVotesBeforeBase
 			continue
 		}
 		if block.layer.Before(base.layer) {
-			child.goodness = bad
+			child.goodness |= conditionVotesBeforeBase
 		}
 		child.updateBlockVote(block, support)
 	}
 	for _, bid := range exceptions.Against {
 		block, exist := state.blockRefs[bid]
 		if !exist {
-			child.goodness = bad
+			child.goodness |= conditionVotesBeforeBase
 			continue
 		}
 		if block.layer.Before(base.layer) {
-			child.goodness = bad
+			child.goodness |= conditionVotesBeforeBase
 		}
 		child.updateBlockVote(block, against)
 	}
 	for _, lid := range exceptions.Abstain {
-		child.goodness = abstained
+		child.goodness |= conditionAbstained
 		if lid.Before(base.layer) {
-			child.goodness = bad
+			child.goodness |= conditionVotesBeforeBase
 		}
 		child.updateLayerVote(lid, abstain)
-	}
-	if base.goodness != good && child.goodness == abstained {
-		child.goodness = bad
-	}
-	if child.goodness == bad {
-		return
-	}
-	// TODO extract this code as it needs to be re-executed when opinion changes
-	ovotes := votes[original:]
-	for i := range ovotes {
-		for j := range ovotes[i].blocks {
-			local, _ := getLocalVote(state, config, ovotes[i].blocks[j].block)
-			if vote := ovotes[i].blocks[j].vote; vote != local {
-				child.goodness = bad
-				logger.With().Debug("not consistent with local opinion",
-					child.id,
-					child.layer,
-					ovotes[i].blocks[j].block.id,
-					log.Stringer("vote", vote),
-					log.Stringer("local", local),
-				)
-				return
-			}
-		}
-	}
-	if base.goodness != good && child.goodness == good {
-		child.goodness = canBeGood
+		layer := state.layer(lid)
+		layer.verifying.abstained = layer.verifying.abstained.Add(child.weight)
 	}
 	logger.With().Debug("decoded votes for ballot",
 		child.id,
 		child.layer,
 		log.Stringer("base", child.base.id),
 		log.Uint32("base layer", child.base.layer.Value),
-		log.Stringer("goodness", child.goodness),
+		log.Bool("good", child.goodness.isGood()),
+		log.Bool("abstained", child.goodness.abstained()),
+		log.Int("goodness", int(child.goodness)),
 	)
+}
+
+func validateConsistency(config Config, state *state, ballot *ballotInfoV2) bool {
+	for i := len(ballot.votes) - 1; i >= 0; i-- {
+		lvote := ballot.votes[i]
+		if lvote.layer.lid.Before(ballot.base.layer) {
+			return true
+		}
+		for j := range lvote.blocks {
+			local, _ := getLocalVote(state, config, lvote.blocks[j].block)
+			if vote := lvote.blocks[j].vote; vote != local {
+				ballot.goodness |= conditionNotConsistent
+				return false
+			}
+		}
+	}
+	return true
 }
