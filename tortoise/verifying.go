@@ -199,8 +199,8 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 		child.goodness = bad
 	}
 
-	// inherit opinion from the base ballot by copying base ballots in range (evicted layer, base layer)
-	votes := copyVotes(state.evicted, base.votes)
+	// inherit opinion from the base ballot by copying votes in range (evicted layer, base layer)
+	votes := base.copyVotes(state.evicted)
 	original := len(votes)
 	// add opinions from the local state [base layer, ballot layer)
 	for lid := base.layer; lid.Before(child.layer); lid = lid.Add(1) {
@@ -219,53 +219,28 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 	}
 
 	// update exceptions
+	child.votes = votes
 	for _, bid := range exceptions.Support {
 		block := state.blockRefs[bid]
-		for i := len(votes) - 1; i >= 0; i-- {
-			if votes[i].layer.lid == block.layer {
-				if votes[i].layer.lid.Before(base.layer) {
-					child.goodness = bad
-				}
-				for j := range votes[i].blocks {
-					if votes[i].blocks[j].block.id == bid {
-						votes[i].blocks[j].vote = support
-					}
-					break
-				}
-				break
-			}
+		if block.layer.Before(base.layer) {
+			child.goodness = bad
 		}
+		child.updateBlockVote(block, support)
 	}
 	for _, bid := range exceptions.Against {
 		block := state.blockRefs[bid]
-		for i := len(votes) - 1; i >= 0; i-- {
-			if votes[i].layer.lid == block.layer {
-				if votes[i].layer.lid.Before(base.layer) {
-					child.goodness = bad
-				}
-				for j := range votes[i].blocks {
-					if votes[i].blocks[j].block.id == bid {
-						votes[i].blocks[j].vote = against
-					}
-					break
-				}
-				break
-			}
+		if block.layer.Before(base.layer) {
+			child.goodness = bad
 		}
+		child.updateBlockVote(block, against)
 	}
 	for _, lid := range exceptions.Abstain {
 		child.goodness = abstained
-		for i := len(votes) - 1; i >= 0; i-- {
-			if votes[i].layer.lid == lid {
-				if votes[i].layer.lid.Before(base.layer) {
-					child.goodness = bad
-				}
-				votes[i].vote = abstain
-				break
-			}
+		if lid.Before(base.layer) {
+			child.goodness = bad
 		}
+		child.updateLayerVote(lid, abstain)
 	}
-	child.votes = votes
 	if base.goodness != good && child.goodness == abstained {
 		child.goodness = bad
 	}

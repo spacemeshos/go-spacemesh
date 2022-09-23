@@ -34,36 +34,6 @@ type (
 		margin   weight
 	}
 
-	layerVote struct {
-		layer  *layerInfo
-		vote   vote
-		blocks []blockVote
-	}
-
-	blockVote struct {
-		block *blockInfoV2
-		vote  vote
-	}
-
-	baseInfo struct {
-		id       types.BallotID
-		layer    types.LayerID
-		goodness goodness
-	}
-
-	ballotInfoV2 struct {
-		id     types.BallotID
-		base   baseInfo
-		layer  types.LayerID
-		height uint64
-		weight weight
-		beacon types.Beacon
-
-		votes []layerVote
-
-		goodness goodness
-	}
-
 	state struct {
 		// last received layer
 		// TODO should be last layer according to the clock
@@ -129,15 +99,70 @@ func (s *state) addBallot(ballot ballotInfoV2) {
 	s.ballotRefs[ballot.id] = &ballot
 }
 
-func copyVotes(evicted types.LayerID, votes []layerVote) []layerVote {
+type (
+	layerVote struct {
+		layer  *layerInfo
+		vote   vote
+		blocks []blockVote
+	}
+
+	blockVote struct {
+		block *blockInfoV2
+		vote  vote
+	}
+
+	baseInfo struct {
+		id       types.BallotID
+		layer    types.LayerID
+		goodness goodness
+	}
+
+	ballotInfoV2 struct {
+		id     types.BallotID
+		base   baseInfo
+		layer  types.LayerID
+		height uint64
+		weight weight
+		beacon types.Beacon
+
+		votes []layerVote
+
+		goodness goodness
+	}
+)
+
+func (b *ballotInfoV2) copyVotes(evicted types.LayerID) []layerVote {
 	eid := 0
-	for i := range votes {
-		if !evicted.Before(votes[i].layer.lid) {
+	for i := range b.votes {
+		if !evicted.Before(b.votes[i].layer.lid) {
 			eid = i
 			break
 		}
 	}
-	rst := make([]layerVote, len(votes)-eid)
-	copy(rst, votes[eid:])
+	rst := make([]layerVote, len(b.votes)-eid)
+	copy(rst, b.votes[eid:])
 	return rst
+}
+
+func (v *ballotInfoV2) updateBlockVote(block *blockInfoV2, vote sign) {
+	for i := len(v.votes) - 1; i >= 0; i-- {
+		if v.votes[i].layer.lid == block.layer {
+			for j := range v.votes[i].blocks {
+				if v.votes[i].blocks[j].block.id == block.id {
+					v.votes[i].blocks[j].vote = vote
+					return
+				}
+			}
+			return
+		}
+	}
+}
+
+func (v *ballotInfoV2) updateLayerVote(lid types.LayerID, vote sign) {
+	for i := len(v.votes) - 1; i >= 0; i-- {
+		if v.votes[i].layer.lid == lid {
+			v.votes[i].vote = abstain
+			break
+		}
+	}
 }

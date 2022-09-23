@@ -75,11 +75,13 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
 	genesis := genesisLayer.Index()
 	for _, ballot := range genesisLayer.Ballots() {
-		t.ballotRefs[ballot.ID()] = &ballotInfoV2{
+		binfo := ballotInfoV2{
 			id:       ballot.ID(),
 			layer:    ballot.LayerIndex,
 			goodness: good,
 		}
+		t.ballots[genesis] = append(t.ballots[genesis], binfo)
+		t.ballotRefs[ballot.ID()] = &binfo
 	}
 	t.last = genesis
 	t.processed = genesis
