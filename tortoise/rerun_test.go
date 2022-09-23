@@ -185,6 +185,12 @@ func BenchmarkRerun(b *testing.B) {
 	b.Run("Full/1000/Window/100", func(b *testing.B) {
 		benchmarkRerun(b, 1000, 1000, 100, sim.WithEmptyHareOutput())
 	})
+	b.Run("Full/1000/Window/1000", func(b *testing.B) {
+		benchmarkRerun(b, 1000, 1000, 1000, sim.WithEmptyHareOutput())
+	})
+	b.Run("Full/2000/Window/2000", func(b *testing.B) {
+		benchmarkRerun(b, 2000, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+	})
 }
 
 func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, opts ...sim.NextOpt) {
@@ -202,12 +208,14 @@ func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, op
 	cfg.FullModeVerificationWindow = fullParam
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+	var last types.LayerID
 	for i := 0; i < size; i++ {
-		tortoise.HandleIncomingLayer(ctx, s.Next(opts...))
+		last = s.Next(opts...)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		tortoise.trtl.last = last
 		tortoise.rerun(ctx)
 	}
 }
