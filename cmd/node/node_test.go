@@ -842,44 +842,44 @@ func TestConfig_Preset(t *testing.T) {
 		require.Equal(t, preset, *conf)
 	})
 
-	// t.Run("PresetOverwrittenByFlags", func(t *testing.T) {
-	// 	preset, err := presets.Get(name)
-	// 	require.NoError(t, err)
+	t.Run("PresetOverwrittenByFlags", func(t *testing.T) {
+		preset, err := presets.Get(name)
+		require.NoError(t, err)
 
-	// 	cmd := &cobra.Command{}
-	// 	cmdp.AddCommands(cmd)
-	// 	const networkID = 42
-	// 	require.NoError(t, cmd.ParseFlags([]string{"--network-id=" + strconv.Itoa(networkID)}))
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+		const lowPeers = 1234
+		require.NoError(t, cmd.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 
-	// 	viper.Set("preset", name)
-	// 	t.Cleanup(viper.Reset)
-	// 	conf, err := loadConfig(cmd)
-	// 	require.NoError(t, err)
-	// 	preset.P2P.NetworkID = networkID
-	// 	require.Equal(t, preset, *conf)
-	// })
+		viper.Set("preset", name)
+		t.Cleanup(viper.Reset)
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
+		preset.P2P.LowPeers = lowPeers
+		require.Equal(t, preset, *conf)
+	})
 
-	// t.Run("PresetOverWrittenByConfigFile", func(t *testing.T) {
-	// 	preset, err := presets.Get(name)
-	// 	require.NoError(t, err)
+	t.Run("PresetOverWrittenByConfigFile", func(t *testing.T) {
+		preset, err := presets.Get(name)
+		require.NoError(t, err)
 
-	// 	cmd := &cobra.Command{}
-	// 	cmdp.AddCommands(cmd)
-	// 	const networkID = 42
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+		const lowPeers = 1234
 
-	// 	content := fmt.Sprintf(`{"p2p": {"network-id": %d}}`, networkID)
-	// 	path := filepath.Join(t.TempDir(), "config.json")
-	// 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-	// 	require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
+		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
+		path := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
 
-	// 	viper.Set("preset", name)
-	// 	t.Cleanup(viper.Reset)
-	// 	conf, err := loadConfig(cmd)
-	// 	require.NoError(t, err)
-	// 	preset.P2P.NetworkID = networkID
-	// 	preset.ConfigFile = path
-	// 	require.Equal(t, preset, *conf)
-	// })
+		viper.Set("preset", name)
+		t.Cleanup(viper.Reset)
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
+		preset.P2P.LowPeers = lowPeers
+		preset.ConfigFile = path
+		require.Equal(t, preset, *conf)
+	})
 
 	t.Run("LoadedFromConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
