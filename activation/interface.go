@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=mocks -destination=./mocks/interface.go -source=./interface.go
 
 type poetValidatorPersister interface {
 	HasProof([]byte) bool

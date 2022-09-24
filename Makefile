@@ -16,8 +16,6 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 export CGO_ENABLED := 1
 export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
 
-PKGS = $(shell go list ./...)
-
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
   # Just assume we're in interactive mode on Windows
@@ -168,11 +166,15 @@ golangci-lint-github-action:
 cover:
 	@echo "mode: count" > cover-all.out
 	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
-	  $(foreach pkg,$(PKGS),\
+	  $(foreach pkg,$(UNIT_TESTS),\
 		go test -coverprofile=cover.out -covermode=count $(pkg);\
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
 .PHONY: cover
+
+cover-profile:
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
+.PHONY: cover-profile
 
 tag-and-build:
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)

@@ -214,6 +214,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	ctx, b.stop = context.WithCancel(b.parentCtx)
 	b.exited = exited
 
+	// TODO(mafa): make a method and add tests
 	if b.commitmentAtx == nil {
 		err := b.loadCommitmentAtx()
 		switch {
@@ -260,6 +261,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	return nil
 }
 
+// TODO(mafa): add tests for this method
 func (b *Builder) getCommitmentAtxID() (types.ATXID, error) {
 	posAtx, err := atxs.GetAtxIDWithMaxHeight(b.cdb)
 	if errors.Is(err, sql.ErrNotFound) {
@@ -560,6 +562,8 @@ func (b *Builder) discardCommitmentAtx() {
 func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
 	logger := b.log.WithContext(ctx)
+
+	// TODO(mafa): add tests for this code path
 	if b.commitmentAtx == nil {
 		logger.With().Info("loading commitment atx")
 		if err := b.loadCommitmentAtx(); err != nil {
