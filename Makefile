@@ -70,6 +70,7 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 .PHONY: install
 
 build: go-spacemesh
@@ -116,6 +117,11 @@ docker-local-build: go-spacemesh hare p2p harness
 	cd build; docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
+
+# Clear tests cache
+clear-test-cache:
+	go clean -testcache
+.PHONY: clear-test-cache
 
 test: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)

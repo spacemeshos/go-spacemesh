@@ -1,7 +1,7 @@
 package activation
 
 import (
-	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +24,7 @@ func init() {
 	cfg = DefaultPostConfig()
 
 	opts = DefaultPostSetupOpts()
-	opts.DataDir, _ = ioutil.TempDir("", "post-test")
+	opts.DataDir, _ = os.MkdirTemp("", "post-test")
 	opts.NumUnits = cfg.MinNumUnits
 	opts.ComputeProviderID = initialization.CPUProviderID()
 

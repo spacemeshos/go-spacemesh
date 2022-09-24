@@ -137,7 +137,6 @@ type Sync struct {
 	h            host.Host
 	peersWatcher bootstrap.Waiter
 
-	once   sync.Once
 	eg     errgroup.Group
 	ctx    context.Context
 	cancel func()
