@@ -181,15 +181,15 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	return false
 }
 
-func decodeExceptions(logger log.Log, config Config, state *state, base, child *ballotInfo, exceptions *types.Votes) {
-	child.goodness |= base.goodness
-	if _, exist := state.badBeaconBallots[child.id]; exist {
-		child.goodness |= conditionBadBeacon
+func decodeExceptions(logger log.Log, config Config, state *state, base, ballot *ballotInfo, exceptions *types.Votes) {
+	ballot.goodness |= base.goodness
+	if _, exist := state.badBeaconBallots[ballot.id]; exist {
+		ballot.goodness |= conditionBadBeacon
 	}
-	// inherit opinion from the base ballot by copying votes in range (evicted layer, base layer)
-	votes := base.copyVotes(state.evicted)
+	// inherit opinion from the base ballot by copying votes in range
+	votes := base.votes.Copy()
 	// add opinions from the local state [base layer, ballot layer)
-	for lid := base.layer; lid.Before(child.layer); lid = lid.Add(1) {
+	for lid := base.layer; lid.Before(ballot.layer); lid = lid.Add(1) {
 		layer := state.layer(lid)
 		lvote := layerVote{
 			layerInfo: layer,
@@ -201,56 +201,55 @@ func decodeExceptions(logger log.Log, config Config, state *state, base, child *
 				vote:      against,
 			})
 		}
-		votes = append(votes, lvote)
+		votes.Append(&lvote)
 	}
 	// update exceptions
-	child.votes = votes
+	ballot.votes = votes
 	for _, bid := range exceptions.Support {
 		block, exist := state.blockRefs[bid]
 		if !exist {
-			child.goodness |= conditionVotesBeforeBase
+			ballot.goodness |= conditionVotesBeforeBase
 			continue
 		}
 		if block.layer.Before(base.layer) {
-			child.goodness |= conditionVotesBeforeBase
+			ballot.goodness |= conditionVotesBeforeBase
 		}
-		child.updateBlockVote(block, support)
+		ballot.updateBlockVote(block, support)
 	}
 	for _, bid := range exceptions.Against {
 		block, exist := state.blockRefs[bid]
 		if !exist {
-			child.goodness |= conditionVotesBeforeBase
+			ballot.goodness |= conditionVotesBeforeBase
 			continue
 		}
 		if block.layer.Before(base.layer) {
-			child.goodness |= conditionVotesBeforeBase
+			ballot.goodness |= conditionVotesBeforeBase
 		}
-		child.updateBlockVote(block, against)
+		ballot.updateBlockVote(block, against)
 	}
 	for _, lid := range exceptions.Abstain {
-		child.goodness |= conditionAbstained
+		ballot.goodness |= conditionAbstained
 		if lid.Before(base.layer) {
-			child.goodness |= conditionVotesBeforeBase
+			ballot.goodness |= conditionVotesBeforeBase
 		}
-		child.updateLayerVote(lid, abstain)
+		ballot.updateLayerVote(lid, abstain)
 		layer := state.layer(lid)
-		layer.verifying.abstained = layer.verifying.abstained.Add(child.weight)
+		layer.verifying.abstained = layer.verifying.abstained.Add(ballot.weight)
 	}
-	validateConsistency(config, state, child)
+	validateConsistency(config, state, ballot)
 	logger.With().Debug("decoded votes for ballot",
-		child.id,
-		child.layer,
-		log.Stringer("base", child.base.id),
-		log.Uint32("base layer", child.base.layer.Value),
+		ballot.id,
+		ballot.layer,
+		log.Stringer("base", ballot.base.id),
+		log.Uint32("base layer", ballot.base.layer.Value),
 		log.Bool("base good", base.goodness.isGood()),
-		log.Bool("ignored", child.goodness.ignored()),
-		log.Bool("consistent", !child.goodness.notConsistent()),
+		log.Bool("ignored", ballot.goodness.ignored()),
+		log.Bool("consistent", !ballot.goodness.notConsistent()),
 	)
 }
 
 func validateConsistency(config Config, state *state, ballot *ballotInfo) bool {
-	for i := len(ballot.votes) - 1; i >= 0; i-- {
-		lvote := ballot.votes[i]
+	for lvote := ballot.votes.Tail; lvote != nil; lvote = lvote.prev {
 		if lvote.lid.Before(ballot.base.layer) {
 			break
 		}

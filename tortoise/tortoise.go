@@ -145,6 +145,7 @@ func (t *turtle) evict(ctx context.Context) {
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
+			ballot.votes.CutAt(windowStart.Sub(1))
 			delete(t.ballotRefs, ballot.id)
 			delete(t.referenceWeight, ballot.id)
 			delete(t.badBeaconBallots, ballot.id)
@@ -269,8 +270,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 		return basedis, nil
 	}
 
-	for i := len(ballot.votes) - 1; i >= 0; i-- {
-		lvote := ballot.votes[i]
+	for lvote := ballot.votes.Tail; lvote != nil; lvote = lvote.prev {
 		if lvote.lid.Before(ballot.base.layer) {
 			break
 		}
@@ -317,8 +317,7 @@ func (t *turtle) encodeVotes(
 		Base: base.id,
 	}
 	// encode difference with local opinion between [start, base.layer)
-	for i := len(base.votes) - 1; i >= 0; i-- {
-		lvote := base.votes[i]
+	for lvote := base.votes.Tail; lvote != nil; lvote = lvote.prev {
 		if lvote.lid.Before(start) {
 			break
 		}
@@ -775,7 +774,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		log.Stringer("weight", weight),
 		log.Uint64("height", height),
 	)
-	ballotv2 := &ballotInfo{
+	binfo := &ballotInfo{
 		id: ballot.ID(),
 		base: baseInfo{
 			id:    base.id,
@@ -786,8 +785,8 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		height: height,
 		beacon: beacon,
 	}
-	decodeExceptions(t.logger, t.Config, &t.state, base, ballotv2, &ballot.Votes)
-	t.state.addBallot(ballotv2)
+	decodeExceptions(t.logger, t.Config, &t.state, base, binfo, &ballot.Votes)
+	t.state.addBallot(binfo)
 	return nil
 }
 

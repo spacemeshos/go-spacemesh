@@ -110,12 +110,6 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 }
 
 type (
-	layerVote struct {
-		*layerInfo
-		vote   vote
-		blocks []blockVote
-	}
-
 	blockVote struct {
 		*blockInfo
 		vote vote
@@ -134,31 +128,18 @@ type (
 		weight weight
 		beacon types.Beacon
 
-		votes []layerVote
+		votes Votes
 
 		goodness condition
 	}
 )
 
-func (b *ballotInfo) copyVotes(evicted types.LayerID) []layerVote {
-	eid := 0
-	for i := range b.votes {
-		if !evicted.Before(b.votes[i].lid) {
-			eid = i
-			break
-		}
-	}
-	rst := make([]layerVote, len(b.votes)-eid)
-	copy(rst, b.votes[eid:])
-	return rst
-}
-
 func (v *ballotInfo) updateBlockVote(block *blockInfo, vote sign) {
-	for i := len(v.votes) - 1; i >= 0; i-- {
-		if v.votes[i].lid == block.layer {
-			for j := range v.votes[i].blocks {
-				if v.votes[i].blocks[j].id == block.id {
-					v.votes[i].blocks[j].vote = vote
+	for current := v.votes.Tail; current != nil; current = current.prev {
+		if current.lid == block.layer {
+			for j := range current.blocks {
+				if current.blocks[j].id == block.id {
+					current.blocks[j].vote = vote
 					return
 				}
 			}
@@ -167,10 +148,61 @@ func (v *ballotInfo) updateBlockVote(block *blockInfo, vote sign) {
 }
 
 func (v *ballotInfo) updateLayerVote(lid types.LayerID, vote sign) {
-	for i := len(v.votes) - 1; i >= 0; i-- {
-		if v.votes[i].lid == lid {
-			v.votes[i].vote = abstain
+	for current := v.votes.Tail; current != nil; current = current.prev {
+		if current.lid == lid {
+			current.vote = vote
+		}
+	}
+}
+
+type Votes struct {
+	Tail *layerVote
+}
+
+func (v *Votes) Append(lv *layerVote) {
+	if v.Tail == nil {
+		v.Tail = lv
+	} else {
+		v.Tail = v.Tail.Append(lv)
+	}
+}
+
+func (v *Votes) Copy() Votes {
+	if v.Tail == nil {
+		return Votes{}
+	}
+	return Votes{Tail: v.Tail.Copy()}
+}
+
+// CutAt is used to cut pointer to the evicted layer.
+func (v *Votes) CutAt(lid types.LayerID) {
+	before := lid.Add(1)
+	for current := v.Tail; current != nil; current = current.prev {
+		if current.lid == before {
+			current.prev = nil
 			return
 		}
 	}
+}
+
+type layerVote struct {
+	*layerInfo
+	vote   vote
+	blocks []blockVote
+
+	prev *layerVote
+}
+
+func (l *layerVote) Copy() *layerVote {
+	return &layerVote{
+		layerInfo: l.layerInfo,
+		vote:      l.vote,
+		blocks:    l.blocks,
+		prev:      l.prev,
+	}
+}
+
+func (l *layerVote) Append(lv *layerVote) *layerVote {
+	lv.prev = l
+	return lv
 }

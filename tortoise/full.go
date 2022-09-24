@@ -39,15 +39,15 @@ func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfo) {
 		if ballot.weight.IsNil() {
 			continue
 		}
-		for i := len(ballot.votes) - 1; i >= 0; i-- {
-			if !ballot.votes[i].lid.After(f.verified) {
+		for lvote := ballot.votes.Tail; lvote != nil; lvote = lvote.prev {
+			if !lvote.lid.After(f.verified) {
 				break
 			}
-			if ballot.votes[i].vote == abstain {
+			if lvote.vote == abstain {
 				continue
 			}
 			empty := true
-			for _, bvote := range ballot.votes[i].blocks {
+			for _, bvote := range lvote.blocks {
 				if bvote.height > ballot.height {
 					continue
 				}
@@ -60,7 +60,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfo) {
 				}
 			}
 			if empty {
-				ballot.votes[i].empty = ballot.votes[i].empty.Add(ballot.weight)
+				lvote.empty = lvote.empty.Add(ballot.weight)
 			}
 		}
 	}

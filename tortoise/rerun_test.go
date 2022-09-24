@@ -191,6 +191,9 @@ func BenchmarkRerun(b *testing.B) {
 	b.Run("Full/2000/Window/2000", func(b *testing.B) {
 		benchmarkRerun(b, 2000, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
 	})
+	b.Run("Full/10000/Window/10000", func(b *testing.B) {
+		benchmarkRerun(b, 10000, 10000, 10000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+	})
 }
 
 func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, opts ...sim.NextOpt) {
