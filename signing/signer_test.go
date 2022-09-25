@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
@@ -49,4 +50,54 @@ func TestPublicKey_ShortString(t *testing.T) {
 
 	pub = NewPublicKey([]byte{1, 2})
 	assert.Equal(t, pub.String(), pub.ShortString())
+}
+
+func TestGenesisEdVerifier_Verify(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	genesisID := [20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	genesisEdSigner := NewGenesisEdSigner(genesisID)
+	verifier := NewGenesisEdVerifier(genesisID)
+
+	t.Run("Fail - short msg", func(t *testing.T) {
+		t.Parallel()
+
+		msg := make([]byte, 19)
+		rand.Read(msg)
+		sign := genesisEdSigner.Sign(msg)
+
+		r.Equal(false, verifier.Verify(genesisEdSigner.signer.PublicKey(), msg, sign))
+	})
+
+	t.Run("Fail - wrong msg", func(t *testing.T) {
+		t.Parallel()
+
+		msg := make([]byte, 20)
+		rand.Read(msg)
+		sign := genesisEdSigner.Sign(msg)
+		msg[0] = 2
+
+		r.Equal(false, verifier.Verify(genesisEdSigner.signer.PublicKey(), append(genesisID[:], msg...), sign))
+	})
+
+	t.Run("Fail - wrong sign", func(t *testing.T) {
+		t.Parallel()
+
+		msg := make([]byte, 20)
+		rand.Read(msg)
+		sign := genesisEdSigner.Sign(msg)[1:]
+
+		r.Equal(false, verifier.Verify(genesisEdSigner.signer.PublicKey(), append(genesisID[:], msg...), sign))
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		t.Parallel()
+
+		msg := make([]byte, 30)
+		rand.Read(msg)
+		sign := genesisEdSigner.Sign(msg)
+
+		r.Equal(true, verifier.Verify(genesisEdSigner.signer.PublicKey(), append(genesisID[:], msg...), sign))
+	})
 }
