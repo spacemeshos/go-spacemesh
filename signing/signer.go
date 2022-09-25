@@ -6,16 +6,27 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+const shortStringSize = 5
+
 // PrivateKey is an alias to spacemeshos/ed25519.PrivateKey.
 type PrivateKey = ed25519.PrivateKey
 
-const shortStringSize = 5
+type GenesisEdSigner struct {
+	genesisID [20]byte
+	signer    EdSigner
+}
+
+type GenesisEdVerifier struct {
+	genesisID [20]byte
+	verifier  EDVerifier
+}
 
 // Public returns public key part from ed25519 private key.
 func Public(priv PrivateKey) ed25519.PublicKey {
@@ -176,4 +187,36 @@ func (EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
 		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
 	}
 	return &PublicKey{pub: pub}, nil
+}
+
+// NewGenesisEdSigner returns an auto-generated genesis ed signer.
+func NewGenesisEdSigner(genesisID [20]byte) *GenesisEdSigner {
+	signer := NewEdSigner()
+	return &GenesisEdSigner{genesisID, *signer}
+}
+
+// NewGenesisEdVerifier returns a new new genesis ed verifier.
+func NewGenesisEdVerifier(genesisID [20]byte) GenesisEdVerifier {
+	return GenesisEdVerifier{genesisID, EDVerifier{}}
+}
+
+// Sign signs the provided message with genesis id.
+func (s *GenesisEdSigner) Sign(m []byte) []byte {
+	return s.signer.Sign(append(s.genesisID[:], m...))
+}
+
+// Verify that signature with genesis id matches public key.
+func (v *GenesisEdVerifier) Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
+	spew.Dump(len(message))
+	if len(message) < 20 {
+		return false
+	}
+	spew.Dump(string(message[0:20][:]), string(v.genesisID[:]), string(message[0:20][:]) != string(v.genesisID[:]))
+	if string(message[0:20][:]) != string(v.genesisID[:]) {
+		return false
+	}
+	spew.Dump("123")
+	spew.Dump(v.verifier.Verify(pubkey, message, sign))
+	spew.Dump("123")
+	return v.verifier.Verify(pubkey, message, sign)
 }
