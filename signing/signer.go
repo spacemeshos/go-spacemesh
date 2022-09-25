@@ -6,36 +6,55 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const shortStringSize = 5
-
 // PrivateKey is an alias to spacemeshos/ed25519.PrivateKey.
 type PrivateKey = ed25519.PrivateKey
 
+// PublicKey is the type describing a public key.
+type PublicKey struct {
+	pub []byte
+}
+
+// EdSigner represents an ED25519 signer.
+type EdSigner struct {
+	privKey ed25519.PrivateKey // the pub & private key
+	pubKey  ed25519.PublicKey  // only the pub key part
+}
+
+// EDVerifier is a verifier for ED purposes.
+type EDVerifier struct{}
+
+// GenesisEdSigner represents an EdSigner with genesis id.
 type GenesisEdSigner struct {
 	genesisID [20]byte
 	signer    EdSigner
 }
 
+// GenesisEdVerifier is a EDVerifier with genesis id.
 type GenesisEdVerifier struct {
 	genesisID [20]byte
 	verifier  EDVerifier
 }
 
+const (
+	shortStringSize = 5
+	// PrivateKeySize size of the private key in bytes.
+	PrivateKeySize = ed25519.PrivateKeySize
+)
+
+var (
+	_ VerifyExtractor = EDVerifier{}
+	_ Signer          = (*EdSigner)(nil)
+)
+
 // Public returns public key part from ed25519 private key.
 func Public(priv PrivateKey) ed25519.PublicKey {
 	return ed25519.PublicKey(priv[ed25519.PrivateKeySize-ed25519.PublicKeySize:])
-}
-
-// PublicKey is the type describing a public key.
-type PublicKey struct {
-	pub []byte
 }
 
 // NewPublicKey constructs a new public key instance from a byte array.
@@ -76,17 +95,6 @@ func (p *PublicKey) ShortString() string {
 func (p *PublicKey) Equals(o *PublicKey) bool {
 	return bytes.Equal(p.Bytes(), o.Bytes())
 }
-
-var _ Signer = (*EdSigner)(nil)
-
-// EdSigner represents an ED25519 signer.
-type EdSigner struct {
-	privKey ed25519.PrivateKey // the pub & private key
-	pubKey  ed25519.PublicKey  // only the pub key part
-}
-
-// PrivateKeySize size of the private key in bytes.
-const PrivateKeySize = ed25519.PrivateKeySize
 
 // NewEdSignerFromBuffer builds a signer from a private key as byte buffer.
 func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
@@ -165,15 +173,10 @@ func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
 	return ed25519.Verify2(pubkey.Bytes(), message, sign)
 }
 
-// EDVerifier is a verifier for ED purposes.
-type EDVerifier struct{}
-
 // NewEDVerifier returns a new EDVerifier.
 func NewEDVerifier() EDVerifier {
 	return EDVerifier{}
 }
-
-var _ VerifyExtractor = EDVerifier{}
 
 // Verify that signature matches public key.
 func (EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
@@ -207,16 +210,11 @@ func (s *GenesisEdSigner) Sign(m []byte) []byte {
 
 // Verify that signature with genesis id matches public key.
 func (v *GenesisEdVerifier) Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
-	spew.Dump(len(message))
 	if len(message) < 20 {
 		return false
 	}
-	spew.Dump(string(message[0:20][:]), string(v.genesisID[:]), string(message[0:20][:]) != string(v.genesisID[:]))
 	if string(message[0:20][:]) != string(v.genesisID[:]) {
 		return false
 	}
-	spew.Dump("123")
-	spew.Dump(v.verifier.Verify(pubkey, message, sign))
-	spew.Dump("123")
 	return v.verifier.Verify(pubkey, message, sign)
 }
