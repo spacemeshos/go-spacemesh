@@ -114,10 +114,6 @@ jobs:
           - macos-latest
           - windows-latest
     steps:
-        # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
-        # https://github.com/actions/virtual-environments/issues/1187
-      - name: disable TCP/UDP offload
-        run: sudo ethtool -K eth0 tx off rx off
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
