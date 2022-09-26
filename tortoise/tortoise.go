@@ -79,6 +79,10 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 			id:     ballot.ID(),
 			layer:  ballot.LayerIndex,
 			weight: util.WeightFromUint64(0),
+			conditions: conditions{
+				baseGood:   true,
+				consistent: true,
+			},
 		}
 		t.ballots[genesis] = append(t.ballots[genesis], binfo)
 		t.ballotRefs[ballot.ID()] = binfo
@@ -248,7 +252,7 @@ func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
 			if ballot.weight.IsNil() {
 				continue
 			}
-			if ballot.goodness.isGood() {
+			if ballot.good() {
 				choices = append(choices, ballot)
 			}
 		}
@@ -831,9 +835,8 @@ func (t *turtle) layerCutoff() types.LayerID {
 }
 
 func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Votes) {
-	ballot.goodness |= base.goodness
 	if _, exist := t.badBeaconBallots[ballot.id]; exist {
-		ballot.goodness |= conditionBadBeacon
+		ballot.conditions.badBeacon = true
 	}
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
@@ -844,11 +847,11 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		for _, bid := range bids {
 			block, exist := t.blockRefs[bid]
 			if !exist {
-				ballot.goodness |= conditionVotesBeforeBase
+				ballot.conditions.votesBeforeBase = true
 				continue
 			}
 			if block.layer.Before(from) {
-				ballot.goodness |= conditionVotesBeforeBase
+				ballot.conditions.votesBeforeBase = true
 				from = block.layer
 			}
 			layerdiff, exist := diff[block.layer]
@@ -860,9 +863,9 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		}
 	}
 	for _, lid := range exceptions.Abstain {
-		ballot.goodness |= conditionAbstained
+		ballot.conditions.abstained = true
 		if lid.Before(from) {
-			ballot.goodness |= conditionVotesBeforeBase
+			ballot.conditions.votesBeforeBase = true
 			from = lid
 		}
 		_, exist := diff[lid]
@@ -902,27 +905,20 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		}
 		ballot.votes.append(&lvote)
 	}
-	validateConsistency(&t.state, t.Config, ballot)
-	t.logger.With().Debug("decoded votes for ballot",
-		ballot.id,
-		ballot.layer,
-		log.Stringer("base", ballot.base.id),
-		log.Uint32("base layer", ballot.base.layer.Value),
-		log.Bool("base good", base.goodness.isGood()),
-		log.Bool("ignored", ballot.goodness.ignored()),
-		log.Bool("consistent", !ballot.goodness.notConsistent()),
-	)
 }
 
 func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if lvote.lid.Before(ballot.base.layer) {
-			break
+			return true
+		}
+		if lvote.vote == abstain {
+			continue
 		}
 		for j := range lvote.blocks {
 			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
-			if vote := lvote.blocks[j].vote; vote != local {
-				ballot.goodness |= conditionNotConsistent
+			vote := lvote.blocks[j].vote
+			if vote != local {
 				return false
 			}
 		}

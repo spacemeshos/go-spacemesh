@@ -62,14 +62,18 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			ballots: [][]*ballotInfo{
 				{
 					{
-						id:       ballots[0],
-						weight:   ballotWeight,
-						goodness: conditionBadBeacon,
+						id:     ballots[0],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
 					},
 					{
-						id:       ballots[1],
-						weight:   ballotWeight,
-						goodness: conditionBadBeacon,
+						id:     ballots[1],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
 					},
 				},
 				{
@@ -103,9 +107,11 @@ func TestVerifyingProcessLayer(t *testing.T) {
 				},
 				{
 					{
-						id:       ballots[2],
-						weight:   ballotWeight,
-						goodness: conditionBadBeacon,
+						id:     ballots[2],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
 					},
 				},
 			},
@@ -119,6 +125,10 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			v := newVerifying(Config{}, newState())
 			v.ballotRefs[goodbase] = &ballotInfo{
 				id: goodbase,
+				conditions: conditions{
+					baseGood:   true,
+					consistent: true,
+				},
 			}
 
 			for i := range tc.ballots {

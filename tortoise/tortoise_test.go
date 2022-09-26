@@ -2056,7 +2056,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 
 	// remove good ballots and genesis to make tortoise select one of the later ballots.
 	for _, ballot := range tortoise.trtl.ballotRefs {
-		ballot.goodness = conditionBadBeacon
+		ballot.conditions.badBeacon = true
 	}
 
 	votes, err := tortoise.EncodeVotes(ctx)

@@ -6,35 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type condition uint8
-
-func (g condition) notConsistent() bool {
-	return g == conditionNotConsistent
-}
-
-func (g condition) abstained() bool {
-	return g&conditionAbstained > 0
-}
-
-func (g condition) isCounted() bool {
-	return g.isGood() || g.abstained()
-}
-
-func (g condition) isGood() bool {
-	return g == 0
-}
-
-func (g condition) ignored() bool {
-	return g&conditionBadBeacon > 0 || g&conditionVotesBeforeBase > 0
-}
-
-const (
-	conditionBadBeacon condition = 1 << iota
-	conditionVotesBeforeBase
-	conditionAbstained
-	conditionNotConsistent
-)
-
 func newVerifying(config Config, state *state) *verifying {
 	return &verifying{
 		Config: config,
@@ -65,14 +36,14 @@ func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfo) bool {
 		if !exist {
 			continue
 		}
-		if ballot.goodness.notConsistent() {
+		if base.canBeGood() && ballot.canBeGood() {
 			logger.With().Debug("marking ballots that can be good as good",
 				log.Stringer("ballot_layer", ballot.layer),
 				log.Stringer("ballot", ballot.id),
 				log.Stringer("base_ballot", ballot.base.id),
 			)
-			base.goodness = 0
-			ballot.goodness = 0
+			base.conditions.baseGood = true
+			ballot.conditions.baseGood = true
 			n++
 		}
 	}
@@ -90,17 +61,20 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 		if !exist {
 			continue
 		}
-		if !base.goodness.isGood() {
+		ballot.conditions.baseGood = base.good()
+		ballot.conditions.consistent = validateConsistency(v.state, v.Config, ballot)
+		logger.With().Debug("ballot goodness",
+			ballot.id,
+			log.Stringer("base id", ballot.base.id),
+			log.Uint32("base layer", ballot.base.layer.Value),
+			log.Bool("good base", ballot.conditions.baseGood),
+			log.Bool("bad beacon", ballot.conditions.badBeacon),
+			log.Bool("consistent", ballot.conditions.consistent),
+			log.Bool("abstained", ballot.conditions.abstained),
+			log.Bool("votes before base", ballot.conditions.votesBeforeBase),
+		)
+		if !ballot.countedByVerifying() {
 			continue
-		}
-		if ballot.goodness.ignored() {
-			continue
-		}
-		if ballot.goodness.notConsistent() {
-			ballot.goodness &^= conditionNotConsistent
-			if !validateConsistency(v.state, v.Config, ballot) {
-				continue
-			}
 		}
 		if ballot.weight.IsNil() {
 			logger.With().Debug("ballot weight is nil", ballot.id)

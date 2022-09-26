@@ -124,17 +124,40 @@ type (
 		layer types.LayerID
 	}
 
+	conditions struct {
+		baseGood bool
+		// is ballot consistent with local opinion within [base.layer, layer)
+		consistent bool
+		// set after comparing with local beacon
+		badBeacon bool
+		// any exceptions before base.layer
+		votesBeforeBase bool
+		abstained       bool
+	}
+
 	ballotInfo struct {
-		id       types.BallotID
-		base     baseInfo
-		layer    types.LayerID
-		height   uint64
-		weight   weight
-		beacon   types.Beacon
-		votes    votes
-		goodness condition
+		id         types.BallotID
+		layer      types.LayerID
+		base       baseInfo
+		height     uint64
+		weight     weight
+		beacon     types.Beacon
+		votes      votes
+		conditions conditions
 	}
 )
+
+func (b *ballotInfo) good() bool {
+	return b.countedByVerifying() && !b.conditions.abstained
+}
+
+func (b *ballotInfo) countedByVerifying() bool {
+	return b.canBeGood() && b.conditions.baseGood
+}
+
+func (b *ballotInfo) canBeGood() bool {
+	return !b.conditions.badBeacon && !b.conditions.votesBeforeBase && b.conditions.consistent
+}
 
 type votes struct {
 	tail *layerVote
