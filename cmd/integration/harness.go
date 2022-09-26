@@ -3,9 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
-
-	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -30,7 +29,6 @@ func Contains(a []string, x string) int {
 // tests and may be used for any other purpose.
 type Harness struct {
 	server *server
-	conn   *grpc.ClientConn
 }
 
 func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
@@ -76,31 +74,33 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 }
 
 func main() {
-	// setup logger
 	log.JSONLog(true)
 
-	dummyChan := make(chan string)
 	// os.Args[0] contains the current process path
 	h, err := newHarnessDefaultServerConfig(os.Args[1:])
 	if err != nil {
 		log.With().Error("harness: an error has occurred while generating a new harness:", log.Err(err))
 		log.Panic("error occurred while generating a new harness")
 	}
+	log.With().Info("integration: harness is listening on a blocking dummy channel")
 
-	// listen on error channel, quit when process stops
-	go func() {
+	interruptChannel := make(chan os.Signal, 1)
+	signal.Notify(interruptChannel, os.Interrupt)
+
+	func() {
 		for {
 			select {
 			case errMsg := <-h.server.errChan:
-				log.With().Error("harness: received an err from subprocess: ", log.Err(errMsg))
-				log.Error("harness: the err is: %s", h.server.buff.String())
-			case <-h.server.quit:
+				log.With().Error("harness: received an err from subprocess: ", log.Err(errMsg), log.String("harness-error", h.server.buff.String()))
+				return
+			case <-interruptChannel:
 				log.With().Info("harness: got a quit signal from subprocess")
 				return
 			}
 		}
 	}()
 
-	log.With().Info("integration: harness is listening on a blocking dummy channel")
-	<-dummyChan
+	if err := h.server.stop(); err == nil {
+		log.With().Error("harness: failed to stop", log.Err(err))
+	}
 }

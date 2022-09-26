@@ -71,7 +71,7 @@ func NewHandler(address core.Address, k uint8, gasSpawn, gasSpend uint64) core.H
 }
 
 type handler struct {
-	k, n                         uint8
+	k                            uint8
 	address                      core.Address
 	totalGasSpawn, totalGasSpend uint64
 }

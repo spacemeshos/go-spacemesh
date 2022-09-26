@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -29,7 +29,7 @@ func init() {
 	postCfg = DefaultPostConfig()
 
 	postSetupOpts = DefaultPostSetupOpts()
-	postSetupOpts.DataDir, _ = ioutil.TempDir("", "post-test")
+	postSetupOpts.DataDir, _ = os.MkdirTemp("", "post-test")
 	postSetupOpts.NumUnits = postCfg.MinNumUnits
 	postSetupOpts.ComputeProviderID = initialization.CPUProviderID()
 }

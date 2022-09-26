@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 const (
@@ -29,13 +29,21 @@ const (
 	txsForProposal = iota
 )
 
+const layersPerEpoch = 3
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
+
 type testLogic struct {
 	*Logic
 	mMesh      *mocks.MockmeshProvider
 	mAtxH      *mocks.MockatxHandler
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
-	mCertH     *mocks.MockcertHandler
 	mProposalH *mocks.MockproposalHandler
 	method     int
 	mTxH       *mocks.MocktxHandler
@@ -68,29 +76,28 @@ func (l *testLogic) getTxs(tids []types.TransactionID) error {
 
 func createTestLogic(t *testing.T) *testLogic {
 	ctrl := gomock.NewController(t)
+	lg := logtest.New(t)
 	tl := &testLogic{
 		mMesh:      mocks.NewMockmeshProvider(ctrl),
 		mAtxH:      mocks.NewMockatxHandler(ctrl),
 		mBallotH:   mocks.NewMockballotHandler(ctrl),
 		mBlocksH:   mocks.NewMockblockHandler(ctrl),
-		mCertH:     mocks.NewMockcertHandler(ctrl),
 		mProposalH: mocks.NewMockproposalHandler(ctrl),
 		mTxH:       mocks.NewMocktxHandler(ctrl),
 		mPoetH:     mocks.NewMockpoetHandler(ctrl),
 		mFetcher:   mocks.NewMockfetcher(ctrl),
 	}
 	tl.Logic = &Logic{
-		log:             logtest.New(t),
-		db:              sql.InMemory(),
+		log:             lg,
+		cdb:             datastore.NewCachedDB(sql.InMemory(), lg),
 		dataResults:     make(map[types.LayerID]*dataResult),
-		dataChs:         make(map[types.LayerID][]chan LayerPromiseResult),
+		dataChs:         make(map[types.LayerID][]chan LayerPromiseData),
 		opnResults:      make(map[types.LayerID]*opinionsResult),
-		opnChs:          make(map[types.LayerID][]chan LayerPromiseResult),
+		opnChs:          make(map[types.LayerID][]chan LayerPromiseOpinions),
 		msh:             tl.mMesh,
 		atxHandler:      tl.mAtxH,
 		ballotHandler:   tl.mBallotH,
 		blockHandler:    tl.mBlocksH,
-		certHandler:     tl.mCertH,
 		proposalHandler: tl.mProposalH,
 		txHandler:       tl.mTxH,
 		poetHandler:     tl.mPoetH,
@@ -104,13 +111,11 @@ const (
 	numBlocks  = 3
 )
 
-func generateCert(t *testing.T, bid *types.BlockID) []byte {
+func generateLayerOpinions(t *testing.T) []byte {
 	t.Helper()
-	var lo LayerOpinions
-	if bid != nil {
-		lo.Cert = &types.Certificate{
-			BlockID: *bid,
-		}
+	var lo LayerOpinion
+	lo.Cert = &types.Certificate{
+		BlockID: types.RandomBlockID(),
 	}
 	data, err := codec.Encode(&lo)
 	require.NoError(t, err)
@@ -127,12 +132,9 @@ func generateLayerContent(t *testing.T) []byte {
 	for i := 0; i < numBlocks; i++ {
 		blockIDs = append(blockIDs, types.RandomBlockID())
 	}
-	hash := types.CalcBlocksHash32(types.SortBlockIDs(blockIDs), nil)
 	lb := LayerData{
-		Ballots:        ballotIDs,
-		Blocks:         blockIDs,
-		Hash:           hash,
-		AggregatedHash: types.RandomHash(),
+		Ballots: ballotIDs,
+		Blocks:  blockIDs,
 	}
 	out, _ := codec.Encode(&lb)
 	return out
@@ -140,10 +142,8 @@ func generateLayerContent(t *testing.T) []byte {
 
 func generateEmptyLayer() []byte {
 	lb := LayerData{
-		Ballots:        []types.BallotID{},
-		Blocks:         []types.BlockID{},
-		Hash:           types.EmptyLayerHash,
-		AggregatedHash: types.RandomHash(),
+		Ballots: []types.BallotID{},
+		Blocks:  []types.BlockID{},
 	}
 	out, _ := codec.Encode(&lb)
 	return out
@@ -363,51 +363,26 @@ func TestPollLayerData_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 	require.Equal(t, layerID, res.Layer)
 }
 
-func TestPollLayerOpinions_AlreadyExists(t *testing.T) {
-	tl := createTestLogic(t)
-	lid := types.NewLayerID(10)
-	require.NoError(t, layers.SetHareOutputWithCert(tl.db, lid, &types.Certificate{
-		BlockID: types.BlockID{1, 2, 3},
-	}))
-	res := <-tl.PollLayerOpinions(context.TODO(), lid)
-	require.NoError(t, res.Err)
-	require.Equal(t, lid, res.Layer)
-}
-
 func TestPollLayerOpinions(t *testing.T) {
 	const numPeers = 4
 	pe := errors.New("meh")
 	tt := []struct {
 		name  string
-		certs []int
 		err   error
 		pErrs []error
 	}{
 		{
-			name:  "all peers have certs",
-			certs: []int{1, 1, 1, 1},
+			name:  "all peers",
 			pErrs: []error{nil, nil, nil, nil},
-		},
-		{
-			name:  "some peers have certs",
-			certs: []int{0, 0, 1, 1},
-			pErrs: []error{nil, nil, nil, nil},
-		},
-		{
-			name:  "no peers have certs",
-			certs: []int{0, 0, 0, 0},
-			pErrs: []error{nil, nil, nil, nil},
-			err:   errCertificateMissing,
 		},
 		{
 			name:  "some peers have errors",
-			certs: []int{0, 0, 1, 1},
-			pErrs: []error{pe, nil, nil, nil},
+			pErrs: []error{pe, pe, nil, nil},
 		},
 		{
 			name:  "all peers have errors",
 			pErrs: []error{pe, pe, pe, pe},
-			err:   errCertificateMissing,
+			err:   errLayerOpinionsNotFetched,
 		},
 	}
 
@@ -426,22 +401,13 @@ func TestPollLayerOpinions(t *testing.T) {
 					for i, peer := range peers {
 						if tc.pErrs[i] != nil {
 							errCB(tc.pErrs[i], peer, numPeers)
-						} else if tc.certs[i] > 0 {
-							okCB(generateCert(t, &types.BlockID{byte(i)}), peer, numPeers)
 						} else {
-							okCB(generateCert(t, nil), peer, numPeers)
+							okCB(generateLayerOpinions(t), peer, numPeers)
 						}
 						wg.Done()
 					}
 					return nil
 				})
-			tl.mCertH.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ types.LayerID, got *types.Certificate) error {
-					if got.BlockID == (types.BlockID{2}) {
-						return nil
-					}
-					return errInternal
-				}).AnyTimes()
 
 			res := <-tl.PollLayerOpinions(context.TODO(), lid)
 			if tc.err != nil {

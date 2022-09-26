@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -262,9 +261,6 @@ type App struct {
 	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
-	gatewaySvc       *grpcserver.GatewayService
-	globalstateSvc   *grpcserver.GlobalStateService
-	txService        *grpcserver.TransactionService
 	syncer           *syncer.Syncer
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
@@ -551,13 +547,12 @@ func (app *App) initServices(ctx context.Context,
 	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
-		Cert:     app.certifier,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
 		Poet:     poetDb,
 	}
-	layerFetch := fetch.NewLogic(app.Config.FETCH, sqlDB, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
+	layerFetch := fetch.NewLogic(app.Config.FETCH, cdb, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -566,7 +561,7 @@ func (app *App) initServices(ctx context.Context,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, sqlDB, clock, beaconProtocol, msh, layerFetch, patrol, app.certifier, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -925,7 +920,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to read identity file: %w", err)
@@ -938,7 +933,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = ioutil.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
+		err = os.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -955,33 +950,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
-}
-
-type identityFileFound struct{}
-
-func (identityFileFound) Error() string {
-	return "identity file found"
-}
-
-func (app *App) getIdentityFile() (string, error) {
-	var f string
-	err := filepath.Walk(app.Config.SMESHING.Opts.DataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() && info.Name() == edKeyFileName {
-			f = path
-			return &identityFileFound{}
-		}
-		return nil
-	})
-	if _, ok := err.(*identityFileFound); ok {
-		return f, nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to traverse Post data dir: %w", err)
-	}
-	return "", fmt.Errorf("not found")
 }
 
 func (app *App) startSyncer(ctx context.Context) {

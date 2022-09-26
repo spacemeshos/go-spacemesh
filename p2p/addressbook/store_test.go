@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -72,7 +71,7 @@ func TestAddrBook_EncodeDecode(t *testing.T) {
 		t.Parallel()
 		expected, tmpDir := initBookAndPersist(t)
 
-		require.NoError(t, ioutil.WriteFile(filepath.Join(tmpDir, peersFileName), []byte{}, 0o666))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, peersFileName), []byte{}, 0o666))
 		book := NewAddrBook(DefaultAddressBookConfigWithDataDir(tmpDir), logtest.New(t))
 		for pid := range expected {
 			found := book.Lookup(pid)
