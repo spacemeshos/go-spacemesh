@@ -198,7 +198,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer1 := signing.NewEdSigner()
+	signer1 := signing.NewEdSigner([20]byte{})
 	vrfSigner1 := signer1.VRFSigner()
 
 	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
@@ -213,7 +213,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now()))
 
-	signer2 := signing.NewEdSigner()
+	signer2 := signing.NewEdSigner([20]byte{})
 	vrfSigner2 := signer2.VRFSigner()
 
 	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
@@ -244,7 +244,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
 	tpd.Close()
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
@@ -264,7 +264,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
@@ -294,7 +294,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := []byte("guaranteed to be  malformed")
@@ -311,7 +311,7 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch-1, false)
@@ -368,7 +368,7 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 	const nextEpoch = epoch + 1
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
@@ -396,7 +396,7 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch+2, false)
@@ -417,7 +417,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, true)
@@ -479,7 +479,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 	mockAlwaysFalseProposalChecker(t, tpd.ProtocolDriver, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 
 	msg := createProposal(t, signer, signer.VRFSigner(), epoch, false)
 	msgBytes, err := codec.Encode(msg)
@@ -500,7 +500,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	const epoch = types.EpochID(10)
 	tpd := createProtocolDriver(t, epoch)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
@@ -523,7 +523,7 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -549,7 +549,7 @@ func Test_HandleFirstVotes_Shutdown(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -568,7 +568,7 @@ func Test_HandleFirstVotes_NotInProtocol(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -588,7 +588,7 @@ func Test_handleFirstVotes_CorruptMsg(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -609,7 +609,7 @@ func Test_handleFirstVotes_WrongEpoch(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch+1, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -643,7 +643,7 @@ func Test_handleFirstVotes_TooLate(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -664,7 +664,7 @@ func Test_HandleFirstVotes_FailedToExtractPK(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, true)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -684,7 +684,7 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -719,7 +719,7 @@ func Test_HandleFirstVotes_MinerMissingATX(t *testing.T) {
 
 	validVotes := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValidVotes := [][]byte{types.HexToHash32("0x23456789").Bytes()}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
@@ -736,7 +736,7 @@ func Test_HandleFollowingVotes_Success(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -765,7 +765,7 @@ func Test_HandleFollowingVotes_Shutdown(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 	tpd.mClock.EXPECT().Unsubscribe(gomock.Any())
 	tpd.Close()
@@ -786,7 +786,7 @@ func Test_HandleFollowingVotes_NotInProtocol(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -806,7 +806,7 @@ func Test_handleFollowingVotes_CorruptMsg(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -825,7 +825,7 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 	createEpochState(t, tpd.ProtocolDriver, epoch+1)
 	createEpochState(t, tpd.ProtocolDriver, epoch-1)
@@ -861,7 +861,7 @@ func Test_handleFollowingVotes_TooEarly(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -882,7 +882,7 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -902,7 +902,7 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -942,7 +942,7 @@ func Test_handleFollowingVotes_MinerMissingATX(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -963,7 +963,7 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	tpd := createProtocolDriver(t, epoch)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	known := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
 	unknown := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
 	plist := append(known, unknown...)
@@ -997,7 +997,7 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	round := types.RoundID(3)
 	votesBitVector := []byte{0b101}
-	edSgn := signing.NewEdSigner()
+	edSgn := signing.NewEdSigner([20]byte{})
 	msg1 := FollowingVotingMessage{
 		FollowingVotingMessageBody: FollowingVotingMessageBody{
 			RoundID:        round,

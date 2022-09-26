@@ -52,7 +52,7 @@ func Test_HandleBlock(t *testing.T) {
 			cstate := mocks.NewMockconservativeState(ctrl)
 			th := NewTxHandler(cstate, logtest.New(t))
 
-			signer := signing.NewEdSigner()
+			signer := signing.NewEdSigner([20]byte{})
 			tx := newTx(t, 3, 10, 1, signer)
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
@@ -81,7 +81,7 @@ func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verif
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	tx := newTx(t, 3, 10, 1, signer)
 	var rst *types.MeshTransaction
 	if has {

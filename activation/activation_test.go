@@ -98,7 +98,7 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 }
 
 func NewMockSigner() *MockSigning {
-	return &MockSigning{signing.NewEdSigner()}
+	return &MockSigning{signing.NewEdSigner([20]byte{})}
 }
 
 // TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".

@@ -21,7 +21,7 @@ func marshallUnmarshall(t *testing.T, msg *Message) *Message {
 
 func TestBuilder_TestBuild(t *testing.T) {
 	b := newMessageBuilder()
-	sgn := signing.NewEdSigner()
+	sgn := signing.NewEdSigner([20]byte{})
 	msg := b.SetPubKey(sgn.PublicKey()).SetInstanceID(instanceID1).Sign(sgn).Build()
 
 	m := marshallUnmarshall(t, &msg.Message)
@@ -41,7 +41,7 @@ func TestMessageBuilder_SetValues(t *testing.T) {
 func TestMessageBuilder_SetCertificate(t *testing.T) {
 	s := NewSetFromValues(value5)
 	tr := newCommitTracker(1, 1, s)
-	tr.OnCommit(BuildCommitMsg(signing.NewEdSigner(), s))
+	tr.OnCommit(BuildCommitMsg(signing.NewEdSigner([20]byte{}), s))
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
 	c := newMessageBuilder().SetCertificate(cert).Build().Message

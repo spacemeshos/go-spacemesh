@@ -570,7 +570,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		}
 	})
 	require.NoError(t, err)
-	edSgn := signing.NewEdSigner()
+	edSgn := signing.NewEdSigner([20]byte{})
 	h, err := p2p.Upgrade(mesh.Hosts()[0], config.CalcGenesisID(cfg.Genesis.ExtraData, cfg.Genesis.GenesisTime))
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
@@ -697,7 +697,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	cfg := config.DefaultTestConfig()
 	app.Config = &cfg
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	address := wallet.Address(signer.PublicKey().Bytes())
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {

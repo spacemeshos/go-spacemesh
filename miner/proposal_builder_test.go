@@ -128,7 +128,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	numSlots := 2
 	proofs := genProofs(t, numSlots)
 
-	tx1 := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx1 := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 	base := types.RandomBallotID()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -174,7 +174,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	activeSet := genActiveSet(t)
 	proofs := genProofs(t, 1)
 
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 	bb := types.RandomBallotID()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -280,7 +280,7 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
 	activeSet := genActiveSet(t)
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -309,7 +309,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 		types.BallotID{1}, nil, b.ProposalBuilder.signer.PublicKey().Bytes(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -337,7 +337,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -357,7 +357,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -379,7 +379,7 @@ func TestBuilder_HandleLayer_StateRootErrorOK(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
@@ -400,7 +400,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner())
+	tx := genTX(t, 1, types.GenerateAddress([]byte{0x01}), signing.NewEdSigner([20]byte{}))
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)

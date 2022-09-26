@@ -29,13 +29,13 @@ func defaultValidator(tb testing.TB) *syntaxContextValidator {
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 
-	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, trueValidator,
+	return newSyntaxContextValidator(signing.NewEdSigner([20]byte{}), lowThresh10, trueValidator,
 		sq, 10, truer{}, newPubGetter(), logtest.New(tb))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
-	assert.True(t, validateCommitType(BuildCommitMsg(signing.NewEdSigner(), NewEmptySet(lowDefaultSize))))
-	assert.True(t, validateStatusType(BuildStatusMsg(signing.NewEdSigner(), NewEmptySet(lowDefaultSize))))
+	assert.True(t, validateCommitType(BuildCommitMsg(signing.NewEdSigner([20]byte{}), NewEmptySet(lowDefaultSize))))
+	assert.True(t, validateStatusType(BuildStatusMsg(signing.NewEdSigner([20]byte{}), NewEmptySet(lowDefaultSize))))
 }
 
 func TestMessageValidator_ValidateCertificate(t *testing.T) {
@@ -56,7 +56,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 	msgs = make([]Message, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildCommitMsg(signing.NewEdSigner(), NewDefaultEmptySet()).Message
+		msgs[i] = BuildCommitMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet()).Message
 	}
 	cert.AggMsgs.Messages = msgs
 	assert.True(t, validator.validateCertificate(context.TODO(), cert))
@@ -71,7 +71,7 @@ func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
 
 func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet(), nil)
 	m.InnerMsg = nil
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
@@ -80,7 +80,7 @@ func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 
 func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
 	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
-	sig := signing.NewEdSigner()
+	sig := signing.NewEdSigner([20]byte{})
 	builder := newMessageBuilder().
 		SetType(pre).
 		SetInstanceID(types.NewLayerID(1)).
@@ -103,7 +103,7 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
 	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	myErr := errors.New("my error")
 
@@ -118,7 +118,7 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
 	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
@@ -131,7 +131,7 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
 	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
@@ -145,7 +145,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), nil))
 	m := &Msg{Message: Message{}, PubKey: nil}
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
-	m.PubKey = signing.NewEdSigner().PublicKey()
+	m.PubKey = signing.NewEdSigner([20]byte{}).PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 
 	// empty set is allowed now
@@ -168,9 +168,9 @@ func (m mockValidator) Validate(context.Context, *Msg) bool {
 func initPg(validator *syntaxContextValidator) (*pubGetter, []Message, Signer) {
 	pg := newPubGetter()
 	msgs := make([]Message, validator.threshold)
-	sgn := signing.NewEdSigner()
+	sgn := signing.NewEdSigner([20]byte{})
 	for i := 0; i < validator.threshold; i++ {
-		sgn = signing.NewEdSigner() // hold some sgn
+		sgn = signing.NewEdSigner([20]byte{}) // hold some sgn
 		iMsg := BuildStatusMsg(sgn, NewSetFromValues(value1))
 		msgs[i] = iMsg.Message
 		pg.Track(iMsg)
@@ -224,7 +224,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	msgs[len(msgs)-1] = m0
 	r.Equal(errDupSender, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
 
-	msgs[0] = BuildStatusMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	msgs[0] = BuildStatusMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1)).Message
 	r.Nil(pg.PublicKey(&msgs[0]))
 	require.NoError(t, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
 	r.NotNil(pg.PublicKey(&msgs[0]))
@@ -243,7 +243,7 @@ func makeMessages(eligibilityCount int) []Message {
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator(t)
-	ed := signing.NewEdSigner()
+	ed := signing.NewEdSigner([20]byte{})
 	pre := BuildPreRoundMsg(ed, NewDefaultEmptySet(), nil)
 	for i := uint32(0); i < 10; i++ {
 		k := i * 4
@@ -256,7 +256,7 @@ func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testing.T) {
 	r := require.New(t)
 	v := defaultValidator(t)
-	ed := signing.NewEdSigner()
+	ed := signing.NewEdSigner([20]byte{})
 	set := NewDefaultEmptySet()
 	pre := BuildPreRoundMsg(ed, set, nil)
 	pre.InnerMsg.K = preRound
@@ -325,15 +325,15 @@ func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, nil, 10, truer{}, newPubGetter(), logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	validator := newSyntaxContextValidator(signing.NewEdSigner([20]byte{}), 1, validate, nil, 10, truer{}, newPubGetter(), logtest.New(t))
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet(), nil)
 	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
-	m = BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
+	m = BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil)
 	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 }
 
 func TestMessageValidator_validateSVPTypeA(t *testing.T) {
-	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
+	m := buildProposalMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	s2 := NewSetFromValues(value3)
 	s3 := NewSetFromValues(value1, value5)
@@ -347,7 +347,7 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVPTypeB(t *testing.T) {
-	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
+	m := buildProposalMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	s := NewSetFromValues(value1)
@@ -361,8 +361,8 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, mockStateQ, 10, truer{}, newPubGetter(), logtest.New(t))
-	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
+	validator := newSyntaxContextValidator(signing.NewEdSigner([20]byte{}), 1, validate, mockStateQ, 10, truer{}, newPubGetter(), logtest.New(t))
+	m := buildProposalMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(preRound, s1)
 	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit
@@ -384,7 +384,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 func buildSVP(ki uint32, S ...*Set) *AggregatedMessages {
 	msgs := make([]Message, 0, len(S))
 	for _, s := range S {
-		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).Message)
+		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner([20]byte{}), s, ki).Message)
 	}
 
 	svp := &AggregatedMessages{}
@@ -396,7 +396,7 @@ func validateMatrix(t *testing.T, mType MessageType, msgK uint32, exp []error) {
 	r := require.New(t)
 	rounds := []uint32{preRound, 0, 1, 2, 3, 4, 5, 6, 7}
 	v := defaultValidator(t)
-	sgn := signing.NewEdSigner()
+	sgn := signing.NewEdSigner([20]byte{})
 	set := NewEmptySet(1)
 	var m *Msg
 	switch mType {

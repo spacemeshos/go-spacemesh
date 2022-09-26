@@ -2,6 +2,7 @@ package hare
 
 import (
 	"context"
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,15 +25,19 @@ func BuildProposalMsg(signing Signer, s *Set) *Msg {
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
+	log.Fatal()
+
 	s := NewSetFromValues(value1, value2)
-	verifier := signing.NewEdSigner()
+	verifier := signing.NewEdSigner([20]byte{})
 
 	m1 := BuildProposalMsg(verifier, s)
 	tracker := newProposalTracker(logtest.New(t))
 	tracker.OnProposal(context.TODO(), m1)
 	assert.False(t, tracker.IsConflicting())
+
 	g := NewSetFromValues(value3)
 	m2 := BuildProposalMsg(verifier, g)
+
 	tracker.OnProposal(context.TODO(), m2)
 	assert.True(t, tracker.IsConflicting())
 }
@@ -43,14 +48,14 @@ func TestProposalTracker_IsConflicting(t *testing.T) {
 	tracker := newProposalTracker(logtest.New(t))
 
 	for i := 0; i < lowThresh10; i++ {
-		tracker.OnProposal(context.TODO(), BuildProposalMsg(signing.NewEdSigner(), s))
+		tracker.OnProposal(context.TODO(), BuildProposalMsg(signing.NewEdSigner([20]byte{}), s))
 		assert.False(t, tracker.IsConflicting())
 	}
 }
 
 func TestProposalTracker_OnLateProposal(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
-	verifier := signing.NewEdSigner()
+	verifier := signing.NewEdSigner([20]byte{})
 	m1 := BuildProposalMsg(verifier, s)
 	tracker := newProposalTracker(logtest.New(t))
 	tracker.OnProposal(context.TODO(), m1)
@@ -66,16 +71,16 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	proposedSet := tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 	s1 := NewSetFromValues(value1, value2)
-	tracker.OnProposal(context.TODO(), buildProposalMsg(signing.NewEdSigner(), s1, []byte{1, 2, 3}))
+	tracker.OnProposal(context.TODO(), buildProposalMsg(signing.NewEdSigner([20]byte{}), s1, []byte{1, 2, 3}))
 	proposedSet = tracker.ProposedSet()
 	assert.NotNil(t, proposedSet)
 	assert.True(t, s1.Equals(proposedSet))
 	s2 := NewSetFromValues(value3, value4, value5)
-	pub := signing.NewEdSigner()
+	pub := signing.NewEdSigner([20]byte{})
 	tracker.OnProposal(context.TODO(), buildProposalMsg(pub, s2, []byte{0}))
 	proposedSet = tracker.ProposedSet()
 	assert.True(t, s2.Equals(proposedSet))
-	tracker.OnProposal(context.TODO(), buildProposalMsg(pub, s1, []byte{0}))
+	tracker.OnProposal(context.TODO(), buildProposalMsg(pub, s1, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0}))
 	proposedSet = tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 }

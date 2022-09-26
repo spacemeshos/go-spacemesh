@@ -26,7 +26,7 @@ func TestBallot_Initialize(t *testing.T) {
 			LayerIndex: NewLayerID(10),
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	b.Signature = signer.Sign(b.Bytes())
 	assert.NoError(t, b.Initialize())
 	assert.NotEqual(t, EmptyBallotID, b.ID())
@@ -48,7 +48,7 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 			LayerIndex: NewLayerID(10),
 		},
 	}
-	b.Signature = signing.NewEdSigner().Sign(b.Bytes())[1:]
+	b.Signature = signing.NewEdSigner([20]byte{}).Sign(b.Bytes())[1:]
 	err := b.Initialize()
 	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }

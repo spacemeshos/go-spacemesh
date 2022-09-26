@@ -26,7 +26,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	verifier := signing.NewEdSigner()
+	verifier := signing.NewEdSigner([20]byte{})
 
 	tracker := newNotifyTracker(lowDefaultSize)
 	exist := tracker.OnNotify(BuildNotifyMsg(verifier, s))
@@ -44,8 +44,8 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	tracker := newNotifyTracker(lowDefaultSize)
-	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner(), s))
+	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner([20]byte{}), s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
-	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner(), s))
+	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner([20]byte{}), s))
 	assert.Equal(t, 2, tracker.NotificationsCount(s))
 }

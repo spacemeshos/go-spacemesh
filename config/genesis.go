@@ -36,12 +36,13 @@ func defaultGenesisConfig() *GenesisConfig {
 }
 
 func GenerateDefaultGenesisAccounts() map[string]uint64 {
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(account1Private))
+	genesisTime := time.Now().Format(time.RFC3339)
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(account1Private), CalcGenesisID(defaultGenesisExtraData, genesisTime))
 	if err != nil {
 		panic("could not build ed signer")
 	}
 
-	acc2Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(account2Private))
+	acc2Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(account2Private), CalcGenesisID(defaultGenesisExtraData, genesisTime))
 	if err != nil {
 		panic("could not build ed signer")
 	}

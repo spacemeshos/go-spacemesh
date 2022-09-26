@@ -106,7 +106,7 @@ func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
 	p.Ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.TxIDs = []types.TransactionID{}
@@ -133,7 +133,7 @@ func TestHare_New(t *testing.T) {
 	defer ctrl.Finish()
 
 	logger := logtest.New(t).WithName(t.Name())
-	h := New(sql.InMemory(), cfg, "", noopPubSub(t), signing.NewEdSigner(), types.NodeID{}, make(chan LayerOutput, 1),
+	h := New(sql.InMemory(), cfg, "", noopPubSub(t), signing.NewEdSigner([20]byte{}), types.NodeID{}, make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
 		eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10, mocks.NewMockstateQuerier(ctrl), newMockClock(), logger)
 	assert.NotNil(t, h)

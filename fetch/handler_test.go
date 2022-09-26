@@ -43,7 +43,7 @@ func createLayer(t *testing.T, db *sql.Database, lid types.LayerID) *lyrdata {
 	for i := 0; i < 5; i++ {
 		b := types.RandomBallot()
 		b.LayerIndex = lid
-		b.Signature = signing.NewEdSigner().Sign(b.Bytes())
+		b.Signature = signing.NewEdSigner([20]byte{}).Sign(b.Bytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(db, b))
 		l.blts = append(l.blts, b.ID())

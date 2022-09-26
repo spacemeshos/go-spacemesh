@@ -77,7 +77,7 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 		mClock: mocks.NewMocklayerClock(ctrl),
 		mSync:  smocks.NewMockSyncStateProvider(ctrl),
 	}
-	edSgn := signing.NewEdSigner()
+	edSgn := signing.NewEdSigner([20]byte{})
 	edPubkey := edSgn.PublicKey()
 	vrfSigner := edSgn.VRFSigner()
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
@@ -108,7 +108,7 @@ func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *sig
 
 func createRandomATXs(t *testing.T, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
-		createATX(t, db, lid, signing.NewEdSigner(), 1)
+		createATX(t, db, lid, signing.NewEdSigner([20]byte{}), 1)
 	}
 }
 
@@ -737,7 +737,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	r := require.New(t)
 
-	edSgn := signing.NewEdSigner()
+	edSgn := signing.NewEdSigner([20]byte{})
 	vrfSigner := edSgn.VRFSigner()
 
 	tt := []struct {
@@ -771,8 +771,8 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 func TestBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
-	signer := signing.NewEdSigner()
-	verifier := signing.NewEDVerifier()
+	signer := signing.NewEdSigner([20]byte{})
+	verifier := signing.NewEdVerifier([20]byte{})
 
 	message := []byte{1, 2, 3, 4}
 
@@ -789,7 +789,7 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 func TestBeacon_signAndVerifyVRF(t *testing.T) {
 	r := require.New(t)
 
-	signer := signing.NewEdSigner().VRFSigner()
+	signer := signing.NewEdSigner([20]byte{}).VRFSigner()
 
 	verifier := signing.VRFVerifier{}
 

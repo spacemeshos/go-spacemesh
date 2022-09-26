@@ -21,7 +21,7 @@ func TestProposal_Initialize(t *testing.T) {
 			TxIDs:  []TransactionID{RandomTransactionID(), RandomTransactionID()},
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 	p.Signature = signer.Sign(p.Bytes())
 	assert.NoError(t, p.Initialize())
@@ -38,7 +38,7 @@ func TestProposal_Initialize_BadSignature(t *testing.T) {
 			TxIDs:  []TransactionID{RandomTransactionID(), RandomTransactionID()},
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 	p.Signature = signer.Sign(p.Bytes())[1:]
 	err := p.Initialize()
@@ -52,8 +52,8 @@ func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
 			TxIDs:  []TransactionID{RandomTransactionID(), RandomTransactionID()},
 		},
 	}
-	p.Ballot.Signature = signing.NewEdSigner().Sign(p.Ballot.Bytes())
-	p.Signature = signing.NewEdSigner().Sign(p.Bytes())
+	p.Ballot.Signature = signing.NewEdSigner([20]byte{}).Sign(p.Ballot.Bytes())
+	p.Signature = signing.NewEdSigner([20]byte{}).Sign(p.Bytes())
 	err := p.Initialize()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "inconsistent smesher in proposal")

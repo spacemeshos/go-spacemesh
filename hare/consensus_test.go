@@ -154,7 +154,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	broker.Start(context.TODO())
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
-	signing := signing2.NewEdSigner()
+	signing := signing2.NewEdSigner([20]byte{})
 	nid := types.BytesToNodeID(signing.PublicKey().Bytes())
 	oracle.Register(isHonest, nid)
 	proc := newConsensusProcess(cfg, layer, initialSet, oracle, broker.mockStateQ, 10, signing,

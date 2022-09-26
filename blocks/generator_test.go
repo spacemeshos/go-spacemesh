@@ -85,7 +85,7 @@ func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
 		addr := types.GenerateAddress([]byte("1"))
-		tx := genTx(t, signing.NewEdSigner(), addr, 1, 10, 100)
+		tx := genTx(t, signing.NewEdSigner([20]byte{}), addr, 1, 10, 100)
 		txIDs = append(txIDs, tx.ID)
 	}
 	return txIDs
@@ -102,7 +102,7 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
 	for i := 0; i < numATXs; i++ {
-		signer := signing.NewEdSigner()
+		signer := signing.NewEdSigner([20]byte{})
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(

@@ -35,7 +35,7 @@ type testOracle struct {
 
 func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
 	tb.Helper()
-	edSigner := signing.NewEdSigner()
+	edSigner := signing.NewEdSigner([20]byte{})
 	edPubkey := edSigner.PublicKey()
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 	return nodeID, edSigner, edSigner.VRFSigner()

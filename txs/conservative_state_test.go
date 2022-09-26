@@ -101,7 +101,7 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 	ids := make([]types.TransactionID, 0, numTXs)
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer := signing.NewEdSigner([20]byte{})
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -295,7 +295,7 @@ func TestSelectProposalTXs(t *testing.T) {
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer := signing.NewEdSigner([20]byte{})
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: 1}, nil).Times(1)
@@ -326,7 +326,7 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 	gasLimit := defaultGas * uint64(expSize)
 	tcs := createTestState(t, gasLimit)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer := signing.NewEdSigner([20]byte{})
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
@@ -348,7 +348,7 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	bid := types.BlockID{100}
 	expected := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer := signing.NewEdSigner([20]byte{})
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
@@ -371,7 +371,7 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 
 func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	numTXs := numTXsInProposal * 2
 	numInBlock := numTXsInProposal
@@ -403,9 +403,9 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 		numInDBs      = numInProposal
 	)
 	tcs := createConservativeState(t)
-	signer1 := signing.NewEdSigner()
+	signer1 := signing.NewEdSigner([20]byte{})
 	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
-	signer2 := signing.NewEdSigner()
+	signer2 := signing.NewEdSigner([20]byte{})
 	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
@@ -453,7 +453,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 
 func TestGetProjection(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -470,7 +470,7 @@ func TestGetProjection(t *testing.T) {
 
 func TestAddToCache(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -517,7 +517,7 @@ func TestAddToCache_NonceGap(t *testing.T) {
 
 func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -530,7 +530,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 
 func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(uint64(math.MaxUint64), nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -546,7 +546,7 @@ func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 
 func TestGetMeshTransaction(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -574,7 +574,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)

@@ -137,7 +137,7 @@ func TestReferenceHeight(t *testing.T) {
 					},
 				}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
-				require.NoError(t, activation.SignAtx(signing.NewEdSigner(), atx))
+				require.NoError(t, activation.SignAtx(signing.NewEdSigner([20]byte{}), atx))
 				vAtx, err := atx.Verify(0, uint64(height))
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx, time.Time{}))

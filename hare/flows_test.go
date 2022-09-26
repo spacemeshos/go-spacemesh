@@ -169,7 +169,7 @@ type hareWithMocks struct {
 
 func createTestHare(t testing.TB, db *sql.Database, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
 	t.Helper()
-	ed := signing.NewEdSigner()
+	ed := signing.NewEdSigner([20]byte{})
 	pub := ed.PublicKey()
 	nodeID := types.BytesToNodeID(pub.Bytes())
 	ctrl := gomock.NewController(t)

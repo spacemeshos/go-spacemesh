@@ -149,7 +149,7 @@ func createState(t *testing.T, numAccounts int) map[types.Address]*testAcct {
 	const minBalance = 1_000_000
 	accounts := make(map[types.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
-		signer := signing.NewEdSigner()
+		signer := signing.NewEdSigner([20]byte{})
 		principal := types.GenerateAddress(signer.PublicKey().Bytes())
 		bal := uint64(rand.Int63n(100_000_000))
 		if bal < minBalance {
@@ -177,7 +177,7 @@ func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*
 
 func createSingleAccountTestCache(t *testing.T) (*testCache, *testAcct) {
 	t.Helper()
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	ta := &testAcct{signer: signer, principal: principal, nonce: uint64(rand.Int63n(1000)), balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
@@ -1180,7 +1180,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	}
 
 	// create a new account that's not in cache
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	skippedNotInCache := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, transactions.Add(tc.db, skippedNotInCache, time.Now()))
 	allSkipped = append(allSkipped, *skippedNotInCache)

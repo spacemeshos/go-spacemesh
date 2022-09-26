@@ -926,6 +926,8 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
+	genesisID := config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime)
+
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -934,7 +936,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner()
+		edSgn := signing.NewEdSigner(genesisID)
 		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
@@ -948,7 +950,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		return edSgn, nil
 	}
 
-	edSgn, err := signing.NewEdSignerFromBuffer(data)
+	edSgn, err := signing.NewEdSignerFromBuffer(data, genesisID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}

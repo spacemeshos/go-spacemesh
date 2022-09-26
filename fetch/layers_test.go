@@ -680,7 +680,7 @@ func genTransactions(t *testing.T, num int) []*types.Transaction {
 	t.Helper()
 	txs := make([]*types.Transaction, 0, num)
 	for i := 0; i < num; i++ {
-		tx := genTx(t, signing.NewEdSigner(), types.Address{1}, 1, 1, 1)
+		tx := genTx(t, signing.NewEdSigner([20]byte{}), types.Address{1}, 1, 1, 1)
 		txs = append(txs, &tx)
 	}
 	return txs
@@ -782,7 +782,7 @@ func TestGetTxs(t *testing.T) {
 
 func genATXs(t *testing.T, num int) []*types.ActivationTx {
 	t.Helper()
-	sig := signing.NewEdSigner()
+	sig := signing.NewEdSigner([20]byte{})
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := 0; i < num; i++ {
 		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)

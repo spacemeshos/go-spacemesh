@@ -43,7 +43,7 @@ type mockClient struct {
 func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
 	tb.Helper()
 
-	sr := signing.NewEdSigner()
+	sr := signing.NewEdSigner([20]byte{})
 	b := newMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
 	return mustEncode(tb, msg.Message)
@@ -107,7 +107,7 @@ func TestBroker_Priority(t *testing.T) {
 	assert.Nil(t, err)
 
 	createMessageWithRoleProof := func(roleProof []byte) []byte {
-		sr := signing.NewEdSigner()
+		sr := signing.NewEdSigner([20]byte{})
 		b := newMessageBuilder()
 		msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID1).SetRoleProof(roleProof).Sign(sr).Build()
 		return mustEncode(t, msg.Message)
@@ -350,7 +350,7 @@ func TestBroker_Send(t *testing.T) {
 
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", nil))
 
-	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+	msg := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil).Message
 	msg.InnerMsg.InstanceID = instanceID2
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 
@@ -368,7 +368,7 @@ func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
-	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
+	msg := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil)
 
 	broker.mu.Lock()
 	broker.pending[instanceID1.Uint32()] = []*Msg{msg, msg}
@@ -390,7 +390,7 @@ func TestBroker_Register2(t *testing.T) {
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	broker.Register(context.TODO(), instanceID1)
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 
 	msg := newMockGossipMsg(m).Message
@@ -409,7 +409,7 @@ func TestBroker_Register3(t *testing.T) {
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
 
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 
 	broker.HandleMessage(context.TODO(), "", mustEncode(t, m))
@@ -434,7 +434,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	inbox, _ := broker.Register(context.TODO(), instanceID1)
-	sgn := signing.NewEdSigner()
+	sgn := signing.NewEdSigner([20]byte{})
 	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 
@@ -456,7 +456,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 }
 
 func Test_newMsg(t *testing.T) {
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil).Message
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
@@ -541,7 +541,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	// unknown-->invalid, ignore
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
@@ -588,7 +588,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
 	_, e := b.Register(context.TODO(), instanceID4)
 	r.NotNil(e)
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner([20]byte{}), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID4
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
 	b.mu.RLock()
@@ -614,7 +614,7 @@ func Test_validate(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 
-	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
+	m := BuildStatusMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = instanceID1
 	b.setLatestLayer(instanceID2)
 	e := b.validate(context.TODO(), &m.Message)
@@ -691,7 +691,7 @@ func TestBroker_Flow(t *testing.T) {
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, b.Start(context.TODO()))
 
-	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
+	m := BuildStatusMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = instanceID1
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m.Message))
 
@@ -699,7 +699,7 @@ func TestBroker_Flow(t *testing.T) {
 	r.Nil(e)
 	<-ch1
 
-	m2 := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
+	m2 := BuildStatusMsg(signing.NewEdSigner([20]byte{}), NewDefaultEmptySet())
 	m2.InnerMsg.InstanceID = instanceID2
 	ch2, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)

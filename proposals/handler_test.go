@@ -78,7 +78,7 @@ func createTestHandler(t *testing.T) *testHandler {
 func createProposal(t *testing.T) *types.Proposal {
 	t.Helper()
 	b := types.RandomBallot()
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	b.Signature = signer.Sign(b.Bytes())
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
@@ -105,7 +105,7 @@ func createBallot(t *testing.T) *types.Ballot {
 
 func signAndInit(t *testing.T, b *types.Ballot) *types.Ballot {
 	t.Helper()
-	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
+	b.Signature = signing.NewEdSigner([20]byte{}).Sign(b.Bytes())
 	require.NoError(t, b.Initialize())
 	return b
 }
@@ -548,7 +548,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 func TestProposal_DuplicateTXs(t *testing.T) {
 	th := createTestHandler(t)
 	b := types.RandomBallot()
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	b.Signature = signer.Sign(b.Bytes())
 	tid := types.RandomTransactionID()
 	p := &types.Proposal{

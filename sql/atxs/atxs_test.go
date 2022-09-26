@@ -27,7 +27,7 @@ func TestGetATXByID(t *testing.T) {
 
 	atxs := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
-		sig := signing.NewEdSigner()
+		sig := signing.NewEdSigner([20]byte{})
 		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
 		require.NoError(t, err)
 		atxs = append(atxs, atx)
@@ -52,7 +52,7 @@ func TestHasID(t *testing.T) {
 
 	atxs := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
-		sig := signing.NewEdSigner()
+		sig := signing.NewEdSigner([20]byte{})
 		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
 		require.NoError(t, err)
 		atxs = append(atxs, atx)
@@ -76,7 +76,7 @@ func TestHasID(t *testing.T) {
 func TestGetTimestampByID(t *testing.T) {
 	db := sql.InMemory()
 
-	sig := signing.NewEdSigner()
+	sig := signing.NewEdSigner([20]byte{})
 	atx, err := newAtx(sig, types.NewLayerID(uint32(0)))
 	require.NoError(t, err)
 
@@ -94,9 +94,9 @@ func TestGetTimestampByID(t *testing.T) {
 func TestGetLastIDByNodeID(t *testing.T) {
 	db := sql.InMemory()
 
-	sig := signing.NewEdSigner()
-	sig1 := signing.NewEdSigner()
-	sig2 := signing.NewEdSigner()
+	sig := signing.NewEdSigner([20]byte{})
+	sig1 := signing.NewEdSigner([20]byte{})
+	sig2 := signing.NewEdSigner([20]byte{})
 	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
 	require.NoError(t, err)
 	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
@@ -127,8 +127,8 @@ func TestGetLastIDByNodeID(t *testing.T) {
 func TestGetIDByEpochAndNodeID(t *testing.T) {
 	db := sql.InMemory()
 
-	sig1 := signing.NewEdSigner()
-	sig2 := signing.NewEdSigner()
+	sig1 := signing.NewEdSigner([20]byte{})
+	sig2 := signing.NewEdSigner([20]byte{})
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
@@ -173,8 +173,8 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 func TestGetIDsByEpoch(t *testing.T) {
 	db := sql.InMemory()
 
-	sig1 := signing.NewEdSigner()
-	sig2 := signing.NewEdSigner()
+	sig1 := signing.NewEdSigner([20]byte{})
+	sig2 := signing.NewEdSigner([20]byte{})
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
@@ -210,7 +210,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
 
-	sig := signing.NewEdSigner()
+	sig := signing.NewEdSigner([20]byte{})
 	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
 	require.NoError(t, err)
 
@@ -229,7 +229,7 @@ func TestAdd(t *testing.T) {
 	_, err := Get(db, nonExistingATXID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	sig := signing.NewEdSigner()
+	sig := signing.NewEdSigner([20]byte{})
 	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
 	require.NoError(t, err)
 
@@ -306,7 +306,7 @@ func TestPositioningID(t *testing.T) {
 
 				bts, err := full.InnerBytes()
 				require.NoError(t, err)
-				sig := signing.NewEdSigner()
+				sig := signing.NewEdSigner([20]byte{})
 				full.Sig = sig.Sign(bts)
 
 				vAtx, err := full.Verify(atx.base, atx.count)

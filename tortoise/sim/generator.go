@@ -218,7 +218,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
-		sig := signing.NewEdSigner()
+		sig := signing.NewEdSigner([20]byte{})
 		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
 		nipost := types.NIPostChallenge{

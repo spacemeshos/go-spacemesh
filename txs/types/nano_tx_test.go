@@ -36,7 +36,7 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 }
 
 func TestNewNanoTX(t *testing.T) {
-	mtx := createMeshTX(t, signing.NewEdSigner(), types.NewLayerID(13))
+	mtx := createMeshTX(t, signing.NewEdSigner([20]byte{}), types.NewLayerID(13))
 	ntx := NewNanoTX(mtx)
 	require.Equal(t, mtx.ID, ntx.ID)
 	require.Equal(t, mtx.Principal, ntx.Principal)
@@ -51,7 +51,7 @@ func TestNewNanoTX(t *testing.T) {
 }
 
 func TestUpdateMaybe(t *testing.T) {
-	mtx := createMeshTX(t, signing.NewEdSigner(), types.LayerID{})
+	mtx := createMeshTX(t, signing.NewEdSigner([20]byte{}), types.LayerID{})
 	ntx := NewNanoTX(mtx)
 	lid := types.NewLayerID(23)
 	bid := types.RandomBlockID()
@@ -73,9 +73,9 @@ func TestUpdateMaybe(t *testing.T) {
 }
 
 func TestBetter_PanicOnInvalidArguments(t *testing.T) {
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
-	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), types.LayerID{}))
+	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner([20]byte{}), types.LayerID{}))
 	require.Panics(t, func() { ntx0.Better(ntx1, nil) })
 
 	ntx2 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
@@ -84,7 +84,7 @@ func TestBetter_PanicOnInvalidArguments(t *testing.T) {
 }
 
 func TestBetter(t *testing.T) {
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
 	ntx1 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
 	require.Equal(t, ntx0.Principal, ntx1.Principal)

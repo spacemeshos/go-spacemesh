@@ -33,7 +33,7 @@ const (
 	epochOffset       uint32 = 3
 )
 
-var sig = signing.NewEdSigner()
+var sig = signing.NewEdSigner([20]byte{})
 
 type testOracle struct {
 	*Oracle
@@ -423,7 +423,7 @@ func Test_Proof(t *testing.T) {
 	layer := types.NewLayerID(2)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
-	signer := signing.NewEdSigner()
+	signer := signing.NewEdSigner([20]byte{})
 	vrfSigner := signer.VRFSigner()
 
 	o.vrfSigner = vrfSigner

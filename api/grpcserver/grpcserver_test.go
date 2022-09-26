@@ -92,8 +92,8 @@ var (
 	signer      = NewMockSigner()
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
-	signer1     = signing.NewEdSigner()
-	signer2     = signing.NewEdSigner()
+	signer1     = signing.NewEdSigner([20]byte{})
+	signer2     = signing.NewEdSigner([20]byte{})
 	globalTx    = NewTx(0, addr1, signer1)
 	globalTx2   = NewTx(1, addr2, signer2)
 	ballot1     = types.GenLayerBallot(types.LayerID{})
@@ -363,7 +363,7 @@ func newAtx(t *testing.T, challenge types.NIPostChallenge, sig *MockSigning, nip
 }
 
 func NewMockSigner() *MockSigning {
-	return &MockSigning{signing.NewEdSigner()}
+	return &MockSigning{signing.NewEdSigner([20]byte{})}
 }
 
 // TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
