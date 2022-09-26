@@ -98,7 +98,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 		}
 		if ballot.goodness.notConsistent() {
 			ballot.goodness &^= conditionNotConsistent
-			if !validateConsistency(v.Config, v.state, ballot) {
+			if !validateConsistency(v.state, v.Config, ballot) {
 				continue
 			}
 		}

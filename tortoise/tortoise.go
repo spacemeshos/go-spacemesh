@@ -783,7 +783,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		height: height,
 		beacon: beacon,
 	}
-	decodeExceptions(t.logger, t.Config, &t.state, base, binfo, &ballot.Votes)
+	t.decodeExceptions(base, binfo, ballot.Votes)
 	t.state.addBallot(binfo)
 	return nil
 }
@@ -828,6 +828,106 @@ func (t *turtle) layerCutoff() types.LayerID {
 		return types.NewLayerID(0)
 	}
 	return t.last.Sub(t.Hdist)
+}
+
+func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Votes) {
+	ballot.goodness |= base.goodness
+	if _, exist := t.badBeaconBallots[ballot.id]; exist {
+		ballot.goodness |= conditionBadBeacon
+	}
+	from := base.layer
+	diff := map[types.LayerID]map[types.BlockID]sign{}
+	for vote, bids := range map[sign][]types.BlockID{
+		support: exceptions.Support,
+		against: exceptions.Against,
+	} {
+		for _, bid := range bids {
+			block, exist := t.blockRefs[bid]
+			if !exist {
+				ballot.goodness |= conditionVotesBeforeBase
+				continue
+			}
+			if block.layer.Before(from) {
+				ballot.goodness |= conditionVotesBeforeBase
+				from = block.layer
+			}
+			layerdiff, exist := diff[block.layer]
+			if !exist {
+				layerdiff = map[types.BlockID]sign{}
+				diff[block.layer] = layerdiff
+			}
+			layerdiff[block.id] = vote
+		}
+	}
+	for _, lid := range exceptions.Abstain {
+		ballot.goodness |= conditionAbstained
+		if lid.Before(from) {
+			ballot.goodness |= conditionVotesBeforeBase
+			from = lid
+		}
+		_, exist := diff[lid]
+		if !exist {
+			diff[lid] = map[types.BlockID]sign{}
+		}
+		layer := t.layer(lid)
+		layer.verifying.abstained = layer.verifying.abstained.Add(ballot.weight)
+	}
+
+	// inherit opinion from the base ballot by copying votes from the point where
+	// opinion diverges
+	ballot.votes = base.votes.update(from, diff)
+	// add new opinions after the base layer
+	for lid := base.layer; lid.Before(ballot.layer); lid = lid.Add(1) {
+		layer := t.layer(lid)
+		lvote := layerVote{
+			layerInfo: layer,
+			vote:      against,
+		}
+		layerdiff, exist := diff[lid]
+		if exist && len(layerdiff) == 0 {
+			lvote.vote = abstain
+		}
+		for _, block := range layer.blocks {
+			bvote := blockVote{
+				blockInfo: block,
+				vote:      against,
+			}
+			if len(layerdiff) > 0 {
+				vote, exist := layerdiff[block.id]
+				if exist {
+					bvote.vote = vote
+				}
+			}
+			lvote.blocks = append(lvote.blocks, bvote)
+		}
+		ballot.votes.append(&lvote)
+	}
+	validateConsistency(&t.state, t.Config, ballot)
+	t.logger.With().Debug("decoded votes for ballot",
+		ballot.id,
+		ballot.layer,
+		log.Stringer("base", ballot.base.id),
+		log.Uint32("base layer", ballot.base.layer.Value),
+		log.Bool("base good", base.goodness.isGood()),
+		log.Bool("ignored", ballot.goodness.ignored()),
+		log.Bool("consistent", !ballot.goodness.notConsistent()),
+	)
+}
+
+func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
+	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
+		if lvote.lid.Before(ballot.base.layer) {
+			break
+		}
+		for j := range lvote.blocks {
+			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
+			if vote := lvote.blocks[j].vote; vote != local {
+				ballot.goodness |= conditionNotConsistent
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func withinDistance(dist uint32, lid, last types.LayerID) bool {

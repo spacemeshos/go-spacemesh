@@ -2513,6 +2513,14 @@ func voteForBlock(block types.BlockID) sim.VotesGenerator {
 	}
 }
 
+func voteAgainst(block types.BlockID) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		voting := sim.PerfectVoting(rng, layers, i)
+		voting.Against = append(voting.Against, block)
+		return voting
+	}
+}
+
 func TestLateBaseBallot(t *testing.T) {
 	ctx := context.Background()
 	const size = 10
@@ -2883,5 +2891,60 @@ func TestOnHareOutput(t *testing.T) {
 			verified = tortoise.HandleIncomingLayer(ctx, last)
 			require.Equal(t, last.Sub(1), verified)
 		})
+	}
+}
+
+func TestDecodeExceptions(t *testing.T) {
+	const size = 1
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	s := sim.New(
+		sim.WithLayerSize(cfg.LayerSize),
+	)
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+	)
+
+	tortoise := tortoiseFromSimState(
+		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+	)
+	last := s.Next(sim.WithNumBlocks(2))
+	tortoise.HandleIncomingLayer(ctx, last)
+
+	layer := tortoise.trtl.layer(last)
+	require.Equal(t, against, layer.blocks[0].hare)
+	block := layer.blocks[0].id
+
+	last = s.Next(
+		sim.WithNumBlocks(1),
+	)
+	tortoise.HandleIncomingLayer(ctx, last)
+	ballots1 := tortoise.trtl.ballots[last]
+
+	last = s.Next(
+		sim.WithNumBlocks(1),
+		sim.WithVoteGenerator(voteForBlock(block)),
+	)
+	tortoise.HandleIncomingLayer(ctx, last)
+	ballots2 := tortoise.trtl.ballots[last]
+
+	last = s.Next(
+		sim.WithNumBlocks(1),
+		sim.WithVoteGenerator(voteAgainst(block)),
+	)
+	tortoise.HandleIncomingLayer(ctx, last)
+	ballots3 := tortoise.trtl.ballots[last]
+
+	for _, ballot := range ballots1 {
+		require.Equal(t, against, ballot.votes.find(layer.lid, block), "base ballot votes against")
+	}
+	for _, ballot := range ballots2 {
+		require.Equal(t, support, ballot.votes.find(layer.lid, block), "new ballot overwrites vote")
+	}
+	for _, ballot := range ballots3 {
+		require.Equal(t, against, ballot.votes.find(layer.lid, block), "latest ballot overwrites back to against")
 	}
 }

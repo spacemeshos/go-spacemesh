@@ -3,7 +3,6 @@ package tortoise
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type (
@@ -17,19 +16,16 @@ type (
 
 	layerInfo struct {
 		lid            types.LayerID
+		empty          weight
 		hareTerminated bool
-
-		empty  weight
-		blocks []*blockInfo
-
-		verifying verifyingInfo
+		blocks         []*blockInfo
+		verifying      verifyingInfo
 	}
 
 	blockInfo struct {
-		id     types.BlockID
-		layer  types.LayerID
-		height uint64
-
+		id       types.BlockID
+		layer    types.LayerID
+		height   uint64
 		hare     vote
 		validity vote
 		margin   weight
@@ -129,39 +125,16 @@ type (
 	}
 
 	ballotInfo struct {
-		id     types.BallotID
-		base   baseInfo
-		layer  types.LayerID
-		height uint64
-		weight weight
-		beacon types.Beacon
-
-		votes votes
-
+		id       types.BallotID
+		base     baseInfo
+		layer    types.LayerID
+		height   uint64
+		weight   weight
+		beacon   types.Beacon
+		votes    votes
 		goodness condition
 	}
 )
-
-func (v *ballotInfo) updateBlockVote(block *blockInfo, vote sign) {
-	for current := v.votes.tail; current != nil; current = current.prev {
-		if current.lid == block.layer {
-			for j := range current.blocks {
-				if current.blocks[j].id == block.id {
-					current.blocks[j].vote = vote
-					return
-				}
-			}
-		}
-	}
-}
-
-func (v *ballotInfo) updateLayerVote(lid types.LayerID, vote sign) {
-	for current := v.votes.tail; current != nil; current = current.prev {
-		if current.lid == lid {
-			current.vote = vote
-		}
-	}
-}
 
 type votes struct {
 	tail *layerVote
@@ -175,11 +148,11 @@ func (v *votes) append(lv *layerVote) {
 	}
 }
 
-func (v *votes) copy() votes {
+func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]vote) votes {
 	if v.tail == nil {
 		return votes{}
 	}
-	return votes{tail: v.tail}
+	return votes{tail: v.tail.update(from, diff)}
 }
 
 // cutBefore cuts all pointers to votes before the specified layer.
@@ -197,6 +170,19 @@ func (v *votes) cutBefore(lid types.LayerID) {
 	}
 }
 
+func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
+	for current := v.tail; current != nil; current = current.prev {
+		if current.lid == lid {
+			for _, block := range current.blocks {
+				if block.id == bid {
+					return block.vote
+				}
+			}
+		}
+	}
+	return abstain
+}
+
 type layerVote struct {
 	*layerInfo
 	vote   vote
@@ -206,6 +192,7 @@ type layerVote struct {
 }
 
 func (l *layerVote) copy() *layerVote {
+
 	return &layerVote{
 		layerInfo: l.layerInfo,
 		vote:      l.vote,
@@ -219,85 +206,27 @@ func (l *layerVote) append(lv *layerVote) *layerVote {
 	return lv
 }
 
-func decodeExceptions(logger log.Log, config Config, state *state, base, ballot *ballotInfo, exceptions *types.Votes) {
-	ballot.goodness |= base.goodness
-	if _, exist := state.badBeaconBallots[ballot.id]; exist {
-		ballot.goodness |= conditionBadBeacon
+func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) *layerVote {
+	if l.lid.Before(from) {
+		return l
 	}
-	// inherit opinion from the base ballot by copying votes
-	votes := base.votes.copy()
-	// add opinions from the local state [base layer, ballot layer)
-	for lid := base.layer; lid.Before(ballot.layer); lid = lid.Add(1) {
-		layer := state.layer(lid)
-		lvote := layerVote{
-			layerInfo: layer,
-			vote:      against,
-		}
-		for _, block := range layer.blocks {
-			lvote.blocks = append(lvote.blocks, blockVote{
-				blockInfo: block,
-				vote:      against,
-			})
-		}
-		votes.append(&lvote)
+	l = l.copy()
+	if l.prev != nil {
+		l.prev = l.prev.update(from, diff)
 	}
-	// update exceptions
-	ballot.votes = votes
-	for _, bid := range exceptions.Support {
-		block, exist := state.blockRefs[bid]
-		if !exist {
-			ballot.goodness |= conditionVotesBeforeBase
-			continue
-		}
-		if block.layer.Before(base.layer) {
-			ballot.goodness |= conditionVotesBeforeBase
-		}
-		ballot.updateBlockVote(block, support)
-	}
-	for _, bid := range exceptions.Against {
-		block, exist := state.blockRefs[bid]
-		if !exist {
-			ballot.goodness |= conditionVotesBeforeBase
-			continue
-		}
-		if block.layer.Before(base.layer) {
-			ballot.goodness |= conditionVotesBeforeBase
-		}
-		ballot.updateBlockVote(block, against)
-	}
-	for _, lid := range exceptions.Abstain {
-		ballot.goodness |= conditionAbstained
-		if lid.Before(base.layer) {
-			ballot.goodness |= conditionVotesBeforeBase
-		}
-		ballot.updateLayerVote(lid, abstain)
-		layer := state.layer(lid)
-		layer.verifying.abstained = layer.verifying.abstained.Add(ballot.weight)
-	}
-	validateConsistency(config, state, ballot)
-	logger.With().Debug("decoded votes for ballot",
-		ballot.id,
-		ballot.layer,
-		log.Stringer("base", ballot.base.id),
-		log.Uint32("base layer", ballot.base.layer.Value),
-		log.Bool("base good", base.goodness.isGood()),
-		log.Bool("ignored", ballot.goodness.ignored()),
-		log.Bool("consistent", !ballot.goodness.notConsistent()),
-	)
-}
-
-func validateConsistency(config Config, state *state, ballot *ballotInfo) bool {
-	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
-		if lvote.lid.Before(ballot.base.layer) {
-			break
-		}
-		for j := range lvote.blocks {
-			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
-			if vote := lvote.blocks[j].vote; vote != local {
-				ballot.goodness |= conditionNotConsistent
-				return false
+	layerdiff, exist := diff[l.lid]
+	if exist && len(layerdiff) == 0 {
+		l.vote = abstain
+	} else if exist && len(layerdiff) > 0 {
+		blocks := make([]blockVote, len(l.blocks))
+		copy(blocks, l.blocks)
+		l.blocks = blocks
+		for i := range l.blocks {
+			vote, exist := layerdiff[l.blocks[i].id]
+			if exist {
+				l.blocks[i].vote = vote
 			}
 		}
 	}
-	return true
+	return l
 }
