@@ -44,7 +44,7 @@ jobs:
             nondoc:
               - '!**/*.md'
 
-  ## stage 1: run unit tests and app tests as a preqrequisite
+  ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
   quicktests:
@@ -103,11 +103,16 @@ jobs:
         run: make golangci-lint-github-action
 
   unittests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should take around 15-18 mins
-    timeout-minutes: 20
+    timeout-minutes: 25
+    strategy:
+      matrix:
+        os: 
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
     steps:
         # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
         # https://github.com/actions/virtual-environments/issues/1187
@@ -142,6 +147,7 @@ jobs:
         if: always() # always run even if the previous step fails
         with:
           report_paths: '**/unit-tests.xml'
+  
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
