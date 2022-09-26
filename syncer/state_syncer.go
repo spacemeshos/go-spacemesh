@@ -141,13 +141,14 @@ func (s *Syncer) fetchLayerOpinions(ctx context.Context, lid types.LayerID) erro
 			return fmt.Errorf("PollLayerOpinions: %w", res.Err)
 		}
 		if len(res.Opinions) == 0 {
-			logger.Debug("no opinions available from peers")
+			logger.Warning("no opinions available from peers")
 			return errNoOpinionsAvailable
 		}
 
 		// TODO: check if the node agree with peers' aggregated hashes
 
 		if err := s.adopt(ctx, lid, res.Opinions); err != nil {
+			logger.With().Info("opinions not fully adopted", log.Err(err))
 			return err
 		}
 	case <-ctx.Done():
