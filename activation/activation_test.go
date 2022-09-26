@@ -469,6 +469,47 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	}
 }
 
+func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	builder := newBuilder(t, cdb, atxHdlr)
+
+	require.ErrorContains(t, builder.StopSmeshing(true), "not started")
+}
+
+func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+
+	postSetupMock := NewMockPostSetupProvider(ctrl)
+	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
+	postSetupMock.EXPECT().StopSession(gomock.Any()).Return(errors.New("couldn't stop session"))
+
+	net.atxHdlr = atxHdlr
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, postSetupMock,
+		layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.initialPost = initialPost
+
+	coinbase := types.Address{1, 1, 1}
+	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.Error(t, b.StopSmeshing(true))
+	require.True(t, b.Smeshing())
+	require.NotNil(t, b.exited)
+
+	select {
+	case <-b.exited:
+		require.Fail(t, "smeshing should not exit")
+	default:
+	}
+}
+
 func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)

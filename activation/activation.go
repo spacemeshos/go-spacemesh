@@ -249,7 +249,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	return nil
 }
 
-// findCommitmentAtx determines the best commitment ATX to use for the current node.
+// findCommitmentAtx determines the best commitment ATX to use for the node.
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
 func (b *Builder) findCommitmentAtx() (types.ATXID, error) {
@@ -274,7 +274,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 
 	if err := b.postSetupProvider.StopSession(deleteFiles); err != nil {
-		return fmt.Errorf("failed to stop post data creation session: %v", err)
+		return fmt.Errorf("failed to stop post data creation session: %w", err)
 	}
 
 	b.stop()
@@ -312,7 +312,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 
 func (b *Builder) run(ctx context.Context) {
 	if err := b.generateProof(); err != nil {
-		b.log.Error("Failed to generate proof: %v", err)
+		b.log.Error("Failed to generate proof: %w", err)
 		return
 	}
 
@@ -530,7 +530,7 @@ func (b *Builder) discardChallenge() {
 	b.challenge = nil
 	b.pendingATX = nil
 	if err := store.ClearNIPostChallenge(b.cdb); err != nil {
-		b.log.Error("failed to discard NIPost challenge: %v", err)
+		b.log.Error("failed to discard NIPost challenge: %w", err)
 	}
 }
 
@@ -695,10 +695,10 @@ func (b *Builder) currentEpoch() types.EpochID {
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	buf, err := codec.Encode(atx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
+		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
 	}
 	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, buf); err != nil {
-		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
+		return 0, fmt.Errorf("failed to broadcast ATX: %w", err)
 	}
 	return len(buf), nil
 }
@@ -711,11 +711,11 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 			b.log.With().Info("using golden atx as positioning atx", id)
 			return b.goldenATXID, types.LayerID{}, nil
 		}
-		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %v", err)
+		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %w", err)
 	}
 	atx, err := b.cdb.GetAtxHeader(id)
 	if err != nil {
-		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return types.ATXID{}, types.LayerID{}, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
 	return id, atx.PubLayerID, nil
 }

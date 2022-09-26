@@ -234,7 +234,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 		commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), atx.CommitmentATX[:]...))
 		if err := h.nipostValidator.ValidatePost(commitment[:], atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
-			return nil, fmt.Errorf("invalid initial Post: %v", err)
+			return nil, fmt.Errorf("invalid initial Post: %w", err)
 		}
 	}
 	var baseTickHeight uint64
@@ -259,7 +259,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	expectedChallengeHash, err := atx.NIPostChallenge.Hash()
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
+		return nil, fmt.Errorf("failed to compute NIPost's expected challenge hash: %w", err)
 	}
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
@@ -280,7 +280,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), commitmentATX[:]...))
 	leaves, err := h.nipostValidator.Validate(commitment[:], atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
-		return nil, fmt.Errorf("invalid nipost: %v", err)
+		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
 
 	return atx.Verify(baseTickHeight, leaves/h.tickSize)
