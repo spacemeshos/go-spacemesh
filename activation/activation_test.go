@@ -234,8 +234,10 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 
 type mockSyncer struct{}
 
-func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
+func (m *mockSyncer) RegisterChForSynced(_ context.Context) chan struct{} {
+	ch := make(chan struct{})
 	close(ch)
+	return ch
 }
 
 func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builder {

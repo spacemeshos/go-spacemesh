@@ -150,14 +150,16 @@ func (s *Syncer) Close() {
 }
 
 // RegisterChForSynced registers ch for notification when the node enters synced state.
-func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
+func (s *Syncer) RegisterChForSynced(ctx context.Context) chan struct{} {
+	ch := make(chan struct{})
 	if s.IsSynced(ctx) {
 		close(ch)
-		return
+		return ch
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
+	return ch
 }
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.

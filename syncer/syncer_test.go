@@ -130,8 +130,7 @@ func TestStartAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	ts := newTestSyncer(ctx, t, time.Millisecond*5)
 
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
+	syncedCh := ts.syncer.RegisterChForSynced(context.TODO())
 
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
 	require.False(t, ts.syncer.ListenToATXGossip())
@@ -401,8 +400,8 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 func TestFromSyncedToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
+
+	syncedCh := ts.syncer.RegisterChForSynced(context.TODO())
 
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	<-syncedCh
@@ -460,8 +459,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
 
 	// done one full layer of gossip sync, now it is synced
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
+	syncedCh := ts.syncer.RegisterChForSynced(context.TODO())
 	lyr = lyr.Add(1)
 	current = current.Add(1)
 	ts.mTicker.advanceToLayer(current)
