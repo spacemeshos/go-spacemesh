@@ -14,4 +14,5 @@ type Tortoise interface {
 	OnBlock(*types.Block)
 	OnHareOutput(types.LayerID, types.BlockID)
 	HandleIncomingLayer(context.Context, types.LayerID) types.LayerID
+	LatestComplete() types.LayerID
 }
