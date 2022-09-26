@@ -217,7 +217,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	b.stop = stop
 	b.exited = make(chan struct{})
 
-	commitmentAtx, err := b.getCommitmentAtx()
+	commitmentAtx, err := b.getCommitmentAtx(ctx)
 	if err != nil {
 		close(b.exited)
 		b.started.Store(false)
@@ -315,7 +315,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	if err := b.generateProof(); err != nil {
+	if err := b.generateProof(ctx); err != nil {
 		b.log.Error("Failed to generate proof: %w", err)
 		return
 	}
@@ -330,13 +330,13 @@ func (b *Builder) run(ctx context.Context) {
 	b.loop(ctx)
 }
 
-func (b *Builder) generateProof() error {
+func (b *Builder) generateProof(ctx context.Context) error {
 	err := b.loadChallenge()
 	if err != nil {
 		b.log.Info("challenge not loaded: %s", err)
 	}
 
-	commitmentAtx, err := b.getCommitmentAtx()
+	commitmentAtx, err := b.getCommitmentAtx(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get commitment atx: %w", err)
 	}
@@ -473,7 +473,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
-		commitmentAtx, err := b.getCommitmentAtx()
+		commitmentAtx, err := b.getCommitmentAtx(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
@@ -538,9 +538,17 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) getCommitmentAtx() (*types.ATXID, error) {
+func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	if b.commitmentAtx != nil {
 		return b.commitmentAtx, nil
+	}
+
+	syncedCh := make(chan struct{})
+	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	select {
+	case <-ctx.Done():
+		return nil, ErrStopRequested
+	case <-syncedCh:
 	}
 
 	id, err := store.GetCommitmentATX(b.cdb)
@@ -640,7 +648,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// the following method waits for a PoET proof, which should take ~1 epoch
 	expireLayer := (pubEpoch + 2).FirstLayer()
 	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
-	commitmentAtx, err := b.getCommitmentAtx()
+	commitmentAtx, err := b.getCommitmentAtx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
 	}

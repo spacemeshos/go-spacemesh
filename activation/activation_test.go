@@ -536,7 +536,7 @@ func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 	builder := newBuilder(t, cdb, atxHdlr)
 
-	atx, err := builder.getCommitmentAtx()
+	atx, err := builder.getCommitmentAtx(context.TODO())
 	require.NoError(t, err)
 
 	stored, err := store.GetCommitmentATX(cdb)
@@ -555,7 +555,7 @@ func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
 	err := store.AddCommitmentATX(cdb, goldenATXID)
 	require.NoError(t, err)
 
-	atx, err := builder.getCommitmentAtx()
+	atx, err := builder.getCommitmentAtx(context.TODO())
 	require.NoError(t, err)
 	require.Equal(t, goldenATXID, *atx)
 	require.NotEqual(t, newATX.ID(), atx)
@@ -1018,7 +1018,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		return newNIPostWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.TODO())
 	runnerExit := make(chan struct{})
 	go func() {
 		b.loop(ctx)
@@ -1052,7 +1052,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, postSetupProvider,
 		layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 
-	require.NoError(t, b.generateProof())
+	require.NoError(t, b.generateProof(context.TODO()))
 	require.Equal(t, 1, postSetupProvider.called)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
@@ -1066,6 +1066,6 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	r.True(published)
 	assertLastAtx(r, vPrevAtx, vPrevAtx, layersPerEpoch)
 
-	require.NoError(t, b.generateProof())
+	require.NoError(t, b.generateProof(context.TODO()))
 	require.Equal(t, 1, postSetupProvider.called)
 }
