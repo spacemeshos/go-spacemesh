@@ -105,7 +105,11 @@ type Builder struct {
 	postSetupProvider PostSetupProvider
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
-	commitmentAtx     *types.ATXID
+
+	// commitmentAtx caches the ATX ID used for the PoST commitment by this node. It is set / fetched
+	// from the DB by calling `getCommitmentAtx()`.
+	commitmentAtx *types.ATXID
+
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
