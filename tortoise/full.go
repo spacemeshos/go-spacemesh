@@ -39,7 +39,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfo) {
 		if ballot.weight.IsNil() {
 			continue
 		}
-		for lvote := ballot.votes.Tail; lvote != nil; lvote = lvote.prev {
+		for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 			if !lvote.lid.After(f.verified) {
 				break
 			}

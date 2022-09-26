@@ -145,7 +145,6 @@ func (t *turtle) evict(ctx context.Context) {
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
-			ballot.votes.CutAt(windowStart.Sub(1))
 			delete(t.ballotRefs, ballot.id)
 			delete(t.referenceWeight, ballot.id)
 			delete(t.badBeaconBallots, ballot.id)
@@ -159,6 +158,9 @@ func (t *turtle) evict(ctx context.Context) {
 			delete(t.epochWeight, lid.GetEpoch())
 			delete(t.referenceHeight, lid.GetEpoch())
 		}
+	}
+	for _, ballot := range t.ballots[windowStart] {
+		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
 }
@@ -270,7 +272,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 		return basedis, nil
 	}
 
-	for lvote := ballot.votes.Tail; lvote != nil; lvote = lvote.prev {
+	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if lvote.lid.Before(ballot.base.layer) {
 			break
 		}
@@ -317,7 +319,7 @@ func (t *turtle) encodeVotes(
 		Base: base.id,
 	}
 	// encode difference with local opinion between [start, base.layer)
-	for lvote := base.votes.Tail; lvote != nil; lvote = lvote.prev {
+	for lvote := base.votes.tail; lvote != nil; lvote = lvote.prev {
 		if lvote.lid.Before(start) {
 			break
 		}
@@ -652,16 +654,12 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 		return
 	}
 	t.logger.With().Debug("on block", log.Inline(block))
-	blockv2 := &blockInfo{
+	t.state.addBlock(&blockInfo{
 		id:     block.ID(),
 		layer:  block.LayerIndex,
 		height: block.TickHeight,
 		margin: util.WeightFromUint64(0),
-	}
-	layer := t.state.layer(block.LayerIndex)
-	layer.blocks = append(layer.blocks, blockv2)
-	t.state.blockRefs[block.ID()] = blockv2
-	t.state.updateRefHeight(layer, blockv2)
+	})
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {

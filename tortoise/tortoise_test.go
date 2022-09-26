@@ -2641,70 +2641,43 @@ func TestStateManagement(t *testing.T) {
 	cfg.Zdist = hdist
 	cfg.WindowSize = window
 
-	t.Run("VerifyingState", func(t *testing.T) {
-		s := sim.New(
-			sim.WithLayerSize(size),
-		)
-		s.Setup()
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup()
 
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
-		var last, verified types.LayerID
-		for _, last = range sim.GenLayers(s,
-			sim.WithSequence(20),
-		) {
-			verified = tortoise.HandleIncomingLayer(ctx, last)
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(20),
+	) {
+		verified = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+
+	evicted := tortoise.trtl.evicted
+	require.Equal(t, verified.Sub(window).Sub(1), evicted)
+	for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
+		require.Empty(t, tortoise.trtl.layers[lid])
+		require.Empty(t, tortoise.trtl.ballots[lid])
+	}
+
+	for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
+		for _, block := range tortoise.trtl.layers[lid].blocks {
+			require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
 		}
-		require.Equal(t, last.Sub(1), verified)
-
-		evicted := tortoise.trtl.evicted
-		require.Equal(t, verified.Sub(window).Sub(1), evicted)
-		for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
-			require.Empty(t, tortoise.trtl.layers[lid])
-			require.Empty(t, tortoise.trtl.ballots[lid])
-		}
-
-		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
-			for _, block := range tortoise.trtl.layers[lid].blocks {
-				require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
+		for _, ballot := range tortoise.trtl.ballots[lid] {
+			require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
+			for current := ballot.votes.tail; current != nil; current = current.prev {
+				require.True(t, !current.lid.Before(evicted), "no votes for layers before evicted (evicted %s, in state %s, ballot %s)", evicted, current.lid, ballot.layer)
+				if current.prev == nil {
+					require.Equal(t, current.lid, evicted, "last vote is exactly evicted")
+				}
 			}
-			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
-			}
+			break
 		}
-	})
-	t.Run("FullState", func(t *testing.T) {
-		s := sim.New(
-			sim.WithLayerSize(size),
-		)
-		s.Setup()
-
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-
-		var last, verified types.LayerID
-		for _, last = range sim.GenLayers(s,
-			sim.WithSequence(20, sim.WithEmptyHareOutput()),
-		) {
-			verified = tortoise.HandleIncomingLayer(ctx, last)
-		}
-		require.Equal(t, last.Sub(1), verified)
-
-		evicted := tortoise.trtl.evicted
-		require.Equal(t, verified.Sub(window).Sub(1), evicted)
-		for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
-			require.Empty(t, tortoise.trtl.layers[lid])
-			require.Empty(t, tortoise.trtl.ballots[lid])
-		}
-
-		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
-			for _, block := range tortoise.trtl.layers[lid].blocks {
-				require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
-			}
-			for _, ballot := range tortoise.trtl.ballots[lid] {
-				require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
-			}
-		}
-	})
+	}
 }
 
 func TestFutureHeight(t *testing.T) {
