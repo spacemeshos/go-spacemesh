@@ -551,13 +551,6 @@ func (b *Builder) loadCommitmentAtx() error {
 	return nil
 }
 
-func (b *Builder) discardCommitmentAtx() {
-	b.commitmentAtx = nil
-	if err := store.ClearCommitmentAtx(b.cdb); err != nil {
-		b.log.Error("failed to discard NIPost challenge: %v", err)
-	}
-}
-
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
