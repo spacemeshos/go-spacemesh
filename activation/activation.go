@@ -113,7 +113,7 @@ type Builder struct {
 	syncer                syncer
 	log                   log.Log
 	parentCtx             context.Context
-	stop                  func()
+	stop                  context.CancelFunc
 	exited                chan struct{}
 	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
@@ -209,42 +209,30 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 	b.started.Store(true)
 	b.coinbaseAccount = coinbase
-	var ctx context.Context
-	exited := make(chan struct{})
-	ctx, b.stop = context.WithCancel(b.parentCtx)
-	b.exited = exited
+	ctx, stop := context.WithCancel(b.parentCtx)
+	b.stop = stop
+	b.exited = make(chan struct{})
 
-	// TODO(mafa): make a method and add tests
-	if b.commitmentAtx == nil {
-		err := b.loadCommitmentAtx()
-		switch {
-		case errors.Is(err, sql.ErrNotFound):
-			atx, err := b.getCommitmentAtxID()
-			if err != nil {
-				close(exited)
-				b.started.Store(false)
-				return fmt.Errorf("failed to start post setup session: %w", err)
-			}
-			b.commitmentAtx = &atx
-		case err != nil:
-			close(exited)
-			b.started.Store(false)
-			return fmt.Errorf("failed to start post setup session: %w", err)
-		}
+	commitmentAtx, err := b.getCommitmentAtx()
+	if err != nil {
+		close(b.exited)
+		b.started.Store(false)
+		b.mu.Unlock()
+		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 
 	b.mu.Unlock()
 
-	doneChan, err := b.postSetupProvider.StartSession(opts, *b.commitmentAtx)
+	doneChan, err := b.postSetupProvider.StartSession(opts, *commitmentAtx)
 	if err != nil {
-		close(exited)
+		close(b.exited)
 		b.started.Store(false)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 	go func() {
 		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return "already started"
 		defer b.started.Store(false)
-		defer close(exited)
+		defer close(b.exited)
 		select {
 		case <-ctx.Done():
 			return
@@ -261,8 +249,10 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	return nil
 }
 
-// TODO(mafa): add tests for this method
-func (b *Builder) getCommitmentAtxID() (types.ATXID, error) {
+// findCommitmentAtx determines the best commitment ATX to use for the current node.
+// It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
+// when no ATXs have yet been published.
+func (b *Builder) findCommitmentAtx() (types.ATXID, error) {
 	posAtx, err := atxs.GetAtxIDWithMaxHeight(b.cdb)
 	if errors.Is(err, sql.ErrNotFound) {
 		b.log.With().Info("using golden atx as commitment atx", posAtx)
@@ -342,11 +332,16 @@ func (b *Builder) generateProof() error {
 		b.log.Info("challenge not loaded: %s", err)
 	}
 
+	commitmentAtx, err := b.getCommitmentAtx()
+	if err != nil {
+		return fmt.Errorf("failed to get commitment atx: %w", err)
+	}
+
 	// don't generate the commitment every time smeshing is starting, but once only.
 	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
-		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *b.commitmentAtx)
+		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *commitmentAtx)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
@@ -469,20 +464,25 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
 	if err != nil {
-		return fmt.Errorf("failed to get positioning ATX: %v", err)
+		return fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
 	if prevAtx, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
-		challenge.CommitmentATX = *b.commitmentAtx
+		commitmentAtx, err := b.getCommitmentAtx()
+		if err != nil {
+			return fmt.Errorf("failed to get commitment ATX: %w", err)
+		}
+
+		challenge.CommitmentATX = *commitmentAtx
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
-	if err := b.storeChallenge(b.challenge); err != nil {
-		return fmt.Errorf("failed to store nipost challenge: %v", err)
+	if err := store.AddNIPostChallenge(b.cdb, b.challenge); err != nil {
+		return fmt.Errorf("failed to store nipost challenge: %w", err)
 	}
 	return nil
 }
@@ -517,10 +517,6 @@ func (b *Builder) Coinbase() types.Address {
 	return b.coinbaseAccount
 }
 
-func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	return store.AddNIPostChallenge(b.cdb, ch)
-}
-
 func (b *Builder) loadChallenge() error {
 	nipost, err := store.GetNIPostChallenge(b.cdb)
 	if err != nil {
@@ -538,31 +534,36 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) storeCommitmentAtx(id types.ATXID) error {
-	return store.AddCommitmentATX(b.cdb, id)
-}
-
-func (b *Builder) loadCommitmentAtx() error {
-	id, err := store.GetCommitmentATX(b.cdb)
-	if err != nil {
-		return err
+func (b *Builder) getCommitmentAtx() (*types.ATXID, error) {
+	if b.commitmentAtx != nil {
+		return b.commitmentAtx, nil
 	}
+
+	id, err := store.GetCommitmentATX(b.cdb)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		id, err := b.findCommitmentAtx()
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine commitment ATX: %w", err)
+		}
+		if err := store.AddCommitmentATX(b.cdb, id); err != nil {
+			return nil, fmt.Errorf("failed to store commitment ATX: %w", err)
+		}
+		b.commitmentAtx = &id
+		return b.commitmentAtx, nil
+	case err != nil:
+		return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
+
+	}
+
 	b.commitmentAtx = &id
-	return nil
+	return b.commitmentAtx, nil
 }
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
 	logger := b.log.WithContext(ctx)
-
-	// TODO(mafa): add tests for this code path
-	if b.commitmentAtx == nil {
-		logger.With().Info("loading commitment atx")
-		if err := b.loadCommitmentAtx(); err != nil {
-			return fmt.Errorf("failed to load commitment atx: %v", err)
-		}
-	}
 
 	if b.challenge != nil {
 		logger.With().Info("using existing atx challenge", log.Stringer("current_epoch", b.currentEpoch()))
@@ -636,10 +637,14 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// the following method waits for a PoET proof, which should take ~1 epoch
 	expireLayer := (pubEpoch + 2).FirstLayer()
 	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
+	commitmentAtx, err := b.getCommitmentAtx()
+	if err != nil {
+		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
+	}
 
 	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
 
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, *b.commitmentAtx, atxExpired)
+	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, *commitmentAtx, atxExpired)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}

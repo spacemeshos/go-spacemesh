@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+//go:generate mockgen -package=activation -destination=./post_mock.go -source=./post.go
+
 type (
 	// PostSetupComputeProvider represent a compute provider for Post setup data creation.
 	PostSetupComputeProvider initialization.ComputeProvider
