@@ -171,21 +171,33 @@ func TestContextualValidity(t *testing.T) {
 	for _, block := range blocks {
 		require.NoError(t, Add(db, block))
 	}
+	cnt, err := CountContextualValidity(db, lid)
+	require.NoError(t, err)
+	require.Zero(t, cnt)
+
 	validities, err := ContextualValidity(db, lid)
 	require.NoError(t, err)
 	require.Len(t, validities, 3)
+
 	for i, validity := range validities {
 		require.Equal(t, blocks[i].ID(), validity.ID)
 		require.False(t, validity.Validity)
 		require.NoError(t, SetValid(db, validity.ID))
 	}
+	cnt, err = CountContextualValidity(db, lid)
+	require.NoError(t, err)
+	require.Equal(t, 3, cnt)
 
 	validities, err = ContextualValidity(db, lid)
 	require.NoError(t, err)
 	require.Len(t, validities, 3)
 	for _, validity := range validities {
 		require.True(t, validity.Validity)
+		require.NoError(t, SetInvalid(db, validity.ID))
 	}
+	cnt, err = CountContextualValidity(db, lid)
+	require.NoError(t, err)
+	require.Equal(t, 3, cnt)
 }
 
 func TestGetLayer(t *testing.T) {

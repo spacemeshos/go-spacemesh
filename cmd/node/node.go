@@ -547,13 +547,12 @@ func (app *App) initServices(ctx context.Context,
 	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
-		Cert:     app.certifier,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
 		Poet:     poetDb,
 	}
-	layerFetch := fetch.NewLogic(app.Config.FETCH, sqlDB, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
+	layerFetch := fetch.NewLogic(app.Config.FETCH, cdb, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -562,7 +561,7 @@ func (app *App) initServices(ctx context.Context,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, sqlDB, clock, beaconProtocol, msh, layerFetch, patrol, app.certifier, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
