@@ -553,7 +553,6 @@ func (b *Builder) getCommitmentAtx() (*types.ATXID, error) {
 		return b.commitmentAtx, nil
 	case err != nil:
 		return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
-
 	}
 
 	b.commitmentAtx = &id
