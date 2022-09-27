@@ -343,7 +343,7 @@ func (t *turtle) encodeVotes(
 				logger.With().Debug("support before base ballot", bvote.id, bvote.layer)
 				votes.Support = append(votes.Support, bvote.id)
 			case against:
-				logger.With().Debug("explicit against before base ballot", bvote.id, bvote.layer)
+				logger.With().Debug("explicit against overwrites base ballot opinion", bvote.id, bvote.layer)
 				votes.Against = append(votes.Against, bvote.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
@@ -866,8 +866,6 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		if !exist {
 			diff[lid] = map[types.BlockID]sign{}
 		}
-		layer := t.layer(lid)
-		layer.verifying.abstained = layer.verifying.abstained.Add(ballot.weight)
 	}
 
 	// inherit opinion from the base ballot by copying votes

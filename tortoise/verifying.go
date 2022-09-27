@@ -26,6 +26,7 @@ func (v *verifying) resetWeights() {
 	for lid := v.verified.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
 		layer.verifying.good = weight{}
+		layer.verifying.abstained = weight{}
 	}
 }
 
@@ -90,6 +91,17 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 			continue
 		}
 		sum = sum.Add(ballot.weight)
+		i := uint32(0)
+		for current := ballot.votes.tail; current != nil; current = current.prev {
+			i++
+			if current.vote != abstain {
+				continue
+			}
+			if i > v.Zdist {
+				break
+			}
+			current.verifying.abstained = current.verifying.abstained.Add(ballot.weight)
+		}
 		n++
 	}
 
