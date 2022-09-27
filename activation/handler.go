@@ -217,9 +217,6 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			if !atx.PubLayerID.After(commitmentAtx.PubLayerID) {
 				return nil, fmt.Errorf("atx layer (%v) must be after commitment atx layer (%v)", atx.PubLayerID, commitmentAtx.PubLayerID)
 			}
-			if d := atx.PubLayerID.Difference(commitmentAtx.PubLayerID); d > h.layersPerEpoch {
-				return nil, fmt.Errorf("expected distance of one epoch (%v layers) from commitment atx but found %v", h.layersPerEpoch, d)
-			}
 		} else {
 			publicationEpoch := atx.PublishEpoch()
 			if !publicationEpoch.IsGenesis() {

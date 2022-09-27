@@ -194,16 +194,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from positioning atx but found 1011")
 	})
 
-	t.Run("wrong commitment atx", func(t *testing.T) {
-		cATX := atxList[0].ID()
-		challenge := newChallenge(0, *types.EmptyATXID, prevAtx.ID(), types.NewLayerID(1012), &cATX)
-		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from commitment atx but found 1011")
-	})
-
 	t.Run("empty positioning atx", func(t *testing.T) {
 		challenge := newChallenge(1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
