@@ -1,6 +1,6 @@
 package types
 
-//go:generate scalegen -types BuilderState
+//go:generate scalegen -types NIPostBuilderState
 
 // NIPostBuilderState is a builder state.
 type NIPostBuilderState struct {

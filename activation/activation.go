@@ -477,7 +477,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 			return fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 
-		challenge.CommitmentATX = *commitmentAtx
+		challenge.CommitmentATX = commitmentAtx
 		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID

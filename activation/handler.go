@@ -185,7 +185,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return nil, fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
 		}
 
-		if atx.CommitmentATX != *types.EmptyATXID {
+		if atx.CommitmentATX != nil {
 			return nil, fmt.Errorf("prevATX declared, but commitmentATX is included")
 		}
 	} else {
@@ -205,12 +205,12 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			return nil, fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 		}
 
-		if atx.CommitmentATX == *types.EmptyATXID {
+		if atx.CommitmentATX == nil {
 			return nil, fmt.Errorf("no prevATX declared, but commitmentATX is missing")
 		}
 
-		if atx.CommitmentATX != h.goldenATXID {
-			commitmentAtx, err := h.cdb.GetAtxHeader(atx.CommitmentATX)
+		if *atx.CommitmentATX != h.goldenATXID {
+			commitmentAtx, err := h.cdb.GetAtxHeader(*atx.CommitmentATX)
 			if err != nil {
 				return nil, fmt.Errorf("commitment atx not found")
 			}
@@ -222,7 +222,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 			}
 		} else {
 			publicationEpoch := atx.PublishEpoch()
-			if !publicationEpoch.NeedsGoldenPositioningATX() {
+			if !publicationEpoch.IsGenesis() {
 				return nil, fmt.Errorf("golden atx used for commitment atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
 			}
 		}
@@ -252,7 +252,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		baseTickHeight = posAtx.TickHeight()
 	} else {
 		publicationEpoch := atx.PublishEpoch()
-		if !publicationEpoch.NeedsGoldenPositioningATX() {
+		if !publicationEpoch.IsGenesis() {
 			return nil, fmt.Errorf("golden atx used for positioning atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
 	}
@@ -265,7 +265,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	commitmentATX := atx.CommitmentATX
-	if atx.CommitmentATX == *types.EmptyATXID {
+	if atx.CommitmentATX == nil {
 		id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.NodeID())
 		if err != nil {
 			return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)

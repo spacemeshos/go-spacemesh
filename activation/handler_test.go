@@ -51,11 +51,11 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 	// Act
 	epoch1 := types.EpochID(1)
-	atx1 := newActivationTx(t, sig, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
+	atx1 := newActivationTx(t, sig, 0, *types.EmptyATXID, goldenATXID, nil, epoch1.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx1))
 
 	epoch2 := types.EpochID(2)
-	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
+	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, epoch2.FirstLayer(), 0, 100, coinbase1, 0, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx2))
 
 	// Assert
@@ -86,14 +86,14 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	numUnits := uint(100)
 
 	npst := newNIPostWithChallenge(&chlng, poetRef)
-	posATX := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, numTicks, coinbase1, numUnits, npst)
+	posATX := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1000), 0, numTicks, coinbase1, numUnits, npst)
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), posATX))
 
 	// Act
 	atxList := []*types.VerifiedActivationTx{
-		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1012), 0, numTicks, coinbase1, numUnits, &types.NIPost{}),
-		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1300), 0, numTicks, coinbase2, numUnits, &types.NIPost{}),
-		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1435), 0, numTicks, coinbase3, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), nil, types.NewLayerID(1012), 0, numTicks, coinbase1, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), nil, types.NewLayerID(1300), 0, numTicks, coinbase2, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 0, *types.EmptyATXID, posATX.ID(), nil, types.NewLayerID(1435), 0, numTicks, coinbase3, numUnits, &types.NIPost{}),
 	}
 	for _, atx := range atxList {
 		hash, err := atx.NIPostChallenge.Hash()
@@ -105,9 +105,9 @@ func TestHandler_processBlockATXs(t *testing.T) {
 
 	// check that further atxList don't affect current epoch count
 	atxList2 := []*types.VerifiedActivationTx{
-		newActivationTx(t, sig, 1, atxList[0].ID(), atxList[0].ID(), types.NewLayerID(2012), 0, numTicks, coinbase1, numUnits, &types.NIPost{}),
-		newActivationTx(t, sig, 1, atxList[1].ID(), atxList[1].ID(), types.NewLayerID(2300), 0, numTicks, coinbase2, numUnits, &types.NIPost{}),
-		newActivationTx(t, sig, 1, atxList[2].ID(), atxList[2].ID(), types.NewLayerID(2435), 0, numTicks, coinbase3, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 1, atxList[0].ID(), atxList[0].ID(), nil, types.NewLayerID(2012), 0, numTicks, coinbase1, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 1, atxList[1].ID(), atxList[1].ID(), nil, types.NewLayerID(2300), 0, numTicks, coinbase2, numUnits, &types.NIPost{}),
+		newActivationTx(t, sig, 1, atxList[2].ID(), atxList[2].ID(), nil, types.NewLayerID(2435), 0, numTicks, coinbase3, numUnits, &types.NIPost{}),
 	}
 	for _, atx := range atxList2 {
 		hash, err := atx.NIPostChallenge.Hash()
@@ -149,9 +149,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	sig2 := NewMockSigner()
 	sig3 := NewMockSigner()
 	atxList := []*types.VerifiedActivationTx{
-		newActivationTx(t, sig1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
-		newActivationTx(t, sig2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
-		newActivationTx(t, sig3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
+		newActivationTx(t, sig1, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
+		newActivationTx(t, sig2, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
+		newActivationTx(t, sig3, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 	}
 	for _, atx := range atxList {
 		require.NoError(t, atxHdlr.ProcessAtx(context.TODO(), atx))
@@ -160,15 +160,15 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
 	npst := newNIPostWithChallenge(&chlng, poetRef)
-	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
-	posAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
+	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
+	posAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 	require.NoError(t, atxHdlr.StoreAtx(context.TODO(), prevAtx))
 	require.NoError(t, atxHdlr.StoreAtx(context.TODO(), posAtx))
 
 	// Act & Assert
 
 	t.Run("valid atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		hash, err := atx.NIPostChallenge.Hash()
 		require.NoError(t, err)
@@ -181,22 +181,22 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("wrong sequence", func(t *testing.T) {
-		challenge := newChallenge(0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "sequence number is not one more than prev sequence number")
 	})
 
 	t.Run("wrong positioning atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, prevAtx.ID(), atxList[0].ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "expected distance of one epoch (1000 layers) from positioning atx but found 1011")
 	})
 
 	t.Run("wrong commitment atx", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, prevAtx.ID(), types.NewLayerID(1012))
-		challenge.CommitmentATX = atxList[0].ID()
+		cATX := atxList[0].ID()
+		challenge := newChallenge(0, *types.EmptyATXID, prevAtx.ID(), types.NewLayerID(1012), &cATX)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
@@ -205,43 +205,21 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("empty positioning atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000))
+		challenge := newChallenge(1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "empty positioning atx")
 	})
 
-	// Using Golden ATX in epochs other than 1 is not allowed.
-	t.Run("golden atx as posAtx in epoch 0", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.NewLayerID(101))
-		challenge.CommitmentATX = prevAtx.ID()
-		atx := newAtx(t, challenge, sig, &types.NIPost{PostMetadata: &types.PostMetadata{}}, 3, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "golden atx used for positioning atx in epoch 0, but is only valid in epoch 1")
-	})
-
 	t.Run("golden atx as posAtx in epoch 2", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(2000))
+		challenge := newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(2000), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "golden atx used for positioning atx in epoch 2, but is only valid in epoch 1")
 	})
 
-	t.Run("golden atx as commitmentAtx in epoch 0", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, prevAtx.ID(), types.NewLayerID(101))
-		challenge.CommitmentATX = goldenATXID
-		atx := newAtx(t, challenge, sig, &types.NIPost{PostMetadata: &types.PostMetadata{}}, 3, coinbase)
-		atx.InitialPost = initialPost
-		atx.InitialPostIndices = initialPost.Indices
-		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "golden atx used for commitment atx in epoch 0, but is only valid in epoch 1")
-	})
-
 	t.Run("golden atx as commitmentAtx in epoch 2", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, prevAtxID, types.NewLayerID(2000))
-		challenge.CommitmentATX = goldenATXID
+		challenge := newChallenge(0, *types.EmptyATXID, prevAtxID, types.NewLayerID(2000), &goldenATXID)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 3, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
@@ -250,7 +228,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("invalid prevAtx", func(t *testing.T) {
-		challenge := newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, atxList[0].ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.ErrorContains(t, err, "previous atx belongs to different miner")
@@ -261,19 +239,20 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("wrong layer for positioning atx", func(t *testing.T) {
-		posAtx2 := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
+		posAtx2 := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), posAtx2))
-		challenge := newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, npst, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "atx layer (1012) must be after positioning atx layer (1020)")
 	})
 
 	t.Run("wrong layer for commitment atx", func(t *testing.T) {
-		commitmentAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
+		commitmentAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1020), 0, 100, coinbase, 100, npst)
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), commitmentAtx))
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
-		challenge.CommitmentATX = commitmentAtx.ID()
+
+		cATX := commitmentAtx.ID()
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), &cATX)
 		atx := newAtx(t, challenge, sig, npst, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
@@ -282,21 +261,21 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("prevAtx not declared but sequence number not zero", func(t *testing.T) {
-		challenge := newChallenge(1, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "no prevATX declared, but sequence number not zero")
 	})
 
 	t.Run("prevAtx not declared but initial Post not included", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "no prevATX declared, but initial Post is not included")
 	})
 
 	t.Run("prevAtx not declared but initial Post indices not included", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
@@ -308,17 +287,17 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed validation")).Times(1)
 		atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, log)
 
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		cATX := prevAtx.ID()
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), &cATX)
 		atx := newAtx(t, challenge, sig, npst, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
-		atx.CommitmentATX = prevAtx.ID()
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "invalid initial Post: failed validation")
 	})
 
 	t.Run("challenge and initial Post indices mismatch", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = append([]byte{}, initialPost.Indices...)
@@ -328,7 +307,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("prevAtx not declared but commitmentAtx is missing", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
@@ -337,31 +316,31 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("commitmentATX declared but not found", func(t *testing.T) {
-		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012))
+		cATX := types.RandomATXID()
+		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), &cATX)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
-		atx.CommitmentATX = types.RandomATXID()
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "commitment atx not found")
 	})
 
 	t.Run("prevAtx declared but not found", func(t *testing.T) {
-		challenge := newChallenge(1, types.RandomATXID(), posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, types.RandomATXID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.ErrorContains(t, err, "prevATX not found")
 	})
 
 	t.Run("posAtx declared but not found", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), types.RandomATXID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, prevAtx.ID(), types.RandomATXID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "positioning atx not found")
 	})
 
 	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPost = initialPost
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
@@ -369,7 +348,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("prevAtx declared but initial Post indices is included", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		atx.InitialPostIndices = initialPost.Indices
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
@@ -377,15 +356,15 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("prevAtx declared but commitmentAtx is included", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012))
+		cATX := prevAtx.ID()
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), &cATX)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
-		atx.CommitmentATX = prevAtx.ID()
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "prevATX declared, but commitmentATX is included")
 	})
 
 	t.Run("prevAtx has publication layer in the same epoch as the atx", func(t *testing.T) {
-		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(100))
+		challenge := newChallenge(1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(100), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
@@ -410,26 +389,26 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
 	npst := newNIPostWithChallenge(&chlng, poetRef)
-	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
+	prevAtx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 	require.NoError(t, atxHdlr.StoreAtx(context.TODO(), prevAtx))
 
 	// Act & Assert
 
 	t.Run("valid atx", func(t *testing.T) {
-		challenge := newChallenge(1, *types.EmptyATXID, goldenATXID, types.LayerID{})
+		challenge := newChallenge(1, *types.EmptyATXID, goldenATXID, types.LayerID{}, nil)
 		atx, err := newAtx(t, challenge, sig1, nil, 0, types.Address{}).Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxHdlr.ContextuallyValidateAtx(atx))
 	})
 
 	t.Run("atx already exists", func(t *testing.T) {
-		challenge := newChallenge(1, *types.EmptyATXID, goldenATXID, types.LayerID{})
+		challenge := newChallenge(1, *types.EmptyATXID, goldenATXID, types.LayerID{}, nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), vAtx))
 
-		challenge = newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(12))
+		challenge = newChallenge(1, prevAtx.ID(), goldenATXID, types.NewLayerID(12), nil)
 		atx = newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		vAtx, err = atx.Verify(0, 1)
 		require.NoError(t, err)
@@ -439,20 +418,20 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 
 	t.Run("missing prevAtx", func(t *testing.T) {
 		arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-		atx, err := newAtx(t, newChallenge(1, arbitraryAtxID, prevAtx.ID(), types.LayerID{}), sig1, nil, 0, types.Address{}).Verify(0, 1)
+		atx, err := newAtx(t, newChallenge(1, arbitraryAtxID, prevAtx.ID(), types.LayerID{}, nil), sig1, nil, 0, types.Address{}).Verify(0, 1)
 		require.NoError(t, err)
 		err = atxHdlr.ContextuallyValidateAtx(atx)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 
 	t.Run("wrong previous atx by same node", func(t *testing.T) {
-		vAtx := newActivationTx(t, sig1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx := newActivationTx(t, sig1, 1, prevAtx.ID(), prevAtx.ID(), nil, types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), vAtx))
 
-		vAtx2 := newActivationTx(t, sig1, 2, vAtx.ID(), vAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx2 := newActivationTx(t, sig1, 2, vAtx.ID(), vAtx.ID(), nil, types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), vAtx2))
 
-		vAtx3 := newActivationTx(t, sig1, 3, vAtx.ID(), vAtx.ID(), types.NewLayerID(1012+layersPerEpoch*3), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx3 := newActivationTx(t, sig1, 3, vAtx.ID(), vAtx.ID(), nil, types.NewLayerID(1012+layersPerEpoch*3), 0, 100, coinbase, 100, &types.NIPost{})
 		require.EqualError(t, atxHdlr.ContextuallyValidateAtx(vAtx3), "last atx is not the one referenced")
 
 		id, err := atxs.GetLastIDByNodeID(cdb, sig1.NodeID())
@@ -463,16 +442,16 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("wrong previous atx from different node", func(t *testing.T) {
-		vAtx := newActivationTx(t, sig1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx := newActivationTx(t, sig1, 1, prevAtx.ID(), prevAtx.ID(), nil, types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), vAtx))
 
-		prevAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
+		prevAtx := newActivationTx(t, otherSig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), prevAtx))
 
-		vAtx1 := newActivationTx(t, otherSig, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx1 := newActivationTx(t, otherSig, 1, prevAtx.ID(), prevAtx.ID(), nil, types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 		require.NoError(t, atxHdlr.StoreAtx(context.TODO(), vAtx1))
 
-		vAtx2 := newActivationTx(t, otherSig, 2, vAtx.ID(), vAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
+		vAtx2 := newActivationTx(t, otherSig, 2, vAtx.ID(), vAtx.ID(), nil, types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 		require.EqualError(t, atxHdlr.ContextuallyValidateAtx(vAtx2), "last atx is not the one referenced")
 
 		id, err := atxs.GetLastIDByNodeID(cdb, otherSig.NodeID())
@@ -493,11 +472,11 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
 	// Act & Assert
-	atx1 := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
+	atx1 := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
 	require.NoError(t, atxHdlr.ProcessAtx(context.TODO(), atx1))
 
 	// processing an already stored ATX returns no error
-	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
+	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
 	require.NoError(t, atxHdlr.StoreAtx(context.TODO(), atx2))
 	require.NoError(t, atxHdlr.ProcessAtx(context.TODO(), atx2))
 }
@@ -518,7 +497,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	coinbase := types.GenerateAddress([]byte("c012ba5e"))
 	var atxList []*types.VerifiedActivationTx
 	for i := 0; i < activesetSize; i++ {
-		atxList = append(atxList, newActivationTx(b, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}))
+		atxList = append(atxList, newActivationTx(b, sig, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}))
 	}
 
 	poetRef := []byte{0x12, 0x21}
@@ -528,13 +507,13 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 	}
 
-	challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}.Add(numberOfLayers+1))
+	challenge := newChallenge(0, *types.EmptyATXID, goldenATXID, types.LayerID{}.Add(numberOfLayers+1), &goldenATXID)
 	hash, err := challenge.Hash()
 	r.NoError(err)
 	npst := newNIPostWithChallenge(hash, poetRef)
 	prevAtx := newAtx(b, challenge, sig, npst, 2, coinbase)
 
-	challenge = newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.LayerID{}.Add(numberOfLayers+1+layersPerEpochBig))
+	challenge = newChallenge(1, prevAtx.ID(), prevAtx.ID(), types.LayerID{}.Add(numberOfLayers+1+layersPerEpochBig), nil)
 	atx := newAtx(b, challenge, sig, &types.NIPost{}, 100, coinbase)
 	hash, err = atx.NIPostChallenge.Hash()
 	r.NoError(err)
@@ -581,7 +560,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	eStart := time.Now()
 	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
 		for miner := 0; miner < numOfMiners; miner++ {
-			challenge := newChallenge(1, prevAtxs[miner], posAtx, layer)
+			challenge := newChallenge(1, prevAtxs[miner], posAtx, layer, nil)
 			h, err := challenge.Hash()
 			r.NoError(err)
 			npst := newNIPostWithChallenge(h, poetBytes)
@@ -591,7 +570,6 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			r.NoError(err)
 			require.NoError(b, atxHdlr.StoreAtx(context.TODO(), vAtx))
 		}
-		// noinspection GoNilness
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
@@ -626,7 +604,7 @@ func TestHandler_GetPosAtx(t *testing.T) {
 	// Act & Assert
 
 	// ATX stored should become top ATX
-	atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}.Add(1), 0, 100, coinbase, 100, &types.NIPost{})
+	atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}.Add(1), 0, 100, coinbase, 100, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx))
 
 	id, err := atxHdlr.GetPosAtxID()
@@ -634,7 +612,7 @@ func TestHandler_GetPosAtx(t *testing.T) {
 	r.Equal(atx.ID(), id)
 
 	// higher-layer ATX stored should become new top ATX
-	atx = newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}.Add(layersPerEpochBig), 0, 100, coinbase, 100, &types.NIPost{})
+	atx = newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}.Add(layersPerEpochBig), 0, 100, coinbase, 100, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx))
 
 	id, err = atxHdlr.GetPosAtxID()
@@ -642,7 +620,7 @@ func TestHandler_GetPosAtx(t *testing.T) {
 	r.Equal(atx.ID(), id)
 
 	// lower-layer ATX stored should NOT become new top ATX
-	atx = newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}.Add(1), 0, 100, coinbase, 100, &types.NIPost{})
+	atx = newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}.Add(1), 0, 100, coinbase, 100, &types.NIPost{})
 	r.NoError(atxHdlr.StoreAtx(context.TODO(), atx))
 
 	id, err = atxHdlr.GetPosAtxID()
@@ -661,7 +639,7 @@ func TestHandler_AwaitAtx(t *testing.T) {
 
 	// Act & Assert
 
-	atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
+	atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
 	ch := atxHdlr.AwaitAtx(atx.ID())
 	r.Len(atxHdlr.atxChannels, 1) // channel was created
 
@@ -711,7 +689,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	// Act & Assert
 
 	t.Run("missing nipost", func(t *testing.T) {
-		atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
+		atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}, 0, 0, coinbase, 0, nil)
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
 
@@ -719,7 +697,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	})
 
 	t.Run("known atx is ignored by handleAtxData", func(t *testing.T) {
-		atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
+		atx := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.LayerID{}, 0, 0, coinbase, 0, nil)
 		require.NoError(t, atxHdlr.ProcessAtx(context.TODO(), atx))
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
@@ -744,7 +722,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 		go func() {
 			defer wg.Done()
 			for i := 0; ; i++ {
-				challenge := newChallenge(uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0))
+				challenge := newChallenge(uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0), nil)
 				atx := newAtx(b, challenge, sig, nil, 0, types.Address{})
 				vAtx, err := atx.Verify(0, 1)
 				if !assert.NoError(b, err) {
@@ -778,7 +756,7 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 
 	atxHdlr := NewHandler(cdb, mockFetch, layersPerEpoch, testTickSize, goldenATXID, validator, log.WithName("atxHandler"))
-	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer, nil)
 
 	atx1 := newAtx(t, challenge, sig, nipost, 2, coinbase)
 	atx1.PositioningATX = types.ATXID{1, 2, 3} // should be fetched
@@ -839,7 +817,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 				InitialPostIndices: []byte{1},
 				PubLayerID:         types.NewLayerID(1).Add(layersPerEpoch),
 
-				CommitmentATX: goldenATXID,
+				CommitmentATX: &goldenATXID,
 			},
 			NumUnits: units,
 			NIPost: &types.NIPost{

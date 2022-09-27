@@ -31,12 +31,6 @@ func (l EpochID) IsGenesis() bool {
 	return l < 2
 }
 
-// NeedsGoldenPositioningATX returns true if ATXs in this epoch require positioning ATX to be equal to the Golden ATX.
-// All ATXs in epoch 1 must have the Golden ATX as positioning ATX.
-func (l EpochID) NeedsGoldenPositioningATX() bool {
-	return l == 1
-}
-
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
 	return NewLayerID(uint32(l)).Mul(GetLayersPerEpoch())
@@ -111,8 +105,8 @@ type NIPostChallenge struct {
 	PubLayerID     LayerID
 	PositioningATX ATXID
 
-	// CommitmentATX is the ATX used as a commitment when initializing the PoST of the node.
-	CommitmentATX      ATXID
+	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
+	CommitmentATX      *ATXID
 	InitialPostIndices []byte
 }
 
