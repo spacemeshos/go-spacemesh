@@ -193,7 +193,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
 			votes, err = t.encodeVotes(ctx, base, base.layer, last)
 			if err != nil {
-				return nil, err
+				logger.With().Error("failed to encode votes for good ballot", log.Err(err))
 			}
 		}
 	}
