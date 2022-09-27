@@ -7,7 +7,6 @@ import (
 
 type (
 	weight = util.Weight
-	vote   = sign
 
 	verifyingInfo struct {
 		good, abstained weight
@@ -26,8 +25,8 @@ type (
 		id       types.BlockID
 		layer    types.LayerID
 		height   uint64
-		hare     vote
-		validity vote
+		hare     sign
+		validity sign
 		margin   weight
 	}
 
@@ -114,7 +113,7 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 type (
 	blockVote struct {
 		*blockInfo
-		vote vote
+		vote sign
 	}
 
 	baseInfo struct {
@@ -169,7 +168,7 @@ func (v *votes) append(lv *layerVote) {
 	}
 }
 
-func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]vote) votes {
+func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) votes {
 	if v.tail == nil {
 		return votes{}
 	}
@@ -206,14 +205,13 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 
 type layerVote struct {
 	*layerInfo
-	vote   vote
+	vote   sign
 	blocks []blockVote
 
 	prev *layerVote
 }
 
 func (l *layerVote) copy() *layerVote {
-
 	return &layerVote{
 		layerInfo: l.layerInfo,
 		vote:      l.vote,

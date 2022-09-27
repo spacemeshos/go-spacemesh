@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	mrand "math/rand"
@@ -1561,16 +1562,6 @@ func BenchmarkTortoiseBaseBallot(b *testing.B) {
 	})
 }
 
-func randomBallot(tb testing.TB, lyrID types.LayerID, refBallotID types.BallotID) *types.Ballot {
-	tb.Helper()
-	ballot := types.RandomBallot()
-	ballot.LayerIndex = lyrID
-	ballot.RefBallot = refBallotID
-	ballot.Signature = signing.NewEdSigner().Sign(ballot.Bytes())
-	require.NoError(tb, ballot.Initialize())
-	return ballot
-}
-
 func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *types.Ballot {
 	tb.Helper()
 	ballot := types.RandomBallot()
@@ -2942,5 +2933,48 @@ func TestDecodeExceptions(t *testing.T) {
 	}
 	for _, ballot := range ballots3 {
 		require.Equal(t, against, ballot.votes.find(layer.lid, block), "latest ballot overwrites back to against")
+	}
+}
+
+func BenchmarkOnBallot(b *testing.B) {
+	const (
+		layerSize = 50
+		window    = 2000
+	)
+	s := sim.New(
+		sim.WithLayerSize(layerSize),
+		sim.WithPath(b.TempDir()),
+	)
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = layerSize
+	cfg.WindowSize = window
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+	for i := 0; i < window; i++ {
+		tortoise.HandleIncomingLayer(ctx, s.Next())
+	}
+	last := s.Next()
+	tortoise.HandleIncomingLayer(ctx, last)
+	ballots, err := ballots.Layer(s.GetState(0).DB, last)
+	require.NoError(b, err)
+	hare, err := layers.GetHareOutput(s.GetState(0).DB, last.Sub(window/2))
+	require.NoError(b, err)
+	modified := *ballots[0]
+	modified.Votes.Against = append(modified.Votes.Against, hare)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		id := types.BallotID{}
+		binary.BigEndian.PutUint64(id[:], uint64(i)+1)
+		ballot := types.NewExistingBallot(id, nil, nil, modified.InnerBallot)
+		tortoise.OnBallot(&ballot)
+
+		b.StopTimer()
+		delete(tortoise.trtl.ballotRefs, ballot.ID())
+		delete(tortoise.trtl.ballots, ballot.LayerIndex)
+		b.StartTimer()
 	}
 }
