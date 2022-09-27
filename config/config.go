@@ -48,7 +48,7 @@ type Config struct {
 	Beacon          beacon.Config            `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	VM              vm.Config                `mapstructure:"vm"`
-	POST            activation.PostConfig    `mapstructure:"post"`
+	POST            types.PostConfig         `mapstructure:"post"`
 	POET            activation.PoetConfig    `mapstructure:"poet"`
 	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig             `mapstructure:"logging"`
@@ -108,9 +108,9 @@ type BaseConfig struct {
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                     `mapstructure:"smeshing-start"`
-	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
+	Start           bool                `mapstructure:"smeshing-start"`
+	CoinbaseAccount string              `mapstructure:"smeshing-coinbase"`
+	Opts            types.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.

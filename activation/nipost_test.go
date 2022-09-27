@@ -21,8 +21,8 @@ import (
 
 var (
 	minerID       = types.NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	postCfg       PostConfig
-	postSetupOpts PostSetupOpts
+	postCfg       types.PostConfig
+	postSetupOpts types.PostSetupOpts
 )
 
 func init() {
@@ -43,27 +43,27 @@ type postSetupProviderMock struct {
 // A compile time check to ensure that postSetupProviderMock fully implements the PostProvider interface.
 var _ PostSetupProvider = (*postSetupProviderMock)(nil)
 
-func (p *postSetupProviderMock) Status() *PostSetupStatus {
-	status := new(PostSetupStatus)
+func (p *postSetupProviderMock) Status() *types.PostSetupStatus {
+	status := new(types.PostSetupStatus)
 	status.State = postSetupStateComplete
 	status.LastOpts = p.LastOpts()
 	status.LastError = p.LastError()
 	return status
 }
 
-func (p *postSetupProviderMock) StatusChan() <-chan *PostSetupStatus {
+func (p *postSetupProviderMock) StatusChan() <-chan *types.PostSetupStatus {
 	return nil
 }
 
-func (p *postSetupProviderMock) ComputeProviders() []PostSetupComputeProvider {
+func (p *postSetupProviderMock) ComputeProviders() []initialization.ComputeProvider {
 	return nil
 }
 
-func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error) {
+func (p *postSetupProviderMock) Benchmark(initialization.ComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *postSetupProviderMock) StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return p.sessionChan, nil
 }
 
@@ -83,11 +83,11 @@ func (p *postSetupProviderMock) LastError() error {
 	return nil
 }
 
-func (p *postSetupProviderMock) LastOpts() *PostSetupOpts {
+func (p *postSetupProviderMock) LastOpts() *types.PostSetupOpts {
 	return &postSetupOpts
 }
 
-func (p *postSetupProviderMock) Config() PostConfig {
+func (p *postSetupProviderMock) Config() types.PostConfig {
 	return postCfg
 }
 
@@ -200,7 +200,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, r *require.Assertions, postCfg types.PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
@@ -396,7 +396,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg types.PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
 	commitment := GetCommitmentBytes(minerID, commitmentAtx)
 	_, err := v.Validate(commitment[:], nipost, challenge, numUnits)

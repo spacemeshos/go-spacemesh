@@ -16,55 +16,30 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate mockgen -package=activation -destination=./post_mock.go -source=./post.go
-
-type (
-	// PostSetupComputeProvider represent a compute provider for Post setup data creation.
-	PostSetupComputeProvider initialization.ComputeProvider
-)
-
-// PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
-type PostConfig struct {
-	BitsPerLabel  uint `mapstructure:"post-bits-per-label"`
-	LabelsPerUnit uint `mapstructure:"post-labels-per-unit"`
-	MinNumUnits   uint `mapstructure:"post-min-numunits"`
-	MaxNumUnits   uint `mapstructure:"post-max-numunits"`
-	K1            uint `mapstructure:"post-k1"`
-	K2            uint `mapstructure:"post-k2"`
-}
-
-// PostSetupOpts are the options used to initiate a Post setup data creation session,
-// either via the public smesher API, or on node launch (via cmd args).
-type PostSetupOpts struct {
-	DataDir           string `mapstructure:"smeshing-opts-datadir"`
-	NumUnits          uint   `mapstructure:"smeshing-opts-numunits"`
-	NumFiles          uint   `mapstructure:"smeshing-opts-numfiles"`
-	ComputeProviderID int    `mapstructure:"smeshing-opts-provider"`
-	Throttle          bool   `mapstructure:"smeshing-opts-throttle"`
-}
+//go:generate mockgen -package=mocks -destination=./mocks/post_mock.go -source=./post.go
 
 // DefaultPostConfig defines the default configuration for Post.
-func DefaultPostConfig() PostConfig {
-	return (PostConfig)(config.DefaultConfig())
+func DefaultPostConfig() types.PostConfig {
+	return (types.PostConfig)(config.DefaultConfig())
 }
 
 // DefaultPostSetupOpts defines the default options for Post setup.
-func DefaultPostSetupOpts() PostSetupOpts {
-	return (PostSetupOpts)(config.DefaultInitOpts())
+func DefaultPostSetupOpts() types.PostSetupOpts {
+	return (types.PostSetupOpts)(config.DefaultInitOpts())
 }
 
 // PostSetupProvider defines the functionality required for Post setup.
 type PostSetupProvider interface {
-	Status() *PostSetupStatus
-	StatusChan() <-chan *PostSetupStatus
-	ComputeProviders() []PostSetupComputeProvider
-	Benchmark(p PostSetupComputeProvider) (int, error)
-	StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
+	Status() *types.PostSetupStatus
+	StatusChan() <-chan *types.PostSetupStatus
+	ComputeProviders() []initialization.ComputeProvider
+	Benchmark(p initialization.ComputeProvider) (int, error)
+	StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
 	StopSession(deleteFiles bool) error
 	GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error)
 	LastError() error
-	LastOpts() *PostSetupOpts
-	Config() PostConfig
+	LastOpts() *types.PostSetupOpts
+	Config() types.PostConfig
 }
 
 // A compile time check to ensure that PostSetupManager fully implements the PostSetupProvider interface.
@@ -75,19 +50,19 @@ type PostSetupManager struct {
 	mu sync.Mutex
 
 	id          types.NodeID
-	cfg         PostConfig
+	cfg         types.PostConfig
 	logger      log.Log
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	state             postSetupState
+	state             types.PostSetupState
 	initCompletedChan chan struct{}
 
 	// init is the current initializer instance. It is being
 	// replaced at the beginning of every data creation session.
 	init *initialization.Initializer
 
-	lastOpts *PostSetupOpts
+	lastOpts *types.PostSetupOpts
 	lastErr  error
 
 	// startedChan indicates whether a data creation session has started.
@@ -99,25 +74,15 @@ type PostSetupManager struct {
 	doneChan chan struct{}
 }
 
-type postSetupState int32
-
 const (
-	postSetupStateNotStarted postSetupState = 1 + iota
+	postSetupStateNotStarted types.PostSetupState = 1 + iota
 	postSetupStateInProgress
 	postSetupStateComplete
 	postSetupStateError
 )
 
-// PostSetupStatus represents a status snapshot of the Post setup.
-type PostSetupStatus struct {
-	State            postSetupState
-	NumLabelsWritten uint64
-	LastOpts         *PostSetupOpts
-	LastError        error
-}
-
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg types.PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:                id,
 		cfg:               cfg,
@@ -135,8 +100,8 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *da
 var errNotComplete = errors.New("not complete")
 
 // Status returns the setup current status.
-func (mgr *PostSetupManager) Status() *PostSetupStatus {
-	status := &PostSetupStatus{}
+func (mgr *PostSetupManager) Status() *types.PostSetupStatus {
+	status := &types.PostSetupStatus{}
 
 	mgr.mu.Lock()
 	status.State = mgr.state
@@ -155,7 +120,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 }
 
 // StatusChan returns a channel with status updates of the setup current or the upcoming session.
-func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
+func (mgr *PostSetupManager) StatusChan() <-chan *types.PostSetupStatus {
 	// Wait for session to start because only then the initializer instance
 	// used for retrieving the progress updates is already set.
 	mgr.mu.Lock()
@@ -164,7 +129,7 @@ func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
 
 	<-startedChan
 
-	statusChan := make(chan *PostSetupStatus, 1024)
+	statusChan := make(chan *types.PostSetupStatus, 1024)
 	go func() {
 		defer close(statusChan)
 
@@ -191,20 +156,20 @@ func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
 }
 
 // ComputeProviders returns a list of available compute providers for Post setup.
-func (mgr *PostSetupManager) ComputeProviders() []PostSetupComputeProvider {
+func (mgr *PostSetupManager) ComputeProviders() []initialization.ComputeProvider {
 	providers := initialization.Providers()
 
-	providersAlias := make([]PostSetupComputeProvider, len(providers))
+	providersAlias := make([]initialization.ComputeProvider, len(providers))
 	for i, p := range providers {
-		providersAlias[i] = PostSetupComputeProvider(p)
+		providersAlias[i] = initialization.ComputeProvider(p)
 	}
 
 	return providersAlias
 }
 
 // BestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
-	var bestProvider PostSetupComputeProvider
+func (mgr *PostSetupManager) BestProvider() (*initialization.ComputeProvider, error) {
+	var bestProvider initialization.ComputeProvider
 	var maxHS int
 	for _, p := range mgr.ComputeProviders() {
 		hs, err := mgr.Benchmark(p)
@@ -220,7 +185,7 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 }
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
-func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
+func (mgr *PostSetupManager) Benchmark(p initialization.ComputeProvider) (int, error) {
 	score, err := gpu.Benchmark(initialization.ComputeProvider(p))
 	if err != nil {
 		return score, fmt.Errorf("benchmark GPU: %w", err)
@@ -232,7 +197,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
-func (mgr *PostSetupManager) StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (mgr *PostSetupManager) StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	state := mgr.getState()
 
 	if state == postSetupStateInProgress {
@@ -407,7 +372,7 @@ func (mgr *PostSetupManager) LastError() error {
 }
 
 // LastOpts returns the Post setup last session options.
-func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
+func (mgr *PostSetupManager) LastOpts() *types.PostSetupOpts {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
@@ -415,11 +380,11 @@ func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
 }
 
 // Config returns the Post protocol config.
-func (mgr *PostSetupManager) Config() PostConfig {
+func (mgr *PostSetupManager) Config() types.PostConfig {
 	return mgr.cfg
 }
 
-func (mgr *PostSetupManager) getState() postSetupState {
+func (mgr *PostSetupManager) getState() types.PostSetupState {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 

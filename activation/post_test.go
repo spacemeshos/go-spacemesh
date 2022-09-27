@@ -16,9 +16,9 @@ import (
 var (
 	id = types.NodeID{}
 
-	cfg             PostConfig
-	opts            PostSetupOpts
-	longerSetupOpts PostSetupOpts
+	cfg             types.PostConfig
+	opts            types.PostSetupOpts
+	longerSetupOpts types.PostSetupOpts
 )
 
 func init() {
@@ -40,7 +40,7 @@ func TestPostSetupManager(t *testing.T) {
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
-	lastStatus := &PostSetupStatus{}
+	lastStatus := &types.PostSetupStatus{}
 	go func() {
 		for status := range mgr.StatusChan() {
 			req.True(status.NumLabelsWritten >= lastStatus.NumLabelsWritten)
@@ -101,9 +101,9 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	// Verify the initial status.
 	status := mgr.Status()
 	req.Equal(postSetupStateNotStarted, status.State)
-	req.Equal(uint64(0), status.NumLabelsWritten)
-	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
-	req.Equal(nil, status.LastError)
+	req.Zero(status.NumLabelsWritten)
+	req.Nil(status.LastOpts)
+	req.Nil(status.LastError)
 
 	// Create data.
 	doneChan, err := mgr.StartSession(opts, goldenATXID)
@@ -121,9 +121,9 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	// Verify the initial status.
 	status = mgr.Status()
 	req.Equal(postSetupStateNotStarted, status.State)
-	req.Equal(uint64(0), status.NumLabelsWritten)
-	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
-	req.Equal(nil, status.LastError)
+	req.Zero(status.NumLabelsWritten)
+	req.Nil(status.LastOpts)
+	req.Nil(status.LastError)
 }
 
 func TestPostSetupManager_GenerateProof(t *testing.T) {
@@ -168,7 +168,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		ch := mgr.StatusChan()
-		prevStatus := (*PostSetupStatus)(nil)
+		var prevStatus *types.PostSetupStatus
 		for {
 			status, more := <-ch
 			if more {
@@ -212,7 +212,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 		time.Sleep(100 * time.Millisecond) // Short delay.
 
 		ch := mgr.StatusChan()
-		prevStatus := (*PostSetupStatus)(nil)
+		var prevStatus *types.PostSetupStatus
 		for {
 			status, more := <-ch
 			if more {
@@ -318,9 +318,9 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	// Verify status.
 	status = mgr.Status()
-	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
+	req.Nil(status.LastOpts)
 	req.Equal(postSetupStateNotStarted, status.State)
-	req.Equal(uint64(0), status.NumLabelsWritten)
+	req.Zero(status.NumLabelsWritten)
 
 	// Continue to create data.
 	doneChan, err = mgr.StartSession(longerSetupOpts, goldenATXID)

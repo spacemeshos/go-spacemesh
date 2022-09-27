@@ -25,6 +25,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -377,27 +378,27 @@ type PostAPIMock struct{}
 // A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
 var _ api.PostSetupAPI = (*PostAPIMock)(nil)
 
-func (*PostAPIMock) Status() *activation.PostSetupStatus {
-	return &activation.PostSetupStatus{}
+func (*PostAPIMock) Status() *types.PostSetupStatus {
+	return &types.PostSetupStatus{}
 }
 
-func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
-	ch := make(chan *activation.PostSetupStatus, 1)
+func (p *PostAPIMock) StatusChan() <-chan *types.PostSetupStatus {
+	ch := make(chan *types.PostSetupStatus, 1)
 	ch <- p.Status()
 	close(ch)
 
 	return ch
 }
 
-func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
+func (p *PostAPIMock) ComputeProviders() []initialization.ComputeProvider {
 	return nil
 }
 
-func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
+func (p *PostAPIMock) Benchmark(initialization.ComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -413,12 +414,12 @@ func (p *PostAPIMock) LastError() error {
 	return nil
 }
 
-func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
-	return &activation.PostSetupOpts{}
+func (p *PostAPIMock) LastOpts() *types.PostSetupOpts {
+	return &types.PostSetupOpts{}
 }
 
-func (p *PostAPIMock) Config() activation.PostConfig {
-	return activation.PostConfig{}
+func (p *PostAPIMock) Config() types.PostConfig {
+	return types.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
@@ -431,7 +432,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, types.PostSetupOpts) error {
 	return nil
 }
 

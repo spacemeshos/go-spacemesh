@@ -406,7 +406,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(coinbase, types.PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
@@ -417,8 +417,8 @@ func TestBuilder_StartSmeshingTwiceError(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
-	require.ErrorContains(t, builder.StartSmeshing(coinbase, PostSetupOpts{}), "already started")
+	require.NoError(t, builder.StartSmeshing(coinbase, types.PostSetupOpts{}))
+	require.ErrorContains(t, builder.StartSmeshing(coinbase, types.PostSetupOpts{}), "already started")
 }
 
 func TestBuilder_StartSmeshingAfterError(t *testing.T) {
@@ -426,7 +426,7 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
-	postSetupMock := NewMockPostSetupProvider(ctrl)
+	postSetupMock := mocks.NewMockPostSetupProvider(ctrl)
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Times(1).Return(nil, errors.New("couldn't start session"))
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
 
@@ -442,8 +442,8 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 	b.initialPost = initialPost
 
 	coinbase := types.Address{1, 1, 1}
-	require.ErrorContains(t, b.StartSmeshing(coinbase, PostSetupOpts{}), "couldn't start session")
-	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.ErrorContains(t, b.StartSmeshing(coinbase, types.PostSetupOpts{}), "couldn't start session")
+	require.NoError(t, b.StartSmeshing(coinbase, types.PostSetupOpts{}))
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
@@ -463,7 +463,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+		require.NoError(t, builder.StartSmeshing(types.Address{}, types.PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
@@ -486,7 +486,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
-	postSetupMock := NewMockPostSetupProvider(ctrl)
+	postSetupMock := mocks.NewMockPostSetupProvider(ctrl)
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
 	postSetupMock.EXPECT().StopSession(gomock.Any()).Return(errors.New("couldn't stop session"))
 
@@ -502,7 +502,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	b.initialPost = initialPost
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.NoError(t, b.StartSmeshing(coinbase, types.PostSetupOpts{}))
 	require.Error(t, b.StopSmeshing(true))
 	require.True(t, b.Smeshing())
 	require.NotNil(t, b.exited)
