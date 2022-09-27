@@ -236,7 +236,7 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 
 type mockSyncer struct{}
 
-func (m *mockSyncer) RegisterChForSynced(_ context.Context) chan struct{} {
+func (m *mockSyncer) RegisterForATXSynced() chan struct{} {
 	ch := make(chan struct{})
 	close(ch)
 	return ch

@@ -62,7 +62,7 @@ type signer interface {
 }
 
 type syncer interface {
-	RegisterChForSynced(context.Context) chan struct{}
+	RegisterForATXSynced() chan struct{}
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
@@ -74,9 +74,6 @@ type SmeshingProvider interface {
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 }
-
-// A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
-var _ SmeshingProvider = (*Builder)(nil)
 
 // Config defines configuration for Builder.
 type Config struct {
@@ -305,15 +302,6 @@ func (b *Builder) SignAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
-	select {
-	case <-ch:
-		return nil
-	case <-ctx.Done():
-		return ErrStopRequested
-	}
-}
-
 func (b *Builder) run(ctx context.Context) {
 	if err := b.generateProof(ctx); err != nil {
 		b.log.Error("Failed to generate proof: %w", err)
@@ -321,12 +309,13 @@ func (b *Builder) run(ctx context.Context) {
 	}
 
 	// ensure layer 1 has arrived
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
+	select {
+	case <-ctx.Done():
 		return
+	case <-b.layerClock.AwaitLayer(types.NewLayerID(1)):
 	}
 
 	b.waitForFirstATX(ctx)
-
 	b.loop(ctx)
 }
 
@@ -458,11 +447,10 @@ func (b *Builder) loop(ctx context.Context) {
 }
 
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
-	syncedCh := b.syncer.RegisterChForSynced(ctx)
 	select {
 	case <-ctx.Done():
 		return ErrStopRequested
-	case <-syncedCh:
+	case <-b.syncer.RegisterForATXSynced():
 	}
 	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
@@ -542,11 +530,10 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 		return b.commitmentAtx, nil
 	}
 
-	syncedCh := b.syncer.RegisterChForSynced(ctx)
 	select {
 	case <-ctx.Done():
 		return nil, ErrStopRequested
-	case <-syncedCh:
+	case <-b.syncer.RegisterForATXSynced():
 	}
 
 	id, err := store.GetCommitmentATX(b.cdb)
@@ -615,11 +602,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		syncedCh := b.syncer.RegisterChForSynced(ctx)
 		select {
 		case <-atxReceived:
 			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
-		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
+		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all blocks before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 		case <-ctx.Done():
@@ -662,8 +648,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
+	select {
+	case <-ctx.Done():
 		return nil, fmt.Errorf("failed to wait for publication epoch: %w", err)
+	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer()):
 	}
 	b.log.Info("publication epoch has arrived!")
 	if discarded := b.discardChallengeIfStale(); discarded {
@@ -675,9 +663,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
 	// ensure we are synced before generating the ATX's view
-	syncedCh := b.syncer.RegisterChForSynced(ctx)
-	if err := b.waitOrStop(ctx, syncedCh); err != nil {
-		return nil, err
+	select {
+	case <-ctx.Done():
+		return nil, ErrStopRequested
+	case <-b.syncer.RegisterForATXSynced():
 	}
 
 	var initialPost *types.Post

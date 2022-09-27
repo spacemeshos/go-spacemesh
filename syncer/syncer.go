@@ -89,8 +89,12 @@ type Syncer struct {
 	lastATXsSynced    atomic.Value
 
 	mu sync.Mutex
+
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
+
+	// awaitATXSyncedCh is the list of subscribers' channels to notify when the node is synced with ATXs
+	awaitATXSyncedCh []chan struct{}
 
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
@@ -115,20 +119,21 @@ func NewSyncer(
 ) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
-		logger:        logger,
-		conf:          conf,
-		db:            db,
-		ticker:        ticker,
-		beacon:        beacon,
-		mesh:          mesh,
-		certHandler:   ch,
-		fetcher:       fetcher,
-		patrol:        patrol,
-		syncTimer:     time.NewTicker(conf.SyncInterval),
-		validateTimer: time.NewTicker(conf.SyncInterval * 3),
-		awaitSyncedCh: make([]chan struct{}, 0),
-		shutdownCtx:   shutdownCtx,
-		cancelFunc:    cancel,
+		logger:           logger,
+		conf:             conf,
+		db:               db,
+		ticker:           ticker,
+		beacon:           beacon,
+		mesh:             mesh,
+		certHandler:      ch,
+		fetcher:          fetcher,
+		patrol:           patrol,
+		syncTimer:        time.NewTicker(conf.SyncInterval),
+		validateTimer:    time.NewTicker(conf.SyncInterval * 3),
+		awaitSyncedCh:    make([]chan struct{}, 0),
+		awaitATXSyncedCh: make([]chan struct{}, 0),
+		shutdownCtx:      shutdownCtx,
+		cancelFunc:       cancel,
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -149,8 +154,8 @@ func (s *Syncer) Close() {
 	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
 }
 
-// RegisterChForSynced registers ch for notification when the node enters synced state.
-func (s *Syncer) RegisterChForSynced(ctx context.Context) chan struct{} {
+// RegisterForSynced returns a channel for notification when the node enters synced state.
+func (s *Syncer) RegisterForSynced(ctx context.Context) chan struct{} {
 	ch := make(chan struct{})
 	if s.IsSynced(ctx) {
 		close(ch)
@@ -159,6 +164,19 @@ func (s *Syncer) RegisterChForSynced(ctx context.Context) chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
+	return ch
+}
+
+// RegisterForATXSynced returns a channel for notification when the node has synced all ATXs.
+func (s *Syncer) RegisterForATXSynced() chan struct{} {
+	ch := make(chan struct{})
+	if s.ListenToATXGossip() {
+		close(ch)
+		return ch
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.awaitATXSyncedCh = append(s.awaitATXSyncedCh, ch)
 	return ch
 }
 
@@ -175,7 +193,7 @@ func (s *Syncer) ListenToATXGossip() bool {
 // IsSynced returns true if the node is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
 	res := s.getSyncState() == synced
-	// TODO: downgrade log after syncer stablized.
+	// TODO(kimmy): downgrade log after syncer stablized.
 	s.logger.WithContext(ctx).With().Info("node sync state",
 		log.Bool("synced", res),
 		log.Stringer("current", s.ticker.GetCurrentLayer()),
@@ -229,6 +247,12 @@ func (s *Syncer) isClosed() bool {
 
 func (s *Syncer) setATXSynced() {
 	s.atxSyncState.Store(synced)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ch := range s.awaitATXSyncedCh {
+		close(ch)
+	}
 }
 
 func (s *Syncer) getATXSyncState() syncState {
