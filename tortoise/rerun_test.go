@@ -138,13 +138,13 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	misverified := genesis.Add(firstBatch)
 
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput()),
 		// in this layer voting is malicious. it doesn't support previous layer so there will be no valid blocks in it
-		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
-		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput()),
+		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput()),
 		// in this layer we skip previously malicious voting.
-		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
-		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput()),
+		sim.WithSequence(10, sim.WithEmptyHareOutput()),
 	) {
 		verified = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -211,14 +211,12 @@ func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, op
 	cfg.FullModeVerificationWindow = fullParam
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
-	var last types.LayerID
 	for i := 0; i < size; i++ {
-		last = s.Next(opts...)
+		tortoise.HandleIncomingLayer(ctx, s.Next(opts...))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tortoise.trtl.last = last
 		tortoise.rerun(ctx)
 	}
 }

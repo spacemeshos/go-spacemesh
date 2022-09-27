@@ -1791,9 +1791,7 @@ func TestBaseBallotGenesis(t *testing.T) {
 
 	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
-	require.Len(t, votes.Support, 1)
-	require.Empty(t, votes.Against)
-	require.Empty(t, votes.Abstain)
+	require.Equal(t, votes.Support, []types.BlockID{types.GenesisBlockID})
 	require.Equal(t, types.GenesisBallotID, votes.Base)
 }
 
