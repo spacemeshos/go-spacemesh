@@ -2,7 +2,6 @@ package activation
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -21,7 +20,7 @@ import (
 )
 
 var (
-	minerID       = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
+	minerID       = types.NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 	postCfg       PostConfig
 	postSetupOpts PostSetupOpts
 )
@@ -240,8 +239,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	r := require.New(t)
 
-	minerIDNotInitialized := make([]byte, 32)
-	copy(minerIDNotInitialized, []byte("not initialized"))
+	minerIDNotInitialized := types.BytesToNodeID([]byte("not initialized"))
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 
 	cdb := newCachedDB(t)
@@ -398,9 +396,9 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID []byte, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
-	commitment := sha256.Sum256(append(minerID, commitmentAtx.Bytes()...))
+	commitment := GetCommitmentBytes(minerID, commitmentAtx)
 	_, err := v.Validate(commitment[:], nipost, challenge, numUnits)
 	return err
 }

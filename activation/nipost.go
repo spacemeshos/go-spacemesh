@@ -65,7 +65,7 @@ type poetDbAPI interface {
 
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
-	minerID []byte,
+	minerID types.NodeID,
 	postSetupProvider PostSetupProvider,
 	poetProver PoetProvingServiceClient,
 	poetDB poetDbAPI,
@@ -73,7 +73,7 @@ func NewNIPostBuilder(
 	log log.Log,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
-		minerID:           minerID,
+		minerID:           minerID.ToBytes(),
 		postSetupProvider: postSetupProvider,
 		poetProver:        poetProver,
 		poetDB:            poetDB,

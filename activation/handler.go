@@ -3,7 +3,6 @@ package activation
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync"
@@ -229,8 +228,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
 
-		commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), atx.CommitmentATX[:]...))
-		if err := h.nipostValidator.ValidatePost(commitment[:], atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
+		commitment := GetCommitmentBytes(atx.NodeID(), *atx.CommitmentATX)
+		if err := h.nipostValidator.ValidatePost(commitment, atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
 			return nil, fmt.Errorf("invalid initial Post: %w", err)
 		}
 	}
@@ -274,8 +273,8 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		commitmentATX = initialATX.CommitmentATX
 	}
 
-	commitment := sha256.Sum256(append(atx.NodeID().ToBytes(), commitmentATX[:]...))
-	leaves, err := h.nipostValidator.Validate(commitment[:], atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
+	commitment := GetCommitmentBytes(atx.NodeID(), *commitmentATX)
+	leaves, err := h.nipostValidator.Validate(commitment, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}

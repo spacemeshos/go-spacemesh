@@ -595,12 +595,12 @@ func (app *App) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postSetupMgr, err := activation.NewPostSetupManager(nodeID[:], app.Config.POST, app.addLogger(PostLogger, lg), cdb, goldenATXID)
+	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), cdb, goldenATXID)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {

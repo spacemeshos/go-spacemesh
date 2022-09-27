@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -74,7 +74,7 @@ var _ PostSetupProvider = (*PostSetupManager)(nil)
 type PostSetupManager struct {
 	mu sync.Mutex
 
-	id          []byte
+	id          types.NodeID
 	cfg         PostConfig
 	logger      log.Log
 	db          *datastore.CachedDB
@@ -117,7 +117,7 @@ type PostSetupStatus struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id []byte, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:                id,
 		cfg:               cfg,
@@ -266,8 +266,8 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts, commitmentAtx type
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	commitment := sha256.Sum256(append(mgr.id, commitmentAtx.Bytes()...))
-	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment[:])
+	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
+	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment)
 	if err != nil {
 		mgr.mu.Lock()
 		mgr.state = postSetupStateError
@@ -374,8 +374,8 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types
 	}
 
 	// TODO(mafa): id field in post package should be renamed to commitment otherwise error messages are confusing
-	commitment := sha256.Sum256(append(mgr.id, commitmentAtx.Bytes()...))
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, commitment[:])
+	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
+	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, commitment)
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
@@ -424,4 +424,9 @@ func (mgr *PostSetupManager) getState() postSetupState {
 	defer mgr.mu.Unlock()
 
 	return mgr.state
+}
+
+func GetCommitmentBytes(id types.NodeID, commitmentAtx types.ATXID) []byte {
+	h := hash.Sum(append(id.ToBytes(), commitmentAtx.Bytes()...))
+	return h[:]
 }

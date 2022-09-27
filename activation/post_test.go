@@ -9,11 +9,12 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 var (
-	id = make([]byte, 32)
+	id = types.NodeID{}
 
 	cfg             PostConfig
 	opts            PostSetupOpts
