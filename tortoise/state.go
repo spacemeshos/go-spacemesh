@@ -129,7 +129,6 @@ type (
 		badBeacon bool
 		// any exceptions before base.layer
 		votesBeforeBase bool
-		abstained       bool
 	}
 
 	ballotInfo struct {
@@ -145,10 +144,6 @@ type (
 )
 
 func (b *ballotInfo) good() bool {
-	return b.countedByVerifying() && !b.conditions.abstained
-}
-
-func (b *ballotInfo) countedByVerifying() bool {
 	return b.canBeGood() && b.conditions.baseGood
 }
 

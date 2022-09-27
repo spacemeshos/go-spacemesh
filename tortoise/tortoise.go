@@ -857,7 +857,6 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		}
 	}
 	for _, lid := range exceptions.Abstain {
-		ballot.conditions.abstained = true
 		if lid.Before(from) {
 			ballot.conditions.votesBeforeBase = true
 			from = lid

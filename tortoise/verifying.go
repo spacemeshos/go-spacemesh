@@ -71,10 +71,9 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 			log.Bool("good base", ballot.conditions.baseGood),
 			log.Bool("bad beacon", ballot.conditions.badBeacon),
 			log.Bool("consistent", ballot.conditions.consistent),
-			log.Bool("abstained", ballot.conditions.abstained),
 			log.Bool("votes before base", ballot.conditions.votesBeforeBase),
 		)
-		if !ballot.countedByVerifying() {
+		if !ballot.good() {
 			continue
 		}
 		if ballot.weight.IsNil() {
