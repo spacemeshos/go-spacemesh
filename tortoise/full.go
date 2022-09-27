@@ -141,8 +141,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 // shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
 // long time ago.
 func (f *full) shouldBeDelayed(ballot *ballotInfo) bool {
-	_, bad := f.badBeaconBallots[ballot.id]
-	return bad && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
+	return ballot.conditions.badBeacon && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
 }
 
 type delayedBallots struct {

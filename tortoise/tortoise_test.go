@@ -1595,19 +1595,17 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	logger := logtest.New(t)
 	// good beacon
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, epochBeacon))
-	assert.NotContains(t, trtl.badBeaconBallots, ballot.ID())
+	badBeacon, err := trtl.compareBeacons(logger, ballot.ID(), ballot.LayerIndex, epochBeacon)
+	assert.NoError(t, err)
+	assert.False(t, badBeacon)
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, beacon))
-	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
-
-	// ask a bad beacon again won't cause a lookup since it's cached
-	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot.ID(), ballot.LayerIndex, beacon))
-	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
+	badBeacon, err = trtl.compareBeacons(logger, ballot.ID(), ballot.LayerIndex, beacon)
+	assert.NoError(t, err)
+	assert.True(t, badBeacon)
 }
 
 func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {

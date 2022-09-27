@@ -55,8 +55,7 @@ type (
 		// referenceWeight stores atx weight divided by the total number of eligibilities.
 		// it is computed together with refBallot weight. it is not equal to refBallot
 		// only if refBallot has more than 1 eligibility proof.
-		referenceWeight  map[types.BallotID]weight
-		badBeaconBallots map[types.BallotID]struct{}
+		referenceWeight map[types.BallotID]weight
 
 		layers  map[types.LayerID]*layerInfo
 		ballots map[types.LayerID][]*ballotInfo
@@ -70,10 +69,9 @@ type (
 
 func newState() *state {
 	return &state{
-		epochWeight:      map[types.EpochID]util.Weight{},
-		referenceHeight:  map[types.EpochID]uint64{},
-		badBeaconBallots: map[types.BallotID]struct{}{},
-		referenceWeight:  map[types.BallotID]util.Weight{},
+		epochWeight:     map[types.EpochID]util.Weight{},
+		referenceHeight: map[types.EpochID]uint64{},
+		referenceWeight: map[types.BallotID]util.Weight{},
 
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},

@@ -18,58 +18,53 @@ import (
 
 func TestFullBallotFilter(t *testing.T) {
 	for _, tc := range []struct {
-		desc             string
-		badBeaconBallots map[types.BallotID]struct{}
-		distance         uint32
-		ballot           types.BallotID
-		ballotlid        types.LayerID
-		last             types.LayerID
-		expect           bool
+		desc     string
+		distance uint32
+		ballot   ballotInfo
+		last     types.LayerID
+		expect   bool
 	}{
 		{
-			desc:             "Good",
-			badBeaconBallots: map[types.BallotID]struct{}{},
-			ballot:           types.BallotID{1},
-			expect:           false,
+			desc: "Good",
+			ballot: ballotInfo{
+				id: types.BallotID{1},
+			},
+			expect: false,
 		},
 		{
 			desc: "BadFromRecent",
-			badBeaconBallots: map[types.BallotID]struct{}{
-				{1}: {},
+			ballot: ballotInfo{
+				id:    types.BallotID{1},
+				layer: types.NewLayerID(10),
+				conditions: conditions{
+					badBeacon: true,
+				},
 			},
-			ballot:    types.BallotID{1},
-			ballotlid: types.NewLayerID(10),
-			last:      types.NewLayerID(11),
-			distance:  2,
-			expect:    true,
+			last:     types.NewLayerID(11),
+			distance: 2,
+			expect:   true,
 		},
 		{
 			desc: "BadFromOld",
-			badBeaconBallots: map[types.BallotID]struct{}{
-				{1}: {},
+			ballot: ballotInfo{
+				id:    types.BallotID{1},
+				layer: types.NewLayerID(8),
+				conditions: conditions{
+					badBeacon: true,
+				},
 			},
-			ballot:    types.BallotID{1},
-			ballotlid: types.NewLayerID(8),
-			last:      types.NewLayerID(11),
-			distance:  2,
-			expect:    false,
+			last:     types.NewLayerID(11),
+			distance: 2,
+			expect:   false,
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			state := newState()
-			state.badBeaconBallots = tc.badBeaconBallots
 			state.last = tc.last
-
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
-
-			f := newFullTortoise(config, state)
-
-			require.Equal(t, tc.expect, f.shouldBeDelayed(&ballotInfo{
-				id:    tc.ballot,
-				layer: tc.ballotlid,
-			}))
+			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(&tc.ballot))
 		})
 	}
 }

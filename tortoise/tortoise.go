@@ -151,7 +151,6 @@ func (t *turtle) evict(ctx context.Context) {
 		for _, ballot := range t.ballots[lid] {
 			delete(t.ballotRefs, ballot.id)
 			delete(t.referenceWeight, ballot.id)
-			delete(t.badBeaconBallots, ballot.id)
 		}
 		delete(t.ballots, lid)
 		for _, block := range t.layers[lid].blocks {
@@ -214,7 +213,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 			}
 		}
 
-		prioritizeBallots(choices, disagreements, t.badBeaconBallots)
+		prioritizeBallots(choices, disagreements)
 		for _, base = range choices {
 			votes, err = t.encodeVotes(ctx, base, t.evicted.Add(1), last)
 			if err == nil {
@@ -768,7 +767,8 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	} else {
 		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
 	}
-	if err := t.markBeaconWithBadBallot(t.logger, ballot.ID(), ballot.LayerIndex, beacon); err != nil {
+	badBeacon, err := t.compareBeacons(t.logger, ballot.ID(), ballot.LayerIndex, beacon)
+	if err != nil {
 		return err
 	}
 	t.logger.With().Debug("computed weight and height for ballot",
@@ -787,19 +787,16 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		height: height,
 		beacon: beacon,
 	}
+	binfo.conditions.badBeacon = badBeacon
 	t.decodeExceptions(base, binfo, ballot.Votes)
 	t.state.addBallot(binfo)
 	return nil
 }
 
-func (t *turtle) markBeaconWithBadBallot(logger log.Log, bid types.BallotID, layerID types.LayerID, beacon types.Beacon) error {
-	// first check if we have it in the cache
-	if _, bad := t.badBeaconBallots[bid]; bad {
-		return nil
-	}
+func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID types.LayerID, beacon types.Beacon) (bool, error) {
 	epochBeacon, err := t.beacons.GetBeacon(layerID.GetEpoch())
 	if err != nil {
-		return err
+		return false, err
 	}
 	if beacon != epochBeacon {
 		logger.With().Warning("ballot has different beacon",
@@ -807,9 +804,9 @@ func (t *turtle) markBeaconWithBadBallot(logger log.Log, bid types.BallotID, lay
 			bid,
 			log.String("ballot_beacon", beacon.ShortString()),
 			log.String("epoch_beacon", epochBeacon.ShortString()))
-		t.badBeaconBallots[bid] = struct{}{}
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 // the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
@@ -835,9 +832,6 @@ func (t *turtle) layerCutoff() types.LayerID {
 }
 
 func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Votes) {
-	if _, exist := t.badBeaconBallots[ballot.id]; exist {
-		ballot.conditions.badBeacon = true
-	}
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
 	for vote, bids := range map[sign][]types.BlockID{
@@ -876,8 +870,7 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		layer.verifying.abstained = layer.verifying.abstained.Add(ballot.weight)
 	}
 
-	// inherit opinion from the base ballot by copying votes from the point where
-	// opinion diverges
+	// inherit opinion from the base ballot by copying votes
 	ballot.votes = base.votes.update(from, diff)
 	// add new opinions after the base layer
 	for lid := base.layer; lid.Before(ballot.layer); lid = lid.Add(1) {

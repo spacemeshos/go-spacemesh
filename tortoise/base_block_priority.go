@@ -10,16 +10,13 @@ import (
 func prioritizeBallots(
 	ballots []*ballotInfo,
 	disagreements map[types.BallotID]types.LayerID,
-	badBeaconBallots map[types.BallotID]struct{},
 ) {
 	sort.Slice(ballots, func(i, j int) bool {
 		iballot := ballots[i]
 		jballot := ballots[j]
 		// use ballots with bad beacons only as a last resort
-		_, ibad := badBeaconBallots[iballot.id]
-		_, jbad := badBeaconBallots[jballot.id]
-		if ibad != jbad {
-			return !ibad
+		if iballot.conditions.badBeacon != jballot.conditions.badBeacon {
+			return !iballot.conditions.badBeacon
 		}
 
 		// prioritize ballots with less disagreements to a local opinion
