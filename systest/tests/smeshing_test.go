@@ -130,7 +130,7 @@ func requireEqualEligibilities(tb testing.TB, proposals map[uint32][]*spacemeshv
 		if referenceEligibilities < 0 {
 			referenceEligibilities = eligibilities
 		} else {
-			require.Equal(tb, referenceEligibilities, eligibilities, smesher)
+			require.Equal(tb, referenceEligibilities, eligibilities, prettyHex([]byte(smesher)))
 		}
 	}
 }

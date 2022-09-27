@@ -665,7 +665,7 @@ func (t *turtle) loadHare(lid types.LayerID) error {
 
 func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 	// validities will be available only during rerun or
-	// if they are synced from peers, which we don't do currently
+	// if they are synced from peers
 	validities, err := blocks.ContextualValidity(t.cdb, lid)
 	if err != nil {
 		return fmt.Errorf("contextual validity %s: %w", lid, err)
