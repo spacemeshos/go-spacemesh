@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -492,4 +493,46 @@ func TestAdopt(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSyncer_setSyncedTwice_NoError(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+
+	sync := ts.syncer.RegisterForSynced(context.TODO())
+	select {
+	case <-sync:
+		require.Fail(t, "should not have reached synced state yet")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	ts.syncer.setSyncState(context.TODO(), synced)
+
+	select {
+	case <-sync:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "should have reached synced state")
+	}
+
+	require.NotPanics(t, func() { ts.syncer.setSyncState(context.TODO(), synced) })
+}
+
+func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+
+	atxSync := ts.syncer.RegisterForATXSynced()
+	select {
+	case <-atxSync:
+		require.Fail(t, "should not have reached synced state yet")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	ts.syncer.setATXSynced()
+
+	select {
+	case <-atxSync:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "should have reached synced state")
+	}
+
+	require.NotPanics(t, func() { ts.syncer.setATXSynced() })
 }

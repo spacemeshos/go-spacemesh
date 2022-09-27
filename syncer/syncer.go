@@ -253,6 +253,7 @@ func (s *Syncer) setATXSynced() {
 	for _, ch := range s.awaitATXSyncedCh {
 		close(ch)
 	}
+	s.awaitATXSyncedCh = make([]chan struct{}, 0)
 }
 
 func (s *Syncer) getATXSyncState() syncState {
