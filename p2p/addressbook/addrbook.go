@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/host"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -40,7 +40,6 @@ func (cr *concurrentRand) Intn(n int) int {
 // AddrBook provides a concurrency safe address manager for caching potential
 // peers on the network. based on bitcoin's AddrBook.
 type AddrBook struct {
-	host   host.Host
 	cfg    *Config
 	logger log.Log
 	path   string
@@ -54,6 +53,9 @@ type AddrBook struct {
 	anchorPeers     []*knownAddress // Anchor peers. store active connections, and use some of them when node starts.
 	lastAnchorPeers []*knownAddress // Anchor peers from last node start. Used only for bootstrap. New connections come to anchorPeers
 
+	// Cache of recently removed peers.
+	recentlyRemoved *lru.Cache
+
 	nTried int
 	nNew   int
 }
@@ -65,15 +67,36 @@ func NewAddrBook(cfg *Config, logger log.Log) *AddrBook {
 	if len(cfg.DataDir) != 0 {
 		path = filepath.Join(cfg.DataDir, peersFileName)
 	}
+	cache, err := lru.New(cfg.RemovedPeersCacheSize)
+	if err != nil {
+		log.With().Panic("Failed to create removed peers cache", log.Err(err), log.Int("size", cfg.RemovedPeersCacheSize))
+	}
 	am := AddrBook{
-		cfg:    cfg,
-		logger: logger,
-		path:   path,
-		rand:   newConcurrentRand(),
+		cfg:             cfg,
+		logger:          logger,
+		path:            path,
+		rand:            newConcurrentRand(),
+		recentlyRemoved: cache,
 	}
 	am.reset()
 	am.loadPeers(am.path)
 	return &am
+}
+
+// WasRecentlyRemoved checks if peer ID was recently removed.
+// If peer is in the cache, then it returns the time when peer was removed.
+// If the peer was not in the cache, returns (nil, false).
+func (a *AddrBook) WasRecentlyRemoved(id peer.ID) (removedAt *time.Time, wasRemoved bool) {
+	if removedAt, ok := a.recentlyRemoved.Peek(id); ok {
+		r := removedAt.(time.Time)
+		return &r, ok
+	}
+	return nil, false
+}
+
+func (a *AddrBook) removePeer(id peer.ID) {
+	delete(a.addrIndex, id)
+	a.recentlyRemoved.Add(id, time.Now())
 }
 
 // updateAddress is a helper function to either update an address already known
@@ -295,9 +318,7 @@ func (a *AddrBook) getAddressFromBuckets(buckets []map[peer.ID]*knownAddress) *k
 	}
 }
 
-// AddressCache returns the current address cache.  It must be treated as
-// read-only (but since it is a copy now, this is not as dangerous).
-func (a *AddrBook) AddressCache() []*AddrInfo {
+func (a *AddrBook) GetKnownAddressesCache() []*knownAddress {
 	allAddr := a.GetAddresses()
 
 	numAddresses := len(allAddr) * a.cfg.GetAddrPercent / 100
@@ -307,7 +328,7 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 		numAddresses = len(allAddr)
 	}
 
-	result := make([]*AddrInfo, 0, numAddresses)
+	result := make([]*knownAddress, 0, numAddresses)
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	for i := 0; i < numAddresses; i++ {
@@ -319,8 +340,19 @@ func (a *AddrBook) AddressCache() []*AddrInfo {
 			ka = a.getAddressFromBuckets(a.addrNew)
 		}
 		if ka != nil {
-			result = append(result, ka.Addr)
+			result = append(result, ka)
 		}
+	}
+	return result
+}
+
+// AddressCache returns the current address cache.  It must be treated as
+// read-only (but since it is a copy now, this is not as dangerous).
+func (a *AddrBook) AddressCache() []*AddrInfo {
+	knownAddresses := a.GetKnownAddressesCache()
+	result := make([]*AddrInfo, 0, len(knownAddresses))
+	for _, address := range knownAddresses {
+		result = append(result, address.Addr)
 	}
 	return result
 }
@@ -370,8 +402,9 @@ func (a *AddrBook) GetAddresses() []*AddrInfo {
 	return addrs
 }
 
-// GetAllAddressesUsedBefore returns all the addresses used before the given time.
-func (a *AddrBook) GetAllAddressesUsedBefore(date time.Time) []*AddrInfo {
+// GetAddressesNotConnectedSince returns all the addresses which have not
+// been successfully connected to since `date`.
+func (a *AddrBook) GetAddressesNotConnectedSince(date time.Time) []*AddrInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -382,7 +415,7 @@ func (a *AddrBook) GetAllAddressesUsedBefore(date time.Time) []*AddrInfo {
 
 	addrs := make([]*AddrInfo, 0, addrIndexLen)
 	for _, v := range a.addrIndex {
-		if v.LastSeen.Before(date) {
+		if v.LastSuccess.Before(date) {
 			addrs = append(addrs, v.Addr)
 		}
 	}
@@ -405,7 +438,7 @@ func (a *AddrBook) expireNew(bucket int) {
 			v.refs--
 			if v.refs == 0 {
 				a.nNew--
-				delete(a.addrIndex, k)
+				a.removePeer(k)
 			}
 			continue
 		}
@@ -422,7 +455,7 @@ func (a *AddrBook) expireNew(bucket int) {
 		oldest.refs--
 		if oldest.refs == 0 {
 			a.nNew--
-			delete(a.addrIndex, key)
+			a.removePeer(key)
 		}
 	}
 }
@@ -569,7 +602,7 @@ func (a *AddrBook) RemoveAddress(pid peer.ID) {
 		}
 	}
 
-	delete(a.addrIndex, pid)
+	a.removePeer(pid)
 }
 
 // reset resets the address manager by reinitialising the random source and allocating fresh empty bucket storage.

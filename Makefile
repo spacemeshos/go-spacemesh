@@ -73,6 +73,8 @@ install:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
+	go install gotest.tools/gotestsum@v1.8.2
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 .PHONY: install
 
 build: go-spacemesh
@@ -120,10 +122,14 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
+# Clear tests cache
+clear-test-cache:
+	go clean -testcache
+
 test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 
 test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -v -p 1 $(UNIT_TESTS)
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs

@@ -60,11 +60,21 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
           make
           make tidy
           make test-fmt
+      - name: staticcheck
+        run: make staticcheck
 
   golangci-lint:
     runs-on: ubuntu-latest
@@ -79,6 +89,14 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: golangci-lint
@@ -101,10 +119,29 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-unittests-
+            cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
+      - name: Clear test cache
+        run: make clear-test-cache
       - name: unit tests
+        env:
+          GOTESTSUM_FORMAT: testname
+          GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v3
+        if: always() # always run even if the previous step fails
+        with:
+          report_paths: '**/unit-tests.xml'
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible

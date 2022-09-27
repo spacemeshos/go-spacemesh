@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 )
 
@@ -36,7 +37,7 @@ func (d *Discovery) CheckBook(ctx context.Context) {
 func (d *Discovery) CheckPeers(ctx context.Context) {
 	peers := d.GetRandomPeers(d.cfg.CheckPeersNumber)
 	if len(peers) == 0 {
-		d.logger.Info("no peers to check")
+		d.logger.Debug("no peers to check")
 		return
 	}
 	qCtx, cancel := context.WithTimeout(ctx, d.cfg.CheckTimeout)
@@ -52,6 +53,7 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 		}
 		peerStoreAddresses := d.host.Peerstore().Addrs(peerID)
 		if len(peerStoreAddresses) == 0 {
+			d.logger.With().Debug("Removing address", log.String("peer", peerID.Pretty()))
 			d.book.RemoveAddress(peerID)
 			continue
 		}
@@ -62,7 +64,15 @@ func (d *Discovery) CheckPeers(ctx context.Context) {
 			continue
 		}
 		// update node address in book.
-		d.book.AddAddress(newAddr, addresses[0])
+		if removedAt, ok := d.book.WasRecentlyRemoved(newAddr.ID); ok {
+			d.logger.With().Debug(
+				"Skipped adding an address for a recently removed peer",
+				log.String("peer", newAddr.ID.Pretty()),
+				log.Time("removedAt", *removedAt),
+			)
+		} else {
+			d.book.AddAddress(newAddr, addresses[0])
+		}
 	}
 }
 
@@ -78,12 +88,12 @@ func (d *Discovery) GetAddresses() []*addressbook.AddrInfo {
 // - peer was attempted to connect X time in ago (defined in config).
 func (d *Discovery) GetRandomPeers(n int) []*addressbook.AddrInfo {
 	lastUsageDate := time.Now().Add(-1 * d.cfg.CheckPeersUsedBefore)
-	allPeers := d.book.GetAllAddressesUsedBefore(lastUsageDate)
+	allPeers := d.book.GetAddressesNotConnectedSince(lastUsageDate)
 	peers := d.filterPeers(allPeers)
 	if len(peers) == 0 {
-		d.logger.Info("no peers to check")
 		return nil
 	}
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	data := make(map[peer.ID]*addressbook.AddrInfo) // use map in case of duplicates.
 	for len(data) < n && len(data) < len(peers) {   // as it random - loop until we get exact number of peers.
@@ -101,7 +111,7 @@ func (d *Discovery) GetRandomPeers(n int) []*addressbook.AddrInfo {
 			}
 			pa, err := addressbook.ParseAddrInfo(bookAddr)
 			if err != nil {
-				d.logger.Debug("failed to parse address: %s", err)
+				d.logger.Error("failed to parse address: %s", err)
 				continue
 			}
 			result = append(result, pa)

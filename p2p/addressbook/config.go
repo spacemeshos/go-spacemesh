@@ -59,26 +59,30 @@ type Config struct {
 
 	// AnchorPeersCount is the number of anchor peers to use when node starting.
 	AnchorPeersCount int
+
+	// Size of the evicted peers cache. Controls how many evicted peers are remembered.
+	RemovedPeersCacheSize int
 }
 
 // DefaultAddressBookConfigWithDataDir returns a default configuration for the address book.
 func DefaultAddressBookConfigWithDataDir(dataDir string) *Config {
 	return &Config{
-		DataDir:              dataDir,
-		NeedAddressThreshold: 1000,
-		TriedBucketSize:      256,
-		TriedBucketCount:     64,
-		NewBucketSize:        120,
-		NewBucketCount:       1024,
-		TriedBucketsPerGroup: 8,
-		NewBucketsPerGroup:   64,
-		NewBucketsPerAddress: 8,
-		NumMissingDays:       30,
-		NumRetries:           3,
-		MaxFailures:          10,
-		MinBadDays:           7,
-		GetAddrMax:           300,
-		GetAddrPercent:       23,
-		AnchorPeersCount:     3,
+		DataDir:               dataDir,
+		NeedAddressThreshold:  1000,
+		TriedBucketSize:       256,
+		TriedBucketCount:      64,
+		NewBucketSize:         120,
+		NewBucketCount:        1024,
+		TriedBucketsPerGroup:  8,
+		NewBucketsPerGroup:    64,
+		NewBucketsPerAddress:  8,
+		NumMissingDays:        30,
+		NumRetries:            3,
+		MaxFailures:           10,
+		MinBadDays:            7,
+		GetAddrMax:            300,
+		GetAddrPercent:        23,
+		AnchorPeersCount:      3,
+		RemovedPeersCacheSize: 64,
 	}
 }
