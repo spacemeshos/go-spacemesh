@@ -43,8 +43,7 @@ jobs:
           filters: |
             nondoc:
               - '!**/*.md'
-
-  ## stage 1: run unit tests and app tests as a preqrequisite
+  ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
   quicktests:

@@ -167,12 +167,7 @@ golangci-lint-github-action:
 .PHONY: golangci-lint-github-action
 
 cover:
-	@echo "mode: count" > cover-all.out
-	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
-	  $(foreach pkg,$(UNIT_TESTS),\
-		go test -coverprofile=cover.out -covermode=count $(pkg);\
-		tail -n +2 cover.out >> cover-all.out;)
-	go tool cover -html=cover-all.out
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: cover
 
 cover-profile:

@@ -193,14 +193,27 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 *NOTE*: if tests are hanging try running `ulimit -n 400`. some tests require that to work.
 
 ```bash
-make test
+TEST_LOG_LEVEL="" make test
 ```
 
-or
+The optional `TEST_LOG_LEVEL` environment variable can be set to change the log level during test execution.
+If not set, tests won't print any logs. Valid values are the error levels of [zapcore](https://pkg.go.dev/go.uber.org/zap/zapcore#Level)
+
+For code coverage you can run:
 
 ```bash
 make cover
 ```
+
+This will start a local web service and open your browser to render a coverage report. If you just want to
+generate a cover profile you can run:
+
+```bash
+make cover-profile
+```
+
+The generated file will be saved to `./cover.out`. It can be loaded into your editor or IDE to view which code paths
+are covered by tests and which not.
 
 ### Continuous Integration
 
