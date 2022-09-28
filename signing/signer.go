@@ -3,7 +3,6 @@ package signing
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/spacemeshos/ed25519"
@@ -225,7 +224,7 @@ func (e EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
 	}
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
-		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
+		return nil, err
 	}
 	return &PublicKey{pub: pub}, nil
 }
