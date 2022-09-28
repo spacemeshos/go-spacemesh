@@ -27,6 +27,9 @@ type PublicKey struct {
 	pub []byte
 }
 
+// emptyGenesisID is a canonical empty GenesisID.
+var emptyGenesisID = [20]byte{}
+
 // NewPublicKey constructs a new public key instance from a byte array.
 func NewPublicKey(pub []byte) *PublicKey {
 	return &PublicKey{pub}
@@ -70,52 +73,74 @@ var _ Signer = (*EdSigner)(nil)
 
 // EdSigner represents an ED25519 signer.
 type EdSigner struct {
-	privKey ed25519.PrivateKey // the pub & private key
-	pubKey  ed25519.PublicKey  // only the pub key part
+	privKey   ed25519.PrivateKey // the pub & private key
+	pubKey    ed25519.PublicKey  // only the pub key part
+	genesisID [20]byte
 }
 
 // PrivateKeySize size of the private key in bytes.
 const PrivateKeySize = ed25519.PrivateKeySize
 
 // NewEdSignerFromBuffer builds a signer from a private key as byte buffer.
-func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
+func NewEdSignerFromBuffer(buff []byte, opts ...EdSignerOpt) (*EdSigner, error) {
 	if len(buff) != ed25519.PrivateKeySize {
 		log.Error("Could not create EdSigner from the provided buffer: buffer too small")
 		return nil, errors.New("buffer too small")
 	}
-
-	sgn := &EdSigner{privKey: buff, pubKey: buff[32:]}
-	keyPair := ed25519.NewKeyFromSeed(sgn.privKey[:32])
-	if !bytes.Equal(keyPair[32:], sgn.pubKey) {
+	edSigner := &EdSigner{privKey: buff, pubKey: buff[32:]}
+	keyPair := ed25519.NewKeyFromSeed(edSigner.privKey[:32])
+	if !bytes.Equal(keyPair[32:], edSigner.pubKey) {
 		log.Error("Public key and private key does not match")
 		return nil, errors.New("private and public does not match")
 	}
-
-	return sgn, nil
+	for _, opt := range opts {
+		opt(edSigner)
+	}
+	return edSigner, nil
 }
 
 // NewEdSignerFromRand generate signer using predictable randomness source.
-func NewEdSignerFromRand(rand io.Reader) *EdSigner {
+func NewEdSignerFromRand(rand io.Reader, opts ...EdSignerOpt) *EdSigner {
 	pub, priv, err := ed25519.GenerateKey(rand)
 	if err != nil {
 		log.Panic("Could not generate key pair err=%v", err)
 	}
-	return &EdSigner{privKey: priv, pubKey: pub}
+	edSigner := &EdSigner{privKey: priv, pubKey: pub}
+	for _, opt := range opts {
+		opt(edSigner)
+	}
+	return edSigner
+}
+
+// EdSignerOpt is for configuring EdSigner.
+type EdSignerOpt func(es *EdSigner)
+
+// WithGenesisID sets genesisID for EdSigner.
+func WithSignerGenesisID(genesisID [20]byte) EdSignerOpt {
+	return func(es *EdSigner) {
+		es.genesisID = genesisID
+	}
 }
 
 // NewEdSigner returns an auto-generated ed signer.
-func NewEdSigner() *EdSigner {
+func NewEdSigner(opts ...EdSignerOpt) *EdSigner {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Panic("Could not generate key pair err=%v", err)
 	}
-
-	return &EdSigner{privKey: priv, pubKey: pub}
+	edSigner := &EdSigner{privKey: priv, pubKey: pub}
+	for _, opt := range opts {
+		opt(edSigner)
+	}
+	return edSigner
 }
 
 // Sign signs the provided message.
-func (es *EdSigner) Sign(m []byte) []byte {
-	return ed25519.Sign2(es.privKey, m)
+func (es *EdSigner) Sign(msg []byte) []byte {
+	if es.genesisID != emptyGenesisID {
+		msg = append(es.genesisID[:], msg...)
+	}
+	return ed25519.Sign2(es.privKey, msg)
 }
 
 // PublicKey returns the public key of the signer.
@@ -154,23 +179,43 @@ func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
 	return ed25519.Verify2(pubkey.Bytes(), message, sign)
 }
 
-// EDVerifier is a verifier for ED purposes.
-type EDVerifier struct{}
+// EdVerifier is a verifier for ED purposes.
+type EdVerifier struct{ genesisID [20]byte }
 
-// NewEDVerifier returns a new EDVerifier.
-func NewEDVerifier() EDVerifier {
-	return EDVerifier{}
+// EdSignerOpt is for configuring EdSigner.
+type EdVerifierOpt func(es *EdVerifier)
+
+// WithGenesisID sets genesisID for EdSigner.
+func WithVerifierGenesisID(genesisID [20]byte) EdVerifierOpt {
+	return func(ev *EdVerifier) {
+		ev.genesisID = genesisID
+	}
 }
 
-var _ VerifyExtractor = EDVerifier{}
+// NewEdVerifier returns a new EDVerifier.
+func NewEdVerifier(opts ...EdVerifierOpt) *EdVerifier {
+	edVerifier := &EdVerifier{}
+	for _, opt := range opts {
+		opt(edVerifier)
+	}
+	return edVerifier
+}
+
+var _ VerifyExtractor = EdVerifier{}
 
 // Verify that signature matches public key.
-func (EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
+func (ev EdVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
+	if ev.genesisID != emptyGenesisID {
+		msg = append(ev.genesisID[:], msg...)
+	}
 	return Verify(pub, msg, sig)
 }
 
 // Extract public key from signature.
-func (EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+func (ev EdVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+	if ev.genesisID != emptyGenesisID {
+		msg = append(ev.genesisID[:], msg...)
+	}
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
 		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)

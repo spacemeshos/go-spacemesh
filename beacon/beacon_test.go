@@ -772,7 +772,7 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
 	signer := signing.NewEdSigner()
-	verifier := signing.NewEDVerifier()
+	verifier := signing.NewEdVerifier()
 
 	message := []byte{1, 2, 3, 4}
 

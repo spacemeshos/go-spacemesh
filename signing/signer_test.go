@@ -2,9 +2,11 @@ package signing
 
 import (
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
@@ -49,4 +51,49 @@ func TestPublicKey_ShortString(t *testing.T) {
 
 	pub = NewPublicKey([]byte{1, 2})
 	assert.Equal(t, pub.String(), pub.ShortString())
+}
+
+func TestEdVerifierWithGenesisID_Verify(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	genesisID := randomBytes20()
+	edSigner := NewEdSigner(WithSignerGenesisID(genesisID))
+	edVerifier := NewEdVerifier(WithVerifierGenesisID(genesisID))
+
+	t.Run("fail - wrong msg", func(t *testing.T) {
+		t.Parallel()
+		msg := randomBytes(100)
+		sign := edSigner.Sign(msg)
+		wrongMsg := randomBytes(100)
+		r.Equal(false, edVerifier.Verify(edSigner.PublicKey(), wrongMsg, sign))
+	})
+	t.Run("fail - wrong sign", func(t *testing.T) {
+		t.Parallel()
+		msg := randomBytes(100)
+		wrongSign := randomBytes(50)
+		r.Equal(false, edVerifier.Verify(edSigner.PublicKey(), msg, wrongSign))
+	})
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		msg := randomBytes(100)
+		sign := edSigner.Sign(msg)
+		r.Equal(true, edVerifier.Verify(edSigner.PublicKey(), msg, sign))
+	})
+}
+
+func randomBytes(len int) []byte {
+	rand.Seed(time.Now().UnixNano())
+	rst := make([]byte, rand.Intn(len))
+	rand.Read(rst)
+
+	return rst
+}
+
+func randomBytes20() [20]byte {
+	rst := [20]byte{}
+	bytes := randomBytes(20)
+	copy(rst[:], bytes)
+
+	return rst
 }
