@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // Config for protocol parameters.
@@ -199,31 +200,13 @@ func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*t
 	return t.trtl.EncodeVotes(ctx, conf)
 }
 
-// HandleIncomingLayer processes all layer block votes
-// returns the old verified layer and new verified layer after taking into account the blocks votes.
-//
-// DEPRECATED
-// Use TallyVotes and LatestComplete instead.
-func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) types.LayerID {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	logger := t.logger.WithContext(ctx).With()
-	t.updateFromRerun(ctx)
-	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
-		return t.trtl.verified
-	}
-	return t.trtl.verified
-}
-
-// TallyVotes up to the layer lid.
+// TallyVotes up to the specified layer.
 func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.updateFromRerun(ctx)
 	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		t.logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
+		t.logger.Error("failed on layer", lid, log.Err(err))
 	}
 }
 
@@ -271,6 +254,29 @@ func (t *Tortoise) WaitReady(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err() //nolint
 	}
+}
+
+// EnableBackgroundTallyVotes starts a goroutine that tallies votes in the middle
+// of the layer if node is synced.
+func (t *Tortoise) EnableBackgroundTallyVotes(layers timesync.LayerTimer, duration time.Duration, syncer system.SyncStateProvider) {
+	t.eg.Go(func() error {
+		var timer *time.Timer
+		for {
+			select {
+			case <-t.ctx.Done():
+				if timer != nil {
+					timer.Stop()
+				}
+				return t.ctx.Err()
+			case lid := <-layers:
+				if syncer.IsSynced(t.ctx) {
+					timer = time.AfterFunc(duration/2, func() {
+						t.TallyVotes(t.ctx, lid)
+					})
+				}
+			}
+		}
+	})
 }
 
 // Stop background workers.
