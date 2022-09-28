@@ -27,9 +27,6 @@ type PoetDb struct {
 	mu                        sync.Mutex
 }
 
-// A compile time check to ensure that PoetDb fully implements poetDbAPI.
-var _ poetDbAPI = (*PoetDb)(nil)
-
 // NewPoetDb returns a new PoET handler.
 func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
 	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan types.PoetProofRef), log: log}

@@ -11,15 +11,23 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type PostSetupProvider interface {
+	Status() *atypes.PostSetupStatus
+	StatusChan() <-chan *atypes.PostSetupStatus
+	ComputeProviders() []atypes.PostSetupComputeProvider
+	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
+	Config() atypes.PostConfig
+}
+
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider api.PostSetupAPI
+	postSetupProvider PostSetupProvider
 	smeshingProvider  api.SmeshingAPI
 }
 
@@ -29,7 +37,7 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post api.PostSetupAPI, smeshing api.SmeshingAPI) *SmesherService {
+func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
 	return &SmesherService{post, smeshing}
 }
 
@@ -63,7 +71,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
 	}
 
-	opts := activation.PostSetupOpts{
+	opts := atypes.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          uint(in.Opts.NumUnits),
 		NumFiles:          uint(in.Opts.NumFiles),
@@ -235,7 +243,7 @@ func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfi
 	}, nil
 }
 
-func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
+func statusToPbStatus(status *atypes.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus := &pb.PostSetupStatus{}
 
 	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.

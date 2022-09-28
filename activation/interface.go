@@ -7,9 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=mocks -destination=./mocks/interface.go -source=./interface.go
 
-type poetValidatorPersistor interface {
+type poetValidatorPersister interface {
 	HasProof(types.PoetProofRef) bool
 	Validate(types.PoetProof, []byte, string, []byte) error
 	StoreProof(types.PoetProofRef, *types.PoetProofMessage) error

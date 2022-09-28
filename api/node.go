@@ -13,9 +13,6 @@ import (
 // Publisher interface for publishing messages.
 type Publisher = pubsub.Publisher
 
-// PostSetupAPI is an alias to PostSetupProvider.
-type PostSetupAPI = activation.PostSetupProvider
-
 // SmeshingAPI is an alias to SmeshingProvider.
 type SmeshingAPI = activation.SmeshingProvider
 
