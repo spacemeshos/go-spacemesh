@@ -202,7 +202,8 @@ func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*t
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
 //
-// TODO(dshulyak) open an issue to split this method.
+// DEPRECATED
+// Use TallyVotes and LatestComplete instead.
 func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) types.LayerID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -238,7 +239,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
-		t.logger.With().Warning("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 }
 

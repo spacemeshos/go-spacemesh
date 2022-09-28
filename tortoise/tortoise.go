@@ -422,7 +422,10 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
 		}
-
+		if t.mode.isFull() {
+			t.full.countDelayed(t.logger, process)
+			t.full.counted = process
+		}
 		t.processed = process
 
 		if err := t.loadBlocksData(process); err != nil {
@@ -450,10 +453,19 @@ func (t *turtle) switchModes(logger log.Log) {
 	)
 }
 
-func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) {
+func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	// NOTE(dshulyak) counting ballot in verifying mode has some side-effects that
-	// are important for encoding votes.
+	// are important for encoding votes
+	badBeacon, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.beacon)
+	if err != nil {
+		return err
+	}
+	ballot.conditions.badBeacon = badBeacon
 	t.verifying.countBallot(logger, ballot)
+	if t.mode.isFull() {
+		t.full.countBallot(logger, ballot)
+	}
+	return nil
 }
 
 func (t *turtle) verifyLayers(logger log.Log) error {
@@ -468,7 +480,7 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 			success = t.verifying.verify(logger, target)
 		}
 		if !success && (t.canUseFullMode() || t.mode.isFull()) {
-			success = t.catchupToVerifyingInFullMode(logger, target)
+			success = t.countFullMode(logger, target)
 		}
 		if success {
 			t.verified = target
@@ -492,25 +504,31 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 	return nil
 }
 
-func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.LayerID) bool {
+func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
+	success := false
 	if t.mode.isVerifying() {
 		t.switchModes(logger)
-	}
-	counted := maxLayer(t.full.counted.Add(1), target.Add(1))
-	for ; !counted.After(t.processed); counted = counted.Add(1) {
-		t.full.tallyVotes(logger, counted)
-		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
-			target, t.last, t.full.counted,
-			t.epochWeight,
-		)
-		if t.full.verify(logger, target) {
-			break
+		counted := maxLayer(t.full.counted.Add(1), target.Add(1))
+		for ; !counted.After(t.processed); counted = counted.Add(1) {
+			for _, ballot := range t.ballots[counted] {
+				t.full.countBallot(logger, ballot)
+			}
+			t.full.countDelayed(logger, counted)
+			t.full.counted = counted
+			if !success {
+				t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+					target, t.last, t.full.counted,
+					t.epochWeight,
+				)
+				success = t.full.verify(logger, target)
+			}
 		}
+	} else {
+		success = t.full.verify(logger, target)
 	}
-	if !t.full.verify(logger, target) {
-		return false
+	if !success {
+		return success
 	}
-
 	if t.verifying.markGoodCut(logger, t.ballots[target]) {
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
@@ -525,7 +543,7 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.Layer
 			t.switchModes(logger)
 		}
 	}
-	return true
+	return success
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.
@@ -616,7 +634,7 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 
 	for _, ballot := range blts {
 		if err := t.onBallot(ballot); err != nil {
-			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
+			t.logger.With().Error("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
 		}
 	}
 	return nil
@@ -695,7 +713,8 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	}
 	t.logger.With().Debug("on ballot",
 		log.Inline(ballot),
-		log.Uint32("processed", t.processed.Value))
+		log.Uint32("processed", t.processed.Value),
+	)
 
 	base, exists := t.state.ballotRefs[ballot.Votes.Base]
 	if !exists {
@@ -739,10 +758,6 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	} else {
 		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
 	}
-	badBeacon, err := t.compareBeacons(t.logger, ballot.ID(), ballot.LayerIndex, beacon)
-	if err != nil {
-		return err
-	}
 	t.logger.With().Debug("computed weight and height for ballot",
 		ballot.ID(),
 		log.Stringer("weight", weight),
@@ -759,12 +774,13 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		height: height,
 		beacon: beacon,
 	}
-	binfo.conditions.badBeacon = badBeacon
 	t.decodeExceptions(base, binfo, ballot.Votes)
-	t.state.addBallot(binfo)
 	if !binfo.layer.Before(t.processed) {
-		t.countBallot(t.logger, binfo)
+		if err := t.countBallot(t.logger, binfo); err != nil {
+			return err
+		}
 	}
+	t.state.addBallot(binfo)
 	return nil
 }
 

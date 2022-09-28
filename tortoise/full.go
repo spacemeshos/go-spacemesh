@@ -60,29 +60,22 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	}
 }
 
-func (f *full) tallyVotes(logger log.Log, lid types.LayerID) {
-	if !lid.After(f.counted) {
+func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
+	delayed, exist := f.delayed[lid]
+	if !exist {
 		return
 	}
-	f.counted = lid
-	delayed := f.delayed[lid]
-	if len(delayed) > 0 {
-		logger.With().Debug("adding weight from delayed ballots",
-			log.Stringer("ballots layer", delayed[0].layer),
-		)
-		delete(f.delayed, lid)
-		for _, ballot := range delayed {
-			f.countBallot(logger, ballot)
-		}
-	}
-	for _, ballot := range f.ballots[lid] {
+	delete(f.delayed, lid)
+	for _, ballot := range delayed {
 		f.countBallot(logger, ballot)
 	}
 }
 
 func (f *full) countVotes(logger log.Log) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
-		f.tallyVotes(logger, lid)
+		for _, ballot := range f.ballots[lid] {
+			f.countBallot(logger, ballot)
+		}
 	}
 	f.counted = f.processed
 }
