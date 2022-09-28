@@ -408,24 +408,32 @@ func (t *turtle) getFullVote(ctx context.Context, block *blockInfo) (sign, voteR
 	return against, reasonCoinflip, nil
 }
 
-// tallyVotes is expected to be called
-func (t *turtle) tallyVotes(ctx context.Context, lid types.LayerID) error {
-	t.logger.With().Debug("on layer terminated", lid)
+func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
+	t.logger.With().Debug("on layer", lid)
 	defer t.evict(ctx)
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
 	}
 	for process := t.processed.Add(1); !process.After(lid); process = process.Add(1) {
+		layer := t.layer(process)
+		for _, block := range layer.blocks {
+			t.updateRefHeight(layer, block)
+		}
+		for _, ballot := range t.ballots[process] {
+			t.countBallot(t.logger, ballot)
+		}
+
 		t.processed = process
+
 		if err := t.loadBlocksData(process); err != nil {
 			return err
 		}
 		if err := t.loadBallots(process); err != nil {
 			return err
 		}
-		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(process), process); err != nil {
-			return err
-		}
+	}
+	if err := t.verifyLayers(t.logger); err != nil {
+		return err
 	}
 
 	return nil
@@ -442,32 +450,25 @@ func (t *turtle) switchModes(logger log.Log) {
 	)
 }
 
-func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
-	logger = logger.WithFields(
-		log.Stringer("last_layer", t.last),
-	)
-	logger.With().Debug("processing layer", lid)
+func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) {
+	// NOTE(dshulyak) counting ballot in verifying mode has some side-effects that
+	// are important for encoding votes.
+	t.verifying.countBallot(logger, ballot)
+}
 
-	t.verifying.countVotes(logger, t.ballots[lid])
+func (t *turtle) verifyLayers(logger log.Log) error {
+	logger = logger.WithFields(
+		log.Stringer("last layer", t.last),
+	)
 
 	previous := t.verified
-	for target := t.verified.Add(1); target.Before(lid); target = target.Add(1) {
+	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
 		var success bool
 		if t.mode.isVerifying() {
 			success = t.verifying.verify(logger, target)
 		}
 		if !success && (t.canUseFullMode() || t.mode.isFull()) {
-			if t.mode.isVerifying() {
-				t.switchModes(logger)
-			}
-
-			// verifying has a large verification window (think 1_000_000) and if it failed to verify layer
-			// the threshold will be computed according to that window.
-			// if we won't reset threshold full tortoise will have to count votes for 1_000_000 layers before
-			// any layer can be expected to get verified. this is infeasible given current performance
-			// of the full tortoise and may take weeks to finish.
-			// instead we recompute window using configuration for the full mode (think 2_000 layers)
-			success = t.catchupToVerifyingInFullMode(logger, lid, target)
+			success = t.catchupToVerifyingInFullMode(logger, target)
 		}
 		if success {
 			t.verified = target
@@ -491,13 +492,15 @@ func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target types.LayerID) bool {
+func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.LayerID) bool {
+	if t.mode.isVerifying() {
+		t.switchModes(logger)
+	}
 	counted := maxLayer(t.full.counted.Add(1), target.Add(1))
-	for ; !counted.After(vcounted); counted = counted.Add(1) {
+	for ; !counted.After(t.processed); counted = counted.Add(1) {
 		t.full.tallyVotes(logger, counted)
-
 		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
-			target, t.last, counted,
+			target, t.last, t.full.counted,
 			t.epochWeight,
 		)
 		if t.full.verify(logger, target) {
@@ -508,17 +511,15 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target t
 		return false
 	}
 
-	// try to find a cut with ballots that can be good (see verifying tortoise for definition)
-	// if there are such ballots try to bootstrap verifying tortoise by marking them good
-	t.verifying.resetWeights()
 	if t.verifying.markGoodCut(logger, t.ballots[target]) {
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
-		for lid := target; !lid.After(counted); lid = lid.Add(1) {
+		t.verifying.resetWeights()
+		for lid := target; !lid.After(t.full.counted); lid = lid.Add(1) {
 			t.verifying.countVotes(logger, t.ballots[lid])
 		}
 		if t.verifying.verify(logger, target) {
-			for lid := counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
+			for lid := t.full.counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 				t.verifying.countVotes(logger, t.ballots[lid])
 			}
 			t.switchModes(logger)
@@ -692,7 +693,9 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	if _, exist := t.state.ballotRefs[ballot.ID()]; exist {
 		return nil
 	}
-	t.logger.With().Debug("on ballot", log.Inline(ballot))
+	t.logger.With().Debug("on ballot",
+		log.Inline(ballot),
+		log.Uint32("processed", t.processed.Value))
 
 	base, exists := t.state.ballotRefs[ballot.Votes.Base]
 	if !exists {
@@ -759,6 +762,9 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	binfo.conditions.badBeacon = badBeacon
 	t.decodeExceptions(base, binfo, ballot.Votes)
 	t.state.addBallot(binfo)
+	if !binfo.layer.Before(t.processed) {
+		t.countBallot(t.logger, binfo)
+	}
 	return nil
 }
 
