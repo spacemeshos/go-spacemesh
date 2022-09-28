@@ -198,7 +198,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
-	encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
+	if atx.CommitmentATX != nil {
+		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
+	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
