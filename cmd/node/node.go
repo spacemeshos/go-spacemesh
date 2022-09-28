@@ -941,12 +941,11 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	genesis := []byte("genesis placeholder")
-	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithSignerPrefix(genesis))
+	edSgn, err := signing.NewEdSignerFromBuffer(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
-	signing.DefaultVerifier = signing.NewEDVerifier(signing.WithVerifierPrefix(genesis))
+
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
