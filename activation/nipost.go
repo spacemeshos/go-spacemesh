@@ -87,9 +87,9 @@ type NIPostBuilder struct {
 }
 
 type poetDbAPI interface {
-	SubscribeToProofRef(poetID []byte, roundID string) chan []byte
-	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
-	GetProof([]byte) (*types.PoetProof, error)
+	SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef
+	GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash32]bool, error)
+	GetProof(types.PoetProofRef) (*types.PoetProof, error)
 	UnsubscribeFromProofRef(poetID []byte, roundID string)
 }
 
