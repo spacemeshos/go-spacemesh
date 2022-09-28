@@ -564,6 +564,7 @@ func (app *App) initServices(ctx context.Context,
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, sqlDB, clock, beaconProtocol, msh, layerFetch, patrol, app.certifier, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
+	trtl.EnableBackgroundTallyVotes(clock.Subscribe(), time.Duration(app.Config.LayerDurationSec)*time.Second, newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
 	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
