@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
@@ -362,7 +361,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 		func(_ context.Context, _ string, got []byte) error {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
-			pubkey, err := ed25519.ExtractPublicKey(msg.Bytes(), msg.Signature)
+			pubkey, err := signing.ExtractPublicKey(msg.Bytes(), msg.Signature)
 			require.NoError(t, err)
 			require.Equal(t, tc.nodeID, types.BytesToNodeID(pubkey))
 			require.Equal(t, b.LayerIndex, msg.LayerID)
