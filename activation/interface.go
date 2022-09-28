@@ -9,9 +9,9 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/interface.go -source=./interface.go
 
 type poetValidatorPersister interface {
-	HasProof([]byte) bool
+	HasProof(types.PoetProofRef) bool
 	Validate(types.PoetProof, []byte, string, []byte) error
-	StoreProof([]byte, *types.PoetProofMessage) error
+	StoreProof(types.PoetProofRef, *types.PoetProofMessage) error
 }
 
 type nipostValidator interface {

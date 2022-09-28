@@ -36,7 +36,7 @@ func (m *MockpoetValidatorPersister) EXPECT() *MockpoetValidatorPersisterMockRec
 }
 
 // HasProof mocks base method.
-func (m *MockpoetValidatorPersister) HasProof(arg0 []byte) bool {
+func (m *MockpoetValidatorPersister) HasProof(arg0 types.PoetProofRef) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasProof", arg0)
 	ret0, _ := ret[0].(bool)
@@ -50,7 +50,7 @@ func (mr *MockpoetValidatorPersisterMockRecorder) HasProof(arg0 interface{}) *go
 }
 
 // StoreProof mocks base method.
-func (m *MockpoetValidatorPersister) StoreProof(arg0 []byte, arg1 *types.PoetProofMessage) error {
+func (m *MockpoetValidatorPersister) StoreProof(arg0 types.PoetProofRef, arg1 *types.PoetProofMessage) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StoreProof", arg0, arg1)
 	ret0, _ := ret[0].(error)
