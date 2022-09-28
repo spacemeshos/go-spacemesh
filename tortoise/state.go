@@ -40,7 +40,7 @@ type (
 		// during rerun. for live tortoise it is identical to the verified layer.
 		historicallyVerified types.LayerID
 		// last processed layer
-		minprocessed, processed types.LayerID
+		processed types.LayerID
 		// last evicted layer
 		evicted types.LayerID
 
@@ -97,7 +97,9 @@ func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	s.blockRefs[block.id] = block
-	s.updateRefHeight(layer, block)
+	if !block.layer.Before(s.processed) {
+		s.updateRefHeight(layer, block)
+	}
 }
 
 func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {

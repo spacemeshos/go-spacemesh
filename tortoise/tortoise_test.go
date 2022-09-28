@@ -462,7 +462,8 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 
 	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(last.Add(1)))
 	require.NoError(t, err)
-	require.Len(t, votes.Support, 2)
+	bids, err := blocks.IDsInLayer(s.GetState(0).DB, last)
+	require.Equal(t, votes.Support, bids)
 	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
 }
 
@@ -1623,37 +1624,6 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	last = s.Next()
 	verified := tortoise.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified)
-}
-
-func TestObjectsNotProcessedBeforeRefencedHeight(t *testing.T) {
-	ctx := context.Background()
-
-	s := sim.New()
-	s.Setup()
-	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-	last := s.Next()
-
-	blks, err := blocks.Layer(s.GetState(0).DB, last)
-	require.NoError(t, err)
-	for _, block := range blks {
-		tortoise.OnBlock(block)
-	}
-
-	blts, err := ballots.Layer(s.GetState(0).DB, last)
-	require.NoError(t, err)
-	for _, ballot := range blts {
-		tortoise.OnBallot(ballot)
-	}
-
-	require.Empty(t, tortoise.trtl.layers[last])
-	require.Empty(t, tortoise.trtl.ballots[last])
-
-	_ = tortoise.HandleIncomingLayer(ctx, last)
-	require.NotEmpty(t, tortoise.trtl.layers[last])
-	require.NotEmpty(t, tortoise.trtl.ballots[last])
-	verified := tortoise.HandleIncomingLayer(ctx, s.Next())
-	require.Equal(t, last, verified)
 }
 
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {

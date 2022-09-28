@@ -107,7 +107,6 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.verified = genesis
 	t.historicallyVerified = genesis
 	t.evicted = genesis.Sub(1)
-	t.minprocessed = genesis
 	t.full.counted = genesis
 }
 
@@ -409,28 +408,15 @@ func (t *turtle) getFullVote(ctx context.Context, block *blockInfo) (sign, voteR
 	return against, reasonCoinflip, nil
 }
 
-// onLayerTerminated is expected to be called when hare terminated for a layer.
-// Internally tortoise will verify all layers before the last one if there are no gaps in
-// terminated layers.
-func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error {
+// tallyVotes is expected to be called
+func (t *turtle) tallyVotes(ctx context.Context, lid types.LayerID) error {
 	t.logger.With().Debug("on layer terminated", lid)
 	defer t.evict(ctx)
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
 	}
-	if err := t.loadBlocksData(lid); err != nil {
-		return err
-	}
-	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
-		layer := t.layer(process)
-		if !layer.hareTerminated && withinDistance(t.Zdist, process, t.last) {
-			t.logger.With().Info("gap in the layers received by tortoise",
-				lid,
-				log.Stringer("undecided", process),
-			)
-			break
-		}
-		// load data for layers that were skipped due to zdist limit
+	for process := t.processed.Add(1); !process.After(lid); process = process.Add(1) {
+		t.processed = process
 		if err := t.loadBlocksData(process); err != nil {
 			return err
 		}
@@ -440,7 +426,6 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(process), process); err != nil {
 			return err
 		}
-		t.minprocessed = process
 	}
 
 	return nil
@@ -463,9 +448,7 @@ func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 	)
 	logger.With().Debug("processing layer", lid)
 
-	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
-	// but may require changes to t.processed
-	t.verifying.countVotes(logger, lid, t.ballots[lid])
+	t.verifying.countVotes(logger, t.ballots[lid])
 
 	previous := t.verified
 	for target := t.verified.Add(1); target.Before(lid); target = target.Add(1) {
@@ -511,7 +494,7 @@ func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target types.LayerID) bool {
 	counted := maxLayer(t.full.counted.Add(1), target.Add(1))
 	for ; !counted.After(vcounted); counted = counted.Add(1) {
-		t.full.countLayerVotes(logger, counted)
+		t.full.tallyVotes(logger, counted)
 
 		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
 			target, t.last, counted,
@@ -532,11 +515,11 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target t
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
 		for lid := target; !lid.After(counted); lid = lid.Add(1) {
-			t.verifying.countVotes(logger, lid, t.ballots[lid])
+			t.verifying.countVotes(logger, t.ballots[lid])
 		}
 		if t.verifying.verify(logger, target) {
 			for lid := counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-				t.verifying.countVotes(logger, lid, t.ballots[lid])
+				t.verifying.countVotes(logger, t.ballots[lid])
 			}
 			t.switchModes(logger)
 		}
@@ -553,7 +536,6 @@ func (t *turtle) loadBlocksData(lid types.LayerID) error {
 	for _, block := range blocks {
 		t.onBlock(lid, block)
 	}
-
 	if err := t.loadHare(lid); err != nil {
 		return err
 	}
@@ -595,9 +577,6 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 	lastUpdated := t.last.Before(lid)
 	if lastUpdated {
 		t.last = lid
-	}
-	if t.processed.Before(lid) {
-		t.processed = lid
 	}
 
 	for epoch := t.last.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
@@ -646,13 +625,6 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if !lid.After(t.evicted) {
 		return
 	}
-	if _, exist := t.referenceHeight[lid.GetEpoch()]; !exist {
-		// TODO(dshulyak) reference height is computed when first layer in the epoch
-		// is sent to the onLayerTerminated. after that we will load blocks from that layer.
-		// this warning is expected if block was sent to onBlock before the first event
-		t.logger.With().Debug("block was submitted before computing reference height", block.ID(), lid)
-		return
-	}
 	if _, exist := t.state.blockRefs[block.ID()]; exist {
 		return
 	}
@@ -691,7 +663,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if exists && previous == bid {
 		return
 	}
-	if lid.Before(t.minprocessed) && t.mode.isVerifying() && withinDistance(t.Config.Hdist, lid, t.last) {
+	if lid.Before(t.processed) && t.mode.isVerifying() && withinDistance(t.Config.Hdist, lid, t.last) {
 		t.logger.With().Info("local opinion changed within hdist",
 			lid,
 			log.Stringer("verified", t.verified),
@@ -708,7 +680,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			if target.GetEpoch().IsGenesis() {
 				continue
 			}
-			t.verifying.countVotes(t.logger, target, t.ballots[target])
+			t.verifying.countVotes(t.logger, t.ballots[target])
 		}
 	}
 }
@@ -717,14 +689,11 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	if !ballot.LayerIndex.After(t.evicted) {
 		return nil
 	}
-	if _, exist := t.referenceHeight[ballot.LayerIndex.GetEpoch()]; !exist {
-		t.logger.With().Debug("ballot was submitted before computing reference height", ballot.ID(), ballot.LayerIndex)
-		return nil
-	}
-	t.logger.With().Debug("on ballot", log.Inline(ballot))
 	if _, exist := t.state.ballotRefs[ballot.ID()]; exist {
 		return nil
 	}
+	t.logger.With().Debug("on ballot", log.Inline(ballot))
+
 	base, exists := t.state.ballotRefs[ballot.Votes.Base]
 	if !exists {
 		t.logger.With().Warning("base ballot not in state",

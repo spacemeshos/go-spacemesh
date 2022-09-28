@@ -51,70 +51,58 @@ func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfo) bool {
 	return n > 0
 }
 
-func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*ballotInfo) {
-	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
-	var (
-		sum = util.WeightFromUint64(0)
-		n   int
-	)
-	for _, ballot := range ballots {
-		base, exist := v.ballotRefs[ballot.base.id]
-		if !exist {
-			continue
-		}
-		ballot.conditions.baseGood = base.good()
-		ballot.conditions.consistent = validateConsistency(v.state, v.Config, ballot)
-		logger.With().Debug("ballot goodness",
-			ballot.id,
-			log.Stringer("base id", ballot.base.id),
-			log.Uint32("base layer", ballot.base.layer.Value),
-			log.Bool("good base", ballot.conditions.baseGood),
-			log.Bool("bad beacon", ballot.conditions.badBeacon),
-			log.Bool("consistent", ballot.conditions.consistent),
-			log.Bool("votes before base", ballot.conditions.votesBeforeBase),
-		)
-		if !ballot.good() {
-			continue
-		}
-		if ballot.weight.IsNil() {
-			logger.With().Debug("ballot weight is nil", ballot.id)
-			continue
-		}
-		// get height of the max votable block
-		if refheight := v.layer(lid.Sub(1)).verifying.referenceHeight; refheight > ballot.height {
-			logger.With().Debug("reference height is higher than the ballot height",
-				ballot.id,
-				log.Uint64("reference height", refheight),
-				log.Uint64("ballot height", ballot.height),
-			)
-			continue
-		}
-		sum = sum.Add(ballot.weight)
-		i := uint32(0)
-		for current := ballot.votes.tail; current != nil; current = current.prev {
-			i++
-			if current.vote != abstain {
-				continue
-			}
-			if i > v.Zdist {
-				break
-			}
-			current.verifying.abstained = current.verifying.abstained.Add(ballot.weight)
-		}
-		n++
+func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
+	base, exist := v.ballotRefs[ballot.base.id]
+	if !exist {
+		return
 	}
-
-	layer := v.layer(lid)
-	layer.verifying.good = sum
-	v.totalGoodWeight = v.totalGoodWeight.Add(sum)
-
-	logger.With().Debug("counted weight from good ballots",
-		log.Stringer("good_weight", sum),
-		log.Stringer("total_good_weight", v.totalGoodWeight),
-		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
-		log.Int("ballots_count", len(ballots)),
-		log.Int("good_ballots_count", n),
+	ballot.conditions.baseGood = base.good()
+	ballot.conditions.consistent = validateConsistency(v.state, v.Config, ballot)
+	logger.With().Debug("ballot goodness",
+		ballot.id,
+		log.Stringer("base id", ballot.base.id),
+		log.Uint32("base layer", ballot.base.layer.Value),
+		log.Bool("good base", ballot.conditions.baseGood),
+		log.Bool("bad beacon", ballot.conditions.badBeacon),
+		log.Bool("consistent", ballot.conditions.consistent),
+		log.Bool("votes before base", ballot.conditions.votesBeforeBase),
 	)
+	if !ballot.good() {
+		return
+	}
+	if ballot.weight.IsNil() {
+		logger.With().Debug("ballot weight is nil", ballot.id)
+		return
+	}
+	// get height of the max votable block
+	if refheight := v.layer(ballot.layer.Sub(1)).verifying.referenceHeight; refheight > ballot.height {
+		logger.With().Debug("reference height is higher than the ballot height",
+			ballot.id,
+			log.Uint64("reference height", refheight),
+			log.Uint64("ballot height", ballot.height),
+		)
+		return
+	}
+	layer := v.layer(ballot.layer)
+	layer.verifying.good = layer.verifying.good.Add(ballot.weight)
+	v.totalGoodWeight = v.totalGoodWeight.Add(ballot.weight)
+	i := uint32(0)
+	for current := ballot.votes.tail; current != nil; current = current.prev {
+		i++
+		if current.vote != abstain {
+			continue
+		}
+		if i > v.Zdist {
+			break
+		}
+		current.verifying.abstained = current.verifying.abstained.Add(ballot.weight)
+	}
+}
+
+func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
+	for _, ballot := range ballots {
+		v.countBallot(logger, ballot)
+	}
 }
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {

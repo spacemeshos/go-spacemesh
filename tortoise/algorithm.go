@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -208,25 +207,22 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) t
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	var (
-		old    = t.trtl.verified
-		logger = t.logger.WithContext(ctx).With()
-	)
-
+	logger := t.logger.WithContext(ctx).With()
 	t.updateFromRerun(ctx)
-	if err := t.trtl.onLayerTerminated(ctx, lid); err != nil {
+	if err := t.trtl.tallyVotes(ctx, lid); err != nil {
 		logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
 		return t.trtl.verified
 	}
-
-	for lid := old.Add(1); !lid.After(t.trtl.verified); lid = lid.Add(1) {
-		events.ReportLayerUpdate(events.LayerUpdate{
-			LayerID: lid,
-			Status:  events.LayerStatusTypeConfirmed,
-		})
-	}
-
 	return t.trtl.verified
+}
+
+func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.updateFromRerun(ctx)
+	if err := t.trtl.tallyVotes(ctx, lid); err != nil {
+		t.logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
+	}
 }
 
 // OnBlock should be called every time new block is received.
