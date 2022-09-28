@@ -24,14 +24,7 @@ func (t *BuilderState) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.PoetRound)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSlice(enc, t.PoetServiceID)
+		n, err := scale.EncodeStructSlice(enc, t.PoetRequests)
 		if err != nil {
 			return total, err
 		}
@@ -64,6 +57,44 @@ func (t *BuilderState) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.NIPost = field
 	}
 	{
+		field, n, err := scale.DecodeStructSlice[PoetRequest](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PoetRequests = field
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PoetProofRef = field
+	}
+	return total, nil
+}
+
+func (t *PoetRequest) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.PoetRound)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.PoetServiceID)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *PoetRequest) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
 		field, n, err := scale.DecodeOption[types.PoetRound](dec)
 		if err != nil {
 			return total, err
@@ -78,14 +109,6 @@ func (t *BuilderState) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.PoetServiceID = field
-	}
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.PoetProofRef = field
 	}
 	return total, nil
 }

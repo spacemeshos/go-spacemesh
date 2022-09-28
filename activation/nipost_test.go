@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -107,13 +108,32 @@ func newPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.C
 
 type poetDbMock struct {
 	errOn        bool
-	unsubscribed bool
+	subscribed   map[[hash.Size]byte]struct{}
+	unsubscribed map[[hash.Size]byte]struct{}
+}
+
+func newPoetDbMock() *poetDbMock {
+	return &poetDbMock{
+		subscribed:   make(map[[hash.Size]byte]struct{}),
+		unsubscribed: make(map[[hash.Size]byte]struct{}),
+	}
+}
+
+func (p *poetDbMock) didSubscribe(poetID []byte) bool {
+	_, ok := p.subscribed[hash.Sum(poetID)]
+	return ok
+}
+
+func (p *poetDbMock) didUnsubscribe(poetID []byte) bool {
+	_, ok := p.unsubscribed[hash.Sum(poetID)]
+	return ok
 }
 
 // A compile time check to ensure that poetDbMock fully implements poetDbAPI.
 var _ poetDbAPI = (*poetDbMock)(nil)
 
-func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
+func (p *poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
+	p.subscribed[hash.Sum(poetID)] = struct{}{}
 	ch := make(chan types.PoetProofRef)
 	go func() {
 		ch <- []byte("hello there")
@@ -121,7 +141,9 @@ func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types
 	return ch
 }
 
-func (p *poetDbMock) UnsubscribeFromProofRef(poetID []byte, roundID string) { p.unsubscribed = true }
+func (p *poetDbMock) UnsubscribeFromProofRef(poetID []byte, roundID string) {
+	p.unsubscribed[hash.Sum(poetID)] = struct{}{}
+}
 
 func (p *poetDbMock) GetMembershipMap(poetRoot types.PoetProofRef) (map[types.Hash32]bool, error) {
 	if p.errOn {
@@ -145,7 +167,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	poetProvider, controller := defaultPoetServiceMock(t)
 	defer controller.Finish()
 
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
 		poetDb, sql.InMemory(), logtest.New(t))
@@ -167,7 +189,7 @@ func TestPostSetup(t *testing.T) {
 	poetProvider, controller := defaultPoetServiceMock(t)
 	defer controller.Finish()
 
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postSetupProvider, poetProvider,
 		poetDb, sql.InMemory(), logtest.New(t))
@@ -193,7 +215,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	r := require.New(t)
 
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 	nipost := buildNIPost(t, r, postCfg, nipostChallenge, poetDb)
@@ -260,7 +282,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 	nb := NewNIPostBuilder(minerIDNotInitialized, postProvider, poetProver,
 		poetDb, sql.InMemory(), logtest.New(t))
 
@@ -290,7 +312,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	poetProvider.EXPECT().Submit(gomock.Any(), gomock.Any()).Times(2).Return(&types.PoetRound{}, nil)
 	defer controller.Finish()
 
-	poetDb := &poetDbMock{errOn: false}
+	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
 		poetDb, sql.InMemory(), logtest.New(t))
@@ -351,7 +373,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	r := require.New(t)
 
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 
 	nipost := buildNIPost(t, r, postCfg, nipostChallenge, poetDb)
@@ -411,16 +433,19 @@ func TestNIPostBuilder_TimeoutUnsubscribe(t *testing.T) {
 	poetProvider, controller := defaultPoetServiceMock(t)
 	defer controller.Finish()
 
-	poetDb := &poetDbMock{}
+	poetID, err := poetProvider.PoetServiceID(context.TODO())
+	r.NoError(err)
+
+	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
 		poetDb, sql.InMemory(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
-	poetDb.unsubscribed = false
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, closedChan) // closedChan will timeout immediately
 	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.Nil(nipost)
-	r.True(poetDb.unsubscribed)
+	// Subscription is asynchronous so it should either subscribe & unscubscribe or not subscribe at all
+	r.True(poetDb.didSubscribe(poetID) && poetDb.didUnsubscribe(poetID) || !poetDb.didSubscribe(poetID))
 }
 
 func TestNIPostBuilder_Close(t *testing.T) {
@@ -430,7 +455,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	poetProvider, controller := defaultPoetServiceMock(t)
 	defer controller.Finish()
 
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
 		poetDb, sql.InMemory(), logtest.New(t))
@@ -447,7 +472,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	poetProver, controller := newPoetServiceMock(t)
 	defer controller.Finish()
 
-	poetDb := &poetDbMock{}
+	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postProver, poetProver,
 		poetDb, sql.InMemory(), logtest.New(t))

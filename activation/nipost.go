@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -27,7 +29,14 @@ type PoetProvingServiceClient interface {
 	PoetServiceID(context.Context) ([]byte, error)
 }
 
-//go:generate scalegen -types BuilderState
+//go:generate scalegen -types BuilderState,PoetRequest
+
+type PoetRequest struct {
+	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
+	PoetRound *types.PoetRound
+	// PoetServiceID returns the public key of the PoET proving service.
+	PoetServiceID []byte
+}
 
 // BuilderState is a builder state.
 type BuilderState struct {
@@ -35,14 +44,10 @@ type BuilderState struct {
 
 	NIPost *types.NIPost
 
-	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
-	PoetRound *types.PoetRound
-
-	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID []byte
+	PoetRequests []PoetRequest
 
 	// PoetProofRef is the root of the proof received from the PoET service.
-	PoetProofRef []byte
+	PoetProofRef types.PoetProofRef
 }
 
 func nipostBuildStateKey() []byte {
@@ -123,10 +128,10 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 	nb.log.With().Info("updated poet proof service client")
 }
 
-// BuildNIPost uses the given challenge to build a NIPost. "atxExpired" and "stop" are channels for early termination of
+// BuildNIPost uses the given challenge to build a NIPost. "deadline" is a channel for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, atxExpired chan struct{}) (*types.NIPost, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (*types.NIPost, error) {
 	nb.load(*challenge)
 
 	if s := nb.postSetupProvider.Status(); s.State != postSetupStateComplete {
@@ -136,61 +141,50 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET service.
-	if nb.state.PoetRound == nil {
+	if nb.state.PoetRequests == nil {
+		// TODO iterate over all Poet services
 		poetServiceID, err := nb.poetProver.PoetServiceID(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to get PoET service ID: %v", ErrPoetServiceUnstable, err)
 		}
-		nb.state.PoetServiceID = poetServiceID
 
-		poetChallenge := challenge
 		nb.state.Challenge = *challenge
 
 		nb.log.With().Debug("submitting challenge to poet proving service",
-			log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
-			log.Stringer("challenge", poetChallenge))
+			log.String("poet_id", util.Bytes2Hex(poetServiceID)),
+			log.Stringer("challenge", *challenge))
 
-		round, err := nb.poetProver.Submit(ctx, *poetChallenge)
+		round, err := nb.poetProver.Submit(ctx, *challenge)
 		if err != nil {
 			nb.log.With().Error("failed to submit challenge to poet proving service",
-				log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
-				log.Stringer("challenge", poetChallenge),
+				log.String("poet_id", util.Bytes2Hex(poetServiceID)),
+				log.Stringer("challenge", *challenge),
 				log.Err(err))
 			return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
 		}
 
 		nb.log.With().Info("challenge submitted to poet proving service",
-			log.String("poet_id", util.Bytes2Hex(nb.state.PoetServiceID)),
+			log.String("poet_id", util.Bytes2Hex(poetServiceID)),
 			log.String("round_id", round.ID),
-			log.Stringer("challenge", poetChallenge))
+			log.Stringer("challenge", *challenge))
 
-		nipost.Challenge = poetChallenge
-		nb.state.PoetRound = round
+		nipost.Challenge = challenge
+		nb.state.PoetRequests = []PoetRequest{{
+			PoetRound:     round,
+			PoetServiceID: poetServiceID,
+		}}
+
 		nb.persist()
 	}
 
 	// Phase 1: receive proofs from PoET service
 	if nb.state.PoetProofRef == nil {
-		var poetProofRef []byte
-		select {
-		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID):
-		case <-atxExpired:
-			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
-			return nil, fmt.Errorf("%w: while waiting for poet proof, target epoch ended", ErrATXChallengeExpired)
-		case <-ctx.Done():
-			return nil, ErrStopRequested
-		}
-
-		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
+		poetProofRef, err := nb.awaitPoetProof(ctx, challenge, deadline)
 		if err != nil {
-			nb.log.With().Panic("failed to fetch membership for poet proof",
-				log.Binary("challenge", nb.state.PoetProofRef)) // TODO: handle inconsistent state
+			return nil, fmt.Errorf("%v: %w", ErrPoetServiceUnstable, err)
 		}
-		if !membership[*nipost.Challenge] {
-			round := nb.state.PoetRound
-			nb.state.PoetRound = nil // no point in waiting in Phase 1 since we are already received a proof
-			return nil, fmt.Errorf("%w not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)", ErrPoetServiceUnstable,
-				nb.state.PoetServiceID, round.ID, *nipost.Challenge, len(membership)) // TODO(noamnelke): handle this case!
+		if poetProofRef == nil {
+			return nil, fmt.Errorf("%w: haven't received any PoET proof", ErrPoetServiceUnstable)
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -222,4 +216,79 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	}
 	nb.persist()
 	return nipost, nil
+}
+
+// awaitPoetProof concurrently waits for proofs from all PoET services that a challenge was submitted to
+// until it gets proofs from all PoETs or a deadline channel is closed.
+// The best proof will be provided through the returned channel (if any). Otherwise, the channel is closed.
+func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (types.PoetProofRef, error) {
+	incomingPoetProofRefs := make(chan types.PoetProofRef, len(nb.state.PoetRequests))
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Spawn workers to concurrently wait for PoET proofs
+	for _, poetService := range nb.state.PoetRequests {
+		svc := poetService
+		g.Go(func() error {
+			proofSubscription := nb.poetDB.SubscribeToProofRef(svc.PoetServiceID, svc.PoetRound.ID)
+			defer nb.poetDB.UnsubscribeFromProofRef(svc.PoetServiceID, svc.PoetRound.ID)
+			select {
+			case ref := <-proofSubscription:
+				// We are interested only in proofs that we are members of
+				membership, err := nb.poetDB.GetMembershipMap(ref)
+				if err != nil {
+					nb.log.With().Panic("failed to fetch membership for poet proof",
+						log.Binary("challenge", challenge[:]))
+				}
+				if membership[*challenge] {
+					incomingPoetProofRefs <- ref
+				}
+			case <-deadline:
+				return ErrATXChallengeExpired
+			case <-ctx.Done():
+				return ErrStopRequested
+			}
+			return nil
+		})
+	}
+
+	result := make(chan types.PoetProofRef)
+
+	// Spawn consumer processing received proofs
+	go func() {
+		type poetProof struct {
+			ref       types.PoetProofRef
+			leafCount uint64
+		}
+		var bestProof *poetProof
+		// Process all proofs
+		for ref := range incomingPoetProofRefs {
+			proof, err := nb.poetDB.GetProof(ref)
+			if err != nil {
+				nb.log.Panic("Inconsistent state of poetDB. Received poetProofRef which doesn't exist in poetDB.")
+			}
+
+			if bestProof == nil || bestProof.leafCount > proof.LeafCount {
+				bestProof = &poetProof{
+					ref:       ref,
+					leafCount: proof.LeafCount,
+				}
+			}
+		}
+		// Send the best proof (if any) and close the channel.
+		if bestProof != nil {
+			result <- bestProof.ref
+		}
+		close(result)
+	}()
+
+	// Close the workers -> consumer channel after all workers finished
+	err := g.Wait()
+	close(incomingPoetProofRefs)
+	proofRef := <-result
+	if errors.Is(err, ErrATXChallengeExpired) && proofRef != nil {
+		// Deadline was reached but we managed to get a proof, so return it
+		// but swallow the error because this situation is fine.
+		return proofRef, nil
+	}
+	return proofRef, err
 }
