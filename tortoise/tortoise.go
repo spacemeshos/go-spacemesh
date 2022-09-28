@@ -417,7 +417,9 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 	for process := t.processed.Add(1); !process.After(lid); process = process.Add(1) {
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
-			t.updateRefHeight(layer, block)
+			if err := t.updateRefHeight(layer, block); err != nil {
+				return err
+			}
 		}
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
@@ -640,20 +642,28 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
+func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 	if !lid.After(t.evicted) {
-		return
+		return nil
 	}
 	if _, exist := t.state.blockRefs[block.ID()]; exist {
-		return
+		return nil
 	}
 	t.logger.With().Debug("on block", log.Inline(block))
-	t.state.addBlock(&blockInfo{
+	binfo := &blockInfo{
 		id:     block.ID(),
 		layer:  block.LayerIndex,
 		height: block.TickHeight,
 		margin: util.WeightFromUint64(0),
-	})
+	}
+	t.addBlock(binfo)
+	layer := t.layer(binfo.layer)
+	if !binfo.layer.Before(t.processed) {
+		if err := t.updateRefHeight(layer, binfo); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {

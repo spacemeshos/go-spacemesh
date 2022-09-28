@@ -217,6 +217,7 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) t
 	return t.trtl.verified
 }
 
+// TallyVotes up to the layer lid.
 func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -230,7 +231,9 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.trtl.onBlock(block.LayerIndex, block)
+	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
+		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
+	}
 }
 
 // OnBallot should be called every time new ballot is received.

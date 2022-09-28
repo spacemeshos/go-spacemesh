@@ -1,6 +1,8 @@
 package tortoise
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
@@ -97,19 +99,21 @@ func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	s.blockRefs[block.id] = block
-	if !block.layer.Before(s.processed) {
-		s.updateRefHeight(layer, block)
-	}
 }
 
-func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
+func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
 	}
-	if block.height <= s.referenceHeight[block.layer.GetEpoch()] &&
+	refheight, exist := s.referenceHeight[block.layer.GetEpoch()]
+	if !exist {
+		return fmt.Errorf("reference height for epoch %d is not recorded", block.layer.GetEpoch())
+	}
+	if block.height <= refheight &&
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
+	return nil
 }
 
 type (
