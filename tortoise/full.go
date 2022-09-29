@@ -94,7 +94,7 @@ func (f *full) countLayerVotes(logger log.Log, lid types.LayerID) {
 		f.delayedQueue.Remove(front)
 		front = next
 	}
-	f.countVotesFromBallots(logger, f.ballots[lid])
+	f.countVotesFromBallots(logger, f.layer(lid).ballots)
 }
 
 func (f *full) countVotes(logger log.Log) {

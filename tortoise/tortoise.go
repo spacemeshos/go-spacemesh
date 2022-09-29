@@ -74,6 +74,11 @@ func (t *turtle) cloneTurtleParams() *turtle {
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
 	genesis := genesisLayer.Index()
+	t.layers[genesis] = &layerInfo{
+		lid:            genesis,
+		empty:          util.WeightFromUint64(0),
+		hareTerminated: true,
+	}
 	for _, ballot := range genesisLayer.Ballots() {
 		binfo := &ballotInfo{
 			id:     ballot.ID(),
@@ -84,13 +89,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 				consistent: true,
 			},
 		}
-		t.ballots[genesis] = append(t.ballots[genesis], binfo)
-		t.ballotRefs[ballot.ID()] = binfo
-	}
-	t.layers[genesis] = &layerInfo{
-		lid:            genesis,
-		empty:          util.WeightFromUint64(0),
-		hareTerminated: true,
+		t.addBallot(binfo)
 	}
 	for _, block := range genesisLayer.Blocks() {
 		blinfo := &blockInfo{
@@ -148,11 +147,10 @@ func (t *turtle) evict(ctx context.Context) {
 	)
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
-		for _, ballot := range t.ballots[lid] {
+		for _, ballot := range t.layer(lid).ballots {
 			delete(t.ballotRefs, ballot.id)
 			delete(t.referenceWeight, ballot.id)
 		}
-		delete(t.ballots, lid)
 		for _, block := range t.layers[lid].blocks {
 			delete(t.blockRefs, block.id)
 		}
@@ -162,7 +160,7 @@ func (t *turtle) evict(ctx context.Context) {
 			delete(t.referenceHeight, lid.GetEpoch())
 		}
 	}
-	for _, ballot := range t.ballots[windowStart] {
+	for _, ballot := range t.layer(windowStart).ballots {
 		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
@@ -199,7 +197,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 	if votes == nil {
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-			for _, ballot := range t.ballots[lid] {
+			for _, ballot := range t.layer(lid).ballots {
 				if ballot.weight.IsNil() {
 					continue
 				}
@@ -247,7 +245,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
 	var choices []*ballotInfo
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
-		for _, ballot := range t.ballots[lid] {
+		for _, ballot := range t.layer(lid).ballots {
 			if ballot.weight.IsNil() {
 				continue
 			}
@@ -465,7 +463,7 @@ func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 
 	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
 	// but may require changes to t.processed
-	t.verifying.countVotes(logger, lid, t.ballots[lid])
+	t.verifying.countVotes(logger, lid, t.layer(lid).ballots)
 
 	previous := t.verified
 	for target := t.verified.Add(1); target.Before(lid); target = target.Add(1) {
@@ -528,15 +526,15 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, vcounted, target t
 	// try to find a cut with ballots that can be good (see verifying tortoise for definition)
 	// if there are such ballots try to bootstrap verifying tortoise by marking them good
 	t.verifying.resetWeights()
-	if t.verifying.markGoodCut(logger, t.ballots[target]) {
+	if t.verifying.markGoodCut(logger, t.layer(target).ballots) {
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
 		for lid := target; !lid.After(counted); lid = lid.Add(1) {
-			t.verifying.countVotes(logger, lid, t.ballots[lid])
+			t.verifying.countVotes(logger, lid, t.layer(lid).ballots)
 		}
 		if t.verifying.verify(logger, target) {
 			for lid := counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-				t.verifying.countVotes(logger, lid, t.ballots[lid])
+				t.verifying.countVotes(logger, lid, t.layer(lid).ballots)
 			}
 			t.switchModes(logger)
 		}
@@ -708,7 +706,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			if target.GetEpoch().IsGenesis() {
 				continue
 			}
-			t.verifying.countVotes(t.logger, target, t.ballots[target])
+			t.verifying.countVotes(t.logger, target, t.layer(target).ballots)
 		}
 	}
 }

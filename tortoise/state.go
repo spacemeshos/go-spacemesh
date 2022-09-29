@@ -18,6 +18,7 @@ type (
 		empty          weight
 		hareTerminated bool
 		blocks         []*blockInfo
+		ballots        []*ballotInfo
 		verifying      verifyingInfo
 	}
 
@@ -56,8 +57,7 @@ type (
 		// only if refBallot has more than 1 eligibility proof.
 		referenceWeight map[types.BallotID]weight
 
-		layers  map[types.LayerID]*layerInfo
-		ballots map[types.LayerID][]*ballotInfo
+		layers map[types.LayerID]*layerInfo
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
@@ -73,7 +73,6 @@ func newState() *state {
 		referenceWeight: map[types.BallotID]util.Weight{},
 
 		layers:     map[types.LayerID]*layerInfo{},
-		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
@@ -89,7 +88,8 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
-	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
+	layer := s.layer(ballot.layer)
+	layer.ballots = append(layer.ballots, ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
