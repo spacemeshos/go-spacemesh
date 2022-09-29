@@ -235,15 +235,12 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 	tt := []struct {
 		name       string
 		concurrent bool
-		expected   pubsub.ValidationResult
 	}{
 		{
-			name:     "sequential",
-			expected: pubsub.ValidationAccept,
+			name: "sequential",
 		},
 		{
 			name:       "concurrent",
-			expected:   pubsub.ValidationAccept,
 			concurrent: true,
 		},
 	}
@@ -259,7 +256,7 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 			require.NoError(t, tcc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 			if tc.concurrent {
 				tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, gomock.Any(), gomock.Any(), defaultCnt).
-					Return(true, nil).MaxTimes(numMsgs)
+					Return(true, nil).MinTimes(cutoff).MaxTimes(numMsgs)
 			}
 			tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			var wg sync.WaitGroup
