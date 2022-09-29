@@ -801,14 +801,18 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf := config.DefaultConfig()
+	conf.DataDirParent = t.TempDir()
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
 	conf = config.DefaultTestConfig()
+	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
-	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	tconf := getTestDefaultConfig()
+	tconf.DataDirParent = t.TempDir()
+	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
 
 	conf.Tortoise.Zdist = 5
@@ -914,85 +918,48 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 	})
 }
 
-type nonFatalLogger struct {
-	log.Log
-	record []string
-}
-
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
 		app := New()
-		app.Config = &config.Config{
-			BaseConfig: config.BaseConfig{
-				DataDirParent: t.TempDir(),
-			},
-			Genesis: &config.GenesisConfig{
-				ExtraData:   "test",
-				GenesisTime: time.Now().Format(time.RFC3339),
-			},
-		}
-		require.ErrorContains(t, app.Initialize(), "tortoise")
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
 		var existing config.GenesisConfig
 		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
 		require.Empty(t, existing.Diff(app.Config.Genesis))
 	})
 	t.Run("no error if no diff", func(t *testing.T) {
 		app := New()
-		app.Config = &config.Config{
-			BaseConfig: config.BaseConfig{
-				DataDirParent: t.TempDir(),
-			},
-			Genesis: &config.GenesisConfig{
-				ExtraData:   "test",
-				GenesisTime: time.Now().Format(time.RFC3339),
-			},
-		}
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
 
-		require.ErrorContains(t, app.Initialize(), "tortoise")
-		require.ErrorContains(t, app.Initialize(), "tortoise")
+		require.NoError(t, app.Initialize())
+		require.NoError(t, app.Initialize())
 	})
 	t.Run("fatal error on a diff", func(t *testing.T) {
 		app := New()
-		app.Config = &config.Config{
-			BaseConfig: config.BaseConfig{
-				DataDirParent: t.TempDir(),
-			},
-			Genesis: &config.GenesisConfig{
-				ExtraData:   "test",
-				GenesisTime: time.Now().Format(time.RFC3339),
-			},
-		}
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
 
-		require.ErrorContains(t, app.Initialize(), "tortoise")
+		require.NoError(t, app.Initialize())
 		app.Config.Genesis.ExtraData = "changed"
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
 	t.Run("not valid time", func(t *testing.T) {
 		app := New()
-		app.Config = &config.Config{
-			BaseConfig: config.BaseConfig{
-				DataDirParent: t.TempDir(),
-			},
-			Genesis: &config.GenesisConfig{
-				ExtraData:   "test",
-				GenesisTime: time.Now().Format(time.RFC1123),
-			},
-		}
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
 
 		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
 	})
 	t.Run("long extra data", func(t *testing.T) {
 		app := New()
-		app.Config = &config.Config{
-			BaseConfig: config.BaseConfig{
-				DataDirParent: t.TempDir(),
-			},
-			Genesis: &config.GenesisConfig{
-				ExtraData:   string(make([]byte, 256)),
-				GenesisTime: time.Now().Format(time.RFC1123),
-			},
-		}
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.ExtraData = string(make([]byte, 256))
 
 		require.ErrorContains(t, app.Initialize(), "extra-data")
 	})

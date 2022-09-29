@@ -27,20 +27,18 @@ func (g *GenesisConfig) GenesisID() types.Hash20 {
 	hh := hash.New()
 	hh.Write([]byte(g.GenesisTime))
 	hh.Write([]byte(g.ExtraData))
-	rst := types.Hash20{}
-	hh.Sum(rst[:0])
-	return rst
+	return types.BytesToHash(hh.Sum(nil)).ToHash20()
 }
 
 // Validate GenesisConfig.
 func (g *GenesisConfig) Validate() error {
 	if len(g.ExtraData) > 255 {
-		return fmt.Errorf("extra-data %s is longer than 255 symbols", g.ExtraData)
+		return fmt.Errorf("extra-data is longer than 255 symbols: %s", g.ExtraData)
 	}
 	_, err := time.Parse(time.RFC3339, g.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("can't parse genesis time using time.RFC3339(%s) %w",
-			time.RFC3339, err)
+		return fmt.Errorf("can't parse genesis time %s using time.RFC3339(%s) %w",
+			g.GenesisTime, time.RFC3339, err)
 	}
 	return nil
 }
@@ -65,7 +63,7 @@ func (g *GenesisConfig) WriteToFile(filename string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, buf, 0600)
+	return ioutil.WriteFile(filename, buf, 0o644)
 }
 
 // ToAccounts creates list of types.Account instance from config.

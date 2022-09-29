@@ -309,7 +309,7 @@ func (app *App) Initialize() (err error) {
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("failed to load genesis config at %s", gpath)
+			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
 		}
 		if err := app.Config.Genesis.Validate(); err != nil {
 			return err
