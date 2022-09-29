@@ -78,8 +78,10 @@ type EdSigner struct {
 // PrivateKeySize size of the private key in bytes.
 const PrivateKeySize = ed25519.PrivateKeySize
 
+// SignerOpt modifies EdSigner.
 type SignerOpt func(*EdSigner)
 
+// WithSignerPrefix sets used by EdSigner.
 func WithSignerPrefix(prefix []byte) SignerOpt {
 	return func(signer *EdSigner) {
 		signer.prefix = prefix
@@ -166,11 +168,6 @@ func (es *EdSigner) ToBuffer() []byte {
 	return buff
 }
 
-// Verify verifies the provided message.
-func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
-	return DefaultVerifier.Verify(pubkey, message, sign)
-}
-
 // VerifierOpt to modify verifier.
 type VerifierOpt func(*EDVerifier)
 
@@ -181,7 +178,7 @@ func WithVerifierPrefix(prefix []byte) VerifierOpt {
 	}
 }
 
-// DefaultVerifier used by ExtractPublicKey and Verify.
+// DefaultVerifier used by ExtractPublicKey.
 var DefaultVerifier = EDVerifier{}
 
 // ExtractPublicKey using DefaultVerifier Extract method.
@@ -208,14 +205,6 @@ func NewEDVerifier(opts ...VerifierOpt) EDVerifier {
 }
 
 var _ VerifyExtractor = EDVerifier{}
-
-// Verify that signature matches public key.
-func (e EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
-	if e.prefix != nil {
-		msg = append(e.prefix, msg...)
-	}
-	return ed25519.Verify2(pub.Bytes(), msg, sig)
-}
 
 // Extract public key from signature.
 func (e EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {

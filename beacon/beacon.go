@@ -135,7 +135,6 @@ type ProtocolDriver struct {
 	publisher   pubsub.Publisher
 	edSigner    *signing.EdSigner
 	vrfSigner   *signing.VRFSigner
-	edVerifier  signing.EDVerifier
 	vrfVerifier signing.VRFVerifier
 	weakCoin    coin
 	theta       *big.Float

@@ -770,9 +770,6 @@ func TestBuilder_SignAtx(t *testing.T) {
 	pubkey, err := signing.ExtractPublicKey(atxBytes, atx.Sig)
 	assert.NoError(t, err)
 	assert.Equal(t, sig.NodeID().ToBytes(), []byte(pubkey))
-
-	ok := signing.Verify(signing.NewPublicKey(atx.NodeID().ToBytes()), atxBytes, atx.Sig)
-	assert.True(t, ok)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {

@@ -150,17 +150,3 @@ func (mr *MockVerifyExtractorMockRecorder) Extract(msg, sig interface{}) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Extract", reflect.TypeOf((*MockVerifyExtractor)(nil).Extract), msg, sig)
 }
-
-// Verify mocks base method.
-func (m *MockVerifyExtractor) Verify(pub *signing.PublicKey, msg, sig []byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", pub, msg, sig)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Verify indicates an expected call of Verify.
-func (mr *MockVerifyExtractorMockRecorder) Verify(pub, msg, sig interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockVerifyExtractor)(nil).Verify), pub, msg, sig)
-}
