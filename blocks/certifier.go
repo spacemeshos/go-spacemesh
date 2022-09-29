@@ -297,6 +297,8 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 }
 
 func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if _, ok := c.certifyMsgs[lid]; ok {
 		if _, ok := c.certifyMsgs[lid][bid]; ok {
 			return c.certifyMsgs[lid][bid].done

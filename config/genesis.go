@@ -1,15 +1,69 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// GenesisConfig defines accounts that will exist in state at genesis.
+// GenesisConfig contains immutable parameters for the protocol.
 type GenesisConfig struct {
-	Accounts map[string]uint64 `mapstructure:"accounts"`
+	GenesisTime string            `mapstructure:"genesis-time"`
+	ExtraData   string            `mapstructure:"extra-data"`
+	Accounts    map[string]uint64 `mapstructure:"accounts"`
+}
+
+// GenesisID computes genesis id from GenesisTime and ExtraData.
+func (g *GenesisConfig) GenesisID() types.Hash20 {
+	hh := hash.New()
+	hh.Write([]byte(g.GenesisTime))
+	hh.Write([]byte(g.ExtraData))
+	return types.BytesToHash(hh.Sum(nil)).ToHash20()
+}
+
+// Validate GenesisConfig.
+func (g *GenesisConfig) Validate() error {
+	if len(g.ExtraData) > 255 {
+		return fmt.Errorf("extra-data is longer than 255 symbols: %s", g.ExtraData)
+	}
+	_, err := time.Parse(time.RFC3339, g.GenesisTime)
+	if err != nil {
+		return fmt.Errorf("can't parse genesis time %s using time.RFC3339(%s) %w",
+			g.GenesisTime, time.RFC3339, err)
+	}
+	return nil
+}
+
+// Diff returns difference between two configs.
+func (g *GenesisConfig) Diff(other *GenesisConfig) string {
+	return cmp.Diff(g, other)
+}
+
+// LoadFromFile loads config from file.
+func (g *GenesisConfig) LoadFromFile(filename string) error {
+	buf, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(buf, g)
+}
+
+// WriteToFile writes config content to file.
+func (g *GenesisConfig) WriteToFile(filename string) error {
+	buf, err := json.Marshal(g)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, buf, 0o644)
 }
 
 // ToAccounts creates list of types.Account instance from config.
@@ -38,7 +92,9 @@ const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df
 func DefaultGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return &GenesisConfig{
-		Accounts: generateGenesisAccounts(),
+		ExtraData:   "mainnet",
+		GenesisTime: time.Now().Format(time.RFC3339),
+		Accounts:    generateGenesisAccounts(),
 	}
 }
 
@@ -46,7 +102,9 @@ func DefaultGenesisConfig() *GenesisConfig {
 func DefaultTestGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return &GenesisConfig{
-		Accounts: generateGenesisAccounts(),
+		ExtraData:   "testnet",
+		GenesisTime: time.Now().Format(time.RFC3339),
+		Accounts:    generateGenesisAccounts(),
 	}
 }
 
