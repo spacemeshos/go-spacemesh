@@ -10,6 +10,7 @@ type (
 
 	verifyingInfo struct {
 		good, abstained weight
+		// highest block height below reference height
 		referenceHeight uint64
 	}
 
@@ -34,6 +35,7 @@ type (
 	state struct {
 		// last received layer
 		// TODO should be last layer according to the clock
+		// https://github.com/spacemeshos/go-spacemesh/issues/2921
 		last types.LayerID
 		// last verified layer
 		verified types.LayerID
@@ -159,6 +161,9 @@ func (v *votes) append(lv *layerVote) {
 	if v.tail == nil {
 		v.tail = lv
 	} else {
+		if v.tail.lid.Add(1) != lv.lid {
+			panic("bug: added vote with a gap")
+		}
 		v.tail = v.tail.append(lv)
 	}
 }
@@ -224,23 +229,23 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	if l.lid.Before(from) {
 		return l
 	}
-	l = l.copy()
-	if l.prev != nil {
-		l.prev = l.prev.update(from, diff)
+	copied := l.copy()
+	if copied.prev != nil {
+		copied.prev = copied.prev.update(from, diff)
 	}
-	layerdiff, exist := diff[l.lid]
+	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
-		l.vote = abstain
+		copied.vote = abstain
 	} else if exist && len(layerdiff) > 0 {
-		blocks := make([]blockVote, len(l.blocks))
-		copy(blocks, l.blocks)
-		l.blocks = blocks
-		for i := range l.blocks {
-			vote, exist := layerdiff[l.blocks[i].id]
+		blocks := make([]blockVote, len(copied.blocks))
+		copy(blocks, copied.blocks)
+		copied.blocks = blocks
+		for i := range copied.blocks {
+			vote, exist := layerdiff[copied.blocks[i].id]
 			if exist {
-				l.blocks[i].vote = vote
+				copied.blocks[i].vote = vote
 			}
 		}
 	}
-	return l
+	return copied
 }
