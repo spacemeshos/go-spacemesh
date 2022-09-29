@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
@@ -46,7 +45,7 @@ func DefaultPoetConfig() PoetConfig {
 const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
-	updatePoETProver(PoetProvingServiceClient)
+	updatePoETProvers([]PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
 }
 
@@ -90,7 +89,7 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClient atomic.UnsafePointer
+	pendingPoetClient chan PoetProvingServiceClient
 	started           atomic.Bool
 
 	signer
@@ -370,6 +369,22 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	return true
 }
 
+func (b *Builder) updatePoetClients() {
+	poetClients := func() []PoetProvingServiceClient {
+		clients := make([]PoetProvingServiceClient, 0)
+		for {
+			select {
+			case client := <-b.pendingPoetClient:
+				clients = append(clients, client)
+			default:
+				return clients
+			}
+		}
+	}()
+
+	b.nipostBuilder.updatePoETProvers(poetClients)
+}
+
 // loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
 	var poetRetryTimer *time.Timer
@@ -380,12 +395,7 @@ func (b *Builder) loop(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
-		client := b.pendingPoetClient.Load()
-		if client != nil {
-			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
-			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CompareAndSwap(client, nil)
-		}
+		b.updatePoetClients()
 
 		ctx := log.WithNewSessionID(ctx)
 		if err := b.PublishActivationTx(ctx); err != nil {
@@ -463,7 +473,7 @@ func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
-	b.pendingPoetClient.Store(unsafe.Pointer(&client))
+	b.pendingPoetClient <- client
 	b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	return nil
 }

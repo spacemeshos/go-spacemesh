@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -169,7 +171,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 
 	poetDb := newPoetDbMock()
 
-	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
+	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, nil)
@@ -191,7 +193,7 @@ func TestPostSetup(t *testing.T) {
 
 	poetDb := newPoetDbMock()
 
-	nb := NewNIPostBuilder(minerID, postSetupProvider, poetProvider,
+	nb := NewNIPostBuilder(minerID, postSetupProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t))
 
 	done, err := postSetupProvider.StartSession(postSetupOpts)
@@ -248,7 +250,7 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	r.NoError(err)
 	<-done
 
-	nb := NewNIPostBuilder(minerID, postProvider, poetProver,
+	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(tb))
 
 	nipost, err := nb.BuildNIPost(context.TODO(), &nipostChallenge, nil)
@@ -283,7 +285,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		r.NoError(err)
 	}()
 	poetDb := newPoetDbMock()
-	nb := NewNIPostBuilder(minerIDNotInitialized, postProvider, poetProver,
+	nb := NewNIPostBuilder(minerIDNotInitialized, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t))
 
 	nipost, err := nb.BuildNIPost(context.TODO(), &nipostChallenge, nil)
@@ -307,14 +309,14 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	postProvider := &postSetupProviderMock{}
 
-	poetProvider, controller := newPoetServiceMock(t)
-	poetProvider.EXPECT().PoetServiceID(gomock.Any()).Times(2).Return([]byte{}, nil)
-	poetProvider.EXPECT().Submit(gomock.Any(), gomock.Any()).Times(2).Return(&types.PoetRound{}, nil)
+	poetProver, controller := newPoetServiceMock(t)
+	poetProver.EXPECT().PoetServiceID(gomock.Any()).Times(2).Return([]byte{}, nil)
+	poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Times(2).Return(&types.PoetRound{}, nil)
 	defer controller.Finish()
 
 	poetDb := newPoetDbMock()
 
-	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
+	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, nil)
@@ -324,20 +326,20 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.Equal(BuilderState{NIPost: &types.NIPost{}}, *nb.state)
 
 	// fail after getting proof ref
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
+	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t))
 	poetDb.errOn = true
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
 	// check that proof ref is not called again
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
+	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t))
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
 	// fail post exec
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
+	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t))
 	poetDb.errOn = false
 	postProvider.setError = true
 	// check that proof ref is not called again
@@ -346,7 +348,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.Error(err)
 
 	// fail post exec
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
+	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t))
 	poetDb.errOn = false
 	postProvider.setError = false
 	// check that proof ref is not called again
@@ -356,14 +358,129 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	assert.Equal(3, postProvider.called)
 	// test state not loading if other challenge provided
-	poetProvider.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
-	poetProvider.EXPECT().Submit(gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
+	poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
+	poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
 	hash2 := types.BytesToHash([]byte("anton1"))
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash2, nil)
 	assert.Equal(4, postProvider.called)
 
 	assert.NotNil(nipost)
 	assert.NoError(err)
+}
+
+func createMockPoetService(t *testing.T, id []byte) PoetProvingServiceClient {
+	t.Helper()
+	poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
+	poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return(id, nil)
+	poet.EXPECT().Submit(gomock.Any(), gomock.Any()).Times(1).Return(&types.PoetRound{}, nil)
+	return poet
+}
+
+func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	assert := require.New(t)
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	poets := make([]PoetProvingServiceClient, 0, 2)
+	poets = append(poets, createMockPoetService(t, []byte("poet0")))
+	poets = append(poets, createMockPoetService(t, []byte("poet1")))
+	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t))
+
+	g, ctx := errgroup.WithContext(context.TODO())
+	resultChan := make(chan struct {
+		*types.NIPost
+		error
+	})
+	deadlineChan := make(chan struct{}, 1)
+
+	challenge := types.BytesToHash([]byte("challenge"))
+	g.Go(func() error {
+		nipost, err := nb.BuildNIPost(ctx, &challenge, deadlineChan)
+		resultChan <- struct {
+			*types.NIPost
+			error
+		}{nipost, err}
+		return nil
+	})
+
+	// Act
+	// Store proof only from poet1
+	proof := types.PoetProofMessage{
+		PoetServiceID: []byte("poet1"),
+		PoetProof: types.PoetProof{
+			Members:   [][]byte{challenge[:]},
+			LeafCount: 1,
+		},
+	}
+	ref, err := proof.Ref()
+	assert.NoError(err)
+	poetDb.StoreProof(ref, &proof)
+	time.Sleep(time.Millisecond * 10)
+
+	// Signal that the time is out
+	close(deadlineChan)
+
+	// Verify
+	result := <-resultChan
+	assert.NoError(result.error)
+	assert.Equal(*result.NIPost.Challenge, challenge)
+}
+
+func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	assert := require.New(t)
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	poets := make([]PoetProvingServiceClient, 0, 2)
+	poets = append(poets, createMockPoetService(t, []byte("poet0")))
+	poets = append(poets, createMockPoetService(t, []byte("poet1")))
+	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t))
+
+	challenge := types.BytesToHash([]byte("challenge0"))
+	g, ctx := errgroup.WithContext(context.TODO())
+	resultChan := make(chan struct {
+		*types.NIPost
+		error
+	})
+	deadlineChan := make(chan struct{}, 1)
+
+	g.Go(func() error {
+		nipost, err := nb.BuildNIPost(ctx, &challenge, deadlineChan)
+		resultChan <- struct {
+			*types.NIPost
+			error
+		}{nipost, err}
+		return nil
+	})
+
+	// Act
+	// Store proofs from both poets
+	proof := types.PoetProofMessage{
+		PoetServiceID: []byte("poet0"),
+		PoetProof: types.PoetProof{
+			Members:   [][]byte{challenge[:]},
+			LeafCount: 4,
+		},
+	}
+	ref, err := proof.Ref()
+	assert.NoError(err)
+	poetDb.StoreProof(ref, &proof)
+
+	proof = types.PoetProofMessage{
+		PoetServiceID: []byte("poet1"),
+		PoetProof: types.PoetProof{
+			Members:   [][]byte{challenge[:]},
+			LeafCount: 1,
+		},
+	}
+	ref, err = proof.Ref()
+	assert.NoError(err)
+	poetDb.StoreProof(ref, &proof)
+
+	// Verify
+	result := <-resultChan
+	assert.NoError(result.error)
+	assert.Equal(*result.NIPost.Challenge, challenge)
 }
 
 func TestValidator_Validate(t *testing.T) {
@@ -430,15 +547,15 @@ func TestNIPostBuilder_TimeoutUnsubscribe(t *testing.T) {
 	r := require.New(t)
 
 	postProvider := &postSetupProviderMock{}
-	poetProvider, controller := defaultPoetServiceMock(t)
+	poetProver, controller := defaultPoetServiceMock(t)
 	defer controller.Finish()
 
-	poetID, err := poetProvider.PoetServiceID(context.TODO())
+	poetID, err := poetProver.PoetServiceID(context.TODO())
 	r.NoError(err)
 
 	poetDb := newPoetDbMock()
 
-	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
+	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, closedChan) // closedChan will timeout immediately
@@ -452,12 +569,12 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	r := require.New(t)
 
 	postProvider := &postSetupProviderMock{}
-	poetProvider, controller := defaultPoetServiceMock(t)
+	poetProver, controller := defaultPoetServiceMock(t)
 	defer controller.Finish()
 
 	poetDb := newPoetDbMock()
 
-	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
+	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	ctx, close := context.WithCancel(context.Background())
@@ -468,13 +585,14 @@ func TestNIPostBuilder_Close(t *testing.T) {
 }
 
 func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
+	t.Parallel()
 	postProver := &postSetupProviderMock{}
 	poetProver, controller := newPoetServiceMock(t)
 	defer controller.Finish()
 
 	poetDb := newPoetDbMock()
 
-	nb := NewNIPostBuilder(minerID, postProver, poetProver,
+	nb := NewNIPostBuilder(minerID, postProver, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t))
 
 	t.Run("PoetServiceID", func(t *testing.T) {

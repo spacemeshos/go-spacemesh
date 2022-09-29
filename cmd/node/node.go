@@ -413,7 +413,7 @@ func (app *App) initServices(ctx context.Context,
 	dbStorepath string,
 	sgn *signing.EdSigner,
 	layerSize uint32,
-	poetClient activation.PoetProvingServiceClient,
+	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32, clock TickProvider,
 ) error {
@@ -600,7 +600,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClients, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -1024,7 +1024,10 @@ func (app *App) Start() error {
 		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
-	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
+	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
+	for _, address := range app.Config.PoETServers {
+		poetClients = append(poetClients, activation.NewHTTPPoetClient(address))
+	}
 
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner := app.edSgn.VRFSigner()
@@ -1062,7 +1065,7 @@ func (app *App) Start() error {
 		dbStorepath,
 		app.edSgn,
 		uint32(app.Config.LayerAvgSize),
-		poetClient,
+		poetClients,
 		vrfSigner,
 		app.Config.LayersPerEpoch,
 		clock); err != nil {

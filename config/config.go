@@ -84,7 +84,7 @@ type BaseConfig struct {
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
 
-	PoETServer string `mapstructure:"poet-server"`
+	PoETServers []string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -161,7 +161,7 @@ func defaultBaseConfig() BaseConfig {
 		GenesisTime:         time.Now().Format(time.RFC3339),
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
-		PoETServer:          "127.0.0.1",
+		PoETServers:         []string{"127.0.0.1"},
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,

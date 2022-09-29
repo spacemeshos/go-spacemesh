@@ -120,7 +120,10 @@ type NIPostBuilderMock struct {
 	SleepTime       int
 }
 
-func (np NIPostBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
+// A compile time check to ensure that `NIPostBuilderMock` fully implements the `nipostBuilder` interface.
+var _ nipostBuilder = (*NIPostBuilderMock)(nil)
+
+func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
 func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, error) {
 	if np.buildNIPostFunc != nil {
@@ -131,7 +134,10 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Has
 
 type NIPostErrBuilderMock struct{}
 
-func (np *NIPostErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
+// A compile time check to ensure that `NIPostErrBuilderMock` fully implements the `nipostBuilder` interface.
+var _ nipostBuilder = (*NIPostErrBuilderMock)(nil)
+
+func (np *NIPostErrBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
 func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, error) {
 	return nil, fmt.Errorf("NIPost builder error")
