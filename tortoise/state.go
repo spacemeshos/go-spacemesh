@@ -102,9 +102,20 @@ func (s *state) addBlock(block *blockInfo) {
 	s.updateRefHeight(layer, block)
 }
 
+func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
+	for lid = lid.Sub(1); lid.After(s.evicted); lid = lid.Sub(1) {
+		layer := s.layer(lid)
+		if len(layer.blocks) == 0 {
+			continue
+		}
+		return layer.verifying.referenceHeight
+	}
+	return 0
+}
+
 func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
-		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
+		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
 	}
 	if block.height <= s.referenceHeight[block.layer.GetEpoch()] &&
 		block.height > layer.verifying.referenceHeight {

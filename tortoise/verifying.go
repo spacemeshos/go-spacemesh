@@ -54,8 +54,9 @@ func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfo) bool {
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*ballotInfo) {
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
 	var (
-		sum = util.WeightFromUint64(0)
-		n   int
+		sum       = util.WeightFromUint64(0)
+		n         int
+		refheight = v.findRefHeightBelow(lid)
 	)
 	for _, ballot := range ballots {
 		base, exist := v.ballotRefs[ballot.base.id]
@@ -81,7 +82,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 			continue
 		}
 		// get height of the max votable block
-		if refheight := v.layer(lid.Sub(1)).verifying.referenceHeight; refheight > ballot.height {
+		if refheight > ballot.height {
 			logger.With().Debug("reference height is higher than the ballot height",
 				ballot.id,
 				log.Uint64("reference height", refheight),
@@ -114,6 +115,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
 		log.Int("good_ballots_count", n),
+		log.Uint64("layer refheight", refheight),
 	)
 }
 
