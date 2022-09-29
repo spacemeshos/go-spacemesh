@@ -3,6 +3,7 @@ package blocks
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -231,24 +232,59 @@ func Test_HandleCertifyMessage(t *testing.T) {
 }
 
 func Test_HandleCertifyMessage_Certified(t *testing.T) {
-	tc := newTestCertifier(t)
-	numMsgs := tc.cfg.CommitteeSize
-	cutoff := tc.cfg.CertifyThreshold / int(defaultCnt)
-	b := generateBlock(t, tc.db)
-	tc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
-	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
-	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
-	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
-	for i := 0; i < numMsgs; i++ {
-		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
-		if i < cutoff {
-			tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-				Return(true, nil)
-		}
-		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
-		require.Equal(t, pubsub.ValidationAccept, res)
+	tt := []struct {
+		name       string
+		concurrent bool
+		expected   pubsub.ValidationResult
+	}{
+		{
+			name:     "sequential",
+			expected: pubsub.ValidationAccept,
+		},
+		{
+			name:       "concurrent",
+			expected:   pubsub.ValidationAccept,
+			concurrent: true,
+		},
 	}
-	verifySaved(t, tc.db, b.LayerIndex, b.ID(), cutoff)
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tcc := newTestCertifier(t)
+			numMsgs := tcc.cfg.CommitteeSize
+			cutoff := tcc.cfg.CertifyThreshold / int(defaultCnt)
+			b := generateBlock(t, tcc.db)
+			tcc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
+			tcc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
+			require.NoError(t, tcc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
+			if tc.concurrent {
+				tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, gomock.Any(), gomock.Any(), defaultCnt).
+					Return(true, nil).MaxTimes(numMsgs)
+			}
+			tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+			var wg sync.WaitGroup
+			for i := 0; i < numMsgs; i++ {
+				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+				if !tc.concurrent && i < cutoff { // we know exactly which msgs will be validated
+					tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+						Return(true, nil)
+				}
+				if tc.concurrent {
+					wg.Add(1)
+					go func(data []byte) {
+						res := tcc.HandleCertifyMessage(context.TODO(), "peer", data)
+						require.Equal(t, pubsub.ValidationAccept, res)
+						wg.Done()
+					}(encoded)
+				} else {
+					res := tcc.HandleCertifyMessage(context.TODO(), "peer", encoded)
+					require.Equal(t, pubsub.ValidationAccept, res)
+				}
+			}
+			wg.Wait()
+			verifySaved(t, tcc.db, b.LayerIndex, b.ID(), cutoff)
+		})
+	}
 }
 
 func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
