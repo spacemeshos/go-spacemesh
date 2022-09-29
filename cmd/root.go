@@ -40,16 +40,14 @@ func AddCommands(cmd *cobra.Command) {
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
 		config.PoETServer, "The poet server url. (temporary) ")
-	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
-		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	cmd.PersistentFlags().StringVar(&config.Genesis.GenesisTime, "genesis-time",
+		config.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
-	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
-		config.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().Uint64Var(&config.TickSize, "tick-size", config.TickSize, "number of poet leaves in a single tick")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")

@@ -709,8 +709,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-		app.Config.Genesis = &apiConfig.GenesisConfig{
+		app.Config.Genesis = &config.GenesisConfig{
+			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
 			},
@@ -801,14 +801,18 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf := config.DefaultConfig()
+	conf.DataDirParent = t.TempDir()
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
 	conf = config.DefaultTestConfig()
+	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
-	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	tconf := getTestDefaultConfig()
+	tconf.DataDirParent = t.TempDir()
+	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
 
 	conf.Tortoise.Zdist = 5
@@ -914,6 +918,53 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 	})
 }
 
+func TestGenesisConfig(t *testing.T) {
+	t.Run("config is written to a file", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		var existing config.GenesisConfig
+		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
+		require.Empty(t, existing.Diff(app.Config.Genesis))
+	})
+	t.Run("no error if no diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		require.NoError(t, app.Initialize())
+	})
+	t.Run("fatal error on a diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		app.Config.Genesis.ExtraData = "changed"
+		err := app.Initialize()
+		require.ErrorContains(t, err, "genesis config")
+	})
+	t.Run("not valid time", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+
+		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
+	})
+	t.Run("long extra data", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+
+		require.ErrorContains(t, app.Initialize(), "extra-data")
+	})
+}
+
 func getTestDefaultConfig() *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
@@ -959,11 +1010,10 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
-	cfg.GoldenATXID = "0x5678"
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
-	cfg.Genesis = apiConfig.DefaultTestGenesisConfig()
+	cfg.Genesis = config.DefaultTestGenesisConfig()
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
@@ -977,7 +1027,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
-	smApp.Config.GenesisTime = genesisTime
+	smApp.Config.Genesis.GenesisTime = genesisTime
 
 	coinbaseAddressBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
