@@ -2939,6 +2939,73 @@ func TestDecodeExceptions(t *testing.T) {
 	}
 }
 
+func TestCountOnBallot(t *testing.T) {
+	const size = 10
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	s := sim.New(
+		sim.WithLayerSize(cfg.LayerSize),
+	)
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+	)
+
+	tortoise := tortoiseFromSimState(
+		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+	)
+	s.Next(sim.WithNumBlocks(1), sim.WithEmptyHareOutput())
+	last := s.Next(sim.WithNumBlocks(1))
+	tortoise.TallyVotes(ctx, last)
+	require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete(),
+		"does't cross threshold as generated ballots vote inconsistently with hare",
+	)
+	blts, err := ballots.Layer(s.GetState(0).DB, last)
+	require.NoError(t, err)
+	require.NotEmpty(t, blts)
+	for i := 1; i <= size*2; i++ {
+		id := types.BallotID{}
+		binary.BigEndian.PutUint64(id[:], uint64(i))
+		ballot := types.NewExistingBallot(id, nil, nil, blts[0].InnerBallot)
+		// unset support to be consistent with local opinion
+		ballot.Votes.Support = nil
+		tortoise.OnBallot(&ballot)
+	}
+	tortoise.TallyVotes(ctx, last)
+}
+
+func TestNonTerminatedLayers(t *testing.T) {
+	const size = 10
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.Hdist = 10
+	cfg.Zdist = 3
+	cfg.LayerSize = size
+
+	s := sim.New(
+		sim.WithLayerSize(cfg.LayerSize),
+	)
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+	)
+
+	tortoise := tortoiseFromSimState(
+		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+	)
+	for i := 0; i <= int(cfg.Zdist); i++ {
+		tortoise.TallyVotes(ctx, s.Next(
+			sim.WithNumBlocks(0), sim.WithoutHareOutput()))
+	}
+	require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
+	var last types.LayerID
+	for i := 0; i <= int(cfg.Zdist); i++ {
+		last = s.Next(sim.WithNumBlocks(1))
+		tortoise.TallyVotes(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
+}
+
 func BenchmarkOnBallot(b *testing.B) {
 	const (
 		layerSize = 50

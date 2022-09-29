@@ -436,6 +436,15 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 		if err := t.loadBallots(process); err != nil {
 			return err
 		}
+
+		// terminate layer that falls out of the zdist window and wasn't terminated
+		// by any other component
+		terminated := process.Sub(t.Zdist + 1)
+		if terminated.After(t.evicted) {
+			if !t.layer(terminated).hareTerminated {
+				t.onHareOutput(terminated, types.EmptyBlockID)
+			}
+		}
 	}
 	if err := t.verifyLayers(t.logger); err != nil {
 		return err
@@ -905,6 +914,9 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 		}
 		if lvote.vote == abstain {
 			continue
+		}
+		if lvote.vote == against && !lvote.hareTerminated {
+			return false
 		}
 		for j := range lvote.blocks {
 			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
