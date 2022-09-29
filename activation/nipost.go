@@ -195,6 +195,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	nb.persist()
 	return nipost, nil
 }
+
+// Submit the challenge to a single PoET.
 func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingServiceClient, challenge *types.Hash32) (*PoetRequest, error) {
 	poetServiceID, err := poet.PoetServiceID(ctx)
 	if err != nil {
@@ -225,6 +227,7 @@ func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingSe
 	}, nil
 }
 
+// Submit the challenge to all registered PoETs.
 func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *types.Hash32) []PoetRequest {
 	g, ctx := errgroup.WithContext(ctx)
 	poetRequestsChannel := make(chan PoetRequest)
