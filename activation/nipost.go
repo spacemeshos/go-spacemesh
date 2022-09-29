@@ -227,18 +227,28 @@ func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingSe
 
 func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *types.Hash32) []PoetRequest {
 	g, ctx := errgroup.WithContext(ctx)
-	poetProcesses := make([]PoetRequest, 0)
+	poetRequestsChannel := make(chan PoetRequest)
 	for _, poetProver := range nb.poetProvers {
 		poet := poetProver
 		g.Go(func() error {
 			if poetRequest, err := submitPoetChallenge(ctx, nb.log, poet, challenge); err == nil {
-				poetProcesses = append(poetProcesses, *poetRequest)
+				poetRequestsChannel <- *poetRequest
 			}
 			return nil
 		})
 	}
+	poetRequests := make([]PoetRequest, 0)
+	done := make(chan struct{})
+	go func() {
+		for request := range poetRequestsChannel {
+			poetRequests = append(poetRequests, request)
+		}
+		close(done)
+	}()
 	g.Wait()
-	return poetProcesses
+	close(poetRequestsChannel)
+	<-done
+	return poetRequests
 }
 
 // awaitPoetProof concurrently waits for proofs from all PoET services that a challenge was submitted to
