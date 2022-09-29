@@ -252,8 +252,8 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *ty
 }
 
 // awaitPoetProof concurrently waits for proofs from all PoET services that a challenge was submitted to
-// until it gets proofs from all PoETs or a deadline channel is closed.
-// The best proof will be provided through the returned channel (if any). Otherwise, the channel is closed.
+// until it gets proofs from all PoETs or the `deadline` channel is closed.
+// The best proof is returned or `nil` if proof was not received at all within the deadline.
 func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (types.PoetProofRef, error) {
 	incomingPoetProofRefs := make(chan types.PoetProofRef, len(nb.state.PoetRequests))
 	g, ctx := errgroup.WithContext(ctx)
