@@ -134,20 +134,20 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 // BuildNIPost uses the given challenge to build a NIPost. "deadline" is a channel for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (*types.NIPost, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (*types.NIPost, time.Duration, error) {
 	nb.load(*challenge)
 
 	if s := nb.postSetupProvider.Status(); s.State != postSetupStateComplete {
-		return nil, errors.New("post setup not complete")
+		return nil, 0, errors.New("post setup not complete")
 	}
 
 	nipost := nb.state.NIPost
 
-	// Phase 0: Submit challenge to PoET service.
+	// Phase 0: Submit challenge to PoET services.
 	if nb.state.PoetRequests == nil {
 		poetRequests := nb.submitPoetChallenges(ctx, challenge)
 		if len(poetRequests) == 0 {
-			return nil, fmt.Errorf("%w: failed to submit challenge to any PoET", ErrPoetServiceUnstable)
+			return nil, 0, fmt.Errorf("%w: failed to submit challenge to any PoET", ErrPoetServiceUnstable)
 		}
 		nipost.Challenge = challenge
 		nb.state.Challenge = *challenge
@@ -155,31 +155,32 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.persist()
 	}
 
-	// Phase 1: receive proofs from PoET service
+	// Phase 1: receive proofs from PoET services
 	if nb.state.PoetProofRef == nil {
 		poetProofRef, err := nb.awaitPoetProof(ctx, challenge, deadline)
 		if err != nil {
-			return nil, fmt.Errorf("%v: %w", ErrPoetServiceUnstable, err)
+			return nil, 0, fmt.Errorf("%v: %w", ErrPoetServiceUnstable, err)
 		}
 		if poetProofRef == nil {
-			return nil, fmt.Errorf("%w: haven't received any PoET proof", ErrPoetServiceUnstable)
+			return nil, 0, fmt.Errorf("%w: haven't received any PoET proof", ErrPoetServiceUnstable)
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
 	}
 
 	// Phase 2: Post execution.
+	var postGenDuration time.Duration = 0
 	if nipost.Post == nil {
 		nb.log.With().Info("starting post execution",
 			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute Post: %v", err)
+			return nil, 0, fmt.Errorf("failed to execute Post: %v", err)
 		}
 
-		nb.log.With().Info("finished post execution",
-			log.Duration("duration", time.Since(startTime)))
+		postGenDuration = time.Since(startTime)
+		nb.log.With().Info("finished post execution", log.Duration("duration", postGenDuration))
 
 		nipost.Post = proof
 		nipost.PostMetadata = proofMetadata
@@ -193,7 +194,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		NIPost: &types.NIPost{},
 	}
 	nb.persist()
-	return nipost, nil
+	return nipost, postGenDuration, nil
 }
 
 // Submit the challenge to a single PoET.

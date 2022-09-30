@@ -46,7 +46,7 @@ const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
 	updatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
+	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, time.Duration, error)
 }
 
 type atxHandler interface {
@@ -117,6 +117,7 @@ type Builder struct {
 	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
+	lastPostGenDuration   time.Duration
 }
 
 // BuilderOption ...
@@ -176,6 +177,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 		log:                   log,
 		poetRetryInterval:     defaultPoetRetryInterval,
 		poetClientInitializer: defaultPoetClientFunc,
+		lastPostGenDuration:   0, // TODO(brozansk) consider using a non-zero initial value
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -312,10 +314,12 @@ func (b *Builder) generateProof() error {
 	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
+		startTime := time.Now()
 		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
+		b.lastPostGenDuration = time.Since(startTime)
 	}
 
 	return nil
@@ -603,23 +607,26 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	b.log.With().Info("challenge ready")
 
-	pubEpoch := b.challenge.PublishEpoch()
-
 	hash, err := b.challenge.Hash()
 	if err != nil {
 		return nil, fmt.Errorf("getting challenge hash failed: %w", err)
 	}
 
 	// the following method waits for a PoET proof, which should take ~1 epoch
-	expireLayer := (pubEpoch + 2).FirstLayer()
-	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
+	pubEpoch := b.challenge.PublishEpoch()
+	// Add a 10% margin to the time it takes to generate a PoST proof
+	postDurationWithMargin := time.Duration(float64(b.lastPostGenDuration.Nanoseconds()) * 1.1)
+	postDurationInLayers := b.layerClock.DurationToLayers(postDurationWithMargin)
+	deadlineLayer := b.challenge.PubLayerID.Add(types.GetLayersPerEpoch()).Sub(postDurationInLayers)
+	deadline := b.layerClock.AwaitLayer(deadlineLayer)
 
-	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
+	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("deadline_layer", deadlineLayer), log.Uint32("last PoST duration", postGenInLayers))
 
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, hash, deadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
+	b.lastPostGenDuration = postDuration
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.FieldNamed("pub_epoch", pubEpoch),

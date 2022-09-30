@@ -171,7 +171,7 @@ type TickProvider interface {
 	GetCurrentLayer() types.LayerID
 	StartNotifying()
 	GetGenesisTime() time.Time
-	LayerToTime(types.LayerID) time.Time
+	timesync.LayerConverter
 	Close()
 	AwaitLayer(types.LayerID) chan struct{}
 }

@@ -116,7 +116,7 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 
 type NIPostBuilderMock struct {
 	poetRef         []byte
-	buildNIPostFunc func(challenge *types.Hash32) (*types.NIPost, error)
+	buildNIPostFunc func(challenge *types.Hash32) (*types.NIPost, time.Duration, error)
 	SleepTime       int
 }
 
@@ -125,11 +125,11 @@ var _ nipostBuilder = (*NIPostBuilderMock)(nil)
 
 func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, time.Duration, error) {
 	if np.buildNIPostFunc != nil {
 		return np.buildNIPostFunc(challenge)
 	}
-	return newNIPostWithChallenge(challenge, np.poetRef), nil
+	return newNIPostWithChallenge(challenge, np.poetRef), 0, nil
 }
 
 type NIPostErrBuilderMock struct{}
@@ -139,8 +139,8 @@ var _ nipostBuilder = (*NIPostErrBuilderMock)(nil)
 
 func (np *NIPostErrBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, error) {
-	return nil, fmt.Errorf("NIPost builder error")
+func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, time.Duration, error) {
+	return nil, 0, fmt.Errorf("NIPost builder error")
 }
 
 type ValidatorMock struct{}
@@ -220,6 +220,10 @@ type LayerClockMock struct {
 	currentLayer types.LayerID
 }
 
+func (l *LayerClockMock) DurationToLayers(time.Duration) uint32 {
+	return 0
+}
+
 func (l *LayerClockMock) LayerToTime(types.LayerID) time.Time {
 	return time.Time{}
 }
@@ -288,10 +292,10 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 
 func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration uint32) (published, builtNIPost bool, err error) {
 	net.lastTransmission = nil
-	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, error) {
+	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, time.Duration, error) {
 		builtNIPost = true
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
-		return newNIPostWithChallenge(challenge, poetBytes), nil
+		return newNIPostWithChallenge(challenge, poetBytes), 0, nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer().Add(3)
 	err = b.PublishActivationTx(context.TODO())
@@ -887,14 +891,14 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	tries := 0
 	builderConfirmation := make(chan struct{})
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
-	nipostBuilder.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, error) {
+	nipostBuilder.buildNIPostFunc = func(challenge *types.Hash32) (*types.NIPost, time.Duration, error) {
 		tries++
 		if tries == expectedTries {
 			close(builderConfirmation)
 		} else if tries < expectedTries {
-			return nil, ErrPoetServiceUnstable
+			return nil, 0, ErrPoetServiceUnstable
 		}
-		return newNIPostWithChallenge(challenge, poetBytes), nil
+		return newNIPostWithChallenge(challenge, poetBytes), 0, nil
 	}
 	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
 	ctx, cancel := context.WithCancel(context.Background())

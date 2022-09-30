@@ -24,4 +24,6 @@ type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
+	// Convert Duration to number of layers
+	DurationToLayers(time.Duration) uint32
 }

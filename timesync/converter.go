@@ -24,3 +24,7 @@ func (lc LayerConv) TimeToLayer(t time.Time) types.LayerID {
 func (lc LayerConv) LayerToTime(id types.LayerID) time.Time {
 	return lc.genesis.Add(time.Duration(id.Uint32()) * lc.duration)
 }
+
+func (lc LayerConv) DurationToLayers(duration time.Duration) uint32 {
+	return uint32(duration.Nanoseconds() / lc.duration.Nanoseconds())
+}
