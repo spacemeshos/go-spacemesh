@@ -3,10 +3,8 @@ package node
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,7 +59,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
-const edKeyFileName = "key.bin"
+const (
+	edKeyFileName   = "key.bin"
+	genesisFileName = "genesis.json"
+)
 
 // Logger names.
 const (
@@ -116,11 +117,11 @@ var Cmd = &cobra.Command{
 		)
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
-				return fmt.Errorf("init node: %w", err)
+				return err
 			}
 			// This blocks until the context is finished or until an error is produced
 			if err := app.Start(); err != nil {
-				return fmt.Errorf("start node: %w", err)
+				return err
 			}
 
 			return nil
@@ -128,7 +129,7 @@ var Cmd = &cobra.Command{
 		err = starter()
 		app.Cleanup()
 		if err != nil {
-			log.With().Fatal("Failed to run the node. See logs for details.", log.Err(err))
+			log.With().Fatal(err.Error())
 		}
 	},
 }
@@ -263,9 +264,6 @@ type App struct {
 	db               *sql.Database
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
-	gatewaySvc       *grpcserver.GatewayService
-	globalstateSvc   *grpcserver.GlobalStateService
-	txService        *grpcserver.TransactionService
 	syncer           *syncer.Syncer
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
@@ -301,6 +299,31 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
+	// ensure all data folders exist
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
+	if err != nil {
+		return fmt.Errorf("ensure folders exist: %w", err)
+	}
+
+	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
+	var existing config.GenesisConfig
+	if err := existing.LoadFromFile(gpath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
+		}
+		if err := app.Config.Genesis.Validate(); err != nil {
+			return err
+		}
+		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
+			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
+		}
+	} else {
+		diff := existing.Diff(app.Config.Genesis)
+		if len(diff) > 0 {
+			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
+		}
+	}
+
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
@@ -319,12 +342,6 @@ func (app *App) Initialize() (err error) {
 
 	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
-
-	// ensure all data folders exist
-	err = filesystem.ExistOrCreate(app.Config.DataDir())
-	if err != nil {
-		return fmt.Errorf("ensure folders exist: %w", err)
-	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
@@ -458,7 +475,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
-	genesisAccts := app.Config.Genesis.ToAccountList()
+	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
 		if err != nil {
@@ -471,7 +488,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime).ToHash32())
+	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -552,13 +569,12 @@ func (app *App) initServices(ctx context.Context,
 	dataHanders := fetch.DataHandlers{
 		ATX:      atxHandler,
 		Block:    blockHandller,
-		Cert:     app.certifier,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
 		Poet:     poetDb,
 	}
-	layerFetch := fetch.NewLogic(app.Config.FETCH, sqlDB, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
+	layerFetch := fetch.NewLogic(app.Config.FETCH, cdb, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -567,7 +583,7 @@ func (app *App) initServices(ctx context.Context,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, sqlDB, clock, beaconProtocol, msh, layerFetch, patrol, app.certifier, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -803,7 +819,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
@@ -926,7 +942,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to read identity file: %w", err)
@@ -939,7 +955,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = ioutil.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
+		err = os.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -956,33 +972,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 
 	return edSgn, nil
-}
-
-type identityFileFound struct{}
-
-func (identityFileFound) Error() string {
-	return "identity file found"
-}
-
-func (app *App) getIdentityFile() (string, error) {
-	var f string
-	err := filepath.Walk(app.Config.SMESHING.Opts.DataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() && info.Name() == edKeyFileName {
-			f = path
-			return &identityFileFound{}
-		}
-		return nil
-	})
-	if _, ok := err.(*identityFileFound); ok {
-		return f, nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to traverse Post data dir: %w", err)
-	}
-	return "", fmt.Errorf("not found")
 }
 
 func (app *App) startSyncer(ctx context.Context) {
@@ -1083,15 +1072,11 @@ func (app *App) Start() error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg, config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime),
+	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
-	}
-
-	if err = app.checkAndStoreGenesisConfig(); err != nil {
-		return fmt.Errorf("failed to check and store genesis config: %w", err)
 	}
 
 	if err = app.initServices(ctx,
@@ -1112,7 +1097,7 @@ func (app *App) Start() error {
 
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), config.CalcGenesisID(app.Config.Genesis.ExtraData, app.Config.Genesis.GenesisTime).Hex())
+			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {
@@ -1168,36 +1153,4 @@ func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
 		return nil, fmt.Errorf("mapstructure decode: %w", err)
 	}
 	return rst, nil
-}
-
-func (app *App) checkAndStoreGenesisConfig() error {
-	genesisConfigPath := filepath.Join(app.Config.DataDirParent, config.DefaultGenesisConfigFileName)
-	if exists := filesystem.PathExists(genesisConfigPath); exists {
-		genesisData, err := ioutil.ReadFile(genesisConfigPath)
-		if err != nil {
-			return fmt.Errorf("failed to read stored genesis config file: %s", err)
-		}
-
-		var storedGenesisConfig config.GenesisConfig
-
-		if err = json.Unmarshal(genesisData, &storedGenesisConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal stored genesis config file: %w", err)
-		}
-		if err = app.Config.Genesis.Compare(&storedGenesisConfig, genesisConfigPath, app.log); err != nil {
-			return fmt.Errorf("genesis config %s changed from previous run: %w", genesisConfigPath, err)
-		}
-		return nil
-	}
-	jsonCfg, err := json.Marshal(app.Config.Genesis)
-	if err != nil {
-		return fmt.Errorf("failed to marshal genesis config: %w", err)
-	}
-	err = filesystem.ExistOrCreate(app.Config.DataDirParent)
-	if err != nil {
-		return fmt.Errorf("failed to setup genesis data dir: %w", err)
-	}
-	if err = ioutil.WriteFile(genesisConfigPath, jsonCfg, 0o444); err != nil {
-		return fmt.Errorf("failed to write genesis config file: %w", err)
-	}
-	return nil
 }

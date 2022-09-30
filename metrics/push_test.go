@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -25,7 +25,7 @@ func TestStartPushMetrics(t *testing.T) {
 	testMetric.WithLabelValues().Add(1)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resBytes, err := ioutil.ReadAll(r.Body)
+		resBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -14,15 +14,16 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayerData(context.Context, types.LayerID) chan fetch.LayerPromiseResult
-	PollLayerOpinions(context.Context, types.LayerID) chan fetch.LayerPromiseResult
+	PollLayerData(context.Context, types.LayerID) chan fetch.LayerPromiseData
+	PollLayerOpinions(context.Context, types.LayerID) chan fetch.LayerPromiseOpinions
 	GetEpochATXs(context.Context, types.EpochID) error
+	GetBlocks(context.Context, []types.BlockID) error
 }
 
 type layerPatrol interface {
 	IsHareInCharge(types.LayerID) bool
 }
 
-type layerProcessor interface {
-	ProcessLayer(context.Context, types.LayerID) error
+type certHandler interface {
+	HandleSyncedCertificate(context.Context, types.LayerID, *types.Certificate) error
 }

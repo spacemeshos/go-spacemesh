@@ -178,3 +178,19 @@ func ContextualValidity(db sql.Executor, lid types.LayerID) ([]types.BlockContex
 	}
 	return rst, nil
 }
+
+// CountContextualValidity counts the number of blocks with contextual validity set in the layer.
+func CountContextualValidity(db sql.Executor, lid types.LayerID) (int, error) {
+	var count int
+	if _, err := db.Exec("select count(id) from blocks where layer = ?1 and validity in (?2, ?3);", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Uint32()))
+		stmt.BindInt64(2, valid)
+		stmt.BindInt64(3, invalid)
+	}, func(stmt *sql.Statement) bool {
+		count = stmt.ColumnInt(0)
+		return true
+	}); err != nil {
+		return 0, fmt.Errorf("count contextual validity in layer %s: %w", lid, err)
+	}
+	return count, nil
+}

@@ -7,17 +7,14 @@ include Makefile-gpu.Inc
 #include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
-TEST_LOG_LEVEL ?=
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-export GO111MODULE := on
 export CGO_ENABLED := 1
 export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
-
-PKGS = $(shell go list ./...)
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
@@ -65,15 +62,14 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
-
 install:
 	go run scripts/check-go-version.go --major 1 --minor 18
 	go mod download
-	GO111MODULE=off go get golang.org/x/lint/golint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 .PHONY: install
 
 build: go-spacemesh
@@ -121,18 +117,21 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
-test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
+# Clear tests cache
+clear-test-cache:
+	go clean -testcache
+.PHONY: clear-test-cache
 
 test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
 .PHONY: generate
 
 staticcheck: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
 .PHONY: staticcheck
 
 test-tidy:
@@ -151,8 +150,6 @@ test-fmt:
 .PHONY: test-fmt
 
 lint: golangci-lint
-	# Golint is deprecated and frozen. Using golangci-lint instead.
-	# golint --set_exit_status ./...
 	go vet ./...
 .PHONY: lint
 
@@ -170,12 +167,7 @@ golangci-lint-github-action:
 .PHONY: golangci-lint-github-action
 
 cover:
-	@echo "mode: count" > cover-all.out
-	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
-	  $(foreach pkg,$(PKGS),\
-		go test -coverprofile=cover.out -covermode=count $(pkg);\
-		tail -n +2 cover.out >> cover-all.out;)
-	go tool cover -html=cover-all.out
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: cover
 
 tag-and-build:

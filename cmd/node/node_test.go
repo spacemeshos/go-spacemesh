@@ -50,19 +50,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-const (
-	defaultTestGenesisTime      = "2022-12-25T00:00:00+00:00"
-	defaultTestGenesisExtraData = "test"
-)
-
-func DefaultTestGenesisConfig() *config.GenesisConfig {
-	return &config.GenesisConfig{
-		Accounts:    config.GenerateDefaultGenesisAccounts(),
-		GenesisTime: defaultTestGenesisTime,
-		ExtraData:   defaultTestGenesisExtraData,
-	}
-}
-
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -571,7 +558,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := p2p.Upgrade(mesh.Hosts()[0], config.CalcGenesisID(cfg.Genesis.ExtraData, cfg.Genesis.GenesisTime))
+	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
@@ -722,7 +709,12 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		app.Config.Genesis = DefaultTestGenesisConfig()
+		app.Config.Genesis = &config.GenesisConfig{
+			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
+			Accounts: map[string]uint64{
+				address.String(): 100_000_000,
+			},
+		}
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -809,14 +801,18 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf := config.DefaultConfig()
+	conf.DataDirParent = t.TempDir()
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
 	conf = config.DefaultTestConfig()
+	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
-	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	tconf := getTestDefaultConfig()
+	tconf.DataDirParent = t.TempDir()
+	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
 
 	conf.Tortoise.Zdist = 5
@@ -923,6 +919,53 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 	})
 }
 
+func TestGenesisConfig(t *testing.T) {
+	t.Run("config is written to a file", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		var existing config.GenesisConfig
+		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
+		require.Empty(t, existing.Diff(app.Config.Genesis))
+	})
+	t.Run("no error if no diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		require.NoError(t, app.Initialize())
+	})
+	t.Run("fatal error on a diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		app.Config.Genesis.ExtraData = "changed"
+		err := app.Initialize()
+		require.ErrorContains(t, err, "genesis config")
+	})
+	t.Run("not valid time", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+
+		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
+	})
+	t.Run("long extra data", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+
+		require.ErrorContains(t, app.Initialize(), "extra-data")
+	})
+}
+
 func getTestDefaultConfig() *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
@@ -971,7 +1014,7 @@ func getTestDefaultConfig() *config.Config {
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
-	cfg.Genesis = DefaultTestGenesisConfig()
+	cfg.Genesis = config.DefaultTestGenesisConfig()
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
@@ -1009,45 +1052,4 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	}
 
 	return smApp, err
-}
-
-func TestConfig_CheckAndStoreGenesisConfig(t *testing.T) {
-	t.Parallel()
-	r := require.New(t)
-
-	t.Run("Saving new genesis config", func(t *testing.T) {
-		t.Parallel()
-		app := &App{
-			Config: &config.Config{
-				BaseConfig: config.BaseConfig{DataDirParent: t.TempDir()},
-				Genesis:    DefaultTestGenesisConfig(),
-			},
-			log: log.NewNop(),
-		}
-
-		app.Config.DataDirParent = t.TempDir()
-
-		err := app.checkAndStoreGenesisConfig()
-		r.NoError(err)
-	})
-
-	t.Run("Mismatching genesis configs", func(t *testing.T) {
-		t.Parallel()
-		app := &App{
-			Config: &config.Config{
-				BaseConfig: config.BaseConfig{DataDirParent: t.TempDir()},
-				Genesis:    DefaultTestGenesisConfig(),
-			},
-			log: log.NewNop(),
-		}
-
-		err := app.checkAndStoreGenesisConfig()
-		r.NoError(err)
-
-		app.Config.Genesis.GenesisTime = time.Now().Add(time.Hour).Format(time.RFC3339)
-
-		err = app.checkAndStoreGenesisConfig()
-		r.Error(err)
-		r.ErrorContains(err, "failed to match config file")
-	})
 }

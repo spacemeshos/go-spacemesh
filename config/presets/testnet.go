@@ -38,7 +38,20 @@ func testnet() config.Config {
 
 	conf.P2P.TargetOutbound = 10
 
+<<<<<<< HEAD
 	conf.Genesis = defaultTestnetGenesisConfig()
+=======
+	conf.Genesis = &config.GenesisConfig{
+		ExtraData: "testnet",
+		Accounts: map[string]uint64{
+			"stest1qqqqqqygdpsq62p4qxfyng8h2mm4f4d94vt7huqqu9mz3": 100000000000000000,
+			"stest1qqqqqqylzg8ypces4llx4gnat0dyntqfvr0h6mcprcz66": 100000000000000000,
+			"stest1qqqqqq90akdpc97206485eu4m0rmacd3mxfv0wsdrea6k": 100000000000000000,
+			"stest1qqqqqq9jpsarr7tnyv0qr0edddwqpg3vcya4cccauypts": 100000000000000000,
+			"stest1qqqqqq8lpq7f5ghqt569nvpl8kldv8r66ms2yzgudsd5t": 100000000000000000,
+		},
+	}
+>>>>>>> develop
 
 	conf.LayerAvgSize = 50
 	conf.LayerDurationSec = 120

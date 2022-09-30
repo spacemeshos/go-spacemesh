@@ -94,8 +94,11 @@ func NewSet(data []types.ProposalID) *Set {
 	s.isIDValid = false
 
 	s.initWithSize(len(data))
+
+	// SAFETY: It's safe not to lock here as `s` was just
+	// created and nobody else has access to it yet.
 	for _, bid := range data {
-		s.add(bid)
+		s.values[bid] = struct{}{}
 	}
 
 	return s
@@ -337,20 +340,6 @@ func (s *Set) contains(id types.ProposalID) bool {
 
 	_, ok := s.values[id]
 	return ok
-}
-
-func (s *Set) add(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	s.values[id] = struct{}{}
-}
-
-func (s *Set) remove(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	delete(s.values, id)
 }
 
 func (s *Set) elements() []types.ProposalID {

@@ -43,8 +43,7 @@ jobs:
           filters: |
             nondoc:
               - '!**/*.md'
-
-  ## stage 1: run unit tests and app tests as a preqrequisite
+  ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
   quicktests:
@@ -60,11 +59,21 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
           make
           make tidy
           make test-fmt
+      - name: staticcheck
+        run: make staticcheck
 
   golangci-lint:
     runs-on: ubuntu-latest
@@ -79,6 +88,14 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: golangci-lint
@@ -91,8 +108,8 @@ jobs:
     # should take around 15-18 mins
     timeout-minutes: 20
     steps:
-        # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
-        # https://github.com/actions/virtual-environments/issues/1187
+      # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
+      # https://github.com/actions/virtual-environments/issues/1187
       - name: disable TCP/UDP offload
         run: sudo ethtool -K eth0 tx off rx off
       - name: checkout
@@ -101,8 +118,19 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            cache-go-${{ env.go-version }}-unittests-
+            cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
+      - name: Clear test cache
+        run: make clear-test-cache
       - name: unit tests
         env:
           GOTESTSUM_FORMAT: testname
@@ -141,7 +169,6 @@ jobs:
         if: env.status != 'success'
         run: exit 1
 
-
   ## workflow for regular pull requests ends here
   ## everything below here only runs in a push when bors is invoked
   ## so we can safely assume that all secrets are accessible here below
@@ -174,70 +201,70 @@ jobs:
     timeout-minutes: 60
     concurrency: cloud-limits
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - id: 'auth'
-      uses: 'google-github-actions/auth@v0'
-      with:
-        # GCP_CREDENTIALS is minified JSON of service account
-        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          # GCP_CREDENTIALS is minified JSON of service account
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-    - name: Configure gcloud
-      uses: 'google-github-actions/setup-gcloud@v0'
+      - name: Configure gcloud
+        uses: 'google-github-actions/setup-gcloud@v0'
 
-    - name: Configure kubectl
-      run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
+      - name: Configure kubectl
+        run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Push go-spacemesh build to dockerhub
-      run: make dockerpush
+      - name: Push go-spacemesh build to dockerhub
+        run: make dockerpush
 
-    - name: Get branch and commit hash
-      id: vars
-      shell: bash
-      run: |
-        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
-        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Get branch and commit hash
+        id: vars
+        shell: bash
+        run: |
+          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
+          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
-    - name: Build tests docker image
-      run: cd systest && make docker
+      - name: Build tests docker image
+        run: cd systest && make docker
 
-    - name: Push tests docker images
-      run: cd systest && make push
+      - name: Push tests docker images
+        run: cd systest && make push
 
-    - name: Run tests
-      timeout-minutes: 50
-      run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
+      - name: Run tests
+        timeout-minutes: 50
+        run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
-    - name: Systemtest result
-      run: |
-        SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
-        SUCCESS="${SUCCESS//'%'/'%25'}"
-        SUCCESS="${SUCCESS//$'\n'/'%0A'}"
-        SUCCESS="${SUCCESS//$'\r'/'%0D'}"
-        echo "::set-output name=content::$SUCCESS"
-      id: tests_logs
+      - name: Systemtest result
+        run: |
+          SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
+          SUCCESS="${SUCCESS//'%'/'%25'}"
+          SUCCESS="${SUCCESS//$'\n'/'%0A'}"
+          SUCCESS="${SUCCESS//$'\r'/'%0D'}"
+          echo "::set-output name=content::$SUCCESS"
+        id: tests_logs
 
-    - name: Delete pod
-      if: always()
-      run: cd systest && make clean
+      - name: Delete pod
+        if: always()
+        run: cd systest && make clean
 
-    - name: Tests Passed or Failed
-      run: |
-        SUCCESS='${{ steps.tests_logs.outputs.content }}'
-        ISTRUE='0'
-        if [[ "$SUCCESS" == "$ISTRUE" ]]; then
-          exit 0
-        else
-          exit 1
-        fi
+      - name: Tests Passed or Failed
+        run: |
+          SUCCESS='${{ steps.tests_logs.outputs.content }}'
+          ISTRUE='0'
+          if [[ "$SUCCESS" == "$ISTRUE" ]]; then
+            exit 0
+          else
+            exit 1
+          fi
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
   ci-stage2:

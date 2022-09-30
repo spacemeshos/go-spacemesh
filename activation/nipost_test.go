@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -29,7 +29,7 @@ func init() {
 	postCfg = DefaultPostConfig()
 
 	postSetupOpts = DefaultPostSetupOpts()
-	postSetupOpts.DataDir, _ = ioutil.TempDir("", "post-test")
+	postSetupOpts.DataDir, _ = os.MkdirTemp("", "post-test")
 	postSetupOpts.NumUnits = postCfg.MinNumUnits
 	postSetupOpts.ComputeProviderID = initialization.CPUProviderID()
 }
@@ -113,8 +113,8 @@ type poetDbMock struct {
 // A compile time check to ensure that poetDbMock fully implements poetDbAPI.
 var _ poetDbAPI = (*poetDbMock)(nil)
 
-func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
-	ch := make(chan []byte)
+func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
+	ch := make(chan types.PoetProofRef)
 	go func() {
 		ch <- []byte("hello there")
 	}()
@@ -123,7 +123,7 @@ func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan []byt
 
 func (p *poetDbMock) UnsubscribeFromProofRef(poetID []byte, roundID string) { p.unsubscribed = true }
 
-func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
+func (p *poetDbMock) GetMembershipMap(poetRoot types.PoetProofRef) (map[types.Hash32]bool, error) {
 	if p.errOn {
 		return map[types.Hash32]bool{}, nil
 	}
@@ -132,7 +132,7 @@ func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, e
 	return map[types.Hash32]bool{hash: true, hash2: true}, nil
 }
 
-func (p *poetDbMock) GetProof(poetRef []byte) (*types.PoetProof, error) {
+func (p *poetDbMock) GetProof(poetRef types.PoetProofRef) (*types.PoetProof, error) {
 	hash := types.BytesToHash([]byte("anton"))
 	hash2 := types.BytesToHash([]byte("anton1"))
 	return &types.PoetProof{Members: [][]byte{hash.Bytes(), hash2.Bytes()}}, nil

@@ -35,7 +35,13 @@ func fastnet() config.Config {
 
 	conf.P2P.TargetOutbound = 10
 
+<<<<<<< HEAD
 	conf.Genesis = &config.GenesisConfig{}
+=======
+	conf.Genesis = &config.GenesisConfig{
+		ExtraData: "fastnet",
+	}
+>>>>>>> develop
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 1_000

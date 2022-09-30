@@ -114,7 +114,11 @@ func DefaultConfig() Config {
 	return Config{
 		Address:         types.DefaultAddressConfig(),
 		BaseConfig:      defaultBaseConfig(),
+<<<<<<< HEAD
 		Genesis:         defaultGenesisConfig(),
+=======
+		Genesis:         DefaultGenesisConfig(),
+>>>>>>> develop
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),

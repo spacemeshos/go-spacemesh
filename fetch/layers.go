@@ -16,26 +16,25 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 var (
 	// errLayerDataNotFetched is returned when any layer data is not fetched successfully.
 	errLayerDataNotFetched = errors.New("layer data not fetched")
 
-	// errCertificateMissing is returned when no peers have the layer's certificate.
-	errCertificateMissing = errors.New("certificates missing from all peers")
+	errLayerOpinionsNotFetched = errors.New("layer opinions not fetched")
 )
 
 // peerResult captures the response from each peer.
 type peerResult struct {
-	data *LayerData
-	err  error
+	data    *LayerData
+	opinion *LayerOpinion
+	err     error
 }
 
 // opinionsResult captures opinions of a layer across peers.
 type opinionsResult struct {
-	responses map[p2p.Peer]struct{}
+	responses map[p2p.Peer]*peerResult
 }
 
 // dataResult captures content of a layer across peers.
@@ -45,31 +44,37 @@ type dataResult struct {
 	responses map[p2p.Peer]*peerResult
 }
 
-// LayerPromiseResult is the result of trying to fetch data for an entire layer.
-type LayerPromiseResult struct {
+// LayerPromiseData is the result of trying to fetch data for an entire layer.
+type LayerPromiseData struct {
 	Err   error
 	Layer types.LayerID
+}
+
+// LayerPromiseOpinions is the result of trying to fetch opinions for a layer.
+type LayerPromiseOpinions struct {
+	Err      error
+	Layer    types.LayerID
+	Opinions []*LayerOpinion
 }
 
 // Logic is the struct containing components needed to follow layer fetching logic.
 type Logic struct {
 	log     log.Log
 	eg      errgroup.Group
-	db      *sql.Database
+	cdb     *datastore.CachedDB
 	msh     meshProvider
 	fetcher fetcher
 
 	mu          sync.Mutex
 	dataResults map[types.LayerID]*dataResult
-	dataChs     map[types.LayerID][]chan LayerPromiseResult
+	dataChs     map[types.LayerID][]chan LayerPromiseData
 	opnResults  map[types.LayerID]*opinionsResult
-	opnChs      map[types.LayerID][]chan LayerPromiseResult
+	opnChs      map[types.LayerID][]chan LayerPromiseOpinions
 
 	poetHandler     poetHandler
 	atxHandler      atxHandler
 	ballotHandler   ballotHandler
 	blockHandler    blockHandler
-	certHandler     certHandler
 	proposalHandler proposalHandler
 	txHandler       txHandler
 }
@@ -79,32 +84,30 @@ type DataHandlers struct {
 	ATX      atxHandler
 	Ballot   ballotHandler
 	Block    blockHandler
-	Cert     certHandler
 	Proposal proposalHandler
 	TX       txHandler
 	Poet     poetHandler
 }
 
 // NewLogic creates a new instance of layer fetching logic.
-func NewLogic(cfg Config, db *sql.Database, msh meshProvider, host *p2p.Host, handlers DataHandlers, log log.Log) *Logic {
+func NewLogic(cfg Config, cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, handlers DataHandlers, log log.Log) *Logic {
 	l := &Logic{
 		log:             log,
 		msh:             msh,
-		db:              db,
+		cdb:             cdb,
 		dataResults:     make(map[types.LayerID]*dataResult),
-		dataChs:         make(map[types.LayerID][]chan LayerPromiseResult),
+		dataChs:         make(map[types.LayerID][]chan LayerPromiseData),
 		opnResults:      make(map[types.LayerID]*opinionsResult),
-		opnChs:          make(map[types.LayerID][]chan LayerPromiseResult),
+		opnChs:          make(map[types.LayerID][]chan LayerPromiseOpinions),
 		poetHandler:     handlers.Poet,
 		atxHandler:      handlers.ATX,
 		ballotHandler:   handlers.Ballot,
 		blockHandler:    handlers.Block,
-		certHandler:     handlers.Cert,
 		proposalHandler: handlers.Proposal,
 		txHandler:       handlers.TX,
 	}
-	bs := datastore.NewBlobStore(db)
-	h := newHandler(db, bs, log)
+	bs := datastore.NewBlobStore(cdb.Database)
+	h := newHandler(cdb, bs, msh, log)
 	atxSrv := server.New(host, atxProtocol, h.handleEpochATXIDsReq,
 		server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
 		server.WithLog(log),
@@ -138,7 +141,7 @@ func (l *Logic) Close() {
 
 // initDataPolling returns false if there is an ongoing polling of the given layer content,
 // otherwise it initializes the polling and returns true.
-func (l *Logic) initDataPolling(layerID types.LayerID, ch chan LayerPromiseResult) bool {
+func (l *Logic) initDataPolling(layerID types.LayerID, ch chan LayerPromiseData) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.dataChs[layerID] = append(l.dataChs[layerID], ch)
@@ -156,8 +159,8 @@ func (l *Logic) initDataPolling(layerID types.LayerID, ch chan LayerPromiseResul
 
 // PollLayerData polls peers for the data in the specified layer.
 // it returns a channel for the caller to be notified when responses are received from all peers.
-func (l *Logic) PollLayerData(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
-	ch := make(chan LayerPromiseResult, 1)
+func (l *Logic) PollLayerData(ctx context.Context, layerID types.LayerID) chan LayerPromiseData {
+	ch := make(chan LayerPromiseData, 1)
 	if !l.initDataPolling(layerID, ch) {
 		return ch
 	}
@@ -169,14 +172,14 @@ func (l *Logic) PollLayerData(ctx context.Context, layerID types.LayerID) chan L
 		l.receiveData(ctx, layerID, peer, numPeers, nil, err)
 	}
 	if err := l.fetcher.GetLayerData(ctx, layerID, okFunc, errFunc); err != nil {
-		ch <- LayerPromiseResult{Layer: layerID, Err: err}
+		ch <- LayerPromiseData{Layer: layerID, Err: err}
 	}
 	return ch
 }
 
 // initOpinionsPolling returns false if there is an ongoing polling of the given layer opinions,
 // otherwise it initializes the polling and returns true.
-func (l *Logic) initOpinionsPolling(layerID types.LayerID, ch chan LayerPromiseResult) bool {
+func (l *Logic) initOpinionsPolling(layerID types.LayerID, ch chan LayerPromiseOpinions) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.opnChs[layerID] = append(l.opnChs[layerID], ch)
@@ -185,21 +188,15 @@ func (l *Logic) initOpinionsPolling(layerID types.LayerID, ch chan LayerPromiseR
 		return false
 	}
 	l.opnResults[layerID] = &opinionsResult{
-		responses: make(map[p2p.Peer]struct{}),
+		responses: make(map[p2p.Peer]*peerResult),
 	}
 	return true
 }
 
 // PollLayerOpinions polls peers for the opinions on blocks in the specified layer.
 // it returns a channel for the caller to be notified when responses are received from all peers.
-func (l *Logic) PollLayerOpinions(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
-	ch := make(chan LayerPromiseResult, 1)
-	cert, err := layers.GetCert(l.db, layerID)
-	if (err != nil && !errors.Is(err, sql.ErrNotFound)) || cert != nil {
-		ch <- LayerPromiseResult{Layer: layerID, Err: err}
-		return ch
-	}
-
+func (l *Logic) PollLayerOpinions(ctx context.Context, layerID types.LayerID) chan LayerPromiseOpinions {
+	ch := make(chan LayerPromiseOpinions, 1)
 	if !l.initOpinionsPolling(layerID, ch) {
 		return ch
 	}
@@ -211,7 +208,7 @@ func (l *Logic) PollLayerOpinions(ctx context.Context, layerID types.LayerID) ch
 		l.receiveOpinions(ctx, layerID, peer, numPeers, nil, err)
 	}
 	if err := l.fetcher.GetLayerOpinions(ctx, layerID, okFunc, errFunc); err != nil {
-		ch <- LayerPromiseResult{Layer: layerID, Err: err}
+		ch <- LayerPromiseOpinions{Layer: layerID, Err: err}
 	}
 	return ch
 }
@@ -220,43 +217,43 @@ func (l *Logic) receiveOpinions(ctx context.Context, layerID types.LayerID, peer
 	logger := l.log.WithContext(ctx).WithFields(layerID, log.Stringer("peer", peer))
 	logger.Debug("received layer opinions from peer")
 
-	var (
-		lo      LayerOpinions
-		success bool
-	)
+	pr := &peerResult{
+		err: peerErr,
+	}
+	var lo LayerOpinion
 	if peerErr != nil {
 		logger.With().Debug("received peer error for layer opinions", log.Err(peerErr))
-	} else if err := codec.Decode(data, &lo); err != nil {
-		logger.With().Debug("error converting bytes to LayerOpinions", log.Err(err))
-	} else if lo.Cert != nil {
-		if err = l.certHandler.HandleSyncedCertificate(ctx, layerID, lo.Cert); err != nil {
-			// TODO: detect multiple hare certificate in the same network
-			// https://github.com/spacemeshos/go-spacemesh/issues/3467
-			logger.With().Debug("peer's certificate rejected", log.Err(err))
-		} else {
-			success = true
-		}
+	} else if pr.err = codec.Decode(data, &lo); pr.err != nil {
+		logger.With().Debug("error converting bytes to LayerOpinion", log.Err(pr.err))
+	} else {
+		lo.SetPeer(peer)
+		pr.opinion = &lo
 	}
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.opnResults[layerID] == nil {
-		// this polling is already done
-		return
-	}
-	l.opnResults[layerID].responses[peer] = struct{}{}
-	if !success && len(l.opnResults[layerID].responses) < expectedResults {
-		logger.With().Debug("not yet received a good opinion from peers",
+	l.opnResults[layerID].responses[peer] = pr
+	if len(l.opnResults[layerID].responses) < expectedResults {
+		logger.With().Debug("not yet received all responses from peers",
 			log.Int("received", len(l.opnResults[layerID].responses)),
 			log.Int("expected", expectedResults))
 		return
 	}
 
-	res := LayerPromiseResult{Layer: layerID}
-	chs := l.opnChs[layerID]
-	if !success {
-		res.Err = errCertificateMissing
+	res := LayerPromiseOpinions{
+		Layer:    layerID,
+		Opinions: make([]*LayerOpinion, 0, expectedResults),
 	}
+	for _, pr := range l.opnResults[layerID].responses {
+		if pr.err == nil {
+			res.Opinions = append(res.Opinions, pr.opinion)
+		}
+	}
+	if len(res.Opinions) == 0 {
+		res.Err = errLayerOpinionsNotFetched
+	}
+
+	chs := l.opnChs[layerID]
 	l.eg.Go(func() error {
 		notifyOpinionsResult(ctx, chs, res)
 		return nil
@@ -265,7 +262,7 @@ func (l *Logic) receiveOpinions(ctx context.Context, layerID types.LayerID, peer
 	delete(l.opnResults, layerID)
 }
 
-func notifyOpinionsResult(ctx context.Context, channels []chan LayerPromiseResult, res LayerPromiseResult) {
+func notifyOpinionsResult(ctx context.Context, channels []chan LayerPromiseOpinions, res LayerPromiseOpinions) {
 	for _, ch := range channels {
 		select {
 		case ch <- res:
@@ -404,7 +401,7 @@ func (l *Logic) receiveData(ctx context.Context, layerID types.LayerID, peer p2p
 // notifyDataResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyDataResult(ctx context.Context, logger log.Log, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseResult, lyrResult *dataResult) {
+func notifyDataResult(ctx context.Context, logger log.Log, layerID types.LayerID, msh meshProvider, channels []chan LayerPromiseData, lyrResult *dataResult) {
 	var (
 		missing, success bool
 		err              error
@@ -424,7 +421,7 @@ func notifyDataResult(ctx context.Context, logger log.Log, layerID types.LayerID
 		}
 	}
 
-	result := LayerPromiseResult{Layer: layerID}
+	result := LayerPromiseData{Layer: layerID}
 	// we tolerate errors from peers as long as we fetched all known blocks in this layer.
 	if missing || !success {
 		result.Err = err
