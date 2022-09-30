@@ -20,7 +20,7 @@ type MeshService struct {
 	conState         api.ConservativeState
 	genTime          api.GenesisTimeAPI
 	layersPerEpoch   uint32
-	networkID        uint32
+	genesisID        types.Hash20
 	layerDurationSec int
 	layerAvgSize     int
 	txsPerProposal   int
@@ -34,7 +34,7 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new service using config data.
 func NewMeshService(
 	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
-	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
+	layersPerEpoch uint32, genesisID types.Hash20, layerDurationSec int,
 	layerAvgSize int, txsPerProposal int,
 ) *MeshService {
 	return &MeshService{
@@ -42,7 +42,7 @@ func NewMeshService(
 		conState:         cstate,
 		genTime:          genTime,
 		layersPerEpoch:   layersPerEpoch,
-		networkID:        networkID,
+		genesisID:        genesisID,
 		layerDurationSec: layerDurationSec,
 		layerAvgSize:     layerAvgSize,
 		txsPerProposal:   txsPerProposal,
@@ -74,12 +74,10 @@ func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb
 	}}, nil
 }
 
-// NetID returns the network ID.
-func (s MeshService) NetID(context.Context, *pb.NetIDRequest) (*pb.NetIDResponse, error) {
+// GenesisID returns the network ID.
+func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.GenesisIDResponse, error) {
 	log.Info("GRPC MeshService.NetId")
-	return &pb.NetIDResponse{Netid: &pb.SimpleInt{
-		Value: uint64(s.networkID),
-	}}, nil
+	return &pb.GenesisIDResponse{GenesisID: s.genesisID.Bytes()}, nil
 }
 
 // EpochNumLayers returns the number of layers per epoch (a network parameter).

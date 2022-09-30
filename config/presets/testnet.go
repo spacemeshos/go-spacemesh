@@ -3,7 +3,6 @@ package presets
 import (
 	"time"
 
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -34,7 +33,8 @@ func testnet() config.Config {
 
 	conf.P2P.TargetOutbound = 10
 
-	conf.Genesis = &apiConfig.GenesisConfig{
+	conf.Genesis = &config.GenesisConfig{
+		ExtraData: "testnet",
 		Accounts: map[string]uint64{
 			"stest1qqqqqqygdpsq62p4qxfyng8h2mm4f4d94vt7huqqu9mz3": 100000000000000000,
 			"stest1qqqqqqylzg8ypces4llx4gnat0dyntqfvr0h6mcprcz66": 100000000000000000,
