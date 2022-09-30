@@ -9,6 +9,7 @@ require (
 	github.com/cosmos/btcutil v1.0.4
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
+	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3
@@ -27,7 +28,7 @@ require (
 	github.com/prometheus/common v0.37.0
 	github.com/pyroscope-io/pyroscope v0.29.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220905145225-2baea06a0206
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220930055900-5d5f39c43abf
 	github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
@@ -86,7 +87,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
@@ -158,7 +158,6 @@ require (
 	github.com/pyroscope-io/dotnetdiag v1.2.1 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
 	github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 // indirect
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 // indirect

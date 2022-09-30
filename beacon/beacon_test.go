@@ -780,10 +780,7 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 	extractedPK, err := verifier.Extract(message, signature)
 	r.NoError(err)
 
-	ok := verifier.Verify(extractedPK, message, signature)
-
 	r.Equal(signer.PublicKey().String(), extractedPK.String())
-	r.True(ok)
 }
 
 func TestBeacon_signAndVerifyVRF(t *testing.T) {

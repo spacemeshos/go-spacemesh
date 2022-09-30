@@ -16,6 +16,5 @@ type Verifier interface {
 
 // VerifyExtractor is a common interface for signature verification with support of public key extraction.
 type VerifyExtractor interface {
-	Verifier
 	Extract(msg, sig []byte) (*PublicKey, error)
 }
