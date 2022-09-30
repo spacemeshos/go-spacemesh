@@ -57,7 +57,7 @@ type Config struct {
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
 // with a subfolder named after the network ID.
 func (cfg *Config) DataDir() string {
-	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.Genesis.GenesisID()))
+	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent))
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
@@ -114,11 +114,7 @@ func DefaultConfig() Config {
 	return Config{
 		Address:         types.DefaultAddressConfig(),
 		BaseConfig:      defaultBaseConfig(),
-<<<<<<< HEAD
-		Genesis:         defaultGenesisConfig(),
-=======
 		Genesis:         DefaultGenesisConfig(),
->>>>>>> develop
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestConfig_DataDir(t *testing.T) {
 
 	config := DefaultTestConfig()
 	config.DataDirParent = "~" + sep + "space-a-mesh"
-	expectedDataDir := filesystem.GetUserHomeDirectory() + sep + "space-a-mesh" + sep + fmt.Sprint(config.Genesis.GenesisID())
+	expectedDataDir := filesystem.GetUserHomeDirectory() + sep + "space-a-mesh"
 	assert.Equal(t, expectedDataDir, config.DataDir())
 
 	config.DataDirParent = "~" + sep + "space-a-mesh" + sep // trailing slash should be ignored
