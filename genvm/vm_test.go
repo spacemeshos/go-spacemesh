@@ -50,10 +50,10 @@ func newTester(tb testing.TB) *tester {
 type testAccount interface {
 	getAddress() core.Address
 	getTemplate() core.Address
-	spend(to core.Address, amount uint64, nonce core.Nonce) []byte
-	selfSpawn(nonce core.Nonce) []byte
+	spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
+	selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte
 
-	spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte
+	spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte
 	spawnArgs() scale.Encodable
 
 	// fixed gas for spawn and spend
@@ -74,16 +74,16 @@ func (a *singlesigAccount) getTemplate() core.Address {
 	return wallet.TemplateAddress
 }
 
-func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
-	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce)
+func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce, opts...)
 }
 
-func (a *singlesigAccount) selfSpawn(nonce core.Nonce) []byte {
-	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce)
+func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
+	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce, opts...)
 }
 
-func (a *singlesigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte {
-	return sdkwallet.Spawn(signing.PrivateKey(a.pk), template, args, nonce)
+func (a *singlesigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	return sdkwallet.Spawn(signing.PrivateKey(a.pk), template, args, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawnArgs() scale.Encodable {
@@ -115,23 +115,23 @@ func (a *multisigAccount) getTemplate() core.Address {
 	return a.template
 }
 
-func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
-	agg := sdkmultisig.Spend(0, a.pks[0], a.address, to, amount, nonce)
+func (a *multisigAccount) spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	agg := sdkmultisig.Spend(0, a.pks[0], a.address, to, amount, nonce, opts...)
 	for i := 1; i < a.k; i++ {
-		part := sdkmultisig.Spend(uint8(i), a.pks[i], a.address, to, amount, nonce)
+		part := sdkmultisig.Spend(uint8(i), a.pks[i], a.address, to, amount, nonce, opts...)
 		agg.Add(*part.Part(uint8(i)))
 	}
 	return agg.Raw()
 }
 
-func (a *multisigAccount) selfSpawn(nonce core.Nonce) []byte {
+func (a *multisigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
 	var pubs []ed25519.PublicKey
 	for _, pk := range a.pks {
 		pubs = append(pubs, ed25519.PublicKey(signing.Public(signing.PrivateKey(pk))))
 	}
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < a.k; i++ {
-		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs, nonce)
+		part := sdkmultisig.SelfSpawn(uint8(i), a.pks[i], a.template, pubs, nonce, opts...)
 		if agg == nil {
 			agg = part
 		} else {
@@ -141,10 +141,10 @@ func (a *multisigAccount) selfSpawn(nonce core.Nonce) []byte {
 	return agg.Raw()
 }
 
-func (a *multisigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte {
-	agg := sdkmultisig.Spawn(0, a.pks[0], a.address, template, args, nonce)
+func (a *multisigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	agg := sdkmultisig.Spawn(0, a.pks[0], a.address, template, args, nonce, opts...)
 	for i := 1; i < a.k; i++ {
-		part := sdkmultisig.Spawn(uint8(i), a.pks[i], a.address, template, args, nonce)
+		part := sdkmultisig.Spawn(uint8(i), a.pks[i], a.address, template, args, nonce, opts...)
 		agg.Add(*part.Part(uint8(i)))
 	}
 	return agg.Raw()
@@ -188,10 +188,10 @@ type vestingAccount struct {
 	multisigAccount
 }
 
-func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64, nonce core.Nonce) []byte {
-	agg := sdkvesting.DrainVault(0, a.pks[0], a.address, vault, recipient, amount, nonce)
+func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	agg := sdkvesting.DrainVault(0, a.pks[0], a.address, vault, recipient, amount, nonce, opts...)
 	for i := 1; i < a.k; i++ {
-		part := sdkvesting.DrainVault(uint8(i), a.pks[i], a.address, vault, recipient, amount, nonce)
+		part := sdkvesting.DrainVault(uint8(i), a.pks[i], a.address, vault, recipient, amount, nonce, opts...)
 		agg.Add(*part.Part(uint8(i)))
 	}
 	return agg.Raw()
@@ -249,15 +249,15 @@ func (a *vaultAccount) getAddress() core.Address {
 	return a.address
 }
 
-func (a *vaultAccount) spend(to core.Address, amount uint64, nonce core.Nonce) []byte {
+func (a *vaultAccount) spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
 	return nil
 }
 
-func (a *vaultAccount) selfSpawn(nonce core.Nonce) []byte {
+func (a *vaultAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
 	return nil
 }
 
-func (a *vaultAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce) []byte {
+func (a *vaultAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte {
 	return nil
 }
 
@@ -395,14 +395,14 @@ func (t *tester) spawnAll() []types.RawTx {
 	return rst
 }
 
-func (t *tester) selfSpawn(i int) types.RawTx {
+func (t *tester) selfSpawn(i int, opts ...sdk.Opt) types.RawTx {
 	nonce := t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].selfSpawn(nonce))
+	return types.NewRawTx(t.accounts[i].selfSpawn(nonce, opts...))
 }
 
-func (t *tester) spawn(i, j int) types.RawTx {
+func (t *tester) spawn(i, j int, opts ...sdk.Opt) types.RawTx {
 	nonce := t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].spawn(t.accounts[j].getTemplate(), t.accounts[j].spawnArgs(), nonce))
+	return types.NewRawTx(t.accounts[i].spawn(t.accounts[j].getTemplate(), t.accounts[j].spawnArgs(), nonce, opts...))
 }
 
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
@@ -422,12 +422,12 @@ func (t *tester) withSeed(seed int64) *tester {
 	return t
 }
 
-func (t *tester) spend(from, to int, amount uint64) types.RawTx {
-	return t.spendWithNonce(from, to, amount, t.nextNonce(from))
+func (t *tester) spend(from, to int, amount uint64, opts ...sdk.Opt) types.RawTx {
+	return t.spendWithNonce(from, to, amount, t.nextNonce(from), opts...)
 }
 
-func (t *tester) spendWithNonce(from, to int, amount uint64, nonce core.Nonce) types.RawTx {
-	return types.NewRawTx(t.accounts[from].spend(t.accounts[to].getAddress(), amount, nonce))
+func (t *tester) spendWithNonce(from, to int, amount uint64, nonce core.Nonce, opts ...sdk.Opt) types.RawTx {
+	return types.NewRawTx(t.accounts[from].spend(t.accounts[to].getAddress(), amount, nonce, opts...))
 }
 
 type reward struct {
@@ -1428,10 +1428,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 	two := scale.U8(2)
 
 	for _, tc := range []struct {
-		desc   string
-		tx     types.RawTx
-		header *core.Header
-		err    error
+		desc     string
+		tx       types.RawTx
+		header   *core.Header
+		err      error
+		verified bool
 	}{
 		{
 			desc: "Spawn",
@@ -1443,6 +1444,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				GasPrice:        1,
 				MaxGas:          uint64(tt.estimateSpawnGas(1)),
 			},
+			verified: true,
+		},
+		{
+			desc: "spawn genesis id mismatch",
+			tx:   tt.selfSpawn(1, sdk.WithGenesisID(types.Hash20{1})),
 		},
 		{
 			desc: "Spend",
@@ -1456,6 +1462,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				MaxSpend:        100,
 				MaxGas:          uint64(tt.estimateSpendGas(0, 1, 100, core.Nonce{Counter: 1})),
 			},
+			verified: true,
+		},
+		{
+			desc: "spawn genesis id mismatch",
+			tx:   tt.spend(0, 1, 100, sdk.WithGenesisID(types.Hash20{1})),
 		},
 		{
 			desc: "WrongVersion",
@@ -1499,8 +1510,10 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
-				require.Equal(t, tc.header, header)
-				require.True(t, req.Verify())
+				require.Equal(t, tc.verified, req.Verify())
+				if tc.verified {
+					require.Equal(t, tc.header, header)
+				}
 			}
 		})
 	}

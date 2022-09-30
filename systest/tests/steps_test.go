@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
@@ -125,7 +126,7 @@ func TestStepTransactions(t *testing.T) {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
 				defer cancel()
-				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, types.Nonce{}))
+				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, types.Nonce{}, sdk.WithGenesisID(cl.GenesisID())))
 				if err != nil {
 					return err
 				}
@@ -156,6 +157,7 @@ func TestStepTransactions(t *testing.T) {
 					receiver,
 					rng.Uint64()%amountLimit,
 					types.Nonce{Counter: nonce},
+					sdk.WithGenesisID(cl.GenesisID()),
 				)
 				_, err := client.submit(tctx, raw)
 				if err != nil {

@@ -40,6 +40,7 @@ func WithLogger(logger log.Log) Opt {
 // Config defines the configuration options for vm.
 type Config struct {
 	GasLimit          uint64
+	GenesisID         types.Hash20
 	StorageCostFactor uint64 `mapstructure:"vm-storage-cost-factor"`
 }
 

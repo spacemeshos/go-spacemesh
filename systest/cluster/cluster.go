@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ var errNotInitialized = errors.New("cluster: not initilized")
 
 const (
 	defaultNetID     = 777
+	defaultExtraData = "systest"
 	poetSvc          = "poet"
 	bootnodesPrefix  = "boot"
 	smesherPrefix    = "smesher"
@@ -96,6 +98,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
+	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
 	cluster.addFlag(NetworkID(defaultNetID))
 	cluster.addFlag(CycleGap(10 * time.Second))
@@ -116,6 +119,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	if len(cluster.keys) > 0 {
 		cluster.addFlag(Accounts(genGenesis(cluster.keys)))
 	}
+
 	return cluster
 }
 
@@ -131,6 +135,14 @@ type Cluster struct {
 	smeshers  int
 	clients   []*NodeClient
 	poets     []*NodeClient
+}
+
+// GenesisID computes id from the configuration.
+func (c *Cluster) GenesisID() types.Hash20 {
+	hh := sha256.New()
+	hh.Write([]byte(c.smesherFlags[genesisTimeFlag].Value))
+	hh.Write([]byte(c.smesherFlags[genesisExtraData].Value))
+	return types.BytesToHash(hh.Sum(nil)).ToHash20()
 }
 
 func (c *Cluster) nextSmesher() int {

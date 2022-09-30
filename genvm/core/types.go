@@ -18,6 +18,8 @@ type (
 	PublicKey = types.Hash32
 	// Hash32 is an alias to types.Hash32.
 	Hash32 = types.Hash32
+	// Hash20 is an lias to types.Hash20
+	Hash20 = types.Hash20
 	// Address is an alias to types.Address.
 	Address = types.Address
 	// Signature is an alias to types.Bytes64.
@@ -100,6 +102,7 @@ type Host interface {
 	Handler() Handler
 	Template() Template
 	Layer() LayerID
+	GetGenesisID() Hash20
 }
 
 //go:generate scalegen -types Payload
