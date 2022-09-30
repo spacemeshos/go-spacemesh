@@ -677,11 +677,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// Use a unique port
 	port := 1236
 
-	// Use a unique dir for data so we don't read existing state
-	path := t.TempDir()
-
 	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
+	cfg.DataDirParent = t.TempDir()
 	app.Config = &cfg
 
 	signer := signing.NewEdSigner()
@@ -690,8 +688,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
 		r.NoError(app.Initialize())
-
-		app.Config.DataDirParent = path
 
 		// GRPC configuration
 		app.Config.API.GrpcServerPort = port
