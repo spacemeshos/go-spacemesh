@@ -440,10 +440,8 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
 		terminated := process.Sub(t.Zdist + 1)
-		if terminated.After(t.evicted) {
-			if !t.layer(terminated).hareTerminated {
-				t.onHareOutput(terminated, types.EmptyBlockID)
-			}
+		if terminated.After(t.evicted) && !t.layer(terminated).hareTerminated {
+			t.onHareOutput(terminated, types.EmptyBlockID)
 		}
 	}
 	if err := t.verifyLayers(t.logger); err != nil {
