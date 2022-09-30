@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -16,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -225,7 +225,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
-	pub, err := ed25519.ExtractPublicKey(b, atx.Sig)
+	pub, err := signing.ExtractPublicKey(b, atx.Sig)
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
@@ -297,6 +297,8 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
+type PoetProofRef []byte
+
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
@@ -314,7 +316,7 @@ type PoetProofMessage struct {
 }
 
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
-func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
+func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spacemeshos/ed25519"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -298,6 +297,8 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 }
 
 func (c *Certifier) certified(lid types.LayerID, bid types.BlockID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if _, ok := c.certifyMsgs[lid]; ok {
 		if _, ok := c.certifyMsgs[lid][bid]; ok {
 			return c.certifyMsgs[lid][bid].done
@@ -353,7 +354,7 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 
 func validate(ctx context.Context, logger log.Log, oracle hare.Rolacle, committeeSize int, msg types.CertifyMessage) error {
 	// extract public key from signature
-	pubkey, err := ed25519.ExtractPublicKey(msg.Bytes(), msg.Signature)
+	pubkey, err := signing.ExtractPublicKey(msg.Bytes(), msg.Signature)
 	if err != nil {
 		return fmt.Errorf("%w: cert msg extract key: %v", errMalformedData, err.Error())
 	}
