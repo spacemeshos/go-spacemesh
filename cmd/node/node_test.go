@@ -558,9 +558,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := p2p.Upgrade(mesh.Hosts()[0])
+	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
@@ -844,14 +844,14 @@ func TestConfig_Preset(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
-		const networkID = 42
-		require.NoError(t, cmd.ParseFlags([]string{"--network-id=" + strconv.Itoa(networkID)}))
+		const lowPeers = 1234
+		require.NoError(t, cmd.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		preset.P2P.NetworkID = networkID
+		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, *conf)
 	})
 
@@ -861,9 +861,9 @@ func TestConfig_Preset(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
-		const networkID = 42
+		const lowPeers = 1234
 
-		content := fmt.Sprintf(`{"p2p": {"network-id": %d}}`, networkID)
+		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
@@ -872,10 +872,11 @@ func TestConfig_Preset(t *testing.T) {
 		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		preset.P2P.NetworkID = networkID
+		preset.P2P.LowPeers = lowPeers
 		preset.ConfigFile = path
 		require.Equal(t, preset, *conf)
 	})
+
 	t.Run("LoadedFromConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)

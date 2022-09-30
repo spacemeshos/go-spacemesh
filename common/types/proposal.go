@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -78,7 +77,7 @@ func (p *Proposal) Initialize() error {
 	}
 
 	// check proposal signature consistent with ballot's
-	pubkey, err := ed25519.ExtractPublicKey(p.Bytes(), p.Signature)
+	pubkey, err := signing.ExtractPublicKey(p.Bytes(), p.Signature)
 	if err != nil {
 		return fmt.Errorf("proposal extract key: %w", err)
 	}
