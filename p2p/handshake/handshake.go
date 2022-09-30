@@ -165,11 +165,10 @@ func (h *Handshake) handler(stream network.Stream) {
 	if _, err := codec.DecodeFrom(stream, &msg); err != nil {
 		return
 	}
-	msgGenesisID, handshakeGenesisID := msg.GenesisID.Big().Uint64(), h.genesisID.Big().Uint64()
-	if msgGenesisID != handshakeGenesisID {
+	if h.genesisID != msg.GenesisID {
 		h.logger.Warning("network id mismatch",
-			log.Uint64("genesis-id", handshakeGenesisID),
-			log.Uint64("peer-genesis-id", msgGenesisID),
+			log.Stringer("genesis id", h.genesisID),
+			log.Stringer("peer genesis id", msg.GenesisID),
 			log.String("peer-id", stream.Conn().RemotePeer().String()),
 			log.String("peer-address", stream.Conn().LocalMultiaddr().String()),
 		)
