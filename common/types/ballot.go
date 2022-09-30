@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -188,7 +187,7 @@ func (b *Ballot) Initialize() error {
 	b.ballotID = BallotID(CalcObjectHash32(b).ToHash20())
 
 	data := b.Bytes()
-	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)
+	pubkey, err := signing.ExtractPublicKey(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
 	}
