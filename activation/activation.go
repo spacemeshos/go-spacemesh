@@ -386,7 +386,9 @@ func (b *Builder) updatePoetClients() {
 		}
 	}()
 
-	b.nipostBuilder.updatePoETProvers(poetClients)
+	if len(poetClients) > 0 {
+		b.nipostBuilder.updatePoETProvers(poetClients)
+	}
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock.

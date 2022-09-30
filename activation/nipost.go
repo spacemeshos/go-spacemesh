@@ -128,7 +128,7 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 		NIPost: &types.NIPost{},
 	}
 	nb.poetProvers = poetProvers
-	nb.log.With().Info("updated poet proof service client")
+	nb.log.With().Info("updated poet proof service clients", log.Int("count", len(nb.poetProvers)))
 }
 
 // BuildNIPost uses the given challenge to build a NIPost. "deadline" is a channel for early termination of
@@ -237,6 +237,8 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *ty
 		g.Go(func() error {
 			if poetRequest, err := submitPoetChallenge(ctx, nb.log, poet, challenge); err == nil {
 				poetRequestsChannel <- *poetRequest
+			} else {
+				nb.log.With().Warning("failed to submit challenge to PoET", log.Err(err))
 			}
 			return nil
 		})
