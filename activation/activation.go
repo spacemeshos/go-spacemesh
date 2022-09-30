@@ -620,7 +620,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	deadlineLayer := b.challenge.PubLayerID.Add(types.GetLayersPerEpoch()).Sub(postDurationInLayers)
 	deadline := b.layerClock.AwaitLayer(deadlineLayer)
 
-	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("deadline_layer", deadlineLayer), log.Uint32("last PoST duration", postGenInLayers))
+	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("deadline_layer", deadlineLayer), log.Uint32("last PoST duration", postDurationInLayers))
 
 	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, hash, deadline)
 	if err != nil {
