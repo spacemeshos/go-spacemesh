@@ -1162,7 +1162,7 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.GenesisID(context.Background(), &pb.GenesisIDRequest{})
 			require.NoError(t, err)
-			require.Equal(t, genesisID.Bytes(), response.Genesisid.Id)
+			require.Equal(t, genesisID.Bytes(), response.GenesisID)
 		}},
 		{"LayerDuration", func(t *testing.T) {
 			logtest.SetupGlobal(t)
