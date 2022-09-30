@@ -327,7 +327,7 @@ func generateNode(t *testing.T, bootNode string) *hostWrapper {
 		book.Persist(ctx)
 		cnf.Bootnodes = append(cnf.Bootnodes, bootNode)
 	}
-	genesisID := types.Hash20{48, 29, 252, 229, 229, 174, 157, 108, 84, 53, 111, 208, 231, 2, 102, 52, 98, 247, 61, 190}
+	genesisID := types.Hash20{1}
 	h, err := Upgrade(node, genesisID, WithConfig(cnf))
 	require.NoError(t, err)
 

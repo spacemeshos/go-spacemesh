@@ -133,7 +133,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	config.MaxClockOffset = 1 * time.Second
 	config.MaxOffsetErrors = 2
 	config.RoundInterval = 0
-	genesisID := types.Hash20{48, 29, 252, 229, 229, 174, 157, 108, 84, 53, 111, 208, 231, 2, 102, 52, 98, 247, 61, 190}
+	genesisID := types.Hash20{1}
 
 	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
