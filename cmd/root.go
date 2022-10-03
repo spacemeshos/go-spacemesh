@@ -78,8 +78,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
 	cmd.PersistentFlags().BoolVar(&config.P2P.DisableNatPort, "disable-natport",
 		config.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
-	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
-		config.P2P.NetworkID, "network-id to participate in")
 	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "low-peers",
 		config.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "high-peers",

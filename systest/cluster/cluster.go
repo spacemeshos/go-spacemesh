@@ -20,7 +20,6 @@ import (
 var errNotInitialized = errors.New("cluster: not initilized")
 
 const (
-	defaultNetID     = 777
 	defaultExtraData = "systest"
 	poetSvc          = "poet"
 	bootnodesPrefix  = "boot"
@@ -100,7 +99,6 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
-	cluster.addFlag(NetworkID(defaultNetID))
 	cluster.addFlag(CycleGap(10 * time.Second))
 	cluster.addFlag(PhaseShift(20 * time.Second))
 	cluster.addFlag(GracePeriod(5 * time.Second))

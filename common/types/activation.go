@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -16,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -225,7 +225,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
-	pub, err := ed25519.ExtractPublicKey(b, atx.Sig)
+	pub, err := signing.ExtractPublicKey(b, atx.Sig)
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}

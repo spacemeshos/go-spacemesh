@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"time"
 
 	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -200,6 +199,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	}
 
 	conf := config.DefaultConfig()
+
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
@@ -323,6 +323,8 @@ func (app *App) Initialize() (err error) {
 			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
 		}
 	}
+	signing.DefaultVerifier = signing.NewEDVerifier(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
@@ -824,7 +826,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
@@ -955,7 +957,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner()
+		edSgn := signing.NewEdSigner(signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
 		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
@@ -968,8 +970,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-
-	edSgn, err := signing.NewEdSignerFromBuffer(data)
+	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
@@ -1077,7 +1078,7 @@ func (app *App) Start() error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg,
+	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
@@ -1102,7 +1103,7 @@ func (app *App) Start() error {
 
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

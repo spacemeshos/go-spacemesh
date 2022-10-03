@@ -23,8 +23,7 @@ func TestConfig_DataDir(t *testing.T) {
 
 	config := DefaultTestConfig()
 	config.DataDirParent = "~" + sep + "space-a-mesh"
-	config.P2P.NetworkID = 88
-	expectedDataDir := filesystem.GetUserHomeDirectory() + sep + "space-a-mesh" + sep + "88"
+	expectedDataDir := filesystem.GetUserHomeDirectory() + sep + "space-a-mesh"
 	assert.Equal(t, expectedDataDir, config.DataDir())
 
 	config.DataDirParent = "~" + sep + "space-a-mesh" + sep // trailing slash should be ignored
