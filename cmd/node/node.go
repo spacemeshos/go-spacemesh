@@ -323,6 +323,8 @@ func (app *App) Initialize() (err error) {
 			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
 		}
 	}
+	signing.DefaultVerifier = signing.NewEDVerifier(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
@@ -950,7 +952,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner()
+		edSgn := signing.NewEdSigner(signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
 		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
@@ -963,8 +965,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-
-	edSgn, err := signing.NewEdSignerFromBuffer(data)
+	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}

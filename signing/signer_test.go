@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
@@ -49,4 +50,27 @@ func TestPublicKey_ShortString(t *testing.T) {
 
 	pub = NewPublicKey([]byte{1, 2})
 	assert.Equal(t, pub.String(), pub.ShortString())
+}
+
+func TestPrefix(t *testing.T) {
+	t.Run("signer mismatch", func(t *testing.T) {
+		signer := NewEdSigner(WithSignerPrefix([]byte("one")))
+		verifier := NewEDVerifier(WithVerifierPrefix([]byte("two")))
+		msg := []byte("test")
+		sig := signer.Sign(msg)
+
+		pub, err := verifier.Extract(msg, sig)
+		require.NoError(t, err)
+		require.NotEqual(t, pub.Bytes(), signer.PublicKey().Bytes())
+	})
+	t.Run("no mismatch", func(t *testing.T) {
+		signer := NewEdSigner(WithSignerPrefix([]byte("one")))
+		verifier := NewEDVerifier(WithVerifierPrefix([]byte("one")))
+		msg := []byte("test")
+		sig := signer.Sign(msg)
+
+		pub, err := verifier.Extract(msg, sig)
+		require.NoError(t, err)
+		require.Equal(t, pub.Bytes(), signer.PublicKey().Bytes())
+	})
 }
