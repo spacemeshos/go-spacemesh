@@ -75,5 +75,5 @@ type PeerCounter interface {
 
 // ActivationAPI is an API for activation module.
 type ActivationAPI interface {
-	UpdatePoETServer(context.Context, string) error
+	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }

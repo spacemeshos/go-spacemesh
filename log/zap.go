@@ -158,6 +158,11 @@ func Array(name string, array ArrayMarshaler) Field {
 	return Field(zap.Array(name, array))
 }
 
+// Strings for logging slice of strings.
+func Strings(name string, slice []string) Field {
+	return Field(zap.Strings(name, slice))
+}
+
 // LoggableField as an interface to enable every type to be used as a log field.
 type LoggableField interface {
 	Field() Field

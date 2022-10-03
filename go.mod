@@ -28,7 +28,7 @@ require (
 	github.com/prometheus/common v0.37.0
 	github.com/pyroscope-io/pyroscope v0.29.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220930055900-5d5f39c43abf
+	github.com/spacemeshos/api/release/go v1.4.1-0.20221003090241-8abb4377580e
 	github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
@@ -85,6 +85,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
@@ -186,6 +187,7 @@ require (
 	golang.org/x/tools v0.1.12 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect

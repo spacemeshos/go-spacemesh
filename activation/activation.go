@@ -89,8 +89,8 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClient chan PoetProvingServiceClient
-	started           atomic.Bool
+	pendingPoetClients chan []PoetProvingServiceClient
+	started            atomic.Bool
 
 	signer
 	accountLock       sync.RWMutex
@@ -375,18 +375,17 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 
 func (b *Builder) updatePoetClients() {
 	poetClients := func() []PoetProvingServiceClient {
-		clients := make([]PoetProvingServiceClient, 0)
 		for {
 			select {
-			case client := <-b.pendingPoetClient:
-				clients = append(clients, client)
-			default:
+			case clients := <-b.pendingPoetClients:
 				return clients
+			default:
+				return nil
 			}
 		}
 	}()
 
-	if len(poetClients) > 0 {
+	if poetClients != nil {
 		b.nipostBuilder.updatePoETProvers(poetClients)
 	}
 }
@@ -470,17 +469,22 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 }
 
 // UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
-func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
-	b.log.With().Debug("request to update poet service", log.String("target", target))
-	client := b.poetClientInitializer(target)
-	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
-	// Maybe it should be provided during update.
-	sid, err := client.PoetServiceID(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
+func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) error {
+	b.log.With().Debug("request to update poet services", log.Strings("endpoints", endpoints))
+
+	clients := make([]PoetProvingServiceClient, len(endpoints))
+	for _, endpoint := range endpoints {
+		client := b.poetClientInitializer(endpoint)
+		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
+		// Maybe it should be provided during update.
+		sid, err := client.PoetServiceID(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: failed to query Poet '%s' for ID (%v)", ErrPoetServiceUnstable, endpoint, err)
+		}
+		b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	}
-	b.pendingPoetClient <- client
-	b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
+
+	b.pendingPoetClients <- clients
 	return nil
 }
 
