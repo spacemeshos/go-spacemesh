@@ -494,12 +494,30 @@ func (tx *selfSpawnTx) gen(t *tester) types.RawTx {
 	return t.selfSpawn(tx.principal)
 }
 
+type selfSpawnTxWithOpts struct {
+	principal int
+	opts      []sdk.Opt
+}
+
+func (tx *selfSpawnTxWithOpts) gen(t *tester) types.RawTx {
+	return t.selfSpawn(tx.principal, tx.opts...)
+}
+
 type spawnTx struct {
 	principal, target int
 }
 
 func (tx *spawnTx) gen(t *tester) types.RawTx {
 	return t.spawn(tx.principal, tx.target)
+}
+
+type spawnTxWithOpts struct {
+	principal, target int
+	opts              []sdk.Opt
+}
+
+func (tx *spawnTxWithOpts) gen(t *tester) types.RawTx {
+	return t.spawn(tx.principal, tx.target, tx.opts...)
 }
 
 type spendTx struct {
@@ -513,6 +531,16 @@ func (tx *spendTx) gen(t *tester) types.RawTx {
 
 func (tx spendTx) withNonce(nonce core.Nonce) *spendNonce {
 	return &spendNonce{spendTx: tx, nonce: nonce}
+}
+
+type spendTxWithOpts struct {
+	from, to int
+	amount   uint64
+	opts     []sdk.Opt
+}
+
+func (tx *spendTxWithOpts) gen(t *tester) types.RawTx {
+	return t.spend(tx.from, tx.to, tx.amount, tx.opts...)
 }
 
 type drainVault struct {
@@ -529,6 +557,25 @@ func (tx *drainVault) gen(t *tester) types.RawTx {
 		t.accounts[tx.recipient].getAddress(),
 		tx.amount,
 		nonce,
+	))
+}
+
+type drainVaultWithOpts struct {
+	owner, vault, recipient int
+	amount                  uint64
+	opts                    []sdk.Opt
+}
+
+func (tx *drainVaultWithOpts) gen(t *tester) types.RawTx {
+	require.IsType(t, t.accounts[tx.owner], &vestingAccount{})
+	vestacc := t.accounts[tx.owner].(*vestingAccount)
+	nonce := t.nextNonce(tx.owner)
+	return types.NewRawTx(vestacc.drainVault(
+		t.accounts[tx.vault].getAddress(),
+		t.accounts[tx.recipient].getAddress(),
+		tx.amount,
+		nonce,
+		tx.opts...,
 	))
 }
 
@@ -675,6 +722,20 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
+			desc: "wrong id for self-spawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTxWithOpts{0, []sdk.Opt{sdk.WithGenesisID(types.Hash20{1})}},
+					},
+					ineffective: []int{0},
+					expected: map[int]change{
+						0: same{},
+					},
+				},
+			},
+		},
+		{
 			desc: "SpawnSpend",
 			layers: []layertc{
 				{
@@ -691,6 +752,25 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 										ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1}))},
 						},
 						10: earned{amount: 100},
+					},
+				},
+			},
+		},
+		{
+			desc: "wrong id for spend",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spendTxWithOpts{0, 10, 100, []sdk.Opt{sdk.WithGenesisID(types.Hash20{1})}},
+					},
+					ineffective: []int{1},
+					expected: map[int]change{
+						0: spawned{
+							template: template,
+							change:   spent{amount: defaultGasPrice * ref.estimateSpawnGas(0)},
+						},
+						10: same{},
 					},
 				},
 			},
@@ -1186,6 +1266,28 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							},
 						},
 						11: spawned{template: template},
+					},
+				},
+			},
+		},
+		{
+			desc: "wrong id in spawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTxWithOpts{0, 11, []sdk.Opt{sdk.WithGenesisID(types.Hash20{1})}},
+					},
+					ineffective: []int{1},
+					expected: map[int]change{
+						0: spawned{
+							template: template,
+							change: spent{
+								amount: ref.estimateSpawnGas(0),
+								change: nonce{increased: 1},
+							},
+						},
+						11: same{},
 					},
 				},
 			},
@@ -1779,6 +1881,32 @@ func TestVestingWithVault(t *testing.T) {
 							ref.estimateDrainGas(0, 20, 9, 5000, core.Nonce{Counter: 8})},
 						9:  earned{amount: 5000},
 						20: spent{amount: 5000},
+					},
+				},
+			},
+		},
+		{
+			desc: "wrong id for drain vault",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTx{0, 20},
+					},
+					expected: map[int]change{
+						0:  spawned{template: vestingTemplate},
+						20: spawned{template: vaultTemplate},
+					},
+				},
+				{
+					txs: []testTx{
+						&drainVaultWithOpts{0, 20, 11, 500, []sdk.Opt{sdk.WithGenesisID(types.Hash20{1})}},
+					},
+					ineffective: []int{0},
+					expected: map[int]change{
+						0:  same{},
+						20: same{},
+						11: same{},
 					},
 				},
 			},
