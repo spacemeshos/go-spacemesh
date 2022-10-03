@@ -52,9 +52,6 @@ func TestPostSetupManager(t *testing.T) {
 				req.Equal(postSetupStateInProgress, status.State)
 			}
 
-			// Compare the chan status to a status queried directly.
-			req.Equal(status, mgr.Status())
-
 			lastStatus = status
 		}
 	}()
