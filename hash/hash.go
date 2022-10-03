@@ -7,10 +7,8 @@ const (
 	Size = sha256.Size
 )
 
-var (
-	// New is an alias to minio sha256.New.
-	New = sha256.New
-)
+// New is an alias to minio sha256.New.
+var New = sha256.New
 
 // Sum computes sha256.Sum256 from chunks with minio/sha256-simd.
 func Sum(chunks ...[]byte) (rst [32]byte) {
