@@ -412,7 +412,7 @@ type Request struct {
 // Parse header from the raw transaction.
 func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
-	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg.StorageCostFactor, r.raw.Raw, r.decoder)
+	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +433,7 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, storageCost uint64, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
@@ -457,6 +457,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	logger.With().Debug("loaded account state", log.Inline(&account))
 
 	ctx := &core.Context{
+		GenesisID:        cfg.GenesisID,
 		Registry:         reg,
 		Loader:           loader,
 		PrincipalAccount: account,
@@ -529,7 +530,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(output.FixedGas, raw, storageCost)
+	ctx.Header.MaxGas = core.ComputeGasCost(output.FixedGas, raw, cfg.StorageCostFactor)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 
