@@ -9,7 +9,7 @@ test_pod_name ?= systest-$(version_info)-$(shell date +'%s')
 keep ?= false
 clusters ?= 1
 size ?= 10
-poet_size ?= 1
+poet_size ?= 3
 level ?= debug
 bootstrap ?= 5m
 storage ?= standard=1Gi
