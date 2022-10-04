@@ -116,6 +116,8 @@ jobs:
           - macos-latest
           - windows-latest
         include:
+          - os: ubuntu-latest
+            allow-failure: "false"
           - os: macos-latest
             allow-failure: "true"
           - os: windows-latest
