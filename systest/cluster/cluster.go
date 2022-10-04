@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
@@ -137,10 +137,10 @@ type Cluster struct {
 
 // GenesisID computes id from the configuration.
 func (c *Cluster) GenesisID() types.Hash20 {
-	hh := sha256.New()
-	hh.Write([]byte(c.smesherFlags[genesisTimeFlag].Value))
-	hh.Write([]byte(c.smesherFlags[genesisExtraData].Value))
-	return types.BytesToHash(hh.Sum(nil)).ToHash20()
+	return types.Hash32(hash.Sum(
+		[]byte(c.smesherFlags[genesisTimeFlag].Value),
+		[]byte(c.smesherFlags[genesisExtraData].Value),
+	)).ToHash20()
 }
 
 func (c *Cluster) nextSmesher() int {
