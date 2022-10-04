@@ -18,7 +18,7 @@ import (
 
 func TestNewPoetListener(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	poetDb := mocks.NewMockpoetValidatorPersistor(ctrl)
+	poetDb := mocks.NewMockpoetValidatorPersister(ctrl)
 	lg := logtest.New(t)
 	listener := NewPoetListener(poetDb, lg)
 

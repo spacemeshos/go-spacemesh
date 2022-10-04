@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -21,8 +23,8 @@ import (
 
 var (
 	minerID       = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	postCfg       PostConfig
-	postSetupOpts PostSetupOpts
+	postCfg       atypes.PostConfig
+	postSetupOpts atypes.PostSetupOpts
 )
 
 func init() {
@@ -40,30 +42,27 @@ type postSetupProviderMock struct {
 	setError    bool
 }
 
-// A compile time check to ensure that postSetupProviderMock fully implements the PostProvider interface.
-var _ PostSetupProvider = (*postSetupProviderMock)(nil)
-
-func (p *postSetupProviderMock) Status() *PostSetupStatus {
-	status := new(PostSetupStatus)
-	status.State = postSetupStateComplete
+func (p *postSetupProviderMock) Status() *atypes.PostSetupStatus {
+	status := new(atypes.PostSetupStatus)
+	status.State = atypes.PostSetupStateComplete
 	status.LastOpts = p.LastOpts()
 	status.LastError = p.LastError()
 	return status
 }
 
-func (p *postSetupProviderMock) StatusChan() <-chan *PostSetupStatus {
+func (p *postSetupProviderMock) StatusChan() <-chan *atypes.PostSetupStatus {
 	return nil
 }
 
-func (p *postSetupProviderMock) ComputeProviders() []PostSetupComputeProvider {
+func (p *postSetupProviderMock) ComputeProviders() []atypes.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error) {
+func (p *postSetupProviderMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(opts PostSetupOpts) (chan struct{}, error) {
+func (p *postSetupProviderMock) StartSession(opts atypes.PostSetupOpts) (chan struct{}, error) {
 	return p.sessionChan, nil
 }
 
@@ -83,25 +82,25 @@ func (p *postSetupProviderMock) LastError() error {
 	return nil
 }
 
-func (p *postSetupProviderMock) LastOpts() *PostSetupOpts {
+func (p *postSetupProviderMock) LastOpts() *atypes.PostSetupOpts {
 	return &postSetupOpts
 }
 
-func (p *postSetupProviderMock) Config() PostConfig {
+func (p *postSetupProviderMock) Config() atypes.PostConfig {
 	return postCfg
 }
 
-func defaultPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
+func defaultPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *gomock.Controller) {
 	poetClient, controller := newPoetServiceMock(tb)
 	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.PoetRound{}, nil)
 	poetClient.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte{}, nil)
 	return poetClient, controller
 }
 
-func newPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
+func newPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *gomock.Controller) {
 	tb.Helper()
 	controller := gomock.NewController(tb)
-	poetClient := NewMockPoetProvingServiceClient(controller)
+	poetClient := mocks.NewMockPoetProvingServiceClient(controller)
 	return poetClient, controller
 }
 
@@ -109,9 +108,6 @@ type poetDbMock struct {
 	errOn        bool
 	unsubscribed bool
 }
-
-// A compile time check to ensure that poetDbMock fully implements poetDbAPI.
-var _ poetDbAPI = (*poetDbMock)(nil)
 
 func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
 	ch := make(chan types.PoetProofRef)
@@ -202,7 +198,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
@@ -398,7 +394,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
+func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg atypes.PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
 	_, err := v.Validate(*signing.NewPublicKey(minerID), nipost, challenge, numUnits)
 	return err
