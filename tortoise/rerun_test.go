@@ -162,7 +162,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err)
-		require.Equal(tb, expectedValidity, validity, "validity for block %s", blk)
+		require.Equal(tb, expectedValidity, validity, "validity for block %s layer %s", blk, misverified)
 	}
 }
 
@@ -184,6 +184,15 @@ func BenchmarkRerun(b *testing.B) {
 	})
 	b.Run("Full/1000/Window/100", func(b *testing.B) {
 		benchmarkRerun(b, 1000, 1000, 100, sim.WithEmptyHareOutput())
+	})
+	b.Run("Full/1000/Window/1000", func(b *testing.B) {
+		benchmarkRerun(b, 1000, 1000, 1000, sim.WithEmptyHareOutput())
+	})
+	b.Run("Full/2000/Window/2000", func(b *testing.B) {
+		benchmarkRerun(b, 2000, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+	})
+	b.Run("Full/10000/Window/10000", func(b *testing.B) {
+		benchmarkRerun(b, 10000, 10000, 10000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
 	})
 }
 
