@@ -2478,124 +2478,101 @@ func TestLayerStream_comprehensive(t *testing.T) {
 }
 
 func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_AccountWrapper:
-		// Check the account, nonce, and balance
-		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address,
-			"inner account has bad address")
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
-			"inner account has bad current counter")
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
-			"inner account has bad current balance")
-		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
-			"inner account has bad projected counter")
-		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
-			"inner account has bad projected balance")
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
+	x := dataItem.(*pb.AccountData_AccountWrapper)
+	// Check the account, nonce, and balance
+	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address,
+		"inner account has bad address")
+	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
+		"inner account has bad current counter")
+	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
+		"inner account has bad current balance")
+	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
+		"inner account has bad projected counter")
+	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
+		"inner account has bad projected balance")
 }
 
 func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_Reward:
-		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-		require.Nil(t, x.Reward.Smesher)
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
+	x := dataItem.(*pb.AccountData_Reward)
+	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
+	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Nil(t, x.Reward.Smesher)
 }
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_MeshTransaction:
-		// Check the sender
-		require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
-	default:
-		require.Fail(t, "inner account data item has wrong data type", x)
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountMeshData_MeshTransaction{}, dataItem)
+	x := dataItem.(*pb.AccountMeshData_MeshTransaction)
+	// Check the sender
+	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 }
 
 func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_Activation:
-		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
-		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
-		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
-	default:
-		require.Fail(t, "inner account data item has wrong tx data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
+	x := dataItem.(*pb.AccountMeshData_Activation)
+	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
+	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
+	require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
+	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
+	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 }
 
 func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_Reward:
-		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-
-	default:
-		require.Fail(t, fmt.Sprintf("inner account data item has wrong data type: %T", dataItem))
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
+	x := dataItem.(*pb.AccountData_Reward)
+	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
 func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_AccountWrapper:
-		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
-		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
-		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
+	x := dataItem.(*pb.AccountData_AccountWrapper)
+	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
+	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
 func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_Reward:
-		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.GlobalStateData_Reward{}, dataItem)
+	x := dataItem.(*pb.GlobalStateData_Reward)
+	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_AccountWrapper:
-		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
-		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
-		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.GlobalStateData_AccountWrapper{}, dataItem)
+	x := dataItem.(*pb.GlobalStateData_AccountWrapper)
+	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
+	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
 func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_GlobalState:
-		require.Equal(t, layerFirst.Uint32(), x.GlobalState.Layer.Number)
-		require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.GlobalStateData_GlobalState{}, dataItem)
+	x := dataItem.(*pb.GlobalStateData_GlobalState)
+	require.Equal(t, layerFirst.Uint32(), x.GlobalState.Layer.Number)
+	require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
 }
 
 func TestMultiService(t *testing.T) {
