@@ -468,7 +468,12 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(VMLogger, lg)))
+	cfg := vm.DefaultConfig()
+	cfg.GasLimit = app.Config.BlockGasLimit
+	cfg.GenesisID = app.Config.Genesis.GenesisID()
+	state := vm.New(sqlDB,
+		vm.WithConfig(cfg),
+		vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,

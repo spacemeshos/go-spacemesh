@@ -10,14 +10,13 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -207,17 +206,20 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx, wallet.SelfSpawn(cluster.Private(account), types.Nonce{}), client)
+	_, err := submitTransaction(ctx,
+		wallet.SelfSpawn(cluster.Private(account), types.Nonce{}, sdk.WithGenesisID(cluster.GenesisID())),
+		client)
 	return err
 }
 
-func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver types.Address, amount uint64, nonce uint64, client *cluster.NodeClient) error {
+func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, receiver types.Address, amount uint64, nonce uint64, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,
 		wallet.Spend(
-			signing.PrivateKey(pk), receiver, amount,
+			cluster.Private(account), receiver, amount,
 			types.Nonce{Counter: nonce},
+			sdk.WithGenesisID(cluster.GenesisID()),
 		),
 		client)
 	return err
