@@ -42,6 +42,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -739,7 +740,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}))
+	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
 
 	stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
