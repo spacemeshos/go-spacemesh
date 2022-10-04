@@ -106,7 +106,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    timeout-minutes: 25
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -167,7 +167,8 @@ jobs:
         continue-on-error: ${{ matrix.allow-failure }}
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3
-        if: always() # always run even if the previous step fails
+        # always run even if the previous step fails
+        if: ${{ always() && matrix.os == 'ubuntu-latest' }}
         with:
           report_paths: "**/unit-tests.xml"
 
@@ -183,8 +184,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
+      # this is the easiest way to access success/failure state of previous jobs in this workflow
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
-    # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
         name: Slack notification
