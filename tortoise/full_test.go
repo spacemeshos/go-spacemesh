@@ -18,55 +18,53 @@ import (
 
 func TestFullBallotFilter(t *testing.T) {
 	for _, tc := range []struct {
-		desc             string
-		badBeaconBallots map[types.BallotID]struct{}
-		distance         uint32
-		ballot           types.BallotID
-		ballotlid        types.LayerID
-		last             types.LayerID
-		expect           bool
+		desc     string
+		distance uint32
+		ballot   ballotInfo
+		last     types.LayerID
+		expect   bool
 	}{
 		{
-			desc:             "Good",
-			badBeaconBallots: map[types.BallotID]struct{}{},
-			ballot:           types.BallotID{1},
-			expect:           false,
+			desc: "Good",
+			ballot: ballotInfo{
+				id: types.BallotID{1},
+			},
+			expect: false,
 		},
 		{
 			desc: "BadFromRecent",
-			badBeaconBallots: map[types.BallotID]struct{}{
-				{1}: {},
+			ballot: ballotInfo{
+				id:    types.BallotID{1},
+				layer: types.NewLayerID(10),
+				conditions: conditions{
+					badBeacon: true,
+				},
 			},
-			ballot:    types.BallotID{1},
-			ballotlid: types.NewLayerID(10),
-			last:      types.NewLayerID(11),
-			distance:  2,
-			expect:    true,
+			last:     types.NewLayerID(11),
+			distance: 2,
+			expect:   true,
 		},
 		{
 			desc: "BadFromOld",
-			badBeaconBallots: map[types.BallotID]struct{}{
-				{1}: {},
+			ballot: ballotInfo{
+				id:    types.BallotID{1},
+				layer: types.NewLayerID(8),
+				conditions: conditions{
+					badBeacon: true,
+				},
 			},
-			ballot:    types.BallotID{1},
-			ballotlid: types.NewLayerID(8),
-			last:      types.NewLayerID(11),
-			distance:  2,
-			expect:    false,
+			last:     types.NewLayerID(11),
+			distance: 2,
+			expect:   false,
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			state := newCommonState()
-			state.badBeaconBallots = tc.badBeaconBallots
+			state := newState()
 			state.last = tc.last
-
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
-
-			f := newFullTortoise(config, &state)
-
-			require.Equal(t, tc.expect, f.shouldBeDelayed(tc.ballot, tc.ballotlid))
+			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(&tc.ballot))
 		})
 	}
 }
@@ -343,6 +341,9 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise := defaultAlgorithm(t, cdb)
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
+			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfo{
+				layer: genesis,
+			}
 
 			var blocks [][]types.Block
 			for i, layer := range tc.layerBlocks {
@@ -399,13 +400,13 @@ func TestFullCountVotes(t *testing.T) {
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
 			var target *blockInfo
-			for _, info := range consensus.blocks[block.LayerIndex] {
+			for _, info := range consensus.layer(block.LayerIndex).blocks {
 				if info.id == block.ID() {
-					target = &info
+					target = info
 				}
 			}
 			require.NotNil(t, target)
-			require.Equal(t, tc.expect.String(), target.weight.String())
+			require.Equal(t, tc.expect.String(), target.margin.String())
 		})
 	}
 }
@@ -524,25 +525,25 @@ func TestFullVerify(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			lid := types.LayerID{}
-			full := newFullTortoise(Config{}, &commonState{
-				blocks:   map[types.LayerID][]blockInfo{},
-				validity: votes{},
-			})
+			full := newFullTortoise(Config{}, newState())
 			full.globalThreshold = util.WeightFromUint64(tc.threshold)
-			full.empty[lid] = util.WeightFromInt64(int64(emptyThreshold))
+			layer := full.layer(lid)
+			layer.empty = util.WeightFromInt64(int64(emptyThreshold))
 			for i, block := range tc.blocks {
-				id := types.BlockID{uint8(i) + 1}
-				full.blocks[lid] = append(full.blocks[lid], blockInfo{
-					id:     id,
+				block := &blockInfo{
+					id:     types.BlockID{uint8(i) + 1},
+					layer:  lid,
 					height: uint64(block.height),
-					weight: util.WeightFromInt64(int64(block.margin)),
-				})
+					margin: util.WeightFromInt64(int64(block.margin)),
+				}
+				layer.blocks = append(layer.blocks, block)
+				full.state.blockRefs[block.id] = block
 			}
 			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
 					id := types.BlockID{uint8(i) + 1}
-					require.Equal(t, expect, full.validity[id])
+					require.Equal(t, expect, full.state.blockRefs[id].validity)
 				}
 			}
 		})
