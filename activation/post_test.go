@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
@@ -16,9 +17,9 @@ import (
 var (
 	id = types.NodeID{}
 
-	cfg             types.PostConfig
-	opts            types.PostSetupOpts
-	longerSetupOpts types.PostSetupOpts
+	cfg             atypes.PostConfig
+	opts            atypes.PostSetupOpts
+	longerSetupOpts atypes.PostSetupOpts
 )
 
 func init() {
@@ -40,7 +41,7 @@ func TestPostSetupManager(t *testing.T) {
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
-	lastStatus := &types.PostSetupStatus{}
+	lastStatus := &atypes.PostSetupStatus{}
 	go func() {
 		for status := range mgr.StatusChan() {
 			req.True(status.NumLabelsWritten >= lastStatus.NumLabelsWritten)
@@ -51,7 +52,7 @@ func TestPostSetupManager(t *testing.T) {
 				// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
 				// req.Equal(postSetupStateComplete, status.State)
 			} else {
-				req.Equal(postSetupStateInProgress, status.State)
+				req.Equal(atypes.PostSetupStateInProgress, status.State)
 			}
 
 			lastStatus = status
@@ -97,7 +98,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status := mgr.Status()
-	req.Equal(postSetupStateNotStarted, status.State)
+	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 	req.Nil(status.LastError)
@@ -117,7 +118,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status = mgr.Status()
-	req.Equal(postSetupStateNotStarted, status.State)
+	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 	req.Nil(status.LastError)
@@ -165,7 +166,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		ch := mgr.StatusChan()
-		var prevStatus *types.PostSetupStatus
+		var prevStatus *atypes.PostSetupStatus
 		for {
 			status, more := <-ch
 			if more {
@@ -209,7 +210,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 		time.Sleep(100 * time.Millisecond) // Short delay.
 
 		ch := mgr.StatusChan()
-		var prevStatus *types.PostSetupStatus
+		var prevStatus *atypes.PostSetupStatus
 		for {
 			status, more := <-ch
 			if more {
@@ -247,7 +248,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status := mgr.Status()
-	req.Equal(postSetupStateNotStarted, status.State)
+	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 
 	// Create data.
 	doneChan, err := mgr.StartSession(opts, goldenATXID)
@@ -256,7 +257,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(postSetupStateComplete, status.State)
+	req.Equal(atypes.PostSetupStateComplete, status.State)
 
 	// Stop without file deletion.
 	err = mgr.StopSession(false)
@@ -264,7 +265,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(postSetupStateComplete, status.State)
+	req.Equal(atypes.PostSetupStateComplete, status.State)
 
 	// Stop with file deletion.
 	err = mgr.StopSession(true)
@@ -272,7 +273,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(postSetupStateNotStarted, status.State)
+	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 
 	// Create data again.
 	doneChan, err = mgr.StartSession(opts, goldenATXID)
@@ -281,7 +282,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(postSetupStateComplete, status.State)
+	req.Equal(atypes.PostSetupStateComplete, status.State)
 }
 
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
@@ -301,7 +302,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify the intermediate status.
 	status := mgr.Status()
 	req.Equal(&longerSetupOpts, status.LastOpts)
-	req.Equal(postSetupStateInProgress, status.State)
+	req.Equal(atypes.PostSetupStateInProgress, status.State)
 
 	// Stop without files deletion.
 	err = mgr.StopSession(false)
@@ -316,7 +317,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Nil(status.LastOpts)
-	req.Equal(postSetupStateNotStarted, status.State)
+	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 
 	// Continue to create data.
@@ -327,6 +328,6 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Equal(&longerSetupOpts, status.LastOpts)
-	req.Equal(postSetupStateComplete, status.State)
+	req.Equal(atypes.PostSetupStateComplete, status.State)
 	req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -21,8 +22,8 @@ import (
 
 var (
 	minerID       = types.NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	postCfg       types.PostConfig
-	postSetupOpts types.PostSetupOpts
+	postCfg       atypes.PostConfig
+	postSetupOpts atypes.PostSetupOpts
 )
 
 func init() {
@@ -40,30 +41,27 @@ type postSetupProviderMock struct {
 	setError    bool
 }
 
-// A compile time check to ensure that postSetupProviderMock fully implements the PostProvider interface.
-var _ PostSetupProvider = (*postSetupProviderMock)(nil)
-
-func (p *postSetupProviderMock) Status() *types.PostSetupStatus {
-	status := new(types.PostSetupStatus)
-	status.State = postSetupStateComplete
+func (p *postSetupProviderMock) Status() *atypes.PostSetupStatus {
+	status := new(atypes.PostSetupStatus)
+	status.State = atypes.PostSetupStateComplete
 	status.LastOpts = p.LastOpts()
 	status.LastError = p.LastError()
 	return status
 }
 
-func (p *postSetupProviderMock) StatusChan() <-chan *types.PostSetupStatus {
+func (p *postSetupProviderMock) StatusChan() <-chan *atypes.PostSetupStatus {
 	return nil
 }
 
-func (p *postSetupProviderMock) ComputeProviders() []initialization.ComputeProvider {
+func (p *postSetupProviderMock) ComputeProviders() []atypes.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *postSetupProviderMock) Benchmark(initialization.ComputeProvider) (int, error) {
+func (p *postSetupProviderMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *postSetupProviderMock) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return p.sessionChan, nil
 }
 
@@ -83,11 +81,11 @@ func (p *postSetupProviderMock) LastError() error {
 	return nil
 }
 
-func (p *postSetupProviderMock) LastOpts() *types.PostSetupOpts {
+func (p *postSetupProviderMock) LastOpts() *atypes.PostSetupOpts {
 	return &postSetupOpts
 }
 
-func (p *postSetupProviderMock) Config() types.PostConfig {
+func (p *postSetupProviderMock) Config() atypes.PostConfig {
 	return postCfg
 }
 
@@ -109,9 +107,6 @@ type poetDbMock struct {
 	errOn        bool
 	unsubscribed bool
 }
-
-// A compile time check to ensure that poetDbMock fully implements poetDbAPI.
-var _ poetDbAPI = (*poetDbMock)(nil)
 
 func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
 	ch := make(chan types.PoetProofRef)
@@ -200,7 +195,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPost(tb testing.TB, r *require.Assertions, postCfg types.PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
@@ -396,7 +391,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg types.PostConfig, numUnits uint) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg atypes.PostConfig, numUnits uint) error {
 	v := &Validator{poetDb, postCfg}
 	commitment := GetCommitmentBytes(minerID, commitmentAtx)
 	_, err := v.Validate(commitment[:], nipost, challenge, numUnits)

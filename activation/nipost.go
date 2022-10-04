@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -99,7 +100,7 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, atxExpired chan struct{}) (*types.NIPost, error) {
 	nb.load(*challenge)
 
-	if s := nb.postSetupProvider.Status(); s.State != postSetupStateComplete {
+	if s := nb.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
 		return nil, errors.New("post setup not complete")
 	}
 

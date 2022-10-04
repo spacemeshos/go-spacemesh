@@ -7,20 +7,18 @@ import (
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/verifying"
 
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
 	poetDb poetDbAPI
-	cfg    types.PostConfig
+	cfg    atypes.PostConfig
 }
 
-// A compile time check to ensure that Validator fully implements the nipostValidator interface.
-var _ nipostValidator = (*Validator)(nil)
-
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg types.PostConfig) *Validator {
+func NewValidator(poetDb poetDbAPI, cfg atypes.PostConfig) *Validator {
 	return &Validator{poetDb, cfg}
 }
 

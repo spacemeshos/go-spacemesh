@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -62,7 +63,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
 	}
 
-	opts := types.PostSetupOpts{
+	opts := atypes.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          uint(in.Opts.NumUnits),
 		NumFiles:          uint(in.Opts.NumFiles),
@@ -234,7 +235,7 @@ func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfi
 	}, nil
 }
 
-func statusToPbStatus(status *types.PostSetupStatus) *pb.PostSetupStatus {
+func statusToPbStatus(status *atypes.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus := &pb.PostSetupStatus{}
 
 	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.

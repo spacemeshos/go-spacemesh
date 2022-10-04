@@ -25,7 +25,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -34,7 +33,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
@@ -376,30 +375,27 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 // TODO(mafa): replace this mock with the generated mock.
 type PostAPIMock struct{}
 
-// A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
-var _ api.PostSetupAPI = (*PostAPIMock)(nil)
-
-func (*PostAPIMock) Status() *types.PostSetupStatus {
-	return &types.PostSetupStatus{}
+func (*PostAPIMock) Status() *atypes.PostSetupStatus {
+	return &atypes.PostSetupStatus{}
 }
 
-func (p *PostAPIMock) StatusChan() <-chan *types.PostSetupStatus {
-	ch := make(chan *types.PostSetupStatus, 1)
+func (p *PostAPIMock) StatusChan() <-chan *atypes.PostSetupStatus {
+	ch := make(chan *atypes.PostSetupStatus, 1)
 	ch <- p.Status()
 	close(ch)
 
 	return ch
 }
 
-func (p *PostAPIMock) ComputeProviders() []initialization.ComputeProvider {
+func (p *PostAPIMock) ComputeProviders() []atypes.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *PostAPIMock) Benchmark(initialization.ComputeProvider) (int, error) {
+func (p *PostAPIMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -415,25 +411,22 @@ func (p *PostAPIMock) LastError() error {
 	return nil
 }
 
-func (p *PostAPIMock) LastOpts() *types.PostSetupOpts {
-	return &types.PostSetupOpts{}
+func (p *PostAPIMock) LastOpts() *atypes.PostSetupOpts {
+	return &atypes.PostSetupOpts{}
 }
 
-func (p *PostAPIMock) Config() types.PostConfig {
-	return types.PostConfig{}
+func (p *PostAPIMock) Config() atypes.PostConfig {
+	return atypes.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
 type SmeshingAPIMock struct{}
 
-// A compile time check to ensure that SmeshingAPIMock fully implements the SmeshingAPI interface.
-var _ api.SmeshingAPI = (*SmeshingAPIMock)(nil)
-
 func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, types.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, atypes.PostSetupOpts) error {
 	return nil
 }
 

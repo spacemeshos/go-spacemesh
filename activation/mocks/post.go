@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	types "github.com/spacemeshos/go-spacemesh/common/types"
-	initialization "github.com/spacemeshos/post/initialization"
+	types "github.com/spacemeshos/go-spacemesh/activation/types"
+	types0 "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // MockPostSetupProvider is a mock of PostSetupProvider interface.
@@ -36,7 +36,7 @@ func (m *MockPostSetupProvider) EXPECT() *MockPostSetupProviderMockRecorder {
 }
 
 // Benchmark mocks base method.
-func (m *MockPostSetupProvider) Benchmark(p initialization.ComputeProvider) (int, error) {
+func (m *MockPostSetupProvider) Benchmark(p types.PostSetupComputeProvider) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Benchmark", p)
 	ret0, _ := ret[0].(int)
@@ -51,10 +51,10 @@ func (mr *MockPostSetupProviderMockRecorder) Benchmark(p interface{}) *gomock.Ca
 }
 
 // ComputeProviders mocks base method.
-func (m *MockPostSetupProvider) ComputeProviders() []initialization.ComputeProvider {
+func (m *MockPostSetupProvider) ComputeProviders() []types.PostSetupComputeProvider {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ComputeProviders")
-	ret0, _ := ret[0].([]initialization.ComputeProvider)
+	ret0, _ := ret[0].([]types.PostSetupComputeProvider)
 	return ret0
 }
 
@@ -79,11 +79,11 @@ func (mr *MockPostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // GenerateProof mocks base method.
-func (m *MockPostSetupProvider) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
+func (m *MockPostSetupProvider) GenerateProof(challenge []byte, commitmentAtx types0.ATXID) (*types0.Post, *types0.PostMetadata, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GenerateProof", challenge, commitmentAtx)
-	ret0, _ := ret[0].(*types.Post)
-	ret1, _ := ret[1].(*types.PostMetadata)
+	ret0, _ := ret[0].(*types0.Post)
+	ret1, _ := ret[1].(*types0.PostMetadata)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -123,7 +123,7 @@ func (mr *MockPostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockPostSetupProvider) StartSession(opts types.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (m *MockPostSetupProvider) StartSession(opts types.PostSetupOpts, commitmentAtx types0.ATXID) (chan struct{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StartSession", opts, commitmentAtx)
 	ret0, _ := ret[0].(chan struct{})

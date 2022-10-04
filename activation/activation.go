@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -68,7 +69,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(types.Address, types.PostSetupOpts) error
+	StartSmeshing(types.Address, atypes.PostSetupOpts) error
 	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -195,7 +196,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts types.PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpts) error {
 	b.mu.Lock()
 	if b.exited != nil {
 		select {
@@ -240,7 +241,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts types.PostSetupOpts
 		case <-doneChan:
 		}
 
-		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
+		if s := b.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}

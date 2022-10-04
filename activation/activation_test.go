@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -405,7 +406,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, types.PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
@@ -416,8 +417,8 @@ func TestBuilder_StartSmeshingTwiceError(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, types.PostSetupOpts{}))
-	require.ErrorContains(t, builder.StartSmeshing(coinbase, types.PostSetupOpts{}), "already started")
+	require.NoError(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
+	require.ErrorContains(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}), "already started")
 }
 
 func TestBuilder_StartSmeshingAfterError(t *testing.T) {
@@ -441,8 +442,8 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 	b.initialPost = initialPost
 
 	coinbase := types.Address{1, 1, 1}
-	require.ErrorContains(t, b.StartSmeshing(coinbase, types.PostSetupOpts{}), "couldn't start session")
-	require.NoError(t, b.StartSmeshing(coinbase, types.PostSetupOpts{}))
+	require.ErrorContains(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}), "couldn't start session")
+	require.NoError(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
@@ -462,7 +463,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, types.PostSetupOpts{}))
+		require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
@@ -501,7 +502,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	b.initialPost = initialPost
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, b.StartSmeshing(coinbase, types.PostSetupOpts{}))
+	require.NoError(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
 	require.Error(t, b.StopSmeshing(true))
 	require.True(t, b.Smeshing())
 	require.NotNil(t, b.exited)
