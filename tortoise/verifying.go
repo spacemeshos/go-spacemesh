@@ -125,7 +125,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		Sub(layer.verifying.good).
 		Sub(layer.verifying.abstained)
 
-	threshold := v.globalThreshold(v.Config, mode{}, lid)
+	threshold := v.globalThreshold(v.Config, lid)
 	logger = logger.WithFields(
 		log.String("verifier", verifyingTortoise),
 		log.Stringer("candidate_layer", lid),

@@ -79,47 +79,6 @@ const (
 	reasonCoinflip       voteReason = "coinflip"
 )
 
-// lsb is a mode, second bit is rerun
-// examples (lsb is on the right, prefix with 6 bits is droppped)
-// 10 - rerun in verifying
-// 00 - live tortoise in verifying
-// 11 - rerun in full
-// 01 - live tortoise in full.
-type mode [2]bool
-
-func (m mode) String() string {
-	humanize := "verifying"
-	if m.isFull() {
-		humanize = "full"
-	}
-	if m.isRerun() {
-		return "rerun_" + humanize
-	}
-	return humanize
-}
-
-func (m mode) toggleRerun() mode {
-	m[1] = !m[1]
-	return m
-}
-
-func (m mode) isRerun() bool {
-	return m[1]
-}
-
-func (m mode) toggleMode() mode {
-	m[0] = !m[0]
-	return m
-}
-
-func (m mode) isVerifying() bool {
-	return !m[0]
-}
-
-func (m mode) isFull() bool {
-	return m[0]
-}
-
 func maxLayer(i, j types.LayerID) types.LayerID {
 	if i.After(j) {
 		return i

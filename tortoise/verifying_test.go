@@ -157,11 +157,11 @@ func TestVerifying_Verify(t *testing.T) {
 	}
 
 	config := Config{
-		LocalThreshold:                  big.NewRat(1, 10),
-		GlobalThreshold:                 big.NewRat(7, 10),
-		VerifyingModeVerificationWindow: 10,
-		Hdist:                           10,
-		Zdist:                           1,
+		LocalThreshold:  big.NewRat(1, 10),
+		GlobalThreshold: big.NewRat(7, 10),
+		WindowSize:      10,
+		Hdist:           10,
+		Zdist:           1,
 	}
 
 	for _, tc := range []struct {

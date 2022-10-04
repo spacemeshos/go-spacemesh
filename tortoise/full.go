@@ -81,7 +81,7 @@ func (f *full) countVotes(logger log.Log) {
 }
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
-	threshold := f.globalThreshold(f.Config, mode{true, false}, lid)
+	threshold := f.globalThreshold(f.Config, lid)
 	logger = logger.WithFields(
 		log.String("verifier", fullTortoise),
 		log.Stringer("counted_layer", f.counted),

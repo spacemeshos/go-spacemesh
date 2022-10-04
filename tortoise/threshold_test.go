@@ -32,9 +32,9 @@ func TestComputeThreshold(t *testing.T) {
 		{
 			desc: "WindowIsNotShorterThanProcessed",
 			config: Config{
-				LocalThreshold:                  big.NewRat(1, 2),
-				GlobalThreshold:                 big.NewRat(1, 2),
-				VerifyingModeVerificationWindow: 1,
+				LocalThreshold:  big.NewRat(1, 2),
+				GlobalThreshold: big.NewRat(1, 2),
+				WindowSize:      1,
 			},
 			processed: genesis.Add(4),
 			last:      genesis.Add(4),

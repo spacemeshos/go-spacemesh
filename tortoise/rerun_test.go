@@ -54,38 +54,6 @@ func TestRecoverState(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
-func TestRerunStaysInVerifyingMode(t *testing.T) {
-	ctx := context.Background()
-	const (
-		size   = 10
-		layers = 20
-	)
-	s := sim.New(sim.WithLayerSize(size))
-	s.Setup(sim.WithSetupUnitsRange(2, 2))
-
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	cfg.Hdist = 1
-	cfg.Zdist = cfg.Hdist
-
-	cfg.VerifyingModeVerificationWindow = layers
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	var last, verified types.LayerID
-	for i := 0; i < layers; i++ {
-		last = s.Next()
-		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
-	}
-	require.Equal(t, last.Sub(1), verified)
-
-	require.NoError(t, tortoise.rerun(ctx))
-	tortoise.TallyVotes(ctx, s.Next())
-	verified = tortoise.LatestComplete()
-	require.Equal(t, last, verified)
-
-	require.Equal(t, types.GetEffectiveGenesis(), tortoise.trtl.full.counted)
-}
-
 func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	ctx := context.Background()
 	const (
@@ -176,35 +144,32 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 
 func BenchmarkRerun(b *testing.B) {
 	b.Run("Verifying/100", func(b *testing.B) {
-		benchmarkRerun(b, 100, 10, 0)
+		benchmarkRerun(b, 100, 0)
 	})
 	b.Run("Verifying/1000", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 1000, 0)
+		benchmarkRerun(b, 1000, 0)
 	})
 	b.Run("Verifying/10000", func(b *testing.B) {
-		benchmarkRerun(b, 10000, 1000, 0)
-	})
-	b.Run("Full/100", func(b *testing.B) {
-		benchmarkRerun(b, 100, 100, 100, sim.WithEmptyHareOutput())
+		benchmarkRerun(b, 10000, 0)
 	})
 	b.Run("Full/100/Window/10", func(b *testing.B) {
-		benchmarkRerun(b, 100, 100, 10, sim.WithEmptyHareOutput())
+		benchmarkRerun(b, 100, 10, sim.WithEmptyHareOutput())
 	})
 	b.Run("Full/1000/Window/100", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 1000, 100, sim.WithEmptyHareOutput())
+		benchmarkRerun(b, 1000, 100, sim.WithEmptyHareOutput())
 	})
 	b.Run("Full/1000/Window/1000", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 1000, 1000, sim.WithEmptyHareOutput())
+		benchmarkRerun(b, 1000, 1000, sim.WithEmptyHareOutput())
 	})
 	b.Run("Full/2000/Window/2000", func(b *testing.B) {
-		benchmarkRerun(b, 2000, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+		benchmarkRerun(b, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
 	})
 	b.Run("Full/10000/Window/10000", func(b *testing.B) {
-		benchmarkRerun(b, 10000, 10000, 10000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+		benchmarkRerun(b, 10000, 10000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
 	})
 }
 
-func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, opts ...sim.NextOpt) {
+func benchmarkRerun(b *testing.B, size int, fullParam uint32, opts ...sim.NextOpt) {
 	const layerSize = 30
 	s := sim.New(
 		sim.WithLayerSize(layerSize),
@@ -215,8 +180,7 @@ func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, op
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = layerSize
-	cfg.VerifyingModeVerificationWindow = verifyingParam
-	cfg.FullModeVerificationWindow = fullParam
+	cfg.WindowSize = fullParam
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
 	for i := 0; i < size; i++ {

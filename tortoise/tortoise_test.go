@@ -508,37 +508,16 @@ func defaultTurtle(tb testing.TB) *turtle {
 	)
 }
 
-func TestCloneTurtle(t *testing.T) {
-	r := require.New(t)
-	trtl := defaultTurtle(t)
-	trtl.LayerSize++                 // make sure defaults aren't being read
-	trtl.last = types.NewLayerID(10) // state should not be cloned
-	trtl2 := trtl.cloneTurtleParams()
-	r.Equal(trtl.cdb, trtl2.cdb)
-	r.Equal(trtl.Hdist, trtl2.Hdist)
-	r.Equal(trtl.Zdist, trtl2.Zdist)
-	r.Equal(trtl.WindowSize, trtl2.WindowSize)
-	r.Equal(trtl.LayerSize, trtl2.LayerSize)
-	r.Equal(trtl.BadBeaconVoteDelayLayers, trtl2.BadBeaconVoteDelayLayers)
-	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
-	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
-	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
-	r.NotEqual(trtl.last, trtl2.last)
-}
-
 func defaultTestConfig() Config {
 	return Config{
-		LayerSize:                       defaultTestLayerSize,
-		Hdist:                           defaultTestHdist,
-		Zdist:                           defaultTestZdist,
-		WindowSize:                      defaultTestWindowSize,
-		BadBeaconVoteDelayLayers:        defaultVoteDelays,
-		GlobalThreshold:                 defaultTestGlobalThreshold,
-		LocalThreshold:                  defaultTestLocalThreshold,
-		RerunInterval:                   defaultTestRerunInterval,
-		MaxExceptions:                   int(defaultTestHdist) * defaultTestLayerSize * 100,
-		VerifyingModeVerificationWindow: 10_000,
-		FullModeVerificationWindow:      100,
+		LayerSize:                defaultTestLayerSize,
+		Hdist:                    defaultTestHdist,
+		Zdist:                    defaultTestZdist,
+		WindowSize:               defaultTestWindowSize,
+		BadBeaconVoteDelayLayers: defaultVoteDelays,
+		GlobalThreshold:          defaultTestGlobalThreshold,
+		LocalThreshold:           defaultTestLocalThreshold,
+		MaxExceptions:            int(defaultTestHdist) * defaultTestLayerSize * 100,
 	}
 }
 

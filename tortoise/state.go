@@ -48,9 +48,6 @@ type (
 
 		// last verified layer
 		verified types.LayerID
-		// historicallyVerified matters only for local opinion for verifying tortoise
-		// during rerun. for live tortoise it is identical to the verified layer.
-		historicallyVerified types.LayerID
 		// last processed layer
 		processed types.LayerID
 		// last evicted layer
@@ -77,8 +74,13 @@ func newState() *state {
 	}
 }
 
-func (s *state) globalThreshold(cfg Config, tmode mode, target types.LayerID) weight {
-	return computeGlobalThreshold(cfg, tmode, s.localThreshold, s.epochs, target, s.processed, s.last)
+func (s *state) globalThreshold(cfg Config, target types.LayerID) weight {
+	window := s.last
+	if s.last.Difference(target) > cfg.WindowSize {
+		window = target.Add(cfg.WindowSize)
+	}
+	window = maxLayer(window, s.processed)
+	return computeGlobalThreshold(cfg, s.localThreshold, s.epochs, target, window)
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {

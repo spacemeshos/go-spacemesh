@@ -32,12 +32,12 @@ type turtle struct {
 	beacons system.BeaconGetter
 	updater blockValidityUpdater
 
-	mode mode
-
 	state
 
 	verifying *verifying
-	full      *full
+
+	isFull bool
+	full   *full
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
@@ -59,17 +59,6 @@ func newTurtle(
 	t.verifying = newVerifying(config, &t.state)
 	t.full = newFullTortoise(config, &t.state)
 	return t
-}
-
-// cloneTurtleParams creates a new verifying tortoise instance using the params of this instance.
-func (t *turtle) cloneTurtleParams() *turtle {
-	return newTurtle(
-		t.logger,
-		t.cdb,
-		t.beacons,
-		t.updater,
-		t.Config,
-	)
 }
 
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
@@ -106,7 +95,6 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.last = genesis
 	t.processed = genesis
 	t.verified = genesis
-	t.historicallyVerified = genesis
 	t.evicted = genesis.Sub(1)
 	t.full.counted = genesis
 }
@@ -117,12 +105,6 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 		return types.NewLayerID(0), false
 	}
 	return t.verified.Sub(t.WindowSize), true
-}
-
-func (t *turtle) updateHistoricallyVerified() {
-	if t.verified.After(t.historicallyVerified) {
-		t.historicallyVerified = t.verified
-	}
 }
 
 // evict makes sure we only keep a window of the last hdist layers.
@@ -183,7 +165,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 	// goodness of the ballot determined using hare output or tortoise output for old layers.
 	// if tortoise is full mode some ballot in old layer is undecided and we can't use it this optimization.
-	if t.mode.isVerifying() {
+	if !t.isFull {
 		base = t.getGoodBallot(logger)
 		if base != nil {
 			// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
@@ -231,7 +213,6 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 
 	logger.With().Info("choose base ballot",
-		log.Stringer("mode", t.mode),
 		log.Stringer("base layer", base.layer),
 		log.Stringer("voting layer", last),
 		log.Inline(votes),
@@ -423,7 +404,7 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
 		}
-		if t.mode.isFull() {
+		if t.isFull {
 			t.full.countDelayed(t.logger, process)
 			t.full.counted = process
 		}
@@ -454,13 +435,11 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 }
 
 func (t *turtle) switchModes(logger log.Log) {
-	from := t.mode
-	t.mode = from.toggleMode()
+	t.isFull = !t.isFull
 	logger.With().Info("switching tortoise mode",
 		log.Stringer("processed_layer", t.processed),
 		log.Stringer("verified_layer", t.verified),
-		log.Stringer("from_mode", from),
-		log.Stringer("to_mode", t.mode),
+		log.Bool("is full", t.isFull),
 	)
 }
 
@@ -473,7 +452,7 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	}
 	ballot.conditions.badBeacon = badBeacon
 	t.verifying.countBallot(logger, ballot)
-	if t.mode.isFull() {
+	if t.isFull {
 		t.full.countBallot(logger, ballot)
 	}
 	return nil
@@ -487,17 +466,16 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 	previous := t.verified
 	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
 		var success bool
-		if t.mode.isVerifying() {
+		if !t.isFull {
 			success = t.verifying.verify(logger, target)
 		}
-		if !success && (t.canUseFullMode() || t.mode.isFull()) {
+		if !success && (t.isFull || !withinDistance(t.Hdist, target, t.last)) {
 			success = t.countFullMode(logger, target)
 		}
-		if success {
-			t.verified = target
-		} else {
+		if !success {
 			break
 		}
+		t.verified = target
 	}
 	if err := persistContextualValidity(logger,
 		t.updater,
@@ -506,14 +484,12 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 	); err != nil {
 		return err
 	}
-
-	t.updateHistoricallyVerified()
 	return nil
 }
 
 func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
 	success := false
-	if t.mode.isVerifying() {
+	if !t.isFull {
 		t.switchModes(logger)
 		counted := maxLayer(t.full.counted.Add(1), target.Add(1))
 		for ; !counted.After(t.processed); counted = counted.Add(1) {
@@ -686,7 +662,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if exists && previous == bid {
 		return
 	}
-	if lid.Before(t.processed) && t.mode.isVerifying() && withinDistance(t.Config.Hdist, lid, t.last) {
+	if lid.Before(t.processed) && !t.isFull && withinDistance(t.Config.Hdist, lid, t.last) {
 		t.logger.With().Info("local opinion changed within hdist",
 			lid,
 			log.Stringer("verified", t.verified),
@@ -809,28 +785,6 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 	return false, nil
 }
 
-// the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
-// during rerun we need to use another heuristic, as hdist is irrelevant by that time.
-func (t *turtle) canUseFullMode() bool {
-	target := t.verified.Add(1)
-	// TODO(dshulyak) this condition should be enabled when the node is syncing.
-	if t.mode.isRerun() {
-		return t.processed.Difference(target) > t.VerifyingModeVerificationWindow ||
-			// if all layer were exhaused and verifying didn't made progress try switching
-			t.last == t.processed
-	}
-	return target.Before(t.layerCutoff())
-}
-
-// layerCuttoff returns last layer that is in hdist distance.
-func (t *turtle) layerCutoff() types.LayerID {
-	// if we haven't seen at least Hdist layers yet, we always rely on local opinion
-	if t.last.Before(types.NewLayerID(t.Hdist)) {
-		return types.NewLayerID(0)
-	}
-	return t.last.Sub(t.Hdist)
-}
-
 func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Votes) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
@@ -938,7 +892,7 @@ func getLocalVote(state *state, config Config, block *blockInfo) (sign, voteReas
 		}
 		return abstain, reasonHareOutput
 	}
-	if block.layer.After(state.historicallyVerified) {
+	if block.layer.After(state.verified) {
 		return abstain, reasonValidity
 	}
 	return block.validity, reasonValidity
