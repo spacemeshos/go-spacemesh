@@ -65,9 +65,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-go-${{ env.go-version }}-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
           make
@@ -94,9 +94,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-go-${{ env.go-version }}-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: golangci-lint
@@ -151,10 +151,10 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-go-${{ env.go-version }}-unittests-
-            cache-go-${{ env.go-version }}-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: Clear test cache
