@@ -108,19 +108,18 @@ jobs:
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     timeout-minutes: 30
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
+        allow-failure: ["false"]
         os:
           - ubuntu-latest
           - macos-latest
           - windows-latest
         include:
-          - os: ubuntu-latest
-            allow-failure: false
           - os: macos-latest
-            allow-failure: true
+            allow-failure: "true"
           - os: windows-latest
-            allow-failure: true
+            allow-failure: "true"
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
@@ -164,14 +163,14 @@ jobs:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
-        continue-on-error: ${{ matrix.allow-failure }}
+        continue-on-error: ${{ matrix.allow-failure == 'true' }}
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3
         # always run even if the previous step fails
         if: always()
         with:
           report_paths: "**/unit-tests.xml"
-          fail_on_failure: ${{ ! matrix.allow-failure }}
+          fail_on_failure: ${{ matrix.allow-failure == 'false' }}
 
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
