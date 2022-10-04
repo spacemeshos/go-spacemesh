@@ -123,7 +123,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 2m -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 4m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
