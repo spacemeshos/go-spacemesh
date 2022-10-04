@@ -1,6 +1,8 @@
 package hash
 
-import "github.com/minio/sha256-simd"
+import (
+	"github.com/minio/sha256-simd"
+)
 
 const (
 	// Size is an alias to minio sha256.Size (32 bytes).
