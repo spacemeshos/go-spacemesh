@@ -171,7 +171,8 @@ jobs:
         if: always()
         with:
           report_paths: "**/unit-tests.xml"
-          fail_on_failure: ${{ matrix.allow-failure == 'false' && 'true' || 'false' }}
+          annotate_only: true
+          fail_on_failure: ${{ matrix.allow-failure == 'false' }}
 
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
