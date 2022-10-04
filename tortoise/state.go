@@ -15,6 +15,13 @@ type (
 		referenceHeight uint64
 	}
 
+	epochInfo struct {
+		// weight is a sum of all atxs
+		weight uint64
+		// median height from atxs
+		height uint64
+	}
+
 	layerInfo struct {
 		lid            types.LayerID
 		empty          weight
@@ -36,6 +43,7 @@ type (
 		// last received layer
 		// TODO should be last layer according to the clock
 		last types.LayerID
+
 		// last verified layer
 		verified types.LayerID
 		// historicallyVerified matters only for local opinion for verifying tortoise
@@ -46,18 +54,9 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		localThreshold  weight
-		globalThreshold weight
+		localThreshold util.Weight
 
-		// epochWeight average weight per layer of atx's that target keyed epoch
-		epochWeight map[types.EpochID]weight
-		// referenceHeight is a median height from all atxs that target keyed epoch
-		referenceHeight map[types.EpochID]uint64
-		// referenceWeight stores atx weight divided by the total number of eligibilities.
-		// it is computed together with refBallot weight. it is not equal to refBallot
-		// only if refBallot has more than 1 eligibility proof.
-		referenceWeight map[types.BallotID]weight
-
+		epochs  map[types.EpochID]*epochInfo
 		layers  map[types.LayerID]*layerInfo
 		ballots map[types.LayerID][]*ballotInfo
 
@@ -70,15 +69,16 @@ type (
 
 func newState() *state {
 	return &state{
-		epochWeight:     map[types.EpochID]util.Weight{},
-		referenceHeight: map[types.EpochID]uint64{},
-		referenceWeight: map[types.BallotID]util.Weight{},
-
+		epochs:     map[types.EpochID]*epochInfo{},
 		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
+}
+
+func (s *state) globalThreshold(cfg Config, tmode mode, target types.LayerID) weight {
+	return computeGlobalThreshold(cfg, tmode, s.localThreshold, s.epochs, target, s.processed, s.last)
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {
@@ -105,11 +105,11 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
 	}
-	refheight, exist := s.referenceHeight[block.layer.GetEpoch()]
+	epoch, exist := s.epochs[block.layer.GetEpoch()]
 	if !exist {
 		return fmt.Errorf("reference height for epoch %d is not recorded", block.layer.GetEpoch())
 	}
-	if block.height <= refheight &&
+	if block.height <= epoch.height &&
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
@@ -137,13 +137,18 @@ type (
 		votesBeforeBase bool
 	}
 
+	referenceInfo struct {
+		weight weight
+		height uint64
+		beacon types.Beacon
+	}
+
 	ballotInfo struct {
 		id         types.BallotID
 		layer      types.LayerID
 		base       baseInfo
-		height     uint64
 		weight     weight
-		beacon     types.Beacon
+		reference  *referenceInfo
 		votes      votes
 		conditions conditions
 	}

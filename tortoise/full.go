@@ -43,7 +43,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 		}
 		empty := true
 		for _, bvote := range lvote.blocks {
-			if bvote.height > ballot.height {
+			if bvote.height > ballot.reference.height {
 				continue
 			}
 			switch bvote.vote {
@@ -81,15 +81,16 @@ func (f *full) countVotes(logger log.Log) {
 }
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
+	threshold := f.globalThreshold(f.Config, mode{true, false}, lid)
 	logger = logger.WithFields(
 		log.String("verifier", fullTortoise),
 		log.Stringer("counted_layer", f.counted),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("local_threshold", f.localThreshold),
-		log.Stringer("global_threshold", f.globalThreshold),
+		log.Stringer("global_threshold", threshold),
 	)
 	layer := f.state.layer(lid)
-	empty := layer.empty.Cmp(f.globalThreshold) > 0
+	empty := layer.empty.Cmp(threshold) > 0
 	if len(layer.blocks) == 0 {
 		if empty {
 			logger.With().Info("candidate layer is empty")
@@ -105,7 +106,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
-			decision := sign(block.margin.Cmp(f.globalThreshold))
+			decision := sign(block.margin.Cmp(threshold))
 			if decision == neutral && empty {
 				return against
 			}

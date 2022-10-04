@@ -25,9 +25,8 @@ func TestComputeThreshold(t *testing.T) {
 		config                    Config
 		processed, last, verified types.LayerID
 		mode                      mode
-		epochWeight               map[types.EpochID]util.Weight
+		epochs                    map[types.EpochID]*epochInfo
 
-		expectedLocal  util.Weight
 		expectedGlobal util.Weight
 	}{
 		{
@@ -40,10 +39,9 @@ func TestComputeThreshold(t *testing.T) {
 			processed: genesis.Add(4),
 			last:      genesis.Add(4),
 			verified:  genesis,
-			epochWeight: map[types.EpochID]util.Weight{
-				2: util.WeightFromUint64(10),
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 10},
 			},
-			expectedLocal:  util.WeightFromUint64(5),
 			expectedGlobal: util.WeightFromUint64(20),
 		},
 		{
@@ -56,10 +54,9 @@ func TestComputeThreshold(t *testing.T) {
 			processed: genesis.Add(1),
 			last:      genesis.Add(4),
 			verified:  genesis,
-			epochWeight: map[types.EpochID]util.Weight{
-				2: util.WeightFromUint64(10),
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 10},
 			},
-			expectedLocal:  util.WeightFromUint64(5),
 			expectedGlobal: util.WeightFromUint64(15),
 		},
 		{
@@ -73,20 +70,18 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(4),
 			verified:  genesis,
 			mode:      mode{}.toggleMode(),
-			epochWeight: map[types.EpochID]util.Weight{
-				2: util.WeightFromUint64(10),
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 10},
 			},
-			expectedLocal:  util.WeightFromUint64(5),
 			expectedGlobal: util.WeightFromUint64(20),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			local, global := computeThresholds(
-				logtest.New(t), tc.config, tc.mode,
-				tc.verified.Add(1), tc.last, tc.processed, tc.epochWeight,
+			global := computeGlobalThreshold(
+				tc.config, tc.mode, weight{}, tc.epochs,
+				tc.verified.Add(1), tc.last, tc.processed,
 			)
-			require.Equal(t, tc.expectedLocal.String(), local.String())
 			require.Equal(t, tc.expectedGlobal.String(), global.String())
 		})
 	}

@@ -1301,9 +1301,9 @@ func TestComputeExpectedWeight(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
-				cdb          = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-				epochWeights = map[types.EpochID]util.Weight{}
-				first        = tc.target.Add(1).GetEpoch()
+				cdb    = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+				epochs = map[types.EpochID]*epochInfo{}
+				first  = tc.target.Add(1).GetEpoch()
 			)
 			for i, weight := range tc.totals {
 				eid := first + types.EpochID(i)
@@ -1323,10 +1323,10 @@ func TestComputeExpectedWeight(t *testing.T) {
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
 				require.NoError(t, err)
-				epochWeights[lid.GetEpoch()] = weight
+				epochs[lid.GetEpoch()] = &epochInfo{weight: weight}
 			}
 
-			weight := computeExpectedWeight(epochWeights, tc.target, tc.last)
+			weight := computeExpectedWeight(epochs, tc.target, tc.last)
 			require.Equal(t, tc.expect.String(), weight.String())
 		})
 	}
@@ -2145,157 +2145,6 @@ func TestComputeLocalOpinion(t *testing.T) {
 				} else {
 					require.Equal(t, tc.expected, vote, "block id %s", bid)
 				}
-			}
-		})
-	}
-}
-
-func TestComputeBallotWeight(t *testing.T) {
-	type testBallot struct {
-		ActiveSet      []int // optional index to atx's to form an active set
-		RefBallot      int   // optional index to the ballot, use it in test if active set is nil
-		ATX            int   // non optional index to this ballot atx
-		ExpectedWeight *big.Float
-		Eligibilities  int
-	}
-	createActiveSet := func(pos []int, atxdis []types.ATXID) []types.ATXID {
-		var rst []types.ATXID
-		for _, i := range pos {
-			rst = append(rst, atxdis[i])
-		}
-		return rst
-	}
-
-	for _, tc := range []struct {
-		desc                      string
-		atxs                      []uint
-		ballots                   []testBallot
-		layerSize, layersPerEpoch uint32
-	}{
-		{
-			desc:           "FromActiveSet",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 3,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-			},
-		},
-		{
-			desc:           "FromRefBallot",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 3,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-			},
-		},
-		{
-			desc:           "FromRefBallotMultipleEligibilities",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 3,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
-			},
-		},
-		{
-			desc:           "FromRefBallotMultipleEligibilities",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 3,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-			},
-		},
-		{
-			desc:           "FromRefBallotMultipleEligibilities",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 3,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(30), Eligibilities: 3},
-			},
-		},
-		{
-			desc:           "DifferentActiveSets",
-			atxs:           []uint{50, 50, 100, 100},
-			layerSize:      5,
-			layersPerEpoch: 2,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: big.NewFloat(20), Eligibilities: 1},
-			},
-		},
-		{
-			desc:           "AtxNotInActiveSet",
-			atxs:           []uint{50, 50, 50},
-			layerSize:      5,
-			layersPerEpoch: 2,
-			ballots: []testBallot{
-				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(0), Eligibilities: 1},
-			},
-		},
-	} {
-		tc := tc
-		t.Run(tc.desc, func(t *testing.T) {
-			var (
-				blts   []*types.Ballot
-				atxids []types.ATXID
-
-				refWeights = map[types.BallotID]util.Weight{}
-			)
-
-			cdb := newCachedDB(t, logtest.New(t))
-			lid := types.NewLayerID(111)
-			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
-			for i, weight := range tc.atxs {
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-					NumUnits: uint32(weight),
-				}}
-				atx.PubLayerID = atxLid
-				nodeID := types.NodeID{byte(i)}
-				atx.SetNodeID(&nodeID)
-				atxID := types.RandomATXID()
-				atx.SetID(&atxID)
-				vAtx, err := atx.Verify(0, 1)
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
-				atxids = append(atxids, atxID)
-			}
-
-			var currentJ int
-			for _, b := range tc.ballots {
-				ballot := &types.Ballot{
-					InnerBallot: types.InnerBallot{
-						AtxID: atxids[b.ATX],
-					},
-				}
-				for j := 0; j < b.Eligibilities; j++ {
-					ballot.EligibilityProofs = append(ballot.EligibilityProofs,
-						types.VotingEligibilityProof{J: uint32(currentJ)})
-					currentJ++
-				}
-				if b.ActiveSet != nil {
-					ballot.EpochData = &types.EpochData{
-						ActiveSet: createActiveSet(b.ActiveSet, atxids),
-					}
-				} else {
-					ballot.RefBallot = blts[b.RefBallot].ID()
-				}
-
-				ballot.Signature = sig.Sign(ballot.Bytes())
-				require.NoError(t, ballot.Initialize())
-				blts = append(blts, ballot)
-
-				weight, err := computeBallotWeight(cdb, refWeights, ballot, tc.layerSize, tc.layersPerEpoch)
-				require.NoError(t, err)
-				require.Equal(t, b.ExpectedWeight.String(), weight.String())
 			}
 		})
 	}

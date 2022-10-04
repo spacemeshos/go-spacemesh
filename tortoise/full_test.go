@@ -357,7 +357,9 @@ func TestFullCountVotes(t *testing.T) {
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
 				}
-				consensus.referenceHeight[lid.GetEpoch()] = localHeight
+				consensus.epochs[lid.GetEpoch()] = &epochInfo{
+					height: localHeight,
+				}
 				for _, block := range layerBlocks {
 					consensus.onBlock(lid, &block)
 				}
@@ -526,7 +528,7 @@ func TestFullVerify(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			lid := types.LayerID{}
 			full := newFullTortoise(Config{}, newState())
-			full.globalThreshold = util.WeightFromUint64(tc.threshold)
+
 			layer := full.layer(lid)
 			layer.empty = util.WeightFromInt64(int64(emptyThreshold))
 			for i, block := range tc.blocks {

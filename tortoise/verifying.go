@@ -75,11 +75,11 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 		return
 	}
 	// get height of the max votable block
-	if refheight := v.layer(ballot.layer.Sub(1)).verifying.referenceHeight; refheight > ballot.height {
+	if refheight := v.layer(ballot.layer.Sub(1)).verifying.referenceHeight; refheight > ballot.reference.height {
 		logger.With().Debug("reference height is higher than the ballot height",
 			ballot.id,
 			log.Uint64("reference height", refheight),
-			log.Uint64("ballot height", ballot.height),
+			log.Uint64("ballot height", ballot.reference.height),
 		)
 		return
 	}
@@ -125,15 +125,16 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		Sub(layer.verifying.good).
 		Sub(layer.verifying.abstained)
 
+	threshold := v.globalThreshold(v.Config, mode{}, lid)
 	logger = logger.WithFields(
 		log.String("verifier", verifyingTortoise),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("margin", margin),
 		log.Stringer("abstained_weight", layer.verifying.abstained),
 		log.Stringer("local_threshold", v.localThreshold),
-		log.Stringer("global_threshold", v.globalThreshold),
+		log.Stringer("global_threshold", threshold),
 	)
-	if sign(margin.Cmp(v.globalThreshold)) == neutral {
+	if sign(margin.Cmp(threshold)) == neutral {
 		logger.With().Debug("doesn't cross global threshold")
 		return false
 	}

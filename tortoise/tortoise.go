@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -149,7 +150,6 @@ func (t *turtle) evict(ctx context.Context) {
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
 			delete(t.ballotRefs, ballot.id)
-			delete(t.referenceWeight, ballot.id)
 		}
 		delete(t.ballots, lid)
 		for _, block := range t.layers[lid].blocks {
@@ -157,8 +157,7 @@ func (t *turtle) evict(ctx context.Context) {
 		}
 		delete(t.layers, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
-			delete(t.epochWeight, lid.GetEpoch())
-			delete(t.referenceHeight, lid.GetEpoch())
+			delete(t.epochs, lid.GetEpoch())
 		}
 	}
 	for _, ballot := range t.ballots[windowStart] {
@@ -286,7 +285,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 			return types.LayerID{}, nil
 		}
 		for _, bvote := range lvote.blocks {
-			vote, _, err := t.getFullVote(ctx, bvote.blockInfo)
+			vote, _, err := t.getFullVote(bvote.blockInfo)
 			if err != nil {
 				return types.LayerID{}, err
 			}
@@ -329,7 +328,7 @@ func (t *turtle) encodeVotes(
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		for _, bvote := range lvote.blocks {
-			vote, _, err := t.getFullVote(ctx, bvote.blockInfo)
+			vote, _, err := t.getFullVote(bvote.blockInfo)
 			if err != nil {
 				return nil, err
 			}
@@ -360,7 +359,7 @@ func (t *turtle) encodeVotes(
 			continue
 		}
 		for _, block := range layer.blocks {
-			vote, _, err := t.getFullVote(ctx, block)
+			vote, _, err := t.getFullVote(block)
 			if err != nil {
 				return nil, err
 			}
@@ -388,7 +387,7 @@ func (t *turtle) encodeVotes(
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
 // outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
-func (t *turtle) getFullVote(ctx context.Context, block *blockInfo) (sign, voteReason, error) {
+func (t *turtle) getFullVote(block *blockInfo) (sign, voteReason, error) {
 	vote, reason := getLocalVote(&t.state, t.Config, block)
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
@@ -465,7 +464,7 @@ func (t *turtle) switchModes(logger log.Log) {
 func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	// NOTE(dshulyak) counting ballot in verifying mode has some side-effects that
 	// are important for encoding votes
-	badBeacon, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.beacon)
+	badBeacon, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.reference.beacon)
 	if err != nil {
 		return err
 	}
@@ -493,10 +492,6 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 		}
 		if success {
 			t.verified = target
-			t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
-				t.verified.Add(1), t.last, t.processed,
-				t.epochWeight,
-			)
 		} else {
 			break
 		}
@@ -525,10 +520,6 @@ func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
 			t.full.countDelayed(logger, counted)
 			t.full.counted = counted
 			if !success {
-				t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
-					target, t.last, t.full.counted,
-					t.epochWeight,
-				)
 				success = t.full.verify(logger, target)
 			}
 		}
@@ -608,27 +599,24 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 	}
 
 	for epoch := t.last.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
-		if _, exist := t.epochWeight[epoch]; exist {
+		if _, exist := t.epochs[epoch]; exist {
 			break
 		}
 		weight, height, err := extractAtxsData(t.cdb, epoch)
 		if err != nil {
 			return err
 		}
-		t.epochWeight[epoch] = weight
-		t.referenceHeight[epoch] = height
+		t.epochs[epoch] = &epochInfo{height: height, weight: weight}
 		logger.With().Info("computed height and weight for epoch",
 			epoch,
-			log.Stringer("weight", weight),
+			log.Uint64("weight", weight),
 			log.Uint64("height", height),
 		)
 	}
-	window := getVerificationWindow(t.Config, t.mode, t.verified.Add(1), t.last)
-	if lastUpdated || window.Before(t.processed) || t.globalThreshold.IsNil() {
-		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
-			t.verified.Add(1), t.last, t.processed,
-			t.epochWeight,
-		)
+	if lastUpdated {
+		t.localThreshold = util.WeightFromUint64(t.epochs[t.last.GetEpoch()].weight).
+			Fraction(t.LocalThreshold).
+			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	}
 	return nil
 }
@@ -741,17 +729,23 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		return nil
 	}
 	var (
-		weight util.Weight
-		height uint64
-		beacon types.Beacon
-
-		err error
+		weight  util.Weight
+		refinfo *referenceInfo
 	)
 	if ballot.EpochData != nil {
-		beacon = ballot.EpochData.Beacon
-		height, err = getBallotHeight(t.cdb, ballot)
+		beacon := ballot.EpochData.Beacon
+		height, err := getBallotHeight(t.cdb, ballot)
 		if err != nil {
 			return err
+		}
+		refweight, err := proposals.ComputeWeightPerEligibility(t.cdb, ballot, t.LayerSize, types.GetLayersPerEpoch())
+		if err != nil {
+			return err
+		}
+		refinfo = &referenceInfo{
+			height: height,
+			beacon: beacon,
+			weight: refweight,
 		}
 	} else {
 		ref, exists := t.state.ballotRefs[ballot.RefBallot]
@@ -761,24 +755,24 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 			)
 			return nil
 		}
-		beacon = ref.beacon
-		height = ref.height
+		if ref.reference == nil {
+			t.logger.With().Warning("invalid ballot used as a reference",
+				log.Stringer("ref", ballot.RefBallot),
+			)
+			return nil
+		}
+		refinfo = ref.reference
 	}
 	if !ballot.IsMalicious() {
-		weight, err = computeBallotWeight(
-			t.cdb, t.referenceWeight,
-			ballot, t.LayerSize, types.GetLayersPerEpoch(),
-		)
-		if err != nil {
-			return err
-		}
+		weight = refinfo.weight.Copy().Mul(
+			util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
 	} else {
 		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
 	}
 	t.logger.With().Debug("computed weight and height for ballot",
 		ballot.ID(),
 		log.Stringer("weight", weight),
-		log.Uint64("height", height),
+		log.Uint64("height", refinfo.height),
 	)
 	binfo := &ballotInfo{
 		id: ballot.ID(),
@@ -786,10 +780,9 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 			id:    base.id,
 			layer: base.layer,
 		},
-		layer:  ballot.LayerIndex,
-		weight: weight,
-		height: height,
-		beacon: beacon,
+		reference: refinfo,
+		layer:     ballot.LayerIndex,
+		weight:    weight,
 	}
 	t.decodeExceptions(base, binfo, ballot.Votes)
 	if !binfo.layer.Before(t.processed) {

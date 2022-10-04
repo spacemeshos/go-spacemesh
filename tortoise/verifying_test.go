@@ -149,15 +149,13 @@ func TestVerifying_Verify(t *testing.T) {
 	start := types.GetEffectiveGenesis()
 	verified := start
 	processed := start.Add(4)
-	epochWeight := map[types.EpochID]util.Weight{
-		2: util.WeightFromUint64(10),
-		3: util.WeightFromUint64(10),
-	}
+
 	const localHeight = 100
-	referenceHeight := map[types.EpochID]uint64{
-		2: localHeight,
-		3: localHeight,
+	epochs := map[types.EpochID]*epochInfo{
+		2: {weight: 10, height: localHeight},
+		3: {weight: 10, height: localHeight},
 	}
+
 	config := Config{
 		LocalThreshold:                  big.NewRat(1, 10),
 		GlobalThreshold:                 big.NewRat(7, 10),
@@ -614,8 +612,7 @@ func TestVerifying_Verify(t *testing.T) {
 			logger := logtest.New(t)
 
 			state := newState()
-			state.epochWeight = epochWeight
-			state.referenceHeight = referenceHeight
+			state.epochs = epochs
 			state.verified = verified
 			state.processed = processed
 			state.last = processed
@@ -627,12 +624,6 @@ func TestVerifying_Verify(t *testing.T) {
 				}
 			}
 
-			state.localThreshold, state.globalThreshold = computeThresholds(
-				logger, config, mode{},
-				state.verified.Add(1), state.processed, state.processed,
-				state.epochWeight,
-			)
-
 			v := newVerifying(config, state)
 			v.totalGoodWeight = tc.totalWeight
 
@@ -641,10 +632,6 @@ func TestVerifying_Verify(t *testing.T) {
 					return false
 				}
 				state.verified = lid
-				state.localThreshold, state.globalThreshold = computeThresholds(logger, config, mode{},
-					state.verified.Add(1), state.processed, state.processed,
-					state.epochWeight,
-				)
 				return true
 			})
 			require.Equal(t, tc.expected, state.verified)
