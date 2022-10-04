@@ -10,70 +10,77 @@ import (
 )
 
 func TestPrioritizeBlocks(t *testing.T) {
-	ballots := []types.BallotID{
-		{1},
-		{2},
-		{3},
-		{4},
+	ballots := []*ballotInfo{
+		{id: types.BallotID{1}},
+		{id: types.BallotID{2}},
+		{id: types.BallotID{3}},
+		{id: types.BallotID{4}},
 	}
 	for _, tc := range []struct {
-		desc             string
-		disagrements     map[types.BallotID]types.LayerID
-		ballotLayer      map[types.BallotID]types.LayerID
-		badBeaconBallots map[types.BallotID]struct{}
-		expect           []types.BallotID
+		desc         string
+		input        []*ballotInfo
+		disagrements map[types.BallotID]types.LayerID
+		expect       []types.BallotID
 	}{
 		{
 			desc:   "SortLexically",
-			expect: ballots,
+			input:  ballots,
+			expect: []types.BallotID{ballots[0].id, ballots[1].id, ballots[2].id, ballots[3].id},
 		},
 		{
 			desc:   "PrioritizeWithHigherDisagreementLayer",
-			expect: append([]types.BallotID{ballots[3], ballots[2]}, ballots[:2]...),
+			input:  ballots,
+			expect: []types.BallotID{ballots[3].id, ballots[2].id, ballots[0].id, ballots[1].id},
 			disagrements: map[types.BallotID]types.LayerID{
-				ballots[2]: types.NewLayerID(9),
-				ballots[3]: types.NewLayerID(10),
+				ballots[2].id: types.NewLayerID(9),
+				ballots[3].id: types.NewLayerID(10),
 			},
 		},
 		{
 			desc:   "PrioritizeByHigherLayer",
-			expect: append([]types.BallotID{ballots[3], ballots[2]}, ballots[:2]...),
+			expect: []types.BallotID{ballots[2].id, ballots[3].id, ballots[1].id, ballots[0].id},
 			disagrements: map[types.BallotID]types.LayerID{
-				ballots[2]: types.NewLayerID(9),
-				ballots[3]: types.NewLayerID(9),
+				ballots[2].id: types.NewLayerID(9),
+				ballots[3].id: types.NewLayerID(9),
 			},
-			ballotLayer: map[types.BallotID]types.LayerID{
-				ballots[2]: types.NewLayerID(9),
-				ballots[3]: types.NewLayerID(10),
+			input: []*ballotInfo{
+				{id: ballots[0].id},
+				{id: ballots[1].id, layer: types.NewLayerID(9)},
+				{id: ballots[2].id, layer: types.NewLayerID(10)},
+				{id: ballots[3].id},
 			},
 		},
 		{
 			desc:   "PrioritizeBallotsWithGoodBeacon",
-			expect: []types.BallotID{ballots[1], ballots[2], ballots[3], ballots[0]},
+			expect: []types.BallotID{ballots[1].id, ballots[2].id, ballots[3].id, ballots[0].id},
 			disagrements: map[types.BallotID]types.LayerID{
-				ballots[0]: types.NewLayerID(8),
-				ballots[1]: types.NewLayerID(9),
-				ballots[2]: types.NewLayerID(9),
-				ballots[3]: types.NewLayerID(9),
+				ballots[0].id: types.NewLayerID(8),
+				ballots[1].id: types.NewLayerID(9),
+				ballots[2].id: types.NewLayerID(9),
+				ballots[3].id: types.NewLayerID(9),
 			},
-			badBeaconBallots: map[types.BallotID]struct{}{
-				ballots[0]: {},
-				ballots[3]: {},
+			input: []*ballotInfo{
+				{id: ballots[0].id, conditions: conditions{badBeacon: true}},
+				{id: ballots[1].id},
+				{id: ballots[2].id},
+				{id: ballots[3].id, conditions: conditions{badBeacon: true}},
 			},
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			rst := make([]types.BallotID, len(ballots))
-			copy(rst, ballots)
+			rst := make([]*ballotInfo, len(tc.input))
+			copy(rst, tc.input)
 
 			rng := rand.New(rand.NewSource(10001))
 			rng.Shuffle(len(rst), func(i, j int) {
 				rst[i], rst[j] = rst[j], rst[i]
 			})
 
-			prioritizeBallots(rst, tc.disagrements, tc.ballotLayer, tc.badBeaconBallots)
-			require.Equal(t, tc.expect, rst)
+			prioritizeBallots(rst, tc.disagrements)
+			for i := range tc.expect {
+				require.Equal(t, tc.expect[i], rst[i].id)
+			}
 		})
 	}
 }
