@@ -2884,16 +2884,26 @@ func BenchmarkOnBallot(b *testing.B) {
 	modified := *ballots[0]
 	modified.Votes.Against = append(modified.Votes.Against, hare)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		id := types.BallotID{}
-		binary.BigEndian.PutUint64(id[:], uint64(i)+1)
-		ballot := types.NewExistingBallot(id, nil, nil, modified.InnerBallot)
-		tortoise.OnBallot(&ballot)
+	bench := func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			id := types.BallotID{}
+			binary.BigEndian.PutUint64(id[:], uint64(i)+1)
+			ballot := types.NewExistingBallot(id, nil, nil, modified.InnerBallot)
+			tortoise.OnBallot(&ballot)
 
-		b.StopTimer()
-		delete(tortoise.trtl.ballotRefs, ballot.ID())
-		delete(tortoise.trtl.ballots, ballot.LayerIndex)
-		b.StartTimer()
+			b.StopTimer()
+			delete(tortoise.trtl.ballotRefs, ballot.ID())
+			delete(tortoise.trtl.ballots, ballot.LayerIndex)
+			b.StartTimer()
+		}
 	}
+
+	b.Run("verifying", func(b *testing.B) {
+		bench(b)
+	})
+	b.Run("full", func(b *testing.B) {
+		tortoise.trtl.mode = tortoise.trtl.mode.toggleMode()
+		bench(b)
+	})
 }

@@ -43,6 +43,8 @@ type (
 		// last received layer
 		// TODO should be last layer according to the clock
 		last types.LayerID
+		// localThreshold is updated together with the last layer.
+		localThreshold util.Weight
 
 		// last verified layer
 		verified types.LayerID
@@ -53,8 +55,6 @@ type (
 		processed types.LayerID
 		// last evicted layer
 		evicted types.LayerID
-
-		localThreshold util.Weight
 
 		epochs  map[types.EpochID]*epochInfo
 		layers  map[types.LayerID]*layerInfo

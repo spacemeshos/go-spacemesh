@@ -35,7 +35,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 		return
 	}
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
-		if !lvote.lid.After(f.verified) {
+		if !lvote.lid.After(f.evicted) {
 			break
 		}
 		if lvote.vote == abstain {

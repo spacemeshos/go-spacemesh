@@ -438,6 +438,9 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
+		if !process.After(types.NewLayerID(t.Zdist)) {
+			continue
+		}
 		terminated := process.Sub(t.Zdist + 1)
 		if terminated.After(t.evicted) && !t.layer(terminated).hareTerminated {
 			t.onHareOutput(terminated, types.EmptyBlockID)
@@ -593,12 +596,7 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 }
 
 func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
-	lastUpdated := t.last.Before(lid)
-	if lastUpdated {
-		t.last = lid
-	}
-
-	for epoch := t.last.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
+	for epoch := lid.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
 		if _, exist := t.epochs[epoch]; exist {
 			break
 		}
@@ -613,8 +611,9 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 			log.Uint64("height", height),
 		)
 	}
-	if lastUpdated {
-		t.localThreshold = util.WeightFromUint64(t.epochs[t.last.GetEpoch()].weight).
+	if t.last.Before(lid) {
+		t.last = lid
+		t.localThreshold = util.WeightFromUint64(t.epochs[lid.GetEpoch()].weight).
 			Fraction(t.LocalThreshold).
 			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	}
