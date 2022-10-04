@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 )
 
@@ -22,7 +23,9 @@ func TestVerify(t *testing.T) {
 		privates = append(privates, pk)
 		publics = append(publics, pub)
 	}
+	empty := types.Hash20{}
 	message := []byte("message")
+	signed := append(empty[:], message...)
 
 	for _, variant := range []struct{ K, N int }{
 		{K: 2, N: 3},
@@ -47,16 +50,16 @@ func TestVerify(t *testing.T) {
 				{
 					desc:      "verified seq",
 					verified:  true,
-					signature: prepSigFromKeys(t, message, privates, pullSeqRefs(variant.K)...),
+					signature: prepSigFromKeys(t, signed, privates, pullSeqRefs(variant.K)...),
 				},
 				{
 					desc:      "verified non seq",
 					verified:  true,
-					signature: prepSigFromKeys(t, message, privates, pullNonSeqRefs(variant.K, variant.N, 2)...),
+					signature: prepSigFromKeys(t, signed, privates, pullNonSeqRefs(variant.K, variant.N, 2)...),
 				},
 				{
 					desc:      "duplicates",
-					signature: prepSigFromKeys(t, message, privates, pullWithDups(variant.K)...),
+					signature: prepSigFromKeys(t, signed, privates, pullWithDups(variant.K)...),
 				},
 				{
 					desc:      "more than k",
@@ -64,7 +67,7 @@ func TestVerify(t *testing.T) {
 				},
 				{
 					desc:      "reverse order",
-					signature: prepSigFromKeys(t, message, privates, pullReverse(variant.K)...),
+					signature: prepSigFromKeys(t, signed, privates, pullReverse(variant.K)...),
 				},
 			} {
 				t.Run(tc.desc, func(t *testing.T) {
@@ -99,7 +102,9 @@ func BenchmarkVerify(b *testing.B) {
 		privates = append(privates, pk)
 		publics = append(publics, pub)
 	}
+	empty := types.Hash20{}
 	message := []byte("message")
+	signed := append(empty[:], message...)
 
 	for _, variant := range []struct{ K, N int }{
 		{K: 2, N: 3},
@@ -116,14 +121,14 @@ func BenchmarkVerify(b *testing.B) {
 				copy(key[:], pub)
 				ms.PublicKeys = append(ms.PublicKeys, key)
 			}
-			sig := prepSigFromKeys(b, message, privates, pullSeqRefs(variant.K)...)
+			sig := prepSigFromKeys(b, signed, privates, pullSeqRefs(variant.K)...)
 			raw := append(message, sig...)
 			dec := scale.NewDecoder(nil)
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				dec.Reset(bytes.NewReader(sig))
-				if !ms.Verify(&core.Context{}, raw, dec) {
+				if !ms.Verify(&core.Context{GenesisID: empty}, raw, dec) {
 					b.Fatal("all signatures must be valid")
 				}
 			}

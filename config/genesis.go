@@ -18,7 +18,7 @@ import (
 // GenesisConfig contains immutable parameters for the protocol.
 type GenesisConfig struct {
 	GenesisTime string            `mapstructure:"genesis-time"`
-	ExtraData   string            `mapstructure:"extra-data"`
+	ExtraData   string            `mapstructure:"genesis-extra-data"`
 	Accounts    map[string]uint64 `mapstructure:"accounts"`
 }
 
