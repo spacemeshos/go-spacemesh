@@ -272,6 +272,11 @@ func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Ha
 			defer nb.poetDB.UnsubscribeFromProofRef(svc.PoetServiceID, svc.PoetRound.ID)
 			select {
 			case ref := <-proofSubscription:
+				nb.log.With().Debug("Worker got a new PoET proof",
+					log.String("poet_id", util.Bytes2Hex(svc.PoetServiceID)),
+					log.String("round_id", svc.PoetRound.ID),
+					log.Binary("ref", ref),
+				)
 				// We are interested only in proofs that we are members of
 				membership, err := nb.poetDB.GetMembershipMap(ref)
 				if err != nil {
@@ -299,12 +304,12 @@ func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Ha
 			leafCount uint64
 		}
 		var bestProof *poetProof
-		// Process all proofs
 		for ref := range incomingPoetProofRefs {
 			proof, err := nb.poetDB.GetProof(ref)
 			if err != nil {
 				nb.log.Panic("Inconsistent state of poetDB. Received poetProofRef which doesn't exist in poetDB.")
 			}
+			nb.log.With().Info("Got a new PoET proof", log.Uint64("leafCount", proof.LeafCount), log.Binary("ref", ref))
 
 			if bestProof == nil || bestProof.leafCount > proof.LeafCount {
 				bestProof = &poetProof{
@@ -315,6 +320,9 @@ func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Ha
 		}
 		// Send the best proof (if any) and close the channel.
 		if bestProof != nil {
+			nb.log.With().Debug("Selected the best PoET proof",
+				log.Uint64("leafCount", bestProof.leafCount),
+				log.Binary("ref", bestProof.ref))
 			result <- bestProof.ref
 		}
 		close(result)
