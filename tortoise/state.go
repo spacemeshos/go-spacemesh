@@ -124,11 +124,6 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 }
 
 type (
-	blockVote struct {
-		*blockInfo
-		vote sign
-	}
-
 	baseInfo struct {
 		id    types.BallotID
 		layer types.LayerID
@@ -206,11 +201,12 @@ func (v *votes) cutBefore(lid types.LayerID) {
 func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 	for current := v.tail; current != nil; current = current.prev {
 		if current.lid == lid {
-			for _, block := range current.blocks {
+			for _, block := range current.supported {
 				if block.id == bid {
-					return block.vote
+					return support
 				}
 			}
+			return against
 		}
 	}
 	return abstain
@@ -218,17 +214,26 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 
 type layerVote struct {
 	*layerInfo
-	vote   sign
-	blocks []blockVote
+	vote      sign
+	supported []*blockInfo
 
 	prev *layerVote
+}
+
+func (l *layerVote) getVote(block types.BlockID) sign {
+	for _, info := range l.supported {
+		if info.id == block {
+			return support
+		}
+	}
+	return against
 }
 
 func (l *layerVote) copy() *layerVote {
 	return &layerVote{
 		layerInfo: l.layerInfo,
 		vote:      l.vote,
-		blocks:    l.blocks,
+		supported: l.supported,
 		prev:      l.prev,
 	}
 }
@@ -250,15 +255,17 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	if exist && len(layerdiff) == 0 {
 		l.vote = abstain
 	} else if exist && len(layerdiff) > 0 {
-		blocks := make([]blockVote, len(l.blocks))
-		copy(blocks, l.blocks)
-		l.blocks = blocks
-		for i := range l.blocks {
-			vote, exist := layerdiff[l.blocks[i].id]
-			if exist {
-				l.blocks[i].vote = vote
+		var supported []*blockInfo
+		for _, block := range l.blocks {
+			vote, exist := layerdiff[block.id]
+			if exist && vote == support {
+				supported = append(supported, block)
+			}
+			if !exist && l.getVote(block.id) == support {
+				supported = append(supported, block)
 			}
 		}
+		l.supported = supported
 	}
 	return l
 }

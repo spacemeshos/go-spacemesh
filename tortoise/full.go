@@ -46,12 +46,12 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			if bvote.height > ballot.reference.height {
 				continue
 			}
-			switch bvote.vote {
+			switch lvote.getVote(bvote.id) {
+			case against:
+				bvote.margin = bvote.margin.Sub(ballot.weight)
 			case support:
 				empty = false
 				bvote.margin = bvote.margin.Add(ballot.weight)
-			case against:
-				bvote.margin = bvote.margin.Sub(ballot.weight)
 			}
 		}
 		if empty {

@@ -70,12 +70,9 @@ func TestVotesUpdate(t *testing.T) {
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
 				vote: against,
-				blocks: []blockVote{
+				supported: []*blockInfo{
 					{
-						vote: support,
-						blockInfo: &blockInfo{
-							id: types.BlockID{byte(i)},
-						},
+						id: types.BlockID{byte(i)},
 					},
 				},
 				layerInfo: &layerInfo{lid: types.NewLayerID(uint32(i))},
@@ -87,11 +84,11 @@ func TestVotesUpdate(t *testing.T) {
 		cp := original.update(types.NewLayerID(0), update)
 		for c := original.tail; c != nil; c = c.prev {
 			require.Len(t, c.blocks, 1)
-			require.Equal(t, support, c.blocks[0].vote)
+			require.Equal(t, support, c.getVote(c.blocks[0].id))
 		}
 		for c := cp.tail; c != nil; c = c.prev {
 			require.Len(t, c.blocks, 1)
-			require.Equal(t, against, c.blocks[0].vote)
+			require.Equal(t, against, c.getVote(c.blocks[0].id))
 		}
 	})
 }
