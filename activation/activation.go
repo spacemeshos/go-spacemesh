@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 var (
@@ -445,8 +445,8 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
-	if err := b.storeChallenge(b.challenge); err != nil {
-		return fmt.Errorf("failed to store nipost challenge: %v", err)
+	if err := kvstore.AddNIPostChallenge(b.cdb, b.challenge); err != nil {
+		return fmt.Errorf("failed to store nipost challenge: %w", err)
 	}
 	return nil
 }
@@ -491,37 +491,12 @@ func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
 
-func getNIPostKey() []byte {
-	return []byte("NIPost")
-}
-
-func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	bts, err := codec.Encode(ch)
-	if err != nil {
-		return fmt.Errorf("serialize NIPost challenge: %w", err)
-	}
-
-	if err := niposts.Add(b.cdb, getNIPostKey(), bts); err != nil {
-		return fmt.Errorf("put NIPost challenge to database: %w", err)
-	}
-
-	return nil
-}
-
 func (b *Builder) loadChallenge() error {
-	bts, err := niposts.Get(b.cdb, getNIPostKey())
+	nipost, err := kvstore.GetNIPostChallenge(b.cdb)
 	if err != nil {
-		return fmt.Errorf("get NIPost challenge from store: %w", err)
+		return err
 	}
-
-	if len(bts) > 0 {
-		var tp types.NIPostChallenge
-		if err = codec.Decode(bts, &tp); err != nil {
-			return fmt.Errorf("parse NIPost challenge: %w", err)
-		}
-
-		b.challenge = &tp
-	}
+	b.challenge = nipost
 	return nil
 }
 
@@ -655,7 +630,7 @@ func (b *Builder) currentEpoch() types.EpochID {
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
 	b.pendingATX = nil
-	if err := niposts.Add(b.cdb, getNIPostKey(), []byte{}); err != nil {
+	if err := kvstore.ClearNIPostChallenge(b.cdb); err != nil {
 		b.log.Error("failed to discard NIPost challenge: %v", err)
 	}
 }

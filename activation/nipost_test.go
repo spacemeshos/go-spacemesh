@@ -295,7 +295,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(nipost)
 	db := sql.InMemory()
-	assert.Equal(BuilderState{NIPost: &types.NIPost{}}, *nb.state)
+	assert.Equal(types.NIPostBuilderState{NIPost: &types.NIPost{}}, *nb.state)
 
 	// fail after getting proof ref
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
@@ -476,9 +476,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 }
 
 func FuzzBuilderStateConsistency(f *testing.F) {
-	tester.FuzzConsistency[BuilderState](f)
+	tester.FuzzConsistency[types.NIPostBuilderState](f)
 }
 
 func FuzzBuilderStateSafety(f *testing.F) {
-	tester.FuzzSafety[BuilderState](f)
+	tester.FuzzSafety[types.NIPostBuilderState](f)
 }
