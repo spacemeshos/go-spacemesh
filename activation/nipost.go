@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -16,7 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/niposts"
 )
 
-//go:generate mockgen -package=activation -destination=./poet_client_mock_test.go -source=./nipost.go PoetProvingServiceClient
+//go:generate mockgen -package=mocks -destination=./mocks/nipost.go -source=./nipost.go PoetProvingServiceClient
 
 // PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
 // proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
@@ -137,7 +138,7 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (*types.NIPost, time.Duration, error) {
 	nb.load(*challenge)
 
-	if s := nb.postSetupProvider.Status(); s.State != postSetupStateComplete {
+	if s := nb.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
 		return nil, 0, errors.New("post setup not complete")
 	}
 

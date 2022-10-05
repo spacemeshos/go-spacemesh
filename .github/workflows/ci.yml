@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: '1.18'
+  go-version: "1.18"
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -43,6 +43,7 @@ jobs:
           filters: |
             nondoc:
               - '!**/*.md'
+
   ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
@@ -64,9 +65,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-go-${{ env.go-version }}-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
           make
@@ -93,25 +94,52 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-go-${{ env.go-version }}-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: golangci-lint
         run: make golangci-lint-github-action
 
   unittests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should take around 15-18 mins
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        include:
+          - os: ubuntu-latest
+            allow-failure: "false"
+          - os: macos-latest
+            allow-failure: "true"
+          - os: windows-latest
+            allow-failure: "true"
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
       - name: disable TCP/UDP offload
-        run: sudo ethtool -K eth0 tx off rx off
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo ethtool -K eth0 tx off
+          sudo ethtool -K eth0 rx off
+      - name: disable TCP/UDP offload
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          sudo sysctl -w net.link.generic.system.hwcksum_tx=0
+          sudo sysctl -w net.link.generic.system.hwcksum_rx=0
+      - name: disable TCP/UDP offload
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          netsh interface tcp set global autotuninglevel=disabled
+          netsh interface tcp set global rss=disabled
+          netsh interface tcp set global chimney=disabled
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
@@ -123,24 +151,29 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-go-${{ env.go-version }}-unittests-
-            cache-go-${{ env.go-version }}-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
         env:
-          GOTESTSUM_FORMAT: testname
+          GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
+        continue-on-error: ${{ matrix.allow-failure == 'true' }}
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3
-        if: always() # always run even if the previous step fails
+        # always run even if the previous step fails
+        if: always()
         with:
-          report_paths: '**/unit-tests.xml'
+          report_paths: "**/unit-tests.xml"
+          annotate_only: true
+          fail_on_failure: ${{ matrix.allow-failure == 'false' }}
+
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
@@ -153,8 +186,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
+      # this is the easiest way to access success/failure state of previous jobs in this workflow
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
-    # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
         name: Slack notification
@@ -187,7 +220,7 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v3
-      - name: push to dockerhub
+      - name: push to docker hub
         run: make dockerpush
 
   ## stage 3: finally run system tests in parallel if everything else passes
@@ -203,14 +236,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v0'
+      - id: "auth"
+        uses: "google-github-actions/auth@v0"
         with:
           # GCP_CREDENTIALS is minified JSON of service account
-          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
 
       - name: Configure gcloud
-        uses: 'google-github-actions/setup-gcloud@v0'
+        uses: "google-github-actions/setup-gcloud@v0"
 
       - name: Configure kubectl
         run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
@@ -221,7 +254,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Push go-spacemesh build to dockerhub
+      - name: Push go-spacemesh build to docker hub
         run: make dockerpush
 
       - name: Get branch and commit hash
@@ -243,7 +276,7 @@ jobs:
         timeout-minutes: 50
         run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
-      - name: Systemtest result
+      - name: System test result
         run: |
           SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
           SUCCESS="${SUCCESS//'%'/'%25'}"
@@ -265,6 +298,7 @@ jobs:
           else
             exit 1
           fi
+
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
   ci-stage2:

@@ -42,6 +42,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
 	cmd.PersistentFlags().StringVar(&config.Genesis.GenesisTime, "genesis-time",
 		config.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	cmd.PersistentFlags().StringVar(&config.Genesis.ExtraData, "genesis-extra-data",
+		config.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",

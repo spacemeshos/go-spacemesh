@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -145,7 +146,6 @@ func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan
 type ValidatorMock struct{}
 
 // A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
-var _ nipostValidator = (*ValidatorMock)(nil)
 
 func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) (uint64, error) {
 	return 1, nil
@@ -409,7 +409,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
@@ -431,7 +431,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+		require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
