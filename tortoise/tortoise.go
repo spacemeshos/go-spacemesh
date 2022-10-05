@@ -388,15 +388,15 @@ func (t *turtle) getFullVote(block *blockInfo) (sign, voteReason, error) {
 	return against, reasonCoinflip, nil
 }
 
-func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
-	t.logger.With().Debug("on layer", lid)
+func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
+	t.logger.With().Debug("on layer", last)
 	defer t.evict(ctx)
-	if lid.After(t.last) {
-		t.last = lid
+	if last.After(t.last) {
+		t.last = last
 	}
-	for process := t.processed.Add(1); !process.After(lid); process = process.Add(1) {
-		if lid.FirstInEpoch() {
-			if err := t.loadAtxs(lid.GetEpoch()); err != nil {
+	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
+		if process.FirstInEpoch() {
+			if err := t.loadAtxs(process.GetEpoch()); err != nil {
 				return err
 			}
 		}
@@ -433,11 +433,7 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 			t.onHareOutput(terminated, types.EmptyBlockID)
 		}
 	}
-	if err := t.verifyLayers(t.logger); err != nil {
-		return err
-	}
-
-	return nil
+	return t.verifyLayers(t.logger)
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -468,9 +464,7 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 	logger = logger.WithFields(
 		log.Stringer("last layer", t.last),
 	)
-
-	previous := t.verified
-	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		var success bool
 		if !t.isFull {
 			success = t.verifying.verify(logger, target)
@@ -483,14 +477,9 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 		}
 		t.verified = target
 	}
-	if err := persistContextualValidity(logger,
-		t.updater,
-		previous, t.verified,
-		t.layers,
-	); err != nil {
-		return err
-	}
-	return nil
+	return persistContextualValidity(
+		logger, t.updater, t.evicted.Add(1), t.verified, t.layers,
+	)
 }
 
 func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {

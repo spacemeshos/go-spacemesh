@@ -44,6 +44,10 @@ func persistContextualValidity(logger log.Log,
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
 		for _, block := range layers[lid].blocks {
+			if !block.dirty {
+				continue
+			}
+			block.dirty = false
 			if block.validity == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
 			}
@@ -129,6 +133,9 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 	}
 	for i, decision := range decisions {
 		blocks[i].validity = decision
+		if blocks[i].validity != decision {
+			blocks[i].dirty = true
+		}
 	}
 
 	logger.With().Info("candidate layer is verified",

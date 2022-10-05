@@ -38,12 +38,15 @@ type (
 	}
 
 	blockInfo struct {
-		id       types.BlockID
-		layer    types.LayerID
-		height   uint64
-		hare     sign
+		id     types.BlockID
+		layer  types.LayerID
+		height uint64
+		hare   sign
+		margin weight
+
 		validity sign
-		margin   weight
+		// if validity requires persisting it to the disk
+		dirty bool
 	}
 
 	state struct {
