@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -40,10 +41,6 @@ func getKeyValue(db sql.Executor, key string, value scale.Decodable) error {
 		return fmt.Errorf("failed to get value: %w", err)
 	} else if rows == 0 {
 		return fmt.Errorf("failed to get value: %w", sql.ErrNotFound)
-	}
-
-	if len(val) == 0 {
-		return nil
 	}
 
 	if err := codec.Decode(val, value); err != nil {
