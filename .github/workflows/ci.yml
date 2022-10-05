@@ -137,8 +137,9 @@ jobs:
       - name: disable TCP/UDP offload
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          netsh interface tcp set global autotuninglevel=disabled
+          netsh interface ip set global taskoffload=disabled
           netsh interface tcp set global rss=disabled
+
           netsh interface show interface
           netsh interface set interface name="Ethernet 3" admin=disabled
           netsh interface set interface name="Ethernet 3" admin=enabled
