@@ -62,7 +62,7 @@ type signer interface {
 }
 
 type syncer interface {
-	RegisterChForSynced(context.Context, chan struct{})
+	RegisterForSynced(context.Context) chan struct{}
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
@@ -424,8 +424,7 @@ func (b *Builder) loop(ctx context.Context) {
 }
 
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
-	syncedCh := make(chan struct{})
-	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	syncedCh := b.syncer.RegisterForSynced(ctx)
 	select {
 	case <-ctx.Done():
 		return ErrStopRequested
@@ -570,8 +569,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		syncedCh := make(chan struct{})
-		b.syncer.RegisterChForSynced(ctx, syncedCh)
+		syncedCh := b.syncer.RegisterForSynced(ctx)
 		select {
 		case <-atxReceived:
 			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
@@ -627,8 +625,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
 	// ensure we are synced before generating the ATX's view
-	syncedCh := make(chan struct{})
-	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	syncedCh := b.syncer.RegisterForSynced(ctx)
 	if err := b.waitOrStop(ctx, syncedCh); err != nil {
 		return nil, err
 	}
