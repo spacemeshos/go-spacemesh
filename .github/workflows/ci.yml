@@ -106,7 +106,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    timeout-minutes: 30
     strategy:
       fail-fast: true
       matrix:
@@ -162,6 +161,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
+        timeout-minutes: 25
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
