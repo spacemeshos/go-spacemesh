@@ -71,7 +71,7 @@ func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags 
 		args = append(args, "--gateway="+gw)
 	}
 	ctx.Log.Debugw("deploying poet pod", "args", args, "image", ctx.PoetImage)
-	labels := nodeLabels("poet")
+	labels := nodeLabels(name)
 	pod := corev1.Pod(name, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
