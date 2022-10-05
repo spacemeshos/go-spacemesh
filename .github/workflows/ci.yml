@@ -134,14 +134,14 @@ jobs:
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
-      - name: disable TCP/UDP offload
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          netsh interface tcp set global rss=disabled
-
-          netsh interface show interface
-          netsh interface set interface name="Ethernet 3" admin=disabled
-          netsh interface set interface name="Ethernet 3" admin=enabled
+      # TODO(mafa): these settings don't seem to improve network performance on windows - disabled for now
+      # - name: disable TCP/UDP offload
+      #   if: ${{ matrix.os == 'windows-latest' }}
+      #   run: |
+      #     netsh interface tcp set global rss=disabled
+      #     netsh interface show interface
+      #     netsh interface set interface name="Ethernet 3" admin=disabled
+      #     netsh interface set interface name="Ethernet 3" admin=enabled
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
