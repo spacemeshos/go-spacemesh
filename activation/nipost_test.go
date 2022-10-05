@@ -79,7 +79,9 @@ func (p *postSetupProviderMock) GenerateProof(challenge []byte) (*types.Post, *t
 	if p.setError {
 		return nil, nil, fmt.Errorf("error")
 	}
-	return &types.Post{}, &types.PostMetadata{}, nil
+	return &types.Post{}, &types.PostMetadata{
+		Challenge: challenge,
+	}, nil
 }
 
 func (p *postSetupProviderMock) LastError() error {
@@ -404,17 +406,17 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	})
 
 	// Act
-	// Store proof only from poet1
-	proof := types.PoetProofMessage{
+	// Store proofMsg only from poet1
+	proofMsg := types.PoetProofMessage{
 		PoetServiceID: []byte("poet1"),
 		PoetProof: types.PoetProof{
 			Members:   [][]byte{challenge[:]},
 			LeafCount: 1,
 		},
 	}
-	ref, err := proof.Ref()
+	ref, err := proofMsg.Ref()
 	assert.NoError(err)
-	poetDb.StoreProof(ref, &proof)
+	poetDb.StoreProof(ref, &proofMsg)
 	time.Sleep(time.Millisecond * 10)
 
 	// Signal that the time is out
@@ -424,6 +426,9 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	result := <-resultChan
 	assert.NoError(result.error)
 	assert.Equal(*result.NIPost.Challenge, challenge)
+	proof, err := poetDb.GetProof(result.NIPost.PostMetadata.Challenge)
+	assert.NoError(err)
+	assert.EqualValues(proof.LeafCount, 1)
 }
 
 func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
@@ -455,32 +460,35 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	// Act
 	// Store proofs from both poets
-	proof := types.PoetProofMessage{
+	proofMsg := types.PoetProofMessage{
 		PoetServiceID: []byte("poet0"),
 		PoetProof: types.PoetProof{
 			Members:   [][]byte{challenge[:]},
 			LeafCount: 4,
 		},
 	}
-	ref, err := proof.Ref()
+	ref, err := proofMsg.Ref()
 	assert.NoError(err)
-	poetDb.StoreProof(ref, &proof)
+	poetDb.StoreProof(ref, &proofMsg)
 
-	proof = types.PoetProofMessage{
+	proofMsg = types.PoetProofMessage{
 		PoetServiceID: []byte("poet1"),
 		PoetProof: types.PoetProof{
 			Members:   [][]byte{challenge[:]},
 			LeafCount: 1,
 		},
 	}
-	ref, err = proof.Ref()
+	ref, err = proofMsg.Ref()
 	assert.NoError(err)
-	poetDb.StoreProof(ref, &proof)
+	poetDb.StoreProof(ref, &proofMsg)
 
 	// Verify
 	result := <-resultChan
 	assert.NoError(result.error)
 	assert.Equal(*result.NIPost.Challenge, challenge)
+	proof, err := poetDb.GetProof(result.NIPost.PostMetadata.Challenge)
+	assert.NoError(err)
+	assert.EqualValues(proof.LeafCount, 4)
 }
 
 func TestValidator_Validate(t *testing.T) {

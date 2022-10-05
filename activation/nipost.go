@@ -311,7 +311,7 @@ func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Ha
 			}
 			nb.log.With().Info("Got a new PoET proof", log.Uint64("leafCount", proof.LeafCount), log.Binary("ref", ref))
 
-			if bestProof == nil || bestProof.leafCount > proof.LeafCount {
+			if bestProof == nil || bestProof.leafCount < proof.LeafCount {
 				bestProof = &poetProof{
 					ref:       ref,
 					leafCount: proof.LeafCount,

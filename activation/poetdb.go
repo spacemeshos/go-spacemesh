@@ -191,11 +191,11 @@ func (db *PoetDb) GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash3
 func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef[:5], err)
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
 	return &proofMessage.PoetProof, nil
 }
