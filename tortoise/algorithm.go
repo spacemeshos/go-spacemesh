@@ -189,6 +189,13 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	}
 }
 
+// OnAtx is expected to be called before ballots that use this atx.
+func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.onAtx(atx)
+}
+
 // OnBlock should be called every time new block is received.
 func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()

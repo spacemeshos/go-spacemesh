@@ -16,6 +16,7 @@ type (
 	}
 
 	epochInfo struct {
+		atxs map[types.ATXID]uint64
 		// weight is a sum of all atxs
 		weight uint64
 		// median height from atxs
