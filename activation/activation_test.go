@@ -230,7 +230,7 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	return ch
 }
 
-// TODO(mafa): replace this mock a generated one
+// TODO(mafa): replace this mock a generated one.
 type mockSyncer struct{}
 
 func (m *mockSyncer) RegisterForATXSynced() chan struct{} {
