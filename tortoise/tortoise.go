@@ -406,6 +406,7 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 				return err
 			}
 		}
+		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(t.layer(process.Sub(1)).verifying.goodUncounted)
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
 		}
@@ -514,16 +515,11 @@ func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
 		return success
 	}
 	if t.verifying.markGoodCut(logger, t.ballots[target]) {
-		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-		// that accumulated weight has a weight of the layer that is going to be verified.
-		t.verifying.resetWeights()
-		for lid := target; !lid.After(t.full.counted); lid = lid.Add(1) {
+		t.verifying.resetWeights(target)
+		for lid := target.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			t.verifying.countVotes(logger, t.ballots[lid])
 		}
 		if t.verifying.verify(logger, target) {
-			for lid := t.full.counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-				t.verifying.countVotes(logger, t.ballots[lid])
-			}
 			t.switchModes(logger)
 		}
 	}
@@ -671,16 +667,9 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			log.Stringer("previous", previous),
 			log.Stringer("new", bid),
 		)
-		t.verifying.resetWeights()
 
-		// if local opinion within hdist was changed about the layer
-		// that was already verified we need to revert that
-		t.verified = minLayer(t.verified, lid)
-		for target := t.verified; !target.After(t.processed); target = target.Add(1) {
-			// TODO(dshulyak) this condition can be removed together with genesis ballot
-			if target.GetEpoch().IsGenesis() {
-				continue
-			}
+		t.verifying.resetWeights(lid)
+		for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
 			t.verifying.countVotes(t.logger, t.ballots[target])
 		}
 	}

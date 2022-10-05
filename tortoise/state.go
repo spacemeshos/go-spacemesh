@@ -11,7 +11,13 @@ type (
 	weight = util.Weight
 
 	verifyingInfo struct {
-		good, abstained weight
+		// goodUncounted is a weight that doesn't vote for this layer
+		//
+		// for example ballot created in layer 10 doesn't vote for layers
+		// 10 and above, therefore its weight needs to be added to goodUncounted
+		// for layers 10 and above
+		goodUncounted   weight
+		abstained       weight
 		referenceHeight uint64
 	}
 

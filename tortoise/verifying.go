@@ -21,11 +21,14 @@ type verifying struct {
 	totalGoodWeight util.Weight
 }
 
-func (v *verifying) resetWeights() {
-	v.totalGoodWeight = util.WeightFromUint64(0)
-	for lid := v.verified.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
+// reset all weight that can vote on a voted layer
+func (v *verifying) resetWeights(voted types.LayerID) {
+	vlayer := v.layer(voted)
+	vlayer.verifying.abstained = weight{}
+	v.totalGoodWeight = vlayer.verifying.goodUncounted.Copy()
+	for lid := voted.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
-		layer.verifying.good = weight{}
+		layer.verifying.goodUncounted = vlayer.verifying.goodUncounted.Copy()
 		layer.verifying.abstained = weight{}
 	}
 }
@@ -83,8 +86,10 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 		)
 		return
 	}
-	layer := v.layer(ballot.layer)
-	layer.verifying.good = layer.verifying.good.Add(ballot.weight)
+	for lid := ballot.layer; !lid.After(v.processed); lid = lid.Add(1) {
+		layer := v.layer(lid)
+		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(ballot.weight)
+	}
 	v.totalGoodWeight = v.totalGoodWeight.Add(ballot.weight)
 	i := uint32(0)
 	for current := ballot.votes.tail; current != nil; current = current.prev {
@@ -106,23 +111,10 @@ func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
 }
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
-	// totalGoodWeight      - weight from good ballots in layers [VERIFIED+1, LAST PROCESSED]
-	// goodWeight[lid]      - weight from good ballots in the layer that is going to be verified
-	// 					      expected to be VERIFIED + 1 (FIXME remove lid parameter)
-	// abstainedWeight[lid] - weight from good ballots in layers (VERIFIED+1, LAST PROCESSED]
-	//                        that abstained from voting for lid (VERIFIED + 1)
-	// TODO(dshulyak) need to know correct values for threshold fractions before implementing next part
-	// expectedWeight       - weight from (VERIFIED+1, LAST] layers,
-	//                        this is the same weight that is used as a base for global threshold
-	// uncountedWeight      - weight that was verifying tortoise didn't count
-	//                        expectedWeight - (totalGoodWeight - goodWeight[lid])
-	// margin               - this is pessimistic margin that is compared with global threshold
-	//                        totalGoodWeight - goodWeight[lid] - abstainedWeight[lid] - uncountedWeight
-
 	layer := v.layer(lid)
 	margin := util.WeightFromUint64(0).
 		Add(v.totalGoodWeight).
-		Sub(layer.verifying.good).
+		Sub(layer.verifying.goodUncounted).
 		Sub(layer.verifying.abstained)
 
 	threshold := v.globalThreshold(v.Config, lid)
@@ -138,7 +130,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		logger.With().Debug("doesn't cross global threshold")
 		return false
 	}
-	if verifyLayer(
+	return verifyLayer(
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
@@ -148,9 +140,5 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 			decision, _ := getLocalVote(v.state, v.Config, block)
 			return decision
 		},
-	) {
-		v.totalGoodWeight.Sub(layer.verifying.good)
-		return true
-	}
-	return false
+	)
 }
