@@ -140,8 +140,8 @@ jobs:
           netsh interface tcp set global autotuninglevel=disabled
           netsh interface tcp set global rss=disabled
           netsh interface show interface
-          netsh interface set interface name="Ethernet0" admin=disabled
-          netsh interface set interface name="Ethernet0" admin=enabled
+          netsh interface set interface name="Ethernet 3" admin=disabled
+          netsh interface set interface name="Ethernet 3" admin=enabled
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
