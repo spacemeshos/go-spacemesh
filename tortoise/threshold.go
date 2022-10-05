@@ -74,7 +74,12 @@ func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last typ
 }
 
 // computeGlobalTreshold computes global treshold based on the expected weight.
-func computeGlobalThreshold(config Config, localThreshold weight, epochs map[types.EpochID]*epochInfo, target, last types.LayerID) util.Weight {
+func computeGlobalThreshold(config Config, localThreshold weight, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) util.Weight {
+	window := last
+	if last.Difference(target) > config.WindowSize {
+		window = target.Add(config.WindowSize)
+	}
+	window = maxLayer(window, processed)
 	return computeExpectedWeight(epochs,
 		target,
 		last,

@@ -24,7 +24,6 @@ func TestComputeThreshold(t *testing.T) {
 		desc                      string
 		config                    Config
 		processed, last, verified types.LayerID
-		mode                      mode
 		epochs                    map[types.EpochID]*epochInfo
 
 		expectedGlobal util.Weight
@@ -47,9 +46,9 @@ func TestComputeThreshold(t *testing.T) {
 		{
 			desc: "VerifyingLimitIsUsed",
 			config: Config{
-				LocalThreshold:                  big.NewRat(1, 2),
-				GlobalThreshold:                 big.NewRat(1, 2),
-				VerifyingModeVerificationWindow: 2,
+				LocalThreshold:  big.NewRat(1, 2),
+				GlobalThreshold: big.NewRat(1, 2),
+				WindowSize:      2,
 			},
 			processed: genesis.Add(1),
 			last:      genesis.Add(4),
@@ -62,14 +61,13 @@ func TestComputeThreshold(t *testing.T) {
 		{
 			desc: "FullLimitIsUsed",
 			config: Config{
-				LocalThreshold:             big.NewRat(1, 2),
-				GlobalThreshold:            big.NewRat(1, 2),
-				FullModeVerificationWindow: 3,
+				LocalThreshold:  big.NewRat(1, 2),
+				GlobalThreshold: big.NewRat(1, 2),
+				WindowSize:      3,
 			},
 			processed: genesis.Add(1),
 			last:      genesis.Add(4),
 			verified:  genesis,
-			mode:      mode{}.toggleMode(),
 			epochs: map[types.EpochID]*epochInfo{
 				2: {weight: 10},
 			},
@@ -79,7 +77,7 @@ func TestComputeThreshold(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			global := computeGlobalThreshold(
-				tc.config, tc.mode, weight{}, tc.epochs,
+				tc.config, weight{}, tc.epochs,
 				tc.verified.Add(1), tc.last, tc.processed,
 			)
 			require.Equal(t, tc.expectedGlobal.String(), global.String())

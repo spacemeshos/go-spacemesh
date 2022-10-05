@@ -286,23 +286,6 @@ func createTurtleLayer(t *testing.T, lid types.LayerID, cdb *datastore.CachedDB,
 	return types.NewExistingLayer(lid, types.Hash32{}, blts, blks)
 }
 
-func TestLayerCutoff(t *testing.T) {
-	r := require.New(t)
-	alg := defaultAlgorithm(t, nil)
-
-	// cutoff should be zero if we haven't seen at least Hdist layers yet
-	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist - 1)
-	r.Equal(0, int(alg.trtl.layerCutoff().Uint32()))
-	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist)
-	r.Equal(0, int(alg.trtl.layerCutoff().Uint32()))
-
-	// otherwise, cutoff should be Hdist layers before Last
-	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist + 1)
-	r.Equal(1, int(alg.trtl.layerCutoff().Uint32()))
-	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist + 100)
-	r.Equal(100, int(alg.trtl.layerCutoff().Uint32()))
-}
-
 func TestAddToMesh(t *testing.T) {
 	logger := logtest.New(t)
 	cdb := newCachedDB(t, logger)
@@ -337,8 +320,7 @@ func TestAddToMesh(t *testing.T) {
 	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
 	require.NoError(t, addLayerToMesh(cdb, l3a))
-	require.NoError(t, alg.rerun(context.TODO()))
-	alg.updateFromRerun(context.TODO())
+	alg.TallyVotes(context.TODO(), l3a.Index())
 
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), cdb, alg.EncodeVotes, atxids, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(cdb, l4))
@@ -862,8 +844,8 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(blocks.Add(cdb1, block))
 		}
 
-		require.NoError(t, alg1.rerun(context.TODO()))
-		require.NoError(t, alg2.rerun(context.TODO()))
+		alg1.TallyVotes(context.TODO(), layerID)
+		alg2.TallyVotes(context.TODO(), layerID)
 
 		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
 		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
@@ -2181,8 +2163,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	partitionEnd := last
 	s1.Merge(s2)
 
-	require.NoError(t, tortoise1.rerun(ctx))
-	require.NoError(t, tortoise2.rerun(ctx))
+	tortoise1.TallyVotes(ctx, last)
+	tortoise2.TallyVotes(ctx, last)
 
 	// make enough progress to cross global threshold with new votes
 	for i := 0; i < int(types.GetLayersPerEpoch())*4; i++ {
@@ -2260,7 +2242,7 @@ func TestSwitchVerifyingByChangingGoodness(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
-	require.True(t, tortoise.trtl.mode.isVerifying(), "verifying mode")
+	require.True(t, !tortoise.trtl.isFull, "verifying mode")
 }
 
 func perfectVotingFirstBaseBallot(_ *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
@@ -2430,9 +2412,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last types.LayerID
 	for _, last = range sim.GenLayers(s, sim.WithSequence(int(types.GetLayersPerEpoch()))) {
-		tortoise.TallyVotes(ctx, last)
 	}
-	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
 
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
@@ -2440,7 +2420,6 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID().Bytes()))
 	}
 
-	require.NoError(t, tortoise.rerun(ctx))
 	tortoise.TallyVotes(ctx, s.Next())
 	require.Equal(t, tortoise.LatestComplete(), types.GetEffectiveGenesis())
 
@@ -2882,7 +2861,7 @@ func BenchmarkOnBallot(b *testing.B) {
 		bench(b)
 	})
 	b.Run("full", func(b *testing.B) {
-		tortoise.trtl.mode = tortoise.trtl.mode.toggleMode()
+		tortoise.trtl.isFull = true
 		bench(b)
 	})
 }

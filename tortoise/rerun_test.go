@@ -76,11 +76,6 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	expected := types.GetEffectiveGenesis().Add(good - 1)
-	require.Equal(t, expected, verified)
-
-	require.NoError(t, tortoise.rerun(ctx))
-	tortoise.TallyVotes(ctx, s.Next())
-	verified = tortoise.LatestComplete()
 	require.True(t, verified.Before(expected))
 }
 
@@ -104,7 +99,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	cfg.LayerSize = size
 	cfg.Hdist = 1
 	cfg.Zdist = 1
-	cfg.FullModeVerificationWindow = uint32(fullWindow)
+	cfg.WindowSize = uint32(fullWindow)
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(tb)), WithConfig(cfg))
 	var last, verified types.LayerID
@@ -128,12 +123,6 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 
 	blks, err := blocks.IDsInLayer(s.GetState(0).DB, misverified)
 	require.NoError(tb, err)
-	for _, blk := range blks {
-		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
-		require.NoError(tb, err)
-		require.False(tb, validity, "validity for block %s", blk)
-	}
-	require.NoError(tb, tortoise.rerun(ctx))
 
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
@@ -183,12 +172,14 @@ func benchmarkRerun(b *testing.B, size int, fullParam uint32, opts ...sim.NextOp
 	cfg.WindowSize = fullParam
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+	var last types.LayerID
 	for i := 0; i < size; i++ {
-		tortoise.TallyVotes(ctx, s.Next(opts...))
+		last = s.Next(opts...)
+		tortoise.TallyVotes(ctx, last)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tortoise.rerun(ctx)
+		tortoise.TallyVotes(ctx, last)
 	}
 }

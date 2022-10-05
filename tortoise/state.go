@@ -76,12 +76,7 @@ func newState() *state {
 }
 
 func (s *state) globalThreshold(cfg Config, target types.LayerID) weight {
-	window := s.last
-	if s.last.Difference(target) > cfg.WindowSize {
-		window = target.Add(cfg.WindowSize)
-	}
-	window = maxLayer(window, s.processed)
-	return computeGlobalThreshold(cfg, s.localThreshold, s.epochs, target, window)
+	return computeGlobalThreshold(cfg, s.localThreshold, s.epochs, target, s.processed, s.last)
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {
