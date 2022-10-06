@@ -518,14 +518,6 @@ func (b *Builder) loadChallenge() error {
 	return nil
 }
 
-func (b *Builder) discardChallenge() {
-	b.challenge = nil
-	b.pendingATX = nil
-	if err := kvstore.ClearNIPostChallenge(b.cdb); err != nil {
-		b.log.Error("failed to discard NIPost challenge: %w", err)
-	}
-}
-
 func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	if b.commitmentAtx != nil {
 		return b.commitmentAtx, nil
@@ -687,6 +679,14 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 func (b *Builder) currentEpoch() types.EpochID {
 	return b.layerClock.GetCurrentLayer().GetEpoch()
+}
+
+func (b *Builder) discardChallenge() {
+	b.challenge = nil
+	b.pendingATX = nil
+	if err := kvstore.ClearNIPostChallenge(b.cdb); err != nil {
+		b.log.Error("failed to discard NIPost challenge: %w", err)
+	}
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
