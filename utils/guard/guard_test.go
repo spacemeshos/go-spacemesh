@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/utils/guard"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/utils/guard"
 )
 
 func TestApply(t *testing.T) {
