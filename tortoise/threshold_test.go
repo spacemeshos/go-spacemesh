@@ -92,7 +92,7 @@ func TestComputeThreshold(t *testing.T) {
 	}
 }
 
-func TestReferenceHeight(t *testing.T) {
+func TestMaxBaseHeight(t *testing.T) {
 	for _, tc := range []struct {
 		desc     string
 		epoch    int
@@ -113,19 +113,13 @@ func TestReferenceHeight(t *testing.T) {
 			desc:     "two",
 			epoch:    2,
 			heights:  []int{10, 20},
-			expected: 15,
+			expected: 20,
 		},
 		{
 			desc:     "median odd",
 			epoch:    3,
 			heights:  []int{30, 10, 20},
-			expected: 20,
-		},
-		{
-			desc:     "median even",
-			epoch:    4,
-			heights:  []int{30, 20, 10, 40},
-			expected: 25,
+			expected: 30,
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -138,7 +132,7 @@ func TestReferenceHeight(t *testing.T) {
 				}}
 				atx.SetID(&types.ATXID{byte(i + 1)})
 				require.NoError(t, activation.SignAtx(signing.NewEdSigner(), atx))
-				vAtx, err := atx.Verify(0, uint64(height))
+				vAtx, err := atx.Verify(uint64(height), 10)
 				require.NoError(t, err)
 				require.NoError(t, atxs.Add(cdb, vAtx, time.Time{}))
 			}

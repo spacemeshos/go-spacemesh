@@ -10,8 +10,6 @@ type (
 
 	verifyingInfo struct {
 		good, abstained weight
-		// highest block height below reference height
-		referenceHeight uint64
 	}
 
 	layerInfo struct {
@@ -52,8 +50,8 @@ type (
 
 		// epochWeight average weight per layer of atx's that target keyed epoch
 		epochWeight map[types.EpochID]weight
-		// referenceHeight is a median height from all atxs that target keyed epoch
-		referenceHeight map[types.EpochID]uint64
+		// maxBaseTickHeight is max base tick height from atxs that target keyed epoch.
+		maxBaseTickHeight map[types.EpochID]uint64
 		// referenceWeight stores atx weight divided by the total number of eligibilities.
 		// it is computed together with refBallot weight. it is not equal to refBallot
 		// only if refBallot has more than 1 eligibility proof.
@@ -70,9 +68,9 @@ type (
 
 func newState() *state {
 	return &state{
-		epochWeight:     map[types.EpochID]util.Weight{},
-		referenceHeight: map[types.EpochID]uint64{},
-		referenceWeight: map[types.BallotID]util.Weight{},
+		epochWeight:       map[types.EpochID]util.Weight{},
+		maxBaseTickHeight: map[types.EpochID]uint64{},
+		referenceWeight:   map[types.BallotID]util.Weight{},
 
 		layers:     map[types.LayerID]*layerInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
@@ -99,28 +97,6 @@ func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	s.blockRefs[block.id] = block
-	s.updateRefHeight(layer, block)
-}
-
-func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
-	for lid = lid.Sub(1); lid.After(s.evicted); lid = lid.Sub(1) {
-		layer := s.layer(lid)
-		if len(layer.blocks) == 0 {
-			continue
-		}
-		return layer.verifying.referenceHeight
-	}
-	return 0
-}
-
-func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
-	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
-		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
-	}
-	if block.height <= s.referenceHeight[block.layer.GetEpoch()] &&
-		block.height > layer.verifying.referenceHeight {
-		layer.verifying.referenceHeight = block.height
-	}
 }
 
 type (

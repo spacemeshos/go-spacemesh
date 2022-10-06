@@ -56,7 +56,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 	var (
 		sum       = util.WeightFromUint64(0)
 		n         int
-		refheight = v.findRefHeightBelow(lid)
+		refheight = v.maxBaseTickHeight[lid.Sub(1).GetEpoch()]
 	)
 	for _, ballot := range ballots {
 		base, exist := v.ballotRefs[ballot.base.id]
@@ -69,6 +69,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []*bal
 			ballot.id,
 			log.Stringer("base id", ballot.base.id),
 			log.Uint32("base layer", ballot.base.layer.Value),
+			log.Uint64("max base height", refheight),
 			log.Bool("good base", ballot.conditions.baseGood),
 			log.Bool("bad beacon", ballot.conditions.badBeacon),
 			log.Bool("consistent", ballot.conditions.consistent),
@@ -133,6 +134,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	// margin               - this is pessimistic margin that is compared with global threshold
 	//                        totalGoodWeight - goodWeight[lid] - abstainedWeight[lid] - uncountedWeight
 
+	refheight := v.maxBaseTickHeight[lid.GetEpoch()]
 	layer := v.layer(lid)
 	margin := util.WeightFromUint64(0).
 		Add(v.totalGoodWeight).
@@ -155,7 +157,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
-			if block.height > layer.verifying.referenceHeight {
+			if block.height > refheight {
 				return neutral
 			}
 			decision, _ := getLocalVote(v.state, v.Config, block)

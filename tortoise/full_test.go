@@ -357,7 +357,7 @@ func TestFullCountVotes(t *testing.T) {
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
 				}
-				consensus.referenceHeight[lid.GetEpoch()] = localHeight
+				consensus.maxBaseTickHeight[lid.GetEpoch()] = localHeight
 				for _, block := range layerBlocks {
 					consensus.onBlock(lid, &block)
 				}

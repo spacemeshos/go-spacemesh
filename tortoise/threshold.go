@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -51,32 +50,20 @@ func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, err
 
 func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (util.Weight, uint64, error) {
 	var (
-		weight  uint64
-		heights []uint64
+		weight uint64
+		height uint64
 	)
 	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		weight += header.GetWeight()
-		heights = append(heights, header.TickHeight())
+		if header.BaseTickHeight > height {
+			height = header.BaseTickHeight
+		}
 		return true
 	}); err != nil {
 		return util.Weight{}, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
 	}
 	return util.WeightFromUint64(weight).
-		Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch()))), getMedian(heights), nil
-}
-
-func getMedian(heights []uint64) uint64 {
-	if len(heights) == 0 {
-		return 0
-	}
-	sort.Slice(heights, func(i, j int) bool {
-		return heights[i] < heights[j]
-	})
-	mid := len(heights) / 2
-	if len(heights)%2 == 0 {
-		return (heights[mid-1] + heights[mid]) / 2
-	}
-	return heights[mid]
+		Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch()))), height, nil
 }
 
 // computes weight for (from, to] layers.

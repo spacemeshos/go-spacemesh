@@ -157,7 +157,7 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.layers, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
 			delete(t.epochWeight, lid.GetEpoch())
-			delete(t.referenceHeight, lid.GetEpoch())
+			delete(t.maxBaseTickHeight, lid.GetEpoch())
 		}
 	}
 	for _, ballot := range t.layer(windowStart).ballots {
@@ -607,7 +607,7 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 			return err
 		}
 		t.epochWeight[epoch] = weight
-		t.referenceHeight[epoch] = height
+		t.maxBaseTickHeight[epoch] = height
 		logger.With().Info("computed height and weight for epoch",
 			epoch,
 			log.Stringer("weight", weight),
@@ -644,7 +644,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) {
 	if !lid.After(t.evicted) {
 		return
 	}
-	if _, exist := t.referenceHeight[lid.GetEpoch()]; !exist {
+	if _, exist := t.maxBaseTickHeight[lid.GetEpoch()]; !exist {
 		// TODO(dshulyak) reference height is computed when first layer in the epoch
 		// is sent to the onLayerTerminated. after that we will load blocks from that layer.
 		// this warning is expected if block was sent to onBlock before the first event
@@ -715,7 +715,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	if !ballot.LayerIndex.After(t.evicted) {
 		return nil
 	}
-	if _, exist := t.referenceHeight[ballot.LayerIndex.GetEpoch()]; !exist {
+	if _, exist := t.maxBaseTickHeight[ballot.LayerIndex.GetEpoch()]; !exist {
 		t.logger.With().Debug("ballot was submitted before computing reference height", ballot.ID(), ballot.LayerIndex)
 		return nil
 	}

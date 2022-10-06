@@ -2697,52 +2697,18 @@ func TestFutureHeight(t *testing.T) {
 		// verifies layer by counting all votes
 		require.Equal(t, last.Sub(1), verified)
 	})
-	t.Run("find refheight from the last non-empty layer", func(t *testing.T) {
-		cfg := defaultTestConfig()
-		cfg.Hdist = 10
-		cfg.LayerSize = 10
-		const (
-			median = 20
-			slow   = 10
-
-			smeshers = 7
-		)
-		s := sim.New(
-			sim.WithLayerSize(smeshers),
-		)
-		s.Setup(
-			sim.WithSetupMinerRange(smeshers, smeshers),
-			sim.WithSetupTicks(
-				median, median, median,
-				median,
-				slow, slow, slow,
-			))
-
-		tortoise := tortoiseFromSimState(
-			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
-		)
-		tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1)))
-		tortoise.HandleIncomingLayer(context.Background(),
-			s.Next(sim.WithEmptyHareOutput(), sim.WithNumBlocks(0)))
-		// 3 is handpicked so that threshold will be crossed if bug wasn't fixed
-		for i := 0; i < 3; i++ {
-			tortoise.HandleIncomingLayer(context.Background(), s.Next(sim.WithNumBlocks(1)))
-		}
-
-		require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
-	})
-	t.Run("median above slow smeshers", func(t *testing.T) {
+	t.Run("part is significantly slower", func(t *testing.T) {
 		s := sim.New(
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		const (
 			slow   = 10
-			normal = 20
+			normal = 40
 		)
 		s.Setup(
-			sim.WithSetupMinerRange(8, 8),
+			sim.WithSetupMinerRange(7, 7),
 			sim.WithSetupTicks(
-				normal, normal, normal,
+				normal, normal,
 				normal, normal,
 				slow, slow, slow,
 			),
@@ -2751,8 +2717,12 @@ func TestFutureHeight(t *testing.T) {
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last, verified types.LayerID
-		for i := 0; i < int(cfg.Hdist); i++ {
-			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1), sim.WithVoteGenerator(sim.ConsistentVoting))
+		for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(sim.ConsistentVoting))
+			verified = tortoise.HandleIncomingLayer(context.Background(), last)
+		}
+		for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(normal), sim.WithVoteGenerator(sim.ConsistentVoting))
 			verified = tortoise.HandleIncomingLayer(context.Background(), last)
 		}
 		require.Equal(t, last.Sub(2), verified)

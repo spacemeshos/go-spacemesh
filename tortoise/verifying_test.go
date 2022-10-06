@@ -612,7 +612,7 @@ func TestVerifying_Verify(t *testing.T) {
 
 			state := newState()
 			state.epochWeight = epochWeight
-			state.referenceHeight = referenceHeight
+			state.maxBaseTickHeight = referenceHeight
 			state.verified = verified
 			state.processed = processed
 			state.last = processed
@@ -620,7 +620,6 @@ func TestVerifying_Verify(t *testing.T) {
 			for _, layer := range state.layers {
 				for _, block := range layer.blocks {
 					state.blockRefs[block.id] = block
-					state.updateRefHeight(layer, block)
 				}
 			}
 
