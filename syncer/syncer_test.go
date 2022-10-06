@@ -198,6 +198,18 @@ func TestSynchronize_AllGood(t *testing.T) {
 		ts.mLyrFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(okCh())
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		atxSyncedCh := ts.syncer.RegisterForATXSynced()
+		select {
+		case <-atxSyncedCh:
+			wg.Done()
+		case <-time.After(1 * time.Second):
+			require.Fail(t, "node should be atx synced")
+		}
+	}()
+
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	require.Equal(t, current.Sub(1), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, current.GetEpoch(), ts.syncer.getLastSyncedATXs())
@@ -205,6 +217,18 @@ func TestSynchronize_AllGood(t *testing.T) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
+
+	wg.Add(1)
+	go func() {
+		atxSyncedCh := ts.syncer.RegisterForATXSynced()
+		select {
+		case <-atxSyncedCh:
+			wg.Done()
+		case <-time.After(1 * time.Second):
+			require.Fail(t, "node should be atx synced")
+		}
+	}()
+	wg.Wait()
 }
 
 func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
@@ -399,15 +423,8 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	atxSyncedCh := ts.syncer.RegisterForATXSynced()
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
-
-	select {
-	case <-atxSyncedCh:
-	case <-time.After(1 * time.Second):
-		require.Fail(t, "node should be atx synced")
-	}
 
 	// cause the syncer to get out of synced and then wait again
 	lyr := types.GetEffectiveGenesis().Add(1)
