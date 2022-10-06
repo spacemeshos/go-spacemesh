@@ -232,7 +232,7 @@ func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingSe
 // Submit the challenge to all registered PoETs.
 func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *types.Hash32) []PoetRequest {
 	g, ctx := errgroup.WithContext(ctx)
-	poetRequestsChannel := make(chan PoetRequest)
+	poetRequestsChannel := make(chan PoetRequest, len(nb.poetProvers))
 	for _, poetProver := range nb.poetProvers {
 		poet := poetProver
 		g.Go(func() error {
@@ -244,17 +244,13 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *ty
 			return nil
 		})
 	}
-	poetRequests := make([]PoetRequest, 0)
-	done := make(chan struct{})
-	go func() {
-		for request := range poetRequestsChannel {
-			poetRequests = append(poetRequests, request)
-		}
-		close(done)
-	}()
 	g.Wait()
 	close(poetRequestsChannel)
-	<-done
+
+	poetRequests := make([]PoetRequest, 0, len(nb.poetProvers))
+	for request := range poetRequestsChannel {
+		poetRequests = append(poetRequests, request)
+	}
 	return poetRequests
 }
 

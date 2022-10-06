@@ -188,7 +188,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	)
 	for i := from; i < to; i++ {
 		i := i
-		finalFlags := make([]DeploymentFlag, len(flags))
+		finalFlags := make([]DeploymentFlag, len(flags), len(flags)+ctx.PoetSize)
 		copy(finalFlags, flags)
 		for idx := 0; idx < ctx.PoetSize; idx++ {
 			finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))

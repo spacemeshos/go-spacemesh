@@ -388,19 +388,14 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t))
 
 	g, ctx := errgroup.WithContext(context.TODO())
-	resultChan := make(chan struct {
-		*types.NIPost
-		error
-	})
-	deadlineChan := make(chan struct{}, 1)
+	resultChan := make(chan *types.NIPost)
+	deadlineChan := make(chan struct{})
 
 	challenge := types.BytesToHash([]byte("challenge"))
 	g.Go(func() error {
 		nipost, _, err := nb.BuildNIPost(ctx, &challenge, deadlineChan)
-		resultChan <- struct {
-			*types.NIPost
-			error
-		}{nipost, err}
+		assert.NoError(err)
+		resultChan <- nipost
 		return nil
 	})
 
@@ -423,9 +418,8 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 
 	// Verify
 	result := <-resultChan
-	assert.NoError(result.error)
-	assert.Equal(*result.NIPost.Challenge, challenge)
-	proof, err := poetDb.GetProof(result.NIPost.PostMetadata.Challenge)
+	assert.Equal(*result.Challenge, challenge)
+	proof, err := poetDb.GetProof(result.PostMetadata.Challenge)
 	assert.NoError(err)
 	assert.EqualValues(proof.LeafCount, 1)
 }
@@ -442,18 +436,13 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	challenge := types.BytesToHash([]byte("challenge0"))
 	g, ctx := errgroup.WithContext(context.TODO())
-	resultChan := make(chan struct {
-		*types.NIPost
-		error
-	})
-	deadlineChan := make(chan struct{}, 1)
+	resultChan := make(chan *types.NIPost)
+	deadlineChan := make(chan struct{})
 
 	g.Go(func() error {
 		nipost, _, err := nb.BuildNIPost(ctx, &challenge, deadlineChan)
-		resultChan <- struct {
-			*types.NIPost
-			error
-		}{nipost, err}
+		assert.NoError(err)
+		resultChan <- nipost
 		return nil
 	})
 
@@ -483,9 +472,8 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	// Verify
 	result := <-resultChan
-	assert.NoError(result.error)
-	assert.Equal(*result.NIPost.Challenge, challenge)
-	proof, err := poetDb.GetProof(result.NIPost.PostMetadata.Challenge)
+	assert.Equal(*result.Challenge, challenge)
+	proof, err := poetDb.GetProof(result.PostMetadata.Challenge)
 	assert.NoError(err)
 	assert.EqualValues(proof.LeafCount, 4)
 }

@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -246,7 +247,7 @@ func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
 	close(ch)
 }
 
-func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builder {
+func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler, opts ...BuilderOption) *Builder {
 	net.atxHdlr = hdlr
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -254,7 +255,7 @@ func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builde
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, hdlr, net, nipostBuilderMock, &postSetupProviderMock{},
-		layerClockMock, &mockSyncer{}, logtest.New(tb).WithName("atxBuilder"))
+		layerClockMock, &mockSyncer{}, logtest.New(tb).WithName("atxBuilder"), opts...)
 	b.initialPost = initialPost
 	return b
 }
@@ -947,4 +948,39 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 
 	require.NoError(t, b.generateProof())
 	require.Equal(t, 1, postSetupProvider.called)
+}
+
+func TestBuilder_UpdatePoets(t *testing.T) {
+	r := require.New(t)
+
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	b := newBuilder(t, cdb, atxHdlr, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
+		poet := mocks.NewMockPoetProvingServiceClient(gomock.NewController(t))
+		poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return(id, nil)
+		return poet
+	}))
+
+	r.Nil(b.receivePendingPoetClients())
+
+	err := b.UpdatePoETServers(context.TODO(), []string{"poet0", "poet1"})
+	r.NoError(err)
+
+	r.NotNil(b.receivePendingPoetClients())
+}
+
+func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
+	r := require.New(t)
+
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	b := newBuilder(t, cdb, atxHdlr, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
+		poet := mocks.NewMockPoetProvingServiceClient(gomock.NewController(t))
+		poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return(id, errors.New("ERROR"))
+		return poet
+	}))
+
+	err := b.UpdatePoETServers(context.TODO(), []string{"poet0", "poet1"})
+	r.ErrorIs(err, ErrPoetServiceUnstable)
+	r.Nil(b.receivePendingPoetClients())
 }
