@@ -33,27 +33,6 @@ func (v *verifying) resetWeights(voted types.LayerID) {
 	}
 }
 
-func (v *verifying) markGoodCut(logger log.Log, ballots []*ballotInfo) bool {
-	n := 0
-	for _, ballot := range ballots {
-		base, exist := v.ballotRefs[ballot.base.id]
-		if !exist {
-			continue
-		}
-		if base.canBeGood() && ballot.canBeGood() {
-			logger.With().Debug("marking ballots that can be good as good",
-				log.Stringer("ballot_layer", ballot.layer),
-				log.Stringer("ballot", ballot.id),
-				log.Stringer("base_ballot", ballot.base.id),
-			)
-			base.conditions.baseGood = true
-			ballot.conditions.baseGood = true
-			n++
-		}
-	}
-	return n > 0
-}
-
 func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 	base, exist := v.ballotRefs[ballot.base.id]
 	if !exist {
@@ -126,6 +105,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", threshold),
 	)
+
 	if sign(margin.Cmp(threshold)) == neutral {
 		logger.With().Debug("doesn't cross global threshold")
 		return false

@@ -132,10 +132,10 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		decisions = append(decisions, decision)
 	}
 	for i, decision := range decisions {
-		blocks[i].validity = decision
 		if blocks[i].validity != decision {
 			blocks[i].dirty = true
 		}
+		blocks[i].validity = decision
 	}
 
 	logger.With().Info("candidate layer is verified",

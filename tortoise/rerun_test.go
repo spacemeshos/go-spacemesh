@@ -129,34 +129,34 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	}
 }
 
-func BenchmarkRerun(b *testing.B) {
+func BenchmarkTallyVotes(b *testing.B) {
 	b.Run("Verifying/100", func(b *testing.B) {
-		benchmarkRerun(b, 100, 0)
+		benchmarkTallyVotes(b, 100, 100)
 	})
 	b.Run("Verifying/1000", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 0)
+		benchmarkTallyVotes(b, 1000, 1000)
 	})
 	b.Run("Verifying/10000", func(b *testing.B) {
-		benchmarkRerun(b, 10000, 0)
+		benchmarkTallyVotes(b, 10000, 10000)
 	})
 	b.Run("Full/100/Window/10", func(b *testing.B) {
-		benchmarkRerun(b, 100, 10, sim.WithEmptyHareOutput())
+		benchmarkTallyVotes(b, 100, 10, sim.WithEmptyHareOutput())
 	})
 	b.Run("Full/1000/Window/100", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 100, sim.WithEmptyHareOutput())
+		benchmarkTallyVotes(b, 1000, 100, sim.WithEmptyHareOutput())
 	})
 	b.Run("Full/1000/Window/1000", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 1000, sim.WithEmptyHareOutput())
+		benchmarkTallyVotes(b, 1000, 1000, sim.WithEmptyHareOutput())
 	})
 	b.Run("Full/2000/Window/2000", func(b *testing.B) {
-		benchmarkRerun(b, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+		benchmarkTallyVotes(b, 2000, 2000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
 	})
 	b.Run("Full/10000/Window/10000", func(b *testing.B) {
-		benchmarkRerun(b, 10000, 10000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+		benchmarkTallyVotes(b, 10000, 10000, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
 	})
 }
 
-func benchmarkRerun(b *testing.B, size int, fullParam uint32, opts ...sim.NextOpt) {
+func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.NextOpt) {
 	const layerSize = 30
 	s := sim.New(
 		sim.WithLayerSize(layerSize),
@@ -167,17 +167,24 @@ func benchmarkRerun(b *testing.B, size int, fullParam uint32, opts ...sim.NextOp
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = layerSize
-	cfg.WindowSize = fullParam
+	cfg.WindowSize = windowsize
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+
+	// generate info
+	start := time.Now()
 	var last types.LayerID
 	for i := 0; i < size; i++ {
 		last = s.Next(opts...)
-		tortoise.TallyVotes(ctx, last)
 	}
+	b.Log("generated state", time.Since(start))
+	// count ballots and form initial opinion
+	tortoise.TallyVotes(ctx, last)
+	b.Log("counted votes", time.Since(start))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		// benchmark how long it takes to recheck all layers within the sliding window
 		tortoise.TallyVotes(ctx, last)
 	}
 }

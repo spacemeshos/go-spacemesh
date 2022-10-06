@@ -64,6 +64,8 @@ func newTurtle(
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
 	genesis := genesisLayer.Index()
+
+	t.epochs[genesis.GetEpoch()] = &epochInfo{}
 	for _, ballot := range genesisLayer.Ballots() {
 		binfo := &ballotInfo{
 			id:     ballot.ID(),
@@ -464,55 +466,34 @@ func (t *turtle) verifyLayers(logger log.Log) error {
 	logger = logger.WithFields(
 		log.Stringer("last layer", t.last),
 	)
+	verified := t.verified
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		var success bool
 		if !t.isFull {
 			success = t.verifying.verify(logger, target)
 		}
 		if !success && (t.isFull || !withinDistance(t.Hdist, target, t.last)) {
-			success = t.countFullMode(logger, target)
+			if !t.isFull {
+				t.switchModes(logger)
+				for counted := t.full.counted.Add(1); !counted.After(t.processed); counted = counted.Add(1) {
+					for _, ballot := range t.ballots[counted] {
+						t.full.countBallot(logger, ballot)
+					}
+					t.full.countDelayed(logger, counted)
+					t.full.counted = counted
+				}
+			}
+			success = t.full.verify(logger, target)
 		}
 		if !success {
 			break
 		}
-		t.verified = target
+		verified = target
 	}
+	t.verified = verified
 	return persistContextualValidity(
 		logger, t.updater, t.evicted.Add(1), t.verified, t.layers,
 	)
-}
-
-func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
-	success := false
-	if !t.isFull {
-		t.switchModes(logger)
-		counted := maxLayer(t.full.counted.Add(1), target.Add(1))
-		for ; !counted.After(t.processed); counted = counted.Add(1) {
-			for _, ballot := range t.ballots[counted] {
-				t.full.countBallot(logger, ballot)
-			}
-			t.full.countDelayed(logger, counted)
-			t.full.counted = counted
-			if !success {
-				success = t.full.verify(logger, target)
-			}
-		}
-	} else {
-		success = t.full.verify(logger, target)
-	}
-	if !success {
-		return success
-	}
-	if t.verifying.markGoodCut(logger, t.ballots[target]) {
-		t.verifying.resetWeights(target)
-		for lid := target.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-			t.verifying.countVotes(logger, t.ballots[lid])
-		}
-		if t.verifying.verify(logger, target) {
-			t.switchModes(logger)
-		}
-	}
-	return success
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.
@@ -855,24 +836,12 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 		if !lvote.hareTerminated {
 			return false
 		}
-		supported := 0
 		for j := range lvote.blocks {
 			local, _ := getLocalVote(state, config, lvote.blocks[j])
-			if local == support {
-				supported++
-				consistent := false
-				for _, vote := range lvote.supported {
-					if vote.id == lvote.blocks[j].id {
-						consistent = true
-					}
-				}
-				if !consistent {
-					return false
-				}
+			vote := lvote.getVote(lvote.blocks[j].id)
+			if local != vote {
+				return false
 			}
-		}
-		if supported != len(lvote.supported) {
-			return false
 		}
 	}
 	return true
