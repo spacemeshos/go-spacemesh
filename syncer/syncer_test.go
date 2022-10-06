@@ -260,6 +260,18 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	}
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), failedEpoch).Return(errors.New("no ATXs. should fail sync"))
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		atxSyncedCh := ts.syncer.RegisterForATXSynced()
+		select {
+		case <-atxSyncedCh:
+			require.Fail(t, "node should not be atx synced")
+		case <-time.After(100 * time.Millisecond):
+			wg.Done()
+		}
+	}()
+
 	require.False(t, ts.syncer.synchronize(context.TODO()))
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, failedEpoch-1, ts.syncer.getLastSyncedATXs())
@@ -267,6 +279,18 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	require.False(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
+
+	wg.Add(1)
+	go func() {
+		atxSyncedCh := ts.syncer.RegisterForATXSynced()
+		select {
+		case <-atxSyncedCh:
+			require.Fail(t, "node should not be atx synced")
+		case <-time.After(100 * time.Millisecond):
+			wg.Done()
+		}
+	}()
+	wg.Wait()
 }
 
 func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
