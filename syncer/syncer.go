@@ -88,10 +88,6 @@ type Syncer struct {
 	lastLayerSynced   atomic.Value
 	lastATXsSynced    atomic.Value
 
-	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
-	awaitSyncedCh []chan struct{}
-	muSyncedCh    sync.Mutex // protects the slice above from concurrent access
-
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh []chan struct{}
 	muATXSyncedCh    sync.Mutex // protects the slice above from concurrent access
@@ -130,7 +126,6 @@ func NewSyncer(
 		patrol:           patrol,
 		syncTimer:        time.NewTicker(conf.SyncInterval),
 		validateTimer:    time.NewTicker(conf.SyncInterval * 3),
-		awaitSyncedCh:    make([]chan struct{}, 0),
 		awaitATXSyncedCh: make([]chan struct{}, 0),
 		shutdownCtx:      shutdownCtx,
 		cancelFunc:       cancel,
@@ -152,19 +147,6 @@ func (s *Syncer) Close() {
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
 	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
-}
-
-// RegisterForSynced returns a channel for notification when the node enters synced state.
-func (s *Syncer) RegisterForSynced(ctx context.Context) chan struct{} {
-	ch := make(chan struct{})
-	if s.IsSynced(ctx) {
-		close(ch)
-		return ch
-	}
-	s.muSyncedCh.Lock()
-	defer s.muSyncedCh.Unlock()
-	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
-	return ch
 }
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
@@ -277,13 +259,6 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 		if newState != synced {
 			return
 		}
-		// notify subscribes
-		s.muSyncedCh.Lock()
-		defer s.muSyncedCh.Unlock()
-		for _, ch := range s.awaitSyncedCh {
-			close(ch)
-		}
-		s.awaitSyncedCh = make([]chan struct{}, 0)
 	}
 }
 
