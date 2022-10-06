@@ -78,11 +78,10 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 		return
 	}
 	// get height of the max votable block
-	votable := v.epochs[ballot.layer.Sub(1).GetEpoch()]
-	if votable.maxBaseHeight > ballot.reference.height {
+	if refheight := v.layer(ballot.layer.Sub(1)).verifying.referenceHeight; refheight > ballot.reference.height {
 		logger.With().Debug("reference height is higher than the ballot height",
 			ballot.id,
-			log.Uint64("max base height", votable.maxBaseHeight),
+			log.Uint64("reference height", refheight),
 			log.Uint64("ballot height", ballot.reference.height),
 		)
 		return
@@ -113,7 +112,6 @@ func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	layer := v.layer(lid)
-	epoch := v.epochs[layer.lid.GetEpoch()]
 	margin := util.WeightFromUint64(0).
 		Add(v.totalGoodWeight).
 		Sub(layer.verifying.goodUncounted).
@@ -136,7 +134,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
-			if block.height > epoch.maxBaseHeight {
+			if block.height > layer.verifying.referenceHeight {
 				return neutral
 			}
 			decision, _ := getLocalVote(v.state, v.Config, block)

@@ -162,8 +162,8 @@ func TestVerifying_Verify(t *testing.T) {
 
 	const localHeight = 100
 	epochs := map[types.EpochID]*epochInfo{
-		2: {weight: 40, maxBaseHeight: localHeight},
-		3: {weight: 40, maxBaseHeight: localHeight},
+		2: {weight: 40, height: localHeight},
+		3: {weight: 40, height: localHeight},
 	}
 
 	config := Config{
@@ -618,6 +618,7 @@ func TestVerifying_Verify(t *testing.T) {
 			for _, layer := range state.layers {
 				for _, block := range layer.blocks {
 					state.blockRefs[block.id] = block
+					state.updateRefHeight(layer, block)
 				}
 			}
 

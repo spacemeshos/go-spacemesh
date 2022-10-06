@@ -401,6 +401,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			}
 		}
 		layer := t.layer(process)
+		for _, block := range layer.blocks {
+			if err := t.updateRefHeight(layer, block); err != nil {
+				return err
+			}
+		}
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(t.layer(process.Sub(1)).verifying.goodUncounted)
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
@@ -558,17 +563,22 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 
 // loadAtxs and compute reference height.
 func (t *turtle) loadAtxs(epoch types.EpochID) error {
+	var (
+		heights []uint64
+	)
 	if err := t.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		t.onAtx(header)
+		heights = append(heights, header.TickHeight())
 		return true
 	}); err != nil {
 		return fmt.Errorf("computing epoch data for %d: %w", epoch, err)
 	}
 	einfo := t.epochs[epoch]
+	einfo.height = getMedian(heights)
 	t.logger.With().Info("computed height and weight for epoch",
 		epoch,
 		log.Uint64("weight", einfo.weight),
-		log.Uint64("height", einfo.maxBaseHeight),
+		log.Uint64("height", einfo.height),
 	)
 	return nil
 }
@@ -604,6 +614,12 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 		margin: util.WeightFromUint64(0),
 	}
 	t.addBlock(binfo)
+	layer := t.layer(binfo.layer)
+	if !binfo.layer.Before(t.processed) {
+		if err := t.updateRefHeight(layer, binfo); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -657,9 +673,6 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 	if _, exist := epoch.atxs[atx.ID]; !exist {
 		epoch.atxs[atx.ID] = atx.GetWeight()
 		epoch.weight += atx.GetWeight()
-		if atx.BaseTickHeight > epoch.maxBaseHeight {
-			epoch.maxBaseHeight = atx.BaseTickHeight
-		}
 		if atx.TargetEpoch() == t.last.GetEpoch() {
 			t.localThreshold = util.WeightFromUint64(epoch.weight).
 				Fraction(t.LocalThreshold).
