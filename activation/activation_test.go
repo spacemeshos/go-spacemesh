@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/store"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 // ========== Vars / Consts ==========
@@ -234,6 +234,7 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	return ch
 }
 
+// TODO(mafa): replace this mock a generated one.
 type mockSyncer struct{}
 
 func (m *mockSyncer) RegisterForATXSynced() chan struct{} {
@@ -543,7 +544,7 @@ func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
 	atx, err := builder.getCommitmentAtx(context.TODO())
 	require.NoError(t, err)
 
-	stored, err := store.GetCommitmentATX(cdb)
+	stored, err := kvstore.GetCommitmentATX(cdb)
 	require.NoError(t, err)
 
 	require.Equal(t, *atx, stored)
@@ -556,7 +557,7 @@ func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
 
 	newATX := addPrevAtx(t, cdb, 1) // add a newer ATX
 
-	err := store.AddCommitmentATX(cdb, goldenATXID)
+	err := kvstore.AddCommitmentATX(cdb, goldenATXID)
 	require.NoError(t, err)
 
 	atx, err := builder.getCommitmentAtx(context.TODO())
@@ -961,7 +962,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
-	got, err := store.GetNIPostChallenge(cdb)
+	got, err := kvstore.GetNIPostChallenge(cdb)
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -973,7 +974,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
-	got, err = store.GetNIPostChallenge(cdb)
+	got, err = kvstore.GetNIPostChallenge(cdb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }

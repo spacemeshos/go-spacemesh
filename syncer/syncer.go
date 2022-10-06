@@ -88,13 +88,13 @@ type Syncer struct {
 	lastLayerSynced   atomic.Value
 	lastATXsSynced    atomic.Value
 
-	mu sync.Mutex
-
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
+	muSyncedCh    sync.Mutex // protects the slice above from concurrent access
 
-	// awaitATXSyncedCh is the list of subscribers' channels to notify when the node is synced with ATXs
+	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh []chan struct{}
+	muATXSyncedCh    sync.Mutex // protects the slice above from concurrent access
 
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
@@ -161,21 +161,21 @@ func (s *Syncer) RegisterForSynced(ctx context.Context) chan struct{} {
 		close(ch)
 		return ch
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.muSyncedCh.Lock()
+	defer s.muSyncedCh.Unlock()
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
 	return ch
 }
 
-// RegisterForATXSynced returns a channel for notification when the node has synced all ATXs.
+// RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
 func (s *Syncer) RegisterForATXSynced() chan struct{} {
 	ch := make(chan struct{})
 	if s.ListenToATXGossip() {
 		close(ch)
 		return ch
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.muATXSyncedCh.Lock()
+	defer s.muATXSyncedCh.Unlock()
 	s.awaitATXSyncedCh = append(s.awaitATXSyncedCh, ch)
 	return ch
 }
@@ -248,8 +248,8 @@ func (s *Syncer) isClosed() bool {
 func (s *Syncer) setATXSynced() {
 	s.atxSyncState.Store(synced)
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.muATXSyncedCh.Lock()
+	defer s.muATXSyncedCh.Unlock()
 	for _, ch := range s.awaitATXSyncedCh {
 		close(ch)
 	}
@@ -278,8 +278,8 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 			return
 		}
 		// notify subscribes
-		s.mu.Lock()
-		defer s.mu.Unlock()
+		s.muSyncedCh.Lock()
+		defer s.muSyncedCh.Unlock()
 		for _, ch := range s.awaitSyncedCh {
 			close(ch)
 		}

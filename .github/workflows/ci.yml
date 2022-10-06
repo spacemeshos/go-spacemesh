@@ -106,7 +106,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    timeout-minutes: 30
     strategy:
       fail-fast: true
       matrix:
@@ -134,12 +133,14 @@ jobs:
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
-      - name: disable TCP/UDP offload
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          netsh interface tcp set global autotuninglevel=disabled
-          netsh interface tcp set global rss=disabled
-          netsh interface tcp set global chimney=disabled
+      # TODO(mafa): these settings don't seem to improve network performance on windows - disabled for now
+      # - name: disable TCP/UDP offload
+      #   if: ${{ matrix.os == 'windows-latest' }}
+      #   run: |
+      #     netsh interface tcp set global rss=disabled
+      #     netsh interface show interface
+      #     netsh interface set interface name="Ethernet 3" admin=disabled
+      #     netsh interface set interface name="Ethernet 3" admin=enabled
       - name: checkout
         uses: actions/checkout@v3
       - name: set up go
@@ -160,6 +161,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
+        timeout-minutes: 25
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml

@@ -149,7 +149,7 @@ func TestStartAndShutdown(t *testing.T) {
 	select {
 	case <-atxSyncedCh:
 	case <-time.After(1 * time.Second):
-		require.Fail(t, "node should be synced")
+		require.Fail(t, "node should be atx synced")
 	}
 
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
@@ -283,7 +283,7 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	atxSyncedCh := ts.syncer.RegisterForATXSynced()
 	select {
 	case <-atxSyncedCh:
-		require.Fail(t, "node should not be synced")
+		require.Fail(t, "node should not be atx synced")
 	case <-time.After(100 * time.Millisecond):
 	}
 }
@@ -443,20 +443,20 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	syncedCh := ts.syncer.RegisterForSynced(context.TODO())
-	atxSyncCh := ts.syncer.RegisterForATXSynced()
+	atxSyncedCh := ts.syncer.RegisterForATXSynced()
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
 
 	select {
 	case <-syncedCh:
 	case <-time.After(1 * time.Second):
-		require.Fail(t, "timed out waiting for sync")
+		require.Fail(t, "node should be synced")
 	}
 
 	select {
-	case <-atxSyncCh:
+	case <-atxSyncedCh:
 	case <-time.After(1 * time.Second):
-		require.Fail(t, "timed out waiting for sync")
+		require.Fail(t, "node should be atx synced")
 	}
 
 	// cause the syncer to get out of synced and then wait again
@@ -526,13 +526,13 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	select {
 	case <-syncedCh:
 	case <-time.After(1 * time.Second):
-		require.Fail(t, "timed out waiting for sync")
+		require.Fail(t, "node should be synced")
 	}
 
 	select {
 	case <-atxSyncedCh:
 	case <-time.After(1 * time.Second):
-		require.Fail(t, "timed out waiting for sync")
+		require.Fail(t, "node should be atx synced")
 	}
 
 	require.True(t, ts.syncer.dataSynced())

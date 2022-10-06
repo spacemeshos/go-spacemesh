@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/store"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/nipost.go -source=./nipost.go PoetProvingServiceClient
@@ -28,7 +28,7 @@ type PoetProvingServiceClient interface {
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
-	state, err := store.GetNIPostBuilderState(nb.db)
+	state, err := kvstore.GetNIPostBuilderState(nb.db)
 	if err != nil {
 		nb.log.With().Warning("cannot load nipost state", log.Err(err))
 		return
@@ -41,7 +41,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 }
 
 func (nb *NIPostBuilder) persist() {
-	if err := store.AddNIPostBuilderState(nb.db, nb.state); err != nil {
+	if err := kvstore.AddNIPostBuilderState(nb.db, nb.state); err != nil {
 		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 	}
 }

@@ -22,7 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/store"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 var (
@@ -473,7 +473,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
-	if err := store.AddNIPostChallenge(b.cdb, b.challenge); err != nil {
+	if err := kvstore.AddNIPostChallenge(b.cdb, b.challenge); err != nil {
 		return fmt.Errorf("failed to store nipost challenge: %w", err)
 	}
 	return nil
@@ -510,7 +510,7 @@ func (b *Builder) Coinbase() types.Address {
 }
 
 func (b *Builder) loadChallenge() error {
-	nipost, err := store.GetNIPostChallenge(b.cdb)
+	nipost, err := kvstore.GetNIPostChallenge(b.cdb)
 	if err != nil {
 		return err
 	}
@@ -521,7 +521,7 @@ func (b *Builder) loadChallenge() error {
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
 	b.pendingATX = nil
-	if err := store.ClearNIPostChallenge(b.cdb); err != nil {
+	if err := kvstore.ClearNIPostChallenge(b.cdb); err != nil {
 		b.log.Error("failed to discard NIPost challenge: %w", err)
 	}
 }
@@ -537,14 +537,14 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	case <-b.syncer.RegisterForATXSynced():
 	}
 
-	id, err := store.GetCommitmentATX(b.cdb)
+	id, err := kvstore.GetCommitmentATX(b.cdb)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		id, err := b.findCommitmentAtx()
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine commitment ATX: %w", err)
 		}
-		if err := store.AddCommitmentATX(b.cdb, id); err != nil {
+		if err := kvstore.AddCommitmentATX(b.cdb, id); err != nil {
 			return nil, fmt.Errorf("failed to store commitment ATX: %w", err)
 		}
 		b.commitmentAtx = &id
@@ -606,7 +606,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		select {
 		case <-atxReceived:
 			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
-		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all blocks before concluding that the ATX was lost
+		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all ATXs before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 		case <-ctx.Done():
