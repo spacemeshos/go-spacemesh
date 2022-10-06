@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 	"github.com/spacemeshos/go-spacemesh/utils/guard"
 )
 
@@ -62,7 +62,7 @@ type signer interface {
 }
 
 type syncer interface {
-	RegisterChForSynced(context.Context, chan struct{})
+	RegisterForATXSynced() chan struct{}
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
@@ -435,12 +435,10 @@ func (b *Builder) loop(ctx context.Context) {
 }
 
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
-	syncedCh := make(chan struct{})
-	b.syncer.RegisterChForSynced(ctx, syncedCh)
 	select {
 	case <-ctx.Done():
 		return ErrStopRequested
-	case <-syncedCh:
+	case <-b.syncer.RegisterForATXSynced():
 	}
 	challenge := &types.NIPostChallenge{}
 	atxID, pubLayerID, err := b.GetPositioningAtxInfo()
@@ -456,8 +454,8 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
-	if err := b.storeChallenge(b.challenge); err != nil {
-		return fmt.Errorf("failed to store nipost challenge: %v", err)
+	if err := kvstore.AddNIPostChallenge(b.cdb, b.challenge); err != nil {
+		return fmt.Errorf("failed to store nipost challenge: %w", err)
 	}
 	return nil
 }
@@ -509,37 +507,12 @@ func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
 
-func getNIPostKey() []byte {
-	return []byte("NIPost")
-}
-
-func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
-	bts, err := codec.Encode(ch)
-	if err != nil {
-		return fmt.Errorf("serialize NIPost challenge: %w", err)
-	}
-
-	if err := niposts.Add(b.cdb, getNIPostKey(), bts); err != nil {
-		return fmt.Errorf("put NIPost challenge to database: %w", err)
-	}
-
-	return nil
-}
-
 func (b *Builder) loadChallenge() error {
-	bts, err := niposts.Get(b.cdb, getNIPostKey())
+	nipost, err := kvstore.GetNIPostChallenge(b.cdb)
 	if err != nil {
-		return fmt.Errorf("get NIPost challenge from store: %w", err)
+		return err
 	}
-
-	if len(bts) > 0 {
-		var tp types.NIPostChallenge
-		if err = codec.Decode(bts, &tp); err != nil {
-			return fmt.Errorf("parse NIPost challenge: %w", err)
-		}
-
-		b.challenge = &tp
-	}
+	b.challenge = nipost
 	return nil
 }
 
@@ -588,12 +561,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		syncedCh := make(chan struct{})
-		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
 			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
-		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
+		case <-b.syncer.RegisterForATXSynced(): // ensure we've seen all ATXs before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 		case <-ctx.Done():
@@ -648,10 +619,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
 	// ensure we are synced before generating the ATX's view
-	syncedCh := make(chan struct{})
-	b.syncer.RegisterChForSynced(ctx, syncedCh)
-	if err := b.waitOrStop(ctx, syncedCh); err != nil {
-		return nil, err
+	select {
+	case <-ctx.Done():
+		return nil, ErrStopRequested
+	case <-b.syncer.RegisterForATXSynced():
 	}
 
 	var initialPost *types.Post
@@ -676,7 +647,7 @@ func (b *Builder) currentEpoch() types.EpochID {
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
 	b.pendingATX = nil
-	if err := niposts.Add(b.cdb, getNIPostKey(), []byte{}); err != nil {
+	if err := kvstore.ClearNIPostChallenge(b.cdb); err != nil {
 		b.log.Error("failed to discard NIPost challenge: %v", err)
 	}
 }

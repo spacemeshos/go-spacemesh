@@ -130,8 +130,8 @@ func TestStartAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	ts := newTestSyncer(ctx, t, time.Millisecond*5)
 
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
+	syncedCh := ts.syncer.RegisterForSynced(context.TODO())
+	atxSynchedCh := ts.syncer.RegisterForATXSynced()
 
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
 	require.False(t, ts.syncer.ListenToATXGossip())
@@ -139,7 +139,19 @@ func TestStartAndShutdown(t *testing.T) {
 
 	// the node is synced when current layer is <= 1
 	ts.syncer.Start(context.TODO())
-	<-syncedCh
+
+	select {
+	case <-syncedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be synced")
+	}
+
+	select {
+	case <-atxSynchedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be atx synced")
+	}
+
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
@@ -227,6 +239,20 @@ func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
+
+	syncedCh := ts.syncer.RegisterForSynced(context.TODO())
+	select {
+	case <-syncedCh:
+		require.Fail(t, "node should not be synced")
+	case <-time.After(1 * time.Millisecond):
+	}
+
+	atxSyncedCh := ts.syncer.RegisterForATXSynced()
+	select {
+	case <-atxSyncedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be atx synced")
+	}
 }
 
 func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
@@ -246,6 +272,20 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	require.False(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
+
+	syncedCh := ts.syncer.RegisterForSynced(context.TODO())
+	select {
+	case <-syncedCh:
+		require.Fail(t, "node should not be synced")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	atxSyncedCh := ts.syncer.RegisterForATXSynced()
+	select {
+	case <-atxSyncedCh:
+		require.Fail(t, "node should not be atx synced")
+	case <-time.After(100 * time.Millisecond):
+	}
 }
 
 func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
@@ -401,12 +441,23 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 func TestFromSyncedToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.mLyrFetcher.EXPECT().GetEpochATXs(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
+	syncedCh := ts.syncer.RegisterForSynced(context.TODO())
+	atxSyncedCh := ts.syncer.RegisterForATXSynced()
 	require.True(t, ts.syncer.synchronize(context.TODO()))
-	<-syncedCh
 	require.True(t, ts.syncer.IsSynced(context.TODO()))
+
+	select {
+	case <-syncedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be synced")
+	}
+
+	select {
+	case <-atxSyncedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be atx synced")
+	}
 
 	// cause the syncer to get out of synced and then wait again
 	lyr := types.GetEffectiveGenesis().Add(1)
@@ -460,8 +511,8 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 	require.False(t, ts.syncer.IsSynced(context.TODO()))
 
 	// done one full layer of gossip sync, now it is synced
-	syncedCh := make(chan struct{})
-	ts.syncer.RegisterChForSynced(context.TODO(), syncedCh)
+	syncedCh := ts.syncer.RegisterForSynced(context.TODO())
+	atxSyncedCh := ts.syncer.RegisterForATXSynced()
 	lyr = lyr.Add(1)
 	current = current.Add(1)
 	ts.mTicker.advanceToLayer(current)
@@ -471,7 +522,19 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 			return okCh()
 		})
 	require.True(t, ts.syncer.synchronize(context.TODO()))
-	<-syncedCh
+
+	select {
+	case <-syncedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be synced")
+	}
+
+	select {
+	case <-atxSyncedCh:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "node should be atx synced")
+	}
+
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
@@ -569,4 +632,46 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 	// but last synced is updated
 	require.Equal(t, lyr, ts.syncer.getLastSyncedLayer())
+}
+
+func TestSyncer_setSyncedTwice_NoError(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+
+	sync := ts.syncer.RegisterForSynced(context.TODO())
+	select {
+	case <-sync:
+		require.Fail(t, "should not have reached synced state yet")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	ts.syncer.setSyncState(context.TODO(), synced)
+
+	select {
+	case <-sync:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "should have reached synced state")
+	}
+
+	require.NotPanics(t, func() { ts.syncer.setSyncState(context.TODO(), synced) })
+}
+
+func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+
+	atxSync := ts.syncer.RegisterForATXSynced()
+	select {
+	case <-atxSync:
+		require.Fail(t, "should not have reached synced state yet")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	ts.syncer.setATXSynced()
+
+	select {
+	case <-atxSync:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "should have reached synced state")
+	}
+
+	require.NotPanics(t, func() { ts.syncer.setATXSynced() })
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 // ========== Vars / Consts ==========
@@ -241,10 +241,13 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	return ch
 }
 
+// TODO(mafa): replace this mock a generated one.
 type mockSyncer struct{}
 
-func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
+func (m *mockSyncer) RegisterForATXSynced() chan struct{} {
+	ch := make(chan struct{})
 	close(ch)
+	return ch
 }
 
 func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler, opts ...BuilderOption) *Builder {
@@ -828,8 +831,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	// test load in correct epoch
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
-	err = b.loadChallenge()
-	assert.NoError(t, err)
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	challenge = newChallenge(2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10))
@@ -840,7 +841,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
-	got, err := niposts.Get(cdb, getNIPostKey())
+	got, err := kvstore.GetNIPostChallenge(cdb)
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -852,8 +853,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
-	got, err = niposts.Get(cdb, getNIPostKey())
-	require.NoError(t, err)
+	got, err = kvstore.GetNIPostChallenge(cdb)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }
 
