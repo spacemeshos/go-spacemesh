@@ -30,7 +30,6 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	cfg.MeshVerified = verified
 	cfg.MeshProcessed = last
 	tortoise2 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	initctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -43,7 +42,6 @@ func TestRecoverState(t *testing.T) {
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
 
-	cfg.MeshVerified = last.Sub(1)
 	cfg.MeshProcessed = last
 	tortoise3 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	initctx, cancel = context.WithTimeout(ctx, time.Second)

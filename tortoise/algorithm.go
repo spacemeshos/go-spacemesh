@@ -28,7 +28,6 @@ type Config struct {
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
 	MeshProcessed            types.LayerID
-	MeshVerified             types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -60,12 +59,8 @@ type Tortoise struct {
 		err error
 	}
 
-	mu sync.Mutex
-
-	// update will be set to non-nil after rerun completes, and must be set to nil once
-	// used to replace trtl.
-	update *turtle
-	trtl   *turtle
+	mu   sync.Mutex
+	trtl *turtle
 }
 
 // Opt for configuring tortoise.
@@ -125,14 +120,17 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 	)
 	t.trtl.init(t.ctx, types.GenesisLayer())
 	if needsRecovery {
-		t.trtl.verified = t.cfg.MeshVerified
-
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last_layer", t.cfg.MeshProcessed),
-			log.Stringer("historically_verified", t.cfg.MeshVerified),
+			log.Stringer("last layer", t.cfg.MeshProcessed),
 		)
 		t.eg.Go(func() error {
-			t.ready <- t.trtl.onLayer(ctx, t.trtl.last)
+			for lid := types.GetEffectiveGenesis().Add(1); lid.After(t.cfg.MeshProcessed); lid = lid.Add(1) {
+				err := t.trtl.onLayer(ctx, lid)
+				if err != nil {
+					t.ready <- err
+					return err
+				}
+			}
 			close(t.ready)
 			return nil
 		})
