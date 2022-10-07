@@ -60,9 +60,6 @@ type NIPostBuilder struct {
 	log               log.Log
 }
 
-// A compile time check to ensure that `NIPostBuilder` fully implements the `nipostBuilder` interface.
-var _ nipostBuilder = (*NIPostBuilder)(nil)
-
 type poetDbAPI interface {
 	SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef
 	GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash32]bool, error)
@@ -116,7 +113,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	if nb.state.PoetRequests == nil {
 		poetRequests := nb.submitPoetChallenges(ctx, challenge)
 		if len(poetRequests) == 0 {
-			return nil, 0, fmt.Errorf("%w: failed to submit challenge to any PoET", ErrPoetServiceUnstable)
+			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET"}
 		}
 		nipost.Challenge = challenge
 		nb.state.Challenge = *challenge
@@ -128,10 +125,10 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	if nb.state.PoetProofRef == nil {
 		poetProofRef, err := nb.awaitPoetProof(ctx, challenge, deadline)
 		if err != nil {
-			return nil, 0, fmt.Errorf("%v: %w", ErrPoetServiceUnstable, err)
+			return nil, 0, &PoetSvcUnstableError{msg: "failed to await for a PoET proof", source: err}
 		}
 		if poetProofRef == nil {
-			return nil, 0, fmt.Errorf("%w: haven't received any PoET proof", ErrPoetServiceUnstable)
+			return nil, 0, &PoetSvcUnstableError{msg: "haven't received any PoET proof"}
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -170,7 +167,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingServiceClient, challenge *types.Hash32) (*types.PoetRequest, error) {
 	poetServiceID, err := poet.PoetServiceID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to get PoET service ID: %v", ErrPoetServiceUnstable, err)
+		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
 
 	logger.With().Debug("submitting challenge to poet proving service",
@@ -183,7 +180,7 @@ func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingSe
 			log.String("poet_id", util.Bytes2Hex(poetServiceID)),
 			log.Stringer("challenge", *challenge),
 			log.Err(err))
-		return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
+		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
 
 	logger.With().Info("challenge submitted to poet proving service",

@@ -121,9 +121,6 @@ type NIPostBuilderMock struct {
 	SleepTime       int
 }
 
-// A compile time check to ensure that `NIPostBuilderMock` fully implements the `nipostBuilder` interface.
-var _ nipostBuilder = (*NIPostBuilderMock)(nil)
-
 func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
 func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, time.Duration, error) {
@@ -134,9 +131,6 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Has
 }
 
 type NIPostErrBuilderMock struct{}
-
-// A compile time check to ensure that `NIPostErrBuilderMock` fully implements the `nipostBuilder` interface.
-var _ nipostBuilder = (*NIPostErrBuilderMock)(nil)
 
 func (np *NIPostErrBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 

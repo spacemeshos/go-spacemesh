@@ -24,15 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/utils/guard"
 )
 
-var (
-	// ErrStopRequested is returned when builder is stopped.
-	ErrStopRequested = errors.New("builder: stop requested")
-	// ErrATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
-	ErrATXChallengeExpired = errors.New("builder: atx expired")
-	// ErrPoetServiceUnstable is returned when poet quality of service is low.
-	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
-)
-
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
 	PhaseShift  time.Duration `mapstructure:"phase-shift"`
@@ -471,7 +462,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		// Maybe it should be provided during update.
 		sid, err := client.PoetServiceID(ctx)
 		if err != nil {
-			return fmt.Errorf("%w: failed to query Poet '%s' for ID (%v)", ErrPoetServiceUnstable, endpoint, err)
+			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
 		}
 		b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	}

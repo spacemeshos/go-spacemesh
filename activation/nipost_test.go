@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
@@ -131,9 +130,6 @@ func (p *poetDbMock) didUnsubscribe(poetID []byte) bool {
 	_, ok := p.unsubscribed[hash.Sum(poetID)]
 	return ok
 }
-
-// A compile time check to ensure that poetDbMock fully implements poetDbAPI.
-var _ poetDbAPI = (*poetDbMock)(nil)
 
 func (p *poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
 	p.subscribed[hash.Sum(poetID)] = struct{}{}
@@ -387,17 +383,16 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	poets = append(poets, createMockPoetService(t, []byte("poet1")))
 	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t))
 
-	g, ctx := errgroup.WithContext(context.TODO())
 	resultChan := make(chan *types.NIPost)
 	deadlineChan := make(chan struct{})
 
 	challenge := types.BytesToHash([]byte("challenge"))
-	g.Go(func() error {
-		nipost, _, err := nb.BuildNIPost(ctx, &challenge, deadlineChan)
+	go func() error {
+		nipost, _, err := nb.BuildNIPost(context.TODO(), &challenge, deadlineChan)
 		assert.NoError(err)
 		resultChan <- nipost
 		return nil
-	})
+	}()
 
 	// Act
 	// Store proofMsg only from poet1
@@ -435,16 +430,15 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	nb := NewNIPostBuilder(minerID, &postSetupProviderMock{}, poets, poetDb, sql.InMemory(), logtest.New(t))
 
 	challenge := types.BytesToHash([]byte("challenge0"))
-	g, ctx := errgroup.WithContext(context.TODO())
 	resultChan := make(chan *types.NIPost)
 	deadlineChan := make(chan struct{})
 
-	g.Go(func() error {
-		nipost, _, err := nb.BuildNIPost(ctx, &challenge, deadlineChan)
+	go func() error {
+		nipost, _, err := nb.BuildNIPost(context.TODO(), &challenge, deadlineChan)
 		assert.NoError(err)
 		resultChan <- nipost
 		return nil
-	})
+	}()
 
 	// Act
 	// Store proofs from both poets
