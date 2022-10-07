@@ -2112,14 +2112,14 @@ func TestComputeLocalOpinion(t *testing.T) {
 }
 
 func TestNetworkRecoversFromFullPartition(t *testing.T) {
-	const size = 10
+	const size = 8
 	s1 := sim.New(
 		sim.WithLayerSize(size),
 		sim.WithStates(2),
 		sim.WithLogger(logtest.New(t)),
 	)
 	s1.Setup(
-		sim.WithSetupMinerRange(15, 15),
+		sim.WithSetupMinerRange(8, 8),
 	)
 
 	ctx := context.Background()
@@ -2127,6 +2127,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = 3
 	cfg.Zdist = 3
+	cfg.BadBeaconVoteDelayLayers = types.GetLayersPerEpoch()
 
 	var (
 		tortoise1 = tortoiseFromSimState(s1.GetState(0), WithConfig(cfg),
@@ -2137,7 +2138,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	)
 
 	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
-		last = s1.Next()
+		last = s1.Next(sim.WithNumBlocks(1))
 		tortoise1.TallyVotes(ctx, last)
 		tortoise2.TallyVotes(ctx, last)
 	}
@@ -2150,25 +2151,45 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 
 	partitionStart := last
 	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
-		last = s1.Next()
+		last = s1.Next(sim.WithNumBlocks(1))
 		tortoise1.TallyVotes(ctx, last)
-		tortoise2.TallyVotes(ctx, s2.Next())
+		tortoise2.TallyVotes(ctx, s2.Next(sim.WithNumBlocks(1)))
 	}
-	require.Equal(t, last.Sub(1), tortoise1.LatestComplete())
-	require.Equal(t, last.Sub(1), tortoise2.LatestComplete())
 
 	// sync missing state and rerun immediately, both instances won't make progress
 	// because weight increases, and each side doesn't have enough weight in votes
 	// and then do rerun
 	partitionEnd := last
 	s1.Merge(s2)
+	require.NoError(t, s1.GetState(0).DB.IterateEpochATXHeaders(
+		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) bool {
+			tortoise1.OnAtx(header)
+			tortoise2.OnAtx(header)
+			return true
+		}))
+	for lid := partitionStart; !lid.After(partitionEnd); lid = lid.Add(1) {
+		mergedBlocks, err := blocks.Layer(s1.GetState(0).DB, lid)
+		require.NoError(t, err)
+		for _, block := range mergedBlocks {
+			tortoise1.OnBlock(block)
+			tortoise2.OnBlock(block)
+		}
+		mergedBallots, err := ballots.Layer(s1.GetState(0).DB, lid)
+		require.NoError(t, err)
+		for _, ballot := range mergedBallots {
+			tortoise1.OnBallot(ballot)
+			tortoise2.OnBallot(ballot)
+		}
+	}
 
 	tortoise1.TallyVotes(ctx, last)
 	tortoise2.TallyVotes(ctx, last)
+	require.Equal(t, partitionStart, tortoise1.LatestComplete())
+	require.Equal(t, partitionStart, tortoise2.LatestComplete())
 
 	// make enough progress to cross global threshold with new votes
 	for i := 0; i < int(types.GetLayersPerEpoch())*4; i++ {
-		last = s1.Next(sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		last = s1.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 			if i < size/2 {
 				return tortoiseVoting(tortoise1)(rng, layers, i)
 			}

@@ -652,6 +652,11 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 		t.epochs[atx.TargetEpoch()] = epoch
 	}
 	if _, exist := epoch.atxs[atx.ID]; !exist {
+		t.logger.With().Debug("on atx",
+			log.Stringer("id", atx.ID),
+			log.Uint32("epoch", uint32(atx.TargetEpoch())),
+			log.Uint64("weight", atx.GetWeight()),
+		)
 		epoch.atxs[atx.ID] = atx.GetWeight()
 		epoch.weight += atx.GetWeight()
 		if atx.TargetEpoch() == t.last.GetEpoch() {
@@ -726,6 +731,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		ballot.ID(),
 		log.Stringer("weight", weight),
 		log.Uint64("height", refinfo.height),
+		log.Uint32("lid", ballot.LayerIndex.Value),
 	)
 	binfo := &ballotInfo{
 		id: ballot.ID(),

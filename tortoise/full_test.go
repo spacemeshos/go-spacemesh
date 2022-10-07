@@ -64,7 +64,8 @@ func TestFullBallotFilter(t *testing.T) {
 			state.last = tc.last
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
-			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(&tc.ballot))
+			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(
+				logtest.New(t), &tc.ballot))
 		})
 	}
 }

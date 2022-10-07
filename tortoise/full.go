@@ -28,12 +28,16 @@ type full struct {
 }
 
 func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
-	if f.shouldBeDelayed(ballot) {
+	if f.shouldBeDelayed(logger, ballot) {
 		return
 	}
 	if ballot.weight.IsNil() {
 		return
 	}
+	logger.With().Debug("counted votes from ballot",
+		log.Stringer("id", ballot.id),
+		log.Uint32("lid", ballot.layer.Value),
+	)
 	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
 		if !lvote.lid.After(f.evicted) {
 			break
@@ -85,7 +89,7 @@ func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 	}
 	delete(f.delayed, lid)
 	for _, ballot := range delayed {
-		f.countBallot(logger, ballot)
+		f.countBallot(logger.WithFields(log.Bool("delayed", true)), ballot)
 	}
 }
 
@@ -133,7 +137,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	)
 }
 
-func (f *full) shouldBeDelayed(ballot *ballotInfo) bool {
+func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
 	if !ballot.conditions.badBeacon {
 		return false
 	}
@@ -141,6 +145,11 @@ func (f *full) shouldBeDelayed(ballot *ballotInfo) bool {
 	if !delay.After(f.last) {
 		return false
 	}
+	logger.With().Debug("ballot is delayed",
+		log.Stringer("id", ballot.id),
+		log.Uint32("ballot lid", ballot.layer.Value),
+		log.Uint32("counted at", delay.Value),
+	)
 	f.delayed[delay] = append(f.delayed[delay], ballot)
 	return true
 }
