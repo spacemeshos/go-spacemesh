@@ -595,9 +595,9 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 		margin: util.WeightFromUint64(0),
 	}
 	t.addBlock(binfo)
-	layer := t.layer(binfo.layer)
+	t.full.countForLateBlock(binfo)
 	if !binfo.layer.Before(t.processed) {
-		if err := t.updateRefHeight(layer, binfo); err != nil {
+		if err := t.updateRefHeight(t.layer(binfo.layer), binfo); err != nil {
 			return err
 		}
 	}

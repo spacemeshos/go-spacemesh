@@ -60,6 +60,24 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	}
 }
 
+func (f *full) countForLateBlock(block *blockInfo) {
+	// ballots are always added to the state after blocks that are
+	// explicitly referenced in the ballot.
+	// therefore if block is added later - all previous ballots vote
+	// for it negatively.
+	//
+	// we could store all negative weight in a single variable and avoid
+	// this computation if there would be no height
+	for lid := block.layer.Add(1); !lid.After(f.counted); lid = lid.Add(1) {
+		for _, ballot := range f.ballots[lid] {
+			if block.height > ballot.reference.height {
+				continue
+			}
+			block.margin = block.margin.Sub(ballot.weight)
+		}
+	}
+}
+
 func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 	delayed, exist := f.delayed[lid]
 	if !exist {
@@ -83,7 +101,7 @@ func (f *full) countVotes(logger log.Log) {
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	threshold := f.globalThreshold(f.Config, lid)
 	logger = logger.WithFields(
-		log.String("verifier", fullTortoise),
+		log.String("verifier", "full"),
 		log.Stringer("counted_layer", f.counted),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("local_threshold", f.localThreshold),

@@ -9,11 +9,6 @@ import (
 )
 
 const (
-	verifyingTortoise = "verifying"
-	fullTortoise      = "full"
-)
-
-const (
 	support sign = 1
 	against sign = -1
 	abstain sign = 0
@@ -131,27 +126,30 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		}
 		decisions = append(decisions, decision)
 	}
+	changes := false
 	for i, decision := range decisions {
 		if blocks[i].validity != decision {
+			changes = true
 			blocks[i].dirty = true
 		}
 		blocks[i].validity = decision
 	}
-
-	logger.With().Info("candidate layer is verified",
-		log.Array("blocks",
-			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for i := range blocks {
-					encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-						encoder.AddString("decision", blocks[i].validity.String())
-						encoder.AddString("id", blocks[i].id.String())
-						encoder.AddString("weight", blocks[i].margin.String())
-						encoder.AddUint64("height", blocks[i].height)
-						return nil
-					}))
-				}
-				return nil
-			})),
-	)
+	if changes {
+		logger.With().Info("candidate layer is verified",
+			log.Array("blocks",
+				log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+					for i := range blocks {
+						encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+							encoder.AddString("decision", blocks[i].validity.String())
+							encoder.AddString("id", blocks[i].id.String())
+							encoder.AddString("weight", blocks[i].margin.String())
+							encoder.AddUint64("height", blocks[i].height)
+							return nil
+						}))
+					}
+					return nil
+				})),
+		)
+	}
 	return true
 }
