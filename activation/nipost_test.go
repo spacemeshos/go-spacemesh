@@ -234,6 +234,9 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig
 }
 
 func TestNewNIPostBuilderNotInitialized(t *testing.T) {
+	if os.Getenv("GOOS") == "windows" && os.Getenv("CI") != "" {
+		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3629)")
+	}
 	if testing.Short() {
 		t.Skip()
 	}

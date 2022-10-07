@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// wait for a WaitGroup to finish or timeout
+// wait for a WaitGroup to finish or timeout.
 func WaitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) error {
 	done := make(chan struct{})
 	go func() {
@@ -17,6 +17,6 @@ func WaitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) error {
 	case <-done:
 		return nil
 	case <-time.After(timeout):
-		return fmt.Errorf("Timed out waiting for wait group to finish")
+		return fmt.Errorf("timed out waiting for wait group to finish")
 	}
 }

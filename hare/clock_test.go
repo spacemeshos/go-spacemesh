@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -26,6 +27,10 @@ func TestClock_AwaitWakeup(t *testing.T) {
 }
 
 func TestClock_AwaitRound(t *testing.T) {
+	if os.Getenv("GOOS") == "windows" && os.Getenv("CI") != "" {
+		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3628)")
+	}
+
 	r := require.New(t)
 
 	tolerance := 5 * time.Millisecond
