@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -193,6 +194,9 @@ func emptyVoteMargins(plist proposalList) map[string]*big.Int {
 }
 
 func Test_HandleProposal_Success(t *testing.T) {
+	if os.Getenv("GOOS") == "windows" && os.Getenv("CI") != "" {
+		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3630)")
+	}
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
