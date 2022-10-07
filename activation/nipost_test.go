@@ -183,6 +183,9 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
+	if os.Getenv("GOOS") == "windows" {
+		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3625)")
+	}
 	if testing.Short() {
 		t.Skip()
 	}

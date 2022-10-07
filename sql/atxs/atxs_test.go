@@ -108,8 +108,10 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4.Sequence = atx3.Sequence + 1
 	require.NoError(t, atx4.CalcAndSetID())
 
+	now := time.Now()
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx, time.Now()))
+		require.NoError(t, Add(db, atx, now))
+		now = now.Add(time.Nanosecond)
 	}
 
 	id1, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))

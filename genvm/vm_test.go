@@ -291,6 +291,7 @@ type tester struct {
 
 func (t *tester) persistent() *tester {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(logtest.New(t)))
 	return t

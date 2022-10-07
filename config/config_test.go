@@ -15,7 +15,7 @@ func TestLoadConfig(t *testing.T) {
 	vip := viper.New()
 	err := LoadConfig(".asdasda", vip)
 	// verify that after attempting to load a non-existent file, an attempt is made to load the default config
-	assert.EqualError(t, err, "failed to read config file open ./config.toml: no such file or directory")
+	assert.ErrorContains(t, err, "failed to read config file open ./config.toml")
 }
 
 func TestConfig_DataDir(t *testing.T) {
@@ -24,8 +24,5 @@ func TestConfig_DataDir(t *testing.T) {
 	config := DefaultTestConfig()
 	config.DataDirParent = "~" + sep + "space-a-mesh"
 	expectedDataDir := filesystem.GetUserHomeDirectory() + sep + "space-a-mesh"
-	assert.Equal(t, expectedDataDir, config.DataDir())
-
-	config.DataDirParent = "~" + sep + "space-a-mesh" + sep // trailing slash should be ignored
 	assert.Equal(t, expectedDataDir, config.DataDir())
 }
