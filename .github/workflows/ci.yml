@@ -70,7 +70,7 @@ jobs:
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
-          make
+          make install
           make tidy
           make test-fmt
       - name: staticcheck
@@ -98,7 +98,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
-        run: make
+        run: make install
       - name: golangci-lint
         run: make golangci-lint-github-action
 
@@ -157,7 +157,7 @@ jobs:
             ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
-        run: make
+        run: make install
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
