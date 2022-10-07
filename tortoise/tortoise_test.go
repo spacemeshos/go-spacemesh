@@ -120,12 +120,13 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
+		cfg.Hdist = 4
+		cfg.Zdist = cfg.Hdist
 		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
-			last     types.LayerID
-			genesis  = types.GetEffectiveGenesis()
-			verified types.LayerID
+			last    types.LayerID
+			genesis = types.GetEffectiveGenesis()
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
@@ -133,18 +134,16 @@ func TestLayerPatterns(t *testing.T) {
 		) {
 			last = lid
 			tortoise.TallyVotes(ctx, lid)
-			verified = tortoise.LatestComplete()
 		}
-		require.Equal(t, genesis.Add(5), verified)
+		require.Equal(t, genesis.Add(4), tortoise.LatestComplete())
 
 		for _, lid := range sim.GenLayers(s,
-			sim.WithSequence(21),
+			sim.WithSequence(2),
 		) {
 			last = lid
 			tortoise.TallyVotes(ctx, lid)
-			verified = tortoise.LatestComplete()
 		}
-		require.Equal(t, last.Sub(1), verified)
+		require.Equal(t, last.Sub(1), tortoise.LatestComplete())
 	})
 
 	t.Run("HealAfterBadGoodBadGoodBad", func(t *testing.T) {
@@ -316,7 +315,6 @@ func TestAddToMesh(t *testing.T) {
 	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), cdb, alg.EncodeVotes, atxids, defaultTestLayerSize+1)
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
-	alg.TallyVotes(context.TODO(), l3a.Index())
 	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
 	require.NoError(t, addLayerToMesh(cdb, l3a))
@@ -325,7 +323,7 @@ func TestAddToMesh(t *testing.T) {
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), cdb, alg.EncodeVotes, atxids, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(cdb, l4))
 	alg.TallyVotes(context.TODO(), l4.Index())
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
+	require.Equal(t, types.GetEffectiveGenesis().Add(3), alg.LatestComplete(), "wrong latest complete layer")
 }
 
 func TestEncodeVotes(t *testing.T) {
@@ -606,605 +604,6 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 				tc.vote.Cmp(tc.weight.Fraction(tc.threshold)))
 		})
 	}
-}
-
-func TestMultiTortoise(t *testing.T) {
-	r := require.New(t)
-
-	t.Run("happy path", func(t *testing.T) {
-		const layerSize = defaultTestLayerSize * 2
-
-		cdb1 := newCachedDB(t, logtest.New(t).Named("trtl1db"))
-		alg1 := defaultAlgorithm(t, cdb1)
-		alg1.trtl.LayerSize = layerSize
-		alg1.logger = alg1.logger.Named("trtl1")
-		alg1.trtl.logger = alg1.logger
-
-		cdb2 := newCachedDB(t, logtest.New(t).Named("trtl2db"))
-		alg2 := defaultAlgorithm(t, cdb2)
-		alg2.trtl.LayerSize = layerSize
-		alg2.logger = alg2.logger.Named("trtl2")
-		alg2.trtl.logger = alg2.logger
-
-		activeSets := map[types.EpochID][]types.ATXID{}
-		makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-			epoch := layerID.GetEpoch()
-			// simulate producing blocks in parallel
-			ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-
-			// these will produce identical sets of blocks, so throw away half of each
-			// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
-			// to test the BaseBallot provider of each tortoise)
-			ballotsA = ballotsA[:layerSize/2]
-			ballotsB = ballotsB[len(ballotsA):]
-			blts := append(ballotsA, ballotsB...)
-
-			// add all ballots/blocks to both tortoises
-			for _, ballot := range blts {
-				r.NoError(ballots.Add(cdb1, ballot))
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, block))
-			r.NoError(blocks.Add(cdb2, block))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, block.ID()))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, block.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-			alg2.TallyVotes(context.TODO(), layerID)
-		}
-
-		// make and process a bunch of layers and make sure both tortoises can verify them
-		for i := 1; i < 5; i++ {
-			layerID := types.GetEffectiveGenesis().Add(uint32(i))
-
-			makeAndProcessLayerMultiTortoise(layerID)
-
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-		}
-	})
-
-	t.Run("unequal partition and rejoin", func(t *testing.T) {
-		const layerSize = 11
-
-		cdb1 := newCachedDB(t, logtest.New(t))
-		alg1 := defaultAlgorithm(t, cdb1)
-		alg1.trtl.LayerSize = layerSize
-		alg1.logger = alg1.logger.Named("trtl1")
-		alg1.trtl.logger = alg1.logger
-
-		cdb2 := newCachedDB(t, logtest.New(t))
-		alg2 := defaultAlgorithm(t, cdb2)
-		alg2.trtl.LayerSize = layerSize
-		alg2.logger = alg2.logger.Named("trtl2")
-		alg2.trtl.logger = alg2.logger
-
-		activeSets := map[types.EpochID][]types.ATXID{}
-		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB []*types.Ballot) {
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-			epoch := layerID.GetEpoch()
-			// simulate producing blocks in parallel
-			ballotsA = generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			ballotsB = generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-
-			// majority > 90
-			ballotsA = ballotsA[:layerSize-1]
-			// minority < 10
-			ballotsB = ballotsB[layerSize-1:]
-			return
-		}
-
-		// a bunch of good layers
-		lastVerified := types.GetEffectiveGenesis()
-		layerID := types.GetEffectiveGenesis()
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB := makeBallots(layerID)
-			blts := append(ballotsA, ballotsB...)
-
-			// add all ballots/blocks to both tortoises
-			for _, ballot := range blts {
-				r.NoError(ballots.Add(cdb1, ballot))
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, block))
-			r.NoError(blocks.Add(cdb2, block))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, block.ID()))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, block.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			// both should make progress
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-			lastVerified = layerID.Sub(1)
-		}
-
-		// keep track of all blocks on each side of the partition
-		var forkballotsA, forkballotsB []*types.Ballot
-		var forkblocksA, forkblocksB []*types.Block
-
-		// simulate a partition
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB := makeBallots(layerID)
-			forkballotsA = append(forkballotsA, ballotsA...)
-			forkballotsB = append(forkballotsB, ballotsB...)
-
-			// add A's blocks to A only, B's to B
-			for _, ballot := range ballotsA {
-				r.NoError(ballots.Add(cdb1, ballot))
-			}
-			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, blockA))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-			forkblocksA = append(forkblocksA, blockA)
-			alg1.TallyVotes(context.TODO(), layerID)
-			for _, ballot := range ballotsB {
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb2, blockB))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-			forkblocksB = append(forkblocksB, blockB)
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			// majority tortoise is unaffected, minority tortoise gets stuck
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
-		}
-
-		// these extra layers account for the time needed to generate enough votes to "catch up" and pass
-		// the threshold.
-		healingDistance := 13
-
-		// after a while (we simulate the distance here), minority tortoise eventually begins producing more blocks
-		for i := 0; i < healingDistance; i++ {
-			layerID = layerID.Add(1)
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-			epoch := layerID.GetEpoch()
-
-			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
-			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
-			// an ongoing partition.
-			ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			forkballotsA = append(forkballotsA, ballotsA...)
-			for _, ballot := range ballotsA {
-				r.NoError(ballots.Add(cdb1, ballot))
-			}
-			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, blockA))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-			forkblocksA = append(forkblocksA, blockA)
-			alg1.TallyVotes(context.TODO(), layerID)
-
-			ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-			forkballotsB = append(forkballotsB, ballotsB...)
-			for _, ballot := range ballotsB {
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb2, blockB))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-			forkblocksB = append(forkblocksB, blockB)
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			// majority tortoise is unaffected, minority tortoise is still stuck
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
-		}
-
-		// finally, the minority tortoise heals and regains parity with the majority tortoise
-		layerID = layerID.Add(1)
-		addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-		epoch := layerID.GetEpoch()
-		ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-		forkballotsA = append(forkballotsA, ballotsA...)
-		for _, ballot := range ballotsA {
-			r.NoError(ballots.Add(cdb1, ballot))
-		}
-		blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb1, blockA))
-		r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-		forkblocksA = append(forkblocksA, blockA)
-		alg1.TallyVotes(context.TODO(), layerID)
-
-		ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-		forkballotsB = append(forkballotsB, ballotsB...)
-		for _, ballot := range ballotsB {
-			r.NoError(ballots.Add(cdb2, ballot))
-		}
-		blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb2, blockB))
-		r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-		forkblocksB = append(forkblocksB, blockB)
-		alg2.TallyVotes(context.TODO(), layerID)
-
-		// minority node is healed
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-
-		// now simulate a rejoin
-		// send each tortoise's blocks to the other (simulated resync)
-		// (of layers 18-40)
-		for _, ballot := range forkballotsA {
-			r.NoError(ballots.Add(cdb2, ballot))
-		}
-		for _, block := range forkblocksA {
-			r.NoError(blocks.Add(cdb2, block))
-		}
-
-		for _, ballot := range forkballotsB {
-			r.NoError(ballots.Add(cdb1, ballot))
-		}
-		for _, block := range forkblocksB {
-			r.NoError(blocks.Add(cdb1, block))
-		}
-
-		alg1.TallyVotes(context.TODO(), layerID)
-		alg2.TallyVotes(context.TODO(), layerID)
-
-		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
-		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
-		// opinion. these layers represent its healing distance. after it heals, it will converge to the
-		// majority opinion.
-		for i := 0; i < 40; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB := makeBallots(layerID)
-			blts := append(ballotsA, ballotsB...)
-
-			// add all ballots/blocks to both tortoises
-			for _, ballot := range blts {
-				r.NoError(ballots.Add(cdb1, ballot))
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, block))
-			r.NoError(blocks.Add(cdb2, block))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, block.ID()))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, block.ID()))
-
-			alg1.TallyVotes(context.TODO(), layerID)
-			alg2.TallyVotes(context.TODO(), layerID)
-		}
-
-		// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
-		// is still stuck
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-	})
-
-	t.Run("equal partition", func(t *testing.T) {
-		const layerSize = 10
-
-		cdb1 := newCachedDB(t, logtest.New(t).Named("trtl1db"))
-		alg1 := defaultAlgorithm(t, cdb1)
-		alg1.trtl.LayerSize = layerSize
-		alg1.logger = alg1.logger.Named("trtl1")
-		alg1.trtl.logger = alg1.logger
-
-		cdb2 := newCachedDB(t, logtest.New(t).Named("trtl2db"))
-		alg2 := defaultAlgorithm(t, cdb2)
-		alg2.trtl.LayerSize = layerSize
-		alg2.logger = alg2.logger.Named("trtl2")
-		alg2.trtl.logger = alg2.logger
-
-		activeSets := map[types.EpochID][]types.ATXID{}
-		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB []*types.Ballot) {
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-			epoch := layerID.GetEpoch()
-			// simulate producing blocks in parallel
-			ballotsA = generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			ballotsB = generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-
-			// 50/50 split
-			ballotsA = ballotsA[:layerSize/2]
-			ballotsB = ballotsB[layerSize/2:]
-			return
-		}
-
-		// a bunch of good layers
-		lastVerified := types.GetEffectiveGenesis()
-		layerID := types.GetEffectiveGenesis()
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB := makeBallots(layerID)
-			blts := append(ballotsA, ballotsB...)
-
-			// add all ballots/blocks to both tortoises
-			for _, ballot := range blts {
-				r.NoError(ballots.Add(cdb1, ballot))
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, block))
-			r.NoError(blocks.Add(cdb2, block))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, block.ID()))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, block.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			// both should make progress
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-			lastVerified = layerID.Sub(1)
-		}
-
-		// simulate a partition
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB := makeBallots(layerID)
-
-			// add A's blocks to A only, B's to B
-			for _, ballot := range ballotsA {
-				r.NoError(ballots.Add(cdb1, ballot))
-			}
-			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, blockA))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-			for _, ballot := range ballotsB {
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb2, blockB))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			// both nodes get stuck
-			checkVerifiedLayer(t, alg1.trtl, lastVerified)
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
-		}
-
-		// after a while (we simulate the distance here), both nodes eventually begin producing more blocks
-		// in the case of a 50/50 split, this happens quickly
-		for i := uint32(0); i < 3; i++ {
-			layerID = layerID.Add(1)
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-
-			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
-			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
-			// an ongoing partition.
-			epoch := layerID.GetEpoch()
-			ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			for _, ballot := range ballotsA {
-				r.NoError(ballots.Add(cdb1, ballot))
-			}
-			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, blockA))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-
-			ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-			for _, ballot := range ballotsB {
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb2, blockB))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			// both nodes still stuck
-			checkVerifiedLayer(t, alg1.trtl, lastVerified)
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
-		}
-
-		// finally, both nodes heal and get unstuck
-		layerID = layerID.Add(1)
-		addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2})
-
-		epoch := layerID.GetEpoch()
-		ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-		for _, ballot := range ballotsA {
-			r.NoError(ballots.Add(cdb1, ballot))
-		}
-		blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb1, blockA))
-		r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-		alg1.TallyVotes(context.TODO(), layerID)
-
-		ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-		for _, ballot := range ballotsB {
-			r.NoError(ballots.Add(cdb2, ballot))
-		}
-		blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb2, blockB))
-		r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-		alg2.TallyVotes(context.TODO(), layerID)
-
-		// both nodes can't switch from full tortoise
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-	})
-
-	t.Run("three-way partition", func(t *testing.T) {
-		const layerSize = 12
-
-		cdb1 := newCachedDB(t, logtest.New(t).Named("trtl1db"))
-		alg1 := defaultAlgorithm(t, cdb1)
-		alg1.trtl.LayerSize = layerSize
-		alg1.logger = alg1.logger.Named("trtl1")
-		alg1.trtl.logger = alg1.logger
-
-		cdb2 := newCachedDB(t, logtest.New(t).Named("trtl2db"))
-		alg2 := defaultAlgorithm(t, cdb2)
-		alg2.trtl.LayerSize = layerSize
-		alg2.logger = alg2.logger.Named("trtl2")
-		alg2.trtl.logger = alg2.logger
-
-		cdb3 := newCachedDB(t, logtest.New(t).Named("trtl3db"))
-		alg3 := defaultAlgorithm(t, cdb3)
-		alg3.trtl.LayerSize = layerSize
-		alg3.logger = alg3.logger.Named("trtl3")
-		alg3.trtl.logger = alg3.logger
-
-		activeSets := map[types.EpochID][]types.ATXID{}
-		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB, ballotsC []*types.Ballot) {
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2, cdb3})
-			// simulate producing blocks in parallel
-			epoch := layerID.GetEpoch()
-			ballotsA = generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			ballotsB = generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-			ballotsC = generateBallots(t, layerID, layerSize, activeSets[epoch], alg3.EncodeVotes)
-
-			// three-way split
-			ballotsA = ballotsA[:layerSize/3]
-			ballotsB = ballotsB[layerSize/3 : layerSize*2/3]
-			ballotsC = ballotsC[layerSize*2/3:]
-			return
-		}
-
-		// a bunch of good layers
-		lastVerified := types.GetEffectiveGenesis()
-		layerID := types.GetEffectiveGenesis()
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB, ballotsC := makeBallots(layerID)
-			var blts []*types.Ballot
-			blts = append(ballotsA, ballotsB...)
-			blts = append(blts, ballotsC...)
-
-			// add all ballots/blocks to all tortoises
-			for _, ballot := range blts {
-				r.NoError(ballots.Add(cdb1, ballot))
-				r.NoError(ballots.Add(cdb2, ballot))
-				r.NoError(ballots.Add(cdb3, ballot))
-			}
-			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, block))
-			r.NoError(blocks.Add(cdb2, block))
-			r.NoError(blocks.Add(cdb3, block))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, block.ID()))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, block.ID()))
-			r.NoError(layers.SetHareOutput(cdb3, layerID, block.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-			alg2.TallyVotes(context.TODO(), layerID)
-			alg3.TallyVotes(context.TODO(), layerID)
-
-			// all should make progress
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
-			lastVerified = layerID.Sub(1)
-		}
-
-		// simulate a partition
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			ballotsA, ballotsB, ballotsC := makeBallots(layerID)
-
-			// add each blocks to their own
-			for _, ballot := range ballotsA {
-				r.NoError(ballots.Add(cdb1, ballot))
-			}
-			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, blockA))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-
-			for _, ballot := range ballotsB {
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb2, blockB))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			for _, ballot := range ballotsC {
-				r.NoError(ballots.Add(cdb3, ballot))
-			}
-			blockC := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb3, blockC))
-			r.NoError(layers.SetHareOutput(cdb3, layerID, blockC.ID()))
-			alg3.TallyVotes(context.TODO(), layerID)
-
-			// all nodes get stuck
-			checkVerifiedLayer(t, alg1.trtl, lastVerified)
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
-			checkVerifiedLayer(t, alg3.trtl, lastVerified)
-		}
-
-		// after a while (we simulate the distance here), all nodes eventually begin producing more blocks
-		for i := uint32(0); i < 7; i++ {
-			layerID = layerID.Add(1)
-			addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2, cdb3})
-
-			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
-			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
-			// an ongoing partition.
-			epoch := layerID.GetEpoch()
-			ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-			for _, ballot := range ballotsA {
-				r.NoError(ballots.Add(cdb1, ballot))
-			}
-			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb1, blockA))
-			r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-			alg1.TallyVotes(context.TODO(), layerID)
-
-			ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-			for _, ballot := range ballotsB {
-				r.NoError(ballots.Add(cdb2, ballot))
-			}
-			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb2, blockB))
-			r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-			alg2.TallyVotes(context.TODO(), layerID)
-
-			ballotsC := generateBallots(t, layerID, layerSize, activeSets[epoch], alg3.EncodeVotes)
-			for _, ballot := range ballotsC {
-				r.NoError(ballots.Add(cdb3, ballot))
-			}
-			blockC := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-			r.NoError(blocks.Add(cdb3, blockC))
-			r.NoError(layers.SetHareOutput(cdb3, layerID, blockC.ID()))
-			alg3.TallyVotes(context.TODO(), layerID)
-
-			// nodes still stuck
-			checkVerifiedLayer(t, alg1.trtl, lastVerified)
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
-			checkVerifiedLayer(t, alg3.trtl, lastVerified)
-		}
-
-		// finally, all nodes heal and get unstuck
-		layerID = layerID.Add(1)
-		addEpochActiveSet(t, activeSets, layerID, layerSize, []*datastore.CachedDB{cdb1, cdb2, cdb3})
-		epoch := layerID.GetEpoch()
-		ballotsA := generateBallots(t, layerID, layerSize, activeSets[epoch], alg1.EncodeVotes)
-		for _, ballot := range ballotsA {
-			r.NoError(ballots.Add(cdb1, ballot))
-		}
-		blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb1, blockA))
-		r.NoError(layers.SetHareOutput(cdb1, layerID, blockA.ID()))
-		alg1.TallyVotes(context.TODO(), layerID)
-
-		ballotsB := generateBallots(t, layerID, layerSize, activeSets[epoch], alg2.EncodeVotes)
-		for _, ballot := range ballotsB {
-			r.NoError(ballots.Add(cdb2, ballot))
-		}
-		blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb2, blockB))
-		r.NoError(layers.SetHareOutput(cdb2, layerID, blockB.ID()))
-		alg2.TallyVotes(context.TODO(), layerID)
-
-		ballotsC := generateBallots(t, layerID, layerSize, activeSets[epoch], alg3.EncodeVotes)
-		for _, ballot := range ballotsC {
-			r.NoError(ballots.Add(cdb3, ballot))
-		}
-		blockC := types.GenLayerBlock(layerID, types.RandomTXSet(5))
-		r.NoError(blocks.Add(cdb3, blockC))
-		r.NoError(layers.SetHareOutput(cdb3, layerID, blockC.ID()))
-		alg3.TallyVotes(context.TODO(), layerID)
-
-		// all nodes are healed
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
-	})
 }
 
 func TestComputeExpectedWeight(t *testing.T) {
@@ -1863,16 +1262,20 @@ func splitVoting(n int) sim.VotesGenerator {
 			last    = layers[len(layers)-1]
 			bids    = last.BlocksIDs()
 			half    = len(bids) / 2
+			ballots = last.BallotIDs()
+			base    types.BallotID
 		)
 		if len(bids) < 2 {
 			panic("make sure that the previous layer has atleast 2 blocks in it")
 		}
 		if i < n/2 {
+			base = ballots[0]
 			support = bids[:half]
 		} else {
+			base = ballots[len(ballots)-1]
 			support = bids[half:]
 		}
-		return sim.Voting{Base: types.BallotID(support[0]), Support: support}
+		return sim.Voting{Base: base, Support: support}
 	}
 }
 
@@ -1898,7 +1301,7 @@ func ensureBlockLayerWithin(tb testing.TB, cdb *datastore.CachedDB, bid types.Bl
 
 func TestWeakCoinVoting(t *testing.T) {
 	const (
-		size  = 6
+		size  = 4
 		hdist = 2
 	)
 	s := sim.New(
@@ -1916,42 +1319,38 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.Zdist = hdist
 
 	var (
-		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-		verified, last types.LayerID
-		genesis        = types.GetEffectiveGenesis()
+		tortoise = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		last     types.LayerID
+		genesis  = types.GetEffectiveGenesis()
 	)
 
 	for _, lid := range sim.GenLayers(s,
-		sim.WithSequence(5),
+		sim.WithSequence(1, sim.WithNumBlocks(2), sim.WithEmptyHareOutput()),
 		sim.WithSequence(hdist+1,
-			sim.WithCoin(true), // declare support
+			sim.WithNumBlocks(2),
 			sim.WithEmptyHareOutput(),
 			sim.WithVoteGenerator(splitVoting(size)),
 		),
 	) {
 		last = lid
 		tortoise.TallyVotes(ctx, lid)
-		verified = tortoise.LatestComplete()
 	}
-	// 5th layer after genesis verifies 4th
-	// and later layers can't verify previous as they are split
-	require.Equal(t, genesis.Add(4), verified)
-	votes, err := tortoise.EncodeVotes(ctx)
-	require.NoError(t, err)
-	// last ballot that is consistent with local opinion
-	ensureBallotLayerWithin(t, s.GetState(0).DB, votes.Base, genesis.Add(5), genesis.Add(5))
+	require.Equal(t, genesis, tortoise.LatestComplete())
 
-	// support for all layers in range of (verified, last - hdist)
-	for _, bid := range votes.Support {
-		ensureBlockLayerWithin(t, s.GetState(0).DB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
-	}
+	require.NoError(t, layers.SetWeakCoin(s.GetState(0).DB, last.Add(1), true))
+	votes, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(last.Add(1)))
+	require.NoError(t, err)
+
+	require.Len(t, votes.Support, 1)
+	block, err := blocks.Get(s.GetState(0).DB, votes.Support[0])
+	require.NoError(t, err)
+	require.Equal(t, block.LayerIndex, genesis.Add(1))
 
 	for i := 0; i < 10; i++ {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
-	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
 }
 
 func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
@@ -2238,32 +1637,6 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(2), verified)
-}
-
-func TestSwitchVerifyingByChangingGoodness(t *testing.T) {
-	ctx := context.Background()
-	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
-	s.Setup()
-
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	cfg.Hdist = 2
-	cfg.Zdist = 2
-	cfg.WindowSize = 10
-
-	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	var last, verified types.LayerID
-	// in the test hare is not working from the start, voters
-	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(20, sim.WithEmptyHareOutput()),
-		sim.WithSequence(10),
-	) {
-		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
-	}
-	require.Equal(t, last.Sub(1), verified)
-	require.True(t, !tortoise.trtl.isFull, "verifying mode")
 }
 
 func perfectVotingFirstBaseBallot(_ *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {

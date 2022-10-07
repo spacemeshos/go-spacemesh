@@ -311,7 +311,7 @@ func (t *turtle) encodeVotes(
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		for _, block := range lvote.blocks {
-			vote, _, err := t.getFullVote(block)
+			vote, reason, err := t.getFullVote(block)
 			if err != nil {
 				return nil, err
 			}
@@ -321,14 +321,15 @@ func (t *turtle) encodeVotes(
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support before base ballot", block.id, block.layer)
+				logger.With().Debug("support before base ballot",
+					block.id, block.layer, log.Stringer("reason", reason))
 				votes.Support = append(votes.Support, block.id)
 			case against:
-				logger.With().Debug("explicit against overwrites base ballot opinion", block.id, block.layer)
+				logger.With().Debug("explicit against overwrites base ballot opinion", block.id, block.layer, log.Stringer("reason", reason))
 				votes.Against = append(votes.Against, block.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					block.id, block.layer,
+					block.id, block.layer, log.Stringer("reason", reason),
 				)
 			}
 		}
@@ -342,19 +343,19 @@ func (t *turtle) encodeVotes(
 			continue
 		}
 		for _, block := range layer.blocks {
-			vote, _, err := t.getFullVote(block)
+			vote, reason, err := t.getFullVote(block)
 			if err != nil {
 				return nil, err
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support after base ballot", block.id, block.layer)
+				logger.With().Debug("support after base ballot", block.id, block.layer, log.Stringer("reason", reason))
 				votes.Support = append(votes.Support, block.id)
 			case against:
-				logger.With().Debug("implicit against after base ballot", block.id, block.layer)
+				logger.With().Debug("implicit against after base ballot", block.id, block.layer, log.Stringer("reason", reason))
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					block.id, lid,
+					block.id, lid, log.Stringer("reason", reason),
 				)
 			}
 		}
@@ -456,6 +457,7 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	}
 	ballot.conditions.badBeacon = badBeacon
 	t.verifying.countBallot(logger, ballot)
+	t.verifying.countAbstained(ballot)
 	if t.isFull {
 		t.full.countBallot(logger, ballot)
 	}
@@ -527,17 +529,17 @@ func (t *turtle) loadHare(lid types.LayerID) error {
 func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 	// validities will be available only during rerun or
 	// if they are synced from peers
-	validities, err := blocks.ContextualValidity(t.cdb, lid)
-	if err != nil {
-		return fmt.Errorf("contextual validity %s: %w", lid, err)
-	}
-	for _, validity := range validities {
-		s := support
-		if !validity.Validity {
-			s = against
+	for _, block := range t.layer(lid).blocks {
+		valid, err := blocks.IsValid(t.cdb, block.id)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNotFound) {
+				return err
+			}
+		} else if valid {
+			block.validity = support
+		} else if !valid {
+			block.validity = against
 		}
-		block := t.blockRefs[validity.ID]
-		block.validity = s
 	}
 	return nil
 }

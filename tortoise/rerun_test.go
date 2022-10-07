@@ -77,16 +77,16 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	require.True(t, verified.Before(expected))
 }
 
-func TestRerunDistanceVoteCounting(t *testing.T) {
+func TestWindowSizeVoteCounting(t *testing.T) {
 	t.Run("FixesMisverified", func(t *testing.T) {
-		testWindowCounting(t, 3, 100, 10, true)
+		testWindowCounting(t, 3, 10, true)
 	})
 	t.Run("ShortWindow", func(t *testing.T) {
-		testWindowCounting(t, 3, 100, 3, false)
+		testWindowCounting(t, 3, 3, false)
 	})
 }
 
-func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWindow int, expectedValidity bool) {
+func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expectedValidity bool) {
 	genesis := types.GetEffectiveGenesis()
 	ctx := context.Background()
 	const size = 10
@@ -97,34 +97,33 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	cfg.LayerSize = size
 	cfg.Hdist = 1
 	cfg.Zdist = 1
-	cfg.WindowSize = uint32(fullWindow)
+	cfg.WindowSize = uint32(windowSize)
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(tb)), WithConfig(cfg))
-	var last, verified types.LayerID
 
 	const firstBatch = 2
 	misverified := genesis.Add(firstBatch)
 
+	var last types.LayerID
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput()),
+		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 		// in this layer voting is malicious. it doesn't support previous layer so there will be no valid blocks in it
-		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput()),
-		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput()),
+		sim.WithSequence(1, sim.WithVoteGenerator(gapVote), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 		// in this layer we skip previously malicious voting.
-		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput()),
-		sim.WithSequence(10, sim.WithEmptyHareOutput()),
+		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
-	require.Equal(tb, last.Sub(1), verified)
+	require.Equal(tb, last.Sub(1), tortoise.LatestComplete())
 
 	blks, err := blocks.IDsInLayer(s.GetState(0).DB, misverified)
 	require.NoError(tb, err)
 
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
-		require.NoError(tb, err)
+		require.NoError(tb, err, "layer %s", misverified)
 		require.Equal(tb, expectedValidity, validity, "validity for block %s layer %s", blk, misverified)
 	}
 }

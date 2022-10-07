@@ -24,12 +24,10 @@ type verifying struct {
 // reset all weight that can vote on a voted layer
 func (v *verifying) resetWeights(voted types.LayerID) {
 	vlayer := v.layer(voted)
-	vlayer.verifying.abstained = weight{}
 	v.totalGoodWeight = vlayer.verifying.goodUncounted.Copy()
 	for lid := voted.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
 		layer.verifying.goodUncounted = vlayer.verifying.goodUncounted.Copy()
-		layer.verifying.abstained = weight{}
 	}
 }
 
@@ -70,6 +68,9 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(ballot.weight)
 	}
 	v.totalGoodWeight = v.totalGoodWeight.Add(ballot.weight)
+}
+
+func (v *verifying) countAbstained(ballot *ballotInfo) {
 	i := uint32(0)
 	for current := ballot.votes.tail; current != nil; current = current.prev {
 		i++
@@ -77,7 +78,7 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 			continue
 		}
 		if i > v.Zdist {
-			break
+			return
 		}
 		current.verifying.abstained = current.verifying.abstained.Add(ballot.weight)
 	}

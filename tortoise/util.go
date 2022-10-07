@@ -42,7 +42,6 @@ func persistContextualValidity(logger log.Log,
 			if !block.dirty {
 				continue
 			}
-			block.dirty = false
 			if block.validity == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
 			}
@@ -51,6 +50,7 @@ func persistContextualValidity(logger log.Log,
 				err = fmt.Errorf("saving validity for %s: %w", block.id, err)
 				return false
 			}
+			block.dirty = false
 		}
 		return true
 	})
@@ -110,10 +110,12 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		decision := getDecision(block)
 		logger.With().Debug("decision for a block",
 			block.id,
+			block.layer,
 			log.Stringer("decision", decision),
 			log.Stringer("weight", block.margin),
 			log.Uint64("height", block.height),
 		)
+
 		if decision == abstain {
 			// all blocks with the same height should be finalized
 			if supported != nil && block.height > supported.height {
