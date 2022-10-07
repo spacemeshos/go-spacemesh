@@ -48,28 +48,30 @@ func getMedian(heights []uint64) uint64 {
 }
 
 func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last types.LayerID) weight {
-	tepoch := target.GetEpoch()
-	lepoch := last.GetEpoch()
+	// all layers after target are voting on the target layer
+	// therefore expected weight for the target layer is a sum of all weights
+	// within (target, last]
+	start := target.Add(1)
+	startEpoch := start.GetEpoch()
+	lastEpoch := last.GetEpoch()
 	length := types.GetLayersPerEpoch()
-	if tepoch == lepoch {
-		einfo := epochs[tepoch]
+	if startEpoch == lastEpoch {
+		einfo := epochs[startEpoch]
 		return util.WeightFromUint64(einfo.weight).Fraction(big.NewRat(
-			int64(last.Difference(target)),
+			int64(last.Difference(start)+1),
 			int64(length),
 		))
 	}
-	weight := util.WeightFromUint64(epochs[tepoch].weight).Fraction(big.NewRat(
-		int64(length-target.OrdinalInEpoch()),
+	weight := util.WeightFromUint64(epochs[startEpoch].weight).Fraction(big.NewRat(
+		int64(length-start.OrdinalInEpoch()),
 		int64(length),
 	))
-	for epoch := tepoch + 1; epoch < lepoch; epoch++ {
+	for epoch := startEpoch + 1; epoch < lastEpoch; epoch++ {
 		einfo := epochs[epoch]
 		weight = weight.Add(util.WeightFromUint64(einfo.weight))
 	}
-	weight = weight.Add(util.WeightFromUint64(epochs[lepoch].weight).Fraction(big.NewRat(
-		int64(last.OrdinalInEpoch()),
-		int64(length),
-	)))
+	weight = weight.Add(util.WeightFromUint64(epochs[lastEpoch].weight).
+		Fraction(big.NewRat(int64(last.OrdinalInEpoch()+1), int64(length))))
 	return weight
 }
 
@@ -82,7 +84,7 @@ func computeGlobalThreshold(config Config, localThreshold weight, epochs map[typ
 	window = maxLayer(window, processed)
 	return computeExpectedWeight(epochs,
 		target,
-		last,
+		window,
 	).
 		Fraction(config.GlobalThreshold).
 		Add(localThreshold)
