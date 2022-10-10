@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // Config for protocol parameters.
@@ -254,29 +253,6 @@ func (t *Tortoise) WaitReady(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err() //nolint
 	}
-}
-
-// EnableBackgroundTallyVotes starts a goroutine that tallies votes in the middle
-// of the layer if node is synced.
-func (t *Tortoise) EnableBackgroundTallyVotes(layers timesync.LayerTimer, duration time.Duration, syncer system.SyncStateProvider) {
-	t.eg.Go(func() error {
-		var timer *time.Timer
-		for {
-			select {
-			case <-t.ctx.Done():
-				if timer != nil {
-					timer.Stop()
-				}
-				return t.ctx.Err()
-			case lid := <-layers:
-				if syncer.IsSynced(t.ctx) {
-					timer = time.AfterFunc(duration/2, func() {
-						t.TallyVotes(t.ctx, lid)
-					})
-				}
-			}
-		}
-	})
 }
 
 // Stop background workers.
