@@ -60,13 +60,10 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 	ballot.conditions.consistent = validateConsistency(v.state, v.Config, ballot)
 	logger.With().Debug("ballot goodness",
 		ballot.id,
+		ballot.layer,
 		log.Stringer("base id", ballot.base.id),
 		log.Uint32("base layer", ballot.base.layer.Value),
-		log.Bool("good base", ballot.conditions.baseGood),
-		log.Bool("bad beacon", ballot.conditions.badBeacon),
-		log.Bool("consistent", ballot.conditions.consistent),
-		log.Bool("votes before base", ballot.conditions.votesBeforeBase),
-	)
+		log.Bool("good", ballot.good()))
 	if !ballot.good() {
 		return
 	}

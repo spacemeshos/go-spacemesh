@@ -185,6 +185,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
+	cfg.Hdist = 10
 	cfg.Zdist = 3
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
@@ -198,23 +199,19 @@ func TestAbstainsInMiddle(t *testing.T) {
 	expected := last
 
 	for i := 0; i < 2; i++ {
-		last = s.Next(
+		tortoise.TallyVotes(ctx, s.Next(
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 			sim.WithoutHareOutput(),
-		)
-		tortoise.TallyVotes(ctx, last)
+		))
 	}
-	for i := 0; i < 4; i++ {
-		last = s.Next(
+	for i := 0; i < int(cfg.Zdist); i++ {
+		tortoise.TallyVotes(ctx, s.Next(
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
-		)
-		tortoise.TallyVotes(ctx, last)
+		))
 	}
 
-	// verification will get stuck as of the first layer with conflicting local and global opinions.
-	// block votes aren't counted because blocks aren't marked good, because they contain exceptions older
-	// than their base block.
-	// self-healing will not run because the layers aren't old enough.
+	// local opinion will be decided after zdist layers
+	// at that point verifying tortoise consistency will be revisited
 	require.Equal(t, expected, tortoise.LatestComplete())
 }
 

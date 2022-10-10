@@ -905,11 +905,13 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 		if lvote.lid.Before(ballot.base.layer) {
 			return true
 		}
-		if lvote.vote == abstain {
-			continue
-		}
+		// local opinion is undecided yet. tortoise will revisit consistency
+		// after hare is terminated or zdist passes.
 		if !lvote.hareTerminated {
 			return false
+		}
+		if lvote.vote == abstain {
+			continue
 		}
 		for j := range lvote.blocks {
 			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
