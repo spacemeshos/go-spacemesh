@@ -406,11 +406,8 @@ func (t *turtle) getFullVote(ctx context.Context, block *blockInfo) (sign, voteR
 	return against, reasonCoinflip, nil
 }
 
-// onLayerTerminated is expected to be called when hare terminated for a layer.
-// Internally tortoise will verify all layers before the last one if there are no gaps in
-// terminated layers.
 func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
-	t.logger.With().Debug("on layer terminated", lid)
+	t.logger.With().Debug("on layer", lid)
 	defer t.evict(ctx)
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
@@ -448,11 +445,7 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 			t.onHareOutput(terminated, types.EmptyBlockID)
 		}
 	}
-	if err := t.verifyLayers(t.logger); err != nil {
-		return err
-	}
-
-	return nil
+	return t.verifyLayers()
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -467,8 +460,6 @@ func (t *turtle) switchModes(logger log.Log) {
 }
 
 func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
-	// NOTE(dshulyak) counting ballot in verifying mode has some side-effects that
-	// are important for encoding votes
 	badBeacon, err := t.compareBeacons(t.logger, ballot.id, ballot.layer, ballot.beacon)
 	if err != nil {
 		return err
@@ -481,8 +472,8 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	return nil
 }
 
-func (t *turtle) verifyLayers(logger log.Log) error {
-	logger = logger.WithFields(
+func (t *turtle) verifyLayers() error {
+	logger := t.logger.WithFields(
 		log.Stringer("last layer", t.last),
 	)
 
@@ -917,7 +908,7 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 		if lvote.vote == abstain {
 			continue
 		}
-		if lvote.vote == against && !lvote.hareTerminated {
+		if !lvote.hareTerminated {
 			return false
 		}
 		for j := range lvote.blocks {

@@ -203,21 +203,19 @@ func TestAbstainsInMiddle(t *testing.T) {
 			sim.WithoutHareOutput(),
 		)
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
 	for i := 0; i < 4; i++ {
 		last = s.Next(
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 		)
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
 
 	// verification will get stuck as of the first layer with conflicting local and global opinions.
 	// block votes aren't counted because blocks aren't marked good, because they contain exceptions older
 	// than their base block.
 	// self-healing will not run because the layers aren't old enough.
-	require.Equal(t, expected, verified)
+	require.Equal(t, expected, tortoise.LatestComplete())
 }
 
 type (
@@ -1639,35 +1637,6 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	last = s.Next()
 	tortoise.TallyVotes(ctx, last)
 	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
-}
-
-func TestObjectsNotProcessedBeforeRefencedHeight(t *testing.T) {
-	ctx := context.Background()
-
-	s := sim.New()
-	s.Setup()
-	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-	last := s.Next()
-
-	blks, err := blocks.Layer(s.GetState(0).DB, last)
-	require.NoError(t, err)
-	for _, block := range blks {
-		tortoise.OnBlock(block)
-	}
-
-	blts, err := ballots.Layer(s.GetState(0).DB, last)
-	require.NoError(t, err)
-	for _, ballot := range blts {
-		tortoise.OnBallot(ballot)
-	}
-
-	require.Empty(t, tortoise.trtl.layers[last])
-
-	tortoise.TallyVotes(ctx, last)
-	require.NotEmpty(t, tortoise.trtl.layers[last])
-	tortoise.TallyVotes(ctx, s.Next())
-	require.Equal(t, last, tortoise.LatestComplete())
 }
 
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
