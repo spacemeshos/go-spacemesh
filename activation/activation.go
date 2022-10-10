@@ -245,15 +245,15 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpt
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
 func (b *Builder) findCommitmentAtx() (types.ATXID, error) {
-	posAtx, err := atxs.GetAtxIDWithMaxHeight(b.cdb)
+	atx, err := atxs.GetAtxIDWithMaxHeight(b.cdb)
 	if errors.Is(err, sql.ErrNotFound) {
-		b.log.With().Info("using golden atx as commitment atx", posAtx)
+		b.log.With().Info("using golden atx as commitment atx")
 		return b.goldenATXID, nil
 	}
 	if err != nil {
 		return *types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
 	}
-	return posAtx, nil
+	return atx, nil
 }
 
 // StopSmeshing stops the atx builder.
