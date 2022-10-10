@@ -283,19 +283,19 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 			)
 			return types.LayerID{}, nil
 		}
-		for _, bvote := range lvote.blocks {
-			vote, _, err := t.getFullVote(ctx, bvote.blockInfo)
+		for _, block := range lvote.blocks {
+			vote, _, err := t.getFullVote(ctx, block)
 			if err != nil {
 				return types.LayerID{}, err
 			}
-			if vote != bvote.vote {
+			if bvote := lvote.getVote(block.id); vote != bvote {
 				t.logger.With().Debug("found disagreement on a block",
 					ballot.id,
-					bvote.id,
+					block.id,
 					log.Stringer("block_layer", lvote.lid),
 					log.Stringer("ballot_layer", ballot.layer),
 					log.Stringer("local_vote", vote),
-					log.Stringer("vote", bvote.vote),
+					log.Stringer("vote", bvote),
 				)
 				return lvote.lid, nil
 			}
@@ -326,25 +326,26 @@ func (t *turtle) encodeVotes(
 		if lvote.vote == abstain && lvote.hareTerminated {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
-		for _, bvote := range lvote.blocks {
-			vote, _, err := t.getFullVote(ctx, bvote.blockInfo)
+		for _, block := range lvote.blocks {
+			vote, _, err := t.getFullVote(ctx, block)
 			if err != nil {
 				return nil, err
 			}
 			// ballot vote is consistent with local opinion, exception is not necessary
-			if vote == bvote.vote {
+			bvote := lvote.getVote(block.id)
+			if vote == bvote {
 				continue
 			}
 			switch vote {
 			case support:
-				logger.With().Debug("support before base ballot", bvote.id, bvote.layer)
-				votes.Support = append(votes.Support, bvote.id)
+				logger.With().Debug("support before base ballot", block.id, block.layer)
+				votes.Support = append(votes.Support, block.id)
 			case against:
-				logger.With().Debug("explicit against overwrites base ballot opinion", bvote.id, bvote.layer)
-				votes.Against = append(votes.Against, bvote.id)
+				logger.With().Debug("explicit against overwrites base ballot opinion", block.id, block.layer)
+				votes.Against = append(votes.Against, block.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					bvote.id, bvote.layer,
+					block.id, block.layer,
 				)
 			}
 		}
@@ -882,19 +883,13 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		layerdiff, exist := diff[lid]
 		if exist && len(layerdiff) == 0 {
 			lvote.vote = abstain
-		}
-		for _, block := range layer.blocks {
-			bvote := blockVote{
-				blockInfo: block,
-				vote:      against,
-			}
-			if len(layerdiff) > 0 {
+		} else if exist && len(layerdiff) > 0 {
+			for _, block := range layer.blocks {
 				vote, exist := layerdiff[block.id]
-				if exist {
-					bvote.vote = vote
+				if exist && vote == support {
+					lvote.supported = append(lvote.supported, block)
 				}
 			}
-			lvote.blocks = append(lvote.blocks, bvote)
 		}
 		ballot.votes.append(&lvote)
 	}
@@ -913,10 +908,9 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 		if lvote.vote == abstain {
 			continue
 		}
-		for j := range lvote.blocks {
-			local, _ := getLocalVote(state, config, lvote.blocks[j].blockInfo)
-			vote := lvote.blocks[j].vote
-			if vote != local {
+		for _, block := range lvote.blocks {
+			local, _ := getLocalVote(state, config, block)
+			if lvote.getVote(block.id) != local {
 				return false
 			}
 		}

@@ -42,16 +42,16 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			continue
 		}
 		empty := true
-		for _, bvote := range lvote.blocks {
-			if bvote.height > ballot.height {
+		for _, block := range lvote.blocks {
+			if block.height > ballot.height {
 				continue
 			}
-			switch bvote.vote {
+			switch lvote.getVote(block.id) {
 			case support:
 				empty = false
-				bvote.margin = bvote.margin.Add(ballot.weight)
+				block.margin = block.margin.Add(ballot.weight)
 			case against:
-				bvote.margin = bvote.margin.Sub(ballot.weight)
+				block.margin = block.margin.Sub(ballot.weight)
 			}
 		}
 		if empty {

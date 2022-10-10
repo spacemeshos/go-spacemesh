@@ -131,11 +131,6 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 }
 
 type (
-	blockVote struct {
-		*blockInfo
-		vote sign
-	}
-
 	baseInfo struct {
 		id    types.BallotID
 		layer types.LayerID
@@ -211,11 +206,12 @@ func (v *votes) cutBefore(lid types.LayerID) {
 func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 	for current := v.tail; current != nil; current = current.prev {
 		if current.lid == lid {
-			for _, block := range current.blocks {
+			for _, block := range current.supported {
 				if block.id == bid {
-					return block.vote
+					return support
 				}
 			}
+			return against
 		}
 	}
 	return abstain
@@ -223,17 +219,26 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 
 type layerVote struct {
 	*layerInfo
-	vote   sign
-	blocks []blockVote
+	vote      sign
+	supported []*blockInfo
 
 	prev *layerVote
+}
+
+func (l *layerVote) getVote(bid types.BlockID) sign {
+	for _, block := range l.supported {
+		if block.id == bid {
+			return support
+		}
+	}
+	return against
 }
 
 func (l *layerVote) copy() *layerVote {
 	return &layerVote{
 		layerInfo: l.layerInfo,
 		vote:      l.vote,
-		blocks:    l.blocks,
+		supported: l.supported,
 		prev:      l.prev,
 	}
 }
@@ -255,15 +260,17 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	if exist && len(layerdiff) == 0 {
 		copied.vote = abstain
 	} else if exist && len(layerdiff) > 0 {
-		blocks := make([]blockVote, len(copied.blocks))
-		copy(blocks, copied.blocks)
-		copied.blocks = blocks
-		for i := range copied.blocks {
-			vote, exist := layerdiff[copied.blocks[i].id]
-			if exist {
-				copied.blocks[i].vote = vote
+		var supported []*blockInfo
+		for _, block := range copied.blocks {
+			vote, exist := layerdiff[block.id]
+			if exist && vote == against {
+				continue
+			}
+			if (exist && vote == support) || l.getVote(block.id) == support {
+				supported = append(supported, block)
 			}
 		}
+		copied.supported = supported
 	}
 	return copied
 }
