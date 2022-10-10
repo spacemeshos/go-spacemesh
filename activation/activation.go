@@ -276,15 +276,6 @@ func (b *Builder) SignAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
-	select {
-	case <-ch:
-		return nil
-	case <-ctx.Done():
-		return ErrStopRequested
-	}
-}
-
 func (b *Builder) run(ctx context.Context) {
 	if err := b.generateProof(); err != nil {
 		b.log.Error("Failed to generate proof: %v", err)
