@@ -165,6 +165,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		ch := mgr.StatusChan()
 		var prevStatus *atypes.PostSetupStatus
 		for {
@@ -181,7 +182,6 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 				break
 			}
 		}
-		wg.Done()
 	}()
 
 	// Create data.
