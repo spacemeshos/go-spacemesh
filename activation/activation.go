@@ -109,10 +109,12 @@ type Builder struct {
 	commitmentAtx *types.ATXID
 	cAtxMutex     sync.Mutex
 
+	// mu protects `StartSmeshing` from concurrent access
+	mu sync.Mutex
+
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	mu                    sync.Mutex
 	syncer                syncer
 	log                   log.Log
 	parentCtx             context.Context
@@ -198,14 +200,12 @@ func (b *Builder) Smeshing() bool {
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpts) error {
-	b.mu.Lock()
 	if b.exited != nil {
 		select {
 		case <-b.exited:
 			// we are here if StartSession failed and method returned with error
 			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
 		default:
-			b.mu.Unlock()
 			return errors.New("already started")
 		}
 	}
@@ -220,11 +220,8 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpt
 	if err != nil {
 		close(b.exited)
 		b.started.Store(false)
-		b.mu.Unlock()
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
-
-	b.mu.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts, *commitmentAtx)
 	if err != nil {
