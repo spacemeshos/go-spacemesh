@@ -105,8 +105,9 @@ type Builder struct {
 	initialPost       *types.Post
 
 	// commitmentAtx caches the ATX ID used for the PoST commitment by this node. It is set / fetched
-	// from the DB by calling `getCommitmentAtx()`.
+	// from the DB by calling `getCommitmentAtx()` and cAtxMutex protects its access.
 	commitmentAtx *types.ATXID
+	cAtxMutex     sync.Mutex
 
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
@@ -519,6 +520,9 @@ func (b *Builder) loadChallenge() error {
 }
 
 func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
+	b.cAtxMutex.Lock()
+	defer b.cAtxMutex.Unlock()
+
 	if b.commitmentAtx != nil {
 		return b.commitmentAtx, nil
 	}
