@@ -521,23 +521,35 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	case <-b.syncer.RegisterForATXSynced():
 	}
 
-	id, err := kvstore.GetCommitmentATX(b.cdb)
+	// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
+	atxId, err := atxs.GetFirstIDByNodeID(b.cdb, b.nodeID)
+	if err == nil {
+		atx, err := atxs.Get(b.cdb, atxId)
+		if err == nil {
+			b.commitmentAtx = atx.CommitmentATX
+			return b.commitmentAtx, nil
+		}
+	}
+
+	// if this node has not published an ATX, get the commitment ATX id from the kvstore (if it exists)
+	// otherwise select the best ATX with `findCommitmentAtx`
+	atxId, err = kvstore.GetCommitmentATXForNode(b.cdb, b.nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		id, err := b.findCommitmentAtx()
+		atxId, err := b.findCommitmentAtx()
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine commitment ATX: %w", err)
 		}
-		if err := kvstore.AddCommitmentATX(b.cdb, id); err != nil {
+		if err := kvstore.AddCommitmentATXForNode(b.cdb, atxId, b.nodeID); err != nil {
 			return nil, fmt.Errorf("failed to store commitment ATX: %w", err)
 		}
-		b.commitmentAtx = &id
+		b.commitmentAtx = &atxId
 		return b.commitmentAtx, nil
 	case err != nil:
 		return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
 	}
 
-	b.commitmentAtx = &id
+	b.commitmentAtx = &atxId
 	return b.commitmentAtx, nil
 }
 

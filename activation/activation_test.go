@@ -253,6 +253,7 @@ func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builde
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, hdlr, net, nipostBuilderMock, &postSetupProviderMock{},
 		layerClockMock, &mockSyncer{}, logtest.New(tb).WithName("atxBuilder"))
 	b.initialPost = initialPost
+	b.commitmentAtx = &goldenATXID
 	return b
 }
 
@@ -300,15 +301,19 @@ func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration u
 }
 
 func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) *types.VerifiedActivationTx {
-	prevAtx := &types.ActivationTx{
+	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer(),
 			},
 		},
 	}
-	require.NoError(t, SignAtx(sig, prevAtx))
-	vAtx, err := prevAtx.Verify(0, 1)
+	return addAtx(t, db, sig, atx)
+}
+
+func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
+	require.NoError(t, SignAtx(sig, atx))
+	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx, time.Now()))
 	return vAtx
@@ -534,11 +539,12 @@ func TestBuilder_getCommitmentAtx_storesCommitmentAtx(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	builder := newBuilder(t, cdb, atxHdlr)
+	builder.commitmentAtx = nil
 
 	atx, err := builder.getCommitmentAtx(context.TODO())
 	require.NoError(t, err)
 
-	stored, err := kvstore.GetCommitmentATX(cdb)
+	stored, err := kvstore.GetCommitmentATXForNode(cdb, builder.nodeID)
 	require.NoError(t, err)
 
 	require.Equal(t, *atx, stored)
@@ -548,15 +554,47 @@ func TestBuilder_getCommitmentAtx_getsStoredCommitmentAtx(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	builder := newBuilder(t, cdb, atxHdlr)
+	builder.commitmentAtx = nil
+	commitmentAtx := types.RandomATXID()
 
-	newATX := addPrevAtx(t, cdb, 1) // add a newer ATX
+	// add a newer ATX by a different node
+	newATX := addAtx(t, cdb, NewMockSigner(), &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: types.LayerID{Value: 1},
+			},
+		},
+	})
 
-	err := kvstore.AddCommitmentATX(cdb, goldenATXID)
+	err := kvstore.AddCommitmentATXForNode(cdb, commitmentAtx, builder.nodeID)
 	require.NoError(t, err)
 
 	atx, err := builder.getCommitmentAtx(context.TODO())
 	require.NoError(t, err)
-	require.Equal(t, goldenATXID, *atx)
+	require.Equal(t, commitmentAtx, *atx)
+	require.NotEqual(t, newATX.ID(), atx)
+}
+
+func TestBuilder_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *testing.T) {
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	builder := newBuilder(t, cdb, atxHdlr)
+	builder.commitmentAtx = nil
+	commitmentAtx := types.RandomATXID()
+
+	// add an atx by the same node
+	newATX := addAtx(t, cdb, sig, &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID:    types.LayerID{Value: 1},
+				CommitmentATX: &commitmentAtx,
+			},
+		},
+	})
+
+	atx, err := builder.getCommitmentAtx(context.TODO())
+	require.NoError(t, err)
+	require.Equal(t, commitmentAtx, *atx)
 	require.NotEqual(t, newATX.ID(), atx)
 }
 
@@ -613,6 +651,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
@@ -620,6 +659,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	published, builtNipost, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.False(published)
@@ -660,6 +700,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, faultyNet, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	published, builtNIPost, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
@@ -918,6 +959,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	}
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
@@ -946,6 +988,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	// test load in correct epoch
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	challenge = newChallenge(2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), nil)
@@ -962,6 +1005,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	// test load challenge in later epoch - NIPost should be truncated
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+	b.commitmentAtx = &goldenATXID
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
