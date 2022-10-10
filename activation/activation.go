@@ -88,7 +88,7 @@ type Config struct {
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	pendingPoetClient atomic.UnsafePointer
-	started           atomic.Bool
+	started           *atomic.Bool
 
 	signer
 	accountLock       sync.RWMutex
@@ -109,8 +109,8 @@ type Builder struct {
 	commitmentAtx *types.ATXID
 	cAtxMutex     sync.Mutex
 
-	// mu protects `StartSmeshing` from concurrent access
-	mu sync.Mutex
+	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
+	smeshingMutex sync.Mutex
 
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
@@ -119,7 +119,6 @@ type Builder struct {
 	log                   log.Log
 	parentCtx             context.Context
 	stop                  context.CancelFunc
-	exited                chan struct{}
 	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
@@ -179,6 +178,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 		postSetupProvider:     postSetupProvider,
 		layerClock:            layerClock,
 		syncer:                syncer,
+		started:               atomic.NewBool(false),
 		log:                   log,
 		poetRetryInterval:     defaultPoetRetryInterval,
 		poetClientInitializer: defaultPoetClientFunc,
@@ -200,39 +200,31 @@ func (b *Builder) Smeshing() bool {
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpts) error {
-	if b.exited != nil {
-		select {
-		case <-b.exited:
-			// we are here if StartSession failed and method returned with error
-			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
-		default:
-			return errors.New("already started")
-		}
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+
+	if !b.started.CompareAndSwap(false, true) {
+		return errors.New("already started")
 	}
 
-	b.started.Store(true)
 	b.coinbaseAccount = coinbase
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
-	b.exited = make(chan struct{})
 
 	commitmentAtx, err := b.getCommitmentAtx(ctx)
 	if err != nil {
-		close(b.exited)
 		b.started.Store(false)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 
 	doneChan, err := b.postSetupProvider.StartSession(opts, *commitmentAtx)
 	if err != nil {
-		close(b.exited)
 		b.started.Store(false)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 	go func() {
 		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return "already started"
 		defer b.started.Store(false)
-		defer close(b.exited)
 		select {
 		case <-ctx.Done():
 			return
@@ -266,10 +258,10 @@ func (b *Builder) findCommitmentAtx() (types.ATXID, error) {
 
 // StopSmeshing stops the atx builder.
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
 
-	if b.exited == nil {
+	if !b.started.Load() {
 		return errors.New("not started")
 	}
 
@@ -277,9 +269,8 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		return fmt.Errorf("failed to stop post data creation session: %w", err)
 	}
 
+	b.started.Store(false)
 	b.stop()
-	<-b.exited
-	b.exited = nil
 	return nil
 }
 

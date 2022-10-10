@@ -468,9 +468,10 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
-		require.True(t, builder.Smeshing())
+		require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 		require.NoError(t, builder.StopSmeshing(true))
-		require.False(t, builder.Smeshing())
+		time.Sleep(400 * time.Microsecond)
+		require.Falsef(t, builder.Smeshing(), "failed on execution %d", i)
 	}
 }
 
@@ -506,13 +507,6 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	require.NoError(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
 	require.Error(t, b.StopSmeshing(true))
 	require.True(t, b.Smeshing())
-	require.NotNil(t, b.exited)
-
-	select {
-	case <-b.exited:
-		require.Fail(t, "smeshing should not exit")
-	default:
-	}
 }
 
 func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
