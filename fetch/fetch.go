@@ -17,7 +17,6 @@ import (
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 const (
@@ -137,10 +136,10 @@ type Fetch struct {
 	eg      errgroup.Group
 	bs      *datastore.BlobStore
 	host    host
-	atxSrv  server.Requestor
-	lyrSrv  server.Requestor
-	opnSrv  server.Requestor
-	hashSrv server.Requestor
+	atxSrv  requester
+	lyrSrv  requester
+	opnSrv  requester
+	hashSrv requester
 
 	// activeRequests contains requests that are not processed
 	activeRequests map[types.Hash32][]*request
@@ -158,7 +157,7 @@ type Fetch struct {
 }
 
 // newFetch creates a new Fetch struct.
-func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, opnS, hashS server.Requestor, logger log.Log) *Fetch {
+func newFetch(cfg Config, h host, bs *datastore.BlobStore, atxS, lyrS, opnS, hashS requester, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
@@ -589,7 +588,7 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, lid types.LayerID, okCB fu
 	return poll(ctx, f.opnSrv, f.host.GetPeers(), lid.Bytes(), okCB, errCB)
 }
 
-func poll(ctx context.Context, srv server.Requestor, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
+func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer, int), errCB func(error, p2p.Peer, int)) error {
 	numPeers := len(peers)
 	if numPeers == 0 {
 		return errNoPeers

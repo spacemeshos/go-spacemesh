@@ -11,6 +11,10 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
+type requester interface {
+	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
+}
+
 type fetcher interface {
 	GetEpochATXIDs(context.Context, types.EpochID, func([]byte, p2p.Peer), func(error)) error
 	GetLayerData(context.Context, types.LayerID, func([]byte, p2p.Peer, int), func(error, p2p.Peer, int)) error

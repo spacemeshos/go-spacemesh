@@ -17,26 +17,25 @@ import (
 	ftypes "github.com/spacemeshos/go-spacemesh/fetch/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	smocks "github.com/spacemeshos/go-spacemesh/p2p/server/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 type testFetch struct {
 	*Fetch
 	mh     *mocks.Mockhost
-	mAtxS  *smocks.MockRequestor
-	mLyrS  *smocks.MockRequestor
-	mOpnS  *smocks.MockRequestor
-	mHashS *smocks.MockRequestor
+	mAtxS  *mocks.Mockrequester
+	mLyrS  *mocks.Mockrequester
+	mOpnS  *mocks.Mockrequester
+	mHashS *mocks.Mockrequester
 }
 
 func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	mh := mocks.NewMockhost(ctrl)
-	msAtx := smocks.NewMockRequestor(ctrl)
-	msLyr := smocks.NewMockRequestor(ctrl)
-	msOpn := smocks.NewMockRequestor(ctrl)
-	msHash := smocks.NewMockRequestor(ctrl)
+	msAtx := mocks.NewMockrequester(ctrl)
+	msLyr := mocks.NewMockrequester(ctrl)
+	msOpn := mocks.NewMockrequester(ctrl)
+	msHash := mocks.NewMockrequester(ctrl)
 	cfg := Config{
 		2000, // make sure we never hit the batch timeout
 		3,
