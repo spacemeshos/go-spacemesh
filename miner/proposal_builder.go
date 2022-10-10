@@ -290,6 +290,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 	logger.With().Info("eligible for proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
+	pb.baseBallotProvider.TallyVotes(ctx, layerID)
 	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
