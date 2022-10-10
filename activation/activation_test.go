@@ -961,7 +961,9 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 	err := b.UpdatePoETServers(context.TODO(), []string{"poet0", "poet1"})
 	r.NoError(err)
 
-	r.NotNil(b.receivePendingPoetClients())
+	clients := b.receivePendingPoetClients()
+	r.NotNil(clients)
+	r.Len(*clients, 2)
 	r.Nil(b.receivePendingPoetClients())
 }
 
