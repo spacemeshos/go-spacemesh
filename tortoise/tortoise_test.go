@@ -467,6 +467,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(last.Add(1)))
 	require.NoError(t, err)
 	bids, err := blocks.IDsInLayer(s.GetState(0).DB, last)
+	require.NoError(t, err)
 	require.Equal(t, votes.Support, bids)
 	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
 }
