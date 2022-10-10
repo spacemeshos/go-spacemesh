@@ -291,6 +291,8 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	logger.With().Info("eligible for proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
 	pb.baseBallotProvider.TallyVotes(ctx, layerID)
+	// TODO(dshulyak) will get rid from the EncodeVotesWithCurrent option in a followup
+	// there are some dependencies in the tests
 	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
