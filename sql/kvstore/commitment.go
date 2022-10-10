@@ -20,7 +20,6 @@ func AddCommitmentATXForNode(db sql.Executor, atx types.ATXID, nodeId types.Node
 
 // GetCommitmentATXForNode returns the id for the commitment atx from the key-value store.
 func GetCommitmentATXForNode(db sql.Executor, nodeId types.NodeID) (types.ATXID, error) {
-
 	var res types.ATXID
 	if err := getKeyValue(db, getKeyForNode(nodeId), &res); err != nil {
 		return *types.EmptyATXID, err
