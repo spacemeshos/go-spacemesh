@@ -1,6 +1,7 @@
 package timesync
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -50,13 +51,13 @@ type LayerConverter interface {
 
 // Ticker is the struct responsible for notifying that a layer has been ticked to subscribers.
 type Ticker struct {
-	*subs                 // the sub-unsub provider
-	LayerConverter        // layer conversions provider
-	clock           Clock // provides the time
-	started         bool
-	lastTickedLayer types.LayerID // track last ticked layer
-	layerChannels   map[types.LayerID]chan struct{}
-	log             log.Log
+	*subs                     // the sub-unsub provider
+	LayerConverter            // layer conversions provider
+	clock               Clock // provides the time
+	started             bool
+	lastTickedLayer     types.LayerID // track last ticked layer
+	layersSubscriptions map[types.LayerID][]context.CancelFunc
+	log                 log.Log
 }
 
 // TickerOption to configure Ticker.
@@ -72,12 +73,12 @@ func WithLog(lg log.Log) TickerOption {
 // NewTicker returns a new instance of ticker.
 func NewTicker(c Clock, lc LayerConverter, opts ...TickerOption) *Ticker {
 	t := &Ticker{
-		subs:            newSubs(),
-		lastTickedLayer: lc.TimeToLayer(c.Now()),
-		clock:           c,
-		LayerConverter:  lc,
-		layerChannels:   make(map[types.LayerID]chan struct{}),
-		log:             log.NewNop(),
+		subs:                newSubs(),
+		lastTickedLayer:     lc.TimeToLayer(c.Now()),
+		clock:               c,
+		LayerConverter:      lc,
+		layersSubscriptions: make(map[types.LayerID][]context.CancelFunc),
+		log:                 log.NewNop(),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -110,9 +111,11 @@ func (t *Ticker) Notify() (int, error) {
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
 	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
-		if layerChan, found := t.layerChannels[l]; found {
-			close(layerChan)
-			delete(t.layerChannels, l)
+		if cancels, found := t.layersSubscriptions[l]; found {
+			for _, cancel := range cancels {
+				cancel()
+			}
+			delete(t.layersSubscriptions, l)
 		}
 	}
 
@@ -181,20 +184,26 @@ func init() {
 
 // AwaitLayer returns a channel that will be signaled when layer id layerID was ticked by the clock, or if this layer has passed
 // while sleeping. it does so by closing the returned channel.
-func (t *Ticker) AwaitLayer(layerID types.LayerID) chan struct{} {
+func (t *Ticker) AwaitLayer(ctx context.Context, layerID types.LayerID) context.Context {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	layerCtx, cancel := context.WithCancel(ctx)
 
 	layerTime := t.LayerToTime(layerID)
 	now := t.clock.Now()
 	if now.After(layerTime) || now.Equal(layerTime) { // passed the time of layerID
-		return closedChan
+		cancel()
+		return layerCtx
 	}
 
-	ch := t.layerChannels[layerID]
-	if ch == nil {
-		ch = make(chan struct{})
-		t.layerChannels[layerID] = ch
+	cancels := t.layersSubscriptions[layerID]
+	if cancels == nil {
+		cancels = make([]context.CancelFunc, 0, 1)
 	}
-	return ch
+
+	cancels = append(cancels, cancel)
+	t.layersSubscriptions[layerID] = cancels
+
+	return layerCtx
 }

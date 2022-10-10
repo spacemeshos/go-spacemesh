@@ -196,17 +196,17 @@ func createTestHare(t testing.TB, db *sql.Database, tcfg config.Config, clock *m
 }
 
 type mockClock struct {
-	channels     map[types.LayerID]chan struct{}
-	layerTime    map[types.LayerID]time.Time
-	currentLayer types.LayerID
-	m            sync.RWMutex
+	layersSubscriptions map[types.LayerID][]context.CancelFunc
+	layerTime           map[types.LayerID]time.Time
+	currentLayer        types.LayerID
+	m                   sync.RWMutex
 }
 
 func newMockClock() *mockClock {
 	return &mockClock{
-		channels:     make(map[types.LayerID]chan struct{}),
-		layerTime:    map[types.LayerID]time.Time{types.GetEffectiveGenesis(): time.Now()},
-		currentLayer: types.GetEffectiveGenesis().Add(1),
+		layersSubscriptions: make(map[types.LayerID][]context.CancelFunc),
+		layerTime:           map[types.LayerID]time.Time{types.GetEffectiveGenesis(): time.Now()},
+		currentLayer:        types.GetEffectiveGenesis().Add(1),
 	}
 }
 
@@ -217,21 +217,20 @@ func (m *mockClock) LayerToTime(layer types.LayerID) time.Time {
 	return m.layerTime[layer]
 }
 
-func (m *mockClock) AwaitLayer(layer types.LayerID) chan struct{} {
+func (m *mockClock) AwaitLayer(ctx context.Context, layer types.LayerID) context.Context {
 	m.m.Lock()
 	defer m.m.Unlock()
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	if _, ok := m.layerTime[layer]; ok {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
+		cancel()
+		return ctx
 	}
-	if ch, ok := m.channels[layer]; ok {
-		return ch
-	}
-	ch := make(chan struct{})
-	m.channels[layer] = ch
-	return ch
+	cancels := m.layersSubscriptions[layer]
+	cancels = append(cancels, cancel)
+	m.layersSubscriptions[layer] = cancels
+	return ctx
 }
 
 func (m *mockClock) GetCurrentLayer() types.LayerID {
@@ -247,9 +246,11 @@ func (m *mockClock) advanceLayer() {
 	defer m.m.Unlock()
 
 	m.layerTime[m.currentLayer] = time.Now()
-	if ch, ok := m.channels[m.currentLayer]; ok {
-		close(ch)
-		delete(m.channels, m.currentLayer)
+	if cancels, ok := m.layersSubscriptions[m.currentLayer]; ok {
+		for _, cancel := range cancels {
+			cancel()
+		}
+		delete(m.layersSubscriptions, m.currentLayer)
 	}
 	m.currentLayer = m.currentLayer.Add(1)
 }

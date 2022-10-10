@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,7 +22,7 @@ type nipostValidator interface {
 }
 
 type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(ctx context.Context, layerID types.LayerID) context.Context
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }

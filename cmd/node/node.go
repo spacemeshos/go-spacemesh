@@ -173,7 +173,7 @@ type TickProvider interface {
 	GetGenesisTime() time.Time
 	LayerToTime(types.LayerID) time.Time
 	Close()
-	AwaitLayer(types.LayerID) chan struct{}
+	AwaitLayer(context.Context, types.LayerID) context.Context
 }
 
 func loadConfig(cmd *cobra.Command) (*config.Config, error) {

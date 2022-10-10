@@ -122,7 +122,7 @@ type NIPostBuilderMock struct {
 
 func (np NIPostBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32) (*types.NIPost, error) {
 	if np.buildNIPostFunc != nil {
 		return np.buildNIPostFunc(challenge)
 	}
@@ -133,7 +133,7 @@ type NIPostErrBuilderMock struct{}
 
 func (np *NIPostErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
-func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, error) {
+func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32) (*types.NIPost, error) {
 	return nil, fmt.Errorf("NIPost builder error")
 }
 
@@ -221,13 +221,9 @@ func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
 	return l.currentLayer
 }
 
-func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		close(ch)
-	}()
-	return ch
+func (l *LayerClockMock) AwaitLayer(ctx context.Context, layerId types.LayerID) context.Context {
+	layerCtx, _ := context.WithTimeout(ctx, 500*time.Millisecond)
+	return layerCtx
 }
 
 // TODO(mafa): replace this mock a generated one.
@@ -360,13 +356,13 @@ func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
 		WithPoetConfig(poetCfg))
 	b.initialPost = initialPost
 
-	ch := make(chan struct{}, 1)
-	close(ch)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
 	addPrevAtx(t, cdb, current.GetEpoch()-1)
 	mClock.EXPECT().GetCurrentLayer().Return(current)
 	mClock.EXPECT().LayerToTime(current).Return(time.Now().Add(-5 * time.Millisecond))
-	mClock.EXPECT().AwaitLayer(current.Add(layersPerEpoch)).Return(ch)
+	mClock.EXPECT().AwaitLayer(gomock.Any(), current.Add(layersPerEpoch)).Return(ctx)
 	mClock.EXPECT().GetCurrentLayer().Return(current.Add(layersPerEpoch)).AnyTimes()
 	require.True(t, b.waitForFirstATX(context.TODO()))
 }

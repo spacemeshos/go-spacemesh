@@ -19,7 +19,7 @@ type conservativeState interface {
 }
 
 type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(ctx context.Context, layerID types.LayerID) context.Context
 	GetCurrentLayer() types.LayerID
 }
 

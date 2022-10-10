@@ -48,7 +48,7 @@ const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
 	updatePoETProver(PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
+	BuildNIPost(ctx context.Context, challenge *types.Hash32) (*types.NIPost, error)
 }
 
 type atxHandler interface {
@@ -292,7 +292,9 @@ func (b *Builder) run(ctx context.Context) {
 	}
 
 	// ensure layer 1 has arrived
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
+	select {
+	case <-b.layerClock.AwaitLayer(ctx, types.NewLayerID(1)).Done():
+	case <-ctx.Done():
 		return
 	}
 
@@ -349,7 +351,7 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 		select {
 		case <-ctx.Done():
 			return false
-		case <-b.layerClock.AwaitLayer(waitTill):
+		case <-b.layerClock.AwaitLayer(ctx, waitTill).Done():
 			wait = window
 		}
 	}
@@ -413,11 +415,7 @@ func (b *Builder) loop(ctx context.Context) {
 			default:
 				// other failures are related to in-process software. we may as well panic here
 				currentLayer := b.layerClock.GetCurrentLayer()
-				select {
-				case <-ctx.Done():
-					return
-				case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
-				}
+				<-b.layerClock.AwaitLayer(ctx, currentLayer.Add(1)).Done()
 			}
 		}
 	}
@@ -542,7 +540,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	select {
 	case <-atxReceived:
 		logger.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
+	case <-b.layerClock.AwaitLayer(ctx, (atx.TargetEpoch() + 1).FirstLayer()).Done():
 		select {
 		case <-atxReceived:
 			logger.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
@@ -571,11 +569,11 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 	// the following method waits for a PoET proof, which should take ~1 epoch
 	expireLayer := (pubEpoch + 2).FirstLayer()
-	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
+	atxExpiredContext := b.layerClock.AwaitLayer(ctx, expireLayer) // this fires when the target epoch is over
 
 	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
 
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
+	nipost, err := b.nipostBuilder.BuildNIPost(atxExpiredContext, hash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
@@ -585,9 +583,12 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
-		return nil, fmt.Errorf("failed to wait for publication epoch: %w", err)
+	select {
+	case <-b.layerClock.AwaitLayer(ctx, pubEpoch.FirstLayer()).Done():
+	case <-ctx.Done():
+		return nil, fmt.Errorf("failed to wait for publication epoch: %w", ErrStopRequested)
 	}
+
 	b.log.Info("publication epoch has arrived!")
 	if discarded := b.discardChallengeIfStale(); discarded {
 		return nil, fmt.Errorf("%w: atx target epoch has passed during nipost construction", ErrATXChallengeExpired)

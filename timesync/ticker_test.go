@@ -1,6 +1,7 @@
 package timesync
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -164,10 +165,10 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	})
 
 	l := ticker.GetCurrentLayer().Add(1)
-	ch := ticker.AwaitLayer(l)
+	ctx := ticker.AwaitLayer(context.Background(), l)
 
 	select {
-	case <-ch:
+	case <-ctx.Done():
 		r.Fail("got notified before layer ticked")
 	default:
 	}
@@ -179,23 +180,17 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	r.Zero(missedTicks)
 
 	select {
-	case <-ch:
+	case <-ctx.Done():
 	default:
 		r.Fail("did not get notified despite layer ticking")
 	}
 
-	ch2 := ticker.AwaitLayer(l)
-
-	r.NotEqual(ch, ch2) // original channel should be discarded and a constant closedChannel should be returned
+	ctx = ticker.AwaitLayer(context.Background(), l)
 	select {
-	case <-ch2:
+	case <-ctx.Done():
 	default:
-		r.Fail("returned channel was not closed, despite awaiting past layer")
+		r.Fail("returned context was not canceled aldready, despite awaiting past layer")
 	}
-
-	ch3 := ticker.AwaitLayer(l.Sub(1))
-
-	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
 }
 
 func TestTicker_AwaitLayerOldSubs(t *testing.T) {
@@ -208,11 +203,11 @@ func TestTicker_AwaitLayerOldSubs(t *testing.T) {
 		genesis:  c.Now(),
 	})
 	tr.StartNotifying()
-	ch := tr.AwaitLayer(types.NewLayerID(5)) // sub to layer 5
-	c.advance(lDur * 2)                      // clock advanced only two layers
-	tr.Notify()                              // notify called (before layer 5)
+	ctx := tr.AwaitLayer(context.Background(), types.NewLayerID(5)) // sub to layer 5
+	c.advance(lDur * 2)                                             // clock advanced only two layers
+	tr.Notify()                                                     // notify called (before layer 5)
 	select {
-	case <-ch:
+	case <-ctx.Done():
 		r.FailNow(t.Name() + "released before layer 5")
 	default:
 	}
@@ -220,7 +215,7 @@ func TestTicker_AwaitLayerOldSubs(t *testing.T) {
 	tr.Notify()          // this should release ch since layer 5 is in the past
 
 	select {
-	case <-ch:
+	case <-ctx.Done():
 	default:
 		r.FailNow(t.Name() + "timed out")
 	}

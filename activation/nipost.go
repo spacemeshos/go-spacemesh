@@ -98,7 +98,7 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 // BuildNIPost uses the given challenge to build a NIPost. "atxExpired" and "stop" are channels for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, atxExpired chan struct{}) (*types.NIPost, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32) (*types.NIPost, error) {
 	nb.load(*challenge)
 
 	if s := nb.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
@@ -146,11 +146,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		var poetProofRef []byte
 		select {
 		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID):
-		case <-atxExpired:
-			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
-			return nil, fmt.Errorf("%w: while waiting for poet proof, target epoch ended", ErrATXChallengeExpired)
 		case <-ctx.Done():
-			return nil, ErrStopRequested
+			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
+			return nil, ctx.Err()
 		}
 
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)

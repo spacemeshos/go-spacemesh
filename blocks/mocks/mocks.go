@@ -126,17 +126,17 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 }
 
 // AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+func (m *MocklayerClock) AwaitLayer(ctx context.Context, layerID types.LayerID) context.Context {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AwaitLayer", layerID)
-	ret0, _ := ret[0].(chan struct{})
+	ret := m.ctrl.Call(m, "AwaitLayer", ctx, layerID)
+	ret0, _ := ret[0].(context.Context)
 	return ret0
 }
 
 // AwaitLayer indicates an expected call of AwaitLayer.
-func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID interface{}) *gomock.Call {
+func (mr *MocklayerClockMockRecorder) AwaitLayer(ctx, layerID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), ctx, layerID)
 }
 
 // GetCurrentLayer mocks base method.

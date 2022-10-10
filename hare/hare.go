@@ -53,7 +53,7 @@ type RoundClock interface {
 // layer number to a clock time.
 type LayerClock interface {
 	LayerToTime(id types.LayerID) time.Time
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(ctx context.Context, layerID types.LayerID) context.Context
 	GetCurrentLayer() types.LayerID
 }
 
@@ -436,7 +436,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
-		case <-h.layerClock.AwaitLayer(layer):
+		case <-h.layerClock.AwaitLayer(ctx, layer).Done():
 			if time.Since(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
 				h.With().Warning("missed hare window, skipping layer", layer)
 				continue

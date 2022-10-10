@@ -114,14 +114,11 @@ func verifySaved(t *testing.T, db *sql.Database, lid types.LayerID, bid types.Bl
 func TestStartStop(t *testing.T) {
 	tc := newTestCertifier(t)
 	lid := types.NewLayerID(11)
-	ch := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
 	tc.mClk.EXPECT().GetCurrentLayer().Return(lid).AnyTimes()
-	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(_ types.LayerID) chan struct{} {
-			return ch
-		}).AnyTimes()
+	tc.mClk.EXPECT().AwaitLayer(gomock.Any(), gomock.Any()).Return(ctx).AnyTimes()
 	tc.Start()
-	ch <- struct{}{}
+	cancel()
 	tc.Start() // calling Start() for the second time have no effect
 	tc.Stop()
 }
@@ -365,19 +362,18 @@ func Test_OldLayersPruned(t *testing.T) {
 	require.Equal(t, 2, tc.NumCached())
 
 	current := lid.Add(tc.cfg.NumLayersToKeep + 1)
-	ch := make(chan struct{}, 1)
 	pruned := make(chan struct{}, 1)
 	tc.mClk.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-	tc.mClk.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) chan struct{} {
+	tc.mClk.EXPECT().AwaitLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, got types.LayerID) context.Context {
 			if got == current.Add(1) {
 				close(pruned)
 			}
-			return ch
+			layerCtx, cancel := context.WithCancel(ctx)
+			cancel()
+			return layerCtx
 		}).AnyTimes()
 	tc.Start()
-	ch <- struct{}{} // for current
-	ch <- struct{}{} // for current+1
 	<-pruned
 	require.Equal(t, 1, tc.NumCached())
 	tc.Stop()
