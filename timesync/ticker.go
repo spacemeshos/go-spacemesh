@@ -182,8 +182,8 @@ func init() {
 	close(closedChan)
 }
 
-// AwaitLayer returns a channel that will be signaled when layer id layerID was ticked by the clock, or if this layer has passed
-// while sleeping. it does so by closing the returned channel.
+// AwaitLayer returns a context that will be canceled when layer with given id is ticked by the clock,
+// or if this layer has passed while sleeping.
 func (t *Ticker) AwaitLayer(ctx context.Context, layerID types.LayerID) context.Context {
 	t.mu.Lock()
 	defer t.mu.Unlock()
