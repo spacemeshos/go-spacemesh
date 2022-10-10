@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"time"
 
 	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -60,7 +59,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
-const edKeyFileName = "key.bin"
+const (
+	edKeyFileName   = "key.bin"
+	genesisFileName = "genesis.json"
+)
 
 // Logger names.
 const (
@@ -115,11 +117,11 @@ var Cmd = &cobra.Command{
 		)
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
-				return fmt.Errorf("init node: %w", err)
+				return err
 			}
 			// This blocks until the context is finished or until an error is produced
 			if err := app.Start(); err != nil {
-				return fmt.Errorf("start node: %w", err)
+				return err
 			}
 
 			return nil
@@ -127,7 +129,7 @@ var Cmd = &cobra.Command{
 		err = starter()
 		app.Cleanup()
 		if err != nil {
-			log.With().Fatal("Failed to run the node. See logs for details.", log.Err(err))
+			log.With().Fatal(err.Error())
 		}
 	},
 }
@@ -197,6 +199,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	}
 
 	conf := config.DefaultConfig()
+
 	if name := viper.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
@@ -296,6 +299,33 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
+	// ensure all data folders exist
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
+	if err != nil {
+		return fmt.Errorf("ensure folders exist: %w", err)
+	}
+
+	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
+	var existing config.GenesisConfig
+	if err := existing.LoadFromFile(gpath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
+		}
+		if err := app.Config.Genesis.Validate(); err != nil {
+			return err
+		}
+		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
+			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
+		}
+	} else {
+		diff := existing.Diff(app.Config.Genesis)
+		if len(diff) > 0 {
+			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
+		}
+	}
+	signing.DefaultVerifier = signing.NewEDVerifier(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
+
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
@@ -314,12 +344,6 @@ func (app *App) Initialize() (err error) {
 
 	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
-
-	// ensure all data folders exist
-	err = filesystem.ExistOrCreate(app.Config.DataDir())
-	if err != nil {
-		return fmt.Errorf("ensure folders exist: %w", err)
-	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
@@ -444,7 +468,12 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	state := vm.New(sqlDB, vm.WithLogger(app.addLogger(VMLogger, lg)))
+	cfg := vm.DefaultConfig()
+	cfg.GasLimit = app.Config.BlockGasLimit
+	cfg.GenesisID = app.Config.Genesis.GenesisID()
+	state := vm.New(sqlDB,
+		vm.WithConfig(cfg),
+		vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -466,7 +495,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+	goldenATXID := types.ATXID(app.Config.Genesis.GenesisID().ToHash32())
 	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
@@ -797,7 +826,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerProposal))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
@@ -928,7 +957,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner()
+		edSgn := signing.NewEdSigner(signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
 		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
@@ -941,8 +970,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-
-	edSgn, err := signing.NewEdSignerFromBuffer(data)
+	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
@@ -1036,9 +1064,9 @@ func (app *App) Start() error {
 	/* Initialize all protocol services */
 
 	dbStorepath := app.Config.DataDir()
-	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.Genesis.GenesisTime, err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
@@ -1050,7 +1078,7 @@ func (app *App) Start() error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg,
+	app.host, err = p2p.New(ctx, p2plog, cfg, app.Config.Genesis.GenesisID(),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
@@ -1075,7 +1103,7 @@ func (app *App) Start() error {
 
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

@@ -73,7 +73,7 @@ func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 
 func (f *full) countVotes(logger log.Log) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
-		for _, ballot := range f.ballots[lid] {
+		for _, ballot := range f.layer(lid).ballots {
 			f.countBallot(logger, ballot)
 		}
 	}

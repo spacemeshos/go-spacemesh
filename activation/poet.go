@@ -25,9 +25,6 @@ type HTTPPoetHarness struct {
 	h        *integration.Harness
 }
 
-// A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
-var _ PoetProvingServiceClient = (*HTTPPoetHarness)(nil)
-
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
 func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	cfg, err := integration.DefaultConfig()
@@ -60,9 +57,6 @@ type HTTPPoetClient struct {
 	baseURL    string
 	ctxFactory func(ctx context.Context) (context.Context, context.CancelFunc)
 }
-
-// A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
-var _ PoetProvingServiceClient = (*HTTPPoetClient)(nil)
 
 func defaultPoetClientFunc(target string) PoetProvingServiceClient {
 	return NewHTTPPoetClient(target)

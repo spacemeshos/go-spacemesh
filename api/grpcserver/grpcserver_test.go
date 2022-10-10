@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
@@ -62,13 +62,13 @@ const (
 	layerAvgSize     = 10
 	txsPerProposal   = 99
 	layersPerEpoch   = uint32(5)
-	networkID        = 120
-	atxPerLayer      = 2
-	blkPerLayer      = 3
-	accountBalance   = 8675301
-	accountCounter   = 0
-	rewardAmount     = 5551234
-	receiptIndex     = 42
+
+	atxPerLayer    = 2
+	blkPerLayer    = 3
+	accountBalance = 8675301
+	accountCounter = 0
+	rewardAmount   = 5551234
+	receiptIndex   = 42
 )
 
 var (
@@ -78,6 +78,7 @@ var (
 	layerLatest           = types.NewLayerID(10)
 	layerCurrent          = types.NewLayerID(12)
 	postGenesisEpochLayer = types.NewLayerID(22)
+	genesisID             = types.Hash20{}
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
@@ -373,30 +374,27 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 // PostAPIMock is a mock for Post API.
 type PostAPIMock struct{}
 
-// A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
-var _ api.PostSetupAPI = (*PostAPIMock)(nil)
-
-func (*PostAPIMock) Status() *activation.PostSetupStatus {
-	return &activation.PostSetupStatus{}
+func (*PostAPIMock) Status() *atypes.PostSetupStatus {
+	return &atypes.PostSetupStatus{}
 }
 
-func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
-	ch := make(chan *activation.PostSetupStatus, 1)
+func (p *PostAPIMock) StatusChan() <-chan *atypes.PostSetupStatus {
+	ch := make(chan *atypes.PostSetupStatus, 1)
 	ch <- p.Status()
 	close(ch)
 
 	return ch
 }
 
-func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
+func (p *PostAPIMock) ComputeProviders() []atypes.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
+func (p *PostAPIMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -412,25 +410,22 @@ func (p *PostAPIMock) LastError() error {
 	return nil
 }
 
-func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
-	return &activation.PostSetupOpts{}
+func (p *PostAPIMock) LastOpts() *atypes.PostSetupOpts {
+	return &atypes.PostSetupOpts{}
 }
 
-func (p *PostAPIMock) Config() activation.PostConfig {
-	return activation.PostConfig{}
+func (p *PostAPIMock) Config() atypes.PostConfig {
+	return atypes.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
 type SmeshingAPIMock struct{}
 
-// A compile time check to ensure that SmeshingAPIMock fully implements the SmeshingAPI interface.
-var _ api.SmeshingAPI = (*SmeshingAPIMock)(nil)
-
 func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, atypes.PostSetupOpts) error {
 	return nil
 }
 
@@ -1111,7 +1106,7 @@ func TestSmesherService(t *testing.T) {
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1149,11 +1144,11 @@ func TestMeshService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(2), response.Epochnum.Value)
 		}},
-		{"NetId", func(t *testing.T) {
+		{"GenesisID", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			response, err := c.NetID(context.Background(), &pb.NetIDRequest{})
+			response, err := c.GenesisID(context.Background(), &pb.GenesisIDRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(networkID), response.Netid.Value)
+			require.Equal(t, genesisID.Bytes(), response.GenesisID)
 		}},
 		{"LayerDuration", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2095,7 +2090,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2403,7 +2398,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}
 	logtest.SetupGlobal(t)
 
-	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2477,131 +2472,108 @@ func TestLayerStream_comprehensive(t *testing.T) {
 }
 
 func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_AccountWrapper:
-		// Check the account, nonce, and balance
-		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address,
-			"inner account has bad address")
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
-			"inner account has bad current counter")
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
-			"inner account has bad current balance")
-		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
-			"inner account has bad projected counter")
-		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
-			"inner account has bad projected balance")
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
+	x := dataItem.(*pb.AccountData_AccountWrapper)
+	// Check the account, nonce, and balance
+	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address,
+		"inner account has bad address")
+	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
+		"inner account has bad current counter")
+	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
+		"inner account has bad current balance")
+	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
+		"inner account has bad projected counter")
+	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
+		"inner account has bad projected balance")
 }
 
 func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_Reward:
-		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-		require.Nil(t, x.Reward.Smesher)
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
+	x := dataItem.(*pb.AccountData_Reward)
+	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
+	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Nil(t, x.Reward.Smesher)
 }
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_MeshTransaction:
-		// Check the sender
-		require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
-	default:
-		require.Fail(t, "inner account data item has wrong data type", x)
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountMeshData_MeshTransaction{}, dataItem)
+	x := dataItem.(*pb.AccountMeshData_MeshTransaction)
+	// Check the sender
+	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 }
 
 func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_Activation:
-		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-		require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
-		require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
-		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
-	default:
-		require.Fail(t, "inner account data item has wrong tx data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
+	x := dataItem.(*pb.AccountMeshData_Activation)
+	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
+	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
+	require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
+	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
+	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 }
 
 func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_Reward:
-		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-
-	default:
-		require.Fail(t, fmt.Sprintf("inner account data item has wrong data type: %T", dataItem))
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
+	x := dataItem.(*pb.AccountData_Reward)
+	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
 func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.AccountData_AccountWrapper:
-		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
-		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
-		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
+	x := dataItem.(*pb.AccountData_AccountWrapper)
+	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
+	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
 func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_Reward:
-		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.GlobalStateData_Reward{}, dataItem)
+	x := dataItem.(*pb.GlobalStateData_Reward)
+	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_AccountWrapper:
-		require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
-		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
-		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.GlobalStateData_AccountWrapper{}, dataItem)
+	x := dataItem.(*pb.GlobalStateData_AccountWrapper)
+	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
+	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
 func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
-	switch x := dataItem.(type) {
-	case *pb.GlobalStateData_GlobalState:
-		require.Equal(t, layerFirst.Uint32(), x.GlobalState.Layer.Number)
-		require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
-
-	default:
-		require.Fail(t, "inner account data item has wrong data type")
-	}
+	t.Helper()
+	require.IsType(t, &pb.GlobalStateData_GlobalState{}, dataItem)
+	x := dataItem.(*pb.GlobalStateData_GlobalState)
+	require.Equal(t, layerFirst.Uint32(), x.GlobalState.Layer.Number)
+	require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
 }
 
 func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	cfg.GrpcServerPort = 9192
 	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2663,7 +2635,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerProposal)
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)

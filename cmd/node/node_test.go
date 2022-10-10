@@ -42,6 +42,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -558,9 +559,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := p2p.Upgrade(mesh.Hosts()[0])
+	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
-	app, err := initSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
@@ -677,11 +678,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// Use a unique port
 	port := 1236
 
-	// Use a unique dir for data so we don't read existing state
-	path := t.TempDir()
-
 	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
+	cfg.DataDirParent = t.TempDir()
 	app.Config = &cfg
 
 	signer := signing.NewEdSigner()
@@ -690,8 +689,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
 		r.NoError(app.Initialize())
-
-		app.Config.DataDirParent = path
 
 		// GRPC configuration
 		app.Config.API.GrpcServerPort = port
@@ -709,8 +706,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-		app.Config.Genesis = &apiConfig.GenesisConfig{
+		app.Config.Genesis = &config.GenesisConfig{
+			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
 			},
@@ -743,7 +740,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}))
+	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
 
 	stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
@@ -801,14 +798,18 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf := config.DefaultConfig()
+	conf.DataDirParent = t.TempDir()
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
 	conf = config.DefaultTestConfig()
+	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
-	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	tconf := getTestDefaultConfig()
+	tconf.DataDirParent = t.TempDir()
+	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
 
 	conf.Tortoise.Zdist = 5
@@ -840,14 +841,14 @@ func TestConfig_Preset(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
-		const networkID = 42
-		require.NoError(t, cmd.ParseFlags([]string{"--network-id=" + strconv.Itoa(networkID)}))
+		const lowPeers = 1234
+		require.NoError(t, cmd.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		preset.P2P.NetworkID = networkID
+		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, *conf)
 	})
 
@@ -857,9 +858,9 @@ func TestConfig_Preset(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
-		const networkID = 42
+		const lowPeers = 1234
 
-		content := fmt.Sprintf(`{"p2p": {"network-id": %d}}`, networkID)
+		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
@@ -868,10 +869,11 @@ func TestConfig_Preset(t *testing.T) {
 		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		preset.P2P.NetworkID = networkID
+		preset.P2P.LowPeers = lowPeers
 		preset.ConfigFile = path
 		require.Equal(t, preset, *conf)
 	})
+
 	t.Run("LoadedFromConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
@@ -911,6 +913,53 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		for _, key := range keys {
 			require.EqualValues(t, conf.Genesis.Accounts[key], value)
 		}
+	})
+}
+
+func TestGenesisConfig(t *testing.T) {
+	t.Run("config is written to a file", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		var existing config.GenesisConfig
+		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
+		require.Empty(t, existing.Diff(app.Config.Genesis))
+	})
+	t.Run("no error if no diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		require.NoError(t, app.Initialize())
+	})
+	t.Run("fatal error on a diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		app.Config.Genesis.ExtraData = "changed"
+		err := app.Initialize()
+		require.ErrorContains(t, err, "genesis config")
+	})
+	t.Run("not valid time", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+
+		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
+	})
+	t.Run("long extra data", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+
+		require.ErrorContains(t, app.Initialize(), "extra-data")
 	})
 }
 
@@ -959,11 +1008,10 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
-	cfg.GoldenATXID = "0x5678"
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
-	cfg.Genesis = apiConfig.DefaultTestGenesisConfig()
+	cfg.Genesis = config.DefaultTestGenesisConfig()
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
@@ -977,7 +1025,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 ) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
-	smApp.Config.GenesisTime = genesisTime
+	smApp.Config.Genesis.GenesisTime = genesisTime
 
 	coinbaseAddressBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))

@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/niposts"
+	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
 )
 
 // ========== Vars / Consts ==========
@@ -140,7 +140,6 @@ func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan
 type ValidatorMock struct{}
 
 // A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
-var _ nipostValidator = (*ValidatorMock)(nil)
 
 func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) (uint64, error) {
 	return 1, nil
@@ -231,10 +230,13 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	return ch
 }
 
+// TODO(mafa): replace this mock a generated one.
 type mockSyncer struct{}
 
-func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
+func (m *mockSyncer) RegisterForATXSynced() chan struct{} {
+	ch := make(chan struct{})
 	close(ch)
+	return ch
 }
 
 func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builder {
@@ -400,7 +402,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
@@ -422,7 +424,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	builder.initialPost = initialPost
 
 	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+		require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
@@ -768,12 +770,9 @@ func TestBuilder_SignAtx(t *testing.T) {
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
 
-	pubkey, err := ed25519.ExtractPublicKey(atxBytes, atx.Sig)
+	pubkey, err := signing.ExtractPublicKey(atxBytes, atx.Sig)
 	assert.NoError(t, err)
 	assert.Equal(t, sig.NodeID().ToBytes(), []byte(pubkey))
-
-	ok := signing.Verify(signing.NewPublicKey(atx.NodeID().ToBytes()), atxBytes, atx.Sig)
-	assert.True(t, ok)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
@@ -821,8 +820,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	// test load in correct epoch
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
-	err = b.loadChallenge()
-	assert.NoError(t, err)
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	challenge = newChallenge(2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10))
@@ -833,7 +830,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b = NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, &FaultyNetMock{}, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
-	got, err := niposts.Get(cdb, getNIPostKey())
+	got, err := kvstore.GetNIPostChallenge(cdb)
 	require.NoError(t, err)
 	require.NotEmpty(t, got)
 
@@ -845,8 +842,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
-	got, err = niposts.Get(cdb, getNIPostKey())
-	require.NoError(t, err)
+	got, err = kvstore.GetNIPostChallenge(cdb)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }
 

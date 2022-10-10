@@ -1641,6 +1641,35 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
 }
 
+func TestObjectsNotProcessedBeforeRefencedHeight(t *testing.T) {
+	ctx := context.Background()
+
+	s := sim.New()
+	s.Setup()
+	cfg := defaultTestConfig()
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	last := s.Next()
+
+	blks, err := blocks.Layer(s.GetState(0).DB, last)
+	require.NoError(t, err)
+	for _, block := range blks {
+		tortoise.OnBlock(block)
+	}
+
+	blts, err := ballots.Layer(s.GetState(0).DB, last)
+	require.NoError(t, err)
+	for _, ballot := range blts {
+		tortoise.OnBallot(ballot)
+	}
+
+	require.Empty(t, tortoise.trtl.layers[last])
+
+	tortoise.TallyVotes(ctx, last)
+	require.NotEmpty(t, tortoise.trtl.layers[last])
+	tortoise.TallyVotes(ctx, s.Next())
+	require.Equal(t, last, tortoise.LatestComplete())
+}
+
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 	ctx := context.Background()
 
@@ -2654,14 +2683,13 @@ func TestStateManagement(t *testing.T) {
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)
 	for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
 		require.Empty(t, tortoise.trtl.layers[lid])
-		require.Empty(t, tortoise.trtl.ballots[lid])
 	}
 
 	for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
 		for _, block := range tortoise.trtl.layers[lid].blocks {
 			require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
 		}
-		for _, ballot := range tortoise.trtl.ballots[lid] {
+		for _, ballot := range tortoise.trtl.layer(lid).ballots {
 			require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
 			for current := ballot.votes.tail; current != nil; current = current.prev {
 				require.True(t, !current.lid.Before(evicted), "no votes for layers before evicted (evicted %s, in state %s, ballot %s)", evicted, current.lid, ballot.layer)
@@ -2698,6 +2726,40 @@ func TestFutureHeight(t *testing.T) {
 		tortoise.TallyVotes(context.Background(), last)
 		// verifies layer by counting all votes
 		require.Equal(t, last.Sub(1), tortoise.LatestComplete())
+	})
+	t.Run("find refheight from the last non-empty layer", func(t *testing.T) {
+		cfg := defaultTestConfig()
+		cfg.Hdist = 10
+		cfg.LayerSize = 10
+		const (
+			median = 20
+			slow   = 10
+
+			smeshers = 7
+		)
+		s := sim.New(
+			sim.WithLayerSize(smeshers),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(smeshers, smeshers),
+			sim.WithSetupTicks(
+				median, median, median,
+				median,
+				slow, slow, slow,
+			))
+
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		tortoise.TallyVotes(context.Background(), s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1)))
+		tortoise.TallyVotes(context.Background(),
+			s.Next(sim.WithEmptyHareOutput(), sim.WithNumBlocks(0)))
+		// 3 is handpicked so that threshold will be crossed if bug wasn't fixed
+		for i := 0; i < 3; i++ {
+			tortoise.TallyVotes(context.Background(), s.Next(sim.WithNumBlocks(1)))
+		}
+
+		require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
 	})
 	t.Run("median above slow smeshers", func(t *testing.T) {
 		s := sim.New(
@@ -2912,21 +2974,21 @@ func TestDecodeExceptions(t *testing.T) {
 		sim.WithNumBlocks(1),
 	)
 	tortoise.TallyVotes(ctx, last)
-	ballots1 := tortoise.trtl.ballots[last]
+	ballots1 := tortoise.trtl.layer(last).ballots
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
 		sim.WithVoteGenerator(voteForBlock(block)),
 	)
 	tortoise.TallyVotes(ctx, last)
-	ballots2 := tortoise.trtl.ballots[last]
+	ballots2 := tortoise.trtl.layer(last).ballots
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
 		sim.WithVoteGenerator(voteAgainst(block)),
 	)
 	tortoise.TallyVotes(ctx, last)
-	ballots3 := tortoise.trtl.ballots[last]
+	ballots3 := tortoise.trtl.layer(last).ballots
 
 	for _, ballot := range ballots1 {
 		require.Equal(t, against, ballot.votes.find(layer.lid, block), "base ballot votes against")
@@ -3044,7 +3106,8 @@ func BenchmarkOnBallot(b *testing.B) {
 
 		b.StopTimer()
 		delete(tortoise.trtl.ballotRefs, ballot.ID())
-		delete(tortoise.trtl.ballots, ballot.LayerIndex)
+		layer := tortoise.trtl.layer(ballot.LayerIndex)
+		layer.ballots = nil
 		b.StartTimer()
 	}
 }

@@ -72,7 +72,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 				"batch", batch,
 			)
 			for j := 0; j < batch; j++ {
-				if err := submitSpend(ctx, cl.Private(i), receiver, uint64(amount), nonce+uint64(j), client); err != nil {
+				if err := submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client); err != nil {
 					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
 				}
 			}

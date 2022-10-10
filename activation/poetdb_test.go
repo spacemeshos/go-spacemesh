@@ -46,7 +46,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	proofBytes, err := codec.Encode(&msg.PoetProof)
 	require.NoError(t, err)
 	expectedRef := hash.Sum(proofBytes)
-	require.Equal(t, types.CalcHash32(expectedRef[:]).Bytes(), ref)
+	require.Equal(t, types.PoetProofRef(types.CalcHash32(expectedRef[:]).Bytes()), ref)
 
 	require.NoError(t, poetDb.StoreProof(ref, msg))
 	got, err := poetDb.getProofRef(msg.PoetServiceID, msg.RoundID)

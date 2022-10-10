@@ -36,7 +36,7 @@ func (ms *MultiSig) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool 
 	if err != nil {
 		return false
 	}
-	hash := core.Hash(raw[:len(raw)-n])
+	hash := core.Hash(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
 	batch := ed25519.NewBatchVerifierWithCapacity(int(ms.k))
 	last := uint8(0)
 	for i, part := range sig {

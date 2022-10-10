@@ -15,7 +15,7 @@ import (
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
 	log    log.Log
-	poetDb poetValidatorPersistor
+	poetDb poetValidatorPersister
 }
 
 // HandlePoetProofMessage is a receiver for broadcast messages.
@@ -58,7 +58,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 }
 
 // NewPoetListener returns a new PoetListener.
-func NewPoetListener(poetDb poetValidatorPersistor, logger log.Log) *PoetListener {
+func NewPoetListener(poetDb poetValidatorPersister, logger log.Log) *PoetListener {
 	return &PoetListener{
 		log:    logger,
 		poetDb: poetDb,

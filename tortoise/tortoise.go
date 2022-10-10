@@ -74,6 +74,11 @@ func (t *turtle) cloneTurtleParams() *turtle {
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
 	genesis := genesisLayer.Index()
+	t.layers[genesis] = &layerInfo{
+		lid:            genesis,
+		empty:          util.WeightFromUint64(0),
+		hareTerminated: true,
+	}
 	for _, ballot := range genesisLayer.Ballots() {
 		binfo := &ballotInfo{
 			id:     ballot.ID(),
@@ -84,13 +89,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 				consistent: true,
 			},
 		}
-		t.ballots[genesis] = append(t.ballots[genesis], binfo)
-		t.ballotRefs[ballot.ID()] = binfo
-	}
-	t.layers[genesis] = &layerInfo{
-		lid:            genesis,
-		empty:          util.WeightFromUint64(0),
-		hareTerminated: true,
+		t.addBallot(binfo)
 	}
 	for _, block := range genesisLayer.Blocks() {
 		blinfo := &blockInfo{
@@ -147,11 +146,10 @@ func (t *turtle) evict(ctx context.Context) {
 	)
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
-		for _, ballot := range t.ballots[lid] {
+		for _, ballot := range t.layer(lid).ballots {
 			delete(t.ballotRefs, ballot.id)
 			delete(t.referenceWeight, ballot.id)
 		}
-		delete(t.ballots, lid)
 		for _, block := range t.layers[lid].blocks {
 			delete(t.blockRefs, block.id)
 		}
@@ -161,7 +159,7 @@ func (t *turtle) evict(ctx context.Context) {
 			delete(t.referenceHeight, lid.GetEpoch())
 		}
 	}
-	for _, ballot := range t.ballots[windowStart] {
+	for _, ballot := range t.layer(windowStart).ballots {
 		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
@@ -198,7 +196,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	}
 	if votes == nil {
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-			for _, ballot := range t.ballots[lid] {
+			for _, ballot := range t.layer(lid).ballots {
 				if ballot.weight.IsNil() {
 					continue
 				}
@@ -246,7 +244,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
 	var choices []*ballotInfo
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
-		for _, ballot := range t.ballots[lid] {
+		for _, ballot := range t.layer(lid).ballots {
 			if ballot.weight.IsNil() {
 				continue
 			}
@@ -408,8 +406,11 @@ func (t *turtle) getFullVote(ctx context.Context, block *blockInfo) (sign, voteR
 	return against, reasonCoinflip, nil
 }
 
+// onLayerTerminated is expected to be called when hare terminated for a layer.
+// Internally tortoise will verify all layers before the last one if there are no gaps in
+// terminated layers.
 func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
-	t.logger.With().Debug("on layer", lid)
+	t.logger.With().Debug("on layer terminated", lid)
 	defer t.evict(ctx)
 	if err := t.updateLayer(t.logger, lid); err != nil {
 		return err
@@ -421,7 +422,7 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 				return err
 			}
 		}
-		for _, ballot := range t.ballots[process] {
+		for _, ballot := range t.layer(process).ballots {
 			t.countBallot(t.logger, ballot)
 		}
 		if t.mode.isFull() {
@@ -439,6 +440,9 @@ func (t *turtle) onLayer(ctx context.Context, lid types.LayerID) error {
 
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
+		if !process.After(types.NewLayerID(t.Zdist)) {
+			continue
+		}
 		terminated := process.Sub(t.Zdist + 1)
 		if terminated.After(t.evicted) && !t.layer(terminated).hareTerminated {
 			t.onHareOutput(terminated, types.EmptyBlockID)
@@ -519,7 +523,7 @@ func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
 		t.switchModes(logger)
 		counted := maxLayer(t.full.counted.Add(1), target.Add(1))
 		for ; !counted.After(t.processed); counted = counted.Add(1) {
-			for _, ballot := range t.ballots[counted] {
+			for _, ballot := range t.layer(counted).ballots {
 				t.full.countBallot(logger, ballot)
 			}
 			t.full.countDelayed(logger, counted)
@@ -538,16 +542,16 @@ func (t *turtle) countFullMode(logger log.Log, target types.LayerID) bool {
 	if !success {
 		return success
 	}
-	if t.verifying.markGoodCut(logger, t.ballots[target]) {
+	if t.verifying.markGoodCut(logger, t.layer(target).ballots) {
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
 		t.verifying.resetWeights()
 		for lid := target; !lid.After(t.full.counted); lid = lid.Add(1) {
-			t.verifying.countVotes(logger, t.ballots[lid])
+			t.verifying.countVotes(logger, t.layer(lid).ballots)
 		}
 		if t.verifying.verify(logger, target) {
 			for lid := t.full.counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-				t.verifying.countVotes(logger, t.ballots[lid])
+				t.verifying.countVotes(logger, t.layer(lid).ballots)
 			}
 			t.switchModes(logger)
 		}
@@ -716,7 +720,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 			if target.GetEpoch().IsGenesis() {
 				continue
 			}
-			t.verifying.countVotes(t.logger, t.ballots[target])
+			t.verifying.countVotes(t.logger, t.layer(target).ballots)
 		}
 	}
 }

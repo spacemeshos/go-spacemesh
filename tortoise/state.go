@@ -12,6 +12,7 @@ type (
 
 	verifyingInfo struct {
 		good, abstained weight
+		// highest block height below reference height
 		referenceHeight uint64
 	}
 
@@ -20,6 +21,7 @@ type (
 		empty          weight
 		hareTerminated bool
 		blocks         []*blockInfo
+		ballots        []*ballotInfo
 		verifying      verifyingInfo
 	}
 
@@ -35,6 +37,7 @@ type (
 	state struct {
 		// last received layer
 		// TODO should be last layer according to the clock
+		// https://github.com/spacemeshos/go-spacemesh/issues/2921
 		last types.LayerID
 		// last verified layer
 		verified types.LayerID
@@ -58,8 +61,7 @@ type (
 		// only if refBallot has more than 1 eligibility proof.
 		referenceWeight map[types.BallotID]weight
 
-		layers  map[types.LayerID]*layerInfo
-		ballots map[types.LayerID][]*ballotInfo
+		layers map[types.LayerID]*layerInfo
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
@@ -75,7 +77,6 @@ func newState() *state {
 		referenceWeight: map[types.BallotID]util.Weight{},
 
 		layers:     map[types.LayerID]*layerInfo{},
-		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
@@ -91,7 +92,8 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
-	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
+	layer := s.layer(ballot.layer)
+	layer.ballots = append(layer.ballots, ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
@@ -99,17 +101,29 @@ func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	s.blockRefs[block.id] = block
+	s.updateRefHeight(layer, block)
+}
+
+func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
+	for lid = lid.Sub(1); lid.After(s.evicted); lid = lid.Sub(1) {
+		layer := s.layer(lid)
+		if len(layer.blocks) == 0 {
+			continue
+		}
+		return layer.verifying.referenceHeight
+	}
+	return 0
 }
 
 func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
-	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
-		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
-	}
-	refheight, exist := s.referenceHeight[block.layer.GetEpoch()]
+	_, exist := s.referenceHeight[block.layer.GetEpoch()]
 	if !exist {
-		return fmt.Errorf("reference height for epoch %d is not recorded", block.layer.GetEpoch())
+		return fmt.Errorf("reference height for epoch %v wasn't computed", block.layer.GetEpoch())
 	}
-	if block.height <= refheight &&
+	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
+		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
+	}
+	if block.height <= s.referenceHeight[block.layer.GetEpoch()] &&
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
@@ -165,6 +179,9 @@ func (v *votes) append(lv *layerVote) {
 	if v.tail == nil {
 		v.tail = lv
 	} else {
+		if v.tail.lid.Add(1) != lv.lid {
+			panic("bug: added vote with a gap")
+		}
 		v.tail = v.tail.append(lv)
 	}
 }
@@ -230,23 +247,23 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	if l.lid.Before(from) {
 		return l
 	}
-	l = l.copy()
-	if l.prev != nil {
-		l.prev = l.prev.update(from, diff)
+	copied := l.copy()
+	if copied.prev != nil {
+		copied.prev = copied.prev.update(from, diff)
 	}
-	layerdiff, exist := diff[l.lid]
+	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
-		l.vote = abstain
+		copied.vote = abstain
 	} else if exist && len(layerdiff) > 0 {
-		blocks := make([]blockVote, len(l.blocks))
-		copy(blocks, l.blocks)
-		l.blocks = blocks
-		for i := range l.blocks {
-			vote, exist := layerdiff[l.blocks[i].id]
+		blocks := make([]blockVote, len(copied.blocks))
+		copy(blocks, copied.blocks)
+		copied.blocks = blocks
+		for i := range copied.blocks {
+			vote, exist := layerdiff[copied.blocks[i].id]
 			if exist {
-				l.blocks[i].vote = vote
+				copied.blocks[i].vote = vote
 			}
 		}
 	}
-	return l
+	return copied
 }
