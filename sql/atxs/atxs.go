@@ -85,11 +85,11 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 	if rows, err := db.Exec(`
 		select id from atxs 
 		where smesher = ?1
-		order by epoch asc, timestamp asc
+		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -110,9 +110,9 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 		where smesher = ?1
 		order by epoch desc, timestamp desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -133,9 +133,9 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 		select id from atxs 
 		where epoch = ?1 and smesher = ?2 
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
