@@ -113,7 +113,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atx3.CalcAndSetID())
 
-	atx4, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx4, err := newAtx(sig2, types.NewLayerID(uint32(4*layersPerEpoch)))
 	atx4.Sequence = atx3.Sequence + 1
 	require.NoError(t, err)
 	require.NoError(t, atx4.CalcAndSetID())
