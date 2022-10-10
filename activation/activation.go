@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
-	"github.com/spacemeshos/go-spacemesh/utils/guard"
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -79,7 +78,7 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClients guard.Guard[*[]PoetProvingServiceClient]
+	pendingPoetClients atomic.Pointer[[]PoetProvingServiceClient]
 	started            atomic.Bool
 
 	signer
@@ -168,7 +167,6 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 		poetRetryInterval:     defaultPoetRetryInterval,
 		poetClientInitializer: defaultPoetClientFunc,
 		lastPostGenDuration:   0,
-		pendingPoetClients:    guard.New[*[]PoetProvingServiceClient](nil),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -365,11 +363,7 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 }
 
 func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
-	var poetClients *[]PoetProvingServiceClient
-	b.pendingPoetClients.Apply(func(pendingClients **[]PoetProvingServiceClient) {
-		poetClients, *pendingClients = *pendingClients, nil
-	})
-	return poetClients
+	return b.pendingPoetClients.Swap(nil)
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock.
@@ -382,8 +376,7 @@ func (b *Builder) loop(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
-		poetClients := b.receivePendingPoetClients()
-		if poetClients != nil {
+		if poetClients := b.receivePendingPoetClients(); poetClients != nil {
 			b.nipostBuilder.updatePoETProvers(*poetClients)
 		}
 
@@ -467,9 +460,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
 	}
 
-	b.pendingPoetClients.Apply(func(pendingClients **[]PoetProvingServiceClient) {
-		*pendingClients = &clients
-	})
+	b.pendingPoetClients.Store(&clients)
 	return nil
 }
 

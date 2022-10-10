@@ -962,6 +962,7 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 	r.NoError(err)
 
 	r.NotNil(b.receivePendingPoetClients())
+	r.Nil(b.receivePendingPoetClients())
 }
 
 func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
