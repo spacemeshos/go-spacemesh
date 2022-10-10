@@ -898,8 +898,7 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 		if lvote.vote == abstain {
 			continue
 		}
-		for j := range lvote.blocks {
-			block := lvote.blocks[j]
+		for _, block := range lvote.blocks {
 			local, _ := getLocalVote(state, config, block)
 			if lvote.getVote(block.id) != local {
 				return false

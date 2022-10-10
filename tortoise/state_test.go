@@ -73,7 +73,8 @@ func TestVotesUpdate(t *testing.T) {
 					lid: types.NewLayerID(uint32(i)),
 					blocks: []*blockInfo{{
 						id: types.BlockID{byte(i)},
-					}}},
+					}},
+				},
 			})
 			update[types.NewLayerID(uint32(i))] = map[types.BlockID]sign{
 				{byte(i)}: support,
