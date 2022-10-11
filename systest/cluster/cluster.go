@@ -80,7 +80,7 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddBootnodes(cctx, defaultBootnodes); err != nil {
 		return nil, err
 	}
-	if err := cl.AddPoet(cctx); err != nil {
+	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
 	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-defaultBootnodes); err != nil {
@@ -244,8 +244,8 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	return nil
 }
 
-// AddPoet ...
-func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
+// AddPoets ...
+func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 	if c.bootnodes == 0 {
 		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
 	}

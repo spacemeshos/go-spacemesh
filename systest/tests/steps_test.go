@@ -45,7 +45,7 @@ func TestStepRedeployPoets(t *testing.T) {
 
 	require.Zero(t, cl.Poets())
 	tctx.Log.Debug("adding poet servers")
-	require.NoError(t, cl.AddPoet(tctx))
+	require.NoError(t, cl.AddPoets(tctx))
 
 	poetEndpoints := make([]string, 0, tctx.PoetSize)
 	for i := 0; i < tctx.PoetSize; i++ {
