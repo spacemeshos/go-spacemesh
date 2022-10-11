@@ -283,10 +283,11 @@ func (b *Builder) run(ctx context.Context) {
 	}
 
 	// ensure layer 1 has arrived
+	<-b.layerClock.AwaitLayer(ctx, types.NewLayerID(1)).Done()
 	select {
-	case <-b.layerClock.AwaitLayer(ctx, types.NewLayerID(1)).Done():
 	case <-ctx.Done():
 		return
+	default:
 	}
 
 	b.waitForFirstATX(ctx)
@@ -339,12 +340,13 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 			log.Stringer("current_epoch", currEpoch),
 			log.Stringer("wait_till", waitTill),
 			log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
+		<-b.layerClock.AwaitLayer(ctx, waitTill).Done()
 		select {
 		case <-ctx.Done():
 			return false
-		case <-b.layerClock.AwaitLayer(ctx, waitTill).Done():
-			wait = window
+		default:
 		}
+		wait = window
 	}
 	timer := time.NewTimer(wait)
 	b.log.WithContext(ctx).With().Info("waiting for the poet window expires",
@@ -407,6 +409,11 @@ func (b *Builder) loop(ctx context.Context) {
 				// other failures are related to in-process software. we may as well panic here
 				currentLayer := b.layerClock.GetCurrentLayer()
 				<-b.layerClock.AwaitLayer(ctx, currentLayer.Add(1)).Done()
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
 			}
 		}
 	}
@@ -574,10 +581,12 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
+
+	<-b.layerClock.AwaitLayer(ctx, pubEpoch.FirstLayer()).Done()
 	select {
-	case <-b.layerClock.AwaitLayer(ctx, pubEpoch.FirstLayer()).Done():
 	case <-ctx.Done():
 		return nil, fmt.Errorf("failed to wait for publication epoch: %w", ErrStopRequested)
+	default:
 	}
 
 	b.log.Info("publication epoch has arrived!")

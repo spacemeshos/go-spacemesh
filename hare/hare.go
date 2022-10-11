@@ -437,21 +437,26 @@ func (h *Hare) tickLoop(ctx context.Context) {
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(ctx, layer).Done():
-			if time.Since(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
-				h.With().Warning("missed hare window, skipping layer", layer)
-				continue
-			}
-			go func(l types.LayerID) {
-				started, err := h.onTick(ctx, l)
-				if err != nil {
-					h.With().Error("failed to handle tick", log.Err(err))
-				} else if !started {
-					h.WithContext(ctx).With().Warning("consensus not started for layer", l)
-				}
-			}(layer)
 		case <-h.CloseChannel():
 			return
 		}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if time.Since(h.layerClock.LayerToTime(layer)) > (time.Duration(h.config.WakeupDelta) * time.Second) {
+			h.With().Warning("missed hare window, skipping layer", layer)
+			continue
+		}
+		go func(l types.LayerID) {
+			started, err := h.onTick(ctx, l)
+			if err != nil {
+				h.With().Error("failed to handle tick", log.Err(err))
+			} else if !started {
+				h.WithContext(ctx).With().Warning("consensus not started for layer", l)
+			}
+		}(layer)
 	}
 }
 

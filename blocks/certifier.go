@@ -155,12 +155,13 @@ func (c *Certifier) isShuttingDown() bool {
 
 func (c *Certifier) run() error {
 	for layer := c.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
+		<-c.layerClock.AwaitLayer(c.ctx, layer).Done()
 		select {
-		case <-c.layerClock.AwaitLayer(c.ctx, layer).Done():
-			c.prune()
 		case <-c.ctx.Done():
 			return fmt.Errorf("context done: %w", c.ctx.Err())
+		default:
 		}
+		c.prune()
 	}
 }
 

@@ -197,13 +197,7 @@ func (t *Ticker) AwaitLayer(ctx context.Context, layerID types.LayerID) context.
 		return layerCtx
 	}
 
-	cancels := t.layersSubscriptions[layerID]
-	if cancels == nil {
-		cancels = make([]context.CancelFunc, 0, 1)
-	}
-
-	cancels = append(cancels, cancel)
-	t.layersSubscriptions[layerID] = cancels
+	t.layersSubscriptions[layerID] = append(t.layersSubscriptions[layerID], cancel)
 
 	return layerCtx
 }

@@ -227,9 +227,7 @@ func (m *mockClock) AwaitLayer(ctx context.Context, layer types.LayerID) context
 		cancel()
 		return ctx
 	}
-	cancels := m.layersSubscriptions[layer]
-	cancels = append(cancels, cancel)
-	m.layersSubscriptions[layer] = cancels
+	m.layersSubscriptions[layer] = append(m.layersSubscriptions[layer], cancel)
 	return ctx
 }
 
