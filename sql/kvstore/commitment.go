@@ -35,23 +35,9 @@ func AddCommitmentATXForNode(db sql.Executor, atx types.ATXID, nodeId types.Node
 
 // GetCommitmentATXForNode returns the id for the commitment atx from the key-value store.
 func GetCommitmentATXForNode(db sql.Executor, nodeId types.NodeID) (types.ATXID, error) {
-	key := getKeyForNode(nodeId)
-	var val []byte
-	if rows, err := db.Exec("select value from kvstore where id = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, []byte(key))
-	}, func(stmt *sql.Statement) bool {
-		val = make([]byte, stmt.ColumnLen(0))
-		stmt.ColumnBytes(0, val[:])
-		return true
-	}); err != nil {
-		return *types.EmptyATXID, fmt.Errorf("failed to get value: %w", err)
-	} else if rows == 0 {
-		return *types.EmptyATXID, fmt.Errorf("failed to get value: %w", sql.ErrNotFound)
-	}
-
 	var res types.ATXID
-	if err := codec.Decode(val, &res); err != nil {
-		return *types.EmptyATXID, fmt.Errorf("failed decoding: %w", err)
+	if err := getKeyValue(db, getKeyForNode(nodeId), &res); err != nil {
+		return *types.EmptyATXID, err
 	}
 	return res, nil
 }
