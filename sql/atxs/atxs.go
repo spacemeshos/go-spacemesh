@@ -28,7 +28,6 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err 
 		baseTickHeight := uint64(stmt.ColumnInt64(1))
 		tickCount := uint64(stmt.ColumnInt64(2))
 		atx, err = v.Verify(baseTickHeight, tickCount)
-
 		return err == nil
 	}
 
@@ -73,6 +72,29 @@ func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err err
 	return timestamp, err
 }
 
+// GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
+func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.ToBytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select id from atxs 
+		where smesher = ?1
+		order by epoch asc
+		limit 1;`, enc, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+	}
+
+	return id, err
+}
+
 // GetLastIDByNodeID gets the last ATX ID for a given node ID.
 func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
@@ -88,9 +110,9 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 		where smesher = ?1
 		order by epoch desc, timestamp desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -111,9 +133,9 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 		select id from atxs 
 		where epoch = ?1 and smesher = ?2 
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -197,8 +219,8 @@ func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-// GetPositioningID returns atx id from the last epoch with the highest tick height.
-func GetPositioningID(db sql.Executor) (types.ATXID, error) {
+// GetAtxIDWithMaxHeight returns the ID of the atx from the last epoch with the highest (or tied for the highest) tick height.
+func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
 	var (
 		rst types.ATXID
 		max uint64

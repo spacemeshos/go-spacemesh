@@ -138,7 +138,6 @@ CREATE TABLE kvstore
     value BLOB
 ) WITHOUT ROWID;
 
-
 CREATE TABLE accounts
 (
     address        CHAR(20),
