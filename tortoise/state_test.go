@@ -69,26 +69,24 @@ func TestVotesUpdate(t *testing.T) {
 		update := map[types.LayerID]map[types.BlockID]sign{}
 		for i := 0; i < last; i++ {
 			original.append(&layerVote{
-				vote: against,
-				supported: []*blockInfo{
-					{
+				layerInfo: &layerInfo{
+					lid: types.NewLayerID(uint32(i)),
+					blocks: []*blockInfo{{
 						id: types.BlockID{byte(i)},
-					},
+					}},
 				},
-				layerInfo: &layerInfo{lid: types.NewLayerID(uint32(i))},
 			})
 			update[types.NewLayerID(uint32(i))] = map[types.BlockID]sign{
-				{byte(i)}: against,
+				{byte(i)}: support,
 			}
 		}
 		cp := original.update(types.NewLayerID(0), update)
 		for c := original.tail; c != nil; c = c.prev {
-			require.Len(t, c.blocks, 1)
-			require.Equal(t, support, c.getVote(c.blocks[0].id))
+			require.Len(t, c.supported, 0)
 		}
 		for c := cp.tail; c != nil; c = c.prev {
-			require.Len(t, c.blocks, 1)
-			require.Equal(t, against, c.getVote(c.blocks[0].id))
+			require.Len(t, c.supported, 1)
+			require.Equal(t, support, c.getVote(c.supported[0].id))
 		}
 	})
 }

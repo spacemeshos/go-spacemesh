@@ -34,6 +34,7 @@ type (
 		empty          weight
 		hareTerminated bool
 		blocks         []*blockInfo
+		ballots        []*ballotInfo
 		verifying      verifyingInfo
 	}
 
@@ -52,6 +53,7 @@ type (
 	state struct {
 		// last received layer
 		// TODO should be last layer according to the clock
+		// https://github.com/spacemeshos/go-spacemesh/issues/2921
 		last types.LayerID
 		// localThreshold is updated together with the last layer.
 		localThreshold util.Weight
@@ -63,9 +65,8 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		epochs  map[types.EpochID]*epochInfo
-		layers  map[types.LayerID]*layerInfo
-		ballots map[types.LayerID][]*ballotInfo
+		epochs map[types.EpochID]*epochInfo
+		layers map[types.LayerID]*layerInfo
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
@@ -78,7 +79,6 @@ func newState() *state {
 	return &state{
 		epochs:     map[types.EpochID]*epochInfo{},
 		layers:     map[types.LayerID]*layerInfo{},
-		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
@@ -98,7 +98,8 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
-	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
+	layer := s.layer(ballot.layer)
+	layer.ballots = append(layer.ballots, ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
@@ -106,15 +107,27 @@ func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	s.blockRefs[block.id] = block
+	s.updateRefHeight(layer, block)
+}
+
+func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
+	for lid = lid.Sub(1); lid.After(s.evicted); lid = lid.Sub(1) {
+		layer := s.layer(lid)
+		if len(layer.blocks) == 0 {
+			continue
+		}
+		return layer.verifying.referenceHeight
+	}
+	return 0
 }
 
 func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
-	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
-		layer.verifying.referenceHeight = s.layer(layer.lid.Sub(1)).verifying.referenceHeight
-	}
 	epoch, exist := s.epochs[block.layer.GetEpoch()]
 	if !exist {
-		return fmt.Errorf("reference height for epoch %d is not recorded", block.layer.GetEpoch())
+		return fmt.Errorf("reference height for epoch %v wasn't computed", block.layer.GetEpoch())
+	}
+	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
+		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
 	}
 	if block.height <= epoch.height &&
 		block.height > layer.verifying.referenceHeight {
@@ -172,6 +185,9 @@ func (v *votes) append(lv *layerVote) {
 	if v.tail == nil {
 		v.tail = lv
 	} else {
+		if v.tail.lid.Add(1) != lv.lid {
+			panic("bug: added vote with a gap")
+		}
 		v.tail = v.tail.append(lv)
 	}
 }
@@ -220,9 +236,9 @@ type layerVote struct {
 	prev *layerVote
 }
 
-func (l *layerVote) getVote(block types.BlockID) sign {
-	for _, info := range l.supported {
-		if info.id == block {
+func (l *layerVote) getVote(bid types.BlockID) sign {
+	for _, block := range l.supported {
+		if block.id == bid {
 			return support
 		}
 	}
@@ -247,25 +263,25 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	if l.lid.Before(from) {
 		return l
 	}
-	l = l.copy()
-	if l.prev != nil {
-		l.prev = l.prev.update(from, diff)
+	copied := l.copy()
+	if copied.prev != nil {
+		copied.prev = copied.prev.update(from, diff)
 	}
-	layerdiff, exist := diff[l.lid]
+	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
-		l.vote = abstain
+		copied.vote = abstain
 	} else if exist && len(layerdiff) > 0 {
 		var supported []*blockInfo
-		for _, block := range l.blocks {
+		for _, block := range copied.blocks {
 			vote, exist := layerdiff[block.id]
-			if exist && vote == support {
-				supported = append(supported, block)
+			if exist && vote == against {
+				continue
 			}
-			if !exist && l.getVote(block.id) == support {
+			if (exist && vote == support) || l.getVote(block.id) == support {
 				supported = append(supported, block)
 			}
 		}
-		l.supported = supported
+		copied.supported = supported
 	}
-	return l
+	return copied
 }

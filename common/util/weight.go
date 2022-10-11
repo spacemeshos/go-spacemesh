@@ -57,24 +57,36 @@ func (w Weight) Sub(other Weight) Weight {
 
 // Div divides weight by `other` and return the quotient.
 func (w Weight) Div(other Weight) Weight {
+	if w.Rat == nil {
+		w.Rat = new(big.Rat)
+	}
 	w.Rat.Quo(w.Rat, other.Rat)
 	return w
 }
 
 // Mul multiplies weight by `other`.
 func (w Weight) Mul(other Weight) Weight {
+	if w.Rat == nil {
+		w.Rat = new(big.Rat)
+	}
 	w.Rat.Mul(w.Rat, other.Rat)
 	return w
 }
 
 // Neg multiples weight by -1.
 func (w Weight) Neg() Weight {
+	if w.Rat == nil {
+		return w
+	}
 	w.Rat.Neg(w.Rat)
 	return w
 }
 
 // Copy copies weight.
 func (w Weight) Copy() Weight {
+	if w.Rat == nil {
+		return w
+	}
 	other := Weight{Rat: new(big.Rat)}
 	other.Rat = other.Rat.Set(w.Rat)
 	return other
@@ -82,6 +94,9 @@ func (w Weight) Copy() Weight {
 
 // Fraction multiples weight by `frac`.
 func (w Weight) Fraction(frac *big.Rat) Weight {
+	if w.Rat == nil {
+		return w
+	}
 	w.Rat = w.Rat.Mul(w.Rat, frac)
 	return w
 }

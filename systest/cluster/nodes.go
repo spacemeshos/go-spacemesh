@@ -425,24 +425,25 @@ func PoetEndpoint(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
 }
 
-// NetworkID flag.
-func NetworkID(id uint32) DeploymentFlag {
-	return DeploymentFlag{Name: "--network-id", Value: strconv.Itoa(int(id))}
-}
-
 // TargetOutbound flag.
 func TargetOutbound(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--target-outbound", Value: strconv.Itoa(target)}
 }
 
 const (
-	genesisTimeFlag = "--genesis-time"
-	accountsFlag    = "--accounts"
+	genesisTimeFlag  = "--genesis-time"
+	genesisExtraData = "--genesis-extra-data"
+	accountsFlag     = "--accounts"
 )
 
 // GenesisTime flag.
 func GenesisTime(t time.Time) DeploymentFlag {
 	return DeploymentFlag{Name: genesisTimeFlag, Value: t.Format(time.RFC3339)}
+}
+
+// GenesisExtraData flag.
+func GenesisExtraData(extra string) DeploymentFlag {
+	return DeploymentFlag{Name: genesisExtraData, Value: extra}
 }
 
 // Bootnodes flag.

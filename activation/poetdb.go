@@ -22,18 +22,18 @@ type poetProofKey [hash.Size]byte
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
 	sqlDB                     *sql.Database
-	poetProofRefSubscriptions map[poetProofKey][]chan []byte
+	poetProofRefSubscriptions map[poetProofKey][]chan types.PoetProofRef
 	log                       log.Log
 	mu                        sync.Mutex
 }
 
 // NewPoetDb returns a new PoET handler.
 func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
-	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
+	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan types.PoetProofRef), log: log}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
-func (db *PoetDb) HasProof(proofRef []byte) bool {
+func (db *PoetDb) HasProof(proofRef types.PoetProofRef) bool {
 	has, err := poets.Has(db.sqlDB, proofRef)
 	return err == nil && has
 }
@@ -91,7 +91,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 }
 
 // StoreProof saves the poet proof in local db.
-func (db *PoetDb) StoreProof(ref []byte, proofMessage *types.PoetProofMessage) error {
+func (db *PoetDb) StoreProof(ref types.PoetProofRef, proofMessage *types.PoetProofMessage) error {
 	messageBytes, err := codec.Encode(proofMessage)
 	if err != nil {
 		return fmt.Errorf("could not marshal proof message: %w", err)
@@ -116,9 +116,9 @@ func (db *PoetDb) StoreProof(ref []byte, proofMessage *types.PoetProofMessage) e
 
 // SubscribeToProofRef returns a channel that PoET proof ref for the requested PoET ID and round ID will be sent. If the
 // proof is already available it will be sent immediately, otherwise it will be sent when available.
-func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
+func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
 	key := makeKey(poetID, roundID)
-	ch := make(chan []byte, 1)
+	ch := make(chan types.PoetProofRef, 1)
 	db.addSubscription(key, ch)
 
 	if poetProofRef, err := db.getProofRef(poetID, roundID); err == nil {
@@ -128,7 +128,7 @@ func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte
 	return ch
 }
 
-func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
+func (db *PoetDb) addSubscription(key poetProofKey, ch chan types.PoetProofRef) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
@@ -143,7 +143,7 @@ func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
 }
 
-func (db *PoetDb) getProofRef(poetID []byte, roundID string) ([]byte, error) {
+func (db *PoetDb) getProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
 	proofRef, err := poets.GetRef(db.sqlDB, poetID, roundID)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %w", poetID[:5], roundID, err)
@@ -151,7 +151,7 @@ func (db *PoetDb) getProofRef(poetID []byte, roundID string) ([]byte, error) {
 	return proofRef, nil
 }
 
-func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
+func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef types.PoetProofRef) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	for _, ch := range db.poetProofRefSubscriptions[key] {
@@ -162,7 +162,7 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 }
 
 // GetProofMessage returns the originally received PoET proof message.
-func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
+func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 	proof, err := poets.Get(db.sqlDB, proofRef)
 	if err != nil {
 		return proof, fmt.Errorf("get proof from store: %w", err)
@@ -172,7 +172,7 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 }
 
 // GetMembershipMap returns the map of memberships in the requested PoET proof.
-func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
+func (db *PoetDb) GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
@@ -185,7 +185,7 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 }
 
 // GetProof returns full proof.
-func (db *PoetDb) GetProof(proofRef []byte) (*types.PoetProof, error) {
+func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)

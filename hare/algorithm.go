@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spacemeshos/ed25519"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -111,7 +109,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
-	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
+	pubKey, err := signing.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
 		logger.With().Error("newmsg construction failed: could not extract public key",
 			log.Err(err),

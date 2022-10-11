@@ -57,7 +57,7 @@ func Spawn(pk signing.PrivateKey, template core.Address, args scale.Encodable, n
 	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
 
 	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
-	hh := hash.Sum(tx)
+	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
 }
@@ -82,7 +82,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	args.Amount = amount
 
 	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
-	hh := hash.Sum(tx)
+	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
 }

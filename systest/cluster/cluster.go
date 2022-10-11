@@ -13,13 +13,14 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
 var errNotInitialized = errors.New("cluster: not initilized")
 
 const (
-	defaultNetID     = 777
+	defaultExtraData = "systest"
 	poetSvc          = "poet"
 	bootnodesPrefix  = "boot"
 	smesherPrefix    = "smesher"
@@ -96,8 +97,8 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	}
 	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
 	cluster.addFlag(genesis)
+	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
-	cluster.addFlag(NetworkID(defaultNetID))
 	cluster.addFlag(CycleGap(10 * time.Second))
 	cluster.addFlag(PhaseShift(20 * time.Second))
 	cluster.addFlag(GracePeriod(5 * time.Second))
@@ -116,6 +117,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	if len(cluster.keys) > 0 {
 		cluster.addFlag(Accounts(genGenesis(cluster.keys)))
 	}
+
 	return cluster
 }
 
@@ -131,6 +133,14 @@ type Cluster struct {
 	smeshers  int
 	clients   []*NodeClient
 	poets     []*NodeClient
+}
+
+// GenesisID computes id from the configuration.
+func (c *Cluster) GenesisID() types.Hash20 {
+	return types.Hash32(hash.Sum(
+		[]byte(c.smesherFlags[genesisTimeFlag].Value),
+		[]byte(c.smesherFlags[genesisExtraData].Value),
+	)).ToHash20()
 }
 
 func (c *Cluster) nextSmesher() int {

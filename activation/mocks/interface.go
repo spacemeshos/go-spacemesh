@@ -13,31 +13,31 @@ import (
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// MockpoetValidatorPersistor is a mock of poetValidatorPersistor interface.
-type MockpoetValidatorPersistor struct {
+// MockpoetValidatorPersister is a mock of poetValidatorPersister interface.
+type MockpoetValidatorPersister struct {
 	ctrl     *gomock.Controller
-	recorder *MockpoetValidatorPersistorMockRecorder
+	recorder *MockpoetValidatorPersisterMockRecorder
 }
 
-// MockpoetValidatorPersistorMockRecorder is the mock recorder for MockpoetValidatorPersistor.
-type MockpoetValidatorPersistorMockRecorder struct {
-	mock *MockpoetValidatorPersistor
+// MockpoetValidatorPersisterMockRecorder is the mock recorder for MockpoetValidatorPersister.
+type MockpoetValidatorPersisterMockRecorder struct {
+	mock *MockpoetValidatorPersister
 }
 
-// NewMockpoetValidatorPersistor creates a new mock instance.
-func NewMockpoetValidatorPersistor(ctrl *gomock.Controller) *MockpoetValidatorPersistor {
-	mock := &MockpoetValidatorPersistor{ctrl: ctrl}
-	mock.recorder = &MockpoetValidatorPersistorMockRecorder{mock}
+// NewMockpoetValidatorPersister creates a new mock instance.
+func NewMockpoetValidatorPersister(ctrl *gomock.Controller) *MockpoetValidatorPersister {
+	mock := &MockpoetValidatorPersister{ctrl: ctrl}
+	mock.recorder = &MockpoetValidatorPersisterMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockpoetValidatorPersistor) EXPECT() *MockpoetValidatorPersistorMockRecorder {
+func (m *MockpoetValidatorPersister) EXPECT() *MockpoetValidatorPersisterMockRecorder {
 	return m.recorder
 }
 
 // HasProof mocks base method.
-func (m *MockpoetValidatorPersistor) HasProof(arg0 []byte) bool {
+func (m *MockpoetValidatorPersister) HasProof(arg0 types.PoetProofRef) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasProof", arg0)
 	ret0, _ := ret[0].(bool)
@@ -45,13 +45,13 @@ func (m *MockpoetValidatorPersistor) HasProof(arg0 []byte) bool {
 }
 
 // HasProof indicates an expected call of HasProof.
-func (mr *MockpoetValidatorPersistorMockRecorder) HasProof(arg0 interface{}) *gomock.Call {
+func (mr *MockpoetValidatorPersisterMockRecorder) HasProof(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasProof", reflect.TypeOf((*MockpoetValidatorPersistor)(nil).HasProof), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasProof", reflect.TypeOf((*MockpoetValidatorPersister)(nil).HasProof), arg0)
 }
 
 // StoreProof mocks base method.
-func (m *MockpoetValidatorPersistor) StoreProof(arg0 []byte, arg1 *types.PoetProofMessage) error {
+func (m *MockpoetValidatorPersister) StoreProof(arg0 types.PoetProofRef, arg1 *types.PoetProofMessage) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StoreProof", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -59,13 +59,13 @@ func (m *MockpoetValidatorPersistor) StoreProof(arg0 []byte, arg1 *types.PoetPro
 }
 
 // StoreProof indicates an expected call of StoreProof.
-func (mr *MockpoetValidatorPersistorMockRecorder) StoreProof(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockpoetValidatorPersisterMockRecorder) StoreProof(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreProof", reflect.TypeOf((*MockpoetValidatorPersistor)(nil).StoreProof), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreProof", reflect.TypeOf((*MockpoetValidatorPersister)(nil).StoreProof), arg0, arg1)
 }
 
 // Validate mocks base method.
-func (m *MockpoetValidatorPersistor) Validate(arg0 types.PoetProof, arg1 []byte, arg2 string, arg3 []byte) error {
+func (m *MockpoetValidatorPersister) Validate(arg0 types.PoetProof, arg1 []byte, arg2 string, arg3 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validate", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -73,9 +73,9 @@ func (m *MockpoetValidatorPersistor) Validate(arg0 types.PoetProof, arg1 []byte,
 }
 
 // Validate indicates an expected call of Validate.
-func (mr *MockpoetValidatorPersistorMockRecorder) Validate(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockpoetValidatorPersisterMockRecorder) Validate(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockpoetValidatorPersistor)(nil).Validate), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockpoetValidatorPersister)(nil).Validate), arg0, arg1, arg2, arg3)
 }
 
 // MocknipostValidator is a mock of nipostValidator interface.
