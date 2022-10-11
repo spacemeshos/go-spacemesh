@@ -70,7 +70,7 @@ jobs:
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: fmt, tidy, lint
         run: |
-          make
+          make install
           make tidy
           make test-fmt
       - name: staticcheck
@@ -98,9 +98,39 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
-        run: make
+        run: make install
       - name: golangci-lint
         run: make golangci-lint-github-action
+
+  build:
+    runs-on: ${{ matrix.os }}
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.go-version }}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-cache-go-${{ env.go-version }}-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-build-
+            ${{ runner.os }}-cache-go-${{ env.go-version }}-
+      - name: setup env
+        run: make install
+      - name: build
+        timeout-minutes: 5
+        run: make build
 
   unittests:
     runs-on: ${{ matrix.os }}
@@ -157,7 +187,7 @@ jobs:
             ${{ runner.os }}-cache-go-${{ env.go-version }}-unittests-
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
-        run: make
+        run: make install
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests

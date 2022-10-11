@@ -31,12 +31,6 @@ func (l EpochID) IsGenesis() bool {
 	return l < 2
 }
 
-// NeedsGoldenPositioningATX returns true if ATXs in this epoch require positioning ATX to be equal to the Golden ATX.
-// All ATXs in epoch 1 must have the Golden ATX as positioning ATX.
-func (l EpochID) NeedsGoldenPositioningATX() bool {
-	return l == 1
-}
-
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
 	return NewLayerID(uint32(l)).Mul(GetLayersPerEpoch())
@@ -106,10 +100,13 @@ var EmptyATXID = &ATXID{}
 type NIPostChallenge struct {
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
-	Sequence           uint64
-	PrevATXID          ATXID
-	PubLayerID         LayerID
-	PositioningATX     ATXID
+	Sequence       uint64
+	PrevATXID      ATXID
+	PubLayerID     LayerID
+	PositioningATX ATXID
+
+	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
+	CommitmentATX      *ATXID
 	InitialPostIndices []byte
 }
 
@@ -201,6 +198,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
+	if atx.CommitmentATX != nil {
+		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
+	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))

@@ -33,7 +33,6 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 		nb.log.With().Warning("cannot load nipost state", log.Err(err))
 		return
 	}
-
 	if state.Challenge == challenge {
 		nb.state = state
 	} else {
@@ -67,7 +66,7 @@ type poetDbAPI interface {
 
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
-	minerID []byte,
+	minerID types.NodeID,
 	postSetupProvider PostSetupProvider,
 	poetProver PoetProvingServiceClient,
 	poetDB poetDbAPI,
@@ -75,7 +74,7 @@ func NewNIPostBuilder(
 	log log.Log,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
-		minerID:           minerID,
+		minerID:           minerID.ToBytes(),
 		postSetupProvider: postSetupProvider,
 		poetProver:        poetProver,
 		poetDB:            poetDB,
@@ -85,7 +84,7 @@ func NewNIPostBuilder(
 	}
 }
 
-// updatePoETProver updates poetProver reference. It should not be executed concurently with BuildNIPST.
+// updatePoETProver updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
 func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 	// reset the state for safety to avoid accidental erroneous wait in Phase 1.
 	nb.state = &types.NIPostBuilderState{
@@ -98,7 +97,7 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 // BuildNIPost uses the given challenge to build a NIPost. "atxExpired" and "stop" are channels for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32) (*types.NIPost, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error) {
 	nb.load(*challenge)
 
 	if s := nb.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
@@ -171,7 +170,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.log.With().Info("starting post execution",
 			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef, commitmentAtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute Post: %v", err)
 		}

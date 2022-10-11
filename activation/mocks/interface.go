@@ -11,7 +11,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // MockpoetValidatorPersister is a mock of poetValidatorPersister interface.
@@ -103,32 +102,32 @@ func (m *MocknipostValidator) EXPECT() *MocknipostValidatorMockRecorder {
 }
 
 // Validate mocks base method.
-func (m *MocknipostValidator) Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
+func (m *MocknipostValidator) Validate(commitment []byte, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validate", id, NIPost, expectedChallenge, numUnits)
+	ret := m.ctrl.Call(m, "Validate", commitment, NIPost, expectedChallenge, numUnits)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Validate indicates an expected call of Validate.
-func (mr *MocknipostValidatorMockRecorder) Validate(id, NIPost, expectedChallenge, numUnits interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) Validate(commitment, NIPost, expectedChallenge, numUnits interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MocknipostValidator)(nil).Validate), id, NIPost, expectedChallenge, numUnits)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MocknipostValidator)(nil).Validate), commitment, NIPost, expectedChallenge, numUnits)
 }
 
 // ValidatePost mocks base method.
-func (m *MocknipostValidator) ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+func (m *MocknipostValidator) ValidatePost(commitment []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidatePost", id, Post, PostMetadata, numUnits)
+	ret := m.ctrl.Call(m, "ValidatePost", commitment, Post, PostMetadata, numUnits)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidatePost indicates an expected call of ValidatePost.
-func (mr *MocknipostValidatorMockRecorder) ValidatePost(id, Post, PostMetadata, numUnits interface{}) *gomock.Call {
+func (mr *MocknipostValidatorMockRecorder) ValidatePost(commitment, Post, PostMetadata, numUnits interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatePost", reflect.TypeOf((*MocknipostValidator)(nil).ValidatePost), id, Post, PostMetadata, numUnits)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatePost", reflect.TypeOf((*MocknipostValidator)(nil).ValidatePost), commitment, Post, PostMetadata, numUnits)
 }
 
 // MocklayerClock is a mock of layerClock interface.
