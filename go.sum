@@ -608,8 +608,8 @@ github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic
 github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
 github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:UdhH50NIW0fCiwBSr0co2m7BnFLdv4fQTgdqdJTHFeE=
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
-github.com/spacemeshos/api/release/go v1.4.1-0.20220930055900-5d5f39c43abf h1:tkTR3X7wOHsonraQ7frPtK8OsJCq55t5t/MEBHMGQMA=
-github.com/spacemeshos/api/release/go v1.4.1-0.20220930055900-5d5f39c43abf/go.mod h1:jlsHnBNe1D2gCSEf7Km/YjVZ8ay2x2ijKCPIa+G20Y8=
+github.com/spacemeshos/api/release/go v1.4.1-0.20221011085707-0a5255087c72 h1:OlgCW2WIFe/wET0PVcX5pUcU6Y1yqeJyzGPnzYMCbhc=
+github.com/spacemeshos/api/release/go v1.4.1-0.20221011085707-0a5255087c72/go.mod h1:L2UDWHM0oLkVK9hfj2vfw+0nBLpVH6uClvIQnq7qd8g=
 github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 h1:f5AVMlh6x7rVJ+SoYvqkOl284OpdPw7tH5aBliIt0gc=
 github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0/go.mod h1:wnp+444ieV6+UUjPYJ8id/kuQbk4jZ6NWp5Nw6O091E=
 github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8 h1:z0XwruM9Vl2YIUxHjTh/3ijhe8ZI7XK3O127Trz5LEk=

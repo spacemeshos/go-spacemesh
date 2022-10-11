@@ -77,7 +77,7 @@ func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb
 // GenesisID returns the network ID.
 func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.GenesisIDResponse, error) {
 	log.Info("GRPC MeshService.NetId")
-	return &pb.GenesisIDResponse{GenesisID: s.genesisID.Bytes()}, nil
+	return &pb.GenesisIDResponse{GenesisId: s.genesisID.Bytes()}, nil
 }
 
 // EpochNumLayers returns the number of layers per epoch (a network parameter).
