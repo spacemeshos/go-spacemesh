@@ -32,9 +32,9 @@ require (
 	github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
-	github.com/spacemeshos/go-scale v0.0.0-20220825075539-b6b3deb9834c
-	github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b
-	github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063
+	github.com/spacemeshos/go-scale v0.0.0-20220915084948-ecda42870b1b
+	github.com/spacemeshos/merkle-tree v0.0.0-20220909175028-45e6d3500683
+	github.com/spacemeshos/poet v0.1.1-0.20221011061754-9bb56a12fb8f
 	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
@@ -146,7 +146,6 @@ require (
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -160,7 +159,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
 	github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 // indirect
-	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 // indirect
 	github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
