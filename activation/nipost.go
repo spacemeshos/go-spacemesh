@@ -123,12 +123,28 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 	// Phase 1: receive proofs from PoET services
 	if nb.state.PoetProofRef == nil {
-		poetProofRef, err := nb.awaitPoetProof(ctx, challenge, deadline)
-		if err != nil {
-			return nil, 0, &PoetSvcUnstableError{msg: "failed to await for a PoET proof", source: err}
+		awaitProofsCtx, cancel := context.WithCancel(ctx)
+		go func() {
+			<-deadline
+			cancel()
+		}()
+
+		poetProofRef := nb.awaitPoetProof(awaitProofsCtx, challenge)
+		select {
+		case <-ctx.Done():
+			return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrStopRequested)
+		default:
 		}
 		if poetProofRef == nil {
-			return nil, 0, &PoetSvcUnstableError{msg: "haven't received any PoET proof"}
+			// Haven't received any poet proof
+			select {
+			case <-awaitProofsCtx.Done():
+				// Time is up - ATX challenge is expired.
+				return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrATXChallengeExpired)
+			default:
+				// Time is not up - ATX challenge is NOT expired yet.
+				return nil, 0, &PoetSvcUnstableError{msg: "haven't received any PoET proof"}
+			}
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -220,9 +236,9 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *ty
 }
 
 // awaitPoetProof concurrently waits for proofs from all PoET services that a challenge was submitted to
-// until it gets proofs from all PoETs or the `deadline` channel is closed.
-// The best proof is returned or `nil` if proof was not received at all within the deadline.
-func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Hash32, deadline chan struct{}) (types.PoetProofRef, error) {
+// until it gets proofs from all PoETs or the context is canceled.
+// The best proof is returned or `nil` if proof was not received at all.
+func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Hash32) types.PoetProofRef {
 	incomingPoetProofRefs := make(chan types.PoetProofRef, len(nb.state.PoetRequests))
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -248,10 +264,7 @@ func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Ha
 				if membership[*challenge] {
 					incomingPoetProofRefs <- ref
 				}
-			case <-deadline:
-				return ErrATXChallengeExpired
 			case <-ctx.Done():
-				return ErrStopRequested
 			}
 			return nil
 		})
@@ -291,13 +304,7 @@ func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Ha
 	}()
 
 	// Close the workers -> consumer channel after all workers finished
-	err := g.Wait()
+	g.Wait()
 	close(incomingPoetProofRefs)
-	proofRef := <-result
-	if errors.Is(err, ErrATXChallengeExpired) && proofRef != nil {
-		// Deadline was reached but we managed to get a proof, so return it
-		// but swallow the error because this situation is fine.
-		return proofRef, nil
-	}
-	return proofRef, err
+	return <-result
 }

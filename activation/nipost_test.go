@@ -376,7 +376,7 @@ func createMockPoetService(t *testing.T, id []byte) PoetProvingServiceClient {
 func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	assert := require.New(t)
+	require := require.New(t)
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 	poets := make([]PoetProvingServiceClient, 0, 2)
 	poets = append(poets, createMockPoetService(t, []byte("poet0")))
@@ -389,7 +389,7 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	challenge := types.BytesToHash([]byte("challenge"))
 	go func() error {
 		nipost, _, err := nb.BuildNIPost(context.TODO(), &challenge, deadlineChan)
-		assert.NoError(err)
+		assert.NoError(t, err)
 		resultChan <- nipost
 		return nil
 	}()
@@ -404,7 +404,7 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 		},
 	}
 	ref, err := proofMsg.Ref()
-	assert.NoError(err)
+	require.NoError(err)
 	poetDb.StoreProof(ref, &proofMsg)
 	time.Sleep(time.Millisecond * 10)
 
@@ -413,10 +413,10 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 
 	// Verify
 	result := <-resultChan
-	assert.Equal(*result.Challenge, challenge)
+	require.Equal(*result.Challenge, challenge)
 	proof, err := poetDb.GetProof(result.PostMetadata.Challenge)
-	assert.NoError(err)
-	assert.EqualValues(proof.LeafCount, 1)
+	require.NoError(err)
+	require.EqualValues(proof.LeafCount, 1)
 }
 
 func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
