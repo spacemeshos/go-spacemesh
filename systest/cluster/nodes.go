@@ -60,9 +60,7 @@ type NodeClient struct {
 	*grpc.ClientConn
 }
 
-// deployPoet creates a poet Pod and exposes it via a Service.
-// Flags are passed to the poet Pod as arguments.
-func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployPoetPod(ctx *testcontext.Context, name string, flags ...DeploymentFlag) (*NodeClient, error) {
 	var args []string
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
@@ -92,6 +90,15 @@ func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) 
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
+	ppod, err := waitNode(ctx, *pod.Name, Poet)
+	if err != nil {
+		return nil, err
+	}
+	return ppod, nil
+}
+
+func deployPoetSvc(ctx *testcontext.Context, name string) (*v1.Service, error) {
+	labels := nodeLabels(name)
 	svc := corev1.Service(name, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -100,16 +107,22 @@ func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) 
 				corev1.ServicePort().WithName("rest").WithPort(poetPort).WithProtocol("TCP"),
 			),
 		)
-	_, err = ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
-	if err != nil {
+	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+}
+
+// deployPoet creates a poet Pod and exposes it via a Service.
+// Flags are passed to the poet Pod as arguments.
+func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) (*NodeClient, error) {
+	if _, err := deployPoetSvc(ctx, name); err != nil {
 		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	ppod, err := waitNode(ctx, *pod.Name, Poet)
+	node, err := deployPoetPod(ctx, name, flags...)
 	if err != nil {
 		return nil, err
 	}
-	return ppod, nil
+
+	return node, nil
 }
 
 func deletePoet(ctx *testcontext.Context, name string) error {
