@@ -33,72 +33,32 @@ func TestOverwriteCommitmentATX(t *testing.T) {
 
 	// Act
 	require.NoError(t, AddCommitmentATXForNode(db, atx, nodeId))
-	require.NoError(t, AddCommitmentATXForNode(db, newAtx, nodeId))
+	require.Error(t, AddCommitmentATXForNode(db, newAtx, nodeId))
 
 	// Assert
 	got, err := GetCommitmentATXForNode(db, nodeId)
 	require.NoError(t, err)
-	require.Equal(t, newAtx, got)
+	require.Equal(t, atx, got)
 }
 
 func TestNotOverwriteCommitmentATXFromOtherNodeID(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
 	atx := types.RandomATXID()
-	newAtx := types.RandomATXID()
+	atx2 := types.RandomATXID()
 	nodeId := types.NodeID{0x0, 0x1}
 	nodeId2 := types.NodeID{0x0, 0x2}
 
 	// Act
 	require.NoError(t, AddCommitmentATXForNode(db, atx, nodeId))
-	require.NoError(t, AddCommitmentATXForNode(db, atx, nodeId2))
-	require.NoError(t, AddCommitmentATXForNode(db, newAtx, nodeId))
+	require.NoError(t, AddCommitmentATXForNode(db, atx2, nodeId2))
 
 	// Assert
 	got, err := GetCommitmentATXForNode(db, nodeId)
 	require.NoError(t, err)
-	require.Equal(t, newAtx, got)
+	require.Equal(t, atx, got)
 
 	got, err = GetCommitmentATXForNode(db, nodeId2)
 	require.NoError(t, err)
-	require.Equal(t, atx, got)
-}
-
-func TestClearCommitmentATX(t *testing.T) {
-	// Arrange
-	db := sql.InMemory()
-	atx := types.RandomATXID()
-	nodeId := types.NodeID{0x0, 0x1}
-	require.NoError(t, AddCommitmentATXForNode(db, atx, nodeId))
-
-	// Act
-	require.NoError(t, ClearCommitmentAtx(db, nodeId))
-
-	// Assert
-	got, err := GetCommitmentATXForNode(db, nodeId)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Equal(t, *types.EmptyATXID, got)
-}
-
-func TestNotClearCommitmentATXFromOtherNodeID(t *testing.T) {
-	// Arrange
-	db := sql.InMemory()
-	atx := types.RandomATXID()
-	nodeId := types.NodeID{0x0, 0x1}
-	require.NoError(t, AddCommitmentATXForNode(db, atx, nodeId))
-
-	nodeId2 := types.NodeID{0x0, 0x2}
-	require.NoError(t, AddCommitmentATXForNode(db, atx, nodeId2))
-
-	// Act
-	require.NoError(t, ClearCommitmentAtx(db, nodeId))
-
-	// Assert
-	got, err := GetCommitmentATXForNode(db, nodeId)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Equal(t, *types.EmptyATXID, got)
-
-	got, err = GetCommitmentATXForNode(db, nodeId2)
-	require.NoError(t, err)
-	require.Equal(t, atx, got)
+	require.Equal(t, atx2, got)
 }
