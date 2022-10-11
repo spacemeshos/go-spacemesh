@@ -256,14 +256,13 @@ func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 	for _, flag := range c.poetFlags {
 		flags = append(flags, flag)
 	}
-
-	var gateways []string
 	for _, bootnode := range c.clients[:c.bootnodes] {
-		gateways = append(gateways, fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name))))
+		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name)))))
 	}
+
 	for i := 0; i < cctx.PoetSize; i++ {
 		name := fmt.Sprintf("%s-%d", poetSvc, i)
-		pod, err := deployPoet(cctx, name, gateways, flags...)
+		pod, err := deployPoet(cctx, name, flags...)
 		if err != nil {
 			return err
 		}

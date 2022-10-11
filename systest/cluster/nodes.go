@@ -60,16 +60,14 @@ type NodeClient struct {
 	*grpc.ClientConn
 }
 
-// deployPoet accepts address of the gateway (to use dns resolver add dns:/// prefix to the address)
-// and output ip of the poet.
-func deployPoet(ctx *testcontext.Context, name string, gateways []string, flags ...DeploymentFlag) (*NodeClient, error) {
+// deployPoet creates a poet Pod and exposes it via a Service.
+// Flags are passed to the poet Pod as arguments.
+func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) (*NodeClient, error) {
 	var args []string
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
-	for _, gw := range gateways {
-		args = append(args, "--gateway="+gw)
-	}
+
 	ctx.Log.Debugw("deploying poet pod", "args", args, "image", ctx.PoetImage)
 	labels := nodeLabels(name)
 	pod := corev1.Pod(name, ctx.Namespace).
@@ -431,6 +429,10 @@ func PoetEndpoint(endpoint string) DeploymentFlag {
 // TargetOutbound flag.
 func TargetOutbound(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--target-outbound", Value: strconv.Itoa(target)}
+}
+
+func Gateway(address string) DeploymentFlag {
+	return DeploymentFlag{Name: "--gateway", Value: address}
 }
 
 const (
