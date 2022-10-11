@@ -440,6 +440,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 func (t *turtle) switchModes(logger log.Log) {
 	t.isFull = !t.isFull
 	logger.With().Info("switching tortoise mode",
+		log.Uint32("hdist", t.Hdist),
 		log.Stringer("processed_layer", t.processed),
 		log.Stringer("verified_layer", t.verified),
 		log.Bool("is full", t.isFull),
@@ -453,7 +454,6 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	}
 	ballot.conditions.badBeacon = badBeacon
 	t.verifying.countBallot(logger, ballot)
-	t.verifying.countAbstained(ballot)
 	if t.isFull {
 		t.full.countBallot(logger, ballot)
 	}

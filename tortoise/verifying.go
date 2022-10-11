@@ -65,6 +65,7 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(ballot.weight)
 	}
 	v.totalGoodWeight = v.totalGoodWeight.Add(ballot.weight)
+	v.countAbstained(ballot)
 }
 
 func (v *verifying) countAbstained(ballot *ballotInfo) {

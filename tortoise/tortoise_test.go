@@ -175,11 +175,11 @@ func TestLayerPatterns(t *testing.T) {
 }
 
 func TestAbstainsInMiddle(t *testing.T) {
-	const size = 10
+	const size = 4
 	s := sim.New(
 		sim.WithLayerSize(size),
 	)
-	s.Setup()
+	s.Setup(sim.WithSetupMinerRange(size, size))
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
@@ -190,7 +190,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 
 	var last, verified types.LayerID
 	for i := 0; i < 5; i++ {
-		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		tortoise.TallyVotes(ctx, last)
 		verified = tortoise.LatestComplete()
 	}
@@ -199,12 +199,14 @@ func TestAbstainsInMiddle(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		tortoise.TallyVotes(ctx, s.Next(
+			sim.WithNumBlocks(1),
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 			sim.WithoutHareOutput(),
 		))
 	}
-	for i := 0; i < int(cfg.Zdist); i++ {
+	for i := 0; i <= int(cfg.Zdist); i++ {
 		tortoise.TallyVotes(ctx, s.Next(
+			sim.WithNumBlocks(1),
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 		))
 	}
@@ -762,14 +764,14 @@ func TestLongTermination(t *testing.T) {
 		// layers won't be verified within hdist, since everyones opinion
 		// will be different from this node opinion
 		const (
-			size  = 10
+			size  = 4
 			zdist = 2
 			hdist = zdist + 3
 			skip  = 1 // skipping layer generated at this position
-			limit = hdist + 1
+			limit = hdist
 		)
 		s := sim.New(sim.WithLayerSize(size))
-		s.Setup()
+		s.Setup(sim.WithSetupMinerRange(4, 4))
 
 		ctx := context.Background()
 		cfg := defaultTestConfig()
