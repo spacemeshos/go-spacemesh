@@ -171,7 +171,7 @@ func NewSyncer(
 	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
 	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
-		NewDataFetch(cdb, mesh, fetcher, s.logger)
+		s.dataFetcher = NewDataFetch(cdb, mesh, fetcher, s.logger)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
