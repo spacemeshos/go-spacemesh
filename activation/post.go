@@ -12,6 +12,8 @@ import (
 
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -33,9 +35,9 @@ type PostSetupProvider interface {
 	StatusChan() <-chan *atypes.PostSetupStatus
 	ComputeProviders() []atypes.PostSetupComputeProvider
 	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
-	StartSession(opts atypes.PostSetupOpts) (chan struct{}, error)
+	StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
 	StopSession(deleteFiles bool) error
-	GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error)
+	GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error)
 	LastError() error
 	LastOpts() *atypes.PostSetupOpts
 	Config() atypes.PostConfig
@@ -45,9 +47,11 @@ type PostSetupProvider interface {
 type PostSetupManager struct {
 	mu sync.Mutex
 
-	id     []byte
-	cfg    atypes.PostConfig
-	logger log.Log
+	id          types.NodeID
+	cfg         atypes.PostConfig
+	logger      log.Log
+	db          *datastore.CachedDB
+	goldenATXID types.ATXID
 
 	state             atypes.PostSetupState
 	initCompletedChan chan struct{}
@@ -69,11 +73,13 @@ type PostSetupManager struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id []byte, cfg atypes.PostConfig, logger log.Log) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg atypes.PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:                id,
 		cfg:               cfg,
 		logger:            logger,
+		db:                db,
+		goldenATXID:       goldenATXID,
 		state:             atypes.PostSetupStateNotStarted,
 		initCompletedChan: make(chan struct{}),
 		startedChan:       make(chan struct{}),
@@ -182,7 +188,7 @@ func (mgr *PostSetupManager) Benchmark(p atypes.PostSetupComputeProvider) (int, 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
-func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts) (chan struct{}, error) {
+func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	state := mgr.getState()
 
 	if state == atypes.PostSetupStateInProgress {
@@ -216,26 +222,24 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts) (chan struc
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
+	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
+	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment)
 	if err != nil {
 		mgr.mu.Lock()
 		mgr.state = atypes.PostSetupStateError
 		mgr.lastErr = err
 		mgr.mu.Unlock()
-
 		return nil, fmt.Errorf("new initializer: %w", err)
 	}
 
 	newInit.SetLogger(mgr.logger)
 
 	mgr.mu.Lock()
-
 	mgr.init = newInit
 	mgr.lastOpts = &opts
 	mgr.lastErr = nil
 	close(mgr.startedChan)
 	mgr.doneChan = make(chan struct{})
-
 	mgr.mu.Unlock()
 
 	go func() {
@@ -318,14 +322,16 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 }
 
 // GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
 	state := mgr.getState()
 
 	if state != atypes.PostSetupStateComplete {
 		return nil, nil, errNotComplete
 	}
 
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, mgr.id)
+	// TODO(mafa): id field in post package should be renamed to commitment otherwise error messages are confusing
+	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
+	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, commitment)
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
@@ -374,4 +380,9 @@ func (mgr *PostSetupManager) getState() atypes.PostSetupState {
 	defer mgr.mu.Unlock()
 
 	return mgr.state
+}
+
+func GetCommitmentBytes(id types.NodeID, commitmentAtx types.ATXID) []byte {
+	h := hash.Sum(append(id.ToBytes(), commitmentAtx.Bytes()...))
+	return h[:]
 }

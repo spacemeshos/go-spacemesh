@@ -79,9 +79,9 @@ func (mr *MockPostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // GenerateProof mocks base method.
-func (m *MockPostSetupProvider) GenerateProof(challenge []byte) (*types0.Post, *types0.PostMetadata, error) {
+func (m *MockPostSetupProvider) GenerateProof(challenge []byte, commitmentAtx types0.ATXID) (*types0.Post, *types0.PostMetadata, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateProof", challenge)
+	ret := m.ctrl.Call(m, "GenerateProof", challenge, commitmentAtx)
 	ret0, _ := ret[0].(*types0.Post)
 	ret1, _ := ret[1].(*types0.PostMetadata)
 	ret2, _ := ret[2].(error)
@@ -89,9 +89,9 @@ func (m *MockPostSetupProvider) GenerateProof(challenge []byte) (*types0.Post, *
 }
 
 // GenerateProof indicates an expected call of GenerateProof.
-func (mr *MockPostSetupProviderMockRecorder) GenerateProof(challenge interface{}) *gomock.Call {
+func (mr *MockPostSetupProviderMockRecorder) GenerateProof(challenge, commitmentAtx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockPostSetupProvider)(nil).GenerateProof), challenge)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockPostSetupProvider)(nil).GenerateProof), challenge, commitmentAtx)
 }
 
 // LastError mocks base method.
@@ -123,18 +123,18 @@ func (mr *MockPostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockPostSetupProvider) StartSession(opts types.PostSetupOpts) (chan struct{}, error) {
+func (m *MockPostSetupProvider) StartSession(opts types.PostSetupOpts, commitmentAtx types0.ATXID) (chan struct{}, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", opts)
+	ret := m.ctrl.Call(m, "StartSession", opts, commitmentAtx)
 	ret0, _ := ret[0].(chan struct{})
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockPostSetupProviderMockRecorder) StartSession(opts interface{}) *gomock.Call {
+func (mr *MockPostSetupProviderMockRecorder) StartSession(opts, commitmentAtx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockPostSetupProvider)(nil).StartSession), opts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockPostSetupProvider)(nil).StartSession), opts, commitmentAtx)
 }
 
 // Status mocks base method.

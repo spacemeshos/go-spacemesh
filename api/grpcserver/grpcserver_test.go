@@ -372,6 +372,7 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 }
 
 // PostAPIMock is a mock for Post API.
+// TODO(mafa): replace this mock with the generated mock.
 type PostAPIMock struct{}
 
 func (*PostAPIMock) Status() *atypes.PostSetupStatus {
@@ -394,7 +395,7 @@ func (p *PostAPIMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -402,7 +403,7 @@ func (p *PostAPIMock) StopSession(deleteFiles bool) error {
 	return nil
 }
 
-func (p *PostAPIMock) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (p *PostAPIMock) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
 	return &types.Post{}, &types.PostMetadata{}, nil
 }
 
@@ -442,13 +443,6 @@ func (*SmeshingAPIMock) Coinbase() types.Address {
 }
 
 func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
-}
-
-func (*SmeshingAPIMock) MinGas() uint64 {
-	return 0
-}
-
-func (*SmeshingAPIMock) SetMinGas(value uint64) {
 }
 
 type GenesisTimeMock struct {
@@ -1148,7 +1142,7 @@ func TestMeshService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			response, err := c.GenesisID(context.Background(), &pb.GenesisIDRequest{})
 			require.NoError(t, err)
-			require.Equal(t, genesisID.Bytes(), response.GenesisID)
+			require.Equal(t, genesisID.Bytes(), response.GenesisId)
 		}},
 		{"LayerDuration", func(t *testing.T) {
 			logtest.SetupGlobal(t)
