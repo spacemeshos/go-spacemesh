@@ -1745,8 +1745,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 
 	tortoise1.TallyVotes(ctx, last)
 	tortoise2.TallyVotes(ctx, last)
-	require.Equal(t, partitionStart, tortoise1.LatestComplete())
-	require.Equal(t, partitionStart, tortoise2.LatestComplete())
+	require.True(t, tortoise1.LatestComplete().Before(partitionStart))
+	require.True(t, tortoise2.LatestComplete().Before(partitionStart))
 
 	// make enough progress to cross global threshold with new votes
 	for i := 0; i < int(types.GetLayersPerEpoch())*4; i++ {
