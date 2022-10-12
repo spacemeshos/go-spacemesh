@@ -369,8 +369,8 @@ func (t *turtle) encodeVotes(
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
 // outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
-func (t *turtle) getFullVote(verified, last types.LayerID, block *blockInfo) (sign, voteReason, error) {
-	vote, reason := getLocalVote(verified, last, t.Config, block)
+func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) (sign, voteReason, error) {
+	vote, reason := getLocalVote(verified, current, t.Config, block)
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
@@ -378,7 +378,7 @@ func (t *turtle) getFullVote(verified, last types.LayerID, block *blockInfo) (si
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
-	coin, err := layers.GetWeakCoin(t.cdb, t.last)
+	coin, err := layers.GetWeakCoin(t.cdb, current.Sub(1))
 	if err != nil {
 		return 0, "", fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
 			t.last, block.id, block.layer)
