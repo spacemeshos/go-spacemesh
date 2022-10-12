@@ -519,18 +519,10 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
 
-	// FIXME latest layer in state is not exactly the latest verified layer
-	// https://github.com/spacemeshos/go-spacemesh/issues/3318
-	verified := msh.LatestLayerInState()
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("failed to load verified layer: %w", err)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	trtlCfg.MeshProcessed = processed
-	trtlCfg.MeshVerified = verified
 	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),

@@ -85,7 +85,6 @@ var (
 	defaultTestZdist           = DefaultConfig().Zdist
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
-	defaultTestRerunInterval   = time.Hour
 )
 
 func TestLayerPatterns(t *testing.T) {
@@ -509,26 +508,6 @@ func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
-}
-
-func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
-	t.Helper()
-	require.Equal(t, int(layerID.Uint32()), int(trtl.verified.Uint32()), "got unexpected value for last verified layer")
-}
-
-func addEpochActiveSet(t *testing.T, activeSets map[types.EpochID][]types.ATXID, lid types.LayerID, layerSize int, dbs []*datastore.CachedDB) {
-	epoch := lid.GetEpoch()
-	if _, ok := activeSets[epoch]; !ok {
-		atxList := genATXs(lid, layerSize, 1)
-		atxids := make([]types.ATXID, 0, len(atxList))
-		for _, atx := range atxList {
-			for _, db := range dbs {
-				require.NoError(t, atxs.Add(db, atx, time.Now()))
-			}
-			atxids = append(atxids, atx.ID())
-		}
-		activeSets[epoch] = atxids
-	}
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
