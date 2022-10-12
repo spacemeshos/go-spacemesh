@@ -122,8 +122,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			verified := c.tortoise.HandleIncomingLayer(context.TODO(), ev.LayerID)
-			m.Notify(EventVerified{ID: c.id, Verified: verified, Layer: ev.LayerID})
+			c.tortoise.TallyVotes(context.TODO(), ev.LayerID)
+			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
 
 		if ev.LayerID.GetEpoch() == ev.LayerID.Add(1).GetEpoch() {

@@ -25,7 +25,8 @@ func TestRecoverState(t *testing.T) {
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
-		verified = tortoise.HandleIncomingLayer(ctx, last)
+		tortoise.TallyVotes(ctx, last)
+		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
 
@@ -38,7 +39,8 @@ func TestRecoverState(t *testing.T) {
 		// test that it won't block on multiple attempts
 		require.NoError(t, tortoise2.WaitReady(initctx))
 	}
-	verified = tortoise2.HandleIncomingLayer(ctx, last)
+	tortoise2.TallyVotes(ctx, last)
+	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
 
 	cfg.MeshVerified = last.Sub(1)
@@ -47,7 +49,8 @@ func TestRecoverState(t *testing.T) {
 	initctx, cancel = context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	require.NoError(t, tortoise3.WaitReady(initctx))
-	verified = tortoise2.HandleIncomingLayer(ctx, last)
+	tortoise2.TallyVotes(ctx, last)
+	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
 }
 
@@ -70,12 +73,14 @@ func TestRerunStaysInVerifyingMode(t *testing.T) {
 	var last, verified types.LayerID
 	for i := 0; i < layers; i++ {
 		last = s.Next()
-		verified = tortoise.HandleIncomingLayer(ctx, last)
+		tortoise.TallyVotes(ctx, last)
+		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
 
 	require.NoError(t, tortoise.rerun(ctx))
-	verified = tortoise.HandleIncomingLayer(ctx, s.Next())
+	tortoise.TallyVotes(ctx, s.Next())
+	verified = tortoise.LatestComplete()
 	require.Equal(t, last, verified)
 
 	require.Equal(t, types.GetEffectiveGenesis(), tortoise.trtl.full.counted)
@@ -99,13 +104,15 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 		sim.WithSequence(good),
 		sim.WithSequence(5, sim.WithVoteGenerator(splitVoting(size))),
 	) {
-		verified = tortoise.HandleIncomingLayer(ctx, last)
+		tortoise.TallyVotes(ctx, last)
+		verified = tortoise.LatestComplete()
 	}
 	expected := types.GetEffectiveGenesis().Add(good - 1)
 	require.Equal(t, expected, verified)
 
 	require.NoError(t, tortoise.rerun(ctx))
-	verified = tortoise.HandleIncomingLayer(ctx, s.Next())
+	tortoise.TallyVotes(ctx, s.Next())
+	verified = tortoise.LatestComplete()
 	require.True(t, verified.Before(expected))
 }
 
@@ -146,7 +153,8 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput()),
 		sim.WithSequence(10, sim.WithEmptyHareOutput()),
 	) {
-		verified = tortoise.HandleIncomingLayer(ctx, last)
+		tortoise.TallyVotes(ctx, last)
+		verified = tortoise.LatestComplete()
 	}
 	require.Equal(tb, last.Sub(1), verified)
 
@@ -212,7 +220,7 @@ func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, op
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
 	for i := 0; i < size; i++ {
-		tortoise.HandleIncomingLayer(ctx, s.Next(opts...))
+		tortoise.TallyVotes(ctx, s.Next(opts...))
 	}
 
 	b.ResetTimer()

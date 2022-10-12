@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -200,40 +199,23 @@ func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*t
 	return t.trtl.EncodeVotes(ctx, conf)
 }
 
-// HandleIncomingLayer processes all layer block votes
-// returns the old verified layer and new verified layer after taking into account the blocks votes.
-//
-// TODO(dshulyak) open an issue to split this method.
-func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) types.LayerID {
+// TallyVotes up to the specified layer.
+func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
-	var (
-		old    = t.trtl.verified
-		logger = t.logger.WithContext(ctx).With()
-	)
-
 	t.updateFromRerun(ctx)
-	if err := t.trtl.onLayerTerminated(ctx, lid); err != nil {
-		logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
-		return t.trtl.verified
+	if err := t.trtl.onLayer(ctx, lid); err != nil {
+		t.logger.Error("failed on layer", lid, log.Err(err))
 	}
-
-	for lid := old.Add(1); !lid.After(t.trtl.verified); lid = lid.Add(1) {
-		events.ReportLayerUpdate(events.LayerUpdate{
-			LayerID: lid,
-			Status:  events.LayerStatusTypeConfirmed,
-		})
-	}
-
-	return t.trtl.verified
 }
 
 // OnBlock should be called every time new block is received.
 func (t *Tortoise) OnBlock(block *types.Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.trtl.onBlock(block.LayerIndex, block)
+	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
+		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
+	}
 }
 
 // OnBallot should be called every time new ballot is received.
@@ -242,7 +224,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
-		t.logger.With().Warning("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 }
 
