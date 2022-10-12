@@ -116,7 +116,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 			if block.height > layer.verifying.referenceHeight {
 				return neutral
 			}
-			decision, _ := getLocalVote(v.state, v.Config, block)
+			decision, _ := getLocalVote(v.state.verified, v.state.last, v.Config, block)
 			return decision
 		},
 	)

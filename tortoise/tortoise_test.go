@@ -1339,7 +1339,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	votes, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(last.Add(1)))
 	require.NoError(t, err)
 
-	require.Len(t, votes.Support, 1)
+	require.Len(t, votes.Support, 2)
 	block, err := blocks.Get(s.GetState(0).DB, votes.Support[0])
 	require.NoError(t, err)
 	require.Equal(t, block.LayerIndex, genesis.Add(1))
@@ -1490,7 +1490,10 @@ func TestComputeLocalOpinion(t *testing.T) {
 			blks, err := blocks.IDsInLayer(s.GetState(0).DB, tc.lid)
 			require.NoError(t, err)
 			for _, bid := range blks {
-				vote, _ := getLocalVote(&tortoise.trtl.state, cfg, tortoise.trtl.blockRefs[bid])
+				vote, _ := getLocalVote(
+					tortoise.trtl.state.verified,
+					tortoise.trtl.state.last,
+					cfg, tortoise.trtl.blockRefs[bid])
 				if tc.expected == support {
 					hareOutput, err := layers.GetHareOutput(s.GetState(0).DB, tc.lid)
 					require.NoError(t, err)

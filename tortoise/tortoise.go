@@ -266,7 +266,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 			return types.LayerID{}, nil
 		}
 		for _, block := range lvote.blocks {
-			vote, _, err := t.getFullVote(block)
+			vote, _, err := t.getFullVote(t.verified, last, block)
 			if err != nil {
 				return types.LayerID{}, err
 			}
@@ -305,11 +305,11 @@ func (t *turtle) encodeVotes(
 		if lvote.lid.Before(start) {
 			break
 		}
-		if lvote.vote == abstain && lvote.hareTerminated {
+		if lvote.vote == abstain && lvote.hareTerminated && !withinDistance(t.Zdist, lvote.lid, last) {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		for _, block := range lvote.blocks {
-			vote, _, err := t.getFullVote(block)
+			vote, reason, err := t.getFullVote(t.verified, last, block)
 			if err != nil {
 				return nil, err
 			}
@@ -327,7 +327,7 @@ func (t *turtle) encodeVotes(
 				votes.Against = append(votes.Against, block.id)
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
-					block.id, block.layer,
+					block.id, block.layer, log.Stringer("reason", reason),
 				)
 			}
 		}
@@ -341,7 +341,7 @@ func (t *turtle) encodeVotes(
 			continue
 		}
 		for _, block := range layer.blocks {
-			vote, reason, err := t.getFullVote(block)
+			vote, reason, err := t.getFullVote(t.verified, last, block)
 			if err != nil {
 				return nil, err
 			}
@@ -369,8 +369,8 @@ func (t *turtle) encodeVotes(
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
 // outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
-func (t *turtle) getFullVote(block *blockInfo) (sign, voteReason, error) {
-	vote, reason := getLocalVote(&t.state, t.Config, block)
+func (t *turtle) getFullVote(verified, last types.LayerID, block *blockInfo) (sign, voteReason, error) {
+	vote, reason := getLocalVote(verified, last, t.Config, block)
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
@@ -841,7 +841,7 @@ func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {
 			continue
 		}
 		for _, block := range lvote.blocks {
-			local, _ := getLocalVote(state, config, block)
+			local, _ := getLocalVote(state.verified, state.last, config, block)
 			if lvote.getVote(block.id) != local {
 				return false
 			}
@@ -859,17 +859,17 @@ func withinDistance(dist uint32, lid, last types.LayerID) bool {
 	return !lid.Before(limit)
 }
 
-func getLocalVote(state *state, config Config, block *blockInfo) (sign, voteReason) {
-	if withinDistance(config.Hdist, block.layer, state.last) {
+func getLocalVote(verified, last types.LayerID, config Config, block *blockInfo) (sign, voteReason) {
+	if withinDistance(config.Hdist, block.layer, last) {
 		if block.hare != neutral {
 			return block.hare, reasonHareOutput
 		}
-		if !withinDistance(config.Zdist, block.layer, state.last) {
+		if !withinDistance(config.Zdist, block.layer, last) {
 			return against, reasonHareOutput
 		}
 		return abstain, reasonHareOutput
 	}
-	if block.layer.After(state.verified) {
+	if block.layer.After(verified) {
 		return abstain, reasonValidity
 	}
 	return block.validity, reasonValidity
