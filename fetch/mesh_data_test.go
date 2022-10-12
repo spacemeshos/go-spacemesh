@@ -62,7 +62,7 @@ const (
 	numBlocks  = 3
 )
 
-func startTestLoop(f *Fetch, eg errgroup.Group, hdlr func(*request) bool) {
+func startTestLoop(f *Fetch, eg *errgroup.Group, hdlr func(*request) bool) {
 	eg.Go(func() error {
 		f.loop(hdlr)
 		return nil
@@ -148,7 +148,7 @@ func TestGetBlocks(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) bool {
 				req.returnChan <- results[req.hash]
 				return true
 			})
@@ -221,7 +221,7 @@ func TestGetBallots(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) bool {
 				req.returnChan <- results[req.hash]
 				return true
 			})
@@ -294,7 +294,7 @@ func TestGetProposals(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) bool {
 				req.returnChan <- results[req.hash]
 				return true
 			})
@@ -373,7 +373,7 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) bool {
 				req.returnChan <- results[req.hash]
 				return true
 			})
@@ -421,7 +421,7 @@ func TestGetTxs(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) bool {
 				req.returnChan <- results[req.hash]
 				return true
 			})
@@ -505,7 +505,7 @@ func TestGetATXs(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) bool {
 				req.returnChan <- results[req.hash]
 				return true
 			})
@@ -525,7 +525,7 @@ func TestGetPoetProof(t *testing.T) {
 	require.NoError(t, err)
 
 	var eg errgroup.Group
-	startTestLoop(f.Fetch, eg, func(req *request) bool {
+	startTestLoop(f.Fetch, &eg, func(req *request) bool {
 		req.returnChan <- HashDataPromiseResult{
 			Hash: h,
 			Data: data,
