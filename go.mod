@@ -36,7 +36,7 @@ require (
 	github.com/spacemeshos/merkle-tree v0.0.0-20220825090929-82954407483b
 	github.com/spacemeshos/poet v0.1.1-0.20220906085751-7a5dcff04063
 	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
-	github.com/spf13/cobra v1.5.0
+	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.0
@@ -96,7 +96,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/ipfs/go-cid v0.3.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
