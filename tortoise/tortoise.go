@@ -661,7 +661,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 	}
 	t.addBlock(binfo)
 	layer := t.layer(binfo.layer)
-	if !binfo.layer.Before(t.processed) {
+	if !binfo.layer.After(t.processed) {
 		if err := t.updateRefHeight(layer, binfo); err != nil {
 			return err
 		}
@@ -788,7 +788,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		beacon: beacon,
 	}
 	t.decodeExceptions(base, binfo, ballot.Votes)
-	if !binfo.layer.Before(t.processed) {
+	if !binfo.layer.After(t.processed) {
 		if err := t.countBallot(t.logger, binfo); err != nil {
 			return err
 		}
