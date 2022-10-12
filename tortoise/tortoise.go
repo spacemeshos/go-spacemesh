@@ -542,9 +542,7 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 
 // loadAtxs and compute reference height.
 func (t *turtle) loadAtxs(epoch types.EpochID) error {
-	var (
-		heights []uint64
-	)
+	var heights []uint64
 	if err := t.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
 		t.onAtx(header)
 		heights = append(heights, header.TickHeight())

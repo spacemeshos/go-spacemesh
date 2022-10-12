@@ -21,7 +21,7 @@ type verifying struct {
 	totalGoodWeight util.Weight
 }
 
-// reset all weight that can vote on a voted layer
+// reset all weight that can vote on a voted layer.
 func (v *verifying) resetWeights(voted types.LayerID) {
 	vlayer := v.layer(voted)
 	v.totalGoodWeight = vlayer.verifying.goodUncounted.Copy()
