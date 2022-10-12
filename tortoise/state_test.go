@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 func TestVotesUpdate(t *testing.T) {
@@ -88,5 +89,102 @@ func TestVotesUpdate(t *testing.T) {
 			require.Len(t, c.supported, 1)
 			require.Equal(t, support, c.getVote(c.supported[0].id))
 		}
+	})
+}
+
+func TestComputeOpinion(t *testing.T) {
+	t.Run("single supported sorted", func(t *testing.T) {
+		v := votes{}
+		blocks := []*blockInfo{
+			{id: types.BlockID{1}, height: 10},
+			{id: types.BlockID{2}, height: 5},
+		}
+		v.append(&layerVote{
+			supported: append([]*blockInfo{}, blocks...),
+		})
+		hh := hash.New()
+		hh.Write(blocks[1].id[:])
+		hh.Write(blocks[0].id[:])
+		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
+	})
+	t.Run("abstain sentinel", func(t *testing.T) {
+		v := votes{}
+		v.append(&layerVote{
+			vote: abstain,
+		})
+		hh := hash.New()
+		hh.Write(abstainSentinel)
+		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
+	})
+	t.Run("recursive", func(t *testing.T) {
+		v := votes{}
+		blocks := []*blockInfo{
+			{id: types.BlockID{1}},
+			{id: types.BlockID{2}},
+		}
+		v.append(&layerVote{
+			supported: []*blockInfo{blocks[0]},
+			layerInfo: &layerInfo{lid: types.NewLayerID(0)}},
+		)
+		v.append(&layerVote{
+			supported: []*blockInfo{blocks[1]},
+			layerInfo: &layerInfo{lid: types.NewLayerID(1)}},
+		)
+
+		hh := hash.New()
+		hh.Write(blocks[0].id[:])
+		buf := hh.Sum(nil)
+		hh.Reset()
+		hh.Write(buf)
+		hh.Write(blocks[1].id[:])
+		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
+	})
+	t.Run("empty layer", func(t *testing.T) {
+		v := votes{}
+		blocks := []*blockInfo{
+			{id: types.BlockID{1}},
+		}
+		v.append(&layerVote{
+			supported: []*blockInfo{blocks[0]},
+			layerInfo: &layerInfo{lid: types.NewLayerID(0)}},
+		)
+		v.append(&layerVote{
+			vote:      against,
+			layerInfo: &layerInfo{lid: types.NewLayerID(1)}},
+		)
+
+		hh := hash.New()
+		hh.Write(blocks[0].id[:])
+		buf := hh.Sum(nil)
+		hh.Reset()
+		hh.Write(buf)
+		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
+	})
+	t.Run("rehash after update", func(t *testing.T) {
+		original := votes{}
+		blocks := []*blockInfo{
+			{id: types.BlockID{1}},
+			{id: types.BlockID{2}},
+		}
+		updated := types.NewLayerID(0)
+		original.append(&layerVote{
+			vote:      against,
+			supported: []*blockInfo{blocks[0]},
+			layerInfo: &layerInfo{lid: updated}},
+		)
+		original.append(&layerVote{
+			vote:      against,
+			supported: []*blockInfo{blocks[1]},
+			layerInfo: &layerInfo{lid: updated.Add(1)}},
+		)
+		v := original.update(updated, map[types.LayerID]map[types.BlockID]sign{
+			updated: {blocks[0].id: against},
+		})
+		hh := hash.New()
+		buf := hh.Sum(nil)
+		hh.Reset()
+		hh.Write(buf)
+		hh.Write(blocks[1].id[:])
+		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
 	})
 }
