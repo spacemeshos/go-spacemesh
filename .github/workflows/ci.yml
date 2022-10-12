@@ -76,7 +76,7 @@ jobs:
       - name: staticcheck
         run: make staticcheck
 
-  golangci-lint:
+  lint:
     runs-on: ubuntu-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
@@ -99,8 +99,8 @@ jobs:
             ${{ runner.os }}-cache-go-${{ env.go-version }}-
       - name: setup env
         run: make install
-      - name: golangci-lint
-        run: make golangci-lint-github-action
+      - name: lint
+        run: make lint-github-action
 
   build:
     runs-on: ${{ matrix.os }}
@@ -213,13 +213,13 @@ jobs:
     needs:
       - filter-changes
       - quicktests
-      - golangci-lint
+      - lint
       - unittests
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
       # this is the easiest way to access success/failure state of previous jobs in this workflow
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
     steps:
       - uses: act10ns/slack@v1
         name: Slack notification
