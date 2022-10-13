@@ -267,6 +267,7 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
 		copied.vote = abstain
+		copied.supported = nil
 	} else if exist && len(layerdiff) > 0 {
 		var supported []*blockInfo
 		for _, block := range copied.blocks {

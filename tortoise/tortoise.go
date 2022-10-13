@@ -788,6 +788,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	}
 	binfo.conditions.badBeacon = badBeacon
 	t.decodeExceptions(base, binfo, ballot.Votes)
+	t.logger.With().Debug("decoded exceptions", binfo.id, binfo.layer, log.Stringer("opinion", binfo.opinion()))
 	t.state.addBallot(binfo)
 	return nil
 }
