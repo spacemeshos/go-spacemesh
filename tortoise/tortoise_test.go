@@ -2882,7 +2882,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		var last types.LayerID
 		for i := 0; i < distance; i++ {
 			last = s.Next(sim.WithNumBlocks(1))
-			tortoise.HandleIncomingLayer(ctx, last)
+			tortoise.TallyVotes(ctx, last)
 		}
 
 		rst, err := ballots.Layer(s.GetState(0).DB, last)
@@ -2921,7 +2921,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		var last types.LayerID
 		for i := 0; i < distance; i++ {
 			last = s.Next(sim.WithNumBlocks(1))
-			tortoise.HandleIncomingLayer(ctx, last)
+			tortoise.TallyVotes(ctx, last)
 		}
 
 		rst, err := ballots.Layer(s.GetState(0).DB, last)
