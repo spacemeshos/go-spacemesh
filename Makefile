@@ -65,7 +65,7 @@ endif
 install:
 	go run scripts/check-go-version.go --major 1 --minor 18
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
@@ -149,22 +149,20 @@ test-fmt:
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
-lint: golangci-lint
+lint: get-libs
 	go vet ./...
+	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
-golangci-lint: get-libs
-	golangci-lint run --config .golangci.yml
-.PHONY: golangci-lint
-
 # Auto-fixes golangci-lint issues where possible.
-golangci-lint-fix: get-libs
-	golangci-lint run --config .golangci.yml --fix
-.PHONY: golangci-lint-fix
+lint-fix: get-libs
+	./bin/golangci-lint run --config .golangci.yml --fix
+.PHONY: lint-fix
 
-golangci-lint-github-action: get-libs
+lint-github-action: get-libs
+	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: golangci-lint-github-action
+.PHONY: lint-github-action
 
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)

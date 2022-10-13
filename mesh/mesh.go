@@ -368,7 +368,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	logger.Info("processing layer")
 
 	// pass the layer to tortoise for processing
-	newVerified := msh.trtl.HandleIncomingLayer(ctx, layerID)
+	msh.trtl.TallyVotes(ctx, layerID)
+	newVerified := msh.trtl.LatestComplete()
 	logger.With().Debug("tortoise results", log.Stringer("verified", newVerified))
 
 	// set processed layer even if later code will fail, as that failure is not related

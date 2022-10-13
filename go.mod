@@ -26,9 +26,9 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
 	github.com/prometheus/common v0.37.0
-	github.com/pyroscope-io/pyroscope v0.30.0
+	github.com/pyroscope-io/pyroscope v0.31.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220930055900-5d5f39c43abf
+	github.com/spacemeshos/api/release/go v1.4.1-0.20221011085707-0a5255087c72
 	github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
@@ -36,7 +36,7 @@ require (
 	github.com/spacemeshos/merkle-tree v0.0.0-20220909175028-45e6d3500683
 	github.com/spacemeshos/poet v0.1.1-0.20221011061754-9bb56a12fb8f
 	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
-	github.com/spf13/cobra v1.5.0
+	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.0
@@ -96,7 +96,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/ipfs/go-cid v0.3.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
