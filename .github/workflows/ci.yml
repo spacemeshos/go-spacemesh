@@ -149,7 +149,7 @@ jobs:
           - os: macos-latest
             allow-failure: "true"
           - os: windows-latest
-            allow-failure: "false"
+            allow-failure: "true"
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
