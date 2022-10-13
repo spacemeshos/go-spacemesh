@@ -1,4 +1,4 @@
-FROM golang:alpine3.15 as build
+FROM golang:1.19-alpine as build
 RUN apk add libc6-compat gcc musl-dev
 WORKDIR /build/
 COPY . .
