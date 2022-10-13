@@ -57,7 +57,7 @@ output:
 linters-settings:
   staticcheck:
     # Select the Go version to target. The default is '1.13'.
-    go: "1.18"
+    go: "1.19"
     # https://staticcheck.io/docs/options#checks
     checks: ["all"]
 
@@ -170,7 +170,7 @@ linters-settings:
     capital: false
   gofumpt:
     # Select the Go version to target. The default is `1.15`.
-    lang-version: "1.18"
+    lang-version: "1.19"
     # Choose whether or not to use the extra rules that are disabled
     # by default
     extra-rules: false
