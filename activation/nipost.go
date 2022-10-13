@@ -129,18 +129,15 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		}()
 
 		poetProofRef := nb.awaitPoetProof(awaitProofsCtx, challenge)
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrStopRequested)
-		default:
 		}
 		if poetProofRef == nil {
 			// Haven't received any poet proof
-			select {
-			case <-awaitProofsCtx.Done():
+			if awaitProofsCtx.Err() != nil {
 				// Time is up - ATX challenge is expired.
 				return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrATXChallengeExpired)
-			default:
+			} else {
 				// Time is not up - ATX challenge is NOT expired yet.
 				return nil, 0, &PoetSvcUnstableError{msg: "haven't received any PoET proof"}
 			}

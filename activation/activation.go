@@ -112,7 +112,11 @@ type Builder struct {
 	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
-	lastPostGenDuration   time.Duration
+	// lastPostGenDuration is the duration that the last PoST proof
+	// took to build. It is used to predict a safe moment in time
+	// when we need to collect the PoET proofs and start building
+	// PoST to complete building NiPoST.
+	lastPostGenDuration time.Duration
 }
 
 // BuilderOption ...
@@ -467,7 +471,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) error {
 	b.log.With().Debug("request to update poet services", log.Strings("endpoints", endpoints))
 
-	clients := make([]PoetProvingServiceClient, len(endpoints))
+	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		client := b.poetClientInitializer(endpoint)
 		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
@@ -477,6 +481,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
 		}
 		b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
+		clients = append(clients, client)
 	}
 
 	b.pendingPoetClients.Store(&clients)

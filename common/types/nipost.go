@@ -2,7 +2,7 @@ package types
 
 //go:generate scalegen -types NIPostBuilderState,PoetRequest
 
-// NIPostBuilderState is a builder state.
+// PoetRequest describes an in-flight challenge submission for a poet proof.
 type PoetRequest struct {
 	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
 	PoetRound *PoetRound
@@ -10,6 +10,7 @@ type PoetRequest struct {
 	PoetServiceID []byte
 }
 
+// NIPostBuilderState is a builder state.
 type NIPostBuilderState struct {
 	Challenge Hash32
 
