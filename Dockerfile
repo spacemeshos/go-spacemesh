@@ -68,13 +68,12 @@ WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 ENV GO111MODULE=on
 ENV GOPROXY=https://proxy.golang.org
 
+COPY Makefile* .
+RUN make get-libs
+
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
 COPY go.sum .
-COPY scripts/* scripts/
-
-# does not required yet
-# RUN go run scripts/check-go-version.go --major 1 --minor 15
 RUN go mod download
 
 # This image builds the go-spacemesh server
@@ -83,9 +82,9 @@ FROM build_base AS server_builder
 COPY . .
 
 # And compile the project
-RUN make build
-RUN make harness
-RUN make gen-p2p-identity
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make harness
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh

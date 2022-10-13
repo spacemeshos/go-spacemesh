@@ -113,7 +113,7 @@ endif
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
 docker-local-build: go-spacemesh hare p2p harness
-	cd build; docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
+	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
 
@@ -174,7 +174,7 @@ tag-and-build:
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
 	git push origin ${VERSION}
-	docker build -t go-spacemesh:${VERSION} .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
 	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
 	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
 .PHONY: tag-and-build
@@ -185,7 +185,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE) .
+	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
