@@ -34,7 +34,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
@@ -300,8 +299,7 @@ func (app *App) introduction() {
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
 	// ensure all data folders exist
-	err = filesystem.ExistOrCreate(app.Config.DataDir())
-	if err != nil {
+	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("ensure folders exist: %w", err)
 	}
 
@@ -958,11 +956,11 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.Info("Identity file not found. Creating new identity...")
 
 		edSgn := signing.NewEdSigner(signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
-		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
+		err := os.MkdirAll(filepath.Dir(filename), 0o700)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
+		err = os.WriteFile(filename, edSgn.ToBuffer(), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -1013,8 +1011,7 @@ func (app *App) Start() error {
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
 		log.String("hostname", hostname))
 
-	err = filesystem.ExistOrCreate(app.Config.DataDir())
-	if err != nil {
+	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
 	}
 
