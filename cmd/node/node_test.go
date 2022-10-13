@@ -429,7 +429,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	conn, err := grpc.Dial(
-		fmt.Sprintf("0.0.0.0:%d", port),
+		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(100*time.Millisecond),
@@ -448,7 +448,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.True(app.Config.API.StartNodeService)
 
 	conn, err = grpc.Dial(
-		fmt.Sprintf("0.0.0.0:%d", port),
+		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(2*time.Second),
@@ -594,13 +594,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	go func() {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
-		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "0.0.0.0")
+		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "localhost")
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 	}()
 
 	conn, err := grpc.Dial(
-		fmt.Sprintf("0.0.0.0:%d", port),
+		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(5*time.Second),
@@ -693,7 +693,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		// GRPC configuration
 		app.Config.API.GrpcServerPort = port
-		app.Config.API.GrpcServerInterface = "0.0.0.0"
+		app.Config.API.GrpcServerInterface = "localhost"
 		app.Config.API.StartTransactionService = true
 
 		// Prevent obnoxious warning in macOS
@@ -732,7 +732,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	conn, err := grpc.Dial(
-		fmt.Sprintf("0.0.0.0:%d", port),
+		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(5*time.Second),

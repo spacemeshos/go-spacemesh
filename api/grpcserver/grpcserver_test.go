@@ -122,7 +122,7 @@ func dialGrpc(t testing.TB, cfg config.Config) *grpc.ClientConn {
 	t.Helper()
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(
-		"0.0.0.0:"+strconv.Itoa(cfg.GrpcServerPort),
+		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithTimeout(time.Second),
@@ -500,7 +500,7 @@ func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
 }
 
 func launchServer(tb testing.TB, services ...ServiceAPI) func() {
-	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "0.0.0.0")
+	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 
 	// attach services
