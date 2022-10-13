@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -13,24 +14,30 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-var id = types.NodeID{}
+var (
+	id = types.NodeID{}
 
-func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
-	cfg := DefaultPostConfig()
+	cfg             atypes.PostConfig
+	opts            atypes.PostSetupOpts
+	longerSetupOpts atypes.PostSetupOpts
+)
 
-	opts := DefaultPostSetupOpts()
-	opts.DataDir = t.TempDir()
+func init() {
+	cfg = DefaultPostConfig()
+
+	opts = DefaultPostSetupOpts()
+	opts.DataDir, _ = os.MkdirTemp("", "post-test")
 	opts.NumUnits = cfg.MinNumUnits
 	opts.ComputeProviderID = initialization.CPUProviderID()
 
-	return cfg, opts
+	longerSetupOpts = opts
+	longerSetupOpts.NumUnits = opts.NumUnits * 10
 }
 
 func TestPostSetupManager(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -86,7 +93,6 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -123,7 +129,6 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	ch := make([]byte, 32)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -153,7 +158,6 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -196,8 +200,6 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
-	opts.NumUnits *= 10
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -219,7 +221,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 				prevStatus = status
 			} else {
 				// Verify last status.
-				req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
 				break
 			}
 		}
@@ -227,7 +229,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 	}()
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
+	doneChan, err := mgr.StartSession(longerSetupOpts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 	wg.Wait()
@@ -241,7 +243,6 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -288,13 +289,11 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
-	opts.NumUnits *= 10
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
+	doneChan, err := mgr.StartSession(longerSetupOpts, goldenATXID)
 	req.NoError(err)
 
 	// Wait a bit for the setup to proceed.
@@ -302,7 +301,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	// Verify the intermediate status.
 	status := mgr.Status()
-	req.Equal(&opts, status.LastOpts)
+	req.Equal(&longerSetupOpts, status.LastOpts)
 	req.Equal(atypes.PostSetupStateInProgress, status.State)
 
 	// Stop without files deletion.
@@ -322,13 +321,13 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Continue to create data.
-	doneChan, err = mgr.StartSession(opts, goldenATXID)
+	doneChan, err = mgr.StartSession(longerSetupOpts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
 
 	// Verify status.
 	status = mgr.Status()
-	req.Equal(&opts, status.LastOpts)
+	req.Equal(&longerSetupOpts, status.LastOpts)
 	req.Equal(atypes.PostSetupStateComplete, status.State)
-	req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
+	req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
 }
