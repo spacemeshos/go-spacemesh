@@ -14,21 +14,19 @@ import (
 var RootFolder = "/"
 
 func TestPathExists(t *testing.T) {
-	tempFile := filepath.Join(os.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
+	tempFile := filepath.Join(t.TempDir(), uuid.New().String()+"_"+t.Name())
 	_, err := os.Create(tempFile)
 	require.NoError(t, err, "couldn't create temp path")
 	assert.True(t, PathExists(tempFile), "expecting existence of path")
-	os.RemoveAll(tempFile)
 }
 
 func TestGetFullDirectoryPath(t *testing.T) {
-	tempFile := filepath.Join(os.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
+	tempFile := filepath.Join(t.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
 	err := os.MkdirAll(tempFile, os.ModeDir)
 	assert.NoError(t, err, "creating temp dir failed")
 	aPath, err := GetFullDirectoryPath(tempFile)
 	assert.Equal(t, tempFile, aPath, "Path is different")
 	assert.NoError(t, err)
-	os.RemoveAll(tempFile)
 }
 
 func TestGetUserHomeDirectory(t *testing.T) {
