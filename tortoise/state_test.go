@@ -124,12 +124,12 @@ func TestComputeOpinion(t *testing.T) {
 		}
 		v.append(&layerVote{
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: types.NewLayerID(0)}},
-		)
+			layerInfo: &layerInfo{lid: types.NewLayerID(0)},
+		})
 		v.append(&layerVote{
 			supported: []*blockInfo{blocks[1]},
-			layerInfo: &layerInfo{lid: types.NewLayerID(1)}},
-		)
+			layerInfo: &layerInfo{lid: types.NewLayerID(1)},
+		})
 
 		hh := hash.New()
 		hh.Write(blocks[0].id[:])
@@ -146,12 +146,12 @@ func TestComputeOpinion(t *testing.T) {
 		}
 		v.append(&layerVote{
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: types.NewLayerID(0)}},
-		)
+			layerInfo: &layerInfo{lid: types.NewLayerID(0)},
+		})
 		v.append(&layerVote{
 			vote:      against,
-			layerInfo: &layerInfo{lid: types.NewLayerID(1)}},
-		)
+			layerInfo: &layerInfo{lid: types.NewLayerID(1)},
+		})
 
 		hh := hash.New()
 		hh.Write(blocks[0].id[:])
@@ -170,13 +170,13 @@ func TestComputeOpinion(t *testing.T) {
 		original.append(&layerVote{
 			vote:      against,
 			supported: []*blockInfo{blocks[0]},
-			layerInfo: &layerInfo{lid: updated}},
-		)
+			layerInfo: &layerInfo{lid: updated},
+		})
 		original.append(&layerVote{
 			vote:      against,
 			supported: []*blockInfo{blocks[1]},
-			layerInfo: &layerInfo{lid: updated.Add(1)}},
-		)
+			layerInfo: &layerInfo{lid: updated.Add(1)},
+		})
 		v := original.update(updated, map[types.LayerID]map[types.BlockID]sign{
 			updated: {blocks[0].id: against},
 		})
