@@ -63,7 +63,7 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
 endif
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 18
+	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
 	go install github.com/spacemeshos/go-scale/scalegen
