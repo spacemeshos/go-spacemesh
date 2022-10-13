@@ -35,15 +35,17 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM golang:1.19 as builder
-WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
+RUN set -ex \
+   && apt-get update --fix-missing \
+   && apt-get install -qy --no-install-recommends \
+   unzip
+
+WORKDIR /src
 
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
 COPY go.sum .
-COPY scripts/* scripts/
 
-# does not required yet
-# RUN go run scripts/check-go-version.go --major 1 --minor 15
 RUN go mod download
 
 # Here we copy the rest of the source code
@@ -58,12 +60,12 @@ RUN make gen-p2p-identity
 FROM linux AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
-COPY --from=builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/
-COPY --from=builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/
-COPY --from=builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
+COPY --from=builder /src/build/go-spacemesh /bin/
+COPY --from=builder /src/build/go-harness /bin/
+COPY --from=builder /src/build/libgpu-setup.so /bin/
 # TODO(nkryuchkov): uncomment when go-svm is imported
-#COPY --from=builder /go/src/github.com/spacemeshos/go-spacemesh/build/libsvm.so /bin/
-COPY --from=builder /go/src/github.com/spacemeshos/go-spacemesh/build/gen-p2p-identity /bin/
+#COPY --from=builder /src/build/libsvm.so /bin/
+COPY --from=builder /src/build/gen-p2p-identity /bin/
 
 ENTRYPOINT ["/bin/go-harness"]
 EXPOSE 7513
