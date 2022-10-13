@@ -500,9 +500,6 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
-
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
@@ -529,6 +526,9 @@ func (app *App) initServices(ctx context.Context,
 		tortoise.WithConfig(trtlCfg),
 	)
 	verifier.Tortoise = trtl
+
+	fetcherWrapped := &layerFetcher{}
+	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
