@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	bc "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -117,8 +116,7 @@ func setupLogging(config *bc.Config) {
 	}
 
 	// setup logging early
-	err := filesystem.ExistOrCreate(config.DataDir())
-	if err != nil {
+	if err := os.MkdirAll(config.DataDir(), 0o700); err != nil {
 		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 }
