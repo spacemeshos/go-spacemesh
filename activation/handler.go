@@ -40,6 +40,7 @@ type Handler struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
+	atxReceiver     atxReceiver
 	log             log.Log
 	processAtxMutex sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -47,13 +48,14 @@ type Handler struct {
 }
 
 // NewHandler returns a data handler for ATX.
-func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *Handler {
+func NewHandler(cdb *datastore.CachedDB, fetcher system.Fetcher, layersPerEpoch uint32, tickSize uint64, goldenATXID types.ATXID, nipostValidator nipostValidator, atxReceiver atxReceiver, log log.Log) *Handler {
 	return &Handler{
 		cdb:             cdb,
 		layersPerEpoch:  layersPerEpoch,
 		tickSize:        tickSize,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
+		atxReceiver:     atxReceiver,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
@@ -444,6 +446,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 		// TODO: blacklist peer
 	}
 
+	h.atxReceiver.OnAtx(vAtx.Header())
 	events.ReportNewActivation(vAtx)
 	logger.With().Info("got new atx", log.Inline(atx), log.Int("size", len(data)))
 	return nil
