@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/viper"
@@ -14,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -31,9 +31,14 @@ const (
 )
 
 var (
-	defaultHomeDir = filesystem.GetUserHomeDirectory()
-	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
+	defaultHomeDir string
+	defaultDataDir string
 )
+
+func init() {
+	defaultHomeDir, _ = os.UserHomeDir()
+	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
+}
 
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
@@ -58,7 +63,7 @@ type Config struct {
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
 // with a subfolder named after the network ID.
 func (cfg *Config) DataDir() string {
-	return filesystem.GetCanonicalPath(cfg.DataDirParent)
+	return filepath.Clean(cfg.DataDirParent)
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
