@@ -3,7 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -50,7 +50,7 @@ func (g *GenesisConfig) Diff(other *GenesisConfig) string {
 
 // LoadFromFile loads config from file.
 func (g *GenesisConfig) LoadFromFile(filename string) error {
-	buf, err := ioutil.ReadFile(filename)
+	buf, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func (g *GenesisConfig) WriteToFile(filename string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, buf, 0o644)
+	return os.WriteFile(filename, buf, 0o644)
 }
 
 // ToAccounts creates list of types.Account instance from config.
