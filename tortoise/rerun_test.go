@@ -52,6 +52,41 @@ func TestRecoverState(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
+<<<<<<< HEAD
+=======
+func TestRerunStaysInVerifyingMode(t *testing.T) {
+	ctx := context.Background()
+	const (
+		size   = 10
+		layers = 20
+	)
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 1
+	cfg.Zdist = cfg.Hdist
+
+	cfg.VerifyingModeVerificationWindow = layers
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for i := 0; i < layers; i++ {
+		last = s.Next()
+		tortoise.TallyVotes(ctx, last)
+		verified = tortoise.LatestComplete()
+	}
+	require.Equal(t, last.Sub(1), verified)
+
+	require.NoError(t, tortoise.rerun(ctx))
+	tortoise.TallyVotes(ctx, s.Next())
+	verified = tortoise.LatestComplete()
+	require.Equal(t, last, verified)
+
+	require.Equal(t, types.GetEffectiveGenesis(), tortoise.trtl.full.counted)
+}
+
+>>>>>>> develop
 func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	ctx := context.Background()
 	const (
@@ -74,6 +109,14 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 		verified = tortoise.LatestComplete()
 	}
 	expected := types.GetEffectiveGenesis().Add(good - 1)
+<<<<<<< HEAD
+=======
+	require.Equal(t, expected, verified)
+
+	require.NoError(t, tortoise.rerun(ctx))
+	tortoise.TallyVotes(ctx, s.Next())
+	verified = tortoise.LatestComplete()
+>>>>>>> develop
 	require.True(t, verified.Before(expected))
 }
 
@@ -115,6 +158,10 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
 		tortoise.TallyVotes(ctx, last)
+<<<<<<< HEAD
+=======
+		verified = tortoise.LatestComplete()
+>>>>>>> develop
 	}
 	require.Equal(tb, last.Sub(1), tortoise.LatestComplete())
 
@@ -174,7 +221,11 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	start := time.Now()
 	var last types.LayerID
 	for i := 0; i < size; i++ {
+<<<<<<< HEAD
 		last = s.Next(opts...)
+=======
+		tortoise.TallyVotes(ctx, s.Next(opts...))
+>>>>>>> develop
 	}
 	b.Log("generated state", time.Since(start))
 	// count ballots and form initial opinion

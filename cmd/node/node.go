@@ -547,7 +547,7 @@ func (app *App) initServices(ctx context.Context,
 			Hdist:          trtlCfg.Hdist,
 		}))
 
-	blockHandller := blocks.NewHandler(fetcherWrapped, sqlDB, msh,
+	blockHandler := blocks.NewHandler(fetcherWrapped, sqlDB, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
@@ -565,15 +565,15 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
-	dataHanders := fetch.DataHandlers{
+	dataHandlers := fetch.DataHandlers{
 		ATX:      atxHandler,
-		Block:    blockHandller,
+		Block:    blockHandler,
 		Ballot:   proposalListener,
 		Proposal: proposalListener,
 		TX:       txHandler,
 		Poet:     poetDb,
 	}
-	layerFetch := fetch.NewLogic(app.Config.FETCH, cdb, msh, app.host, dataHanders, app.addLogger(LayerFetcher, lg))
+	layerFetch := fetch.NewLogic(app.Config.FETCH, cdb, msh, app.host, dataHandlers, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -616,12 +616,12 @@ func (app *App) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postSetupMgr, err := activation.NewPostSetupManager(nodeID[:], app.Config.POST, app.addLogger(PostLogger, lg))
+	postSetupMgr, err := activation.NewPostSetupManager(nodeID, app.Config.POST, app.addLogger(PostLogger, lg), cdb, goldenATXID)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID[:], postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {

@@ -149,24 +149,22 @@ test-fmt:
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
-lint: golangci-lint
+lint: get-libs
 	go vet ./...
+	golangci-lint run --config .golangci.yml
 .PHONY: lint
 
-golangci-lint:
-	golangci-lint run --config .golangci.yml
-.PHONY: golangci-lint
-
 # Auto-fixes golangci-lint issues where possible.
-golangci-lint-fix:
+lint-fix: get-libs
 	golangci-lint run --config .golangci.yml --fix
-.PHONY: golangci-lint-fix
+.PHONY: lint-fix
 
-golangci-lint-github-action:
+lint-github-action: get-libs
+	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: golangci-lint-github-action
+.PHONY: lint-github-action
 
-cover:
+cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: cover
 
