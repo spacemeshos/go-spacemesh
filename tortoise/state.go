@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -48,7 +49,7 @@ type (
 		// during rerun. for live tortoise it is identical to the verified layer.
 		historicallyVerified types.LayerID
 		// last processed layer
-		minprocessed, processed types.LayerID
+		processed types.LayerID
 		// last evicted layer
 		evicted types.LayerID
 
@@ -118,7 +119,11 @@ func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
 	return 0
 }
 
-func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
+func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
+	_, exist := s.referenceHeight[block.layer.GetEpoch()]
+	if !exist {
+		return fmt.Errorf("reference height for epoch %v wasn't computed", block.layer.GetEpoch())
+	}
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
 	}
@@ -126,6 +131,7 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) {
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
+	return nil
 }
 
 type (

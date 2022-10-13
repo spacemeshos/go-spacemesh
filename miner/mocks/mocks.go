@@ -132,3 +132,15 @@ func (mr *MockvotesEncoderMockRecorder) EncodeVotes(arg0 interface{}, arg1 ...in
 	varargs := append([]interface{}{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeVotes", reflect.TypeOf((*MockvotesEncoder)(nil).EncodeVotes), varargs...)
 }
+
+// TallyVotes mocks base method.
+func (m *MockvotesEncoder) TallyVotes(arg0 context.Context, arg1 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "TallyVotes", arg0, arg1)
+}
+
+// TallyVotes indicates an expected call of TallyVotes.
+func (mr *MockvotesEncoderMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockvotesEncoder)(nil).TallyVotes), arg0, arg1)
+}

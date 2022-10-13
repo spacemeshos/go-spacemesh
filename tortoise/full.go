@@ -1,17 +1,15 @@
 package tortoise
 
 import (
-	"container/list"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func newFullTortoise(config Config, state *state) *full {
 	return &full{
-		Config:       config,
-		state:        state,
-		delayedQueue: list.New(),
+		Config:  config,
+		state:   state,
+		delayed: map[types.LayerID][]*ballotInfo{},
 	}
 }
 
@@ -25,81 +23,59 @@ type full struct {
 	// we want to wait until verifying can't make progress before they are counted.
 	// storing them in current version is cheap.
 	counted types.LayerID
-	// queue of the ballots with bad beacon
-	delayedQueue *list.List
+	// delayed ballots by the layer when they are safe to count
+	delayed map[types.LayerID][]*ballotInfo
 }
 
-func (f *full) countVotesFromBallots(logger log.Log, ballots []*ballotInfo) {
-	var delayed []*ballotInfo
-	for _, ballot := range ballots {
-		if f.shouldBeDelayed(ballot) {
-			delayed = append(delayed, ballot)
-			continue
-		}
-		if ballot.weight.IsNil() {
-			continue
-		}
-		for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
-			if !lvote.lid.After(f.verified) {
-				break
-			}
-			if lvote.vote == abstain {
-				continue
-			}
-			empty := true
-			for _, block := range lvote.blocks {
-				if block.height > ballot.height {
-					continue
-				}
-				switch lvote.getVote(block.id) {
-				case support:
-					empty = false
-					block.margin = block.margin.Add(ballot.weight)
-				case against:
-					block.margin = block.margin.Sub(ballot.weight)
-				}
-			}
-			if empty {
-				lvote.empty = lvote.empty.Add(ballot.weight)
-			}
-		}
-	}
-	if len(delayed) > 0 {
-		f.delayedQueue.PushBack(delayedBallots{
-			lid:     delayed[0].layer,
-			ballots: delayed,
-		})
-	}
-}
-
-func (f *full) countLayerVotes(logger log.Log, lid types.LayerID) {
-	if !lid.After(f.counted) {
+func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
+	if f.shouldBeDelayed(ballot) {
 		return
 	}
-	f.counted = lid
-
-	for front := f.delayedQueue.Front(); front != nil; {
-		delayed := front.Value.(delayedBallots)
-		if f.last.Difference(delayed.lid) <= f.BadBeaconVoteDelayLayers {
+	if ballot.weight.IsNil() {
+		return
+	}
+	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
+		if !lvote.lid.After(f.verified) {
 			break
 		}
-		logger.With().Debug("adding weight from delayed ballots",
-			log.Stringer("ballots_layer", delayed.lid),
-		)
-
-		f.countVotesFromBallots(
-			logger.WithFields(log.Bool("delayed", true)), delayed.ballots)
-
-		next := front.Next()
-		f.delayedQueue.Remove(front)
-		front = next
+		if lvote.vote == abstain {
+			continue
+		}
+		empty := true
+		for _, block := range lvote.blocks {
+			if block.height > ballot.height {
+				continue
+			}
+			switch lvote.getVote(block.id) {
+			case support:
+				empty = false
+				block.margin = block.margin.Add(ballot.weight)
+			case against:
+				block.margin = block.margin.Sub(ballot.weight)
+			}
+		}
+		if empty {
+			lvote.empty = lvote.empty.Add(ballot.weight)
+		}
 	}
-	f.countVotesFromBallots(logger, f.layer(lid).ballots)
+}
+
+func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
+	delayed, exist := f.delayed[lid]
+	if !exist {
+		return
+	}
+	delete(f.delayed, lid)
+	for _, ballot := range delayed {
+		f.countBallot(logger, ballot)
+	}
 }
 
 func (f *full) countVotes(logger log.Log) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
-		f.countLayerVotes(logger, lid)
+		for _, ballot := range f.layer(lid).ballots {
+			f.countBallot(logger, ballot)
+		}
 	}
 	f.counted = f.processed
 }
@@ -138,13 +114,14 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	)
 }
 
-// shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
-// long time ago.
 func (f *full) shouldBeDelayed(ballot *ballotInfo) bool {
-	return ballot.conditions.badBeacon && f.last.Difference(ballot.layer) <= f.BadBeaconVoteDelayLayers
-}
-
-type delayedBallots struct {
-	lid     types.LayerID
-	ballots []*ballotInfo
+	if !ballot.conditions.badBeacon {
+		return false
+	}
+	delay := ballot.layer.Add(f.BadBeaconVoteDelayLayers)
+	if !delay.After(f.last) {
+		return false
+	}
+	f.delayed[delay] = append(f.delayed[delay], ballot)
+	return true
 }
