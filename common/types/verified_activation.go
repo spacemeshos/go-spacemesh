@@ -9,21 +9,6 @@ type VerifiedActivationTx struct {
 	tickCount      uint64
 }
 
-// Header creates ActivationTxHeader.
-func (vatx *VerifiedActivationTx) Header() *ActivationTxHeader {
-	return &ActivationTxHeader{
-		NIPostChallenge: vatx.NIPostChallenge,
-		Coinbase:        vatx.Coinbase,
-		NumUnits:        vatx.NumUnits,
-
-		ID:     vatx.ID(),
-		NodeID: vatx.NodeID(),
-
-		BaseTickHeight: vatx.BaseTickHeight(),
-		TickCount:      vatx.TickCount(),
-	}
-}
-
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
 // sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
 // Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.

@@ -62,7 +62,7 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, err
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, atx.Header())
+	db.atxHdrCache.Add(id, getHeader(atx))
 	return atx, nil
 }
 
@@ -185,4 +185,18 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return poets.Get(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
+}
+
+func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
+	return &types.ActivationTxHeader{
+		NIPostChallenge: vatx.NIPostChallenge,
+		Coinbase:        vatx.Coinbase,
+		NumUnits:        vatx.NumUnits,
+
+		ID:     vatx.ID(),
+		NodeID: vatx.NodeID(),
+
+		BaseTickHeight: vatx.BaseTickHeight(),
+		TickCount:      vatx.TickCount(),
+	}
 }
