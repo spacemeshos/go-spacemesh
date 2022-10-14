@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -2856,6 +2857,97 @@ func TestEmptyLayers(t *testing.T) {
 	})
 	t.Run("not recovered within hdist", func(t *testing.T) {
 		testEmptyLayers(t, 5)
+	})
+}
+
+func TestOnBallotComputeOpinion(t *testing.T) {
+	const size = 4
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.WindowSize = 10
+
+	t.Run("empty layers after genesis", func(t *testing.T) {
+		const distance = 3
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i < distance; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise.TallyVotes(ctx, last)
+		}
+
+		rst, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		require.NotEmpty(t, rst)
+
+		id := types.BallotID{1}
+		ballot := types.NewExistingBallot(id, nil, nil, rst[0].InnerBallot)
+		ballot.Votes.Base = types.GenesisBallotID
+		ballot.Votes.Support = []types.BlockID{types.GenesisBlockID}
+		ballot.Votes.Against = nil
+
+		tortoise.OnBallot(&ballot)
+
+		info := tortoise.trtl.ballotRefs[id]
+		hasher := hash.New()
+		hasher.Write(types.GenesisBlockID[:])
+		for i := 0; i < distance-1; i++ {
+			buf := hasher.Sum(nil)
+			hasher.Reset()
+			hasher.Write(buf)
+		}
+		require.Equal(t, hasher.Sum(nil), info.opinion().Bytes())
+	})
+	t.Run("support abstain support", func(t *testing.T) {
+		const distance = 3
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i < distance; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise.TallyVotes(ctx, last)
+		}
+
+		rst, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		require.NotEmpty(t, rst)
+
+		id := types.BallotID{1}
+		ballot := types.NewExistingBallot(id, nil, nil, rst[0].InnerBallot)
+		ballot.Votes.Abstain = []types.LayerID{types.GetEffectiveGenesis().Add(1)}
+
+		tortoise.OnBallot(&ballot)
+
+		info := tortoise.trtl.ballotRefs[id]
+		hasher := hash.New()
+		hasher.Write(types.GenesisBlockID[:])
+		buf := hasher.Sum(nil)
+		hasher.Reset()
+
+		hasher.Write(buf)
+		hasher.Write(abstainSentinel)
+		buf = hasher.Sum(nil)
+		hasher.Reset()
+
+		hasher.Write(buf)
+		hasher.Write(ballot.Votes.Support[0][:])
+		require.Equal(t, hasher.Sum(nil), info.opinion().Bytes())
 	})
 }
 
