@@ -42,6 +42,9 @@ RUN set -ex \
 
 WORKDIR /src
 
+COPY Makefile* .
+RUN make get-libs
+
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
 COPY go.sum .
@@ -52,9 +55,9 @@ RUN go mod download
 COPY . .
 
 # And compile the project
-RUN make build
-RUN make harness
-RUN make gen-p2p-identity
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make harness
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh
