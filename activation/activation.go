@@ -194,11 +194,6 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
-// Finished returns true iff atx builder is not smeshing.
-func (b *Builder) Finished() bool {
-	return !b.Smeshing()
-}
-
 // StartSmeshing is the main entry point of the atx builder.
 // It runs the main loop of the builder and shouldn't be called more than once.
 // If the post data is incomplete or missing, data creation
