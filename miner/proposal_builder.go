@@ -203,7 +203,6 @@ func (pb *ProposalBuilder) createProposal(
 	ib := &types.InnerBallot{
 		AtxID:             atxID,
 		EligibilityProofs: proofs,
-		Votes:             votes,
 		LayerIndex:        layerID,
 	}
 
@@ -236,6 +235,7 @@ func (pb *ProposalBuilder) createProposal(
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: *ib,
+				Votes:       votes,
 			},
 			TxIDs:    txIDs,
 			MeshHash: mesh,

@@ -42,6 +42,8 @@ type Ballot struct {
 	InnerBallot
 	// smesher's signature on InnerBallot
 	Signature []byte
+	// Votes is not include into the signature.
+	Votes Votes
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -59,7 +61,10 @@ type InnerBallot struct {
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
 	EligibilityProofs []VotingEligibilityProof
-	Votes             Votes
+	// OpinionHash is a aggregated opinion on the latest votable layer.
+	// It is included into transfered data explicitly, so that signature
+	// can be verified before decoding votes.
+	OpinionHash Hash32
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
@@ -122,6 +127,12 @@ type Votes struct {
 	Support, Against []BlockID
 	// Abstain on layers until they are terminated.
 	Abstain []LayerID
+}
+
+// Opinion is a tuple from opinion hash and votes that decode to opinion hash.
+type Opinion struct {
+	Hash  Hash32
+	Votes Votes
 }
 
 // MarshalLogObject implements logging interface.
@@ -308,25 +319,5 @@ func NewExistingBallot(id BallotID, sig []byte, pub []byte, inner InnerBallot) B
 		Signature:   sig,
 		smesherID:   signing.NewPublicKey(pub),
 		InnerBallot: inner,
-	}
-}
-
-// DBBallot is a Ballot structure as it is stored in DB.
-type DBBallot struct {
-	InnerBallot
-	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
-	// to break if in future key for database will be changed
-	ID        BallotID
-	Signature []byte
-	SmesherID []byte // derived from signature when ballot is received
-}
-
-// ToBallot creates a Ballot from data that is stored locally.
-func (b *DBBallot) ToBallot() *Ballot {
-	return &Ballot{
-		ballotID:    b.ID,
-		InnerBallot: b.InnerBallot,
-		Signature:   b.Signature,
-		smesherID:   signing.NewPublicKey(b.SmesherID),
 	}
 }

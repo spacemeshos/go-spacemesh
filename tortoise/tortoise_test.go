@@ -249,13 +249,13 @@ func generateBallots(t *testing.T, lid types.LayerID, nballots int, activeSet []
 		b := &types.Ballot{
 			InnerBallot: types.InnerBallot{
 				AtxID:             activeSet[i%len(activeSet)],
-				Votes:             *votes,
 				EligibilityProofs: []types.VotingEligibilityProof{{J: uint32(i)}},
 				LayerIndex:        lid,
 				EpochData: &types.EpochData{
 					ActiveSet: activeSet,
 				},
 			},
+			Votes: *votes,
 		}
 		signer := signing.NewEdSigner()
 		b.Signature = signer.Sign(b.Bytes())

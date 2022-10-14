@@ -17,13 +17,13 @@ func TestBallot_IDSize(t *testing.T) {
 func TestBallot_Initialize(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID: RandomATXID(),
-			Votes: Votes{
-				Base:    RandomBallotID(),
-				Support: []BlockID{RandomBlockID(), RandomBlockID()},
-			},
+			AtxID:      RandomATXID(),
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
+		},
+		Votes: Votes{
+			Base:    RandomBallotID(),
+			Support: []BlockID{RandomBlockID(), RandomBlockID()},
 		},
 	}
 	signer := signing.NewEdSigner()
@@ -39,34 +39,18 @@ func TestBallot_Initialize(t *testing.T) {
 func TestBallot_Initialize_BadSignature(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID: RandomATXID(),
-			Votes: Votes{
-				Base:    RandomBallotID(),
-				Support: []BlockID{RandomBlockID(), RandomBlockID()},
-			},
+			AtxID:      RandomATXID(),
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
+		},
+		Votes: Votes{
+			Base:    RandomBallotID(),
+			Support: []BlockID{RandomBlockID(), RandomBlockID()},
 		},
 	}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())[1:]
 	err := b.Initialize()
 	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
-}
-
-func TestDBBallot(t *testing.T) {
-	layer := NewLayerID(100)
-	b := GenLayerBallot(layer)
-	assert.Equal(t, layer, b.LayerIndex)
-	assert.NotEqual(t, b.ID(), EmptyBallotID)
-	assert.NotNil(t, b.SmesherID())
-	dbb := &DBBallot{
-		InnerBallot: b.InnerBallot,
-		ID:          b.ID(),
-		Signature:   b.Signature,
-		SmesherID:   b.SmesherID().Bytes(),
-	}
-	got := dbb.ToBallot()
-	assert.Equal(t, b, got)
 }
 
 func FuzzBallotConsistency(f *testing.F) {
@@ -107,12 +91,4 @@ func FuzzVotingEligibilityProofConsistency(f *testing.F) {
 
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
 	tester.FuzzSafety[VotingEligibilityProof](f)
-}
-
-func FuzzDBBallotConsistency(f *testing.F) {
-	tester.FuzzConsistency[DBBallot](f)
-}
-
-func FuzzDBBallotSafety(f *testing.F) {
-	tester.FuzzSafety[DBBallot](f)
 }

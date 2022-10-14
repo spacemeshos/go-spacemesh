@@ -101,13 +101,13 @@ func RandomTransactionID() TransactionID {
 func RandomBallot() *Ballot {
 	return &Ballot{
 		InnerBallot: InnerBallot{
-			AtxID: RandomATXID(),
-			Votes: Votes{
-				Base:    RandomBallotID(),
-				Support: []BlockID{RandomBlockID(), RandomBlockID()},
-			},
+			AtxID:      RandomATXID(),
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
+		},
+		Votes: Votes{
+			Base:    RandomBallotID(),
+			Support: []BlockID{RandomBlockID(), RandomBlockID()},
 		},
 	}
 }

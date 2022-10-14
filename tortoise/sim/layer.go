@@ -177,13 +177,13 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			InnerBallot: types.InnerBallot{
 				AtxID:             atxid,
 				EligibilityProofs: proofs,
-				Votes:             voting,
 				LayerIndex:        g.nextLayer,
 				EpochData: &types.EpochData{
 					ActiveSet: activeset,
 					Beacon:    beacon,
 				},
 			},
+			Votes: voting,
 		}
 		ballot.Signature = signer.Sign(ballot.Bytes())
 		if err = ballot.Initialize(); err != nil {
