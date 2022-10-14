@@ -788,6 +788,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		beacon: beacon,
 	}
 	t.decodeExceptions(base, binfo, ballot.Votes)
+	t.logger.With().Debug("decoded exceptions", binfo.id, binfo.layer, log.Stringer("opinion", binfo.opinion()))
 	if !binfo.layer.After(t.processed) {
 		if err := t.countBallot(t.logger, binfo); err != nil {
 			return err
