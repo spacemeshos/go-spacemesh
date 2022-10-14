@@ -90,7 +90,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		ballot := &types.Ballot{}
 		ballot.LayerIndex = ev.LayerID
-		ballot.Votes = *votes
+		ballot.Votes = votes.Votes
+		ballot.OpinionHash = votes.Hash
 		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
 			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})

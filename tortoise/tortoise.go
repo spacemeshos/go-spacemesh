@@ -21,6 +21,9 @@ import (
 var (
 	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
+
+	// ErrValidation raised if objects doesn't pass tortoise validation.
+	ErrValidation = errors.New("tortoise validation")
 )
 
 type turtle struct {
@@ -166,16 +169,16 @@ func (t *turtle) evict(ctx context.Context) {
 }
 
 // EncodeVotes by choosing base ballot and explicit votes.
-func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Votes, error) {
+func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opinion, error) {
 	var (
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BallotID]types.LayerID{}
 		choices       []*ballotInfo
 		base          *ballotInfo
 
-		votes *types.Votes
-		last  = t.last.Add(1)
-		err   error
+		opinion *types.Opinion
+		last    = t.last.Add(1)
+		err     error
 	)
 	if conf.current != nil {
 		last = *conf.current
@@ -188,13 +191,13 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 			// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 			// consistent with our local opinion.
 			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-			votes, err = t.encodeVotes(ctx, base, base.layer, last)
+			opinion, err = t.encodeVotes(ctx, base, base.layer, last)
 			if err != nil {
 				logger.With().Error("failed to encode votes for good ballot", log.Err(err))
 			}
 		}
 	}
-	if votes == nil {
+	if opinion == nil {
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballot := range t.layer(lid).ballots {
 				if ballot.weight.IsNil() {
@@ -212,7 +215,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 
 		prioritizeBallots(choices, disagreements)
 		for _, base = range choices {
-			votes, err = t.encodeVotes(ctx, base, t.evicted.Add(1), last)
+			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), last)
 			if err == nil {
 				break
 			}
@@ -224,7 +227,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		}
 	}
 
-	if votes == nil {
+	if opinion == nil {
 		// TODO: special error encoding when exceeding exception list size
 		return nil, errNoBaseBallotFound
 	}
@@ -233,12 +236,12 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		log.Stringer("mode", t.mode),
 		log.Stringer("base layer", base.layer),
 		log.Stringer("voting layer", last),
-		log.Inline(votes),
+		log.Inline(opinion),
 	)
 
 	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
 
-	return votes, nil
+	return opinion, nil
 }
 
 func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
@@ -310,12 +313,12 @@ func (t *turtle) encodeVotes(
 	base *ballotInfo,
 	start types.LayerID,
 	last types.LayerID,
-) (*types.Votes, error) {
+) (*types.Opinion, error) {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Stringer("base layer", base.layer),
 		log.Stringer("voting layer", last),
 	)
-	votes := &types.Votes{
+	votes := types.Votes{
 		Base: base.id,
 	}
 	// encode difference with local opinion between [start, base.layer)
@@ -380,8 +383,11 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
 	}
-
-	return votes, nil
+	decoded := t.decodeExceptions(last, base, &conditions{}, votes)
+	return &types.Opinion{
+		Hash:  decoded.opinion(),
+		Votes: votes,
+	}, nil
 }
 
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
@@ -787,8 +793,17 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		height: height,
 		beacon: beacon,
 	}
-	t.decodeExceptions(base, binfo, ballot.Votes)
-	t.logger.With().Debug("decoded exceptions", binfo.id, binfo.layer, log.Stringer("opinion", binfo.opinion()))
+	binfo.votes = t.decodeExceptions(binfo.layer, base, &binfo.conditions, ballot.Votes)
+	t.logger.With().Debug("decoded exceptions",
+		binfo.id, binfo.layer,
+		log.Stringer("opinion", binfo.opinion()),
+		log.Stringer("signed opinion", ballot.OpinionHash),
+	)
+	// if binfo.opinion() != ballot.OpinionHash {
+	// 	return fmt.Errorf("%w: computed opinion (%s) doesn't match signed (%s)",
+	// 		ErrValidation, binfo.opinion().ShortString(), ballot.OpinionHash.ShortString(),
+	// 	)
+	// }
 	if !binfo.layer.After(t.processed) {
 		if err := t.countBallot(t.logger, binfo); err != nil {
 			return err
@@ -836,7 +851,7 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.last.Sub(t.Hdist)
 }
 
-func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Votes) {
+func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) votes {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
 	for vote, bids := range map[sign][]types.BlockID{
@@ -846,11 +861,11 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 		for _, bid := range bids {
 			block, exist := t.blockRefs[bid]
 			if !exist {
-				ballot.conditions.votesBeforeBase = true
+				cond.votesBeforeBase = true
 				continue
 			}
 			if block.layer.Before(from) {
-				ballot.conditions.votesBeforeBase = true
+				cond.votesBeforeBase = true
 				from = block.layer
 			}
 			layerdiff, exist := diff[block.layer]
@@ -863,7 +878,7 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 	}
 	for _, lid := range exceptions.Abstain {
 		if lid.Before(from) {
-			ballot.conditions.votesBeforeBase = true
+			cond.votesBeforeBase = true
 			from = lid
 		}
 		_, exist := diff[lid]
@@ -873,9 +888,9 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 	}
 
 	// inherit opinion from the base ballot by copying votes
-	ballot.votes = base.votes.update(from, diff)
+	decoded := base.votes.update(from, diff)
 	// add new opinions after the base layer
-	for lid := base.layer; lid.Before(ballot.layer); lid = lid.Add(1) {
+	for lid := base.layer; lid.Before(blid); lid = lid.Add(1) {
 		layer := t.layer(lid)
 		lvote := layerVote{
 			layerInfo: layer,
@@ -892,8 +907,9 @@ func (t *turtle) decodeExceptions(base, ballot *ballotInfo, exceptions types.Vot
 				}
 			}
 		}
-		ballot.votes.append(&lvote)
+		decoded.append(&lvote)
 	}
+	return decoded
 }
 
 func validateConsistency(state *state, config Config, ballot *ballotInfo) bool {

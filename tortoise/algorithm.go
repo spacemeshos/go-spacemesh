@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -189,7 +190,7 @@ func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
 }
 
 // EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Votes, error) {
+func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Opinion, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	conf := &encodeConf{}
@@ -220,12 +221,16 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 
 // OnBallot should be called every time new ballot is received.
 // BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
-func (t *Tortoise) OnBallot(ballot *types.Ballot) {
+func (t *Tortoise) OnBallot(ballot *types.Ballot) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
 		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+		if errors.Is(err, ErrValidation) {
+			return err
+		}
 	}
+	return nil
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block

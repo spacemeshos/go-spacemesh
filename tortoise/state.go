@@ -104,6 +104,7 @@ func (s *state) addBallot(ballot *ballotInfo) {
 func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
+	sortBlocks(layer.blocks)
 	s.blockRefs[block.id] = block
 	s.updateRefHeight(layer, block)
 }
@@ -171,10 +172,7 @@ func (b *ballotInfo) canBeGood() bool {
 }
 
 func (b *ballotInfo) opinion() types.Hash32 {
-	if b.votes.tail != nil {
-		return b.votes.tail.opinion
-	}
-	return types.Hash32{}
+	return b.votes.opinion()
 }
 
 type votes struct {
@@ -228,6 +226,13 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 		}
 	}
 	return abstain
+}
+
+func (v *votes) opinion() types.Hash32 {
+	if v.tail == nil {
+		return types.Hash32{}
+	}
+	return v.tail.opinion
 }
 
 type layerVote struct {

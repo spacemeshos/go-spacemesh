@@ -38,11 +38,11 @@ func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 
 // Ballot contains the smesher's signed vote on the mesh history.
 type Ballot struct {
-	// the actual votes on the mesh history
+	// InnerBallot is a signed part of the ballot.
 	InnerBallot
 	// smesher's signature on InnerBallot
 	Signature []byte
-	// Votes is not include into the signature.
+	// Votes field is not signed.
 	Votes Votes
 
 	// the following fields are kept private and from being serialized
@@ -129,12 +129,6 @@ type Votes struct {
 	Abstain []LayerID
 }
 
-// Opinion is a tuple from opinion hash and votes that decode to opinion hash.
-type Opinion struct {
-	Hash  Hash32
-	Votes Votes
-}
-
 // MarshalLogObject implements logging interface.
 func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("base", v.Base.String())
@@ -157,6 +151,18 @@ func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}))
 	return nil
+}
+
+// Opinion is a tuple from opinion hash and votes that decode to opinion hash.
+type Opinion struct {
+	Hash Hash32
+	Votes
+}
+
+// MarshalLogObject implements logging interface.
+func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("hash", o.Hash.String())
+	return o.Votes.MarshalLogObject(encoder)
 }
 
 // EpochData contains information that cannot be changed mid-epoch.
