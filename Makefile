@@ -63,9 +63,9 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
 endif
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 18
+	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
@@ -151,12 +151,12 @@ test-fmt:
 
 lint: get-libs
 	go vet ./...
-	golangci-lint run --config .golangci.yml
+	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
 # Auto-fixes golangci-lint issues where possible.
 lint-fix: get-libs
-	golangci-lint run --config .golangci.yml --fix
+	./bin/golangci-lint run --config .golangci.yml --fix
 .PHONY: lint-fix
 
 lint-github-action: get-libs
