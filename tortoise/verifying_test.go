@@ -133,9 +133,12 @@ func TestVerifyingProcessLayer(t *testing.T) {
 
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))
-				v.countVotes(logger, lid, tc.ballots[i])
+				for _, ballot := range tc.ballots[i] {
+					ballot.layer = lid
+					v.countBallot(logger, ballot)
+				}
 				require.Equal(t, tc.layerWeights[i].String(), v.layer(lid).verifying.good.String())
-				require.Equal(t, tc.total[i], v.totalGoodWeight)
+				require.Equal(t, tc.total[i].String(), v.totalGoodWeight.String())
 			}
 		})
 	}

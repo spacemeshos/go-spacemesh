@@ -35,20 +35,6 @@ func (m *MockTortoise) EXPECT() *MockTortoiseMockRecorder {
 	return m.recorder
 }
 
-// HandleIncomingLayer mocks base method.
-func (m *MockTortoise) HandleIncomingLayer(arg0 context.Context, arg1 types.LayerID) types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleIncomingLayer", arg0, arg1)
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// HandleIncomingLayer indicates an expected call of HandleIncomingLayer.
-func (mr *MockTortoiseMockRecorder) HandleIncomingLayer(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleIncomingLayer", reflect.TypeOf((*MockTortoise)(nil).HandleIncomingLayer), arg0, arg1)
-}
-
 // LatestComplete mocks base method.
 func (m *MockTortoise) LatestComplete() types.LayerID {
 	m.ctrl.T.Helper()
@@ -97,4 +83,16 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
+}
+
+// TallyVotes mocks base method.
+func (m *MockTortoise) TallyVotes(arg0 context.Context, arg1 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "TallyVotes", arg0, arg1)
+}
+
+// TallyVotes indicates an expected call of TallyVotes.
+func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockTortoise)(nil).TallyVotes), arg0, arg1)
 }
