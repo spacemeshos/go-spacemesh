@@ -1,8 +1,6 @@
 package hash
 
 import (
-	"hash"
-
 	"github.com/minio/sha256-simd"
 )
 
@@ -10,9 +8,6 @@ const (
 	// Size is an alias to minio sha256.Size (32 bytes).
 	Size = sha256.Size
 )
-
-// Hash is an alias to stdlib hash.Hash interface.
-type Hash = hash.Hash
 
 // New is an alias to minio sha256.New.
 var New = sha256.New
