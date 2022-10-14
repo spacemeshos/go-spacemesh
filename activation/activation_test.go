@@ -11,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
@@ -453,28 +454,32 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
-	cdb := newCachedDB(t)
-	atxHdlr := newAtxHandler(t, cdb)
-	net.atxHdlr = atxHdlr
-	cfg := Config{
-		CoinbaseAccount: coinbase,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+	getBuilder := func(t *testing.T) *Builder {
+		cdb := newCachedDB(t)
+		atxHdlr := newAtxHandler(t, cdb)
+		net.atxHdlr = atxHdlr
+		cfg := Config{
+			CoinbaseAccount: coinbase,
+			GoldenATXID:     goldenATXID,
+			LayersPerEpoch:  layersPerEpoch,
+		}
+		sessionChan := make(chan struct{})
+		close(sessionChan)
+		builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
+			&postSetupProviderMock{sessionChan: sessionChan},
+			layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+		builder.initialPost = initialPost
+		return builder
 	}
-	sessionChan := make(chan struct{})
-	close(sessionChan)
-	builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
-		&postSetupProviderMock{sessionChan: sessionChan},
-		layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
-	builder.initialPost = initialPost
 
 	t.Run("Single threaded", func(t *testing.T) {
+		builder := getBuilder(t)
 		for i := 0; i < 100; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
-			require.Never(t, builder.Finished, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
+			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
 			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
-			require.Eventually(t, builder.Finished, 10*time.Millisecond, time.Millisecond, "failed on execution %d", i)
+			require.Eventually(t, func() bool { return !builder.Smeshing() }, 10*time.Millisecond, time.Millisecond, "failed on execution %d", i)
 		}
 	})
 
@@ -482,14 +487,18 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		// Meant to be run with -race to detect races.
 		// It cannot check `builder.Smeshing()` as Start/Stop is happening from many goroutines simultaneously.
 		// Both Start and Stop can fail as it is not known if builder is smeshing or not.
+		builder := getBuilder(t)
+		eg, _ := errgroup.WithContext(context.Background())
 		for worker := 0; worker < 10; worker += 1 {
-			go func() {
+			eg.Go(func() error {
 				for i := 0; i < 100; i++ {
 					builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{})
 					builder.StopSmeshing(true)
 				}
-			}()
+				return nil
+			})
 		}
+		eg.Wait()
 	})
 }
 
