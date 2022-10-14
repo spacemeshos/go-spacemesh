@@ -156,12 +156,12 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		choices       []*ballotInfo
 		base          *ballotInfo
 
-		votes *types.Votes
-		last  = t.last.Add(1)
-		err   error
+		votes   *types.Votes
+		current = t.last.Add(1)
+		err     error
 	)
 	if conf.current != nil {
-		last = *conf.current
+		current = *conf.current
 	}
 	// goodness of the ballot determined using hare output or tortoise output for old layers.
 	// if tortoise is full mode some ballot in old layer is undecided and we can't use it this optimization.
@@ -171,7 +171,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 			// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 			// consistent with our local opinion.
 			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-			votes, err = t.encodeVotes(ctx, base, base.layer, last)
+			votes, err = t.encodeVotes(ctx, base, base.layer, current)
 			if err != nil {
 				logger.With().Error("failed to encode votes for good ballot", log.Err(err))
 			}
@@ -183,7 +183,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 				if ballot.weight.IsNil() {
 					continue
 				}
-				dis, err := t.firstDisagreement(ctx, last, ballot, disagreements)
+				dis, err := t.firstDisagreement(ctx, current, ballot, disagreements)
 				if err != nil {
 					logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
 					continue
@@ -195,14 +195,14 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 
 		prioritizeBallots(choices, disagreements)
 		for _, base = range choices {
-			votes, err = t.encodeVotes(ctx, base, t.evicted.Add(1), last)
+			votes, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
 				break
 			}
 			logger.With().Warning("error calculating vote exceptions for ballot",
 				base.id,
 				log.Err(err),
-				log.Stringer("last_layer", t.last),
+				log.Stringer("current layer", current),
 			)
 		}
 	}
@@ -214,7 +214,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 
 	logger.With().Info("choose base ballot",
 		log.Stringer("base layer", base.layer),
-		log.Stringer("voting layer", last),
+		log.Stringer("current layer", current),
 		log.Inline(votes),
 	)
 
@@ -245,7 +245,7 @@ func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ballot *ballotInfo, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
+func (t *turtle) firstDisagreement(ctx context.Context, current types.LayerID, ballot *ballotInfo, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
 	// using it as a mark that the votes for block are completely consistent
 	// with a local opinion. so if two blocks have consistent histories select block
 	// from a higher layer as it is more consistent.
@@ -258,7 +258,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 		if lvote.lid.Before(ballot.base.layer) {
 			break
 		}
-		if lvote.vote == abstain && (lvote.hareTerminated || !withinDistance(t.Zdist, lvote.lid, last)) {
+		if lvote.vote == abstain && (lvote.hareTerminated || !withinDistance(t.Zdist, lvote.lid, current)) {
 			t.logger.With().Debug("ballot votes abstain on a terminated layer. can't use as a base ballot",
 				ballot.id,
 				lvote.lid,
@@ -266,7 +266,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, last types.LayerID, ball
 			return types.LayerID{}, nil
 		}
 		for _, block := range lvote.blocks {
-			vote, _, err := t.getFullVote(t.verified, last, block)
+			vote, _, err := t.getFullVote(t.verified, current, block)
 			if err != nil {
 				return types.LayerID{}, err
 			}
@@ -291,11 +291,11 @@ func (t *turtle) encodeVotes(
 	ctx context.Context,
 	base *ballotInfo,
 	start types.LayerID,
-	last types.LayerID,
+	current types.LayerID,
 ) (*types.Votes, error) {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Stringer("base layer", base.layer),
-		log.Stringer("voting layer", last),
+		log.Stringer("current layer", current),
 	)
 	votes := &types.Votes{
 		Base: base.id,
@@ -305,11 +305,11 @@ func (t *turtle) encodeVotes(
 		if lvote.lid.Before(start) {
 			break
 		}
-		if lvote.vote == abstain && lvote.hareTerminated && !withinDistance(t.Zdist, lvote.lid, last) {
+		if lvote.vote == abstain && lvote.hareTerminated && !withinDistance(t.Zdist, lvote.lid, current) {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		for _, block := range lvote.blocks {
-			vote, reason, err := t.getFullVote(t.verified, last, block)
+			vote, reason, err := t.getFullVote(t.verified, current, block)
 			if err != nil {
 				return nil, err
 			}
@@ -333,15 +333,15 @@ func (t *turtle) encodeVotes(
 		}
 	}
 	// encode votes after base ballot votes [base layer, last)
-	for lid := base.layer; lid.Before(last); lid = lid.Add(1) {
+	for lid := base.layer; lid.Before(current); lid = lid.Add(1) {
 		layer := t.layer(lid)
-		if !layer.hareTerminated && withinDistance(t.Zdist, lid, last) {
+		if !layer.hareTerminated && withinDistance(t.Zdist, lid, current) {
 			logger.With().Debug("voting abstain on the layer", lid)
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
 		}
 		for _, block := range layer.blocks {
-			vote, reason, err := t.getFullVote(t.verified, last, block)
+			vote, reason, err := t.getFullVote(t.verified, current, block)
 			if err != nil {
 				return nil, err
 			}
