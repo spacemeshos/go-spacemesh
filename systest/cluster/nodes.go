@@ -61,14 +61,17 @@ type NodeClient struct {
 	*grpc.ClientConn
 }
 
-func deployPoetPod(ctx *testcontext.Context, name string, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
 	var args []string
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
 
-	ctx.Log.Debugw("deploying poet pod", "name", name, "args", args, "image", ctx.PoetImage)
-	labels := nodeLabels(name)
+	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
+	labels := map[string]string{
+		"app": "poet",
+		"id":  id,
+	}
 	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
@@ -93,17 +96,20 @@ func deployPoetPod(ctx *testcontext.Context, name string, flags ...DeploymentFla
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
 	ppod, err := waitNode(ctx, *pod.Name, Poet)
-	ppod.Name = name
+	ppod.Name = id
 	if err != nil {
 		return nil, err
 	}
 	return ppod, nil
 }
 
-func deployPoetSvc(ctx *testcontext.Context, name string) (*v1.Service, error) {
-	ctx.Log.Debugw("Deploying Poet Service", "name", name)
-	labels := nodeLabels(name)
-	svc := corev1.Service(name, ctx.Namespace).
+func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
+	ctx.Log.Debugw("Deploying Poet Service", "id", id)
+	labels := map[string]string{
+		"app": "poet",
+		"id":  id,
+	}
+	svc := corev1.Service(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
@@ -117,12 +123,12 @@ func deployPoetSvc(ctx *testcontext.Context, name string) (*v1.Service, error) {
 
 // deployPoet creates a poet Pod and exposes it via a Service.
 // Flags are passed to the poet Pod as arguments.
-func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) (*NodeClient, error) {
-	if _, err := deployPoetSvc(ctx, name); err != nil {
+func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+	if _, err := deployPoetSvc(ctx, id); err != nil {
 		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	node, err := deployPoetPod(ctx, name, flags...)
+	node, err := deployPoetPod(ctx, id, flags...)
 	if err != nil {
 		return nil, err
 	}

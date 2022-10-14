@@ -244,29 +244,29 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	return nil
 }
 
-// AddPoets ...
+// AddPoets spawns poets up to configured number of poets.
 func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 	for i := 0; i < cctx.PoetSize; i++ {
-		c.AddPoet(cctx, i)
+		c.AddPoet(cctx)
 	}
 	return nil
 }
 
-func (c *Cluster) FirstFreePoetId() int {
+func (c *Cluster) firstFreePoetId() int {
 	set := make(map[int]struct{}, c.Poets())
 	for _, poet := range c.poets {
 		set[decodePoetOrdinal(poet.Name)] = struct{}{}
 	}
-	id := 0
-	for {
+	for id := 0; ; id += 1 {
 		if _, ok := set[id]; !ok {
 			return id
 		}
-		id += 1
 	}
 }
 
-func (c *Cluster) AddPoet(cctx *testcontext.Context, id int) error {
+// AddPoet spawns a single poet with the first available id.
+// Id is of form "poet-N", where N ∈ [0, ∞)
+func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	if c.bootnodes == 0 {
 		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
 	}
@@ -281,9 +281,9 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context, id int) error {
 		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name)))))
 	}
 
-	name := fmt.Sprintf("%s-%d", poetSvc, id)
-	cctx.Log.Debugw("Deploying Poet", "name", name)
-	pod, err := deployPoet(cctx, name, flags...)
+	id := fmt.Sprintf("%s-%d", poetSvc, c.firstFreePoetId())
+	cctx.Log.Debugw("Deploying Poet", "id", id)
+	pod, err := deployPoet(cctx, id, flags...)
 	if err != nil {
 		return err
 	}
