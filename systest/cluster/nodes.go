@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,9 +67,9 @@ func deployPoetPod(ctx *testcontext.Context, name string, flags ...DeploymentFla
 		args = append(args, flag.Flag())
 	}
 
-	ctx.Log.Debugw("deploying poet pod", "args", args, "image", ctx.PoetImage)
+	ctx.Log.Debugw("deploying poet pod", "name", name, "args", args, "image", ctx.PoetImage)
 	labels := nodeLabels(name)
-	pod := corev1.Pod(name, ctx.Namespace).
+	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
 			corev1.PodSpec().
@@ -86,11 +87,13 @@ func deployPoetPod(ctx *testcontext.Context, name string, flags ...DeploymentFla
 					)),
 				),
 		)
+
 	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
 	ppod, err := waitNode(ctx, *pod.Name, Poet)
+	ppod.Name = name
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +101,7 @@ func deployPoetPod(ctx *testcontext.Context, name string, flags ...DeploymentFla
 }
 
 func deployPoetSvc(ctx *testcontext.Context, name string) (*v1.Service, error) {
+	ctx.Log.Debugw("Deploying Poet Service", "name", name)
 	labels := nodeLabels(name)
 	svc := corev1.Service(name, ctx.Namespace).
 		WithLabels(labels).
@@ -107,6 +111,7 @@ func deployPoetSvc(ctx *testcontext.Context, name string) (*v1.Service, error) {
 				corev1.ServicePort().WithName("rest").WithPort(poetPort).WithProtocol("TCP"),
 			),
 		)
+
 	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 }
 
@@ -126,7 +131,21 @@ func deployPoet(ctx *testcontext.Context, name string, flags ...DeploymentFlag) 
 }
 
 func deletePoet(ctx *testcontext.Context, name string) error {
-	return ctx.Client.CoreV1().Pods(ctx.Namespace).Delete(ctx, name, apimetav1.DeleteOptions{})
+	errPod := ctx.Client.CoreV1().Pods(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", name)})
+	var errSvc error
+	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", name)}); err == nil {
+		for _, svc := range svcs.Items {
+			err = ctx.Client.CoreV1().Services(ctx.Namespace).Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
+			if errSvc == nil {
+				errSvc = err
+			}
+		}
+	}
+
+	if errPod != nil {
+		return errPod
+	}
+	return errSvc
 }
 
 func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {

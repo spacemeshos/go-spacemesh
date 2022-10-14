@@ -246,6 +246,27 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 
 // AddPoets ...
 func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
+	for i := 0; i < cctx.PoetSize; i++ {
+		c.AddPoet(cctx, i)
+	}
+	return nil
+}
+
+func (c *Cluster) FirstFreePoetId() int {
+	set := make(map[int]struct{}, c.Poets())
+	for _, poet := range c.poets {
+		set[decodePoetOrdinal(poet.Name)] = struct{}{}
+	}
+	id := 0
+	for {
+		if _, ok := set[id]; !ok {
+			return id
+		}
+		id += 1
+	}
+}
+
+func (c *Cluster) AddPoet(cctx *testcontext.Context, id int) error {
 	if c.bootnodes == 0 {
 		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
 	}
@@ -260,14 +281,13 @@ func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name)))))
 	}
 
-	for i := 0; i < cctx.PoetSize; i++ {
-		name := fmt.Sprintf("%s-%d", poetSvc, i)
-		pod, err := deployPoet(cctx, name, flags...)
-		if err != nil {
-			return err
-		}
-		c.poets = append(c.poets, pod)
+	name := fmt.Sprintf("%s-%d", poetSvc, id)
+	cctx.Log.Debugw("Deploying Poet", "name", name)
+	pod, err := deployPoet(cctx, name, flags...)
+	if err != nil {
+		return err
 	}
+	c.poets = append(c.poets, pod)
 	return nil
 }
 
@@ -332,12 +352,26 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 
 // DeletePoets delete all poet servers.
 func (c *Cluster) DeletePoets(cctx *testcontext.Context) error {
-	for _, pod := range c.poets {
-		if err := deletePoet(cctx, pod.Name); err != nil {
+	for {
+		if c.Poets() == 0 {
+			return nil
+		}
+		if err := c.DeletePoet(cctx, c.Poets()-1); err != nil {
 			return err
 		}
-		c.poets = c.poets[1:]
 	}
+}
+
+func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
+	poet := c.Poet(i)
+	if poet == nil {
+		return nil
+	}
+	if err := deletePoet(cctx, poet.Name); err != nil {
+		return err
+	}
+	c.poets = append(c.poets[0:i], c.poets[i+1:]...)
+
 	return nil
 }
 
@@ -373,6 +407,11 @@ func (c *Cluster) Total() int {
 // Poets returns total number of poet servers.
 func (c *Cluster) Poets() int {
 	return len(c.poets)
+}
+
+// Poet returns client for i-th poet node.
+func (c *Cluster) Poet(i int) *NodeClient {
+	return c.poets[i]
 }
 
 // Client returns client for i-th node, either bootnode or smesher.

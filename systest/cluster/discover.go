@@ -61,3 +61,16 @@ func decodeOrdinal(name string) int {
 	}
 	return ord
 }
+
+func decodePoetOrdinal(name string) int {
+	// expected name is poet-N
+	parts := strings.Split(name, "-")
+	if len(parts) != 2 {
+		panic(fmt.Sprintf("unexpected name format %s", name))
+	}
+	ord, err := strconv.Atoi(parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return ord
+}

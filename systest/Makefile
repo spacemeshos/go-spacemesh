@@ -16,6 +16,7 @@ storage ?= standard=1Gi
 node_selector ?=
 namespace ?=
 label ?=
+env ?=
 
 
 .PHONY: docker
@@ -30,6 +31,7 @@ push:
 run:
 	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
+	--env=$(env) \
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
