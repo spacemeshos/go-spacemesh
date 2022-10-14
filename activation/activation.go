@@ -473,7 +473,12 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 
 // UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
 func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) error {
-	b.log.With().Debug("request to update poet services", log.Strings("endpoints", endpoints))
+	b.log.With().Debug("request to update poet services", log.Array("endpoints", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, endpoint := range endpoints {
+			encoder.AppendString(endpoint)
+		}
+		return nil
+	})))
 
 	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
