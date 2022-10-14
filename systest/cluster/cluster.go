@@ -265,7 +265,7 @@ func (c *Cluster) firstFreePoetId() int {
 }
 
 // AddPoet spawns a single poet with the first available id.
-// Id is of form "poet-N", where N ∈ [0, ∞)
+// Id is of form "poet-N", where N ∈ [0, ∞).
 func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	if c.bootnodes == 0 {
 		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
