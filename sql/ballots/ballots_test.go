@@ -161,3 +161,22 @@ func TestGetRefBallot(t *testing.T) {
 	_, err = GetRefBallot(db, 1, pub4)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
+
+func TestDelete(t *testing.T) {
+	t.Run("existing", func(t *testing.T) {
+		db := sql.InMemory()
+		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{},
+			types.InnerBallot{})
+		require.NoError(t, Add(db, &ballot))
+		require.NoError(t, Delete(db, ballot.ID()))
+		_, err := Get(db, ballot.ID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("non existing", func(t *testing.T) {
+		db := sql.InMemory()
+		id := types.BallotID{1}
+		_, err := Get(db, id)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.NoError(t, Delete(db, id))
+	})
+}

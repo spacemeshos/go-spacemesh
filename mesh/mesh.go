@@ -644,7 +644,15 @@ func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
 	if err := msh.addBallot(ballot); err != nil {
 		return err
 	}
-	msh.trtl.OnBallot(ballot)
+	if err := msh.trtl.OnBallot(ballot); err != nil {
+		// if ballot is malicious weight of the ballot will be zeroed in the tortoise
+		// maliciousness of the ballot is learned after msh.addBallot call
+		serr := ballots.Delete(msh.cdb, ballot.ID())
+		if serr != nil {
+			msh.logger.With().Error("failed to delete ballot", ballot.ID(), log.Err(err))
+		}
+		return err
+	}
 	return nil
 }
 
@@ -656,8 +664,9 @@ func (msh *Mesh) addBallot(b *types.Ballot) error {
 	if mal {
 		b.SetMalicious()
 	}
-
-	// it is important to run add ballot and set identity to malicious atomically
+	// balots.Add and ballots.Count should be atomic
+	// otherwise concurrent ballots.Add from the same smesher may not be noticed
+	// alternative is to add a special purpose mutex here
 	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
 		if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err

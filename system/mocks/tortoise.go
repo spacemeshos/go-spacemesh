@@ -50,9 +50,11 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 }
 
 // OnBallot mocks base method.
-func (m *MockTortoise) OnBallot(arg0 *types.Ballot) {
+func (m *MockTortoise) OnBallot(arg0 *types.Ballot) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnBallot", arg0)
+	ret := m.ctrl.Call(m, "OnBallot", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // OnBallot indicates an expected call of OnBallot.

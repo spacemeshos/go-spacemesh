@@ -215,9 +215,19 @@ func (b *Ballot) Bytes() []byte {
 	return data
 }
 
+// SetID from stored data.
+func (b *Ballot) SetID(id BallotID) {
+	b.ballotID = id
+}
+
 // ID returns the BallotID.
 func (b *Ballot) ID() BallotID {
 	return b.ballotID
+}
+
+// SetSmesherID from stored data.
+func (b *Ballot) SetSmesherID(id *signing.PublicKey) {
+	b.smesherID = id
 }
 
 // SmesherID returns the smesher's Edwards public key.
@@ -251,6 +261,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer_id", b.LayerIndex.Value)
 	encoder.AddUint32("epoch_id", uint32(b.LayerIndex.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
+	encoder.AddString("opinion hash", b.OpinionHash.String())
 	encoder.AddString("base_ballot", b.Votes.Base.String())
 	encoder.AddInt("support", len(b.Votes.Support))
 	encoder.AddInt("against", len(b.Votes.Against))

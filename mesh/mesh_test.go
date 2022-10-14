@@ -743,11 +743,26 @@ func TestMesh_CallOnBlock(t *testing.T) {
 	require.NoError(t, tm.AddBlockWithTXs(context.TODO(), &block))
 }
 
-func TestMesh_CallOnBallot(t *testing.T) {
-	tm := createTestMesh(t)
-	ballot := types.RandomBallot()
-	tm.mockTortoise.EXPECT().OnBallot(ballot)
-	require.NoError(t, tm.AddBallot(ballot))
+func TestMesh_OnBallot(t *testing.T) {
+	t.Run("added", func(t *testing.T) {
+		tm := createTestMesh(t)
+		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1, 1}, types.InnerBallot{})
+		tm.mockTortoise.EXPECT().OnBallot(&ballot)
+		require.NoError(t, tm.AddBallot(&ballot))
+		received, err := ballots.Get(tm.cdb, ballot.ID())
+		require.NoError(t, err)
+		require.Equal(t, &ballot, received)
+	})
+	t.Run("removed if failed to add", func(t *testing.T) {
+		tm := createTestMesh(t)
+		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1, 1}, types.InnerBallot{})
+		merr := errors.New("test failure")
+		tm.mockTortoise.EXPECT().OnBallot(&ballot).Return(merr)
+		require.EqualError(t, tm.AddBallot(&ballot), merr.Error())
+		received, err := ballots.Get(tm.cdb, ballot.ID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, received)
+	})
 }
 
 func TestMesh_MaliciousBallots(t *testing.T) {
