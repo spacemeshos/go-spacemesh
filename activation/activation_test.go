@@ -468,16 +468,29 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 	builder.initialPost = initialPost
 
-	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
-		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
-		// but proper test requires adding quite a lot of additional mocking and general refactoring.
-		time.Sleep(400 * time.Microsecond)
-		require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
-		require.NoError(t, builder.StopSmeshing(true))
-		time.Sleep(400 * time.Microsecond)
-		require.Falsef(t, builder.Smeshing(), "failed on execution %d", i)
-	}
+	t.Run("Single threaded", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
+			require.Never(t, builder.Finished, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
+			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
+			require.NoError(t, builder.StopSmeshing(true))
+			require.Eventually(t, builder.Finished, 10*time.Millisecond, time.Millisecond, "failed on execution %d", i)
+		}
+	})
+
+	t.Run("Multi threaded", func(t *testing.T) {
+		// Meant to be run with -race to detect races.
+		// It cannot check `builder.Smeshing()` as Start/Stop is happening from many goroutines simultaneously.
+		// Both Start and Stop can fail as it is not known if builder is smeshing or not.
+		for worker := 0; worker < 10; worker += 1 {
+			go func() {
+				for i := 0; i < 100; i++ {
+					builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{})
+					builder.StopSmeshing(true)
+				}
+			}()
+		}
+	})
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
