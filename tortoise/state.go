@@ -2,10 +2,14 @@ package tortoise
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
+
+var abstainSentinel = []byte{0}
 
 type (
 	weight = util.Weight
@@ -166,6 +170,13 @@ func (b *ballotInfo) canBeGood() bool {
 	return !b.conditions.badBeacon && !b.conditions.votesBeforeBase && b.conditions.consistent
 }
 
+func (b *ballotInfo) opinion() types.Hash32 {
+	if b.votes.tail != nil {
+		return b.votes.tail.opinion
+	}
+	return types.Hash32{}
+}
+
 type votes struct {
 	tail *layerVote
 }
@@ -179,6 +190,8 @@ func (v *votes) append(lv *layerVote) {
 		}
 		v.tail = v.tail.append(lv)
 	}
+	v.tail.sortSupported()
+	v.tail.computeOpinion()
 }
 
 func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) votes {
@@ -219,6 +232,7 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 
 type layerVote struct {
 	*layerInfo
+	opinion   types.Hash32
 	vote      sign
 	supported []*blockInfo
 
@@ -259,6 +273,7 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
 		copied.vote = abstain
+		copied.supported = nil
 	} else if exist && len(layerdiff) > 0 {
 		var supported []*blockInfo
 		for _, block := range copied.blocks {
@@ -271,6 +286,36 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 			}
 		}
 		copied.supported = supported
+		copied.sortSupported()
 	}
+	copied.computeOpinion()
 	return copied
+}
+
+func (l *layerVote) sortSupported() {
+	sortBlocks(l.supported)
+}
+
+func (l *layerVote) computeOpinion() {
+	hasher := hash.New()
+	if l.prev != nil {
+		hasher.Write(l.prev.opinion[:])
+	}
+	if len(l.supported) > 0 {
+		for _, block := range l.supported {
+			hasher.Write(block.id[:])
+		}
+	} else if l.vote == abstain {
+		hasher.Write(abstainSentinel)
+	}
+	hasher.Sum(l.opinion[:0])
+}
+
+func sortBlocks(blocks []*blockInfo) {
+	sort.Slice(blocks, func(i, j int) bool {
+		if blocks[i].height < blocks[j].height {
+			return true
+		}
+		return blocks[i].id.Compare(blocks[j].id)
+	})
 }
