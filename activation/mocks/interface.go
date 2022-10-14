@@ -166,20 +166,6 @@ func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
 }
 
-// DurationToLayers mocks base method.
-func (m *MocklayerClock) DurationToLayers(arg0 time.Duration) uint32 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DurationToLayers", arg0)
-	ret0, _ := ret[0].(uint32)
-	return ret0
-}
-
-// DurationToLayers indicates an expected call of DurationToLayers.
-func (mr *MocklayerClockMockRecorder) DurationToLayers(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DurationToLayers", reflect.TypeOf((*MocklayerClock)(nil).DurationToLayers), arg0)
-}
-
 // GetCurrentLayer mocks base method.
 func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
 	m.ctrl.T.Helper()

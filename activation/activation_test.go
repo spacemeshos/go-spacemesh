@@ -123,7 +123,7 @@ type NIPostBuilderMock struct {
 
 func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, _ chan struct{}) (*types.NIPost, time.Duration, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, _ time.Time) (*types.NIPost, time.Duration, error) {
 	if np.buildNIPostFunc != nil {
 		return np.buildNIPostFunc(challenge, commitmentAtx)
 	}
@@ -135,7 +135,7 @@ type NIPostErrBuilderMock struct{}
 
 func (np *NIPostErrBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, types.ATXID, chan struct{}) (*types.NIPost, time.Duration, error) {
+func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
 	return nil, 0, fmt.Errorf("NIPost builder error")
 }
 
@@ -215,10 +215,6 @@ func newActivationTx(
 
 type LayerClockMock struct {
 	currentLayer types.LayerID
-}
-
-func (l *LayerClockMock) DurationToLayers(time.Duration) uint32 {
-	return 0
 }
 
 func (l *LayerClockMock) LayerToTime(types.LayerID) time.Time {

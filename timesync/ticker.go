@@ -46,8 +46,6 @@ type LayerTimer chan types.LayerID
 type LayerConverter interface {
 	TimeToLayer(time.Time) types.LayerID
 	LayerToTime(types.LayerID) time.Time
-	// Convert time duration to number of layers it spreads
-	DurationToLayers(duration time.Duration) uint32
 }
 
 // Ticker is the struct responsible for notifying that a layer has been ticked to subscribers.

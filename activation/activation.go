@@ -39,7 +39,7 @@ const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
 	updatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, timeout chan struct{}) (*types.NIPost, time.Duration, error)
+	BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 
 type atxHandler interface {
@@ -399,6 +399,7 @@ func (b *Builder) loop(ctx context.Context) {
 
 		ctx := log.WithNewSessionID(ctx)
 		if err := b.PublishActivationTx(ctx); err != nil {
+			b.log.With().Warning("PublishActivationTx failed", log.Err(err))
 			if errors.Is(err, ErrStopRequested) {
 				return
 			}
@@ -409,9 +410,11 @@ func (b *Builder) loop(ctx context.Context) {
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
+				b.log.Info("Discarding challenge")
 				b.discardChallenge()
 				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
+				b.log.Info("Setting up poet retry timer")
 				if poetRetryTimer == nil {
 					poetRetryTimer = time.NewTimer(b.poetRetryInterval)
 				} else {
@@ -423,6 +426,7 @@ func (b *Builder) loop(ctx context.Context) {
 				case <-poetRetryTimer.C:
 				}
 			default:
+				b.log.Warning("Unknown error")
 				// other failures are related to in-process software. we may as well panic here
 				currentLayer := b.layerClock.GetCurrentLayer()
 				select {
@@ -628,22 +632,29 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("getting challenge hash failed: %w", err)
 	}
 
-	// the following method waits for a PoET proof, which should take ~1 epoch
 	pubEpoch := b.challenge.PublishEpoch()
-	// Add a 10% margin to the time it takes to generate a PoST proof
 	postDurationWithMargin := time.Duration(float64(b.lastPostGenDuration.Nanoseconds()) * 1.1)
-	postDurationInLayers := b.layerClock.DurationToLayers(postDurationWithMargin)
-	deadlineLayer := b.challenge.PubLayerID.Add(types.GetLayersPerEpoch()).Sub(postDurationInLayers)
-	deadline := b.layerClock.AwaitLayer(deadlineLayer)
+	// Aim no later than the middle of the cycle gap
+	if postDurationWithMargin < b.poetCfg.CycleGap/2 {
+		postDurationWithMargin = b.poetCfg.CycleGap / 2
+	}
+	poetProofDeadline := b.layerClock.LayerToTime(b.challenge.PubLayerID).Add(b.poetCfg.PhaseShift).Add(-postDurationWithMargin)
+	if time.Now().After(poetProofDeadline) {
+		b.log.With().Error("Poet proof deadline is already up!")
+	}
+
+	b.log.With().Info("building NIPost",
+		log.Stringer("pub_epoch", pubEpoch),
+		log.Time("deadline time", poetProofDeadline),
+		log.Duration("last PoST duration", postDurationWithMargin),
+	)
 
 	commitmentAtx, err := b.getCommitmentAtx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
 	}
 
-	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("deadline_layer", deadlineLayer), log.Uint32("last PoST duration", postDurationInLayers))
-
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, hash, *commitmentAtx, deadline)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, hash, *commitmentAtx, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}

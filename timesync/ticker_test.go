@@ -42,10 +42,6 @@ func (m *mockConv) LayerToTime(types.LayerID) time.Time {
 	return m.t
 }
 
-func (lc *mockConv) DurationToLayers(duration time.Duration) uint32 {
-	panic("unimplemented")
-}
-
 type mockClock struct {
 	now time.Time
 }

@@ -96,10 +96,10 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 	nb.log.With().Info("updated poet proof service clients", log.Int("count", len(nb.poetProvers)))
 }
 
-// BuildNIPost uses the given challenge to build a NIPost. "deadline" is a channel for early termination of
-// the building process. The process can take considerable time, because it includes waiting for the poet service to
+// BuildNIPost uses the given challenge to build a NIPost.
+// The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, deadline chan struct{}) (*types.NIPost, time.Duration, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
 	nb.load(*challenge)
 
 	if s := nb.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
@@ -122,12 +122,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 	// Phase 1: receive proofs from PoET services
 	if nb.state.PoetProofRef == nil {
-		awaitProofsCtx, cancel := context.WithCancel(ctx)
-		go func() {
-			<-deadline
-			cancel()
-		}()
-
+		awaitProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
+		defer cancel()
 		poetProofRef := nb.awaitPoetProof(awaitProofsCtx, challenge)
 		if ctx.Err() != nil {
 			return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrStopRequested)
@@ -136,7 +132,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 			// Haven't received any poet proof
 			if awaitProofsCtx.Err() != nil {
 				// Time is up - ATX challenge is expired.
-				return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrATXChallengeExpired)
+				return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrPoetProofDeadlineExpired)
 			} else {
 				// Time is not up - ATX challenge is NOT expired yet.
 				return nil, 0, &PoetSvcUnstableError{msg: "haven't received any PoET proof"}

@@ -12,6 +12,9 @@ var (
 	ErrATXChallengeExpired = errors.New("builder: atx expired")
 	// ErrPoetServiceUnstable is returned when poet quality of service is low.
 	ErrPoetServiceUnstable = &PoetSvcUnstableError{}
+	// ErrPoetProofDeadlineExpired is returned when time to wait for poet proofs is up and
+	// no proof was received.
+	ErrPoetProofDeadlineExpired = errors.New("builder: time to wait for poet proof is up")
 )
 
 // PoetSvcUnstableError means there was a problem communicating
