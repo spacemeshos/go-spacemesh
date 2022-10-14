@@ -192,7 +192,7 @@ func (pb *ProposalBuilder) createProposal(
 	activeSet []types.ATXID,
 	beacon types.Beacon,
 	txIDs []types.TransactionID,
-	votes types.Votes,
+	opinion types.Opinion,
 ) (*types.Proposal, error) {
 	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
 
@@ -204,6 +204,7 @@ func (pb *ProposalBuilder) createProposal(
 		AtxID:             atxID,
 		EligibilityProofs: proofs,
 		LayerIndex:        layerID,
+		OpinionHash:       opinion.Hash,
 	}
 
 	epoch := layerID.GetEpoch()
@@ -235,7 +236,7 @@ func (pb *ProposalBuilder) createProposal(
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: *ib,
-				Votes:       votes,
+				Votes:       opinion.Votes,
 			},
 			TxIDs:    txIDs,
 			MeshHash: mesh,
@@ -293,13 +294,13 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	pb.baseBallotProvider.TallyVotes(ctx, layerID)
 	// TODO(dshulyak) will get rid from the EncodeVotesWithCurrent option in a followup
 	// there are some dependencies in the tests
-	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
+	opinion, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
 	}
 
 	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
-	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)
+	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *opinion)
 	if err != nil {
 		logger.With().Error("failed to create new proposal", log.Err(err))
 		return err
