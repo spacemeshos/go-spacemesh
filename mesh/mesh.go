@@ -641,54 +641,56 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
-	if err := msh.addBallot(ballot); err != nil {
-		return err
+	decoded, err := msh.trtl.DecodeBallot(ballot)
+	if err != nil {
+		return fmt.Errorf("decode ballot %s: %w", ballot.ID(), err)
 	}
-	if err := msh.trtl.OnBallot(ballot); err != nil {
-		// if ballot is malicious weight of the ballot will be zeroed in the tortoise
-		// maliciousness of the ballot is learned after msh.addBallot call
-		serr := ballots.Delete(msh.cdb, ballot.ID())
-		if serr != nil {
-			msh.logger.With().Error("failed to delete ballot", ballot.ID(), log.Err(err))
-		}
-		return err
+	if decoded == nil {
+		return nil
 	}
-	return nil
-}
-
-func (msh *Mesh) addBallot(b *types.Ballot) error {
-	mal, err := identities.IsMalicious(msh.cdb, b.SmesherID().Bytes())
+	if computed := decoded.Opinion(); computed != ballot.OpinionHash {
+		return fmt.Errorf("ballot %s/%v: decoded opinion (%s) doesn't match signed (%s)",
+			ballot.ID(), ballot.LayerIndex, computed.ShortString(), ballot.OpinionHash.String(),
+		)
+	}
+	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID().Bytes())
 	if err != nil {
 		return err
 	}
-	if mal {
-		b.SetMalicious()
+	if malicious {
+		ballot.SetMalicious()
 	}
 	// balots.Add and ballots.Count should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	// alternative is to add a special purpose mutex here
-	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+	err = msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
-		if !mal {
-			count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+		if !malicious {
+			count, err := ballots.CountByPubkeyLayer(tx, ballot.LayerIndex, ballot.SmesherID().Bytes())
 			if err != nil {
 				return err
 			}
 			if count > 1 {
-				if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+				if err := identities.SetMalicious(tx, ballot.SmesherID().Bytes()); err != nil {
 					return err
 				}
-				b.SetMalicious()
+				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", b.SmesherID()),
-					log.Inline(b),
+					log.Stringer("smesher", ballot.SmesherID()),
+					log.Inline(ballot),
 				)
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if ballot.IsMalicious() {
+		decoded.CancelWeight()
+	}
+	return decoded.Store()
 }
 
 // AddBlockWithTXs adds the block and its TXs in into the database.

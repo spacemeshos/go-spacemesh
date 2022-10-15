@@ -21,9 +21,6 @@ import (
 var (
 	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
-
-	// ErrValidation raised if objects doesn't pass tortoise validation.
-	ErrValidation = errors.New("tortoise validation")
 )
 
 type turtle struct {
@@ -723,12 +720,12 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	}
 }
 
-func (t *turtle) onBallot(ballot *types.Ballot) error {
+func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 	if !ballot.LayerIndex.After(t.evicted) {
-		return nil
+		return nil, nil
 	}
 	if _, exist := t.state.ballotRefs[ballot.ID()]; exist {
-		return nil
+		return nil, nil
 	}
 	t.logger.With().Debug("on ballot",
 		log.Inline(ballot),
@@ -740,7 +737,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		t.logger.With().Warning("base ballot not in state",
 			log.Stringer("base", ballot.Votes.Base),
 		)
-		return nil
+		return nil, nil
 	}
 	var (
 		weight util.Weight
@@ -753,7 +750,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		beacon = ballot.EpochData.Beacon
 		height, err = getBallotHeight(t.cdb, ballot)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		ref, exists := t.state.ballotRefs[ballot.RefBallot]
@@ -761,22 +758,24 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 			t.logger.With().Warning("ref ballot not in state",
 				log.Stringer("ref", ballot.RefBallot),
 			)
-			return nil
+			return nil, nil
 		}
 		beacon = ref.beacon
 		height = ref.height
 	}
+
 	if !ballot.IsMalicious() {
 		weight, err = computeBallotWeight(
 			t.cdb, t.referenceWeight,
 			ballot, t.LayerSize, types.GetLayersPerEpoch(),
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
 	}
+
 	t.logger.With().Debug("computed weight and height for ballot",
 		ballot.ID(),
 		log.Stringer("weight", weight),
@@ -797,20 +796,26 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	t.logger.With().Debug("decoded exceptions",
 		binfo.id, binfo.layer,
 		log.Stringer("opinion", binfo.opinion()),
-		log.Stringer("signed opinion", ballot.OpinionHash),
 	)
-	// if binfo.opinion() != ballot.OpinionHash {
-	// 	return fmt.Errorf("%w: computed opinion (%s) doesn't match signed (%s)",
-	// 		ErrValidation, binfo.opinion().ShortString(), ballot.OpinionHash.ShortString(),
-	// 	)
-	// }
-	if !binfo.layer.After(t.processed) {
-		if err := t.countBallot(t.logger, binfo); err != nil {
+	return binfo, nil
+}
+
+func (t *turtle) storeBallot(ballot *ballotInfo) error {
+	if !ballot.layer.After(t.processed) {
+		if err := t.countBallot(t.logger, ballot); err != nil {
 			return err
 		}
 	}
-	t.state.addBallot(binfo)
+	t.state.addBallot(ballot)
 	return nil
+}
+
+func (t *turtle) onBallot(ballot *types.Ballot) error {
+	decoded, err := t.decodeBallot(ballot)
+	if decoded == nil || err != nil {
+		return err
+	}
+	return t.storeBallot(decoded)
 }
 
 func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID types.LayerID, beacon types.Beacon) (bool, error) {

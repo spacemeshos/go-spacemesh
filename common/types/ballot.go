@@ -62,7 +62,7 @@ type InnerBallot struct {
 	// Eligibilities must be produced in the ascending order.
 	EligibilityProofs []VotingEligibilityProof
 	// OpinionHash is a aggregated opinion on the latest votable layer.
-	// It is included into transfered data explicitly, so that signature
+	// It is included into transferred data explicitly, so that signature
 	// can be verified before decoding votes.
 	OpinionHash Hash32
 

@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -221,16 +220,49 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 
 // OnBallot should be called every time new ballot is received.
 // BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
-func (t *Tortoise) OnBallot(ballot *types.Ballot) error {
+func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
 		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
-		if errors.Is(err, ErrValidation) {
-			return err
-		}
 	}
-	return nil
+}
+
+// DecodedBallot created after unwrapping exceptions list and computing internal opinion.
+type DecodedBallot struct {
+	t    *Tortoise
+	info *ballotInfo
+}
+
+// Opinion returns computed opinion.
+func (d *DecodedBallot) Opinion() types.Hash32 {
+	return d.info.opinion()
+}
+
+// CancelWeight zeroes out ballot weight.
+func (d *DecodedBallot) CancelWeight() {
+	d.info.weight = weight{}
+}
+
+// Store adds decoded ballot to the tortoise in-memory state.
+func (d *DecodedBallot) Store() error {
+	d.t.mu.Lock()
+	defer d.t.mu.Unlock()
+	return d.t.trtl.storeBallot(d.info)
+}
+
+// DecodeBallot decodes ballot if it wasn't processed earlier.
+func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (system.DecodedBallot, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	info, err := t.trtl.decodeBallot(ballot)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, nil
+	}
+	return &DecodedBallot{t: t, info: info}, nil
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block

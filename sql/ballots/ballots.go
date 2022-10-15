@@ -88,20 +88,6 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 	return rst, nil
 }
 
-// Delete ballot with id from the database.
-func Delete(db sql.Executor, id types.BallotID) error {
-	_, err := db.Exec("delete from ballots where id = ?1",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id.Bytes())
-		},
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("delete %s: %w", id, err)
-	}
-	return nil
-}
-
 // Layer returns full body ballot for layer.
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
 	if _, err = db.Exec(`select id, pubkey, ballot, identities.malicious
