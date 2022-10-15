@@ -2163,7 +2163,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 		last = s.Next(opts...)
 		tortoise.TallyVotes(ctx, last)
 	}
-	require.Equal(t, types.GetEffectiveGenesis().Add(uint32(skipFrom)), tortoise.LatestComplete())
+	require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
 	for i := 0; i <= int(cfg.Zdist); i++ {
 		last = s.Next(
 			sim.WithNumBlocks(1),

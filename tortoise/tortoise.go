@@ -231,7 +231,18 @@ func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
 			if ballot.weight.IsNil() {
 				continue
 			}
-			if ballot.good() {
+			i := uint32(0)
+			abstained := false
+			for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
+				i++
+				if i > t.Zdist {
+					break
+				}
+				if lvote.vote == abstain && lvote.hareTerminated {
+					abstained = true
+				}
+			}
+			if ballot.good() && !abstained {
 				choices = append(choices, ballot)
 			}
 		}
@@ -430,7 +441,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		if !process.After(types.NewLayerID(t.Zdist)) {
 			continue
 		}
-		terminated := process.Sub(t.Zdist + 1)
+		terminated := process.Sub(t.Zdist)
 		if terminated.After(t.evicted) && !t.layer(terminated).hareTerminated {
 			t.onHareOutput(terminated, types.EmptyBlockID)
 		}
