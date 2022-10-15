@@ -216,6 +216,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		log.Stringer("base layer", base.layer),
 		log.Stringer("current layer", current),
 		log.Inline(votes),
+		log.Bool("is full", t.isFull),
 	)
 
 	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
@@ -258,7 +259,7 @@ func (t *turtle) firstDisagreement(ctx context.Context, current types.LayerID, b
 		if lvote.lid.Before(ballot.base.layer) {
 			break
 		}
-		if lvote.vote == abstain && (lvote.hareTerminated || !withinDistance(t.Zdist, lvote.lid, current)) {
+		if lvote.vote == abstain && lvote.hareTerminated {
 			t.logger.With().Debug("ballot votes abstain on a terminated layer. can't use as a base ballot",
 				ballot.id,
 				lvote.lid,
@@ -305,7 +306,7 @@ func (t *turtle) encodeVotes(
 		if lvote.lid.Before(start) {
 			break
 		}
-		if lvote.vote == abstain && lvote.hareTerminated && !withinDistance(t.Zdist, lvote.lid, current) {
+		if lvote.vote == abstain && lvote.hareTerminated {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
 		}
 		for _, block := range lvote.blocks {
@@ -335,7 +336,7 @@ func (t *turtle) encodeVotes(
 	// encode votes after base ballot votes [base layer, last)
 	for lid := base.layer; lid.Before(current); lid = lid.Add(1) {
 		layer := t.layer(lid)
-		if !layer.hareTerminated && withinDistance(t.Zdist, lid, current) {
+		if !layer.hareTerminated {
 			logger.With().Debug("voting abstain on the layer", lid)
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
@@ -587,8 +588,12 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 	binfo := &blockInfo{
 		id:     block.ID(),
 		layer:  block.LayerIndex,
+		hare:   neutral,
 		height: block.TickHeight,
 		margin: util.WeightFromUint64(0),
+	}
+	if t.layer(block.LayerIndex).hareTerminated {
+		binfo.hare = against
 	}
 	t.addBlock(binfo)
 	t.full.countForLateBlock(binfo)
@@ -655,11 +660,11 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 		)
 		epoch.atxs[atx.ID] = atx.GetWeight()
 		epoch.weight += atx.GetWeight()
-		if atx.TargetEpoch() == t.last.GetEpoch() {
-			t.localThreshold = util.WeightFromUint64(epoch.weight).
-				Fraction(t.LocalThreshold).
-				Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
-		}
+	}
+	if atx.TargetEpoch() == t.last.GetEpoch() {
+		t.localThreshold = util.WeightFromUint64(epoch.weight).
+			Fraction(t.LocalThreshold).
+			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	}
 }
 
@@ -859,13 +864,7 @@ func withinDistance(dist uint32, lid, last types.LayerID) bool {
 
 func getLocalVote(verified, last types.LayerID, config Config, block *blockInfo) (sign, voteReason) {
 	if withinDistance(config.Hdist, block.layer, last) {
-		if block.hare != neutral {
-			return block.hare, reasonHareOutput
-		}
-		if !withinDistance(config.Zdist, block.layer, last) {
-			return against, reasonHareOutput
-		}
-		return abstain, reasonHareOutput
+		return block.hare, reasonHareOutput
 	}
 	if block.layer.After(verified) {
 		return abstain, reasonValidity

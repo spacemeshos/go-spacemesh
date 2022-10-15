@@ -115,7 +115,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	empty := layer.empty.Cmp(threshold) > 0
 	if len(layer.blocks) == 0 {
 		if empty {
-			logger.With().Info("candidate layer is empty")
+			logger.With().Debug("candidate layer is empty")
 		} else {
 			logger.With().Debug("margin is too low to terminate layer as empty",
 				lid,

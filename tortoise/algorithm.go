@@ -122,7 +122,7 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 			log.Stringer("last layer", t.cfg.MeshProcessed),
 		)
 		t.eg.Go(func() error {
-			for lid := types.GetEffectiveGenesis().Add(1); lid.After(t.cfg.MeshProcessed); lid = lid.Add(1) {
+			for lid := types.GetEffectiveGenesis().Add(1); !lid.After(t.cfg.MeshProcessed); lid = lid.Add(1) {
 				err := t.trtl.onLayer(ctx, lid)
 				if err != nil {
 					t.ready <- err

@@ -2161,17 +2161,13 @@ func testEmptyLayers(t *testing.T, hdist int) {
 			opts = append(opts, sim.WithNumBlocks(1))
 		}
 		last = s.Next(opts...)
-		if skipped {
-			continue
-		}
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
-	require.Equal(t, types.GetEffectiveGenesis(), verified)
+	require.Equal(t, types.GetEffectiveGenesis().Add(uint32(skipFrom)), tortoise.LatestComplete())
 	for i := 0; i <= int(cfg.Zdist); i++ {
 		last = s.Next(
 			sim.WithNumBlocks(1),
-			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 		)
 		tortoise.TallyVotes(ctx, last)
 		verified = tortoise.LatestComplete()
@@ -2181,11 +2177,10 @@ func testEmptyLayers(t *testing.T, hdist int) {
 	for i := 0; i < skipTo-skipFrom-1; i++ {
 		last = s.Next(
 			sim.WithNumBlocks(1),
-			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
+			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 		)
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
-		require.Equal(t, expected.Add(uint32(i)+1), verified)
+		require.Equal(t, expected.Add(uint32(i)+1), tortoise.LatestComplete())
 	}
 	last = s.Next(
 		sim.WithNumBlocks(1),
@@ -2197,10 +2192,10 @@ func testEmptyLayers(t *testing.T, hdist int) {
 }
 
 func TestEmptyLayers(t *testing.T) {
-	t.Run("recovered within hdist", func(t *testing.T) {
+	t.Run("terminated using zdist", func(t *testing.T) {
 		testEmptyLayers(t, 10)
 	})
-	t.Run("not recovered within hdist", func(t *testing.T) {
+	t.Run("full mode", func(t *testing.T) {
 		testEmptyLayers(t, 5)
 	})
 }
