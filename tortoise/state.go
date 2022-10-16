@@ -92,6 +92,10 @@ func (s *state) globalThreshold(cfg Config, target types.LayerID) weight {
 	return computeGlobalThreshold(cfg, s.localThreshold, s.epochs, target, s.processed, s.last)
 }
 
+func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
+	return computeExpectedWeightInWindow(cfg, s.epochs, target, s.processed, s.last)
+}
+
 func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
