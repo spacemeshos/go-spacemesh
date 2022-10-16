@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 	"sync"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -19,34 +18,27 @@ type Config struct {
 	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
-	WindowSize                      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
-	GlobalThreshold                 *big.Rat      `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
-	LocalThreshold                  *big.Rat      `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
-	RerunInterval                   time.Duration `mapstructure:"tortoise-rerun-interval"`
-	MaxExceptions                   int           `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
-	VerifyingModeVerificationWindow uint32        `mapstructure:"verifying-mode-verification-window"`
-	FullModeVerificationWindow      uint32        `mapstructure:"full-mode-verification-window"`
+	WindowSize      uint32   `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	GlobalThreshold *big.Rat `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
+	LocalThreshold  *big.Rat `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
+	MaxExceptions   int      `mapstructure:"tortoise-max-exceptions"`   // if candidate for base block has more than max exceptions it will be ignored
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
 	MeshProcessed            types.LayerID
-	MeshVerified             types.LayerID
 }
 
 // DefaultConfig for Tortoise.
 func DefaultConfig() Config {
 	return Config{
-		LayerSize:                       30,
-		Hdist:                           10,
-		Zdist:                           8,
-		WindowSize:                      100,
-		GlobalThreshold:                 big.NewRat(60, 100),
-		LocalThreshold:                  big.NewRat(20, 100),
-		RerunInterval:                   time.Hour,
-		BadBeaconVoteDelayLayers:        6,
-		MaxExceptions:                   30 * 100, // 100 layers of average size
-		VerifyingModeVerificationWindow: 1000,
-		FullModeVerificationWindow:      20,
+		LayerSize:                30,
+		Hdist:                    10,
+		Zdist:                    8,
+		WindowSize:               1000,
+		GlobalThreshold:          big.NewRat(60, 100),
+		LocalThreshold:           big.NewRat(20, 100),
+		BadBeaconVoteDelayLayers: 6,
+		MaxExceptions:            30 * 100, // 100 layers of average size
 	}
 }
 
@@ -65,12 +57,8 @@ type Tortoise struct {
 		err error
 	}
 
-	mu sync.Mutex
-
-	// update will be set to non-nil after rerun completes, and must be set to nil once
-	// used to replace trtl.
-	update *turtle
-	trtl   *turtle
+	mu   sync.Mutex
+	trtl *turtle
 }
 
 // Opt for configuring tortoise.
@@ -130,34 +118,23 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 	)
 	t.trtl.init(t.ctx, types.GenesisLayer())
 	if needsRecovery {
-		t.trtl.processed = t.cfg.MeshProcessed
-		// TODO(dshulyak) last should be set according to the clock.
-		t.trtl.last = t.cfg.MeshProcessed
-		t.trtl.verified = t.cfg.MeshVerified
-		t.trtl.historicallyVerified = t.cfg.MeshVerified
-
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last_layer", t.cfg.MeshProcessed),
-			log.Stringer("historically_verified", t.cfg.MeshVerified),
+			log.Stringer("last layer", t.cfg.MeshProcessed),
 		)
 		t.eg.Go(func() error {
-			t.ready <- t.rerun(ctx)
+			for lid := types.GetEffectiveGenesis().Add(1); !lid.After(t.cfg.MeshProcessed); lid = lid.Add(1) {
+				err := t.trtl.onLayer(ctx, lid)
+				if err != nil {
+					t.ready <- err
+					return err
+				}
+			}
 			close(t.ready)
 			return nil
 		})
 	} else {
 		t.logger.Info("no state on disk. initialized with genesis")
 		close(t.ready)
-	}
-
-	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
-	// when initial sync is in progress, or right after sync
-	if t.cfg.RerunInterval != 0 {
-		t.logger.With().Info("launching rerun loop", log.Duration("interval", t.cfg.RerunInterval))
-		t.eg.Go(func() error {
-			t.rerunLoop(ctx, t.cfg.RerunInterval)
-			return nil
-		})
 	}
 	return t
 }
@@ -203,10 +180,16 @@ func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*t
 func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.updateFromRerun(ctx)
 	if err := t.trtl.onLayer(ctx, lid); err != nil {
 		t.logger.Error("failed on layer", lid, log.Err(err))
 	}
+}
+
+// OnAtx is expected to be called before ballots that use this atx.
+func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.onAtx(atx)
 }
 
 // OnBlock should be called every time new block is received.

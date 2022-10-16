@@ -11,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
@@ -172,7 +173,8 @@ func newCachedDB(tb testing.TB) *datastore.CachedDB {
 }
 
 func newAtxHandler(tb testing.TB, cdb *datastore.CachedDB) *Handler {
-	return NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxHandler"))
+	receiver := mocks.NewMockatxReceiver(gomock.NewController(tb))
+	return NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, receiver, logtest.New(tb).WithName("atxHandler"))
 }
 
 func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID, cATX *types.ATXID) types.NIPostChallenge {
@@ -453,31 +455,52 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
-	cdb := newCachedDB(t)
-	atxHdlr := newAtxHandler(t, cdb)
-	net.atxHdlr = atxHdlr
-	cfg := Config{
-		CoinbaseAccount: coinbase,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+	getBuilder := func(t *testing.T) *Builder {
+		cdb := newCachedDB(t)
+		atxHdlr := newAtxHandler(t, cdb)
+		net.atxHdlr = atxHdlr
+		cfg := Config{
+			CoinbaseAccount: coinbase,
+			GoldenATXID:     goldenATXID,
+			LayersPerEpoch:  layersPerEpoch,
+		}
+		sessionChan := make(chan struct{})
+		close(sessionChan)
+		builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
+			&postSetupProviderMock{sessionChan: sessionChan},
+			layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
+		builder.initialPost = initialPost
+		return builder
 	}
-	sessionChan := make(chan struct{})
-	close(sessionChan)
-	builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
-		&postSetupProviderMock{sessionChan: sessionChan},
-		layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
-	builder.initialPost = initialPost
 
-	for i := 0; i < 100; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
-		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
-		// but proper test requires adding quite a lot of additional mocking and general refactoring.
-		time.Sleep(400 * time.Microsecond)
-		require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
-		require.NoError(t, builder.StopSmeshing(true))
-		time.Sleep(400 * time.Microsecond)
-		require.Falsef(t, builder.Smeshing(), "failed on execution %d", i)
-	}
+	t.Run("Single threaded", func(t *testing.T) {
+		builder := getBuilder(t)
+		for i := 0; i < 100; i++ {
+			require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
+			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
+			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
+			require.NoError(t, builder.StopSmeshing(true))
+			require.Eventually(t, func() bool { return !builder.Smeshing() }, 10*time.Millisecond, time.Millisecond, "failed on execution %d", i)
+		}
+	})
+
+	t.Run("Multi threaded", func(t *testing.T) {
+		// Meant to be run with -race to detect races.
+		// It cannot check `builder.Smeshing()` as Start/Stop is happening from many goroutines simultaneously.
+		// Both Start and Stop can fail as it is not known if builder is smeshing or not.
+		builder := getBuilder(t)
+		eg, _ := errgroup.WithContext(context.Background())
+		for worker := 0; worker < 10; worker += 1 {
+			eg.Go(func() error {
+				for i := 0; i < 100; i++ {
+					builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{})
+					builder.StopSmeshing(true)
+				}
+				return nil
+			})
+		}
+		eg.Wait()
+	})
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
@@ -926,7 +949,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	sig := NewMockSigner()
 	cdb := newCachedDB(t)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	receiver := mocks.NewMockatxReceiver(gomock.NewController(t))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, receiver, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
@@ -949,7 +973,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	layersPerEpoch := uint32(10)
 	sig := NewMockSigner()
 	cdb := newCachedDB(t)
-	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	receiver := mocks.NewMockatxReceiver(gomock.NewController(t))
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, &ValidatorMock{}, receiver, logtest.New(t).WithName("atxDB1"))
 	net.atxHdlr = atxHdlr
 
 	cfg := Config{
