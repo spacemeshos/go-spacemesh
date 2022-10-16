@@ -9,11 +9,6 @@ import (
 )
 
 const (
-	verifyingTortoise = "verifying"
-	fullTortoise      = "full"
-)
-
-const (
 	support sign = 1
 	against sign = -1
 	abstain sign = 0
@@ -44,6 +39,9 @@ func persistContextualValidity(logger log.Log,
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
 		for _, block := range layers[lid].blocks {
+			if !block.dirty {
+				continue
+			}
 			if block.validity == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
 			}
@@ -52,6 +50,7 @@ func persistContextualValidity(logger log.Log,
 				err = fmt.Errorf("saving validity for %s: %w", block.id, err)
 				return false
 			}
+			block.dirty = false
 		}
 		return true
 	})
@@ -79,56 +78,8 @@ const (
 	reasonCoinflip       voteReason = "coinflip"
 )
 
-// lsb is a mode, second bit is rerun
-// examples (lsb is on the right, prefix with 6 bits is droppped)
-// 10 - rerun in verifying
-// 00 - live tortoise in verifying
-// 11 - rerun in full
-// 01 - live tortoise in full.
-type mode [2]bool
-
-func (m mode) String() string {
-	humanize := "verifying"
-	if m.isFull() {
-		humanize = "full"
-	}
-	if m.isRerun() {
-		return "rerun_" + humanize
-	}
-	return humanize
-}
-
-func (m mode) toggleRerun() mode {
-	m[1] = !m[1]
-	return m
-}
-
-func (m mode) isRerun() bool {
-	return m[1]
-}
-
-func (m mode) toggleMode() mode {
-	m[0] = !m[0]
-	return m
-}
-
-func (m mode) isVerifying() bool {
-	return !m[0]
-}
-
-func (m mode) isFull() bool {
-	return m[0]
-}
-
 func maxLayer(i, j types.LayerID) types.LayerID {
 	if i.After(j) {
-		return i
-	}
-	return j
-}
-
-func minLayer(i, j types.LayerID) types.LayerID {
-	if i.Before(j) {
 		return i
 	}
 	return j
@@ -152,10 +103,12 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		decision := getDecision(block)
 		logger.With().Debug("decision for a block",
 			block.id,
+			block.layer,
 			log.Stringer("decision", decision),
 			log.Stringer("weight", block.margin),
 			log.Uint64("height", block.height),
 		)
+
 		if decision == abstain {
 			// all blocks with the same height should be finalized
 			if supported != nil && block.height > supported.height {
@@ -168,24 +121,30 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 		}
 		decisions = append(decisions, decision)
 	}
+	changes := false
 	for i, decision := range decisions {
+		if blocks[i].validity != decision {
+			changes = true
+			blocks[i].dirty = true
+		}
 		blocks[i].validity = decision
 	}
-
-	logger.With().Info("candidate layer is verified",
-		log.Array("blocks",
-			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for i := range blocks {
-					encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-						encoder.AddString("decision", blocks[i].validity.String())
-						encoder.AddString("id", blocks[i].id.String())
-						encoder.AddString("weight", blocks[i].margin.String())
-						encoder.AddUint64("height", blocks[i].height)
-						return nil
-					}))
-				}
-				return nil
-			})),
-	)
+	if changes {
+		logger.With().Info("candidate layer is verified",
+			log.Array("blocks",
+				log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+					for i := range blocks {
+						encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+							encoder.AddString("decision", blocks[i].validity.String())
+							encoder.AddString("id", blocks[i].id.String())
+							encoder.AddString("weight", blocks[i].margin.String())
+							encoder.AddUint64("height", blocks[i].height)
+							return nil
+						}))
+					}
+					return nil
+				})),
+		)
+	}
 	return true
 }

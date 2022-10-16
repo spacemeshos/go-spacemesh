@@ -498,9 +498,6 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	fetcherWrapped := &layerFetcher{}
-	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, app.addLogger(ATXHandlerLogger, lg))
-
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
@@ -517,24 +514,19 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
 
-	// FIXME latest layer in state is not exactly the latest verified layer
-	// https://github.com/spacemeshos/go-spacemesh/issues/3318
-	verified := msh.LatestLayerInState()
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("failed to load verified layer: %w", err)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	trtlCfg.MeshProcessed = processed
-	trtlCfg.MeshVerified = verified
 	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
 	verifier.Tortoise = trtl
+
+	fetcherWrapped := &layerFetcher{}
+	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 

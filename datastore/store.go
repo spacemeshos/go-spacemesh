@@ -187,16 +187,16 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 	return nil, fmt.Errorf("blob store not found %s", hint)
 }
 
-func getHeader(atx *types.VerifiedActivationTx) *types.ActivationTxHeader {
+func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 	return &types.ActivationTxHeader{
-		NIPostChallenge: atx.NIPostChallenge,
-		Coinbase:        atx.Coinbase,
-		NumUnits:        atx.NumUnits,
+		NIPostChallenge: vatx.NIPostChallenge,
+		Coinbase:        vatx.Coinbase,
+		NumUnits:        vatx.NumUnits,
 
-		ID:     atx.ID(),
-		NodeID: atx.NodeID(),
+		ID:     vatx.ID(),
+		NodeID: vatx.NodeID(),
 
-		BaseTickHeight: atx.BaseTickHeight(),
-		TickCount:      atx.TickCount(),
+		BaseTickHeight: vatx.BaseTickHeight(),
+		TickCount:      vatx.TickCount(),
 	}
 }

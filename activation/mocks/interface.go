@@ -12,6 +12,41 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+// MockatxReceiver is a mock of atxReceiver interface.
+type MockatxReceiver struct {
+	ctrl     *gomock.Controller
+	recorder *MockatxReceiverMockRecorder
+}
+
+// MockatxReceiverMockRecorder is the mock recorder for MockatxReceiver.
+type MockatxReceiverMockRecorder struct {
+	mock *MockatxReceiver
+}
+
+// NewMockatxReceiver creates a new mock instance.
+func NewMockatxReceiver(ctrl *gomock.Controller) *MockatxReceiver {
+	mock := &MockatxReceiver{ctrl: ctrl}
+	mock.recorder = &MockatxReceiverMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockatxReceiver) EXPECT() *MockatxReceiverMockRecorder {
+	return m.recorder
+}
+
+// OnAtx mocks base method.
+func (m *MockatxReceiver) OnAtx(arg0 *types.ActivationTxHeader) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnAtx", arg0)
+}
+
+// OnAtx indicates an expected call of OnAtx.
+func (mr *MockatxReceiverMockRecorder) OnAtx(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockatxReceiver)(nil).OnAtx), arg0)
+}
+
 // MockpoetValidatorPersister is a mock of poetValidatorPersister interface.
 type MockpoetValidatorPersister struct {
 	ctrl     *gomock.Controller
