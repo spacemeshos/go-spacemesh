@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -13,7 +14,6 @@ import (
 func Get(db sql.Executor, id types.ProposalID) (proposal *types.Proposal, err error) {
 	if rows, err := db.Exec(`
 		select 
-			ballots.signature, 
 			ballots.pubkey, 
 			ballots.ballot, 
 			identities.malicious, 
@@ -78,7 +78,6 @@ func GetIDsByLayer(db sql.Executor, layer types.LayerID) (ids []types.ProposalID
 func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Proposal, err error) {
 	if rows, err := db.Exec(`
 		select 
-			ballots.signature, 
 			ballots.pubkey, 
 			ballots.ballot, 
 			identities.malicious, 
@@ -162,37 +161,34 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 
 func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	ballotID := types.BallotID{}
-	stmt.ColumnBytes(5, ballotID[:])
+	stmt.ColumnBytes(4, ballotID[:])
 
-	sigBytes := make([]byte, stmt.ColumnLen(0))
-	stmt.ColumnBytes(0, sigBytes[:])
+	pubKeyBytes := make([]byte, stmt.ColumnLen(0))
+	stmt.ColumnBytes(0, pubKeyBytes[:])
 
-	pubKeyBytes := make([]byte, stmt.ColumnLen(1))
-	stmt.ColumnBytes(1, pubKeyBytes[:])
+	bodyBytes := make([]byte, stmt.ColumnLen(1))
+	stmt.ColumnBytes(1, bodyBytes[:])
 
-	bodyBytes := make([]byte, stmt.ColumnLen(2))
-	stmt.ColumnBytes(2, bodyBytes[:])
-
-	inner := types.InnerBallot{}
-	if err := codec.Decode(bodyBytes, &inner); err != nil {
+	ballot := types.Ballot{}
+	if err := codec.Decode(bodyBytes, &ballot); err != nil {
 		return nil, err
 	}
-
-	ballot := types.NewExistingBallot(ballotID, sigBytes, pubKeyBytes, inner)
-	if stmt.ColumnInt(3) > 0 {
+	ballot.SetID(ballotID)
+	ballot.SetSmesherID(signing.NewPublicKey(pubKeyBytes))
+	if stmt.ColumnInt(2) > 0 {
 		ballot.SetMalicious()
 	}
 
 	proposalID := types.ProposalID{}
-	stmt.ColumnBytes(4, proposalID[:])
+	stmt.ColumnBytes(3, proposalID[:])
 
-	txIDsBytes := make([]byte, stmt.ColumnLen(6))
-	stmt.ColumnBytes(6, txIDsBytes)
+	txIDsBytes := make([]byte, stmt.ColumnLen(5))
+	stmt.ColumnBytes(5, txIDsBytes)
 
-	meshBytes := make([]byte, stmt.ColumnLen(7))
-	stmt.ColumnBytes(7, meshBytes)
-	signature := make([]byte, stmt.ColumnLen(8))
-	stmt.ColumnBytes(8, signature)
+	meshBytes := make([]byte, stmt.ColumnLen(6))
+	stmt.ColumnBytes(6, meshBytes)
+	signature := make([]byte, stmt.ColumnLen(7))
+	stmt.ColumnBytes(7, signature)
 
 	txIDs, err := codec.DecodeSlice[types.TransactionID](txIDsBytes)
 	if err != nil {
