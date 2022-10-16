@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -163,48 +162,33 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	if conf.current != nil {
 		current = *conf.current
 	}
-	// goodness of the ballot determined using hare output or tortoise output for old layers.
-	// if tortoise is full mode some ballot in old layer is undecided and we can't use it this optimization.
-	if !t.isFull {
-		base = t.getGoodBallot(logger)
-		if base != nil {
-			// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
-			// consistent with our local opinion.
-			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-			votes, err = t.encodeVotes(ctx, base, base.layer, current)
-			if err != nil {
-				logger.With().Error("failed to encode votes for good ballot", log.Err(err))
+
+	for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
+		for _, ballot := range t.layer(lid).ballots {
+			if ballot.weight.IsNil() {
+				continue
 			}
+			dis, err := t.firstDisagreement(ctx, current, ballot, disagreements)
+			if err != nil {
+				logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
+				continue
+			}
+			disagreements[ballot.id] = dis
+			choices = append(choices, ballot)
 		}
 	}
-	if votes == nil {
-		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-			for _, ballot := range t.layer(lid).ballots {
-				if ballot.weight.IsNil() {
-					continue
-				}
-				dis, err := t.firstDisagreement(ctx, current, ballot, disagreements)
-				if err != nil {
-					logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
-					continue
-				}
-				disagreements[ballot.id] = dis
-				choices = append(choices, ballot)
-			}
-		}
 
-		prioritizeBallots(choices, disagreements)
-		for _, base = range choices {
-			votes, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
-			if err == nil {
-				break
-			}
-			logger.With().Warning("error calculating vote exceptions for ballot",
-				base.id,
-				log.Err(err),
-				log.Stringer("current layer", current),
-			)
+	prioritizeBallots(choices, disagreements)
+	for _, base = range choices {
+		votes, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
+		if err == nil {
+			break
 		}
+		logger.With().Warning("error calculating vote exceptions for ballot",
+			base.id,
+			log.Err(err),
+			log.Stringer("current layer", current),
+		)
 	}
 
 	if votes == nil {
@@ -222,38 +206,6 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
 
 	return votes, nil
-}
-
-func (t *turtle) getGoodBallot(logger log.Log) *ballotInfo {
-	var choices []*ballotInfo
-	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
-		for _, ballot := range t.layer(lid).ballots {
-			if ballot.weight.IsNil() {
-				continue
-			}
-			i := uint32(0)
-			abstained := false
-			for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
-				i++
-				if i > t.Zdist {
-					break
-				}
-				if lvote.vote == abstain && lvote.hareTerminated {
-					abstained = true
-				}
-			}
-			if ballot.good() && !abstained {
-				choices = append(choices, ballot)
-			}
-		}
-		if len(choices) > 0 {
-			sort.Slice(choices, func(i, j int) bool {
-				return choices[i].id.Compare(choices[j].id)
-			})
-			return choices[0]
-		}
-	}
-	return nil
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
@@ -319,6 +271,11 @@ func (t *turtle) encodeVotes(
 		}
 		if lvote.vote == abstain && lvote.hareTerminated {
 			return nil, fmt.Errorf("ballot %s can't be used as a base ballot", base.id)
+		}
+		if lvote.vote != abstain && !lvote.hareTerminated {
+			logger.With().Debug("voting abstain on the layer", lvote.lid)
+			votes.Abstain = append(votes.Abstain, lvote.lid)
+			continue
 		}
 		for _, block := range lvote.blocks {
 			vote, reason, err := t.getFullVote(t.verified, current, block)

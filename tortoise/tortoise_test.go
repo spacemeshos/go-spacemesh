@@ -430,10 +430,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	cfg.LayerSize = size
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
-	var (
-		last     types.LayerID
-		verified types.LayerID
-	)
+	var last types.LayerID
 	for _, lid := range sim.GenLayers(s,
 		sim.WithSequence(1, sim.WithNumBlocks(1)),
 		sim.WithSequence(1, sim.WithNumBlocks(1), sim.WithoutHareOutput()),
@@ -441,10 +438,10 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	) {
 		last = lid
 		tortoise.TallyVotes(ctx, lid)
-		verified = tortoise.LatestComplete()
 	}
-	require.Equal(t, last.Sub(3), verified)
+	require.Equal(t, last.Sub(3), tortoise.LatestComplete())
 
+	tortoise.TallyVotes(ctx, last.Add(1))
 	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(last.Add(1)))
 	require.NoError(t, err)
 	bids, err := blocks.IDsInLayer(s.GetState(0).DB, last)
@@ -906,13 +903,7 @@ func benchmarkBaseBallot(b *testing.B, opts ...sim.NextOpt) {
 }
 
 func BenchmarkTortoiseBaseBallot(b *testing.B) {
-	b.Run("Verifying", func(b *testing.B) {
-		benchmarkBaseBallot(b)
-	})
-	b.Run("Full", func(b *testing.B) {
-		// hare output will have only 10/30 ballots
-		benchmarkBaseBallot(b, sim.WithEmptyHareOutput())
-	})
+	benchmarkBaseBallot(b)
 }
 
 func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *types.Ballot {
@@ -1183,7 +1174,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				sim.WithSequence(5),
 				sim.WithSequence(5, sim.WithVoteGenerator(olderExceptions)),
 			},
-			expected: genesis.Add(5),
+			expected: genesis.Add(10),
 			window:   5,
 		},
 		{
@@ -1201,7 +1192,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				sim.WithSequence(5),
 				sim.WithSequence(1, sim.WithVoteGenerator(gapVote)),
 			},
-			expected: genesis.Add(5),
+			expected: genesis.Add(6),
 			window:   10,
 		},
 	} {
