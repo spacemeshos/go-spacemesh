@@ -54,25 +54,6 @@ func newCachedDB(t *testing.T, logger log.Log) *datastore.CachedDB {
 	return cdb
 }
 
-func addLayerToMesh(cdb *datastore.CachedDB, layer *types.Layer) error {
-	// add blocks to mDB
-	for _, bl := range layer.Ballots() {
-		if err := ballots.Add(cdb, bl); err != nil {
-			return fmt.Errorf("add ballot: %w", err)
-		}
-	}
-	for _, bl := range layer.Blocks() {
-		if err := blocks.Add(cdb, bl); err != nil {
-			return fmt.Errorf("add block: %w", err)
-		}
-	}
-	if err := layers.SetHareOutput(cdb, layer.Index(), layer.BlocksIDs()[0]); err != nil {
-		panic("database error")
-	}
-
-	return nil
-}
-
 const (
 	defaultTestLayerSize  = 3
 	defaultTestWindowSize = 30
@@ -213,26 +194,6 @@ func TestAbstainsInMiddle(t *testing.T) {
 	// local opinion will be decided after zdist layers
 	// at that point verifying tortoise consistency will be revisited
 	require.Equal(t, expected, tortoise.LatestComplete())
-}
-
-func genATXs(lid types.LayerID, numATXs, weight int) []*types.VerifiedActivationTx {
-	atxList := make([]*types.VerifiedActivationTx, 0, numATXs)
-	for i := 0; i < numATXs; i++ {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NumUnits: uint32(weight),
-		}}
-		atx.PubLayerID = lid
-		nodeID := types.NodeID{byte(i)}
-		atx.SetNodeID(&nodeID)
-		atxID := types.RandomATXID()
-		atx.SetID(&atxID)
-		vAtx, err := atx.Verify(0, 1)
-		if err != nil {
-			panic(err)
-		}
-		atxList = append(atxList, vAtx)
-	}
-	return atxList
 }
 
 func TestEncodeAbstainVotesForZdist(t *testing.T) {
