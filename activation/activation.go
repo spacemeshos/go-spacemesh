@@ -641,7 +641,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	pubEpoch := b.challenge.PublishEpoch()
 	// Calculate deadline for waiting for poet proofs.
 	// Deadline must fir between current poet round end and
-	// start of the next. It must also accomodate for PoST duration.
+	// start of the next. It must also accommodate for PoST duration.
 	//                               PoST
 	//                                ┌┐
 	//         ┌─────────────────────┐││  ┌─────────────────────┐
