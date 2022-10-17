@@ -734,8 +734,8 @@ func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 // sortBlocks sort blocks tick height, if height is equal by lexicographic order.
 func sortBlocks(blks []*types.Block) []*types.Block {
 	sort.Slice(blks, func(i, j int) bool {
-		if blks[i].TickHeight < blks[j].TickHeight {
-			return true
+		if blks[i].TickHeight != blks[j].TickHeight {
+			return blks[i].TickHeight < blks[j].TickHeight
 		}
 		return blks[i].ID().Compare(blks[j].ID())
 	})
