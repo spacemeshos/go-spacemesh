@@ -1,10 +1,10 @@
 package hare
 
 import (
-	"os"
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +27,7 @@ func TestClock_AwaitWakeup(t *testing.T) {
 }
 
 func TestClock_AwaitRound(t *testing.T) {
-	if os.Getenv("GOOS") == "windows" && os.Getenv("CI") != "" {
+	if util.IsWindows() && util.IsCi() {
 		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3628)")
 	}
 

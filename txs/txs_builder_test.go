@@ -2,13 +2,13 @@ package txs
 
 import (
 	"math"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
@@ -233,7 +233,7 @@ func Test_checkStateConsensus_allEmpty(t *testing.T) {
 }
 
 func Test_checkStateConsensus_ownMeshDiffer(t *testing.T) {
-	if os.Getenv("GOOS") == "windows" {
+	if util.IsWindows() {
 		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
 	}
 	cfg := CSConfig{OptFilterThreshold: 100}
@@ -254,7 +254,7 @@ func Test_checkStateConsensus_ownMeshDiffer(t *testing.T) {
 }
 
 func Test_checkStateConsensus_NoConsensus(t *testing.T) {
-	if os.Getenv("GOOS") == "windows" {
+	if util.IsWindows() {
 		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
 	}
 

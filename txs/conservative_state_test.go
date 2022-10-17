@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -343,7 +342,7 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 }
 
 func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
-	if os.Getenv("GOOS") == "windows" {
+	if util.IsWindows() {
 		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
 	}
 	tcs := createConservativeState(t)
