@@ -81,10 +81,11 @@ type (
 
 func newState() *state {
 	return &state{
-		epochs:     map[types.EpochID]*epochInfo{},
-		layers:     map[types.LayerID]*layerInfo{},
-		ballotRefs: map[types.BallotID]*ballotInfo{},
-		blockRefs:  map[types.BlockID]*blockInfo{},
+		localThreshold: util.WeightFromUint64(0),
+		epochs:         map[types.EpochID]*epochInfo{},
+		layers:         map[types.LayerID]*layerInfo{},
+		ballotRefs:     map[types.BallotID]*ballotInfo{},
+		blockRefs:      map[types.BlockID]*blockInfo{},
 	}
 }
 

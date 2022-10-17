@@ -88,6 +88,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 			layer:    genesis,
 			hare:     support,
 			validity: support,
+			margin:   util.WeightFromUint64(0),
 		}
 		t.layers[genesis].blocks = append(t.layers[genesis].blocks, blinfo)
 		t.blockRefs[blinfo.id] = blinfo
