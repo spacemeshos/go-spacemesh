@@ -60,10 +60,9 @@ type NIPostBuilder struct {
 }
 
 type poetDbAPI interface {
-	SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef
 	GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash32]bool, error)
 	GetProof(types.PoetProofRef) (*types.PoetProof, error)
-	UnsubscribeFromProofRef(poetID []byte, roundID string)
+	GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error)
 }
 
 // NewNIPostBuilder returns a NIPostBuilder.
@@ -122,21 +121,15 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 	// Phase 1: receive proofs from PoET services
 	if nb.state.PoetProofRef == nil {
-		awaitProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
-		defer cancel()
-		poetProofRef := nb.awaitPoetProof(awaitProofsCtx, challenge)
-		if ctx.Err() != nil {
-			return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrStopRequested)
+		select {
+		case <-time.After(time.Until(poetProofDeadline)):
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
 		}
+		poetProofRef := nb.getBestProof(ctx, challenge)
 		if poetProofRef == nil {
-			// Haven't received any poet proof
-			if awaitProofsCtx.Err() != nil {
-				// Time is up - ATX challenge is expired.
-				return nil, 0, fmt.Errorf("failed to get poet proofs: %w", ErrPoetProofDeadlineExpired)
-			} else {
-				// Time is not up - ATX challenge is NOT expired yet.
-				return nil, 0, &PoetSvcUnstableError{msg: "haven't received any PoET proof"}
-			}
+			// Time is up - ATX challenge is expired.
+			return nil, 0, ErrPoetProofNotReceived
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -227,76 +220,47 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, challenge *ty
 	return poetRequests
 }
 
-// awaitPoetProof concurrently waits for proofs from all PoET services that a challenge was submitted to
-// until it gets proofs from all PoETs or the context is canceled.
-// The best proof is returned or `nil` if proof was not received at all.
-func (nb *NIPostBuilder) awaitPoetProof(ctx context.Context, challenge *types.Hash32) types.PoetProofRef {
-	incomingPoetProofRefs := make(chan types.PoetProofRef, len(nb.state.PoetRequests))
-	g, ctx := errgroup.WithContext(ctx)
+func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash32) types.PoetProofRef {
+	type poetProof struct {
+		ref       types.PoetProofRef
+		leafCount uint64
+	}
+	var bestProof *poetProof
 
-	// Spawn workers to concurrently wait for PoET proofs
-	for _, poetService := range nb.state.PoetRequests {
-		svc := poetService
-		g.Go(func() error {
-			proofSubscription := nb.poetDB.SubscribeToProofRef(svc.PoetServiceID, svc.PoetRound.ID)
-			defer nb.poetDB.UnsubscribeFromProofRef(svc.PoetServiceID, svc.PoetRound.ID)
-			select {
-			case ref := <-proofSubscription:
-				nb.log.With().Debug("Worker got a new PoET proof",
-					log.String("poet_id", util.Bytes2Hex(svc.PoetServiceID)),
-					log.String("round_id", svc.PoetRound.ID),
-					log.Binary("ref", ref),
-				)
-				// We are interested only in proofs that we are members of
-				membership, err := nb.poetDB.GetMembershipMap(ref)
-				if err != nil {
-					nb.log.With().Panic("failed to fetch membership for poet proof",
-						log.Binary("challenge", challenge[:]))
-				}
-				if membership[*challenge] {
-					incomingPoetProofRefs <- ref
-				}
-			case <-ctx.Done():
+	for _, poetSubmission := range nb.state.PoetRequests {
+		ref, err := nb.poetDB.GetProofRef(poetSubmission.PoetServiceID, poetSubmission.PoetRound.ID)
+		if err != nil {
+			continue
+		}
+		// We are interested only in proofs that we are members of
+		membership, err := nb.poetDB.GetMembershipMap(ref)
+		if err != nil {
+			nb.log.With().Panic("failed to fetch membership for poet proof", log.Binary("challenge", challenge[:]))
+		}
+		if !membership[*challenge] {
+			continue
+		}
+		proof, err := nb.poetDB.GetProof(ref)
+		if err != nil {
+			nb.log.Panic("Inconsistent state of poetDB. Received poetProofRef which doesn't exist in poetDB.")
+		}
+		nb.log.With().Info("Got a new PoET proof", log.Uint64("leafCount", proof.LeafCount), log.Binary("ref", ref))
+
+		if bestProof == nil || bestProof.leafCount < proof.LeafCount {
+			bestProof = &poetProof{
+				ref:       ref,
+				leafCount: proof.LeafCount,
 			}
-			return nil
-		})
+		}
 	}
 
-	result := make(chan types.PoetProofRef)
+	// Send the best proof (if any) and close the channel.
+	if bestProof != nil {
+		nb.log.With().Debug("Selected the best PoET proof",
+			log.Uint64("leafCount", bestProof.leafCount),
+			log.Binary("ref", bestProof.ref))
+		return bestProof.ref
+	}
 
-	// Spawn consumer processing received proofs
-	go func() {
-		type poetProof struct {
-			ref       types.PoetProofRef
-			leafCount uint64
-		}
-		var bestProof *poetProof
-		for ref := range incomingPoetProofRefs {
-			proof, err := nb.poetDB.GetProof(ref)
-			if err != nil {
-				nb.log.Panic("Inconsistent state of poetDB. Received poetProofRef which doesn't exist in poetDB.")
-			}
-			nb.log.With().Info("Got a new PoET proof", log.Uint64("leafCount", proof.LeafCount), log.Binary("ref", ref))
-
-			if bestProof == nil || bestProof.leafCount < proof.LeafCount {
-				bestProof = &poetProof{
-					ref:       ref,
-					leafCount: proof.LeafCount,
-				}
-			}
-		}
-		// Send the best proof (if any) and close the channel.
-		if bestProof != nil {
-			nb.log.With().Debug("Selected the best PoET proof",
-				log.Uint64("leafCount", bestProof.leafCount),
-				log.Binary("ref", bestProof.ref))
-			result <- bestProof.ref
-		}
-		close(result)
-	}()
-
-	// Close the workers -> consumer channel after all workers finished
-	g.Wait()
-	close(incomingPoetProofRefs)
-	return <-result
+	return nil
 }
