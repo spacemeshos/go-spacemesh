@@ -81,10 +81,11 @@ type (
 
 func newState() *state {
 	return &state{
-		epochs:     map[types.EpochID]*epochInfo{},
-		layers:     map[types.LayerID]*layerInfo{},
-		ballotRefs: map[types.BallotID]*ballotInfo{},
-		blockRefs:  map[types.BlockID]*blockInfo{},
+		localThreshold: util.WeightFromUint64(0),
+		epochs:         map[types.EpochID]*epochInfo{},
+		layers:         map[types.LayerID]*layerInfo{},
+		ballotRefs:     map[types.BallotID]*ballotInfo{},
+		blockRefs:      map[types.BlockID]*blockInfo{},
 	}
 }
 
@@ -120,6 +121,7 @@ func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)
+
 	s.blockRefs[block.id] = block
 	s.updateRefHeight(layer, block)
 }
@@ -338,8 +340,8 @@ func (l *layerVote) computeOpinion() {
 
 func sortBlocks(blocks []*blockInfo) {
 	sort.Slice(blocks, func(i, j int) bool {
-		if blocks[i].height < blocks[j].height {
-			return true
+		if blocks[i].height != blocks[j].height {
+			return blocks[i].height < blocks[j].height
 		}
 		return blocks[i].id.Compare(blocks[j].id)
 	})

@@ -88,6 +88,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 			layer:    genesis,
 			hare:     support,
 			validity: support,
+			margin:   util.WeightFromUint64(0),
 		}
 		t.layers[genesis].blocks = append(t.layers[genesis].blocks, blinfo)
 		t.blockRefs[blinfo.id] = blinfo
@@ -349,7 +350,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	coin, err := layers.GetWeakCoin(t.cdb, current.Sub(1))
 	if err != nil {
 		return 0, "", fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
-			t.last, block.id, block.layer)
+			current.Sub(1), block.id, block.layer)
 	}
 	if coin {
 		return support, reasonCoinflip, nil

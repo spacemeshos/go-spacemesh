@@ -2291,7 +2291,7 @@ func TestNonTerminatedLayers(t *testing.T) {
 
 func TestEncodeVotes(t *testing.T) {
 	ctx := context.Background()
-	t.Run("sanity support", func(t *testing.T) {
+	t.Run("support", func(t *testing.T) {
 		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 		tortoise := defaultAlgorithm(t, cdb)
 
@@ -2316,7 +2316,7 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.Write(opinion.Support[1][:])
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
-	t.Run("sanity against", func(t *testing.T) {
+	t.Run("against", func(t *testing.T) {
 		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 		tortoise := defaultAlgorithm(t, cdb)
 
@@ -2335,7 +2335,7 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.Write(buf)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
-	t.Run("sanity abstain", func(t *testing.T) {
+	t.Run("abstain", func(t *testing.T) {
 		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 		tortoise := defaultAlgorithm(t, cdb)
 
@@ -2352,6 +2352,51 @@ func TestEncodeVotes(t *testing.T) {
 
 		hasher.Write(buf)
 		hasher.Write(abstainSentinel)
+		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
+	})
+	t.Run("support multiple", func(t *testing.T) {
+		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+		cfg := defaultTestConfig()
+		cfg.Hdist = 1
+		cfg.Zdist = 1
+		tortoise := New(cdb, mockedBeacons(t), &updater{cdb},
+			WithConfig(cfg),
+			WithLogger(logtest.New(t)),
+		)
+
+		lid := types.GetEffectiveGenesis().Add(1)
+		blocks := []*types.Block{
+			{InnerBlock: types.InnerBlock{LayerIndex: lid, TickHeight: 100}},
+			{InnerBlock: types.InnerBlock{LayerIndex: lid, TickHeight: 10}},
+		}
+		for _, block := range blocks {
+			block.Initialize()
+			tortoise.OnBlock(block)
+		}
+
+		current := lid.Add(2)
+		require.NoError(t, layers.SetWeakCoin(cdb, current.Sub(1), true))
+		tortoise.TallyVotes(ctx, current)
+
+		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
+		require.NoError(t, err)
+		require.Len(t, opinion.Support, 3)
+
+		hasher := hash.New()
+		hasher.Write(types.GenesisBlockID[:])
+		buf := hasher.Sum(nil)
+		hasher.Reset()
+
+		id0 := blocks[0].ID()
+		id1 := blocks[1].ID()
+
+		hasher.Write(buf)
+		hasher.Write(id1[:])
+		hasher.Write(id0[:])
+		buf = hasher.Sum(nil)
+		hasher.Reset()
+
+		hasher.Write(buf)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 }
