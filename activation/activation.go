@@ -639,6 +639,20 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	}
 
 	pubEpoch := b.challenge.PublishEpoch()
+	// Calculate deadline for waiting for poet proofs.
+	// Deadline must fir between current poet round end and
+	// start of the next. It must also accomodate for PoST duration.
+	//                               PoST
+	//                                ┌┐
+	//         ┌─────────────────────┐││  ┌─────────────────────┐
+	//         │     POET ROUND      │││  │     POET ROUND      │
+	// ┌───────┴──────────────────┬──┴┴┴▲─┴─────────────────▲┬──┴───► time
+	// │           EPOCH          │     │      EPOCH        ││
+	// └──────────────────────────┴─────┼───────────────────┼┴──────
+	//                                  │				    │
+	//                              DEADLINE FOR	   ATX PUBLICATION
+	//                            WAITING FOR POET       DEADLINE
+	//                                PROOFS
 	postDurationWithMargin := time.Duration(float64(b.lastPostGenDuration.Nanoseconds()) * 1.1)
 	// Aim no later than the middle of the cycle gap
 	if postDurationWithMargin < b.poetCfg.CycleGap/2 {
