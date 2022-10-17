@@ -189,7 +189,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 	return b
 }
 
-// Smeshing returns true iff atx builder started.
+// Smeshing returns true iff atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
@@ -223,7 +223,8 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpt
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 	go func() {
-		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return "already started"
+		// Signal that smeshing is finished. StartSmeshing will refuse to restart until this
+		// goroutine finished.
 		defer b.started.Store(false)
 		select {
 		case <-ctx.Done():
@@ -257,6 +258,7 @@ func (b *Builder) findCommitmentAtx() (types.ATXID, error) {
 }
 
 // StopSmeshing stops the atx builder.
+// It doesn't wait for the smeshing to stop.
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -269,7 +271,6 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		return fmt.Errorf("failed to stop post data creation session: %w", err)
 	}
 
-	b.started.Store(false)
 	b.stop()
 	return nil
 }

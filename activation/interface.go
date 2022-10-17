@@ -8,6 +8,10 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/interface.go -source=./interface.go
 
+type atxReceiver interface {
+	OnAtx(*types.ActivationTxHeader)
+}
+
 type poetValidatorPersister interface {
 	HasProof(types.PoetProofRef) bool
 	Validate(types.PoetProof, []byte, string, []byte) error
