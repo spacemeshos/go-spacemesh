@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -49,6 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/utils"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -501,9 +503,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.JSONServerPort, "v1/node/echo")
 	_, err = http.Post(url, "application/json", strings.NewReader(payload))
 	r.Error(err)
-	r.Contains(err.Error(), fmt.Sprintf(
-		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		app.Config.API.JSONServerPort))
 
 	resetFlags()
 	events.CloseEventReporter()
@@ -535,6 +534,10 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
+	if util.IsWindows() {
+		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3626)")
+	}
+
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
 	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
@@ -542,7 +545,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Use a unique port
 	port := 1240
-
 	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
@@ -667,7 +669,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cmdp.Cancel()() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
-	wg.Wait()
+	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 // E2E app test of the transaction service.
@@ -774,7 +776,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		once.Do(oncebody)
 
 		// Wait for the app to exit
-		wg.Wait()
+		require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 	}()
 
 	// Submit the txs
@@ -787,13 +789,13 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res1.Txstate.State)
 
 	// Wait for messages to be received
-	wg2.Wait()
+	r.NoError(utils.WaitWithTimeout(&wg2, time.Second*10))
 
 	// This stops the app
 	cmdp.Cancel()()
 
 	// Wait for it to stop
-	wg.Wait()
+	r.NoError(utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {
@@ -1040,9 +1042,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	nodeID := types.BytesToNodeID(pub.Bytes())
 
-	dbStorepath := storePath
-
-	err := smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn,
+	err := smApp.initServices(context.TODO(), nodeID, storePath, edSgn,
 		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err

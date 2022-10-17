@@ -923,6 +923,11 @@ func (app *App) stopServices() {
 			app.log.With().Warning("p2p host exited with error", log.Err(err))
 		}
 	}
+	if app.db != nil {
+		if err := app.db.Close(); err != nil {
+			app.log.With().Warning("db exited with error", log.Err(err))
+		}
+	}
 
 	events.CloseEventReporter()
 
