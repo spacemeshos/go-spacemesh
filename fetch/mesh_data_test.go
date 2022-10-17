@@ -153,7 +153,7 @@ func TestGetBlocks(t *testing.T) {
 			})
 
 			require.ErrorIs(t, f.GetBlocks(context.TODO(), blockIDs), tc.err)
-			f.stop <- struct{}{}
+			f.cancel()
 			eg.Wait()
 		})
 	}
@@ -225,7 +225,7 @@ func TestGetBallots(t *testing.T) {
 			})
 
 			require.ErrorIs(t, f.GetBallots(context.TODO(), ballotIDs), tc.err)
-			f.stop <- struct{}{}
+			f.cancel()
 			eg.Wait()
 		})
 	}
@@ -297,7 +297,7 @@ func TestGetProposals(t *testing.T) {
 			})
 
 			require.ErrorIs(t, f.GetProposals(context.TODO(), proposalIDs), tc.err)
-			f.stop <- struct{}{}
+			f.cancel()
 			eg.Wait()
 		})
 	}
@@ -375,7 +375,7 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 			})
 
 			require.ErrorIs(t, f.getTxs(tids), errUnknown)
-			f.stop <- struct{}{}
+			f.cancel()
 			eg.Wait()
 		})
 	}
@@ -422,7 +422,7 @@ func TestGetTxs(t *testing.T) {
 			})
 
 			require.ErrorIs(t, f.GetBlockTxs(context.TODO(), tids), tc.err)
-			f.stop <- struct{}{}
+			f.cancel()
 			eg.Wait()
 		})
 	}
@@ -505,7 +505,7 @@ func TestGetATXs(t *testing.T) {
 			})
 
 			require.ErrorIs(t, f.GetAtxs(context.TODO(), atxIDs), tc.err)
-			f.stop <- struct{}{}
+			f.cancel()
 			eg.Wait()
 		})
 	}
@@ -534,7 +534,7 @@ func TestGetPoetProof(t *testing.T) {
 
 	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(errors.New("unknown")).Times(1)
 	require.Error(t, f.GetPoetProof(context.TODO(), h))
-	f.stop <- struct{}{}
+	f.cancel()
 	eg.Wait()
 }
 

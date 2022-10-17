@@ -61,6 +61,7 @@ func createFetch(tb testing.TB) *testFetch {
 	}
 	lg := logtest.New(tb)
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil,
+		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
 		WithATXHandler(tf.mAtxH),

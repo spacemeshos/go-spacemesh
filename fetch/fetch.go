@@ -108,6 +108,13 @@ func randomPeer(peers []p2p.Peer) p2p.Peer {
 // Option is a type to configure a fetcher.
 type Option func(*Fetch)
 
+// WithContext configures the shutdown context for the fetcher
+func WithContext(c context.Context) Option {
+	return func(f *Fetch) {
+		f.shutdownCtx, f.cancel = context.WithCancel(c)
+	}
+}
+
 // WithConfig configures the config for the fetcher.
 func WithConfig(c Config) Option {
 	return func(f *Fetch) {
@@ -180,7 +187,6 @@ func withHost(h host) Option {
 type Fetch struct {
 	cfg    Config
 	logger log.Log
-	eg     errgroup.Group
 	bs     *datastore.BlobStore
 	host   host
 
@@ -200,11 +206,14 @@ type Fetch struct {
 	activeBatches   map[types.Hash32]batchInfo
 	requestReceiver chan request
 	batchTimeout    *time.Ticker
-	stop            chan struct{}
 	activeReqM      sync.RWMutex
 	activeBatchM    sync.RWMutex
 	onlyOnce        sync.Once
 	hashToPeers     *HashPeersCache
+
+	shutdownCtx context.Context
+	cancel      context.CancelFunc
+	eg          errgroup.Group
 }
 
 // NewFetch creates a new Fetch struct.
@@ -219,7 +228,6 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, opts ..
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
 		requestReceiver: make(chan request),
-		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		hashToPeers:     NewHashPeersCache(cacheSize),
 	}
@@ -264,7 +272,7 @@ func (f *Fetch) Start() {
 func (f *Fetch) Stop() {
 	f.logger.Info("stopping fetch")
 	f.batchTimeout.Stop()
-	close(f.stop)
+	f.cancel()
 	if err := f.host.Close(); err != nil {
 		f.logger.With().Warning("error closing host", log.Err(err))
 	}
@@ -288,7 +296,7 @@ func (f *Fetch) Stop() {
 // stopped returns if we should stop.
 func (f *Fetch) stopped() bool {
 	select {
-	case <-f.stop:
+	case <-f.shutdownCtx.Done():
 		return true
 	default:
 		return false
@@ -334,7 +342,7 @@ func (f *Fetch) loop(handler func(*request)) {
 				f.requestHashBatchFromPeers() // Process the batch.
 				return nil
 			})
-		case <-f.stop:
+		case <-f.shutdownCtx.Done():
 			return
 		}
 	}
@@ -549,7 +557,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, requests []RequestMessage) error {
 			log.Int("num_requests", len(batch.Requests)),
 			log.String("peer", p.String()))
 
-		err = f.servers[hashProtocol].Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
+		err = f.servers[hashProtocol].Request(f.shutdownCtx, p, bytes, f.receiveResponse, errorFunc)
 		if err == nil {
 			break
 		}

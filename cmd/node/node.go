@@ -574,6 +574,7 @@ func (app *App) initServices(ctx context.Context,
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
 	fetcher := fetch.NewFetch(cdb, msh, app.host,
+		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
 		fetch.WithATXHandler(atxHandler),
