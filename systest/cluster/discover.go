@@ -12,11 +12,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func discoverNodes(ctx *testcontext.Context, name string, pt PodType) ([]*NodeClient, error) {
+func discoverNodes(ctx *testcontext.Context, kind string, pt PodType) ([]*NodeClient, error) {
 	pods, err := ctx.Client.CoreV1().Pods(ctx.Namespace).List(ctx,
-		apimetav1.ListOptions{LabelSelector: labelSelector(nodeLabels(name))})
+		apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", kind)})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods name=%s: %w", name, err)
+		return nil, fmt.Errorf("failed to list pods app=%s: %w", kind, err)
 	}
 	var (
 		eg      errgroup.Group
@@ -53,19 +53,6 @@ func decodeOrdinal(name string) int {
 	// expected name is boot-1-0
 	parts := strings.Split(name, "-")
 	if len(parts) != 3 {
-		panic(fmt.Sprintf("unexpected name format %s", name))
-	}
-	ord, err := strconv.Atoi(parts[1])
-	if err != nil {
-		panic(err)
-	}
-	return ord
-}
-
-func decodePoetOrdinal(name string) int {
-	// expected name is poet-N
-	parts := strings.Split(name, "-")
-	if len(parts) != 2 {
 		panic(fmt.Sprintf("unexpected name format %s", name))
 	}
 	ord, err := strconv.Atoi(parts[1])

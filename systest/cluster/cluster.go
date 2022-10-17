@@ -41,7 +41,7 @@ func headlessSvc(setname string) string {
 
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
 func MakePoetEndpoint(ith int) string {
-	return fmt.Sprintf("%s-%d:%d", poetSvc, ith, poetPort)
+	return fmt.Sprintf("%s:%d", createPoetIdentifier(ith), poetPort)
 }
 
 // Opt is for configuring cluster.
@@ -255,7 +255,7 @@ func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
 func (c *Cluster) firstFreePoetId() int {
 	set := make(map[int]struct{}, c.Poets())
 	for _, poet := range c.poets {
-		set[decodePoetOrdinal(poet.Name)] = struct{}{}
+		set[decodePoetIdentifier(poet.Identifier)] = struct{}{}
 	}
 	for id := 0; ; id += 1 {
 		if _, ok := set[id]; !ok {
@@ -281,7 +281,7 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 		flags = append(flags, Gateway(fmt.Sprintf("dns:///%s.%s:9092", bootnode.Name, headlessSvc(setName(bootnode.Name)))))
 	}
 
-	id := fmt.Sprintf("%s-%d", poetSvc, c.firstFreePoetId())
+	id := createPoetIdentifier(c.firstFreePoetId())
 	cctx.Log.Debugw("Deploying Poet", "id", id)
 	pod, err := deployPoet(cctx, id, flags...)
 	if err != nil {
@@ -336,7 +336,7 @@ func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
 		flags = append(flags, flag)
 	}
 	flags = append(flags, Bootnodes(extractP2PEndpoints(c.clients[:c.bootnodes])...))
-	clients, err := deployNodes(cctx, "smesher", c.nextSmesher(), c.nextSmesher()+n, flags)
+	clients, err := deployNodes(cctx, smesherPrefix, c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
 	}
@@ -367,7 +367,7 @@ func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
 	if poet == nil {
 		return nil
 	}
-	if err := deletePoet(cctx, poet.Name); err != nil {
+	if err := deletePoet(cctx, poet.Identifier); err != nil {
 		return err
 	}
 	c.poets = append(c.poets[0:i], c.poets[i+1:]...)

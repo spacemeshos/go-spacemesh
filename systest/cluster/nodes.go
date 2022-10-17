@@ -41,6 +41,9 @@ type Node struct {
 	P2P, GRPC uint16
 	ID        string
 
+	// Identifier let's uniquely select the k8s resource
+	Identifier string
+
 	Created   time.Time
 	Restarted time.Time
 }
@@ -68,10 +71,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 	}
 
 	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
-	labels := map[string]string{
-		"app": "poet",
-		"id":  id,
-	}
+	labels := nodeLabels("poet", id)
 	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
@@ -96,7 +96,6 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
 	ppod, err := waitNode(ctx, *pod.Name, Poet)
-	ppod.Name = id
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +104,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 
 func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
 	ctx.Log.Debugw("Deploying Poet Service", "id", id)
-	labels := map[string]string{
-		"app": "poet",
-		"id":  id,
-	}
+	labels := nodeLabels("poet", id)
 	svc := corev1.Service(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -119,6 +115,22 @@ func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
 		)
 
 	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+}
+
+func createPoetIdentifier(id int) string {
+	return fmt.Sprintf("%s-%d", poetSvc, id)
+}
+
+func decodePoetIdentifier(id string) int {
+	parts := strings.Split(id, "-")
+	if len(parts) != 2 {
+		panic(fmt.Sprintf("unexpected name format %s", id))
+	}
+	ord, err := strconv.Atoi(parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return ord
 }
 
 // deployPoet creates a poet Pod and exposes it via a Service.
@@ -136,10 +148,10 @@ func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*
 	return node, nil
 }
 
-func deletePoet(ctx *testcontext.Context, name string) error {
-	errPod := ctx.Client.CoreV1().Pods(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", name)})
+func deletePoet(ctx *testcontext.Context, id string) error {
+	errPod := ctx.Client.CoreV1().Pods(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
-	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", name)}); err == nil {
+	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
 		for _, svc := range svcs.Items {
 			err = ctx.Client.CoreV1().Services(ctx.Namespace).Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
 			if errSvc == nil {
@@ -193,32 +205,22 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 	}
 }
 
-func nodeLabels(name string) map[string]string {
+func nodeLabels(name string, id string) map[string]string {
 	return map[string]string{
+		// app identifies resource kind (Node, Poet).
+		// It can be used to select all Pods of given kind.
 		"app": name,
+		// id uniquely identifies a resource (i.e. poet-0).
+		"id": id,
 	}
 }
 
-func labelSelector(labels map[string]string) string {
-	var (
-		buf   strings.Builder
-		first = true
-	)
-	for key, value := range labels {
-		if !first {
-			buf.WriteString(",")
-		}
-		first = false
-		buf.WriteString(key)
-		buf.WriteString("=")
-		buf.WriteString(value)
-	}
-	return buf.String()
+func labelSelector(id string) string {
+	return fmt.Sprintf("id=%s", id)
 }
 
 func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
 	var (
-		labels  = nodeLabels(name)
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
 	)
@@ -232,11 +234,12 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 
 		eg.Go(func() error {
 			setname := fmt.Sprintf("%s-%d", name, i)
+			podname := fmt.Sprintf("%s-0", setname)
+			labels := nodeLabels(name, podname)
 
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
-			podname := fmt.Sprintf("%s-0", setname)
 			node, err := waitNode(ctx, podname, Smesher)
 			if err != nil {
 				return err
@@ -273,13 +276,7 @@ func deleteNode(ctx *testcontext.Context, podname string) error {
 	return nil
 }
 
-func deployNode(ctx *testcontext.Context, name string, applabels map[string]string, flags []DeploymentFlag) error {
-	labels := map[string]string{
-		"smesher": name,
-	}
-	for label, value := range applabels {
-		labels[label] = value
-	}
+func deployNode(ctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag) error {
 	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
@@ -390,7 +387,8 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 		if pt == Poet {
 			return &NodeClient{
 				Node: Node{
-					Name: podname,
+					Name:       podname,
+					Identifier: pod.Labels["id"],
 				},
 			}, nil
 		}
@@ -399,12 +397,13 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 			return nil, err
 		}
 		node := Node{
-			Name:      podname,
-			IP:        pod.Status.PodIP,
-			P2P:       7513,
-			GRPC:      9092,
-			Created:   set.CreationTimestamp.Time,
-			Restarted: pod.CreationTimestamp.Time,
+			Name:       podname,
+			Identifier: pod.Labels["id"],
+			IP:         pod.Status.PodIP,
+			P2P:        7513,
+			GRPC:       9092,
+			Created:    set.CreationTimestamp.Time,
+			Restarted:  pod.CreationTimestamp.Time,
 		}
 		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
 		defer cancel()
