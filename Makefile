@@ -63,9 +63,9 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
 endif
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 18
+	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
 	go install github.com/spacemeshos/go-scale/scalegen
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
@@ -113,7 +113,7 @@ endif
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
 docker-local-build: go-spacemesh hare p2p harness
-	cd build; docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
+	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
 
@@ -151,12 +151,12 @@ test-fmt:
 
 lint: get-libs
 	go vet ./...
-	golangci-lint run --config .golangci.yml
+	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
 # Auto-fixes golangci-lint issues where possible.
 lint-fix: get-libs
-	golangci-lint run --config .golangci.yml --fix
+	./bin/golangci-lint run --config .golangci.yml --fix
 .PHONY: lint-fix
 
 lint-github-action: get-libs
@@ -174,7 +174,7 @@ tag-and-build:
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
 	git push origin ${VERSION}
-	docker build -t go-spacemesh:${VERSION} .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
 	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
 	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
 .PHONY: tag-and-build
@@ -185,7 +185,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE) .
+	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only

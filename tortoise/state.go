@@ -2,18 +2,35 @@ package tortoise
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
+
+var abstainSentinel = []byte{0}
 
 type (
 	weight = util.Weight
 
 	verifyingInfo struct {
-		good, abstained weight
-		// highest block height below reference height
+		// goodUncounted is a weight that doesn't vote for this layer
+		//
+		// for example ballot created in layer 10 doesn't vote for layers
+		// 10 and above, therefore its weight needs to be added to goodUncounted
+		// for layers 10 and above
+		goodUncounted   weight
+		abstained       weight
 		referenceHeight uint64
+	}
+
+	epochInfo struct {
+		atxs map[types.ATXID]uint64
+		// weight is a sum of all atxs
+		weight uint64
+		// median height from atxs
+		height uint64
 	}
 
 	layerInfo struct {
@@ -26,12 +43,15 @@ type (
 	}
 
 	blockInfo struct {
-		id       types.BlockID
-		layer    types.LayerID
-		height   uint64
-		hare     sign
+		id     types.BlockID
+		layer  types.LayerID
+		height uint64
+		hare   sign
+		margin weight
+
 		validity sign
-		margin   weight
+		// if validity requires persisting it to the disk
+		dirty bool
 	}
 
 	state struct {
@@ -39,28 +59,17 @@ type (
 		// TODO should be last layer according to the clock
 		// https://github.com/spacemeshos/go-spacemesh/issues/2921
 		last types.LayerID
+		// localThreshold is updated together with the last layer.
+		localThreshold util.Weight
+
 		// last verified layer
 		verified types.LayerID
-		// historicallyVerified matters only for local opinion for verifying tortoise
-		// during rerun. for live tortoise it is identical to the verified layer.
-		historicallyVerified types.LayerID
 		// last processed layer
 		processed types.LayerID
 		// last evicted layer
 		evicted types.LayerID
 
-		localThreshold  weight
-		globalThreshold weight
-
-		// epochWeight average weight per layer of atx's that target keyed epoch
-		epochWeight map[types.EpochID]weight
-		// referenceHeight is a median height from all atxs that target keyed epoch
-		referenceHeight map[types.EpochID]uint64
-		// referenceWeight stores atx weight divided by the total number of eligibilities.
-		// it is computed together with refBallot weight. it is not equal to refBallot
-		// only if refBallot has more than 1 eligibility proof.
-		referenceWeight map[types.BallotID]weight
-
+		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
 
 		// to efficiently find base and reference ballots
@@ -72,14 +81,15 @@ type (
 
 func newState() *state {
 	return &state{
-		epochWeight:     map[types.EpochID]util.Weight{},
-		referenceHeight: map[types.EpochID]uint64{},
-		referenceWeight: map[types.BallotID]util.Weight{},
-
+		epochs:     map[types.EpochID]*epochInfo{},
 		layers:     map[types.LayerID]*layerInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
+}
+
+func (s *state) globalThreshold(cfg Config, target types.LayerID) weight {
+	return computeGlobalThreshold(cfg, s.localThreshold, s.epochs, target, s.processed, s.last)
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {
@@ -116,14 +126,14 @@ func (s *state) findRefHeightBelow(lid types.LayerID) uint64 {
 }
 
 func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
-	_, exist := s.referenceHeight[block.layer.GetEpoch()]
+	epoch, exist := s.epochs[block.layer.GetEpoch()]
 	if !exist {
 		return fmt.Errorf("reference height for epoch %v wasn't computed", block.layer.GetEpoch())
 	}
 	if layer.verifying.referenceHeight == 0 && layer.lid.After(s.evicted) {
 		layer.verifying.referenceHeight = s.findRefHeightBelow(layer.lid)
 	}
-	if block.height <= s.referenceHeight[block.layer.GetEpoch()] &&
+	if block.height <= epoch.height &&
 		block.height > layer.verifying.referenceHeight {
 		layer.verifying.referenceHeight = block.height
 	}
@@ -146,13 +156,18 @@ type (
 		votesBeforeBase bool
 	}
 
+	referenceInfo struct {
+		weight weight
+		height uint64
+		beacon types.Beacon
+	}
+
 	ballotInfo struct {
 		id         types.BallotID
 		layer      types.LayerID
 		base       baseInfo
-		height     uint64
 		weight     weight
-		beacon     types.Beacon
+		reference  *referenceInfo
 		votes      votes
 		conditions conditions
 	}
@@ -164,6 +179,13 @@ func (b *ballotInfo) good() bool {
 
 func (b *ballotInfo) canBeGood() bool {
 	return !b.conditions.badBeacon && !b.conditions.votesBeforeBase && b.conditions.consistent
+}
+
+func (b *ballotInfo) opinion() types.Hash32 {
+	if b.votes.tail != nil {
+		return b.votes.tail.opinion
+	}
+	return types.Hash32{}
 }
 
 type votes struct {
@@ -179,6 +201,8 @@ func (v *votes) append(lv *layerVote) {
 		}
 		v.tail = v.tail.append(lv)
 	}
+	v.tail.sortSupported()
+	v.tail.computeOpinion()
 }
 
 func (v *votes) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]sign) votes {
@@ -219,6 +243,7 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 
 type layerVote struct {
 	*layerInfo
+	opinion   types.Hash32
 	vote      sign
 	supported []*blockInfo
 
@@ -259,6 +284,7 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 	layerdiff, exist := diff[copied.lid]
 	if exist && len(layerdiff) == 0 {
 		copied.vote = abstain
+		copied.supported = nil
 	} else if exist && len(layerdiff) > 0 {
 		var supported []*blockInfo
 		for _, block := range copied.blocks {
@@ -271,6 +297,36 @@ func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.
 			}
 		}
 		copied.supported = supported
+		copied.sortSupported()
 	}
+	copied.computeOpinion()
 	return copied
+}
+
+func (l *layerVote) sortSupported() {
+	sortBlocks(l.supported)
+}
+
+func (l *layerVote) computeOpinion() {
+	hasher := hash.New()
+	if l.prev != nil {
+		hasher.Write(l.prev.opinion[:])
+	}
+	if len(l.supported) > 0 {
+		for _, block := range l.supported {
+			hasher.Write(block.id[:])
+		}
+	} else if l.vote == abstain {
+		hasher.Write(abstainSentinel)
+	}
+	hasher.Sum(l.opinion[:0])
+}
+
+func sortBlocks(blocks []*blockInfo) {
+	sort.Slice(blocks, func(i, j int) bool {
+		if blocks[i].height < blocks[j].height {
+			return true
+		}
+		return blocks[i].id.Compare(blocks[j].id)
+	})
 }

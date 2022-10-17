@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"math/big"
 	mrand "math/rand"
 	"testing"
 	"time"
@@ -64,7 +65,8 @@ func TestFullBallotFilter(t *testing.T) {
 			state.last = tc.last
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
-			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(&tc.ballot))
+			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(
+				logtest.New(t), &tc.ballot))
 		})
 	}
 }
@@ -357,7 +359,9 @@ func TestFullCountVotes(t *testing.T) {
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
 				}
-				consensus.referenceHeight[lid.GetEpoch()] = localHeight
+				consensus.epochs[lid.GetEpoch()] = &epochInfo{
+					height: localHeight,
+				}
 				for _, block := range layerBlocks {
 					consensus.onBlock(lid, &block)
 				}
@@ -412,134 +416,135 @@ func TestFullCountVotes(t *testing.T) {
 }
 
 func TestFullVerify(t *testing.T) {
-	const emptyThreshold = 20
+	epoch := types.EpochID(1)
+	target := epoch.FirstLayer().Sub(1)
+	last := target.Add(types.GetLayersPerEpoch())
+	cfg := Config{GlobalThreshold: big.NewRat(60, 100)}
+	epochs := map[types.EpochID]*epochInfo{
+		1: {weight: 10},
+	}
+	positive := 7
+	negative := -7
+	neutral := 3
 	type testBlock struct {
 		height, margin int
 	}
 	for _, tc := range []struct {
-		desc      string
-		blocks    []testBlock
-		threshold uint64
-		validity  []sign
+		desc   string
+		blocks []testBlock
+		empty  int
+
+		validity []sign
 	}{
 		{
-			desc:      "support",
-			blocks:    []testBlock{{margin: 11}},
-			threshold: 10,
-			validity:  []sign{support},
+			desc:     "support",
+			blocks:   []testBlock{{margin: positive}},
+			validity: []sign{support},
 		},
 		{
-			desc:      "abstain",
-			blocks:    []testBlock{{margin: 10}},
-			threshold: emptyThreshold + 1,
+			desc:   "abstain",
+			blocks: []testBlock{{margin: neutral}},
 		},
 		{
 			desc: "abstain before support",
 			blocks: []testBlock{
-				{margin: 10, height: 10},
-				{margin: 11, height: 20},
+				{margin: neutral, height: 10},
+				{margin: positive, height: 20},
 			},
-			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "abstain after support",
 			blocks: []testBlock{
-				{margin: 10, height: 30},
-				{margin: 11, height: 20},
+				{margin: neutral, height: 30},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{against, support},
+			validity: []sign{against, support},
 		},
 		{
 			desc: "abstained same height",
 			blocks: []testBlock{
-				{margin: 11, height: 20},
-				{margin: 10, height: 20},
+				{margin: positive, height: 20},
+				{margin: neutral, height: 20},
 			},
-			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "support after against",
 			blocks: []testBlock{
-				{margin: -11, height: 10},
-				{margin: 11, height: 20},
+				{margin: negative, height: 10},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{against, support},
+			validity: []sign{against, support},
 		},
 		{
 			desc: "only against",
 			blocks: []testBlock{
-				{margin: -11, height: 10},
-				{margin: -11, height: 20},
+				{margin: negative, height: 10},
+				{margin: negative, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{against, against},
+			validity: []sign{against, against},
 		},
 		{
 			desc: "support same height",
 			blocks: []testBlock{
-				{margin: 11, height: 10},
-				{margin: 11, height: 10},
+				{margin: positive, height: 10},
+				{margin: positive, height: 10},
 			},
-			threshold: 10,
-			validity:  []sign{support, support},
+			validity: []sign{support, support},
 		},
 		{
 			desc: "support different height",
 			blocks: []testBlock{
-				{margin: 11, height: 10},
-				{margin: 11, height: 20},
+				{margin: positive, height: 10},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{support, support},
+			validity: []sign{support, support},
 		},
 		{
 			desc: "support abstain support",
 			blocks: []testBlock{
-				{margin: 11, height: 10},
-				{margin: 10, height: 11},
-				{margin: 11, height: 20},
+				{margin: positive, height: 10},
+				{margin: neutral, height: 11},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{support, against, support},
+			validity: []sign{support, against, support},
 		},
 		{
 			desc: "against abstain support",
 			blocks: []testBlock{
-				{margin: -11, height: 10},
-				{margin: 10, height: 10},
-				{margin: 11, height: 10},
+				{margin: negative, height: 10},
+				{margin: neutral, height: 10},
+				{margin: positive, height: 10},
 			},
-			threshold: emptyThreshold + 1,
 		},
 		{
-			desc:      "empty layer",
-			threshold: 10,
-			validity:  []sign{},
+			desc:     "empty layer",
+			empty:    positive,
+			validity: []sign{},
 		},
 		{
-			desc:      "empty layer not verified",
-			threshold: emptyThreshold + 1,
+			desc:  "empty layer not verified",
+			empty: neutral,
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			lid := types.LayerID{}
-			full := newFullTortoise(Config{}, newState())
-			full.globalThreshold = util.WeightFromUint64(tc.threshold)
-			layer := full.layer(lid)
-			layer.empty = util.WeightFromInt64(int64(emptyThreshold))
+			full := newFullTortoise(cfg, newState())
+			full.epochs = epochs
+			full.last = last
+			full.processed = last
+
+			layer := full.layer(target)
+			layer.empty = util.WeightFromInt64(int64(tc.empty))
 			for i, block := range tc.blocks {
 				block := &blockInfo{
 					id:     types.BlockID{uint8(i) + 1},
-					layer:  lid,
+					layer:  target,
 					height: uint64(block.height),
 					margin: util.WeightFromInt64(int64(block.margin)),
 				}
 				layer.blocks = append(layer.blocks, block)
 				full.state.blockRefs[block.id] = block
 			}
-			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
+			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), target))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
 					id := types.BlockID{uint8(i) + 1}
