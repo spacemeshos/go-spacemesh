@@ -614,6 +614,83 @@ func TestCache_Account_Add_RandomOrder(t *testing.T) {
 	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
 }
 
+func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	buildSingleAccountCache(t, tc, ta, nil)
+
+	mtx := &types.MeshTransaction{
+		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
+		Received:    time.Now(),
+	}
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx.Transaction, mtx.Received, false))
+	checkNoTX(t, tc.cache, mtx.ID)
+	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
+	checkMempool(t, tc.cache, nil)
+	require.True(t, tc.MoreInDB(ta.principal))
+	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.MEMPOOL)
+
+	lid := types.NewLayerID(97)
+	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
+	// the account will receive funds in layer 97 (via rewards or incoming transfer)
+	ta.balance += ta.balance
+	require.NoError(t, tc.cache.ApplyLayer(context.TODO(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
+
+	checkTX(t, tc.cache, mtx)
+	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
+	checkMempool(t, tc.cache, expectedMempool)
+	require.False(t, tc.MoreInDB(ta.principal))
+	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.MEMPOOL)
+}
+
+func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	buildSingleAccountCache(t, tc, ta, nil)
+
+	mtx0 := &types.MeshTransaction{
+		Transaction: *newTx(t, ta.nonce, ta.balance*2, defaultFee, ta.signer),
+		Received:    time.Now(),
+	}
+	mtx1 := &types.MeshTransaction{
+		Transaction: *newTx(t, ta.nonce+10, ta.balance, defaultFee, ta.signer),
+		Received:    time.Now(),
+	}
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx0.Transaction, mtx0.Received, false))
+	require.NoError(t, tc.Add(context.TODO(), tc.db, &mtx1.Transaction, mtx1.Received, false))
+	checkNoTX(t, tc.cache, mtx0.ID)
+	checkNoTX(t, tc.cache, mtx1.ID)
+	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
+	checkMempool(t, tc.cache, nil)
+	require.True(t, tc.MoreInDB(ta.principal))
+	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
+
+	lid := types.NewLayerID(97)
+	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
+	// the account receive enough funds in layer 97 (via rewards or incoming transfer) for mtx1
+	ta.balance = mtx1.Spending()
+	require.NoError(t, tc.cache.ApplyLayer(context.TODO(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
+	checkNoTX(t, tc.cache, mtx0.ID)
+	checkTX(t, tc.cache, mtx1)
+	checkProjection(t, tc.cache, ta.principal, mtx1.Nonce.Counter+1, 0)
+	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx1)}}
+	checkMempool(t, tc.cache, expectedMempool)
+	require.True(t, tc.MoreInDB(ta.principal))
+	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
+
+	lid = lid.Add(1)
+	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
+	// for some reasons this account wasn't applied in layer 98.
+	// the account receive enough funds in layer 99 (via rewards or incoming transfer) for both mtx0 and mtx1
+	ta.balance = mtx0.Spending() + mtx1.Spending()
+	require.NoError(t, tc.cache.ApplyLayer(context.TODO(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
+	checkTX(t, tc.cache, mtx0)
+	checkTX(t, tc.cache, mtx1)
+	checkProjection(t, tc.cache, ta.principal, mtx1.Nonce.Counter+1, 0)
+	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs([]*types.MeshTransaction{mtx0, mtx1})}
+	checkMempool(t, tc.cache, expectedMempool)
+	require.False(t, tc.MoreInDB(ta.principal))
+	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
+}
+
 func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
