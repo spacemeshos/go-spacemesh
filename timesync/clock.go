@@ -59,39 +59,35 @@ func (t *TimeClock) startClock() error {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.genesis, t)
 
 	for {
-		currLayer := t.Ticker.TimeToLayer(t.clock.Now()) // get current layer
+		currLayer := t.Ticker.TimeToLayer(t.clock.Now())
 		nextLayer := currLayer.Add(1)
 		if time.Until(t.Ticker.LayerToTime(currLayer)) > 0 {
 			nextLayer = currLayer
 		}
-		nextTickTime := t.Ticker.LayerToTime(nextLayer) // get next tick time for the next layer
-		diff := nextTickTime.Sub(t.clock.Now())
+		nextTickTime := t.Ticker.LayerToTime(nextLayer)
 		t.log.With().Info("global clock going to sleep before next layer",
-			log.String("diff", diff.String()),
 			log.FieldNamed("curr_layer", currLayer),
-			log.FieldNamed("next_layer", nextLayer))
-		tmr := time.NewTimer(diff)
-		select {
-		case <-tmr.C:
-			tmr.Stop()
-			t.mu.Lock()
-			subscriberCount := len(t.subscribers)
-			t.mu.Unlock()
+			log.FieldNamed("next_layer", nextLayer),
+			log.Time("next_tick_time", nextTickTime),
+		)
 
-			t.log.With().Info("clock notifying subscribers of new layer tick",
-				log.Int("subscriber_count", subscriberCount),
-				t.TimeToLayer(t.clock.Now()))
-
-			// notify subscribers
-			if missed, err := t.Notify(); err != nil {
-				t.log.With().Warning("could not notify all subscribers",
-					log.Err(err),
-					log.Int("missed", missed))
+		for {
+			// `time.After` sometimes unblocks bit too soon. In this case - wait again.
+			// See https://github.com/spacemeshos/go-spacemesh/issues/3617.
+			if t.clock.Now().After(nextTickTime) || t.clock.Now().Equal(nextTickTime) {
+				break
 			}
-		case <-t.stop:
-			tmr.Stop()
-			t.log.Info("stopping global clock %p", t)
-			return nil
+			select {
+			case <-time.After(nextTickTime.Sub(t.clock.Now())):
+			case <-t.stop:
+				t.log.Info("stopping global clock %p", t)
+				return nil
+			}
+		}
+		if missed, err := t.Notify(); err != nil {
+			t.log.With().Warning("could not notify all subscribers",
+				log.Err(err),
+				log.Int("missed", missed))
 		}
 	}
 }

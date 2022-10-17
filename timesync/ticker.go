@@ -107,6 +107,10 @@ func (t *Ticker) Notify() (int, error) {
 		return 0, errNotStarted
 	}
 
+	t.log.With().Info("clock notifying subscribers of new layer tick",
+		log.Int("subscriber_count", len(t.subscribers)),
+		t.TimeToLayer(t.clock.Now()))
+
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
 	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
