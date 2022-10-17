@@ -180,8 +180,6 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "tortoise-hdist",
 		config.Tortoise.Hdist, "hdist")
-	cmd.PersistentFlags().DurationVar(&config.Tortoise.RerunInterval, "tortoise-rerun-interval",
-		config.Tortoise.RerunInterval, "Tortoise will verify layers from scratch every interval.")
 
 	// TODO(moshababo): add usage desc
 
