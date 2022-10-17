@@ -108,7 +108,7 @@ func randomPeer(peers []p2p.Peer) p2p.Peer {
 // Option is a type to configure a fetcher.
 type Option func(*Fetch)
 
-// WithContext configures the shutdown context for the fetcher
+// WithContext configures the shutdown context for the fetcher.
 func WithContext(c context.Context) Option {
 	return func(f *Fetch) {
 		f.shutdownCtx, f.cancel = context.WithCancel(c)
@@ -326,7 +326,6 @@ func (f *Fetch) handleNewRequest(req *request) {
 		})
 		return
 	}
-	return
 }
 
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
