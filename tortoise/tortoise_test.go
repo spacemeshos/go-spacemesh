@@ -2391,13 +2391,76 @@ func TestEncodeVotes(t *testing.T) {
 		id1 := blocks[1].ID()
 
 		hasher.Write(buf)
-		hasher.Write(id1[:])
+		hasher.Write(id1[:]) // note the order due to the height
 		hasher.Write(id0[:])
 		buf = hasher.Sum(nil)
 		hasher.Reset()
 
 		hasher.Write(buf)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
+	})
+	t.Run("rewrite before base", func(t *testing.T) {
+		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+		tortoise := New(cdb, mockedBeacons(t), &updater{cdb},
+			WithConfig(defaultTestConfig()),
+			WithLogger(logtest.New(t)),
+		)
+
+		hare := types.GetEffectiveGenesis().Add(1)
+		block := types.Block{InnerBlock: types.InnerBlock{LayerIndex: hare}}
+		block.Initialize()
+		tortoise.OnBlock(&block)
+		tortoise.OnHareOutput(hare, block.ID())
+
+		lid := hare.Add(1)
+		ballot := types.Ballot{}
+
+		atxid := types.ATXID{1}
+		atx := &types.ActivationTx{}
+		atx.NumUnits = 10
+		atx.SetID(&atxid)
+		atx.SetNodeID(&types.NodeID{1})
+		vatx, err := atx.Verify(1, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(cdb, vatx, time.Now()))
+
+		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
+		ballot.AtxID = atxid
+		ballot.LayerIndex = lid
+		ballot.Votes.Base = types.GenesisBallotID
+		ballot.Votes.Support = []types.BlockID{types.GenesisBlockID, block.ID()}
+		ballot.SetID(types.BallotID{1})
+
+		decoded, err := tortoise.DecodeBallot(&ballot)
+		require.NoError(t, err)
+		require.NoError(t, decoded.Store())
+
+		current := lid.Add(1)
+		tortoise.TallyVotes(ctx, current)
+
+		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
+		require.NoError(t, err)
+		require.Len(t, opinion.Abstain, 1)
+
+		tortoise.OnHareOutput(hare, types.EmptyBlockID)
+
+		rewritten, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
+		require.NoError(t, err)
+		require.Len(t, rewritten.Abstain, 1)
+		require.Equal(t, rewritten.Against, []types.BlockID{block.ID()})
+
+		hasher := hash.New()
+		hasher.Write(types.GenesisBlockID[:])
+		buf := hasher.Sum(nil)
+		hasher.Reset()
+
+		hasher.Write(buf)
+		buf = hasher.Sum(nil)
+		hasher.Reset()
+
+		hasher.Write(buf)
+		hasher.Write(abstainSentinel)
+		require.Equal(t, hasher.Sum(nil), rewritten.Hash[:])
 	})
 }
 
