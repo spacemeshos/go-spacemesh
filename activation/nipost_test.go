@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -180,6 +181,9 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
+	if util.IsWindows() {
+		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3625)")
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -228,6 +232,9 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig
 }
 
 func TestNewNIPostBuilderNotInitialized(t *testing.T) {
+	if util.IsWindows() && util.IsCi() {
+		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3629)")
+	}
 	if testing.Short() {
 		t.Skip()
 	}
