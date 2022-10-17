@@ -87,7 +87,7 @@ const (
 	ProposalListenerLogger = "proposalListener"
 	PoetListenerLogger     = "poetListener"
 	NipostBuilderLogger    = "nipostBuilder"
-	LayerFetcher           = "layerFetcher"
+	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
 	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
@@ -575,13 +575,13 @@ func (app *App) initServices(ctx context.Context,
 
 	fetcher := fetch.NewFetch(cdb, msh, app.host,
 		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(app.addLogger(LayerFetcher, lg)),
-		fetch.WithATXHandlers(atxHandler),
-		fetch.WithBallotHandlers(proposalListener),
-		fetch.WithBlockHandlers(blockHandler),
-		fetch.WithProposalHandlers(proposalListener),
-		fetch.WithTXHandlers(txHandler),
-		fetch.WithPoetHandlers(poetDb),
+		fetch.WithLogger(app.addLogger(Fetcher, lg)),
+		fetch.WithATXHandler(atxHandler),
+		fetch.WithBallotHandler(proposalListener),
+		fetch.WithBlockHandler(blockHandler),
+		fetch.WithProposalHandler(proposalListener),
+		fetch.WithTXHandler(txHandler),
+		fetch.WithPoetHandler(poetDb),
 	)
 	fetcherWrapped.Fetcher = fetcher
 
@@ -591,7 +591,7 @@ func (app *App) initServices(ctx context.Context,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
-	newSyncer := syncer.NewSyncer(cdb, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(sqlDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
 		syncer.WithContext(ctx),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))

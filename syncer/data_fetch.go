@@ -7,7 +7,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -36,12 +35,10 @@ type request[T any, R any] struct {
 type dataResponse struct {
 	ballots map[types.BallotID]struct{}
 	blocks  map[types.BlockID]struct{}
-	err     error
 }
 
 type opinionResponse struct {
 	opinions []*fetch.LayerOpinion
-	err      error
 }
 
 type (
@@ -52,16 +49,14 @@ type (
 // DataFetch contains the logic of fetching mesh data.
 type DataFetch struct {
 	logger  log.Log
-	cdb     *datastore.CachedDB
 	msh     meshProvider
 	fetcher fetcher
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(cdb *datastore.CachedDB, msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
+func NewDataFetch(msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
 	return &DataFetch{
 		logger:  lg,
-		cdb:     cdb,
 		msh:     msh,
 		fetcher: fetch,
 	}
@@ -113,13 +108,13 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID) error 
 				break
 			}
 			// all peer responded
-			if !success {
-				req.response.err = candidateErr
+			if success {
+				candidateErr = nil
 			}
-			if req.response.err == nil && len(req.response.blocks) == 0 {
+			if candidateErr == nil && len(req.response.blocks) == 0 {
 				d.msh.SetZeroBlockLayer(ctx, req.lid)
 			}
-			return req.response.err
+			return candidateErr
 		case <-ctx.Done():
 			return errTimeout
 		}
@@ -253,10 +248,10 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 				break
 			}
 			// all peer responded
-			if !success {
-				req.response.err = candidateErr
+			if success {
+				candidateErr = nil
 			}
-			return req.response.opinions, req.response.err
+			return req.response.opinions, candidateErr
 		case <-ctx.Done():
 			return nil, errTimeout
 		}
@@ -290,11 +285,6 @@ type epochAtxRes struct {
 	atxIDs []types.ATXID
 }
 
-func randomPeer(peers []p2p.Peer) p2p.Peer {
-	idx := rand.Intn(len(peers))
-	return peers[idx]
-}
-
 // GetEpochATXs fetches all ATXs in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
@@ -302,7 +292,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 	if len(peers) == 0 {
 		return errNoPeers
 	}
-	peer := randomPeer(peers)
+	peer := peers[rand.Intn(len(peers))]
 	okFunc := func(data []byte) {
 		atxIDs, err := codec.DecodeSlice[types.ATXID](data)
 		resCh <- epochAtxRes{

@@ -79,20 +79,20 @@ func (b *batchInfo) ToMap() map[types.Hash32]RequestMessage {
 
 // Config is the configuration file of the Fetch component.
 type Config struct {
-	BatchTimeout         int // in milliseconds
+	BatchTimeout         time.Duration // in milliseconds
 	MaxRetriesForPeer    int
 	BatchSize            int
-	RequestTimeout       int // in seconds
+	RequestTimeout       time.Duration // in seconds
 	MaxRetriesForRequest int
 }
 
 // DefaultConfig is the default config for the fetch component.
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:         50,
+		BatchTimeout:         time.Millisecond * time.Duration(50),
 		MaxRetriesForPeer:    2,
 		BatchSize:            20,
-		RequestTimeout:       10,
+		RequestTimeout:       time.Second * time.Duration(10),
 		MaxRetriesForRequest: 100,
 	}
 }
@@ -122,43 +122,43 @@ func WithLogger(log log.Log) Option {
 	}
 }
 
-// WithATXHandlers configures the ATX handler of the fetcher.
-func WithATXHandlers(h atxHandler) Option {
+// WithATXHandler configures the ATX handler of the fetcher.
+func WithATXHandler(h atxHandler) Option {
 	return func(f *Fetch) {
 		f.atxHandler = h
 	}
 }
 
-// WithBallotHandlers configures the Ballot handler of the fetcher.
-func WithBallotHandlers(h ballotHandler) Option {
+// WithBallotHandler configures the Ballot handler of the fetcher.
+func WithBallotHandler(h ballotHandler) Option {
 	return func(f *Fetch) {
 		f.ballotHandler = h
 	}
 }
 
-// WithBlockHandlers configures the Block handler of the fetcher.
-func WithBlockHandlers(h blockHandler) Option {
+// WithBlockHandler configures the Block handler of the fetcher.
+func WithBlockHandler(h blockHandler) Option {
 	return func(f *Fetch) {
 		f.blockHandler = h
 	}
 }
 
-// WithProposalHandlers configures the Proposal handler of the fetcher.
-func WithProposalHandlers(h proposalHandler) Option {
+// WithProposalHandler configures the Proposal handler of the fetcher.
+func WithProposalHandler(h proposalHandler) Option {
 	return func(f *Fetch) {
 		f.proposalHandler = h
 	}
 }
 
-// WithTXHandlers configures the TX handler of the fetcher.
-func WithTXHandlers(h txHandler) Option {
+// WithTXHandler configures the TX handler of the fetcher.
+func WithTXHandler(h txHandler) Option {
 	return func(f *Fetch) {
 		f.txHandler = h
 	}
 }
 
-// WithPoetHandlers configures the PoET handler of the fetcher.
-func WithPoetHandlers(h poetHandler) Option {
+// WithPoetHandler configures the PoET handler of the fetcher.
+func WithPoetHandler(h poetHandler) Option {
 	return func(f *Fetch) {
 		f.poetHandler = h
 	}
@@ -227,24 +227,23 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, opts ..
 		opt(f)
 	}
 
-	f.batchTimeout = time.NewTicker(time.Millisecond * time.Duration(f.cfg.BatchTimeout))
+	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
 		h := newHandler(cdb, bs, msh, f.logger)
-		timeout := time.Second * time.Duration(f.cfg.RequestTimeout)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochATXIDsReq,
-			server.WithTimeout(timeout),
+			server.WithTimeout(f.cfg.RequestTimeout),
 			server.WithLog(f.logger),
 		)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq,
-			server.WithTimeout(timeout),
+			server.WithTimeout(f.cfg.RequestTimeout),
 			server.WithLog(f.logger),
 		)
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq,
-			server.WithTimeout(timeout),
+			server.WithTimeout(f.cfg.RequestTimeout),
 			server.WithLog(f.logger),
 		)
 		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq,
-			server.WithTimeout(timeout),
+			server.WithTimeout(f.cfg.RequestTimeout),
 			server.WithLog(f.logger),
 		)
 	}
@@ -300,13 +299,13 @@ func (f *Fetch) stopped() bool {
 // if there are pending requests for the same hash, it will put the new request, regardless of the priority,
 // to the pending list and wait for notification when the earlier request gets response.
 // it returns true if a request is sent immediately, or false otherwise.
-func (f *Fetch) handleNewRequest(req *request) bool {
+func (f *Fetch) handleNewRequest(req *request) {
 	f.activeReqM.Lock()
 	if _, ok := f.pendingRequests[req.hash]; ok {
 		// hash already being requested. just add the req and wait for the notification
 		f.pendingRequests[req.hash] = append(f.pendingRequests[req.hash], req)
 		f.activeReqM.Unlock()
-		return false
+		return
 	}
 	f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
 	rLen := len(f.activeRequests)
@@ -317,14 +316,14 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 			f.requestHashBatchFromPeers() // Process the batch.
 			return nil
 		})
-		return true
+		return
 	}
-	return false
+	return
 }
 
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched.
-func (f *Fetch) loop(handler func(*request) bool) {
+func (f *Fetch) loop(handler func(*request)) {
 	f.logger.Info("starting fetch main loop")
 	for {
 		select {

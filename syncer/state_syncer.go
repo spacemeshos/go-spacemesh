@@ -146,6 +146,7 @@ func (s *Syncer) fetchLayerOpinions(ctx context.Context, lid types.LayerID) erro
 	}
 
 	// TODO: check if the node agree with peers' aggregated hashes
+	// https://github.com/spacemeshos/go-spacemesh/issues/2507
 
 	if err := s.adopt(ctx, lid, opinions); err != nil {
 		logger.With().Info("opinions not fully adopted", log.Err(err))

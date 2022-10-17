@@ -18,13 +18,16 @@ type meshProvider interface {
 	SetZeroBlockLayer(context.Context, types.LayerID)
 }
 
-type dataFetcher interface {
+// fetchLogic is the interface between syncer and low-level fetching.
+// it handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
+type fetchLogic interface {
 	PollLayerData(context.Context, types.LayerID) error
 	PollLayerOpinions(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error)
 	GetEpochATXs(context.Context, types.EpochID) error
 	GetBlocks(context.Context, []types.BlockID) error
 }
 
+// fetcher is the interface to the low-level fetching.
 type fetcher interface {
 	GetEpochATXIDs(context.Context, p2p.Peer, types.EpochID, func([]byte), func(error)) error
 	GetLayerData(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error

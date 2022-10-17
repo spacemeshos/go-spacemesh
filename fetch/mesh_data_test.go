@@ -62,7 +62,7 @@ const (
 	numBlocks  = 3
 )
 
-func startTestLoop(f *Fetch, eg *errgroup.Group, hdlr func(*request) bool) {
+func startTestLoop(f *Fetch, eg *errgroup.Group, hdlr func(*request)) {
 	eg.Go(func() error {
 		f.loop(hdlr)
 		return nil
@@ -148,9 +148,8 @@ func TestGetBlocks(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) {
 				req.returnChan <- results[req.hash]
-				return true
 			})
 
 			require.ErrorIs(t, f.GetBlocks(context.TODO(), blockIDs), tc.err)
@@ -221,9 +220,8 @@ func TestGetBallots(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) {
 				req.returnChan <- results[req.hash]
-				return true
 			})
 
 			require.ErrorIs(t, f.GetBallots(context.TODO(), ballotIDs), tc.err)
@@ -294,9 +292,8 @@ func TestGetProposals(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) {
 				req.returnChan <- results[req.hash]
-				return true
 			})
 
 			require.ErrorIs(t, f.GetProposals(context.TODO(), proposalIDs), tc.err)
@@ -373,9 +370,8 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) {
 				req.returnChan <- results[req.hash]
-				return true
 			})
 
 			require.ErrorIs(t, f.getTxs(tids), errUnknown)
@@ -421,9 +417,8 @@ func TestGetTxs(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) {
 				req.returnChan <- results[req.hash]
-				return true
 			})
 
 			require.ErrorIs(t, f.GetBlockTxs(context.TODO(), tids), tc.err)
@@ -505,9 +500,8 @@ func TestGetATXs(t *testing.T) {
 			}
 
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) bool {
+			startTestLoop(f.Fetch, &eg, func(req *request) {
 				req.returnChan <- results[req.hash]
-				return true
 			})
 
 			require.ErrorIs(t, f.GetAtxs(context.TODO(), atxIDs), tc.err)
@@ -525,12 +519,11 @@ func TestGetPoetProof(t *testing.T) {
 	require.NoError(t, err)
 
 	var eg errgroup.Group
-	startTestLoop(f.Fetch, &eg, func(req *request) bool {
+	startTestLoop(f.Fetch, &eg, func(req *request) {
 		req.returnChan <- HashDataPromiseResult{
 			Hash: h,
 			Data: data,
 		}
-		return true
 	})
 
 	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(nil).Times(1)

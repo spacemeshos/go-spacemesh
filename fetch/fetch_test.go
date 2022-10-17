@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -52,22 +53,22 @@ func createFetch(tb testing.TB) *testFetch {
 		mPoetH:     mocks.NewMockpoetHandler(ctrl),
 	}
 	cfg := Config{
-		2000, // make sure we never hit the batch timeout
+		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
 		3,
 		3,
-		3,
+		time.Second * time.Duration(3),
 		3,
 	}
 	lg := logtest.New(tb)
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil,
 		WithConfig(cfg),
 		WithLogger(lg),
-		WithATXHandlers(tf.mAtxH),
-		WithBallotHandlers(tf.mBallotH),
-		WithBlockHandlers(tf.mBlocksH),
-		WithProposalHandlers(tf.mProposalH),
-		WithTXHandlers(tf.mTxH),
-		WithPoetHandlers(tf.mPoetH),
+		WithATXHandler(tf.mAtxH),
+		WithBallotHandler(tf.mBallotH),
+		WithBlockHandler(tf.mBlocksH),
+		WithProposalHandler(tf.mProposalH),
+		WithTXHandler(tf.mTxH),
+		WithPoetHandler(tf.mPoetH),
 		withServers(map[string]requester{
 			atxProtocol:     tf.mAtxS,
 			lyrDataProtocol: tf.mLyrS,

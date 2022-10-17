@@ -146,18 +146,15 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 
 	started := make(chan struct{}, 1)
 	done := make(chan struct{}, 1)
-	for lid := gLayer.Add(1); lid.Before(current); lid = lid.Add(1) {
-		if lid == gLayer.Add(1) {
-			ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).DoAndReturn(
-				func(context.Context, types.LayerID) error {
-					close(started)
-					<-done
-					return nil
-				},
-			)
-		} else {
-			ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(nil)
-		}
+	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), gLayer.Add(1)).DoAndReturn(
+		func(context.Context, types.LayerID) error {
+			close(started)
+			<-done
+			return nil
+		},
+	)
+	for lid := gLayer.Add(2); lid.Before(current); lid = lid.Add(1) {
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(nil)
 	}
 	var wg sync.WaitGroup
 	wg.Add(1)

@@ -11,7 +11,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -101,7 +100,7 @@ func WithLogger(l log.Log) Option {
 	}
 }
 
-func withDataFetcher(d dataFetcher) Option {
+func withDataFetcher(d fetchLogic) Option {
 	return func(s *Syncer) {
 		s.dataFetcher = d
 	}
@@ -112,12 +111,12 @@ type Syncer struct {
 	logger log.Log
 
 	cfg           Config
-	db            *sql.Database
+	db            sql.Executor
 	ticker        layerTicker
 	beacon        system.BeaconGetter
 	mesh          *mesh.Mesh
 	certHandler   certHandler
-	dataFetcher   dataFetcher
+	dataFetcher   fetchLogic
 	patrol        layerPatrol
 	syncOnce      sync.Once
 	syncState     atomic.Value
@@ -144,7 +143,7 @@ type Syncer struct {
 
 // NewSyncer creates a new Syncer instance.
 func NewSyncer(
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
@@ -156,7 +155,7 @@ func NewSyncer(
 	s := &Syncer{
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
-		db:               cdb.Database,
+		db:               db,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
@@ -171,7 +170,7 @@ func NewSyncer(
 	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
 	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(cdb, mesh, fetcher, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
