@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 func TestClock_AwaitWakeup(t *testing.T) {
