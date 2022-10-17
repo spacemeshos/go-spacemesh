@@ -18,7 +18,6 @@ import (
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -109,16 +108,11 @@ func newPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *go
 }
 
 type poetDbMock struct {
-	errOn        bool
-	subscribed   map[[hash.Size]byte]struct{}
-	unsubscribed map[[hash.Size]byte]struct{}
+	errOn bool
 }
 
 func newPoetDbMock() *poetDbMock {
-	return &poetDbMock{
-		subscribed:   make(map[[hash.Size]byte]struct{}),
-		unsubscribed: make(map[[hash.Size]byte]struct{}),
-	}
+	return &poetDbMock{}
 }
 
 func (p *poetDbMock) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
@@ -521,9 +515,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	r := require.New(t)
 
 	postProvider := &postSetupProviderMock{}
-	poetProver, controller := defaultPoetServiceMock(t)
-	defer controller.Finish()
-
+	poetProver, _ := defaultPoetServiceMock(t)
 	poetDb := newPoetDbMock()
 
 	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},

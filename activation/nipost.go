@@ -110,6 +110,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	// Phase 0: Submit challenge to PoET services.
 	if nb.state.PoetRequests == nil {
 		poetRequests := nb.submitPoetChallenges(ctx, challenge)
+		if ctx.Err() != nil {
+			return nil, 0, ctx.Err()
+		}
 		if len(poetRequests) == 0 {
 			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET"}
 		}
