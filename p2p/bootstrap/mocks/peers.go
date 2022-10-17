@@ -9,59 +9,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 )
-
-// MockProvider is a mock of Provider interface.
-type MockProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockProviderMockRecorder
-}
-
-// MockProviderMockRecorder is the mock recorder for MockProvider.
-type MockProviderMockRecorder struct {
-	mock *MockProvider
-}
-
-// NewMockProvider creates a new mock instance.
-func NewMockProvider(ctrl *gomock.Controller) *MockProvider {
-	mock := &MockProvider{ctrl: ctrl}
-	mock.recorder = &MockProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockProvider) EXPECT() *MockProviderMockRecorder {
-	return m.recorder
-}
-
-// GetPeers mocks base method.
-func (m *MockProvider) GetPeers() []peer.ID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]peer.ID)
-	return ret0
-}
-
-// GetPeers indicates an expected call of GetPeers.
-func (mr *MockProviderMockRecorder) GetPeers() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockProvider)(nil).GetPeers))
-}
-
-// PeerCount mocks base method.
-func (m *MockProvider) PeerCount() uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PeerCount")
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// PeerCount indicates an expected call of PeerCount.
-func (mr *MockProviderMockRecorder) PeerCount() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockProvider)(nil).PeerCount))
-}
 
 // MockWaiter is a mock of Waiter interface.
 type MockWaiter struct {

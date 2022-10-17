@@ -7,15 +7,14 @@ include Makefile-gpu.Inc
 #include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
-TEST_LOG_LEVEL ?=
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-export GO111MODULE := on
 export CGO_ENABLED := 1
-PKGS = $(shell go list ./...)
+export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
@@ -55,22 +54,6 @@ ifdef dump
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
 endif
 
-
-# This prevents "the input device is not a TTY" error from docker in CI
-DOCKERRUNARGS := --rm \
-	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
- 	-e CLUSTER_NAME=$(CLUSTER_NAME) \
-	-e CLUSTER_ZONE=$(CLUSTER_ZONE) \
-	-e PROJECT_NAME=$(PROJECT_NAME) \
-	-e ES_USER=$(ES_USER) \
-	-e ES_PASS=$(ES_PASS) \
-	-e ES_PASSWD=$(ES_PASSWD) \
-	-e MAIN_ES_IP=$(MAIN_ES_IP) \
-	-e TD_QUEUE_NAME=$(TD_QUEUE_NAME) \
-	-e TD_QUEUE_ZONE=$(TD_QUEUE_ZONE) \
-	-e DUMP_QUEUE_NAME=$(DUMP_QUEUE_NAME) \
-	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE)
-
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
 # We use a docker image corresponding to the commithash for staging and trying, to be safe
@@ -79,19 +62,14 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
-DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE=$(DOCKER_HUB)/$(DOCKER_IMAGE)
-
-ifdef INTERACTIVE
-  DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
-else
-  DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
-endif
-
 install:
-	go run scripts/check-go-version.go --major 1 --minor 17
+	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
-	GO111MODULE=off go get golang.org/x/lint/golint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
+	go install github.com/spacemeshos/go-scale/scalegen
+	go install github.com/golang/mock/mockgen
+	go install gotest.tools/gotestsum@v1.8.2
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 .PHONY: install
 
 build: go-spacemesh
@@ -101,20 +79,18 @@ build: go-spacemesh
 get-libs: get-gpu-setup #get-svm
 .PHONY: get-libs
 
+gen-p2p-identity:
+	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) $(GOTAGS) .
 hare p2p: get-libs
-	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
 go-spacemesh: get-libs
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
 harness: get-libs
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
-.PHONY: hare p2p harness go-spacemesh
+.PHONY: hare p2p harness go-spacemesh gen-p2p-identity
 
 tidy:
 	go mod tidy
-	# NOTE(dshulyak) go mod tidy for some reason removes github.com/jessevdk/go-flags from indirect dependencies
-	# starting from 1.16. similar issue was fixed in 1.17 https://github.com/golang/go/issues/44129
-	# but apparently this is not exactly our case 
-	go get -d github.com/spacemeshos/poet@v0.1.1-0.20201103004828-ef8f28a744fc
 .PHONY: tidy
 
 ifeq ($(HOST_OS),$(filter $(HOST_OS),linux darwin))
@@ -137,21 +113,26 @@ endif
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
 docker-local-build: go-spacemesh hare p2p harness
-	cd build; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
+	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
 
-test test-all: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -race -timeout 0 -p 1 ./...
+# Clear tests cache
+clear-test-cache:
+	go clean -testcache
+.PHONY: clear-test-cache
+
+test: get-libs
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
-test-no-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -race -timeout 0 -p 1 -tags exclude_app_test ./...
-.PHONY: test-no-app-test
+generate: get-libs
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
+.PHONY: generate
 
-test-only-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -race -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
-.PHONY: test-only-app-test
+staticcheck: get-libs
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
+.PHONY: staticcheck
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
@@ -168,31 +149,23 @@ test-fmt:
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
-lint:
-	golint --set_exit_status ./...
+lint: get-libs
 	go vet ./...
+	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
-golangci-lint:
-	golangci-lint run --config .golangci.yml
-.PHONY: golangci-lint
-
 # Auto-fixes golangci-lint issues where possible.
-golangci-lint-fix:
-	golangci-lint run --config .golangci.yml --fix
-.PHONY: golangci-lint-fix
+lint-fix: get-libs
+	./bin/golangci-lint run --config .golangci.yml --fix
+.PHONY: lint-fix
 
-golangci-lint-github-action:
+lint-github-action: get-libs
+	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: golangci-lint-github-action
+.PHONY: lint-github-action
 
-cover:
-	@echo "mode: count" > cover-all.out
-	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
-	  $(foreach pkg,$(PKGS),\
-		go test -coverprofile=cover.out -covermode=count $(pkg);\
-		tail -n +2 cover.out >> cover-all.out;)
-	go tool cover -html=cover-all.out
+cover: get-libs
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: cover
 
 tag-and-build:
@@ -201,7 +174,7 @@ tag-and-build:
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
 	git push origin ${VERSION}
-	docker build -t go-spacemesh:${VERSION} .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
 	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
 	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
 .PHONY: tag-and-build
@@ -212,17 +185,8 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE) .
+	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
-
-dockerbuild-test:
-	docker build -f DockerFileTests \
-	             --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
-	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
-	             -t go-spacemesh-python:$(BRANCH) .
-.PHONY: dockerbuild-test
 
 dockerpush: dockerbuild-go dockerpush-only
 .PHONY: dockerpush
@@ -243,130 +207,3 @@ endif
 
 docker-local-push: docker-local-build dockerpush-only
 .PHONY: docker-local-push
-
-ifdef TEST
-DELIM=::
-endif
-
-dockerrun-p2p:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-p2p
-
-dockertest-p2p: dockerbuild-test dockerrun-p2p
-.PHONY: dockertest-p2p
-
-dockerrun-mining:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-mining
-
-dockertest-mining: dockerbuild-test dockerrun-mining
-.PHONY: dockertest-mining
-
-dockerrun-hare:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-hare
-
-dockertest-hare: dockerbuild-test dockerrun-hare
-.PHONY: dockertest-hare
-
-dockerrun-late-nodes:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-late-nodes
-
-dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
-.PHONY: dockertest-late-nodes
-
-dockerrun-blocks-add-node:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-blocks-add-node
-
-dockertest-blocks-add-node: dockerbuild-test dockerrun-blocks-add-node
-.PHONY: dockertest-blocks-add-node
-
-dockerrun-blocks-remove-node:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-blocks-remove-node
-
-dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
-.PHONY: dockertest-blocks-remove-node
-
-dockerrun-beacon:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v beacon/test_beacon.py --tc-file=beacon/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-beacon
-
-dockertest-beacon: dockerbuild-test dockerrun-beacon
-.PHONY: dockertest-beacon
-
-dockerrun-blocks-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-blocks-stress
-
-dockertest-blocks-stress: dockerbuild-test dockerrun-blocks-stress
-.PHONY: dockertest-blocks-stress
-
-dockerrun-grpc-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-grpc-stress
-
-dockertest-grpc-stress: dockerbuild-test dockerrun-grpc-stress
-.PHONY: dockertest-grpc-stress
-
-dockerrun-sync-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-sync-stress
-
-dockertest-sync-stress: dockerbuild-test dockerrun-sync-stress
-.PHONY: dockertest-sync-stress
-
-dockerrun-tx-stress:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-tx-stress
-
-dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
-.PHONY: dockertest-tx-stress
-
-# The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node dockerrun-beacon
-.PHONY: dockerrun-test
-
-dockerrun-all: dockerpush dockerrun-test
-.PHONY: dockerrun-all
-
-dockerrun-stress: dockerbuild-test dockerrun-blocks-stress dockerrun-grpc-stress dockerrun-sync-stress dockerrun-tx-stress
-.PHONY: dockerrun-stress
-
-dockertest-stress: dockerpush dockerrun-stress
-.PHONY: dockertest-stress

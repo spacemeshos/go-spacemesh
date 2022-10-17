@@ -1,12 +1,12 @@
 package node
 
-// Hide deprecated protobuf version error.
-// nolint: staticcheck
+//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +20,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -29,10 +30,12 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -40,12 +43,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/utils"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -67,14 +72,14 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// Create new identity.
 	signer1, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err := ioutil.ReadDir(tempdir)
+	infos, err := os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
 	// Load existing identity.
 	signer2, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err = ioutil.ReadDir(tempdir)
+	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 	r.Equal(signer1.PublicKey(), signer2.PublicKey())
@@ -87,7 +92,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// Create new identity.
 	signer3, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-	infos, err = ioutil.ReadDir(tempdir)
+	infos, err = os.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 2)
 	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
@@ -392,7 +397,7 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
@@ -424,49 +429,38 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	// Give the services a few seconds to start running - this is important on CI.
-	time.Sleep(2 * time.Second)
-
-	// Try talking to the server
-	const message = "Hello World"
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
-	r.NoError(err)
-	c := pb.NewNodeServiceClient(conn)
-
-	// We expect this one to fail
-	_, err = c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message},
-	})
-	r.Error(err)
-	r.Contains(err.Error(), "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
-	r.NoError(conn.Close())
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(100*time.Millisecond),
+	)
+	r.ErrorContains(err, "context deadline exceeded")
 
 	resetFlags()
 	events.CloseEventReporter()
 
-	// Test starting the server from the commandline
+	// Test starting the server from the command line
 	// uses Cmd.Run from above
 	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(port, app.Config.API.GrpcServerPort)
-	r.Equal(true, app.Config.API.StartNodeService)
+	r.True(app.Config.API.StartNodeService)
 
-	// Give the services a few seconds to start running - this is important on CI.
-	time.Sleep(2 * time.Second)
-
-	// Set up a new connection to the server
-	conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
-	defer func() {
-		r.NoError(conn.Close())
-	}()
+	conn, err = grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(2*time.Second),
+	)
 	r.NoError(err)
-	c = pb.NewNodeServiceClient(conn)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
+	c := pb.NewNodeServiceClient(conn)
 
 	// call echo and validate result
 	// We expect this one to succeed
+	const message = "Hello World"
 	response, err := c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
@@ -509,9 +503,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.JSONServerPort, "v1/node/echo")
 	_, err = http.Post(url, "application/json", strings.NewReader(payload))
 	r.Error(err)
-	r.Contains(err.Error(), fmt.Sprintf(
-		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		app.Config.API.JSONServerPort))
 
 	resetFlags()
 	events.CloseEventReporter()
@@ -525,14 +516,17 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.Equal(true, app.Config.API.StartJSONServer)
 	r.Equal(true, app.Config.API.StartNodeService)
 
-	// Give the server a chance to start up
-	time.Sleep(2 * time.Second)
-
-	// We expect this one to succeed
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
+	var (
+		respBody   string
+		respStatus int
+	)
+	require.Eventually(t, func() bool {
+		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
+		return respStatus == http.StatusOK
+	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
-	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
-	r.Equal(message, msg.Msg.Value)
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
 	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
@@ -540,6 +534,10 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
+	if util.IsWindows() {
+		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3626)")
+	}
+
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
 	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
@@ -547,20 +545,25 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Use a unique port
 	port := 1240
-
 	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
-	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	t.Cleanup(func() {
+		err := poetHarness.Teardown(true)
+		if assert.NoError(t, err, "failed to tear down harness") {
+			t.Log("harness torn down")
+		}
+	})
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := p2p.Upgrade(mesh.Hosts()[0])
+	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
-	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
 		path, eligibility.New(logtest.New(t)),
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
@@ -597,21 +600,14 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	// Set up a new connection to the server
-	var (
-		conn *grpc.ClientConn
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
 	)
-	for start := time.Now(); time.Since(start) <= 10*time.Second; {
-		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure(), grpc.WithBlock())
-		if err == nil {
-			break
-		}
-	}
-	require.NotNil(t, conn)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, conn.Close())
-	})
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
 
 	wg.Add(1)
@@ -643,15 +639,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
 	require.NoError(t, err)
+	_, err = streamErr.Header()
+	require.NoError(t, err)
 
 	// Report two errors and make sure they're both received
 	go func() {
-		// Ensure order
-		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test123")
-		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test456")
-		time.Sleep(10 * time.Millisecond)
 		assert.Panics(t, func() {
 			errlog.Panic("testPANIC")
 		})
@@ -675,7 +669,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cmdp.Cancel()() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
-	wg.Wait()
+	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 // E2E app test of the transaction service.
@@ -686,18 +680,17 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// Use a unique port
 	port := 1236
 
-	// Use a unique dir for data so we don't read existing state
-	path := t.TempDir()
-
 	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
+	cfg.DataDirParent = t.TempDir()
 	app.Config = &cfg
+
+	signer := signing.NewEdSigner()
+	address := wallet.Address(signer.PublicKey().Bytes())
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
 		r.NoError(app.Initialize())
-
-		app.Config.DataDirParent = path
 
 		// GRPC configuration
 		app.Config.API.GrpcServerPort = port
@@ -710,16 +703,17 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Avoid waiting for new connections.
 		app.Config.P2P.TargetOutbound = 0
 
-		// Speed things up a little
-		app.Config.SyncInterval = 1
+		// syncer will cause the node to go out of sync (and not listen to gossip)
+		// since we are testing single-node transaction service, we don't need the syncer to run
+		app.Config.SyncInterval = 1000000
 		app.Config.LayerDurationSec = 2
 
-		// Force gossip to always listen, even when not synced
-		app.Config.AlwaysListen = true
-
-		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
-
-		app.Config.Genesis = apiConfig.DefaultTestGenesisConfig()
+		app.Config.Genesis = &config.GenesisConfig{
+			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
+			Accounts: map[string]uint64{
+				address.String(): 100_000_000,
+			},
+		}
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -738,38 +732,27 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		wg.Done()
 	}()
 
-	// Wait for the app and services to start
-	// Strictly speaking, this does not indicate that all of the services
-	// have started, we could add separate channels for that, but it seems
-	// to work well enough for testing.
-	<-app.started
-	time.Sleep(2 * time.Second)
-
-	// Set up a new connection to the server
-	addr := fmt.Sprintf("localhost:%d", port)
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	defer func() {
-		r.NoError(conn.Close())
-	}()
+	conn, err := grpc.Dial(
+		fmt.Sprintf("localhost:%d", port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second),
+	)
 	r.NoError(err)
+	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	// Construct some mock tx data
-	// The tx origin must be the hardcoded test account or else it will have no balance.
-	signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account1Private))
+	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
+
+	stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
+		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
+		IncludeTransactions: true,
+	})
 	require.NoError(t, err)
-	txorigin := types.Address{}
-	txorigin.SetBytes(signer.PublicKey().Bytes())
-	dst := types.GenerateAddress([]byte{0x02})
+	_, err = stream.Header()
+	require.NoError(t, err)
 
-	tx1 := transaction.GenerateSpawnTransaction(signer, dst)
-	tx1bytes, _ := types.InterfaceToBytes(tx1)
-
-	tx2, err := transaction.GenerateCallTransaction(signer, dst, 1, 10, 1, 1)
-	require.NoError(t, err, "unable to create signed mock tx")
-	tx2bytes, _ := types.InterfaceToBytes(tx2)
-
-	// Coordinate ending the test
+	// TODO(dshulyak) synchronization below is messed up
 	wg2 := sync.WaitGroup{}
 	wg2.Add(1)
 	go func() {
@@ -779,82 +762,56 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		oncebody := func() { wg2.Done() }
 		defer once.Do(oncebody)
 
-		// Open a transaction stream
-		stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
-			TransactionId:       []*pb.TransactionId{{Id: tx2.ID().Bytes()}},
-			IncludeTransactions: true,
-		})
-		require.NoError(t, err)
-
 		// Now listen on the stream
 		res, err := stream.Recv()
 		require.NoError(t, err)
-		require.Equal(t, tx2.ID().Bytes(), res.TransactionState.Id.Id)
+		require.Equal(t, tx1.ID.Bytes(), res.TransactionState.Id.Id)
 
 		// We expect the tx to go to the mempool
 		inTx := res.Transaction
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
-		require.Equal(t, tx2.ID().Bytes(), inTx.Id.Id)
-		require.Equal(t, tx2.Origin().Bytes(), inTx.Sender.Address)
-		require.Equal(t, tx2.GasLimit, inTx.GasOffered.GasProvided)
-		require.Equal(t, tx2.Amount, inTx.Amount.Value)
-		require.Equal(t, tx2.AccountNonce, inTx.Counter)
-		require.Equal(t, tx2.Origin().Bytes(), inTx.Signature.PublicKey)
-		switch x := inTx.Datum.(type) {
-		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, tx2.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
-				"inner coin transfer tx has bad recipient")
-		default:
-			require.Fail(t, "inner tx has wrong tx data type")
-		}
-
+		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
+		require.Equal(t, address.String(), inTx.Principal.Address)
 		// Let the test end
 		once.Do(oncebody)
 
 		// Wait for the app to exit
-		wg.Wait()
+		require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 	}()
-
-	time.Sleep(4 * time.Second)
 
 	// Submit the txs
 	res1, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-		Transaction: tx1bytes,
+		Transaction: tx1.Raw,
 	})
 	require.NoError(t, err)
 	require.Equal(t, int32(code.Code_OK), res1.Status.Code)
-	require.Equal(t, tx1.ID().Bytes(), res1.Txstate.Id.Id)
+	require.Equal(t, tx1.ID.Bytes(), res1.Txstate.Id.Id)
 	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res1.Txstate.State)
 
-	// Submit the tx
-	res2, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-		Transaction: tx2bytes,
-	})
-	require.NoError(t, err)
-	require.Equal(t, int32(code.Code_OK), res2.Status.Code)
-	require.Equal(t, tx2.ID().Bytes(), res2.Txstate.Id.Id)
-	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res2.Txstate.State)
-
 	// Wait for messages to be received
-	wg2.Wait()
+	r.NoError(utils.WaitWithTimeout(&wg2, time.Second*10))
 
 	// This stops the app
 	cmdp.Cancel()()
 
 	// Wait for it to stop
-	wg.Wait()
+	r.NoError(utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf := config.DefaultConfig()
+	conf.DataDirParent = t.TempDir()
 	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
 	conf = config.DefaultTestConfig()
+	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
 
-	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	tconf := getTestDefaultConfig()
+	tconf.DataDirParent = t.TempDir()
+	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
 	require.NoError(t, app.Initialize())
 
 	conf.Tortoise.Zdist = 5
@@ -886,14 +843,14 @@ func TestConfig_Preset(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
-		const networkID = 42
-		require.NoError(t, cmd.ParseFlags([]string{"--network-id=" + strconv.Itoa(networkID)}))
+		const lowPeers = 1234
+		require.NoError(t, cmd.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		preset.P2P.NetworkID = networkID
+		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, *conf)
 	})
 
@@ -903,9 +860,9 @@ func TestConfig_Preset(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
-		const networkID = 42
+		const lowPeers = 1234
 
-		content := fmt.Sprintf(`{"p2p": {"network-id": %d}}`, networkID)
+		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
@@ -914,10 +871,11 @@ func TestConfig_Preset(t *testing.T) {
 		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		preset.P2P.NetworkID = networkID
+		preset.P2P.LowPeers = lowPeers
 		preset.ConfigFile = path
 		require.Equal(t, preset, *conf)
 	})
+
 	t.Run("LoadedFromConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
@@ -958,4 +916,137 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 			require.EqualValues(t, conf.Genesis.Accounts[key], value)
 		}
 	})
+}
+
+func TestGenesisConfig(t *testing.T) {
+	t.Run("config is written to a file", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		var existing config.GenesisConfig
+		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
+		require.Empty(t, existing.Diff(app.Config.Genesis))
+	})
+	t.Run("no error if no diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		require.NoError(t, app.Initialize())
+	})
+	t.Run("fatal error on a diff", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+
+		require.NoError(t, app.Initialize())
+		app.Config.Genesis.ExtraData = "changed"
+		err := app.Initialize()
+		require.ErrorContains(t, err, "genesis config")
+	})
+	t.Run("not valid time", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+
+		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
+	})
+	t.Run("long extra data", func(t *testing.T) {
+		app := New()
+		app.Config = getTestDefaultConfig()
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+
+		require.ErrorContains(t, app.Initialize(), "extra-data")
+	})
+}
+
+func getTestDefaultConfig() *config.Config {
+	cfg, err := LoadConfigFromFile()
+	if err != nil {
+		log.Error("cannot load config from file")
+		return nil
+	}
+	// is set to 0 to make sync start immediately when node starts
+	cfg.P2P.TargetOutbound = 0
+
+	cfg.POST = activation.DefaultPostConfig()
+	cfg.POST.MinNumUnits = 2
+	cfg.POST.MaxNumUnits = 4
+	cfg.POST.LabelsPerUnit = 32
+	cfg.POST.BitsPerLabel = 8
+	cfg.POST.K2 = 4
+
+	cfg.SMESHING = config.DefaultSmeshingConfig()
+	cfg.SMESHING.Start = true
+	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.NumFiles = 1
+	cfg.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
+
+	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
+	cfg.HARE.RoundDuration = 2
+	cfg.HARE.WakeupDelta = 1
+	cfg.HARE.N = 5
+	cfg.HARE.F = 2
+	cfg.HARE.ExpectedLeaders = 5
+	cfg.HARE.SuperHare = true
+	cfg.LayerAvgSize = 5
+	cfg.LayersPerEpoch = 3
+	cfg.TxsPerProposal = 100
+	cfg.Tortoise.Hdist = 5
+	cfg.Tortoise.Zdist = 5
+
+	cfg.LayerDurationSec = 20
+	cfg.HareEligibility.ConfidenceParam = 4
+	cfg.HareEligibility.EpochOffset = 0
+	cfg.SyncRequestTimeout = 500
+	cfg.SyncInterval = 2
+
+	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.MaxRetriesForPeer = 5
+	cfg.FETCH.BatchSize = 5
+	cfg.FETCH.BatchTimeout = 5
+
+	cfg.Beacon = beacon.NodeSimUnitTestConfig()
+
+	cfg.Genesis = config.DefaultTestGenesisConfig()
+
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	return cfg
+}
+
+// initSingleInstance initializes a node instance with given
+// configuration and parameters, it does not stop the instance.
+func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
+	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner,
+) (*App, error) {
+	smApp := New(WithLog(lg))
+	smApp.Config = &cfg
+	smApp.Config.Genesis.GenesisTime = genesisTime
+
+	coinbaseAddressBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(coinbaseAddressBytes, uint32(i+1))
+	smApp.Config.SMESHING.CoinbaseAccount = types.GenerateAddress(coinbaseAddressBytes).String()
+	smApp.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
+
+	smApp.host = host
+	smApp.edSgn = edSgn
+
+	pub := edSgn.PublicKey()
+	vrfSigner := edSgn.VRFSigner()
+
+	nodeID := types.BytesToNodeID(pub.Bytes())
+
+	err := smApp.initServices(context.TODO(), nodeID, storePath, edSgn,
+		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	if err != nil {
+		return nil, err
+	}
+
+	return smApp, err
 }

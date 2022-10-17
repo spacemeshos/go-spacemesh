@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
@@ -16,7 +16,7 @@ func TestGossip(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	n := 10
-	mesh, err := mocknet.FullMeshLinked(ctx, n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	topic := "test"
 	pubsubs := []*PubSub{}
@@ -25,7 +25,7 @@ func TestGossip(t *testing.T) {
 
 	for _, h := range mesh.Hosts() {
 		h := h
-		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true})
+		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
 		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) ValidationResult {
@@ -47,17 +47,5 @@ func TestGossip(t *testing.T) {
 	for i, ps := range pubsubs {
 		require.NoError(t, ps.Publish(ctx, topic, []byte(mesh.Hosts()[i].ID())))
 	}
-
-	go func() {
-		time.Sleep(5 * time.Second)
-		close(received)
-	}()
-	i := 0
-	for range received {
-		i++
-		if i == count {
-			break
-		}
-	}
-	require.Equal(t, count, i)
+	require.Eventually(t, func() bool { return len(received) == count }, 5*time.Second, 10*time.Millisecond)
 }

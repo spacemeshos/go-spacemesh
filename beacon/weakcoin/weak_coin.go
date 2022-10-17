@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/spacemeshos/go-scale"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,9 +20,6 @@ import (
 const (
 	// Prefix defines weak coin proposal prefix.
 	proposalPrefix = "WeakCoin"
-	// GossipProtocol is weak coin Gossip protocol name.
-	GossipProtocol = "WeakCoinGossip"
-
 	// equal to 2^256 / 2.
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
@@ -50,6 +50,91 @@ type Message struct {
 	Unit      uint64
 	MinerPK   []byte
 	Signature []byte
+}
+
+// EncodeScale implements scale codec interface.
+func (t *Message) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Epoch))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Round))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.Unit))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.MinerPK)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.Signature)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+// DecodeScale implements scale codec interface.
+func (t *Message) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Epoch = types.EpochID(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Round = types.RoundID(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Unit = uint64(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MinerPK = field
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Signature = field
+	}
+	return total, nil
 }
 
 // Option for optional configuration adjustments.
@@ -235,7 +320,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 				MinerPK:   wc.signer.PublicKey().Bytes(),
 				Signature: signature,
 			}
-			msg, err := types.InterfaceToBytes(message)
+			msg, err := codec.Encode(&message)
 			if err != nil {
 				wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
 			}
@@ -257,7 +342,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 		return nil
 	}
 
-	if err := wc.publisher.Publish(ctx, GossipProtocol, msg); err != nil {
+	if err := wc.publisher.Publish(ctx, pubsub.BeaconWeakCoinProtocol, msg); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -19,7 +20,7 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 	)
 
 	var message Message
-	if err := types.BytesToInterface(msg, &message); err != nil {
+	if err := codec.Decode(msg, &message); err != nil {
 		logger.With().Warning("received invalid weak coin message",
 			log.Binary("message", msg),
 			log.Err(err))

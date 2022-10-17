@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/event"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/event"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -34,26 +35,30 @@ func WithLog(logger log.Log) Opt {
 }
 
 const (
-	hsprotocol    = "/handshake/1.0.0"
+	hsprotocol    = "/handshake/1"
 	streamTimeout = 10 * time.Second
 )
 
-type handshakeMessage struct {
-	Network uint32
+//go:generate scalegen -types HandshakeMessage,HandshakeAck
+
+// HandshakeMessage is a handshake message.
+type HandshakeMessage struct { // nolint
+	GenesisID types.Hash20
 }
 
-type handshakeAck struct {
+// HandshakeAck is a handshake ack.
+type HandshakeAck struct { // nolint
 	Error string
 }
 
 // New instantiates handshake protocol for the host.
-func New(h host.Host, netid uint32, opts ...Opt) *Handshake {
+func New(h host.Host, genesisID types.Hash20, opts ...Opt) *Handshake {
 	ctx, cancel := context.WithCancel(context.Background())
 	hs := &Handshake{
-		logger: log.NewNop(),
-		netid:  netid,
-		h:      h,
-		cancel: cancel,
+		logger:    log.NewNop(),
+		genesisID: genesisID,
+		h:         h,
+		cancel:    cancel,
 	}
 	for _, opt := range opts {
 		opt(hs)
@@ -76,9 +81,9 @@ func New(h host.Host, netid uint32, opts ...Opt) *Handshake {
 type Handshake struct {
 	logger log.Log
 
-	emitter event.Emitter
-	netid   uint32
-	h       host.Host
+	emitter   event.Emitter
+	genesisID types.Hash20
+	h         host.Host
 
 	cancel context.CancelFunc
 	eg     errgroup.Group
@@ -133,10 +138,10 @@ func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err = codec.EncodeTo(stream, &handshakeMessage{Network: h.netid}); err != nil {
+	if _, err = codec.EncodeTo(stream, &HandshakeMessage{GenesisID: h.genesisID}); err != nil {
 		return fmt.Errorf("failed to send handshake msg: %w", err)
 	}
-	var ack handshakeAck
+	var ack HandshakeAck
 	if _, err := codec.DecodeFrom(stream, &ack); err != nil {
 		return fmt.Errorf("failed to receive handshake ack: %w", err)
 	}
@@ -156,20 +161,20 @@ func (h *Handshake) handler(stream network.Stream) {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
-	var msg handshakeMessage
+	var msg HandshakeMessage
 	if _, err := codec.DecodeFrom(stream, &msg); err != nil {
 		return
 	}
-	if msg.Network != h.netid {
+	if h.genesisID != msg.GenesisID {
 		h.logger.Warning("network id mismatch",
-			log.Uint32("network-id", h.netid),
-			log.Uint32("peer-network-id", msg.Network),
+			log.Stringer("genesis id", h.genesisID),
+			log.Stringer("peer genesis id", msg.GenesisID),
 			log.String("peer-id", stream.Conn().RemotePeer().String()),
 			log.String("peer-address", stream.Conn().LocalMultiaddr().String()),
 		)
 		return
 	}
-	if _, err := codec.EncodeTo(stream, &handshakeAck{}); err != nil {
+	if _, err := codec.EncodeTo(stream, &HandshakeAck{}); err != nil {
 		return
 	}
 }

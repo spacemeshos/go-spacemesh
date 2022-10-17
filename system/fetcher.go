@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
@@ -16,6 +17,7 @@ type Fetcher interface {
 	BallotFetcher
 	ProposalFetcher
 	TxFetcher
+	PeerTracker
 }
 
 // BlockFetcher defines an interface for fetching blocks from remote peers.
@@ -26,12 +28,12 @@ type BlockFetcher interface {
 // AtxFetcher defines an interface for fetching ATXs from remote peers.
 type AtxFetcher interface {
 	GetAtxs(context.Context, []types.ATXID) error
-	FetchAtx(context.Context, types.ATXID) error
 }
 
 // TxFetcher defines an interface for fetching transactions from remote peers.
 type TxFetcher interface {
-	GetTxs(context.Context, []types.TransactionID) error
+	GetBlockTxs(context.Context, []types.TransactionID) error
+	GetProposalTxs(context.Context, []types.TransactionID) error
 }
 
 // PoetProofFetcher defines an interface for fetching PoET proofs from remote peers.
@@ -47,4 +49,10 @@ type BallotFetcher interface {
 // ProposalFetcher defines an interface for fetching Proposal from remote peers.
 type ProposalFetcher interface {
 	GetProposals(context.Context, []types.ProposalID) error
+}
+
+// PeerTracker defines an interface to track peer hashes.
+type PeerTracker interface {
+	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
+	AddPeersFromHash(types.Hash32, []types.Hash32)
 }

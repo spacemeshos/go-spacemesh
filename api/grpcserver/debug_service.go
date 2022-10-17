@@ -12,14 +12,13 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
-	mesh     api.TxAPI
+	conState api.ConservativeState
 	identity api.NetworkIdentity
 }
 
@@ -29,9 +28,9 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(tx api.TxAPI, host api.NetworkIdentity) *DebugService {
+func NewDebugService(conState api.ConservativeState, host api.NetworkIdentity) *DebugService {
 	return &DebugService{
-		mesh:     tx,
+		conState: conState,
 		identity: host,
 	}
 }
@@ -40,7 +39,7 @@ func NewDebugService(tx api.TxAPI, host api.NetworkIdentity) *DebugService {
 func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.AccountsResponse, error) {
 	log.Info("GRPC DebugServices.Accounts")
 
-	accounts, err := d.mesh.GetAllAccounts()
+	accounts, err := d.conState.GetAllAccounts()
 	if err != nil {
 		log.Error("Failed to get all accounts from state: %s", err)
 		return nil, status.Errorf(codes.Internal, "error fetching accounts state")
@@ -48,14 +47,14 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 
 	res := &pb.AccountsResponse{}
 
-	for address, accountData := range accounts.Accounts {
+	for _, account := range accounts {
 		state := &pb.AccountState{
-			Counter: accountData.Nonce,
-			Balance: &pb.Amount{Value: accountData.Balance},
+			Counter: account.NextNonce,
+			Balance: &pb.Amount{Value: account.Balance},
 		}
 
 		account := &pb.Account{
-			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // Address is raw account bytes, not a 0x hex string
+			AccountId:    &pb.AccountId{Address: account.Address.String()}, // Address is bech32 string, not a 0x hex string
 			StateCurrent: state,
 		}
 

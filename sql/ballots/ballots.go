@@ -40,7 +40,7 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious 
 
 // Add ballot to the database.
 func Add(db sql.Executor, ballot *types.Ballot) error {
-	bytes, err := codec.Encode(ballot.InnerBallot)
+	bytes, err := codec.Encode(&ballot.InnerBallot)
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
@@ -147,4 +147,43 @@ func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (int,
 		return 0, fmt.Errorf("counting layer %s: %w", lid, err)
 	}
 	return rows, nil
+}
+
+// GetRefBallot gets a ref ballot for a layer and a pubkey.
+func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballotID types.BallotID, err error) {
+	firstLayer := epochID.FirstLayer()
+	lastLayer := firstLayer.Add(types.GetLayersPerEpoch()).Sub(1)
+	rows, err := db.Exec(`
+		select id from ballots 
+		where layer between ?1 and ?2 and pubkey = ?3
+		order by layer
+		limit 1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(firstLayer.Value))
+			stmt.BindInt64(2, int64(lastLayer.Value))
+			stmt.BindBytes(3, pubkey)
+		}, func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, ballotID[:])
+			return true
+		})
+	if err != nil {
+		return types.BallotID{}, fmt.Errorf("ref ballot epoch %v: %w", epochID, err)
+	} else if rows == 0 {
+		return types.BallotID{}, fmt.Errorf("%w ref ballot epoch %s", sql.ErrNotFound, epochID)
+	}
+	return ballotID, nil
+}
+
+// LatestLayer gets the highest layer with ballots.
+func LatestLayer(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	if _, err := db.Exec("select max(layer) from ballots;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return lid, fmt.Errorf("latest layer: %w", err)
+	}
+	return lid, nil
 }

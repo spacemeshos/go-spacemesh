@@ -1,13 +1,16 @@
 package proposals
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -25,19 +28,20 @@ var (
 type Validator struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
-	atxDB          atxDB
-	mesh           meshDB
+	cdb            *datastore.CachedDB
+	mesh           meshProvider
 	beacons        system.BeaconCollector
 	logger         log.Log
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m meshDB, lg log.Log) *Validator {
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log,
+) *Validator {
 	return &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,
-		atxDB:          db,
+		cdb:            cdb,
 		mesh:           m,
 		beacons:        bc,
 		logger:         lg,
@@ -54,7 +58,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	)
 
 	if ballot.RefBallot != types.EmptyBallotID {
-		if refBallot, err = v.mesh.GetBallot(ballot.RefBallot); err != nil {
+		if refBallot, err = ballots.Get(v.cdb, ballot.RefBallot); err != nil {
 			return false, fmt.Errorf("get ref ballot %v: %w", ballot.RefBallot, err)
 		}
 	}
@@ -74,19 +78,18 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range activeSets {
-		atx, err := v.atxDB.GetAtxHeader(atxID)
+		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
-			return false, fmt.Errorf("get ATX header: %w", err)
+			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
 		}
 		totalWeight += atx.GetWeight()
 	}
 
 	atx, err := v.getBallotATX(ctx, ballot)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get ballot ATX header %v: %w", ballot.AtxID, err)
 	}
 	weight = atx.GetWeight()
-	vrfPubkey := atx.NodeID.VRFPublicKey
 
 	numEligibleSlots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
@@ -97,6 +100,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		last    uint32
 		isFirst = true
 	)
+
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
@@ -117,7 +121,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !signing.VRFVerify(vrfPubkey, message, vrfSig) {
+		if !signing.VRFVerify(atx.NodeID.ToBytes(), message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
@@ -129,7 +133,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 	}
 
-	v.logger.WithContext(ctx).With().Info("ballot eligibility verified",
+	v.logger.WithContext(ctx).With().Debug("ballot eligibility verified",
 		ballot.ID(),
 		ballot.LayerIndex,
 		epoch,
@@ -140,22 +144,22 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	return true, nil
 }
 
-func (v Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
+func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
 	if ballot.AtxID == *types.EmptyATXID {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}
 
 	epoch := ballot.LayerIndex.GetEpoch()
-	atx, err := v.atxDB.GetAtxHeader(ballot.AtxID)
+	atx, err := v.cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
 		return nil, fmt.Errorf("get ballot ATX %v epoch %v: %w", ballot.AtxID.ShortString(), epoch, err)
 	}
-	if targetEpoch := atx.PubLayerID.GetEpoch() + 1; targetEpoch != epoch {
+	if targetEpoch := atx.TargetEpoch(); targetEpoch != epoch {
 		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pubString := ballot.SmesherID().String(); atx.NodeID.Key != pubString {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pubString, atx.NodeID.Key)
+	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID.ToBytes(), pub.Bytes()) {
+		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
 	}
 	return atx, nil
 }

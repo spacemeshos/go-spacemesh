@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/spacemeshos/sha256-simd"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 type proposalList [][]byte
@@ -20,17 +19,15 @@ func (hl proposalList) sort() [][]byte {
 }
 
 func (hl proposalList) hash() types.Hash32 {
-	hasher := sha256.New()
+	hasher := hash.New()
 
-	for _, hash := range hl {
-		if _, err := hasher.Write(hash); err != nil {
+	for _, proposal := range hl {
+		if _, err := hasher.Write(proposal); err != nil {
 			panic("should not happen") // an error is never returned: https://golang.org/pkg/hash/#Hash
 		}
 	}
 
-	var hash types.Hash32
-
-	hasher.Sum(hash[:0])
-
-	return hash
+	var rst types.Hash32
+	hasher.Sum(rst[:0])
+	return rst
 }

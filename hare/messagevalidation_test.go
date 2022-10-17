@@ -41,20 +41,20 @@ func TestMessageValidator_CommitStatus(t *testing.T) {
 func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	validator := defaultValidator(t)
 	assert.False(t, validator.validateCertificate(context.TODO(), nil))
-	cert := &certificate{}
+	cert := &Certificate{}
 	assert.False(t, validator.validateCertificate(context.TODO(), cert))
-	cert.AggMsgs = &aggregatedMessages{}
+	cert.AggMsgs = &AggregatedMessages{}
 	assert.False(t, validator.validateCertificate(context.TODO(), cert))
-	msgs := make([]*Message, 0, validator.threshold)
+	msgs := make([]Message, 0, validator.threshold)
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(context.TODO(), cert))
-	msgs = append(msgs, &Message{})
+	msgs = append(msgs, Message{})
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(context.TODO(), cert))
 	cert.Values = NewSetFromValues(value1).ToSlice()
 	assert.False(t, validator.validateCertificate(context.TODO(), cert))
 
-	msgs = make([]*Message, validator.threshold)
+	msgs = make([]Message, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
 		msgs[i] = BuildCommitMsg(signing.NewEdSigner(), NewDefaultEmptySet()).Message
 	}
@@ -63,16 +63,14 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_NoMsg(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, nil, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
 	res, err := ev.validateRole(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.False(t, res)
 }
 
 func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, nil, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg = nil
 	res, err := ev.validateRole(context.TODO(), m)
@@ -81,45 +79,34 @@ func TestEligibilityValidator_validateRole_NoInnerMsg(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_Genesis(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ev := newEligibilityValidator(nil, 10, nil, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
+	ev := newEligibilityValidator(nil, 4, 1, 5, logtest.New(t))
+	sig := signing.NewEdSigner()
+	builder := newMessageBuilder().
+		SetType(pre).
+		SetInstanceID(types.NewLayerID(1)).
+		SetRoundCounter(k).
+		SetKi(ki).
+		SetValues(NewDefaultEmptySet()).
+		SetPubKey(sig.PublicKey()).
+		SetEligibilityCount(1)
+	builder.Sign(sig)
+	m := builder.Build()
+
 	res, err := ev.validateRole(context.TODO(), m)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// TODO: remove comment after inceptions problem is addressed
 	// assert.False(t, res)
 	assert.True(t, res)
 }
 
-func TestEligibilityValidator_validateRole_FailedToGetIdentity(t *testing.T) {
-	types.SetLayersPerEpoch(10)
-	ctrl := gomock.NewController(t)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(nil, 10, mockIDProvider, 1, 5, logtest.New(t))
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
-	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	myErr := errors.New("my error")
-
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).Return(types.NodeID{}, myErr)
-	res, err := ev.validateRole(context.TODO(), m)
-	assert.NotNil(t, err)
-	assert.ErrorIs(t, err, myErr)
-	assert.False(t, res)
-}
-
 func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(mo, 10, mockIDProvider, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	myErr := errors.New("my error")
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).DoAndReturn(
-		func(edID string) (types.NodeID, error) {
-			return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
-		}).Times(1)
+
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, myErr).Times(1)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
@@ -128,17 +115,12 @@ func TestEligibilityValidator_validateRole_FailedToValidate(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(mo, 10, mockIDProvider, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).DoAndReturn(
-		func(edID string) (types.NodeID, error) {
-			return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
-		}).Times(1)
+
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).Times(1)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
@@ -146,17 +128,12 @@ func TestEligibilityValidator_validateRole_NotEligible(t *testing.T) {
 }
 
 func TestEligibilityValidator_validateRole_Success(t *testing.T) {
-	types.SetLayersPerEpoch(10)
 	ctrl := gomock.NewController(t)
 	mo := mocks.NewMockRolacle(ctrl)
-	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
-	ev := newEligibilityValidator(mo, 10, mockIDProvider, 1, 5, logtest.New(t))
+	ev := newEligibilityValidator(mo, 4, 1, 5, logtest.New(t))
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
-	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).DoAndReturn(
-		func(edID string) (types.NodeID, error) {
-			return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
-		}).Times(1)
+
 	mo.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 	res, err := ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
@@ -166,13 +143,13 @@ func TestEligibilityValidator_validateRole_Success(t *testing.T) {
 func TestMessageValidator_IsStructureValid(t *testing.T) {
 	validator := defaultValidator(t)
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), nil))
-	m := &Msg{Message: &Message{}, PubKey: nil}
+	m := &Msg{Message: Message{}, PubKey: nil}
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.PubKey = signing.NewEdSigner().PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 
 	// empty set is allowed now
-	m.InnerMsg = &innerMessage{}
+	m.InnerMsg = &InnerMessage{}
 	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.InnerMsg.Values = nil
 	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
@@ -188,9 +165,9 @@ func (m mockValidator) Validate(context.Context, *Msg) bool {
 	return m.res
 }
 
-func initPg(validator *syntaxContextValidator) (*pubGetter, []*Message, Signer) {
+func initPg(validator *syntaxContextValidator) (*pubGetter, []Message, Signer) {
 	pg := newPubGetter()
-	msgs := make([]*Message, validator.threshold)
+	msgs := make([]Message, validator.threshold)
 	sgn := signing.NewEdSigner()
 	for i := 0; i < validator.threshold; i++ {
 		sgn = signing.NewEdSigner() // hold some sgn
@@ -209,7 +186,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	funcs := make([]func(m *Msg) bool, 0)
 	r.Equal(errNilAggMsgs, validator.validateAggregatedMessage(context.TODO(), nil, funcs))
 
-	agg := &aggregatedMessages{}
+	agg := &AggregatedMessages{}
 	r.Equal(errNilMsgsSlice, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
 
 	agg.Messages = makeMessages(validator.threshold - 1)
@@ -248,15 +225,15 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	r.Equal(errDupSender, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
 
 	msgs[0] = BuildStatusMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
-	r.Nil(pg.PublicKey(msgs[0]))
+	r.Nil(pg.PublicKey(&msgs[0]))
 	require.NoError(t, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
-	r.NotNil(pg.PublicKey(msgs[0]))
+	r.NotNil(pg.PublicKey(&msgs[0]))
 }
 
-func makeMessages(eligibilityCount int) []*Message {
-	return []*Message{
+func makeMessages(eligibilityCount int) []Message {
+	return []Message{
 		{
-			InnerMsg: &innerMessage{
+			InnerMsg: &InnerMessage{
 				EligibilityCount: uint16(eligibilityCount),
 			},
 		},
@@ -404,18 +381,18 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	assert.True(t, validator.validateSVP(context.TODO(), m))
 }
 
-func buildSVP(ki uint32, S ...*Set) *aggregatedMessages {
-	msgs := make([]*Message, 0, len(S))
+func buildSVP(ki uint32, S ...*Set) *AggregatedMessages {
+	msgs := make([]Message, 0, len(S))
 	for _, s := range S {
 		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).Message)
 	}
 
-	svp := &aggregatedMessages{}
+	svp := &AggregatedMessages{}
 	svp.Messages = msgs
 	return svp
 }
 
-func validateMatrix(t *testing.T, mType messageType, msgK uint32, exp []error) {
+func validateMatrix(t *testing.T, mType MessageType, msgK uint32, exp []error) {
 	r := require.New(t)
 	rounds := []uint32{preRound, 0, 1, 2, 3, 4, 5, 6, 7}
 	v := defaultValidator(t)

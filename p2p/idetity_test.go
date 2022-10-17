@@ -3,14 +3,14 @@ package p2p
 import (
 	"testing"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPersistedIdentity(t *testing.T) {
 	dir := t.TempDir()
-	_, err := ensureIdentity(dir)
+	_, err := EnsureIdentity(dir)
 	require.NoError(t, err)
 
 	info, err := identityInfoFromDir(dir)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -19,11 +19,23 @@ const (
 	ProposalIDSize = Hash32Length
 )
 
+//go:generate scalegen
+
 // ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
 type ProposalID Hash20
 
 // EmptyProposalID is a canonical empty ProposalID.
 var EmptyProposalID = ProposalID{}
+
+// EncodeScale implements scale codec interface.
+func (id *ProposalID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *ProposalID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
+}
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
 // Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
@@ -45,6 +57,12 @@ type InnerProposal struct {
 	Ballot
 	// smesher's content proposal for a layer
 	TxIDs []TransactionID
+	// aggregated hash up to the layer before this proposal.
+	MeshHash Hash32
+	// TODO add this when a state commitment mechanism is implemented.
+	// state root up to the layer before this proposal.
+	// note: this is needed in addition to mesh hash to detect bug in SVM
+	// StateHash Hash32
 }
 
 // Initialize calculates and sets the Proposal's cached proposalID.
@@ -59,7 +77,7 @@ func (p *Proposal) Initialize() error {
 	}
 
 	// check proposal signature consistent with ballot's
-	pubkey, err := ed25519.ExtractPublicKey(p.Bytes(), p.Signature)
+	pubkey, err := signing.ExtractPublicKey(p.Bytes(), p.Signature)
 	if err != nil {
 		return fmt.Errorf("proposal extract key: %w", err)
 	}
@@ -68,13 +86,13 @@ func (p *Proposal) Initialize() error {
 		return fmt.Errorf("inconsistent smesher in proposal %v and ballot %v", pPubKey.ShortString(), p.Ballot.SmesherID().ShortString())
 	}
 
-	p.proposalID = ProposalID(CalcHash32(p.Bytes()).ToHash20())
+	p.proposalID = ProposalID(CalcObjectHash32(p).ToHash20())
 	return nil
 }
 
 // Bytes returns the serialization of the InnerProposal.
 func (p *Proposal) Bytes() []byte {
-	bytes, err := codec.Encode(p.InnerProposal)
+	bytes, err := codec.Encode(&p.InnerProposal)
 	if err != nil {
 		log.Panic("failed to serialize proposal: %v", err)
 	}
@@ -86,6 +104,11 @@ func (p *Proposal) ID() ProposalID {
 	return p.proposalID
 }
 
+// SetID set the ProposalID.
+func (p *Proposal) SetID(pid ProposalID) {
+	p.proposalID = pid
+}
+
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
@@ -95,6 +118,7 @@ func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 		}
 		return nil
 	}))
+	encoder.AddString("mesh_hash", p.MeshHash.String())
 	p.Ballot.MarshalLogObject(encoder)
 	return nil
 }
@@ -152,27 +176,4 @@ func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
 		hashes = append(hashes, id.AsHash32())
 	}
 	return hashes
-}
-
-// DBProposal is a Proposal structure stored in DB to skip signature verification.
-type DBProposal struct {
-	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
-	// to break if in future key for database will be changed
-	ID         ProposalID
-	BallotID   BallotID
-	LayerIndex LayerID
-	TxIDs      []TransactionID
-	Signature  []byte
-}
-
-// ToProposal creates a Proposal from data that is stored locally.
-func (b *DBProposal) ToProposal(ballot *Ballot) *Proposal {
-	return &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: *ballot,
-			TxIDs:  b.TxIDs,
-		},
-		Signature:  b.Signature,
-		proposalID: b.ID,
-	}
 }

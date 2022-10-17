@@ -1,20 +1,23 @@
 package sim
 
 import (
-	"context"
+	"errors"
+	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 func newState(logger log.Log, conf config) State {
-	mdb := newMeshDB(logger, conf)
 	return State{
 		logger:  logger,
-		MeshDB:  mdb,
-		AtxDB:   newAtxDB(logger, conf),
+		DB:      newCacheDB(logger, conf),
 		Beacons: newBeaconStore(),
 	}
 }
@@ -23,8 +26,7 @@ func newState(logger log.Log, conf config) State {
 type State struct {
 	logger log.Log
 
-	MeshDB  *mesh.DB
-	AtxDB   *activation.DB
+	DB      *datastore.CachedDB
 	Beacons *beaconStore
 }
 
@@ -34,42 +36,45 @@ func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 }
 
 // OnActivationTx callback to store activation transaction.
-func (s *State) OnActivationTx(atx *types.ActivationTx) {
-	if err := s.AtxDB.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx); err != nil {
-		s.logger.With().Panic("failed to save atx", log.Err(err))
+func (s *State) OnActivationTx(atx *types.VerifiedActivationTx) {
+	if err := atxs.Add(s.DB, atx, time.Now()); err != nil {
+		s.logger.With().Panic("failed to add atx", log.Err(err))
 	}
 }
 
 // OnBallot callback to store ballot.
 func (s *State) OnBallot(ballot *types.Ballot) {
-	exist, _ := s.MeshDB.GetBallot(ballot.ID())
+	exist, _ := ballots.Get(s.DB, ballot.ID())
 	if exist != nil {
 		return
 	}
-	if err := s.MeshDB.AddBallot(ballot); err != nil {
+	if err := ballots.Add(s.DB, ballot); err != nil {
 		s.logger.With().Panic("failed to save ballot", log.Err(err))
 	}
 }
 
 // OnBlock callback to store block.
 func (s *State) OnBlock(block *types.Block) {
-	exist, _ := s.MeshDB.GetBlock(block.ID())
+	exist, _ := blocks.Get(s.DB, block.ID())
 	if exist != nil {
 		return
 	}
-	if err := s.MeshDB.AddBlock(block); err != nil {
+
+	if err := blocks.Add(s.DB, block); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		s.logger.With().Panic("failed to save block", log.Err(err))
 	}
 }
 
 // OnHareOutput callback to store hare output.
 func (s *State) OnHareOutput(lid types.LayerID, bid types.BlockID) {
-	if err := s.MeshDB.SaveHareConsensusOutput(context.TODO(), lid, bid); err != nil {
+	if err := layers.SetHareOutput(s.DB, lid, bid); err != nil {
 		s.logger.With().Panic("failed to save hare output", log.Err(err))
 	}
 }
 
 // OnCoinflip callback to store coinflip.
 func (s *State) OnCoinflip(lid types.LayerID, coinflip bool) {
-	s.MeshDB.RecordCoinflip(context.TODO(), lid, coinflip)
+	if err := layers.SetWeakCoin(s.DB, lid, coinflip); err != nil {
+		s.logger.With().Panic("failed to save coin flip", log.Err(err))
+	}
 }

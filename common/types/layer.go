@@ -76,7 +76,7 @@ func InitGenesisData() {
 		},
 		blockID: GenesisBlockID,
 	}
-	genesisLayer = NewExistingLayer(GetEffectiveGenesis(), []*Ballot{ballot}, []*Block{block})
+	genesisLayer = NewExistingLayer(GetEffectiveGenesis(), Hash32{}, []*Ballot{ballot}, []*Block{block})
 }
 
 // GetEffectiveGenesis returns when actual proposals would be created.
@@ -88,6 +88,8 @@ func GetEffectiveGenesis() LayerID {
 func NewLayerID(value uint32) LayerID {
 	return LayerID{Value: value}
 }
+
+//go:generate scalegen -types LayerID
 
 // LayerID is representing a layer number. Zero value is safe to use, and means 0.
 // Internally it is a simple wrapper over uint32 and should be considered immutable
@@ -176,77 +178,42 @@ func (l LayerID) String() string {
 	return strconv.FormatUint(uint64(l.Value), 10)
 }
 
-// NodeID contains a miner's two public keys.
-type NodeID struct {
-	// Key is the miner's Edwards public key
-	Key string
+// BytesToNodeID is a helper to copy buffer into NodeID struct.
+func BytesToNodeID(buf []byte) (id NodeID) {
+	copy(id[:], buf)
+	return id
+}
 
-	// VRFPublicKey is the miner's public key used for VRF.
-	VRFPublicKey []byte
+// NodeID contains a miner's public key.
+type NodeID [32]byte
+
+func (id NodeID) hex() string {
+	return util.Bytes2Hex(id[:])
 }
 
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + string(id.VRFPublicKey)
+	return id.hex()
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
 func (id NodeID) ToBytes() []byte {
-	return util.Hex2Bytes(id.String())
+	return id[:]
 }
 
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (id NodeID) ShortString() string {
-	name := id.Key
-	return Shorten(name, 5)
-}
-
-// BytesToNodeID deserializes a byte slice into a NodeID
-// TODO: length of the input will be made exact when the NodeID is compressed into
-// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
-func BytesToNodeID(b []byte) (*NodeID, error) {
-	if len(b) < 32 {
-		return nil, fmt.Errorf("invalid input length, input too short")
-	}
-	if len(b) > 64 {
-		return nil, fmt.Errorf("invalid input length, input too long")
-	}
-
-	pubKey := b[0:32]
-	vrfKey := b[32:]
-	return &NodeID{
-		Key:          util.Bytes2Hex(pubKey),
-		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
-	}, nil
-}
-
-// StringToNodeID deserializes a string into a NodeID
-// TODO: length of the input will be made exact when the NodeID is compressed into
-// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
-func StringToNodeID(s string) (*NodeID, error) {
-	strLen := len(s)
-	if strLen < 64 {
-		return nil, fmt.Errorf("invalid length, input too short")
-	}
-	if strLen > 128 {
-		return nil, fmt.Errorf("invalid length, input too long")
-	}
-	// portion of the string corresponding to the Edwards public key
-	pubKey := s[:64]
-	vrfKey := s[64:]
-	return &NodeID{
-		Key:          pubKey,
-		VRFPublicKey: []byte(vrfKey),
-	}, nil
+	return Shorten(id.String(), 5)
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
+func (id NodeID) Field() log.Field { return log.Stringer("node_id", id) }
 
 // Layer contains a list of proposals and their corresponding LayerID.
 type Layer struct {
 	index   LayerID
+	hash    Hash32
 	ballots []*Ballot
 	blocks  []*Block
 }
@@ -284,10 +251,7 @@ func (l *Layer) BallotIDs() []BallotID {
 
 // Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
-	if len(l.blocks) == 0 {
-		return EmptyLayerHash
-	}
-	return CalcBlocksHash32(SortBlockIDs(l.BlocksIDs()), nil)
+	return l.hash
 }
 
 // AddBallot adds a ballot to this layer. Panics if the ballot's index doesn't match the layer.
@@ -317,9 +281,10 @@ func (l *Layer) SetBlocks(blocks []*Block) {
 }
 
 // NewExistingLayer returns a new layer with the given list of blocks without validation.
-func NewExistingLayer(idx LayerID, ballots []*Ballot, blocks []*Block) *Layer {
+func NewExistingLayer(idx LayerID, hash Hash32, ballots []*Ballot, blocks []*Block) *Layer {
 	return &Layer{
 		index:   idx,
+		hash:    hash,
 		ballots: ballots,
 		blocks:  blocks,
 	}

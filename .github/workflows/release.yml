@@ -18,13 +18,13 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
       - name: Setup Go
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.17.6'
+          go-version: '1.19'
       
       - if: matrix.os == 'windows-latest'
         name: Install dependencies in windows
-        uses: crazy-max/ghaction-chocolatey@v1
+        uses: crazy-max/ghaction-chocolatey@v2
         with:
           args: install make wget zip
 
@@ -37,7 +37,7 @@ jobs:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
 
       - name: Check out Git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Read version.txt
         id: version
@@ -69,7 +69,7 @@ jobs:
 
           zip -r ${{ runner.os }}.zip ${{ runner.os }}
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@master
+        uses: google-github-actions/setup-gcloud@v0
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
@@ -86,7 +86,7 @@ jobs:
     needs: build-and-upload
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Read version.txt
         id: version
@@ -107,5 +107,5 @@ jobs:
             - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
             - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
             - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux.zip
-          draft: true
+          draft: false
           prerelease: true

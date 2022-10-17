@@ -7,8 +7,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	bootmocks "github.com/spacemeshos/go-spacemesh/p2p/bootstrap/mocks"
@@ -36,7 +38,7 @@ func TestSyncGetOffset(t *testing.T) {
 	)
 
 	t.Run("Success", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+		mesh, err := mocknet.FullMeshConnected(4)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -56,7 +58,7 @@ func TestSyncGetOffset(t *testing.T) {
 	})
 
 	t.Run("Failure", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+		mesh, err := mocknet.FullMeshConnected(4)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -91,7 +93,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 		responseReceive = start.Add(30 * time.Second)
 	)
 
-	mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+	mesh, err := mocknet.FullMeshConnected(4)
 	require.NoError(t, err)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -120,7 +122,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	}()
 	select {
 	case err := <-errors:
-		require.ErrorIs(t, err, ErrPeersNotSynced)
+		require.ErrorContains(t, err, ErrPeersNotSynced.Error())
 	case <-time.After(100 * time.Millisecond):
 		require.FailNow(t, "timed out waiting for sync to fail")
 	}
@@ -131,15 +133,16 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	config.MaxClockOffset = 1 * time.Second
 	config.MaxOffsetErrors = 2
 	config.RoundInterval = 0
+	genesisID := types.Hash20{1}
 
 	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
 	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), len(delays))
+	mesh, err := mocknet.FullMeshLinked(len(delays))
 	require.NoError(t, err)
 	hosts := []*p2p.Host{}
 	for _, h := range mesh.Hosts() {
-		fh, err := p2p.Upgrade(h)
+		fh, err := p2p.Upgrade(h, genesisID)
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = fh.Stop() })
 		hosts = append(hosts, fh)
@@ -167,9 +170,25 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		}()
 		select {
 		case err := <-wait:
-			require.ErrorIs(t, err, errors[i])
+			require.ErrorContains(t, err, errors[i].Error())
 		case <-time.After(1000 * time.Millisecond):
 			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
 		}
 	}
+}
+
+func FuzzRequestConsistency(f *testing.F) {
+	tester.FuzzConsistency[Request](f)
+}
+
+func FuzzRequestSafety(f *testing.F) {
+	tester.FuzzSafety[Request](f)
+}
+
+func FuzzResponseConsistency(f *testing.F) {
+	tester.FuzzConsistency[Response](f)
+}
+
+func FuzzResponseSafety(f *testing.F) {
+	tester.FuzzSafety[Response](f)
 }

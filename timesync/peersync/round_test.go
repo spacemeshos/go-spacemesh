@@ -11,14 +11,14 @@ func TestRound(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		round     round
-		responses []response
+		responses []Response
 		received  []int64
 		notReady  bool
 		offset    time.Duration
 	}{
 		{
 			desc: "EvenMedian",
-			responses: []response{
+			responses: []Response{
 				{Timestamp: 30},
 				{Timestamp: 10},
 				{Timestamp: 20},
@@ -28,7 +28,7 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc: "OddMedian",
-			responses: []response{
+			responses: []Response{
 				{Timestamp: 30},
 				{Timestamp: 10},
 				{Timestamp: 20},
@@ -40,7 +40,7 @@ func TestRound(t *testing.T) {
 		{
 			desc:  "AdjustedByRTT",
 			round: round{Timestamp: 50},
-			responses: []response{
+			responses: []Response{
 				{Timestamp: 100},
 				{Timestamp: 100},
 				{Timestamp: 100},
@@ -50,7 +50,7 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc: "OneResponse",
-			responses: []response{
+			responses: []Response{
 				{Timestamp: 100},
 			},
 			received: []int64{0},
@@ -58,7 +58,7 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc: "TwoResponses",
-			responses: []response{
+			responses: []Response{
 				{Timestamp: 100},
 				{Timestamp: 120},
 			},
@@ -71,7 +71,7 @@ func TestRound(t *testing.T) {
 		{
 			desc:  "RoundMismatch",
 			round: round{ID: 1, RequiredResponses: 2},
-			responses: []response{
+			responses: []Response{
 				{Timestamp: 100, ID: 1},
 				{Timestamp: 100, ID: 2},
 			},

@@ -9,9 +9,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -47,7 +47,10 @@ func WithContext(ctx context.Context) Opt {
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
 
-type response struct {
+//go:generate scalegen -types Response
+
+// Response is a server response.
+type Response struct {
 	Data  []byte
 	Error string
 }
@@ -115,7 +118,7 @@ func (s *Server) streamHandler(stream network.Stream) {
 		log.String("protocol", s.protocol),
 		log.Duration("duration", time.Since(start)),
 	)
-	var resp response
+	var resp Response
 	if err != nil {
 		resp.Error = err.Error()
 	} else {
@@ -176,7 +179,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func
 		}
 
 		rd := bufio.NewReader(stream)
-		var r response
+		var r Response
 		if _, err := codec.DecodeFrom(rd, &r); err != nil {
 			failure(err)
 			return

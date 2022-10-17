@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/libp2p/go-libp2p-core/event"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/event"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,12 +51,6 @@ func StartPeers(h host.Host, opts ...Opt) *Peers {
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/peers.go -source=./peers.go
-
-// Provider is an interface that provides peers.
-type Provider interface {
-	PeerCount() uint64
-	GetPeers() []peer.ID
-}
 
 // Waiter is an interface to wait for peers.
 type Waiter interface {

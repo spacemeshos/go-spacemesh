@@ -2,7 +2,6 @@ package hare
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"math"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -59,20 +59,20 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(context.TODO(), m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
-	g, _ := tracker.preRound[verifier.PublicKey().String()]
+	g := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, s.Equals(g))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(verifier, nSet, nil)
 	m2.InnerMsg.EligibilityCount = 2
 	tracker.OnPreRound(context.TODO(), m2)
-	h, _ := tracker.preRound[verifier.PublicKey().String()]
+	h := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
 
 	interSet := NewSetFromValues(value1, value2, value5)
 	m3 := BuildPreRoundMsg(verifier, interSet, nil)
 	tracker.OnPreRound(context.TODO(), m3)
-	h, _ = tracker.preRound[verifier.PublicKey().String()]
+	h = tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value2))
@@ -162,7 +162,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	s1 := NewSetFromValues(value1, value2)
 
 	for _, v := range values {
-		sha := sha256.Sum256(v.proof)
+		sha := hash.Sum(v.proof)
 		shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 		r.Equal(v.val, shaUint32, "mismatch in hash output")
 		prMsg := BuildPreRoundMsg(signing.NewEdSigner(), s1, v.proof)

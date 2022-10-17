@@ -43,7 +43,7 @@ func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.WithContext(ctx).With().Info("equivocation detected on proposal round",
+			pt.WithContext(ctx).With().Warning("equivocation detected on proposal round",
 				log.String("id_malicious", msg.PubKey.String()),
 				log.String("current_set", g.String()),
 				log.String("conflicting_set", s.String()))
@@ -74,7 +74,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.WithContext(ctx).With().Info("equivocation detected for late round",
+			pt.WithContext(ctx).With().Warning("equivocation detected for late round",
 				log.String("id_malicious", msg.PubKey.String()),
 				log.String("current_set", g.String()),
 				log.String("conflicting_set", s.String()))
@@ -85,7 +85,7 @@ func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 	// not equal check rank
 	// lower ranked proposal on late proposal is a conflict
 	if bytes.Compare(msg.InnerMsg.RoleProof, pt.proposal.InnerMsg.RoleProof) < 0 {
-		pt.With().Info("late lower rank detected",
+		pt.With().Warning("late lower rank detected",
 			log.String("id_malicious", msg.PubKey.String()))
 		pt.isConflicting = true
 	}

@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -58,19 +59,18 @@ func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
 	assert.Contains(t, err.Error(), "inconsistent smesher in proposal")
 }
 
-func TestDBProposal(t *testing.T) {
-	layer := NewLayerID(100)
-	p := GenLayerProposal(layer, RandomTXSet(199))
-	assert.Equal(t, layer, p.LayerIndex)
-	assert.NotEqual(t, p.ID(), EmptyProposalID)
-	assert.NotNil(t, p.SmesherID())
-	dbb := &DBProposal{
-		ID:         p.ID(),
-		BallotID:   p.Ballot.ID(),
-		LayerIndex: p.LayerIndex,
-		TxIDs:      p.TxIDs,
-		Signature:  p.Signature,
-	}
-	got := dbb.ToProposal(&p.Ballot)
-	assert.Equal(t, p, got)
+func FuzzProposalConsistency(f *testing.F) {
+	tester.FuzzConsistency[Proposal](f)
+}
+
+func FuzzProposalSafety(f *testing.F) {
+	tester.FuzzSafety[Proposal](f)
+}
+
+func FuzzInnerProposalConsistency(f *testing.F) {
+	tester.FuzzConsistency[InnerProposal](f)
+}
+
+func FuzzInnerProposalSafety(f *testing.F) {
+	tester.FuzzSafety[InnerProposal](f)
 }

@@ -7,10 +7,12 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 var (
@@ -30,7 +32,7 @@ type oracleCache struct {
 type Oracle struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
-	atxDB          activationDB
+	cdb            *datastore.CachedDB
 
 	vrfSigner *signing.VRFSigner
 	nodeID    types.NodeID
@@ -40,11 +42,11 @@ type Oracle struct {
 	cache oracleCache
 }
 
-func newMinerOracle(layerSize, layersPerEpoch uint32, atxDB activationDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
+func newMinerOracle(layerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
 	return &Oracle{
 		avgLayerSize:   layerSize,
 		layersPerEpoch: layersPerEpoch,
-		atxDB:          atxDB,
+		cdb:            cdb,
 		vrfSigner:      vrfSigner,
 		nodeID:         nodeID,
 		log:            log,
@@ -72,13 +74,13 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	if o.cache.epoch == epoch { // use the cached value
 		layerProofs = o.cache.proofs[lid]
 		logger.With().Info("got cached eligibility", log.Int("num_proposals", len(layerProofs)))
-		return o.cache.atx.ID(), o.cache.activeSet, layerProofs, nil
+		return o.cache.atx.ID, o.cache.activeSet, layerProofs, nil
 	}
 
 	// calculate the proof
 	atx, err := o.getOwnEpochATX(epoch)
 	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
+		if errors.Is(err, sql.ErrNotFound) {
 			return *types.EmptyATXID, nil, nil, errMinerHasNoATXInPreviousEpoch
 		}
 		return *types.EmptyATXID, nil, nil, fmt.Errorf("failed to get valid atx for node for target epoch %d: %w", epoch, err)
@@ -100,12 +102,12 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) 
 	layerProofs = o.cache.proofs[lid]
 	logger.With().Info("got eligibility for proposals", log.Int("num_proposals", len(layerProofs)))
 
-	return o.cache.atx.ID(), o.cache.activeSet, layerProofs, nil
+	return o.cache.atx.ID, o.cache.activeSet, layerProofs, nil
 }
 
 func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	publishEpoch := targetEpoch - 1
-	atxID, err := o.atxDB.GetNodeAtxIDForEpoch(o.nodeID, publishEpoch)
+	atxID, err := atxs.GetIDByEpochAndNodeID(o.cdb, publishEpoch, o.nodeID)
 	if err != nil {
 		o.log.With().Warning("failed to find ATX ID for node",
 			log.Named("publish_epoch", publishEpoch),
@@ -114,7 +116,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 		return nil, fmt.Errorf("get ATX ID: %w", err)
 	}
 
-	atx, err := o.atxDB.GetAtxHeader(atxID)
+	atx, err := o.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		o.log.With().Error("failed to get ATX header",
 			log.Named("publish_epoch", publishEpoch),
@@ -131,7 +133,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
-	totalWeight, activeSet, err := o.atxDB.GetEpochWeight(epoch)
+	totalWeight, activeSet, err := o.cdb.GetEpochWeight(epoch)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get epoch %v weight: %w", epoch, err)
 	}
@@ -170,7 +172,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	logger.With().Info("proposal eligibility calculated",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
-		log.Object("layers_to_num_proposals", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+		log.Array("layers_to_num_proposals", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 			// Sort the layer map to log the layer data in order
 			keys := make([]types.LayerID, 0, len(eligibilityProofs))
 			for k := range eligibilityProofs {
@@ -180,8 +182,11 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 				return keys[i].Before(keys[j])
 			})
 			for _, lyr := range keys {
-				encoder.AddUint32("layer", lyr.Uint32())
-				encoder.AddInt("slots", len(eligibilityProofs[lyr]))
+				encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+					encoder.AddUint32("layer", lyr.Uint32())
+					encoder.AddInt("slots", len(eligibilityProofs[lyr]))
+					return nil
+				}))
 			}
 			return nil
 		})))

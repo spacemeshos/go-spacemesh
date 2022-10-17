@@ -3,7 +3,7 @@ package grpcserver
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p/core/event"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -16,7 +16,6 @@ var (
 	errLayerBufferFull       = "layer buffer is full"
 	errAccountBufferFull     = "account buffer is full"
 	errRewardsBufferFull     = "rewards buffer is full"
-	errReceiptsBufferFull    = "receipts buffer is full"
 	errActivationsBufferFull = "activations buffer is full"
 	errStatusBufferFull      = "status buffer is full"
 	errErrorsBufferFull      = "errors buffer is full"

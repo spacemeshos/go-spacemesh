@@ -26,7 +26,6 @@ import (
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
 
 func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
-	logger.Info("creating clock at %v wakeup: %v round duration: %v", time.Now(), cfg.WakeupDelta, cfg.RoundDuration)
 	return NewSimpleRoundClock(time.Now(),
 		time.Duration(cfg.WakeupDelta)*time.Second,
 		time.Duration(cfg.RoundDuration)*time.Second,
@@ -120,7 +119,7 @@ type mockCommitTracker struct {
 	countHasEnoughCommits int
 	countBuildCertificate int
 	hasEnoughCommits      bool
-	certificate           *certificate
+	certificate           *Certificate
 }
 
 func (mct *mockCommitTracker) CommitCount() int {
@@ -136,18 +135,17 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 	return mct.hasEnoughCommits
 }
 
-func (mct *mockCommitTracker) BuildCertificate() *certificate {
+func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
 }
 
-func buildMessage(msg *Message) *Msg {
+func buildMessage(msg Message) *Msg {
 	return &Msg{Message: msg, PubKey: nil}
 }
 
 type testBroker struct {
 	*Broker
-	ctrl       *gomock.Controller
 	mockStateQ *mocks.MockstateQuerier
 	mockSyncS  *smocks.MockSyncStateProvider
 }
@@ -162,7 +160,7 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	return &testBroker{
 		Broker: newBroker("self", &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
-			10, limit, util.NewCloser(), logtest.New(tb).WithName(testName)),
+			4, limit, util.NewCloser(), logtest.New(tb).WithName(testName)),
 		mockSyncS:  mockSyncS,
 		mockStateQ: mockStateQ,
 	}
@@ -186,13 +184,14 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
-	inbox, _ := broker.Register(context.TODO(), proc.ID())
+	inbox, err := broker.Register(context.TODO(), proc.ID())
+	require.NoError(t, err)
 	proc.SetInbox(inbox)
 	proc.s = NewSetFromValues(value1)
-	err := proc.Start(context.TODO())
-	assert.Equal(t, nil, err)
 	err = proc.Start(context.TODO())
-	assert.Equal(t, "instance already started", err.Error())
+	require.NoError(t, err)
+	err = proc.Start(context.TODO())
+	require.Error(t, err, "instance already started")
 
 	closeBrokerAndWait(t, broker.Broker)
 }
@@ -312,18 +311,16 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	oracle := eligibility.New(logger)
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
-	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
-	assert.NoError(tb, err)
-	oracle.Register(true, edPubkey.String())
+	nid := types.BytesToNodeID(edPubkey.Bytes())
+	oracle.Register(true, nid)
 	output := make(chan TerminationOutput, 1)
-	certs := make(chan CertificationOutput, 1)
 
 	ctrl := gomock.NewController(tb)
 	sq := mocks.NewMockstateQuerier(ctrl)
 	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
-		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
-		noopPubSub(tb), output, certs, truer{}, newRoundClockFromCfg(logger, cfg),
+		4, edSigner, types.BytesToNodeID(edPubkey.Bytes()),
+		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))
 }
 
@@ -509,27 +506,11 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 
-	proc.setK(notifyRound)
 	for i := 0; i < cfg.F+1; i++ {
 		proc.processNotifyMsg(context.TODO(), BuildNotifyMsg(signing.NewEdSigner(), s))
 	}
 
-	// certifyRound
-	proc.advanceToNextRound(context.TODO())
-
-	/*
-		 certification is not really required
-		 for i := 0; i < cfg.F+1; i++ {
-			proc.processCertificationMsg(context.TODO(), BuildCertifyMsg(signing.NewEdSigner(), s))
-		 }
-	*/
-
-	// terminating hare
-	proc.advanceToNextRound(context.TODO())
-
-	if !proc.completed {
-		t.Fatal("hare incomplete")
-	}
+	require.Equal(t, true, proc.terminating)
 }
 
 func TestConsensusProcess_currentRound(t *testing.T) {
@@ -549,7 +530,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	proc.advanceToNextRound(context.TODO())
-	proc.onEarlyMessage(context.TODO(), buildMessage(nil))
+	proc.onEarlyMessage(context.TODO(), buildMessage(Message{}))
 	r.Len(proc.pending, 0)
 	proc.onEarlyMessage(context.TODO(), m)
 	r.Len(proc.pending, 1)
@@ -618,7 +599,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	proc.advanceToNextRound(context.TODO())
 	network := &mockP2p{}
 	proc.publisher = network
-	proc.setK(1)
+	proc.k = 1
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
@@ -673,7 +654,6 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 
 type mockNet struct {
 	callBroadcast int
-	callRegister  int
 	err           error
 }
 
@@ -741,7 +721,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	mct.certificate = &certificate{}
+	mct.certificate = &Certificate{}
 	mpt.proposedSet = nil
 	proc.s = NewDefaultEmptySet()
 	proc.beginNotifyRound(context.TODO())

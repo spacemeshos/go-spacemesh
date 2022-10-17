@@ -3,6 +3,7 @@ package layers
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -12,35 +13,49 @@ const (
 	aggregatedHashField = "aggregated_hash"
 )
 
-// Status of the layer.
-type Status int8
-
-func (s Status) String() string {
-	switch s {
-	case Latest:
-		return "latest"
-	case Processed:
-		return "processed"
-	case Applied:
-		return "applied"
-	default:
-		panic(fmt.Sprintf("unknown status %d", s))
+// SetWeakCoin for the layer.
+func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
+	if _, err := db.Exec(`insert into layers (id, weak_coin) values (?1, ?2) 
+					on conflict(id) do update set weak_coin=?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBool(2, weakcoin)
+		}, nil); err != nil {
+		return fmt.Errorf("set weak coin %s: %w", lid, err)
 	}
+	return nil
 }
 
-const (
-	// Latest layer that was added to db.
-	Latest Status = iota
-	// Processed layer is either synced from peers or updated by hare.
-	Processed
-	// Applied layer to the state.
-	Applied
-)
+// GetWeakCoin for layer.
+func GetWeakCoin(db sql.Executor, lid types.LayerID) (bool, error) {
+	var (
+		weakcoin bool
+		err      error
+		rows     int
+	)
+	if rows, err = db.Exec("select weak_coin from layers where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		},
+		func(stmt *sql.Statement) bool {
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w weak coin for %s is null", sql.ErrNotFound, lid)
+				return false
+			}
+			weakcoin = stmt.ColumnInt(0) == 1
+			return true
+		}); err != nil {
+		return false, fmt.Errorf("is empty %s: %w", lid, err)
+	} else if rows == 0 {
+		return false, fmt.Errorf("%w weak coin is not set for %s", sql.ErrNotFound, lid)
+	}
+	return weakcoin, err
+}
 
 // SetHareOutput for the layer to a block id.
 func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) error {
 	if _, err := db.Exec(`insert into layers (id, hare_output) values (?1, ?2) 
-					on conflict(id) do update set hare_output=?2;`,
+					on conflict(id) do update set hare_output=?2 where hare_output is null and cert is null;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 			stmt.BindBytes(2, output[:])
@@ -48,6 +63,47 @@ func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) err
 		return fmt.Errorf("set hare output %s: %w", lid, err)
 	}
 	return nil
+}
+
+// SetHareOutputWithCert sets the hare output for the layer with a block certificate.
+func SetHareOutputWithCert(db sql.Executor, lid types.LayerID, cert *types.Certificate) error {
+	output := cert.BlockID
+	data, err := codec.Encode(cert)
+	if err != nil {
+		return fmt.Errorf("encode cert %w", err)
+	}
+	if _, err = db.Exec(`insert into layers (id, hare_output, cert) values (?1, ?2, ?3)
+					on conflict(id) do update set hare_output=?2, cert=?3 where cert is null;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBytes(2, output[:])
+			stmt.BindBytes(3, data[:])
+		}, nil); err != nil {
+		return fmt.Errorf("set hare output w cert %s: %w", lid, err)
+	}
+	return nil
+}
+
+// GetCert returns the certificate of the hare out for the specified layer.
+func GetCert(db sql.Executor, lid types.LayerID) (*types.Certificate, error) {
+	var (
+		cert types.Certificate
+		err  error
+		rows int
+	)
+	if rows, err = db.Exec("select cert from layers where id = ?1 and cert is not null;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Value))
+	}, func(stmt *sql.Statement) bool {
+		data := make([]byte, stmt.ColumnLen(0))
+		stmt.ColumnBytes(0, data[:])
+		err = codec.Decode(data, &cert)
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("get cert %s: %w", lid, err)
+	} else if rows == 0 {
+		return nil, fmt.Errorf("%w get cert %s", sql.ErrNotFound, lid)
+	}
+	return &cert, nil
 }
 
 // GetHareOutput for layer.
@@ -71,54 +127,153 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (rst types.BlockID, err e
 	return rst, err
 }
 
-// SetStatus updates status of the layer.
-func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
-	if _, err := db.Exec(`insert into mesh_status (layer, status) values (?1, ?2) 
-					on conflict(status) do update set layer=max(?1, layer);`,
+// SetApplied for the layer to a block id.
+func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error {
+	if _, err := db.Exec(`insert into layers (id, applied_block) values (?1, ?2) 
+					on conflict(id) do update set applied_block=?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
-			stmt.BindInt64(2, int64(status))
+			stmt.BindBytes(2, applied[:])
 		}, nil); err != nil {
-		return fmt.Errorf("insert %s %s: %w", lid, status, err)
+		return fmt.Errorf("set applied %s: %w", lid, err)
 	}
 	return nil
 }
 
-// GetByStatus return latest layer with the status.
-func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) {
-	if _, err := db.Exec("select layer from mesh_status where status = ?1;",
+// UnsetAppliedFrom updates the applied block to nil for layer >= `lid`.
+func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
+	if _, err := db.Exec("update layers set applied_block = null, state_hash = null, hash = null, aggregated_hash = null where id >= ?1;",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(status))
-		},
-		func(stmt *sql.Statement) bool {
-			rst = types.NewLayerID(uint32(stmt.ColumnInt(0)))
-			return true
-		}); err != nil {
-		return types.LayerID{}, fmt.Errorf("layer by status %s: %w", status, err)
+			stmt.BindInt64(1, int64(lid.Value))
+		}, nil); err != nil {
+		return fmt.Errorf("unset applied %s: %w", lid, err)
 	}
-	return rst, nil
+	return nil
 }
 
-func setHash(db sql.Executor, field string, lid types.LayerID, hash types.Hash32) error {
-	if _, err := db.Exec(fmt.Sprintf(`insert into layers (id, %[1]s) values (?1, ?2) 
-	on conflict(id) do update set %[1]s=?2;`, field),
+// UpdateStateHash for the layer.
+func UpdateStateHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
+	if _, err := db.Exec(`insert into layers (id, state_hash) values (?1, ?2) 
+	on conflict(id) do update set state_hash=?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBytes(2, hash[:])
+		}, nil); err != nil {
+		return fmt.Errorf("set applied %s: %w", lid, err)
+	}
+	return nil
+}
+
+// GetLatestStateHash loads latest state hash.
+func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
+	if rows, err := db.Exec("select state_hash from layers where state_hash is not null;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, rst[:])
+			return false
+		}); err != nil {
+		return rst, fmt.Errorf("failed to load latest state root %w", err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w: state root doesnt exist", sql.ErrNotFound)
+	}
+	return rst, err
+}
+
+// GetStateHash loads state hash for the layer.
+func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
+	if rows, err := db.Exec("select state_hash from layers where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		},
+		func(stmt *sql.Statement) bool {
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w: state_hash for %s is not set", sql.ErrNotFound, lid)
+				return false
+			}
+			stmt.ColumnBytes(0, rst[:])
+			return false
+		}); err != nil {
+		return rst, fmt.Errorf("failed to load state root for %v: %w", lid, err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w: %s doesnt exist", sql.ErrNotFound, lid)
+	}
+	return rst, err
+}
+
+// GetApplied for the applied block for layer.
+func GetApplied(db sql.Executor, lid types.LayerID) (rst types.BlockID, err error) {
+	if rows, err := db.Exec("select applied_block from layers where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+		},
+		func(stmt *sql.Statement) bool {
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w applied for %s is null", sql.ErrNotFound, lid)
+				return false
+			}
+			stmt.ColumnBytes(0, rst[:])
+			return true
+		}); err != nil {
+		return rst, fmt.Errorf("is empty %s: %w", lid, err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w applied is not set for %s", sql.ErrNotFound, lid)
+	}
+	return rst, err
+}
+
+// GetLastApplied for the applied block for layer.
+func GetLastApplied(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	if _, err := db.Exec("select max(id) from layers where applied_block is not null", nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return lid, fmt.Errorf("last applied: %w", err)
+	}
+	return lid, nil
+}
+
+// SetProcessed sets a layer processed.
+func SetProcessed(db sql.Executor, lid types.LayerID) error {
+	if _, err := db.Exec(
+		`insert into layers (id, processed) values (?1, 1) 
+         on conflict(id) do update set processed=1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Uint32()))
+		}, nil); err != nil {
+		return fmt.Errorf("set processed %v: %w", lid, err)
+	}
+	return nil
+}
+
+// GetProcessed gets the highest layer processed.
+func GetProcessed(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	if _, err := db.Exec("select max(id) from layers where processed = 1;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
+			return true
+		}); err != nil {
+		return lid, fmt.Errorf("processed layer: %w", err)
+	}
+	return lid, nil
+}
+
+// SetHashes sets the layer hash and aggregated hash.
+func SetHashes(db sql.Executor, lid types.LayerID, hash, aggHash types.Hash32) error {
+	if _, err := db.Exec(
+		`insert into layers (id, hash, aggregated_hash) values (?1, ?2, ?3) 
+         on conflict(id) do update set hash=?2, aggregated_hash=?3;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
 			stmt.BindBytes(2, hash[:])
+			stmt.BindBytes(3, aggHash[:])
 		}, nil); err != nil {
-		return fmt.Errorf("update %s to %s: %w", field, hash, err)
+		return fmt.Errorf("set hashes %v: %w", lid, err)
 	}
 	return nil
-}
-
-// SetHash updates hash for layer.
-func SetHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	return setHash(db, hashField, lid, hash)
-}
-
-// SetAggregatedHash updates aggregated hash for layer.
-func SetAggregatedHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	return setHash(db, aggregatedHashField, lid, hash)
 }
 
 func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32, err error) {

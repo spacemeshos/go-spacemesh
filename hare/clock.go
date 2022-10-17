@@ -43,7 +43,7 @@ func (c *SimpleRoundClock) AwaitEndOfRound(round uint32) <-chan struct{} {
 	// zero-based. By adding 2 to the round number and multiplying by the RoundDuration we get the correct number of
 	// RoundDurations to wait.
 	duration := c.WakeupDelta + (c.RoundDuration * time.Duration(round+2))
-	time.AfterFunc(c.LayerTime.Add(duration).Sub(time.Now()), func() {
+	time.AfterFunc(time.Until(c.LayerTime.Add(duration)), func() {
 		close(ch)
 	})
 

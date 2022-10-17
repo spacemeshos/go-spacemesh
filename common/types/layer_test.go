@@ -2,73 +2,12 @@ package types
 
 import (
 	"math"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/codec"
 )
-
-func genByte32() [32]byte {
-	var x [32]byte
-	rand.Read(x[:])
-	return x
-}
-
-func TestStringToNodeID(t *testing.T) {
-	pubkey := genByte32()
-	nodeID1 := NodeID{
-		Key:          util.Bytes2Hex(pubkey[:]),
-		VRFPublicKey: []byte("22222"),
-	}
-	nodeIDStr := nodeID1.String()
-	reversed, err := StringToNodeID(nodeIDStr)
-
-	r := require.New(t)
-	r.NoError(err, "Error converting string to NodeID")
-	r.Equal(nodeID1.Key, reversed.Key, "Node ID deserialization Key does not match")
-	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "Node ID deserialization VRF Key does not match")
-
-	// Test too short
-	_, err = StringToNodeID(string(pubkey[:10]))
-	r.Error(err, "Expected error converting too-short string to NodeID")
-
-	// Test too long
-	var x [129]byte
-	rand.Read(x[:])
-	_, err = StringToNodeID(string(x[:]))
-	r.Error(err, "Expected error converting too-long string to NodeID")
-}
-
-func TestBytesToNodeID(t *testing.T) {
-	pubkey := genByte32()
-	nodeID1 := NodeID{
-		Key:          util.Bytes2Hex(pubkey[:]),
-		VRFPublicKey: []byte("222222"),
-	}
-
-	// Test correct length
-	bytes := nodeID1.ToBytes()
-	reversed, err := BytesToNodeID(bytes)
-
-	r := require.New(t)
-	r.NoError(err, "Error converting bytes to NodeID")
-	r.Equal(nodeID1.Key, reversed.Key, "NodeID Key does not match")
-	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "NodeID VRF Key does not match")
-
-	// Test too short
-	var x [31]byte
-	rand.Read(x[:])
-	_, err = BytesToNodeID(x[:])
-	r.Error(err, "Expected error converting too-short byte array to NodeID")
-
-	// Test too long
-	var y [65]byte
-	rand.Read(y[:])
-	_, err = BytesToNodeID(y[:])
-	r.Error(err, "Expected error converting too-long byte array to NodeID")
-}
 
 func TestLayerIDWraparound(t *testing.T) {
 	var (
@@ -132,10 +71,10 @@ func TestLayerIDString(t *testing.T) {
 
 func TestLayerIDBinaryEncoding(t *testing.T) {
 	lid := NewLayerID(100)
-	buf, err := InterfaceToBytes(lid)
+	buf, err := codec.Encode(&lid)
 	require.NoError(t, err)
 	decoded := LayerID{}
-	require.NoError(t, BytesToInterface(buf, &decoded))
+	require.NoError(t, codec.Decode(buf, &decoded))
 	require.Equal(t, lid, decoded)
 }
 

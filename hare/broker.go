@@ -71,6 +71,7 @@ func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, s
 		tasks:          make(chan func()),
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
+		minDeleted:     types.GetEffectiveGenesis(),
 		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
 	}
@@ -223,7 +224,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			// create an inner context object to handle this message
 			messageCtx := msg.Ctx
 
-			h := types.CalcMessageHash12(msg.Data, protoName)
+			h := types.CalcMessageHash12(msg.Data, pubsub.HareProtocol)
 			msgLogger := logger.WithContext(messageCtx).WithFields(h)
 			hareMsg, err := MessageFromBuffer(msg.Data)
 			if err != nil {
@@ -231,7 +232,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				msg.Error <- err
 				continue
 			}
-			msgLogger = msgLogger.WithFields(hareMsg)
+			msgLogger = msgLogger.WithFields(&hareMsg)
 
 			if hareMsg.InnerMsg == nil {
 				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
@@ -244,7 +245,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
-			if err := b.validate(messageCtx, hareMsg); err != nil {
+			if err := b.validate(messageCtx, &hareMsg); err != nil {
 				if !errors.Is(err, errEarlyMsg) {
 					// not early, validation failed
 					msgLogger.With().Debug("broker received a message to a consensus process that is not registered",
@@ -275,7 +276,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			// validation passed, report
 			msg.Error <- nil
-			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
+			msgLogger.With().Debug("broker reported hare message as valid", &hareMsg)
 
 			if isEarly {
 				b.mu.Lock()
@@ -362,7 +363,7 @@ func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
 	// not exist means unknown, check & set
 
 	if !b.nodeSyncState.IsSynced(ctx) {
-		b.WithContext(ctx).With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
+		b.WithContext(ctx).With().Debug("node is not synced, marking layer as not synced", types.LayerID(id))
 		b.syncState[id.Uint32()] = false // mark not synced
 		return
 	}
@@ -409,7 +410,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 				instance := b.minDeleted.Add(1)
 				b.mu.RUnlock()
 				b.cleanState(instance)
-				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
+				b.With().Info("unregistered layer due to maximum concurrent processes", instance)
 			}
 
 			outboxCh := make(chan *Msg, inboxCapacity)
@@ -468,7 +469,7 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	wg.Add(1)
 	f := func() {
 		b.cleanState(id)
-		b.WithContext(ctx).With().Info("hare broker unregistered layer", id)
+		b.WithContext(ctx).With().Debug("hare broker unregistered layer", id)
 		wg.Done()
 	}
 	select {

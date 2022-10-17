@@ -10,45 +10,8 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	log "github.com/spacemeshos/go-spacemesh/log"
 )
-
-// MockatxProvider is a mock of atxProvider interface.
-type MockatxProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockatxProviderMockRecorder
-}
-
-// MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
-type MockatxProviderMockRecorder struct {
-	mock *MockatxProvider
-}
-
-// NewMockatxProvider creates a new mock instance.
-func NewMockatxProvider(ctrl *gomock.Controller) *MockatxProvider {
-	mock := &MockatxProvider{ctrl: ctrl}
-	mock.recorder = &MockatxProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
-	return m.recorder
-}
-
-// GetAtxHeader mocks base method.
-func (m *MockatxProvider) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockatxProviderMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxProvider)(nil).GetAtxHeader), arg0)
-}
 
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
@@ -87,31 +50,156 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
 }
 
-// GetTransactions mocks base method.
-func (m *MockmeshProvider) GetTransactions(arg0 []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+// ProcessLayerPerHareOutput mocks base method.
+func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransactions", arg0)
-	ret0, _ := ret[0].([]*types.Transaction)
-	ret1, _ := ret[1].(map[types.TransactionID]struct{})
-	return ret0, ret1
-}
-
-// GetTransactions indicates an expected call of GetTransactions.
-func (mr *MockmeshProviderMockRecorder) GetTransactions(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactions", reflect.TypeOf((*MockmeshProvider)(nil).GetTransactions), arg0)
-}
-
-// HasBlock mocks base method.
-func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasBlock", arg0)
-	ret0, _ := ret[0].(bool)
+	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// HasBlock indicates an expected call of HasBlock.
-func (mr *MockmeshProviderMockRecorder) HasBlock(arg0 interface{}) *gomock.Call {
+// ProcessLayerPerHareOutput indicates an expected call of ProcessLayerPerHareOutput.
+func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBlock", reflect.TypeOf((*MockmeshProvider)(nil).HasBlock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2)
+}
+
+// MockconservativeState is a mock of conservativeState interface.
+type MockconservativeState struct {
+	ctrl     *gomock.Controller
+	recorder *MockconservativeStateMockRecorder
+}
+
+// MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
+type MockconservativeStateMockRecorder struct {
+	mock *MockconservativeState
+}
+
+// NewMockconservativeState creates a new mock instance.
+func NewMockconservativeState(ctrl *gomock.Controller) *MockconservativeState {
+	mock := &MockconservativeState{ctrl: ctrl}
+	mock.recorder = &MockconservativeStateMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
+	return m.recorder
+}
+
+// SelectBlockTXs mocks base method.
+func (m *MockconservativeState) SelectBlockTXs(arg0 types.LayerID, arg1 []*types.Proposal) ([]types.TransactionID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectBlockTXs", arg0, arg1)
+	ret0, _ := ret[0].([]types.TransactionID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectBlockTXs indicates an expected call of SelectBlockTXs.
+func (mr *MockconservativeStateMockRecorder) SelectBlockTXs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBlockTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectBlockTXs), arg0, arg1)
+}
+
+// MocklayerClock is a mock of layerClock interface.
+type MocklayerClock struct {
+	ctrl     *gomock.Controller
+	recorder *MocklayerClockMockRecorder
+}
+
+// MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
+type MocklayerClockMockRecorder struct {
+	mock *MocklayerClock
+}
+
+// NewMocklayerClock creates a new mock instance.
+func NewMocklayerClock(ctrl *gomock.Controller) *MocklayerClock {
+	mock := &MocklayerClock{ctrl: ctrl}
+	mock.recorder = &MocklayerClockMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
+	return m.recorder
+}
+
+// AwaitLayer mocks base method.
+func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AwaitLayer", layerID)
+	ret0, _ := ret[0].(chan struct{})
+	return ret0
+}
+
+// AwaitLayer indicates an expected call of AwaitLayer.
+func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
+}
+
+// GetCurrentLayer mocks base method.
+func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCurrentLayer")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// GetCurrentLayer indicates an expected call of GetCurrentLayer.
+func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
+}
+
+// Mockcertifier is a mock of certifier interface.
+type Mockcertifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockcertifierMockRecorder
+}
+
+// MockcertifierMockRecorder is the mock recorder for Mockcertifier.
+type MockcertifierMockRecorder struct {
+	mock *Mockcertifier
+}
+
+// NewMockcertifier creates a new mock instance.
+func NewMockcertifier(ctrl *gomock.Controller) *Mockcertifier {
+	mock := &Mockcertifier{ctrl: ctrl}
+	mock.recorder = &MockcertifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockcertifier) EXPECT() *MockcertifierMockRecorder {
+	return m.recorder
+}
+
+// CertifyIfEligible mocks base method.
+func (m *Mockcertifier) CertifyIfEligible(arg0 context.Context, arg1 log.Log, arg2 types.LayerID, arg3 types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CertifyIfEligible", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CertifyIfEligible indicates an expected call of CertifyIfEligible.
+func (mr *MockcertifierMockRecorder) CertifyIfEligible(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyIfEligible", reflect.TypeOf((*Mockcertifier)(nil).CertifyIfEligible), arg0, arg1, arg2, arg3)
+}
+
+// RegisterForCert mocks base method.
+func (m *Mockcertifier) RegisterForCert(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RegisterForCert", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RegisterForCert indicates an expected call of RegisterForCert.
+func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForCert", reflect.TypeOf((*Mockcertifier)(nil).RegisterForCert), arg0, arg1, arg2)
 }

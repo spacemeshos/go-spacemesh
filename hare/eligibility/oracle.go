@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -12,13 +13,34 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./oracle.go
+
+const (
+	// HarePreRound ...
+	HarePreRound uint32 = math.MaxUint32
+	// CertifyRound is not part of the hare protocol, but it shares the same oracle for eligibility.
+	CertifyRound uint32 = math.MaxUint32 >> 1
+)
+
+const (
+	// HareStatusRound ...
+	HareStatusRound uint32 = iota
+	// HareProposalRound ...
+	HareProposalRound
+	// HareCommitRound ...
+	HareCommitRound
+	// HareNotifyRound ...
+	HareNotifyRound
+)
 
 const (
 	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
@@ -37,17 +59,6 @@ type cache interface {
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
-type atxProvider interface {
-	// GetEpochAtxs is used to get the tortoise active set for an epoch
-	GetEpochAtxs(types.EpochID) ([]types.ATXID, error)
-	// GetAtxHeader returns the ATX header for an ATX ID
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-}
-
-type meshProvider interface {
-	LayerBallots(types.LayerID) ([]*types.Ballot, error)
-}
-
 // a function to verify the message with the signature and its public key.
 type verifierFunc = func(pub, msg, sig []byte) bool
 
@@ -55,8 +66,7 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 type Oracle struct {
 	lock           sync.Mutex
 	beacons        system.BeaconGetter
-	atxdb          atxProvider
-	meshdb         meshProvider
+	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    verifierFunc
 	layersPerEpoch uint32
@@ -106,13 +116,13 @@ func safeLayerRange(
 // New returns a new eligibility oracle instance.
 func New(
 	beacons system.BeaconGetter,
-	atxdb atxProvider,
-	meshdb meshProvider,
+	db *datastore.CachedDB,
 	vrfVerifier verifierFunc,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
-	logger log.Log) *Oracle {
+	logger log.Log,
+) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
 	if err != nil {
 		logger.With().Panic("could not create lru cache", log.Err(err))
@@ -125,8 +135,7 @@ func New(
 
 	return &Oracle{
 		beacons:        beacons,
-		atxdb:          atxdb,
-		meshdb:         meshdb,
+		cdb:            db,
 		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
@@ -137,7 +146,10 @@ func New(
 	}
 }
 
-type vrfMessage struct {
+//go:generate scalegen -types VrfMessage
+
+// VrfMessage is a verification message.
+type VrfMessage struct {
 	Beacon uint32
 	Round  uint32
 	Layer  types.LayerID
@@ -189,7 +201,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
+	msg := VrfMessage{Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
@@ -201,7 +213,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
+		o.WithContext(ctx).With().Error("failed to get active set", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -219,12 +231,12 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 		return 0, err
 	}
 
-	w, ok := actives[id.Key]
+	w, ok := actives[id]
 	if !ok {
 		o.With().Debug("miner is not active in specified layer",
 			log.Int("active_set_size", len(actives)),
 			log.String("actives", fmt.Sprintf("%v", actives)),
-			layer, log.String("id.Key", id.Key),
+			layer, log.Stringer("id.Key", id),
 		)
 		return 0, errors.New("miner is not active in specified layer")
 	}
@@ -236,7 +248,8 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 }
 
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
+	id types.NodeID, vrfSig []byte,
+) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		id,
@@ -255,7 +268,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier(id.VRFPublicKey, msg, vrfSig) {
+	if !o.vrfVerifier(id.ToBytes(), msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)
@@ -351,7 +364,8 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
 func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte) (uint16, error) {
+	id types.NodeID, vrfSig []byte,
+) (uint16, error) {
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
@@ -371,7 +385,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 		}
 	}()
 
-	o.With().Info("params",
+	o.With().Debug("params",
 		layer, layer.GetEpoch(), log.Uint32("round_id", round),
 		log.Int("committee_size", committeeSize),
 		log.Int("n", n),
@@ -399,7 +413,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 }
 
 // Returns a map of all active node IDs in the specified layer id.
-func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[string]uint64, error) {
+func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[types.NodeID]uint64, error) {
 	logger := o.WithContext(ctx).WithFields(
 		log.FieldNamed("target_layer", targetLayer),
 		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()))
@@ -429,7 +443,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	// epochs.
 	if safeLayerStart.GetEpoch() == safeLayerEnd.GetEpoch() {
 		if val, exist := o.activesCache.Get(safeLayerStart.GetEpoch()); exist {
-			activeMap := val.(map[string]uint64)
+			activeMap := val.(map[types.NodeID]uint64)
 			logger.With().Debug("found value in cache for safe layer start epoch",
 				log.FieldNamed("safe_layer_start", safeLayerStart),
 				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
@@ -462,17 +476,16 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 				logger.With().Error("actives failed to get beacon", epoch, log.Err(err))
 				return nil, fmt.Errorf("error getting beacon for epoch %v: %w", epoch, err)
 			}
-			logger.With().Info("found beacon for epoch", epoch,
-				log.String("epoch_beacon", beacon.ShortString()))
+			logger.With().Debug("found beacon for epoch", epoch, beacon)
 			beacons[epoch] = beacon
 		}
-		ballots, err := o.meshdb.LayerBallots(layerID)
+		blts, err := ballots.Layer(o.cdb, layerID)
 		if err != nil {
 			logger.With().Warning("failed to get layer ballots", layerID, log.Err(err))
 			return nil, fmt.Errorf("error getting ballots for layer %v (target layer %v): %w",
 				layerID, targetLayer, err)
 		}
-		for _, b := range ballots {
+		for _, b := range blts {
 			activeBallots[b.ID()] = b
 		}
 	}
@@ -481,7 +494,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 
 	// now read the set of ATXs referenced by these blocks
 	// TODO: can the set of blocks ever span multiple epochs?
-	hareActiveSet := make(map[string]uint64)
+	hareActiveSet := make(map[types.NodeID]uint64)
 	badBeaconATXIDs := make(map[types.ATXID]struct{})
 	seenATXIDs := make(map[types.ATXID]struct{})
 	seenBallots := make(map[types.BallotID]struct{})
@@ -510,22 +523,22 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 				continue
 			}
 			seenATXIDs[id] = struct{}{}
-			atx, err := o.atxdb.GetAtxHeader(id)
+			atx, err := o.cdb.GetAtxHeader(id)
 			if err != nil {
 				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
-			hareActiveSet[atx.NodeID.Key] = atx.GetWeight()
+			hareActiveSet[atx.NodeID] = atx.GetWeight()
 		}
 	}
 
 	// remove miners who published ballots with bad beacons
 	for id := range badBeaconATXIDs {
-		atx, err := o.atxdb.GetAtxHeader(id)
+		atx, err := o.cdb.GetAtxHeader(id)
 		if err != nil {
 			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
 		}
-		delete(hareActiveSet, atx.NodeID.Key)
-		logger.With().Error("smesher removed from hare active set", log.String("node_key", atx.NodeID.Key))
+		delete(hareActiveSet, atx.NodeID)
+		logger.With().Error("smesher removed from hare active set", log.Stringer("node_key", atx.NodeID))
 	}
 
 	if len(hareActiveSet) > 0 {
@@ -536,42 +549,37 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	}
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
-	// TODO: do we want to cache tortoise active set too?
 	if safeLayerStart.GetEpoch().IsGenesis() {
-		logger.With().Info("no hare active set for genesis layer range, reading tortoise set for epoch instead",
+		logger.With().Debug("no hare active set for genesis layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	} else {
 		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	}
-	atxs, err := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	atxids, err := atxs.GetIDsByEpoch(o.cdb, targetLayer.GetEpoch()-1)
 	if err != nil {
 		return nil, fmt.Errorf("can't get atxs for an epoch %d: %w", targetLayer.GetEpoch()-1, err)
 	}
-	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
-	if len(atxs) == 0 {
+	if len(atxids) == 0 {
 		return nil, fmt.Errorf("%w: layer %v / epoch %v", errEmptyActiveSet, targetLayer, targetLayer.GetEpoch())
 	}
 
 	// extract the nodeIDs and weights
-	activeMap := make(map[string]uint64, len(atxs))
-	for _, atxid := range atxs {
-		atxHeader, err := o.atxdb.GetAtxHeader(atxid)
+	activeMap := make(map[types.NodeID]uint64, len(atxids))
+	for _, atxid := range atxids {
+		atxHeader, err := o.cdb.GetAtxHeader(atxid)
 		if err != nil {
 			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
-		activeMap[atxHeader.NodeID.Key] = atxHeader.GetWeight()
+		activeMap[atxHeader.NodeID] = atxHeader.GetWeight()
 	}
 	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
-
-	// update cache and return
-	o.activesCache.Add(targetLayer.GetEpoch(), activeMap)
 	return activeMap, nil
 }
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
-func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types.NodeID, layer types.LayerID) (bool, error) {
 	o.WithContext(ctx).With().Debug("hare oracle checking for active identity")
 	defer func() {
 		o.WithContext(ctx).With().Debug("hare oracle active identity check complete")

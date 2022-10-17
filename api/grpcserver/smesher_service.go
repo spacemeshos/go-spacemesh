@@ -11,16 +11,23 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type PostSetupProvider interface {
+	Status() *atypes.PostSetupStatus
+	StatusChan() <-chan *atypes.PostSetupStatus
+	ComputeProviders() []atypes.PostSetupComputeProvider
+	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
+	Config() atypes.PostConfig
+}
+
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider api.PostSetupAPI
+	postSetupProvider PostSetupProvider
 	smeshingProvider  api.SmeshingAPI
 }
 
@@ -30,7 +37,7 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post api.PostSetupAPI, smeshing api.SmeshingAPI) *SmesherService {
+func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
 	return &SmesherService{post, smeshing}
 }
 
@@ -64,7 +71,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
 	}
 
-	opts := activation.PostSetupOpts{
+	opts := atypes.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          uint(in.Opts.NumUnits),
 		NumFiles:          uint(in.Opts.NumFiles),
@@ -72,7 +79,10 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		Throttle:          in.Opts.Throttle,
 	}
 
-	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
+	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
+	}
 	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
@@ -111,8 +121,9 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
-	addr := util.Hex2Bytes(s.smeshingProvider.SmesherID().Key)
-	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr}}, nil
+	nodeID := s.smeshingProvider.SmesherID()
+	addr := types.GenerateAddress(nodeID[:])
+	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr.String()}}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node.
@@ -120,7 +131,7 @@ func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseRes
 	log.Info("GRPC SmesherService.Coinbase")
 
 	addr := s.smeshingProvider.Coinbase()
-	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.Bytes()}}, nil
+	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.String()}}, nil
 }
 
 // SetCoinbase sets the current coinbase setting of this node.
@@ -131,7 +142,10 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
 	}
 
-	addr := types.BytesToAddress(in.Id.Address)
+	addr, err := types.StringToAddress(in.Id.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse in.Id.Address `%s`: %w", in.Id.Address, err)
+	}
 	s.smeshingProvider.SetCoinbase(addr)
 
 	return &pb.SetCoinbaseResponse{
@@ -229,7 +243,7 @@ func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfi
 	}, nil
 }
 
-func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
+func statusToPbStatus(status *atypes.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus := &pb.PostSetupStatus{}
 
 	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.

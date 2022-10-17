@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -26,9 +25,6 @@ type HTTPPoetHarness struct {
 	h        *integration.Harness
 }
 
-// A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
-var _ PoetProvingServiceClient = (*HTTPPoetHarness)(nil)
-
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
 func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	cfg, err := integration.DefaultConfig()
@@ -38,7 +34,8 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 
 	cfg.DisableBroadcast = disableBroadcast
 	cfg.Reset = true
-	cfg.Duration = "4s"
+	cfg.Genesis = time.Now()
+	cfg.EpochDuration = 4 * time.Second
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {
@@ -61,8 +58,9 @@ type HTTPPoetClient struct {
 	ctxFactory func(ctx context.Context) (context.Context, context.CancelFunc)
 }
 
-// A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
-var _ PoetProvingServiceClient = (*HTTPPoetClient)(nil)
+func defaultPoetClientFunc(target string) PoetProvingServiceClient {
+	return NewHTTPPoetClient(target)
+}
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
 func NewHTTPPoetClient(target string) *HTTPPoetClient {
@@ -131,7 +129,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		data, _ := ioutil.ReadAll(res.Body)
+		data, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("response status code: %d, body: %s", res.StatusCode, string(data))
 	}
 

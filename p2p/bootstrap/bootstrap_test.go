@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p/core/network"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
@@ -17,7 +17,7 @@ import (
 
 func TestBootstrapEmitEvents(t *testing.T) {
 	n := 3
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	h := mesh.Hosts()[0]
 
@@ -78,7 +78,7 @@ func TestBootstrapEmitEvents(t *testing.T) {
 
 func TestBootstrapCancelDiscoveryContext(t *testing.T) {
 	n := 3
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), n)
+	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	h := mesh.Hosts()[0]
 

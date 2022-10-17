@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -66,4 +67,52 @@ func TestDBBallot(t *testing.T) {
 	}
 	got := dbb.ToBallot()
 	assert.Equal(t, b, got)
+}
+
+func FuzzBallotConsistency(f *testing.F) {
+	tester.FuzzConsistency[Ballot](f)
+}
+
+func FuzzBallotSafety(f *testing.F) {
+	tester.FuzzSafety[Ballot](f)
+}
+
+func FuzzInnerBallotConsistency(f *testing.F) {
+	tester.FuzzConsistency[InnerBallot](f)
+}
+
+func FuzzInnerBallotSafety(f *testing.F) {
+	tester.FuzzSafety[InnerBallot](f)
+}
+
+func FuzzVotesConsistency(f *testing.F) {
+	tester.FuzzConsistency[Votes](f)
+}
+
+func FuzzVotesSafety(f *testing.F) {
+	tester.FuzzSafety[Votes](f)
+}
+
+func FuzzEpochDataConsistency(f *testing.F) {
+	tester.FuzzConsistency[EpochData](f)
+}
+
+func FuzzEpochDataSafety(f *testing.F) {
+	tester.FuzzSafety[EpochData](f)
+}
+
+func FuzzVotingEligibilityProofConsistency(f *testing.F) {
+	tester.FuzzConsistency[VotingEligibilityProof](f)
+}
+
+func FuzzVotingEligibilityProofSafety(f *testing.F) {
+	tester.FuzzSafety[VotingEligibilityProof](f)
+}
+
+func FuzzDBBallotConsistency(f *testing.F) {
+	tester.FuzzConsistency[DBBallot](f)
+}
+
+func FuzzDBBallotSafety(f *testing.F) {
+	tester.FuzzSafety[DBBallot](f)
 }

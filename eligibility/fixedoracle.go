@@ -4,10 +4,10 @@ package eligibility
 import (
 	"context"
 	"encoding/binary"
-	"hash/fnv"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -17,28 +17,28 @@ type FixedRolacle struct {
 
 	mutex  sync.Mutex
 	mapRW  sync.RWMutex
-	honest map[string]struct{}
-	faulty map[string]struct{}
-	emaps  map[uint32]map[string]struct{}
+	honest map[types.NodeID]struct{}
+	faulty map[types.NodeID]struct{}
+	emaps  map[types.Hash32]map[types.NodeID]struct{}
 }
 
 // New initializes the oracle with no participants.
 func New(logger log.Log) *FixedRolacle {
 	return &FixedRolacle{
 		logger: logger,
-		honest: make(map[string]struct{}),
-		faulty: make(map[string]struct{}),
-		emaps:  make(map[uint32]map[string]struct{}),
+		honest: make(map[types.NodeID]struct{}),
+		faulty: make(map[types.NodeID]struct{}),
+		emaps:  make(map[types.Hash32]map[types.NodeID]struct{}),
 	}
 }
 
 // IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID types.NodeID, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
 // Export creates a map with the eligible participants for id and committee size.
-func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{} {
+func (fo *FixedRolacle) Export(id types.Hash32, committeeSize int) map[types.NodeID]struct{} {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty)
 	fo.mapRW.RUnlock()
@@ -63,7 +63,7 @@ func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{}
 	return m
 }
 
-func (fo *FixedRolacle) update(m map[string]struct{}, client string) {
+func (fo *FixedRolacle) update(m map[types.NodeID]struct{}, client types.NodeID) {
 	fo.mutex.Lock()
 
 	if _, exist := m[client]; exist {
@@ -77,7 +77,7 @@ func (fo *FixedRolacle) update(m map[string]struct{}, client string) {
 }
 
 // Register adds a participant to the eligibility map. can be honest or faulty.
-func (fo *FixedRolacle) Register(isHonest bool, client string) {
+func (fo *FixedRolacle) Register(isHonest bool, client types.NodeID) {
 	if isHonest {
 		fo.update(fo.honest, client)
 	} else {
@@ -87,7 +87,7 @@ func (fo *FixedRolacle) Register(isHonest bool, client string) {
 
 // Unregister removes a participant from the eligibility map. can be honest or faulty.
 // TODO: just remove from both instead of specifying.
-func (fo *FixedRolacle) Unregister(isHonest bool, client string) {
+func (fo *FixedRolacle) Unregister(isHonest bool, client types.NodeID) {
 	fo.mutex.Lock()
 	if isHonest {
 		delete(fo.honest, client)
@@ -97,8 +97,8 @@ func (fo *FixedRolacle) Unregister(isHonest bool, client string) {
 	fo.mutex.Unlock()
 }
 
-func cloneMap(m map[string]struct{}) map[string]struct{} {
-	c := make(map[string]struct{}, len(m))
+func cloneMap(m map[types.NodeID]struct{}) map[types.NodeID]struct{} {
+	c := make(map[types.NodeID]struct{}, len(m))
 	for k, v := range m {
 		c[k] = v
 	}
@@ -106,7 +106,7 @@ func cloneMap(m map[string]struct{}) map[string]struct{} {
 	return c
 }
 
-func pickUnique(pickCount int, orig map[string]struct{}, dest map[string]struct{}) {
+func pickUnique(pickCount int, orig map[types.NodeID]struct{}, dest map[types.NodeID]struct{}) {
 	i := 0
 	for k := range orig { // randomly pass on clients
 		if i == pickCount { // pick exactly size
@@ -119,9 +119,9 @@ func pickUnique(pickCount int, orig map[string]struct{}, dest map[string]struct{
 	}
 }
 
-func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map[string]struct{} {
+func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map[types.NodeID]struct{} {
 	logger := fo.logger.WithContext(ctx)
-	emap := make(map[string]struct{}, expCom)
+	emap := make(map[types.NodeID]struct{}, expCom)
 
 	if expCom == 0 {
 		return emap
@@ -163,10 +163,10 @@ func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map
 	return emap
 }
 
-func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) uint32 {
+func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) types.Hash32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
-	h := fnv.New32()
+	h := hash.New()
 	_, err := h.Write(instanceID.Bytes())
 	_, err2 := h.Write(kInBytes)
 
@@ -175,8 +175,7 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) u
 			log.FieldNamed("err1", log.Err(err)),
 			log.FieldNamed("err2", log.Err(err2)))
 	}
-
-	return h.Sum32()
+	return types.BytesToHash(h.Sum([]byte{}))
 }
 
 // Validate is required to conform to the Rolacle interface, but should never be called.
@@ -216,7 +215,7 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 		fo.emaps[instID] = fo.generateEligibility(ctx, size)
 	}
 	// get eligibility result
-	_, exist := fo.emaps[instID][id.Key]
+	_, exist := fo.emaps[instID][id]
 	fo.mapRW.Unlock()
 
 	return exist, nil
@@ -226,13 +225,12 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
-	hash := fnv.New32()
-	if _, err := hash.Write(kInBytes); err != nil {
+	h := hash.New()
+	if _, err := h.Write(kInBytes); err != nil {
 		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 
-	hashBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hashBytes, hash.Sum32())
+	sum := h.Sum([]byte{})
 
-	return hashBytes, nil
+	return sum, nil
 }

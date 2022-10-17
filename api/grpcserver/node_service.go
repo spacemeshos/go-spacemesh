@@ -11,6 +11,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -24,11 +25,11 @@ import (
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
-	Mesh        api.TxAPI
-	GenTime     api.GenesisTimeAPI
-	PeerCounter api.PeerCounter
-	Syncer      api.Syncer
-	AtxAPI      api.ActivationAPI
+	mesh        api.MeshAPI
+	genTime     api.GenesisTimeAPI
+	peerCounter api.PeerCounter
+	syncer      api.Syncer
+	atxAPI      api.ActivationAPI
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -38,13 +39,14 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	peers api.PeerCounter, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI) *NodeService {
+	peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
+) *NodeService {
 	return &NodeService{
-		Mesh:        tx,
-		GenTime:     genTime,
-		PeerCounter: peers,
-		Syncer:      syncer,
-		AtxAPI:      atxapi,
+		mesh:        msh,
+		genTime:     genTime,
+		peerCounter: peers,
+		syncer:      syncer,
+		atxAPI:      atxapi,
 	}
 }
 
@@ -81,8 +83,8 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
-			IsSynced:       s.Syncer.IsSynced(ctx),                 // whether the node is synced
+			ConnectedPeers: s.peerCounter.PeerCount(),              // number of connected peers
+			IsSynced:       s.syncer.IsSynced(ctx),                 // whether the node is synced
 			SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 			TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 			VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
@@ -93,14 +95,14 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
-	curLayerObj := s.GenTime.GetCurrentLayer()
+	curLayerObj := s.genTime.GetCurrentLayer()
 	curLayer = curLayerObj.Uint32()
 	if curLayerObj.GetEpoch().IsGenesis() {
-		latestLayer = s.Mesh.LatestLayer().Uint32()
+		latestLayer = s.mesh.LatestLayer().Uint32()
 		verifiedLayer = latestLayer
 	} else {
-		latestLayer = s.Mesh.LatestLayer().Uint32()
-		verifiedLayer = s.Mesh.LatestLayerInState().Uint32()
+		latestLayer = s.mesh.LatestLayer().Uint32()
+		verifiedLayer = s.mesh.LatestLayerInState().Uint32()
 	}
 	return
 }
@@ -108,7 +110,7 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
 func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
-	s.Syncer.Start(ctx)
+	s.syncer.Start(ctx)
 	return &pb.SyncStartResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -127,7 +129,7 @@ func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.Shutdow
 
 // UpdatePoetServer update server that is used for generating PoETs.
 func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetServerRequest) (*pb.UpdatePoetServerResponse, error) {
-	err := s.AtxAPI.UpdatePoETServer(ctx, req.Url)
+	err := s.atxAPI.UpdatePoETServer(ctx, req.Url)
 	if err == nil {
 		return &pb.UpdatePoetServerResponse{
 			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
@@ -171,8 +173,8 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 
 			resp := &pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
-					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
-					IsSynced:       s.Syncer.IsSynced(stream.Context()),    // whether the node is synced
+					ConnectedPeers: s.peerCounter.PeerCount(),              // number of connected peers
+					IsSynced:       s.syncer.IsSynced(stream.Context()),    // whether the node is synced
 					SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
@@ -202,6 +204,9 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
 		errorsCh, errorsBufFull = consumeEvents(stream.Context(), errorsSubscription)
+	}
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 
 	for {

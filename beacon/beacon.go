@@ -16,20 +16,22 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
 	proposalPrefix  = "BP"
-	numEpochsToKeep = 10
+	numEpochsToKeep = 3
 )
 
 var (
@@ -81,10 +83,9 @@ func withWeakCoin(wc coin) Opt {
 func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
-	atxDB activationDB,
 	edSigner *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
-	db *sql.Database,
+	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
 ) *ProtocolDriver {
@@ -94,10 +95,9 @@ func New(
 		config:             DefaultConfig(),
 		nodeID:             nodeID,
 		publisher:          publisher,
-		atxDB:              atxDB,
 		edSigner:           edSigner,
 		vrfSigner:          vrfSigner,
-		db:                 db,
+		cdb:                cdb,
 		clock:              clock,
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
@@ -133,17 +133,15 @@ type ProtocolDriver struct {
 	nodeID      types.NodeID
 	sync        system.SyncStateProvider
 	publisher   pubsub.Publisher
-	atxDB       activationDB
 	edSigner    *signing.EdSigner
 	vrfSigner   *signing.VRFSigner
-	edVerifier  signing.EDVerifier
 	vrfVerifier signing.VRFVerifier
 	weakCoin    coin
 	theta       *big.Float
 
 	clock       layerClock
 	layerTicker chan types.LayerID
-	db          *sql.Database
+	cdb         *datastore.CachedDB
 
 	mu sync.RWMutex
 
@@ -334,7 +332,7 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 		return beacon, nil
 	}
 
-	if errors.Is(err, database.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		pd.logger.With().Warning("beacon not available", targetEpoch)
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}
@@ -364,7 +362,7 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 }
 
 func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := beacons.Add(pd.db, epoch, beacon); err != nil {
+	if err := beacons.Add(pd.cdb, epoch, beacon); err != nil {
 		if !errors.Is(err, sql.ErrObjectExists) {
 			pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
 			return fmt.Errorf("persist beacon: %w", err)
@@ -382,7 +380,7 @@ func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon
 }
 
 func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon, error) {
-	data, err := beacons.Get(pd.db, epoch)
+	data, err := beacons.Get(pd.cdb, epoch)
 	if err != nil {
 		return types.EmptyBeacon, fmt.Errorf("get from DB: %w", err)
 	}
@@ -413,7 +411,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return s, nil
 	}
 
-	epochWeight, atxs, err := pd.atxDB.GetEpochWeight(epoch)
+	epochWeight, atxs, err := pd.cdb.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
 		return nil, fmt.Errorf("get epoch weight: %w", err)
@@ -469,12 +467,8 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 		return
 	}
 	oldest := epoch - numEpochsToKeep
-	if _, ok := pd.beacons[oldest]; ok {
-		delete(pd.beacons, oldest)
-	}
-	if _, ok := pd.beaconsFromBallots[oldest]; ok {
-		delete(pd.beaconsFromBallots, oldest)
-	}
+	delete(pd.beacons, oldest)
+	delete(pd.beaconsFromBallots, oldest)
 }
 
 // listens to new layers.
@@ -522,6 +516,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 
 func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	defer pd.cleanupEpoch(epoch)
 
 	if epoch.IsGenesis() {
 		logger.Info("not running beacon protocol: genesis epochs")
@@ -537,7 +532,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 	}
 
 	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(pd.nodeID, epoch-1)
+	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
 	if err != nil {
 		logger.With().Info("not running beacon protocol: no own ATX in last epoch", log.Err(err))
 		return
@@ -548,7 +543,6 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
 		logger.With().Error("epoch not setup correctly", log.Err(err))
 		return
 	}
-	defer pd.cleanupEpoch(epoch)
 
 	logger.With().Info("participating beacon protocol with ATX", atxID, log.Uint64("epoch_weight", epochWeight))
 	pd.runProtocol(ctx, epoch, atxs)
@@ -657,7 +651,12 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID)
 		VRFSignature: proposedSignature,
 	}
 
-	pd.sendToGossip(ctx, ProposalProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
 	logger.With().Info("beacon proposal sent", log.String("message", m.String()))
 }
 
@@ -737,11 +736,11 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 	// we need to pass a map with spacetime unit allowances before any round is started
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
-		header, err := pd.atxDB.GetAtxHeader(id)
+		header, err := pd.cdb.GetAtxHeader(id)
 		if err != nil {
 			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
-		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
+		ua[string(header.NodeID.ToBytes())] += uint64(header.NumUnits)
 	}
 
 	pd.weakCoin.StartEpoch(ctx, epoch, ua)
@@ -789,7 +788,12 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		return err
 	}
 
-	sig := signMessage(pd.edSigner, mb, pd.logger)
+	encoded, err := codec.Encode(&mb)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := pd.edSigner.Sign(encoded)
+
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		Signature:              sig,
@@ -800,7 +804,12 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		types.FirstRound,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, FirstVotesProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, serialized)
 	return nil
 }
 
@@ -826,7 +835,11 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig := signMessage(pd.edSigner, mb, pd.logger)
+	encoded, err := codec.Encode(&mb)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+	}
+	sig := pd.edSigner.Sign(encoded)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
@@ -838,7 +851,12 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		round,
 		log.String("message", m.String()))
 
-	pd.sendToGossip(ctx, FollowingVotesProtocol, m)
+	serialized, err := codec.Encode(&m)
+	if err != nil {
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+	}
+
+	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, serialized)
 	return nil
 }
 
@@ -898,11 +916,14 @@ func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Flo
 
 // TODO(nkryuchkov): Consider having a generic function for probabilities.
 func atxThreshold(kappa uint64, q *big.Rat, epochWeight uint64) *big.Int {
-	const signatureLength = 64 * 8
+	const (
+		sigLengthBytes = 80
+		sigLengthBits  = sigLengthBytes * 8
+	)
 
 	fraction := atxThresholdFraction(kappa, q, epochWeight)
 	two := big.NewInt(2)
-	signatureLengthBigInt := big.NewInt(signatureLength)
+	signatureLengthBigInt := big.NewInt(sigLengthBits)
 
 	maxPossibleNumberBigInt := new(big.Int).Exp(two, signatureLengthBigInt, nil)
 	maxPossibleNumberBigFloat := new(big.Float).SetInt(maxPossibleNumberBigInt)
@@ -924,36 +945,28 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 	return signature
 }
 
-func signMessage(signer signing.Signer, message interface{}, logger log.Log) []byte {
-	encoded, err := types.InterfaceToBytes(message)
-	if err != nil {
-		logger.With().Panic("failed to serialize message for signing", log.Err(err))
-	}
-	return signer.Sign(encoded)
+//go:generate scalegen -types BuildProposalMessage
+
+// BuildProposalMessage is a message for buildProposal below.
+type BuildProposalMessage struct {
+	Prefix string
+	Epoch  uint32
 }
 
 func buildProposal(epoch types.EpochID, logger log.Log) []byte {
-	message := &struct {
-		Prefix string
-		Epoch  uint32
-	}{
+	message := &BuildProposalMessage{
 		Prefix: proposalPrefix,
 		Epoch:  uint32(epoch),
 	}
 
-	b, err := types.InterfaceToBytes(message)
+	b, err := codec.Encode(message)
 	if err != nil {
 		logger.With().Panic("failed to serialize proposal", log.Err(err))
 	}
 	return b
 }
 
-func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, data interface{}) {
-	serialized, err := types.InterfaceToBytes(data)
-	if err != nil {
-		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
-	}
-
+func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) {
 	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
 	pd.eg.Go(func() error {
 		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
@@ -967,12 +980,12 @@ func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, dat
 }
 
 func (pd *ProtocolDriver) getOwnWeight(epoch types.EpochID) uint64 {
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(pd.nodeID, epoch)
+	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch, pd.nodeID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
 		return 0
 	}
-	hdr, err := pd.atxDB.GetAtxHeader(atxID)
+	hdr, err := pd.cdb.GetAtxHeader(atxID)
 	if err != nil {
 		pd.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
 		return 0

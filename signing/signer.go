@@ -3,7 +3,6 @@ package signing
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/spacemeshos/ed25519"
@@ -12,7 +11,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// PrivateKey is an alias to spacemeshos/ed25519.PrivateKey.
+type PrivateKey = ed25519.PrivateKey
+
 const shortStringSize = 5
+
+// Public returns public key part from ed25519 private key.
+func Public(priv PrivateKey) ed25519.PublicKey {
+	return ed25519.PublicKey(priv[ed25519.PrivateKeySize-ed25519.PublicKeySize:])
+}
 
 // PublicKey is the type describing a public key.
 type PublicKey struct {
@@ -64,13 +71,25 @@ var _ Signer = (*EdSigner)(nil)
 type EdSigner struct {
 	privKey ed25519.PrivateKey // the pub & private key
 	pubKey  ed25519.PublicKey  // only the pub key part
+
+	prefix []byte
 }
 
 // PrivateKeySize size of the private key in bytes.
 const PrivateKeySize = ed25519.PrivateKeySize
 
+// SignerOpt modifies EdSigner.
+type SignerOpt func(*EdSigner)
+
+// WithSignerPrefix sets used by EdSigner.
+func WithSignerPrefix(prefix []byte) SignerOpt {
+	return func(signer *EdSigner) {
+		signer.prefix = prefix
+	}
+}
+
 // NewEdSignerFromBuffer builds a signer from a private key as byte buffer.
-func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
+func NewEdSignerFromBuffer(buff []byte, opts ...SignerOpt) (*EdSigner, error) {
 	if len(buff) != ed25519.PrivateKeySize {
 		log.Error("Could not create EdSigner from the provided buffer: buffer too small")
 		return nil, errors.New("buffer too small")
@@ -82,7 +101,9 @@ func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 		log.Error("Public key and private key does not match")
 		return nil, errors.New("private and public does not match")
 	}
-
+	for _, opt := range opts {
+		opt(sgn)
+	}
 	return sgn, nil
 }
 
@@ -96,17 +117,23 @@ func NewEdSignerFromRand(rand io.Reader) *EdSigner {
 }
 
 // NewEdSigner returns an auto-generated ed signer.
-func NewEdSigner() *EdSigner {
+func NewEdSigner(opts ...SignerOpt) *EdSigner {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Panic("Could not generate key pair err=%v", err)
 	}
-
-	return &EdSigner{privKey: priv, pubKey: pub}
+	signer := &EdSigner{privKey: priv, pubKey: pub}
+	for _, opt := range opts {
+		opt(signer)
+	}
+	return signer
 }
 
 // Sign signs the provided message.
 func (es *EdSigner) Sign(m []byte) []byte {
+	if es.prefix != nil {
+		m = append(es.prefix, m...)
+	}
 	return ed25519.Sign2(es.privKey, m)
 }
 
@@ -115,9 +142,22 @@ func (es *EdSigner) PublicKey() *PublicKey {
 	return NewPublicKey(es.pubKey)
 }
 
+// PrivateKey returns private key.
+func (es *EdSigner) PrivateKey() PrivateKey {
+	return es.privKey
+}
+
 // LittleEndian indicates whether byte order in a signature is little-endian.
 func (es *EdSigner) LittleEndian() bool {
 	return true
+}
+
+// VRFSigner wraps same ed25519 key to provide ecvrf.
+func (es *EdSigner) VRFSigner() *VRFSigner {
+	return &VRFSigner{
+		privateKey: es.privKey,
+		pub:        es.PublicKey(),
+	}
 }
 
 // ToBuffer returns the private key as a byte buffer.
@@ -128,31 +168,52 @@ func (es *EdSigner) ToBuffer() []byte {
 	return buff
 }
 
-// Verify verifies the provided message.
-func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
-	return ed25519.Verify2(pubkey.Bytes(), message, sign)
+// VerifierOpt to modify verifier.
+type VerifierOpt func(*EDVerifier)
+
+// WithVerifierPrefix ...
+func WithVerifierPrefix(prefix []byte) VerifierOpt {
+	return func(verifier *EDVerifier) {
+		verifier.prefix = prefix
+	}
+}
+
+// DefaultVerifier used by ExtractPublicKey.
+var DefaultVerifier = EDVerifier{}
+
+// ExtractPublicKey using DefaultVerifier Extract method.
+func ExtractPublicKey(msg, sig []byte) (ed25519.PublicKey, error) {
+	pub, err := DefaultVerifier.Extract(msg, sig)
+	if err != nil {
+		return nil, err
+	}
+	return pub.Bytes(), nil
 }
 
 // EDVerifier is a verifier for ED purposes.
-type EDVerifier struct{}
+type EDVerifier struct {
+	prefix []byte
+}
 
 // NewEDVerifier returns a new EDVerifier.
-func NewEDVerifier() EDVerifier {
-	return EDVerifier{}
+func NewEDVerifier(opts ...VerifierOpt) EDVerifier {
+	verifier := EDVerifier{}
+	for _, opt := range opts {
+		opt(&verifier)
+	}
+	return verifier
 }
 
 var _ VerifyExtractor = EDVerifier{}
 
-// Verify that signature matches public key.
-func (EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
-	return Verify(pub, msg, sig)
-}
-
 // Extract public key from signature.
-func (EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+func (e EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+	if e.prefix != nil {
+		msg = append(e.prefix, msg...)
+	}
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
-		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
+		return nil, err
 	}
 	return &PublicKey{pub: pub}, nil
 }

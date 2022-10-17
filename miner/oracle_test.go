@@ -2,8 +2,9 @@ package miner
 
 import (
 	"context"
-	"errors"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -11,11 +12,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -29,50 +31,29 @@ type testOracle struct {
 	nodeID    types.NodeID
 	edSigner  *signing.EdSigner
 	vrfSigner *signing.VRFSigner
-	ctrl      *gomock.Controller
-	mdb       *mocks.MockactivationDB
 }
 
 func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
 	tb.Helper()
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
-	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(edPubkey.Bytes())
-	require.NoError(tb, err)
-	nodeID := types.NodeID{
-		Key:          edPubkey.String(),
-		VRFPublicKey: vrfPubkey,
-	}
-	return nodeID, edSigner, vrfSigner
+	nodeID := types.BytesToNodeID(edPubkey.Bytes())
+	return nodeID, edSigner, edSigner.VRFSigner()
 }
 
-func genATXHeader(id types.ATXID) *types.ActivationTxHeader {
-	atxHeader := &types.ActivationTxHeader{
+func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
-			StartTick: 0,
-			EndTick:   1,
-		},
-		NumUnits: defaultAtxWeight,
-	}
-	atxHeader.SetID(&id)
-	return atxHeader
-}
-
-func genMinerATXHeader(id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.ActivationTxHeader {
-	atxHeader := &types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{
-			NodeID: types.NodeID{
-				Key:          nodeID.Key,
-				VRFPublicKey: nodeID.VRFPublicKey,
-			},
 			PubLayerID: publishLayer,
-			StartTick:  0,
-			EndTick:    1,
 		},
 		NumUnits: defaultAtxWeight,
-	}
-	atxHeader.SetID(&id)
-	return atxHeader
+	}}
+	atx.SetID(&id)
+	atx.SetNodeID(&nodeID)
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(tb, err)
+	require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
+	return vAtx
 }
 
 func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibilityProof, activeSet []types.ATXID, beacon types.Beacon) *types.Ballot {
@@ -88,45 +69,53 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 			},
 		},
 	}
-	bytes, err := codec.Encode(ballot.InnerBallot)
+	bytes, err := codec.Encode(&ballot.InnerBallot)
 	require.NoError(tb, err)
 	ballot.Signature = signer.Sign(bytes)
-	ballot.Initialize()
+	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
 
 func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOracle {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
-	ctrl := gomock.NewController(tb)
-	mdb := mocks.NewMockactivationDB(ctrl)
+	lg := logtest.New(tb)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
 	return &testOracle{
-		Oracle:    newMinerOracle(layerSize, layersPerEpoch, mdb, vrfSigner, nodeID, logtest.New(tb)),
+		Oracle:    newMinerOracle(layerSize, layersPerEpoch, cdb, vrfSigner, nodeID, lg),
 		nodeID:    nodeID,
 		edSigner:  edSigner,
 		vrfSigner: vrfSigner,
-		ctrl:      ctrl,
-		mdb:       mdb,
 	}
 }
 
 type epochATXInfo struct {
-	atx       *types.ActivationTxHeader
+	atxID     types.ATXID
 	activeSet []types.ATXID
 	beacon    types.Beacon
 }
 
-func genATXForTargetEpochs(tb testing.TB, start, end types.EpochID, nodeID types.NodeID, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
+func genATXForTargetEpochs(tb testing.TB, cdb *datastore.CachedDB, start, end types.EpochID, nodeID types.NodeID, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
 	epochInfo := make(map[types.EpochID]epochATXInfo)
 	for epoch := start; epoch < end; epoch++ {
-		activeSet := genActiveSet(tb)
 		publishLayer := epoch.FirstLayer().Sub(layersPerEpoch)
-		epochInfo[epoch] = epochATXInfo{
-			atx:       genMinerATXHeader(types.RandomATXID(), publishLayer, nodeID),
+		activeSet := types.RandomActiveSet(activeSetSize)
+		info := epochATXInfo{
 			beacon:    types.RandomBeacon(),
 			activeSet: activeSet,
 		}
+		for i, id := range activeSet {
+			nid := types.BytesToNodeID([]byte(strconv.Itoa(i)))
+			if i == 0 {
+				nid = nodeID
+			}
+			atx := genMinerATX(tb, cdb, id, publishLayer, nid)
+			if i == 0 {
+				info.atxID = atx.ID()
+			}
+		}
+		epochInfo[epoch] = info
 	}
 	return epochInfo
 }
@@ -144,22 +133,14 @@ func TestMinerOracle(t *testing.T) {
 
 func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
 	o := createTestOracle(t, layerSize, layersPerEpoch)
-	defer o.ctrl.Finish()
-
-	mbc := smocks.NewMockBeaconCollector(o.ctrl)
-	mdb := mocks.NewMockactivationDB(o.ctrl)
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, mdb, mbc, nil, o.log.WithName("blkElgValidator"))
+	mbc := smocks.NewMockBeaconCollector(gomock.NewController(t))
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"))
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
 	endLayer := types.NewLayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
 	counterValuesSeen := map[uint32]int{}
-	epochInfo := genATXForTargetEpochs(t, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.nodeID, layersPerEpoch)
-	for epoch, info := range epochInfo {
-		o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, epoch-1).Return(info.atx.ID(), nil).Times(1)
-		o.mdb.EXPECT().GetAtxHeader(info.atx.ID()).Return(info.atx, nil).Times(1)
-		o.mdb.EXPECT().GetEpochWeight(epoch).Return(uint64(activeSetSize*defaultAtxWeight), info.activeSet, nil).Times(1)
-	}
+	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.nodeID, layersPerEpoch)
 	for layer := types.NewLayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)
@@ -167,12 +148,8 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 		require.NoError(t, err)
 
 		for _, proof := range proofs {
-			b := genBallotWithEligibility(t, o.edSigner, layer, info.atx.ID(), proof, info.activeSet, info.beacon)
+			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b.ID(), info.beacon, uint64(defaultAtxWeight)).Times(1)
-			for _, atxID := range info.activeSet {
-				mdb.EXPECT().GetAtxHeader(atxID).Return(genATXHeader(atxID), nil).Times(1)
-			}
-			mdb.EXPECT().GetAtxHeader(info.atx.ID()).Return(info.atx, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.TODO(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			assert.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
@@ -196,46 +173,9 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	defer o.ctrl.Finish()
-
 	lid := types.NewLayerID(layersPerEpoch * 3)
-	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(*types.EmptyATXID, database.ErrNotFound).Times(1)
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
-	assert.Equal(t, *types.EmptyATXID, atxID)
-	assert.Len(t, activeSet, 0)
-	assert.Len(t, proofs, 0)
-}
-
-func TestOracle_OwnATXIDError(t *testing.T) {
-	avgLayerSize := uint32(10)
-	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	defer o.ctrl.Finish()
-
-	lid := types.NewLayerID(layersPerEpoch * 3)
-	errUnknown := errors.New("unknown")
-	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(*types.EmptyATXID, errUnknown).Times(1)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
-	assert.ErrorIs(t, err, errUnknown)
-	assert.Equal(t, *types.EmptyATXID, atxID)
-	assert.Len(t, activeSet, 0)
-	assert.Len(t, proofs, 0)
-}
-
-func TestOracle_OwnATXError(t *testing.T) {
-	avgLayerSize := uint32(10)
-	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	defer o.ctrl.Finish()
-
-	lid := types.NewLayerID(layersPerEpoch * 3)
-	atxID := types.RandomATXID()
-	errUnknown := errors.New("unknown")
-	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(atxID, nil).Times(1)
-	o.mdb.EXPECT().GetAtxHeader(atxID).Return(nil, errUnknown).Times(1)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
-	assert.ErrorIs(t, err, errUnknown)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
 	assert.Len(t, proofs, 0)
@@ -245,35 +185,23 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	avgLayerSize := uint32(10)
 	layersPerEpoch := uint32(20)
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	defer o.ctrl.Finish()
-
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	atxID := types.RandomATXID()
-	atx := genMinerATXHeader(atxID, lid.Sub(layersPerEpoch), o.nodeID)
-	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(atxID, nil).Times(1)
-	o.mdb.EXPECT().GetAtxHeader(atxID).Return(atx, nil).Times(1)
-	o.mdb.EXPECT().GetEpochWeight(lid.GetEpoch()).Return(uint64(0), nil, nil)
+
+	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		NIPostChallenge: types.NIPostChallenge{
+			PubLayerID: (lid.GetEpoch() - 1).FirstLayer(),
+		},
+		NumUnits: 0,
+	}}
+	atx.SetID(&atxID)
+	atx.SetNodeID(&o.nodeID)
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vAtx, time.Now()))
+
 	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errZeroEpochWeight)
-	assert.Equal(t, *types.EmptyATXID, atxID)
-	assert.Len(t, activeSet, 0)
-	assert.Len(t, proofs, 0)
-}
-
-func TestOracle_EmptyActiveSet(t *testing.T) {
-	avgLayerSize := uint32(10)
-	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch)
-	defer o.ctrl.Finish()
-
-	lid := types.NewLayerID(layersPerEpoch * 3)
-	atxID := types.RandomATXID()
-	atx := genMinerATXHeader(atxID, lid.Sub(layersPerEpoch), o.nodeID)
-	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(atxID, nil).Times(1)
-	o.mdb.EXPECT().GetAtxHeader(atxID).Return(atx, nil).Times(1)
-	o.mdb.EXPECT().GetEpochWeight(lid.GetEpoch()).Return(uint64(defaultAtxWeight), nil, nil)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
-	assert.ErrorIs(t, err, errEmptyActiveSet)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
 	assert.Len(t, proofs, 0)

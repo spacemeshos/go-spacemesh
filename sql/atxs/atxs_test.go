@@ -1,7 +1,7 @@
 package atxs
 
 import (
-	"strconv"
+	"os"
 	"testing"
 	"time"
 
@@ -9,22 +9,28 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const layersPerEpoch = 5
 
-func TestGetATXByID(t *testing.T) {
+func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
+	res := m.Run()
+	os.Exit(res)
+}
+
+func TestGetATXByID(t *testing.T) {
 	db := sql.InMemory()
 
-	atxs := make([]*types.ActivationTx, 0)
+	atxs := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
-		strIdx := strconv.Itoa(i)
-		nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
-		atxs = append(atxs, newAtx(nodeID, types.NewLayerID(uint32(i))))
+		sig := signing.NewEdSigner()
+		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
+		require.NoError(t, err)
+		atxs = append(atxs, atx)
 	}
 
 	for _, atx := range atxs {
@@ -42,15 +48,14 @@ func TestGetATXByID(t *testing.T) {
 }
 
 func TestHasID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
-	atxs := make([]*types.ActivationTx, 0)
+	atxs := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
-		strIdx := strconv.Itoa(i)
-		nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
-		atxs = append(atxs, newAtx(nodeID, types.NewLayerID(uint32(i))))
+		sig := signing.NewEdSigner()
+		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
+		require.NoError(t, err)
+		atxs = append(atxs, atx)
 	}
 
 	for _, atx := range atxs {
@@ -69,12 +74,11 @@ func TestHasID(t *testing.T) {
 }
 
 func TestGetTimestampByID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
-	nodeID := types.NodeID{Key: "0", VRFPublicKey: []byte("0")}
-	atx := newAtx(nodeID, types.NewLayerID(uint32(0)))
+	sig := signing.NewEdSigner()
+	atx, err := newAtx(sig, types.NewLayerID(uint32(0)))
+	require.NoError(t, err)
 
 	ts := time.Now()
 	require.NoError(t, Add(db, atx, ts))
@@ -84,99 +88,167 @@ func TestGetTimestampByID(t *testing.T) {
 	require.EqualValues(t, ts.UnixNano(), timestamp.UnixNano())
 
 	_, err = GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestGetLastIDByNodeID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
+func TestGetFirstIDByNodeID(t *testing.T) {
 	db := sql.InMemory()
 
-	nodeID0 := types.NodeID{Key: "0", VRFPublicKey: []byte("0")}
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
-	atx1 := newAtx(nodeID1, types.NewLayerID(uint32(1*layersPerEpoch)))
-	atx2 := newAtx(nodeID1, types.NewLayerID(uint32(2*layersPerEpoch)))
-	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	sig := signing.NewEdSigner()
+	sig1 := signing.NewEdSigner()
+	sig2 := signing.NewEdSigner()
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
+	// Arrange
+
+	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	require.NoError(t, err)
+	require.NoError(t, atx1.CalcAndSetID())
+
+	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
+	atx2.Sequence = atx1.Sequence + 1
+	require.NoError(t, err)
+	require.NoError(t, atx2.CalcAndSetID())
+
+	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	require.NoError(t, err)
+	require.NoError(t, atx3.CalcAndSetID())
+
+	atx4, err := newAtx(sig2, types.NewLayerID(uint32(4*layersPerEpoch)))
+	atx4.Sequence = atx3.Sequence + 1
+	require.NoError(t, err)
+	require.NoError(t, atx4.CalcAndSetID())
+
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
-	id1, err := GetLastIDByNodeID(db, nodeID1)
-	require.NoError(t, err)
-	require.EqualValues(t, atx2.ID(), id1)
+	// Act & Assert
 
-	id2, err := GetLastIDByNodeID(db, nodeID2)
+	id1, err := GetFirstIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	require.NoError(t, err)
+	require.EqualValues(t, atx1.ID(), id1)
+
+	id2, err := GetFirstIDByNodeID(db, types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx3.ID(), id2)
 
-	_, err = GetLastIDByNodeID(db, nodeID0)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	_, err = GetLastIDByNodeID(db, types.BytesToNodeID(sig.PublicKey().Bytes()))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func TestGetLastIDByNodeID(t *testing.T) {
+	db := sql.InMemory()
+
+	sig := signing.NewEdSigner()
+	sig1 := signing.NewEdSigner()
+	sig2 := signing.NewEdSigner()
+
+	// Arrange
+
+	atx1, err := newAtx(sig1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	require.NoError(t, err)
+	require.NoError(t, atx1.CalcAndSetID())
+
+	atx2, err := newAtx(sig1, types.NewLayerID(uint32(2*layersPerEpoch)))
+	atx2.Sequence = atx1.Sequence + 1
+	require.NoError(t, err)
+	require.NoError(t, atx2.CalcAndSetID())
+
+	atx3, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	require.NoError(t, err)
+	require.NoError(t, atx3.CalcAndSetID())
+
+	atx4, err := newAtx(sig2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx4.Sequence = atx3.Sequence + 1
+	require.NoError(t, err)
+	require.NoError(t, atx4.CalcAndSetID())
+
+	now := time.Now()
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+		require.NoError(t, Add(db, atx, now))
+		now = now.Add(time.Nanosecond)
+	}
+
+	// Act & Assert
+
+	id1, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	require.NoError(t, err)
+	require.EqualValues(t, atx2.ID(), id1)
+
+	id2, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	require.NoError(t, err)
+	require.EqualValues(t, atx4.ID(), id2)
+
+	_, err = GetLastIDByNodeID(db, types.BytesToNodeID(sig.PublicKey().Bytes()))
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestGetIDByEpochAndNodeID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
+	sig1 := signing.NewEdSigner()
+	sig2 := signing.NewEdSigner()
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
 	l3 := types.NewLayerID(uint32(3 * layersPerEpoch))
 
-	atx1 := newAtx(nodeID1, l1)
-	atx2 := newAtx(nodeID1, l2)
-	atx3 := newAtx(nodeID2, l2)
-	atx4 := newAtx(nodeID2, l3)
+	atx1, err := newAtx(sig1, l1)
+	require.NoError(t, err)
+	atx2, err := newAtx(sig1, l2)
+	require.NoError(t, err)
+	atx3, err := newAtx(sig2, l2)
+	require.NoError(t, err)
+	atx4, err := newAtx(sig2, l3)
+	require.NoError(t, err)
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
-	l1n1, err := GetIDByEpochAndNodeID(db, l1.GetEpoch(), nodeID1)
+	l1n1, err := GetIDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx1.ID(), l1n1)
 
-	_, err = GetIDByEpochAndNodeID(db, l1.GetEpoch(), nodeID2)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	_, err = GetIDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	l2n1, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), nodeID1)
+	l2n1, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx2.ID(), l2n1)
 
-	l2n2, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), nodeID2)
+	l2n2, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx3.ID(), l2n2)
 
-	_, err = GetIDByEpochAndNodeID(db, l3.GetEpoch(), nodeID1)
-	require.ErrorIs(t, err, database.ErrNotFound)
+	_, err = GetIDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	l3n2, err := GetIDByEpochAndNodeID(db, l3.GetEpoch(), nodeID2)
+	l3n2, err := GetIDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
 	require.NoError(t, err)
 	require.EqualValues(t, atx4.ID(), l3n2)
 }
 
 func TestGetIDsByEpoch(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
+	sig1 := signing.NewEdSigner()
+	sig2 := signing.NewEdSigner()
 
 	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
 	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
 	l3 := types.NewLayerID(uint32(3 * layersPerEpoch))
 
-	atx1 := newAtx(nodeID1, l1)
-	atx2 := newAtx(nodeID1, l2)
-	atx3 := newAtx(nodeID2, l2)
-	atx4 := newAtx(nodeID2, l3)
+	atx1, err := newAtx(sig1, l1)
+	require.NoError(t, err)
+	atx2, err := newAtx(sig1, l2)
+	require.NoError(t, err)
+	atx3, err := newAtx(sig2, l2)
+	require.NoError(t, err)
+	atx4, err := newAtx(sig2, l3)
+	require.NoError(t, err)
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
@@ -186,64 +258,39 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	ids2, err := GetIDsByEpoch(db, l2.GetEpoch())
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx2.ID(), atx3.ID()}, ids2)
+	require.Contains(t, ids2, atx2.ID())
+	require.Contains(t, ids2, atx3.ID())
 
 	ids3, err := GetIDsByEpoch(db, l3.GetEpoch())
 	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
-func TestGetTop(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
-	db := sql.InMemory()
-
-	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
-
-	l1 := types.NewLayerID(uint32(1 * layersPerEpoch))
-	l2 := types.NewLayerID(uint32(2 * layersPerEpoch))
-
-	atx1 := newAtx(nodeID1, l1)
-	atx2 := newAtx(nodeID1, l2)
-	atx3 := newAtx(nodeID2, l2)
-
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
-		require.NoError(t, UpdateTopIfNeeded(db, atx))
-	}
-
-	top, err := GetTop(db)
-	require.NoError(t, err)
-	require.EqualValues(t, atx2.ID(), top)
-}
-
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
 
-	nodeID := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
-
-	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
+	sig := signing.NewEdSigner()
+	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
+	require.NoError(t, err)
 
 	require.NoError(t, Add(db, atx, time.Now()))
-	buf, err := GetBlob(db, atx.ID())
+	buf, err := GetBlob(db, atx.ID().Bytes())
 	require.NoError(t, err)
-	encoded, err := codec.Encode(atx)
+	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
 	require.Equal(t, encoded, buf)
 }
 
 func TestAdd(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
 	db := sql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
 	_, err := Get(db, nonExistingATXID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	strIdx := strconv.Itoa(1)
-	nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
-	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
+	sig := signing.NewEdSigner()
+	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
+	require.NoError(t, err)
 
 	require.NoError(t, Add(db, atx, time.Now()))
 	require.ErrorIs(t, Add(db, atx, time.Now()), sql.ErrObjectExists)
@@ -253,20 +300,86 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, atx, got)
 }
 
-func newAtx(nodeID types.NodeID, layerID types.LayerID) *types.ActivationTx {
-	activationTx := &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: &types.ActivationTxHeader{
-				NIPostChallenge: types.NIPostChallenge{
-					NodeID:     nodeID,
-					PubLayerID: layerID,
-					StartTick:  0,
-					EndTick:    1,
-				},
-				NumUnits: 2,
+func newAtx(sig *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: layerID,
+				PrevATXID:  types.RandomATXID(),
 			},
+			NumUnits: 2,
 		},
 	}
-	activationTx.CalcAndSetID()
-	return activationTx
+
+	bts, err := atx.InnerBytes()
+	if err != nil {
+		return nil, err
+	}
+	atx.Sig = sig.Sign(bts)
+	return atx.Verify(0, 1)
+}
+
+func TestPositioningID(t *testing.T) {
+	type header struct {
+		coinbase    types.Address
+		base, count uint64
+		epoch       types.EpochID
+	}
+	for _, tc := range []struct {
+		desc   string
+		atxs   []header
+		expect int
+	}{
+		{
+			desc: "not found",
+		},
+		{
+			desc: "by epoch",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 2},
+			},
+			expect: 1,
+		},
+		{
+			desc: "by tick height",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{2}, base: 1, count: 1, epoch: 1},
+			},
+			expect: 0,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			db := sql.InMemory()
+			ids := []types.ATXID{}
+			for _, atx := range tc.atxs {
+				full := &types.ActivationTx{
+					InnerActivationTx: types.InnerActivationTx{
+						NIPostChallenge: types.NIPostChallenge{
+							PubLayerID: atx.epoch.FirstLayer(),
+						},
+						Coinbase: atx.coinbase,
+					},
+				}
+
+				bts, err := full.InnerBytes()
+				require.NoError(t, err)
+				sig := signing.NewEdSigner()
+				full.Sig = sig.Sign(bts)
+
+				vAtx, err := full.Verify(atx.base, atx.count)
+				require.NoError(t, err)
+
+				require.NoError(t, Add(db, vAtx, time.Time{}))
+				ids = append(ids, full.ID())
+			}
+			rst, err := GetAtxIDWithMaxHeight(db)
+			if len(tc.atxs) == 0 {
+				require.ErrorIs(t, err, sql.ErrNotFound)
+			} else {
+				require.Equal(t, ids[tc.expect], rst)
+			}
+		})
+	}
 }

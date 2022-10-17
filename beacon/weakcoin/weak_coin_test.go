@@ -2,15 +2,16 @@ package weakcoin_test
 
 import (
 	"context"
-	"crypto/ed25519"
 	"fmt"
 	"math/rand"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -28,7 +29,7 @@ func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublishe
 
 func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 	tb.Helper()
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := codec.Encode(&msg)
 	require.NoError(tb, err)
 	return buf
 }
@@ -353,15 +354,13 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	broadcaster := mocks.NewMockPublisher(ctrl)
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 		msg := weakcoin.Message{}
-		require.NoError(t, types.BytesToInterface(data, &msg))
+		require.NoError(t, codec.Decode(data, &msg))
 		sig = msg.Signature
 		return nil
 	}).AnyTimes()
-	seed := make([]byte, ed25519.SeedSize)
 	r := rand.New(rand.NewSource(999))
-	r.Read(seed)
-	signer, _, err := signing.NewVRFSigner(seed)
-	require.NoError(t, err)
+
+	signer := signing.NewEdSignerFromRand(r).VRFSigner()
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
 	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
@@ -369,7 +368,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	require.NoError(t, instance.StartRound(context.TODO(), round))
 
 	require.Equal(t,
-		"a1f2c99f9210b15b66197fbc6f0dd5a93bfb08da63eae81b84d550cf5a6daf7e0c8e79fe3fefeac839bdce2de4f3cc3d420a8f43a9275bfed0221e99e3a4b204",
+		"110b3a848728d3c83ba99804e825f56763d190a3a8f13382bf4e31eaabedbfe9a6f20e7dcd4ce5dcecd325b3cf29529415c9c0692abeb3c0f3600f852444f723018863c0fc541b5644dcafb0c0b4c10b",
 		util.Bytes2Hex(sig))
 }
 
@@ -399,11 +398,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 				return nil
 			}).AnyTimes()
-		seed := make([]byte, ed25519.SeedSize)
-
-		r.Read(seed)
-		signer, _, err := signing.NewVRFSigner(seed)
-		require.NoError(t, err)
+		signer := signing.NewEdSignerFromRand(r).VRFSigner()
 		allowances[string(signer.PublicKey().Bytes())] = 1
 		instances[i] = weakcoin.New(broadcaster, signer,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
@@ -430,4 +425,12 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			instance.FinishEpoch(context.TODO(), epoch)
 		}
 	}
+}
+
+func FuzzMessageConsistency(f *testing.F) {
+	tester.FuzzConsistency[weakcoin.Message](f)
+}
+
+func FuzzMessageStateSafety(f *testing.F) {
+	tester.FuzzSafety[weakcoin.Message](f)
 }

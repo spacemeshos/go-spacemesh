@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // GatewayService exposes transaction data, and a submit tx endpoint.
@@ -40,7 +40,7 @@ func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoetR
 	}
 
 	// Note that we broadcast a poet message regardless of whether or not we are currently in sync
-	if err := s.publisher.Publish(ctx, activation.PoetProofProtocol, in.Data); err != nil {
+	if err := s.publisher.Publish(ctx, pubsub.PoetProofProtocol, in.Data); err != nil {
 		log.Error("failed to broadcast poet message: %s", err)
 		return nil, status.Errorf(codes.Internal, "failed to broadcast message")
 	}

@@ -8,7 +8,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Mockcache is a mock of cache interface.
@@ -61,95 +60,4 @@ func (m *Mockcache) Get(key interface{}) (interface{}, bool) {
 func (mr *MockcacheMockRecorder) Get(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcache)(nil).Get), key)
-}
-
-// MockatxProvider is a mock of atxProvider interface.
-type MockatxProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockatxProviderMockRecorder
-}
-
-// MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
-type MockatxProviderMockRecorder struct {
-	mock *MockatxProvider
-}
-
-// NewMockatxProvider creates a new mock instance.
-func NewMockatxProvider(ctrl *gomock.Controller) *MockatxProvider {
-	mock := &MockatxProvider{ctrl: ctrl}
-	mock.recorder = &MockatxProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
-	return m.recorder
-}
-
-// GetAtxHeader mocks base method.
-func (m *MockatxProvider) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockatxProviderMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxProvider)(nil).GetAtxHeader), arg0)
-}
-
-// GetEpochAtxs mocks base method.
-func (m *MockatxProvider) GetEpochAtxs(arg0 types.EpochID) ([]types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEpochAtxs", arg0)
-	ret0, _ := ret[0].([]types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEpochAtxs indicates an expected call of GetEpochAtxs.
-func (mr *MockatxProviderMockRecorder) GetEpochAtxs(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochAtxs", reflect.TypeOf((*MockatxProvider)(nil).GetEpochAtxs), arg0)
-}
-
-// MockmeshProvider is a mock of meshProvider interface.
-type MockmeshProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockmeshProviderMockRecorder
-}
-
-// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
-type MockmeshProviderMockRecorder struct {
-	mock *MockmeshProvider
-}
-
-// NewMockmeshProvider creates a new mock instance.
-func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
-	mock := &MockmeshProvider{ctrl: ctrl}
-	mock.recorder = &MockmeshProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
-	return m.recorder
-}
-
-// LayerBallots mocks base method.
-func (m *MockmeshProvider) LayerBallots(arg0 types.LayerID) ([]*types.Ballot, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerBallots", arg0)
-	ret0, _ := ret[0].([]*types.Ballot)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// LayerBallots indicates an expected call of LayerBallots.
-func (mr *MockmeshProviderMockRecorder) LayerBallots(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBallots", reflect.TypeOf((*MockmeshProvider)(nil).LayerBallots), arg0)
 }

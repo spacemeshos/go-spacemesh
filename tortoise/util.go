@@ -2,21 +2,18 @@ package tortoise
 
 import (
 	"fmt"
-	"math/big"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
-	verifyingTortoise = "verifying"
-	fullTortoise      = "full"
-)
-
-const (
 	support sign = 1
 	against sign = -1
 	abstain sign = 0
+
+	neutral = abstain
 )
 
 type sign int8
@@ -34,121 +31,26 @@ func (a sign) String() string {
 	}
 }
 
-type votes map[types.BlockID]sign
-
-func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
-	arr := make([]types.BlockID, 0, len(m))
-	for b := range m {
-		arr = append(arr, b)
-	}
-	return arr
-}
-
-func weightFromInt64(value int64) weight {
-	return weight{Rat: new(big.Rat).SetInt64(value)}
-}
-
-func weightFromUint64(value uint64) weight {
-	return weight{Rat: new(big.Rat).SetUint64(value)}
-}
-
-func weightFromFloat64(value float64) weight {
-	return weight{Rat: new(big.Rat).SetFloat64(value)}
-}
-
-// weight represents any weight in the tortoise.
-type weight struct {
-	*big.Rat
-}
-
-func (w weight) add(other weight) weight {
-	w.Rat.Add(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) sub(other weight) weight {
-	if other.Rat == nil {
-		return w
-	}
-	w.Rat.Sub(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) div(other weight) weight {
-	w.Rat.Quo(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) mul(other weight) weight {
-	w.Rat.Mul(w.Rat, other.Rat)
-	return w
-}
-
-func (w weight) neg() weight {
-	w.Rat.Neg(w.Rat)
-	return w
-}
-
-func (w weight) copy() weight {
-	other := weight{Rat: new(big.Rat)}
-	other.Rat = other.Rat.Set(w.Rat)
-	return other
-}
-
-func (w weight) fraction(frac *big.Rat) weight {
-	w.Rat = w.Rat.Mul(w.Rat, frac)
-	return w
-}
-
-func (w weight) cmp(other weight) sign {
-	if w.Rat.Sign() == 1 && w.Rat.Cmp(other.Rat) == 1 {
-		return support
-	}
-	if w.Rat.Sign() == -1 && new(big.Rat).Abs(w.Rat).Cmp(other.Rat) == 1 {
-		return against
-	}
-	return abstain
-}
-
-func (w weight) String() string {
-	if w.isNil() {
-		return "0"
-	}
-	if w.Rat.IsInt() {
-		return w.Rat.Num().String()
-	}
-	return w.Rat.FloatString(2)
-}
-
-func (w weight) isNil() bool {
-	return w.Rat == nil
-}
-
-type tortoiseBallot struct {
-	id, base types.BallotID
-	votes    votes
-	abstain  map[types.LayerID]struct{}
-	weight   weight
-}
-
 func persistContextualValidity(logger log.Log,
-	bdp blockDataProvider,
+	updater blockValidityUpdater,
 	from, to types.LayerID,
-	blocks map[types.LayerID][]types.BlockID,
-	opinion votes,
+	layers map[types.LayerID]*layerInfo,
 ) error {
 	var err error
 	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
-		for _, bid := range blocks[lid] {
-			sign := opinion[bid]
-			if sign == abstain {
-				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
+		for _, block := range layers[lid].blocks {
+			if !block.dirty {
+				continue
 			}
-			err = bdp.SaveContextualValidity(bid, lid, sign == support)
+			if block.validity == abstain {
+				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, block.id)
+			}
+			err = updater.UpdateBlockValidity(block.id, lid, block.validity == support)
 			if err != nil {
-				err = fmt.Errorf("saving validity for %s: %w", bid, err)
+				err = fmt.Errorf("saving validity for %s: %w", block.id, err)
 				return false
 			}
+			block.dirty = false
 		}
 		return true
 	})
@@ -176,50 +78,73 @@ const (
 	reasonCoinflip       voteReason = "coinflip"
 )
 
-// lsb is a mode, second bit is rerun
-// examples (lsb is on the right, prefix with 6 bits is droppped)
-// 10 - rerun in verifying
-// 00 - live tortoise in verifying
-// 11 - rerun in full
-// 01 - live tortoise in full.
-type mode [2]bool
-
-func (m mode) String() string {
-	humanize := "verifying"
-	if m.isFull() {
-		humanize = "full"
-	}
-	if m.isRerun() {
-		return "rerun_" + humanize
-	}
-	return humanize
-}
-
-func (m mode) toggleRerun() mode {
-	m[1] = !m[1]
-	return m
-}
-
-func (m mode) isRerun() bool {
-	return m[1]
-}
-
-func (m mode) toggleMode() mode {
-	m[0] = !m[0]
-	return m
-}
-
-func (m mode) isVerifying() bool {
-	return !m[0]
-}
-
-func (m mode) isFull() bool {
-	return m[0]
-}
-
 func maxLayer(i, j types.LayerID) types.LayerID {
 	if i.After(j) {
 		return i
 	}
 	return j
+}
+
+func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInfo) sign) bool {
+	// order blocks by height in ascending order
+	// if there is a support before any abstain
+	// and a previous height is lower than the current one
+	// the layer is verified
+	//
+	// it will modify original slice
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].height < blocks[j].height
+	})
+	var (
+		decisions = make([]sign, 0, len(blocks))
+		supported *blockInfo
+	)
+	for _, block := range blocks {
+		decision := getDecision(block)
+		logger.With().Debug("decision for a block",
+			block.id,
+			block.layer,
+			log.Stringer("decision", decision),
+			log.Stringer("weight", block.margin),
+			log.Uint64("height", block.height),
+		)
+
+		if decision == abstain {
+			// all blocks with the same height should be finalized
+			if supported != nil && block.height > supported.height {
+				decision = against
+			} else {
+				return false
+			}
+		} else if decision == support {
+			supported = block
+		}
+		decisions = append(decisions, decision)
+	}
+	changes := false
+	for i, decision := range decisions {
+		if blocks[i].validity != decision {
+			changes = true
+			blocks[i].dirty = true
+		}
+		blocks[i].validity = decision
+	}
+	if changes {
+		logger.With().Info("candidate layer is verified",
+			log.Array("blocks",
+				log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+					for i := range blocks {
+						encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+							encoder.AddString("decision", blocks[i].validity.String())
+							encoder.AddString("id", blocks[i].id.String())
+							encoder.AddString("weight", blocks[i].margin.String())
+							encoder.AddUint64("height", blocks[i].height)
+							return nil
+						}))
+					}
+					return nil
+				})),
+		)
+	}
+	return true
 }

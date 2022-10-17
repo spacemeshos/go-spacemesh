@@ -25,11 +25,12 @@ type Server struct {
 }
 
 // NewServerWithInterface creates and returns a new Server with port and interface.
-func NewServerWithInterface(port int, intfce string) *Server {
+func NewServerWithInterface(port int, intfce string, opts ...grpc.ServerOption) *Server {
+	opts = append(opts, ServerOptions...)
 	return &Server{
 		Port:       port,
 		Interface:  intfce,
-		GrpcServer: grpc.NewServer(ServerOptions...),
+		GrpcServer: grpc.NewServer(opts...),
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+//go:generate scalegen
+
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID

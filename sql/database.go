@@ -4,21 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
-
-	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 var (
 	// ErrNoConnection is returned if pooled connection is not available.
 	ErrNoConnection = errors.New("database: no free connection")
 	// ErrNotFound is returned if requested record is not found.
-	// TODO(dshulyak) is an alias to datatabase.ErrNotFound until full transition is implemented.
-	ErrNotFound = database.ErrNotFound
+	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+)
+
+const (
+	beginDefault   = "BEGIN;"
+	beginImmediate = "BEGIN IMMEDIATE;"
 )
 
 // Executor is an interface for executing raw statement.
@@ -126,6 +129,30 @@ type Database struct {
 	pool *sqlitex.Pool
 }
 
+func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+	conn := db.pool.Get(ctx)
+	if conn == nil {
+		return nil, ErrNoConnection
+	}
+	tx := &Tx{db: db, conn: conn}
+	if err := tx.begin(initstmt); err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) error) error {
+	tx, err := db.getTx(ctx, initstmt)
+	if err != nil {
+		return err
+	}
+	defer tx.Release()
+	if err := exec(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Tx creates deferred sqlite transaction.
 //
 // Deferred transactions are not started until the first statement.
@@ -134,12 +161,28 @@ type Database struct {
 //
 // https://www.sqlite.org/lang_transaction.html
 func (db *Database) Tx(ctx context.Context) (*Tx, error) {
-	conn := db.pool.Get(ctx)
-	if conn == nil {
-		return nil, ErrNoConnection
-	}
-	tx := &Tx{db: db, conn: conn}
-	return tx, tx.begin()
+	return db.getTx(ctx, beginDefault)
+}
+
+// WithTx will pass initialized deferred transaction to exec callback.
+// Will commit only if error is nil.
+func (db *Database) WithTx(ctx context.Context, exec func(*Tx) error) error {
+	return db.withTx(ctx, beginImmediate, exec)
+}
+
+// TxImmediate creates immediate transaction.
+//
+// IMMEDIATE cause the database connection to start a new write immediately, without waiting
+// for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write
+// transaction is already active on another database connection.
+func (db *Database) TxImmediate(ctx context.Context) (*Tx, error) {
+	return db.getTx(ctx, beginImmediate)
+}
+
+// WithTxImmediate will pass initialized immediate transaction to exec callback.
+// Will commit only if error is nil.
+func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) error {
+	return db.withTx(ctx, beginImmediate, exec)
 }
 
 // Exec statement using one of the connection from the pool.
@@ -168,6 +211,11 @@ func (db *Database) Close() error {
 }
 
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
+	start := time.Now()
+	defer func() {
+		queryDuration.WithLabelValues(query).Observe(float64(time.Since(start)))
+	}()
+
 	stmt, err := conn.Prepare(query)
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s: %w", query, err)
@@ -212,8 +260,8 @@ type Tx struct {
 	err       error
 }
 
-func (tx *Tx) begin() error {
-	stmt := tx.conn.Prep("BEGIN;")
+func (tx *Tx) begin(initstmt string) error {
+	stmt := tx.conn.Prep(initstmt)
 	_, err := stmt.Step()
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)

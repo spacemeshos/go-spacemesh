@@ -43,6 +43,7 @@ type LoggerConfig struct {
 	AtxBuilderLoggerLevel     string     `mapstructure:"atx-builder"`
 	HareBeaconLoggerLevel     string     `mapstructure:"hare-beacon"`
 	TimeSyncLoggerLevel       string     `mapstructure:"timesync"`
+	VMLogLevel                string     `mapstructure:"vm"`
 }
 
 func defaultLoggingConfig() LoggerConfig {
@@ -75,5 +76,6 @@ func defaultLoggingConfig() LoggerConfig {
 		AtxBuilderLoggerLevel:     defaultLoggingLevel.String(),
 		HareBeaconLoggerLevel:     defaultLoggingLevel.String(),
 		TimeSyncLoggerLevel:       defaultLoggingLevel.String(),
+		VMLogLevel:                defaultLoggingLevel.String(),
 	}
 }

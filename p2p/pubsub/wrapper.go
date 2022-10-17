@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 // PubSub is a spacemesh-specific wrapper around gossip protocol.
@@ -28,7 +30,11 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 		ps.logger.Panic("already registered a topic %s", topic)
 	}
 	ps.pubsub.RegisterTopicValidator(topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-		return handler(log.WithNewRequestID(ctx), pid, msg.Data)
+		start := time.Now()
+		rst := handler(log.WithNewRequestID(ctx), pid, msg.Data)
+		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(rst)).
+			Observe(float64(time.Since(start)))
+		return rst
 	})
 	topich, err := ps.pubsub.Join(topic)
 	if err != nil {

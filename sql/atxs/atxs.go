@@ -10,7 +10,7 @@ import (
 )
 
 // Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
+func Get(db sql.Executor, id types.ATXID) (atx *types.VerifiedActivationTx, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -20,13 +20,18 @@ func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 			atx, err = nil, fmt.Errorf("decode %w", decodeErr)
 			return true
 		}
-
 		v.SetID(&id)
-		atx, err = &v, nil
-		return true
+		nodeID := types.NodeID{}
+		stmt.ColumnBytes(3, nodeID[:])
+		v.SetNodeID(&nodeID)
+
+		baseTickHeight := uint64(stmt.ColumnInt64(1))
+		tickCount := uint64(stmt.ColumnInt64(2))
+		atx, err = v.Verify(baseTickHeight, tickCount)
+		return err == nil
 	}
 
-	if rows, err := db.Exec("select atx from atxs where id = ?1;", enc, dec); err != nil {
+	if rows, err := db.Exec("select atx, base_tick_height, tick_count, smesher from atxs where id = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("exec id %v: %w", id, sql.ErrNotFound)
@@ -67,6 +72,29 @@ func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err err
 	return timestamp, err
 }
 
+// GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
+func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.ToBytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select id from atxs 
+		where smesher = ?1
+		order by epoch asc
+		limit 1;`, enc, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+	}
+
+	return id, err
+}
+
 // GetLastIDByNodeID gets the last ATX ID for a given node ID.
 func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
@@ -80,11 +108,11 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	if rows, err := db.Exec(`
 		select id from atxs 
 		where smesher = ?1
-		order by epoch desc 
+		order by epoch desc, timestamp desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -105,9 +133,9 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 		select id from atxs 
 		where epoch = ?1 and smesher = ?2 
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -135,10 +163,10 @@ func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err
 }
 
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id types.ATXID) (buf []byte, err error) {
+func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 	if rows, err := db.Exec("select atx from atxs where id = ?1",
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id.Bytes())
+			stmt.BindBytes(1, id)
 		}, func(stmt *sql.Statement) bool {
 			buf = make([]byte, stmt.ColumnLen(0))
 			stmt.ColumnBytes(0, buf)
@@ -152,8 +180,8 @@ func GetBlob(db sql.Executor, id types.ATXID) (buf []byte, err error) {
 }
 
 // Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
-	buf, err := codec.Encode(atx)
+func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) error {
+	buf, err := codec.Encode(atx.ActivationTx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -161,65 +189,20 @@ func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
-		stmt.BindInt64(3, int64(atx.PubLayerID.GetEpoch()))
-		stmt.BindBytes(4, atx.NodeID.ToBytes())
+		stmt.BindInt64(3, int64(atx.PublishEpoch()))
+		stmt.BindBytes(4, atx.NodeID().ToBytes())
 		stmt.BindBytes(5, buf)
 		stmt.BindInt64(6, timestamp.UnixNano())
+		stmt.BindInt64(7, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(8, int64(atx.TickCount()))
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, layer, epoch, smesher, atx, timestamp) 
-		values (?1, ?2, ?3, ?4, ?5, ?6);`, enc, nil)
+		insert into atxs (id, layer, epoch, smesher, atx, timestamp, base_tick_height, tick_count) 
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
-
-	return nil
-}
-
-// GetTop gets a top ATX (positioning ATX candidate) for a given ATX ID.
-// The top ATX is the one with the highest layer ID.
-func GetTop(db sql.Executor) (id types.ATXID, err error) {
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
-
-	if rows, err := db.Exec("select atx_id from atx_top;", nil, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec: %w", err)
-	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec: %w", sql.ErrNotFound)
-	}
-
-	return id, err
-}
-
-// UpdateTopIfNeeded updates top ATX if needed.
-func UpdateTopIfNeeded(db sql.Executor, atx *types.ActivationTx) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, atx.ID().Bytes())
-		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
-	}
-
-	_, err := db.Exec(`
-		insert into atx_top (id, atx_id, layer) 
-		values (1, ?1, ?2)
-		on conflict (id) do
-		update set 
-			layer = case
-				when excluded.layer > layer
-				then excluded.layer
-				else layer
-			end,
-			atx_id = case
-				when excluded.layer > layer
-				then excluded.atx_id
-				else atx_id
-			end;`, enc, nil)
-	if err != nil {
-		return fmt.Errorf("update top ATX ID %v: %w", atx.ID(), err)
-	}
-
 	return nil
 }
 
@@ -234,4 +217,29 @@ func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
 	}
 
 	return nil
+}
+
+// GetAtxIDWithMaxHeight returns the ID of the atx from the last epoch with the highest (or tied for the highest) tick height.
+func GetAtxIDWithMaxHeight(db sql.Executor) (types.ATXID, error) {
+	var (
+		rst types.ATXID
+		max uint64
+	)
+	dec := func(stmt *sql.Statement) bool {
+		var id types.ATXID
+		stmt.ColumnBytes(0, id[:])
+		height := uint64(stmt.ColumnInt64(1)) + uint64(stmt.ColumnInt64(2))
+		if height >= max {
+			max = height
+			rst = id
+		}
+		return true
+	}
+
+	if rows, err := db.Exec("select id, base_tick_height, tick_count, epoch from atxs where epoch = (select max(epoch) from atxs);", nil, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
+	} else if rows == 0 {
+		return types.ATXID{}, sql.ErrNotFound
+	}
+	return rst, nil
 }

@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -42,13 +42,17 @@ func (s systemTime) Now() time.Time {
 	return time.Now()
 }
 
-type request struct {
+//go:generate scalegen -types Request,Response
+
+// Request is a sync request.
+type Request struct {
 	ID uint64
 }
 
-type response struct {
+// Response is a sync response.
+type Response struct {
 	ID        uint64
-	Timestamp int64
+	Timestamp uint64
 }
 
 // DefaultConfig for Sync.
@@ -133,7 +137,6 @@ type Sync struct {
 	h            host.Host
 	peersWatcher bootstrap.Waiter
 
-	once   sync.Once
 	eg     errgroup.Group
 	ctx    context.Context
 	cancel func()
@@ -143,14 +146,14 @@ func (s *Sync) streamHandler(stream network.Stream) {
 	defer stream.Close()
 	_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
 	defer stream.SetDeadline(time.Time{})
-	var request request
+	var request Request
 	if _, err := codec.DecodeFrom(stream, &request); err != nil {
 		s.log.With().Warning("can't decode request", log.Err(err))
 		return
 	}
-	resp := response{
+	resp := Response{
 		ID:        request.ID,
-		Timestamp: s.time.Now().UnixNano(),
+		Timestamp: uint64(s.time.Now().UnixNano()),
 	}
 	if _, err := codec.EncodeTo(stream, &resp); err != nil {
 		s.log.With().Warning("can't encode response", log.Err(err))
@@ -209,7 +212,10 @@ func (s *Sync) run() error {
 					log.Duration("max_offset", s.config.MaxClockOffset),
 				)
 				if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
-					return ErrPeersNotSynced
+					return clockError{
+						err:     ErrPeersNotSynced,
+						details: clockErrorDetails{Drift: offset},
+					}
 				}
 			} else {
 				s.log.With().Info("peers offset is within max allowed clock difference",
@@ -242,7 +248,7 @@ func (s *Sync) run() error {
 // GetOffset computes offset from received response. The method is stateless and safe to use concurrently.
 func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.Duration, error) {
 	var (
-		responses = make(chan response, len(prs))
+		responses = make(chan Response, len(prs))
 		round     = round{
 			ID:                id,
 			Timestamp:         s.time.Now().UnixNano(),
@@ -250,7 +256,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 		}
 		wg sync.WaitGroup
 	)
-	buf, err := codec.Encode(&request{ID: id})
+	buf, err := codec.Encode(&Request{ID: id})
 	if err != nil {
 		s.log.With().Panic("can't encode request to bytes", log.Err(err))
 	}
@@ -271,7 +277,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 				logger.Warning("failed to send a request", log.Err(err))
 				return
 			}
-			var resp response
+			var resp Response
 			if _, err := codec.DecodeFrom(stream, &resp); err != nil {
 				logger.Warning("failed to read response from peer", log.Err(err))
 				return

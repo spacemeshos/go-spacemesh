@@ -7,31 +7,45 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"time"
 
-	"github.com/libp2p/go-eventbus"
-	"github.com/libp2p/go-libp2p-core/event"
-	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p/core/event"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
+)
+
+const (
+	// BootNodeTag is the tag used to identify boot nodes in connectionManager.
+	BootNodeTag = "bootnode"
 )
 
 // Config for Discovery.
 type Config struct {
-	Bootnodes []string
-	DataDir   string
+	Bootnodes            []string
+	DataDir              string
+	CheckInterval        time.Duration      // Interval to check for dead|alive peers in the book.
+	CheckTimeout         time.Duration      // Timeout to connect while node check for dead|alive peers in the book.
+	CheckPeersNumber     int                // Number of peers to check for dead|alive peers in the book.
+	CheckPeersUsedBefore time.Duration      // Time to wait before checking for dead|alive peers in the book.
+	PeerExchange         PeerExchangeConfig // Configuration for Peer Exchange protocol
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
 type Discovery struct {
 	logger log.Log
+	host   host.Host
+	cfg    Config
 
 	cancel context.CancelFunc
 	eg     errgroup.Group
 
-	book  *addrBook
+	book  *addressbook.AddrBook
 	crawl *crawler
 }
 
@@ -39,18 +53,23 @@ type Discovery struct {
 func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Discovery{
+		cfg:    config,
 		logger: logger,
+		host:   h,
 		cancel: cancel,
-		book:   newAddrBook(config, logger),
+		book: addressbook.NewAddrBook(
+			addressbook.DefaultAddressBookConfigWithDataDir(config.DataDir),
+			logger,
+		),
 	}
 	d.eg.Go(func() error {
 		d.book.Persist(ctx)
 		return ctx.Err()
 	})
 
-	bootnodes := make([]*addrInfo, 0, len(config.Bootnodes))
+	bootnodes := make([]*addressbook.AddrInfo, 0, len(config.Bootnodes))
 	for _, raw := range config.Bootnodes {
-		info, err := parseAddrInfo(raw)
+		info, err := addressbook.ParseAddrInfo(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
@@ -62,7 +81,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	}
 	d.book.AddAddresses(bootnodes, best)
 
-	protocol := newPeerExchange(h, d.book, portFromHost(logger, h), logger)
+	protocol := newPeerExchange(h, d.book, portFromHost(logger, h), logger, config.PeerExchange)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
 	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
 	if err != nil {
@@ -81,6 +100,10 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 				return ctx.Err()
 			}
 		}
+	})
+	d.eg.Go(func() error {
+		d.CheckBook(ctx)
+		return ctx.Err()
 	})
 	return d, nil
 }
@@ -104,7 +127,7 @@ func (d *Discovery) ExternalPort() uint16 {
 var errNotFound = errors.New("not found")
 
 // bestHostAddress returns routable address if exists, otherwise it returns first available address.
-func bestHostAddress(h host.Host) (*addrInfo, error) {
+func bestHostAddress(h host.Host) (*addressbook.AddrInfo, error) {
 	best, err := bestNetAddress(h)
 	if err == nil {
 		ip, err := manet.ToIP(best)
@@ -112,14 +135,15 @@ func bestHostAddress(h host.Host) (*addrInfo, error) {
 			return nil, fmt.Errorf("failed to recover ip from host address %v: %w", best, err)
 		}
 		full := ma.Join(best, ma.StringCast("/p2p/"+h.ID().String()))
-		return &addrInfo{
+		addr := &addressbook.AddrInfo{
 			IP:      ip,
 			ID:      h.ID(),
 			RawAddr: full.String(),
-			addr:    full,
-		}, nil
+		}
+		addr.SetAddr(full)
+		return addr, nil
 	}
-	return &addrInfo{
+	return &addressbook.AddrInfo{
 		IP: net.IP{127, 0, 0, 1},
 		ID: h.ID(),
 	}, nil
@@ -158,7 +182,7 @@ func routableNetAddress(h host.Host) (ma.Multiaddr, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to recover ip from host address %v: %w", addr, err)
 		}
-		if IsRoutable(ip) {
+		if addressbook.IsRoutable(ip) {
 			return addr, nil
 		}
 	}

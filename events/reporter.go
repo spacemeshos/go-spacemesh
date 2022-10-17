@@ -5,8 +5,8 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/libp2p/go-eventbus"
-	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p/core/event"
+	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -68,7 +68,7 @@ func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bo
 	if reporter != nil {
 		if err := reporter.transactionEmitter.Emit(txWithValidity); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit transaction", tx.ID(), layerID, log.Err(err))
+			log.With().Error("Failed to emit transaction", tx.ID, layerID, log.Err(err))
 		} else {
 			log.Debug("reported tx: %v", txWithValidity)
 		}
@@ -76,24 +76,15 @@ func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bo
 }
 
 // ReportNewActivation reports a new activation.
-func ReportNewActivation(activation *types.ActivationTx) {
+func ReportNewActivation(activation *types.VerifiedActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	activationTxEvent := ActivationTx{ActivationTx: activation}
-
+	activationTxEvent := ActivationTx{VerifiedActivationTx: activation}
 	if reporter != nil {
-		innerBytes, err := activation.InnerBytes()
-		if err != nil {
-			log.Error("error attempting to report activation: unable to encode activation")
-			return
-		}
-
 		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
 			log.With().Error("Failed to emit activation", activation.ID(), activation.PubLayerID, log.Err(err))
-		} else {
-			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 		}
 	}
 }
@@ -169,17 +160,12 @@ func ReportNodeStatusUpdate() {
 	}
 }
 
-// ReportReceipt reports creation or receipt of a new tx receipt.
-func ReportReceipt(r TxReceipt) {
-	mu.RLock()
-	defer mu.RUnlock()
-
+// ReportResult reports creation or receipt of a new tx receipt.
+func ReportResult(rst types.TransactionWithResult) {
 	if reporter != nil {
-		if err := reporter.receiptEmitter.Emit(r); err != nil {
+		if err := reporter.resultsEmitter.Emit(rst); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit receipt", r.ID, log.Err(err))
-		} else {
-			log.Debug("reported receipt: %v", r)
+			log.With().Error("Failed to emit tx results", rst.ID, log.Err(err))
 		}
 	}
 }
@@ -194,7 +180,7 @@ func ReportAccountUpdate(a types.Address) {
 	if reporter != nil {
 		if err := reporter.accountEmitter.Emit(accountEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit account update", log.String("account", a.Short()), log.Err(err))
+			log.With().Error("Failed to emit account update", log.String("account", a.String()), log.Err(err))
 		} else {
 			log.With().Debug("reported account update", a)
 		}
@@ -313,22 +299,6 @@ func SubscribeRewards() Subscription {
 	return nil
 }
 
-// SubscribeReceipts subscribes to receipts.
-func SubscribeReceipts() Subscription {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(TxReceipt))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to receipts")
-		}
-
-		return sub
-	}
-	return nil
-}
-
 // SubscribeToLayers is used to track and report automatically every time a
 // new layer is reached.
 func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
@@ -361,6 +331,7 @@ const (
 	LayerStatusTypeUnknown   = iota
 	LayerStatusTypeApproved  // approved by Hare
 	LayerStatusTypeConfirmed // confirmed by Tortoise
+	LayerStatusTypeApplied   // applied to state
 )
 
 // LayerUpdate packages up a layer with its status (which a layer does not ordinarily contain).
@@ -398,10 +369,6 @@ type Reward struct {
 	Total       uint64
 	LayerReward uint64
 	Coinbase    types.Address
-	// TODO: We don't currently have a way to get the Layer Computed.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-	// LayerComputed
-	Smesher types.NodeID
 }
 
 // Transaction wraps a tx with its layer ID and validity info.
@@ -411,9 +378,9 @@ type Transaction struct {
 	Valid       bool
 }
 
-// ActivationTx wraps *types.ActivationTx.
+// ActivationTx wraps *types.VerifiedActivationTx.
 type ActivationTx struct {
-	*types.ActivationTx
+	*types.VerifiedActivationTx
 }
 
 // Status indicates status change event.
@@ -434,7 +401,7 @@ type EventReporter struct {
 	statusEmitter      event.Emitter
 	accountEmitter     event.Emitter
 	rewardEmitter      event.Emitter
-	receiptEmitter     event.Emitter
+	resultsEmitter     event.Emitter
 	proposalsEmitter   event.Emitter
 	stopChan           chan struct{}
 }
@@ -472,7 +439,7 @@ func newEventReporter() *EventReporter {
 		log.With().Panic("failed to create reward emitter", log.Err(err))
 	}
 
-	receiptEmitter, err := bus.Emitter(new(TxReceipt))
+	resultsEmitter, err := bus.Emitter(new(types.TransactionWithResult))
 	if err != nil {
 		log.With().Panic("failed to create receipt emitter", log.Err(err))
 	}
@@ -495,7 +462,7 @@ func newEventReporter() *EventReporter {
 		statusEmitter:      statusEmitter,
 		accountEmitter:     accountEmitter,
 		rewardEmitter:      rewardEmitter,
-		receiptEmitter:     receiptEmitter,
+		resultsEmitter:     resultsEmitter,
 		errorEmitter:       errorEmitter,
 		proposalsEmitter:   proposalsEmitter,
 		stopChan:           make(chan struct{}),
@@ -528,7 +495,7 @@ func CloseEventReporter() {
 		if err := reporter.rewardEmitter.Close(); err != nil {
 			log.With().Panic("failed to close rewardEmitter", log.Err(err))
 		}
-		if err := reporter.receiptEmitter.Close(); err != nil {
+		if err := reporter.resultsEmitter.Close(); err != nil {
 			log.With().Panic("failed to close receiptEmitter", log.Err(err))
 		}
 		if err := reporter.proposalsEmitter.Close(); err != nil {

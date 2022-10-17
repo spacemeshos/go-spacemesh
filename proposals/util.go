@@ -7,10 +7,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
 
-// ErrZeroTotalWeight is returned when zero total epoch weight is used when calculating eligible slots.
-var ErrZeroTotalWeight = errors.New("zero total weight not allowed")
+var (
+	// ErrZeroTotalWeight is returned when zero total epoch weight is used when calculating eligible slots.
+	ErrZeroTotalWeight = errors.New("zero total weight not allowed")
+
+	errBadBallotData = errors.New("bad ballot data")
+)
 
 // CalcEligibleLayer calculates the eligible layer from the VRF signature.
 func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
@@ -31,7 +37,10 @@ func GetNumEligibleSlots(weight, totalWeight uint64, committeeSize uint32, layer
 	return uint32(numberOfEligibleBlocks), nil
 }
 
-type vrfMessage struct {
+//go:generate scalegen -types VrfMessage
+
+// VrfMessage is a verification message.
+type VrfMessage struct {
 	Beacon  types.Beacon
 	Epoch   types.EpochID
 	Counter uint32
@@ -39,7 +48,7 @@ type vrfMessage struct {
 
 // SerializeVRFMessage serializes a message for generating/verifying a VRF signature.
 func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint32) ([]byte, error) {
-	m := vrfMessage{
+	m := VrfMessage{
 		Beacon:  beacon,
 		Epoch:   epoch,
 		Counter: counter,
@@ -49,4 +58,44 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint3
 		return nil, fmt.Errorf("serialize vrf message: %w", err)
 	}
 	return serialized, nil
+}
+
+// ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
+func ComputeWeightPerEligibility(
+	cdb *datastore.CachedDB,
+	ballot *types.Ballot,
+	layerSize,
+	layersPerEpoch uint32,
+) (util.Weight, error) {
+	var (
+		refBallot        = ballot
+		hdr              *types.ActivationTxHeader
+		err              error
+		total, atxWeight uint64
+	)
+	if ballot.EpochData == nil {
+		if ballot.RefBallot == types.EmptyBallotID {
+			return util.Weight{}, fmt.Errorf("%w: empty ref ballot but no epoch data %s", errBadBallotData, ballot.ID())
+		}
+		refBallot, err = ballots.Get(cdb, ballot.RefBallot)
+		if err != nil {
+			return util.Weight{}, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
+		}
+	}
+	for _, atxID := range refBallot.EpochData.ActiveSet {
+		hdr, err = cdb.GetAtxHeader(atxID)
+		if err != nil {
+			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
+		}
+		weight := hdr.GetWeight()
+		total += weight
+		if atxID == ballot.AtxID {
+			atxWeight = weight
+		}
+	}
+	expNumSlots, err := GetNumEligibleSlots(atxWeight, total, layerSize, layersPerEpoch)
+	if err != nil {
+		return util.Weight{}, fmt.Errorf("failed to compute num eligibility for atx %s: %w", ballot.AtxID, err)
+	}
+	return util.WeightFromUint64(atxWeight).Div(util.WeightFromUint64(uint64(expNumSlots))), nil
 }

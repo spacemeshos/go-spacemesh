@@ -7,525 +7,637 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func TestVerifyingDetermineGoodness(t *testing.T) {
-	goodbase := types.BallotID{254}
-	abstainedBase := types.BallotID{255}
-	ballots := []types.BallotID{{1}, {2}, {3}}
-	blocks := []types.BlockID{{11}, {22}, {33}}
-	for _, tc := range []struct {
-		desc string
-		commonState
-		ballot tortoiseBallot
-		expect goodness
-	}{
-		{
-			desc: "BadBeaconBallot",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{
-					ballots[0]: {},
-				},
-			},
-			ballot: tortoiseBallot{id: ballots[0]},
-		},
-		{
-			desc: "BadBaseBallot",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-			},
-			ballot: tortoiseBallot{id: ballots[0], base: ballots[1]},
-			expect: canBeGood,
-		},
-		{
-			desc: "ExceptionBeforeBaseBallot",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					goodbase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{
-					blocks[0]: types.NewLayerID(9),
-				},
-			},
-			ballot: tortoiseBallot{
-				id: ballots[0], base: goodbase,
-				votes: votes{
-					blocks[0]: support,
-				},
-			},
-		},
-		{
-			desc: "ExceptionNotInMemory",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					goodbase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{},
-			},
-			ballot: tortoiseBallot{
-				id: ballots[0], base: goodbase,
-				votes: votes{
-					blocks[0]: support,
-				},
-			},
-		},
-		{
-			desc: "DifferentOpinionOnException",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					goodbase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{
-					blocks[0]: types.NewLayerID(10),
-				},
-				hareOutput: votes{
-					blocks[0]: against,
-				},
-			},
-			ballot: tortoiseBallot{
-				id: ballots[0], base: goodbase,
-				votes: votes{
-					blocks[0]: support,
-				},
-			},
-		},
-		{
-			desc: "AbstainedBallot",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					goodbase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{
-					blocks[0]: types.NewLayerID(10),
-					blocks[1]: types.NewLayerID(10),
-					blocks[2]: types.NewLayerID(10),
-				},
-				hareOutput: votes{
-					blocks[0]: support,
-					blocks[1]: against,
-					blocks[2]: against,
-				},
-			},
-			ballot: tortoiseBallot{
-				id: ballots[0], base: goodbase,
-				abstain: map[types.LayerID]struct{}{
-					types.NewLayerID(10): {},
-				},
-			},
-			expect: abstained,
-		},
-		{
-			desc: "AbstainedBase",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					abstainedBase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{},
-			},
-			ballot: tortoiseBallot{
-				id:   ballots[0],
-				base: abstainedBase,
-				abstain: map[types.LayerID]struct{}{
-					types.NewLayerID(11): {},
-				},
-			},
-			expect: bad,
-		},
-		{
-			desc: "ConsistentWithAbstainedBase",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					abstainedBase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{},
-			},
-			ballot: tortoiseBallot{
-				id:   ballots[0],
-				base: abstainedBase,
-			},
-			expect: canBeGood,
-		},
-		{
-			desc: "GoodBallot",
-			commonState: commonState{
-				badBeaconBallots: map[types.BallotID]struct{}{},
-				ballotLayer: map[types.BallotID]types.LayerID{
-					goodbase: types.NewLayerID(10),
-				},
-				blockLayer: map[types.BlockID]types.LayerID{
-					blocks[0]: types.NewLayerID(10),
-					blocks[1]: types.NewLayerID(10),
-					blocks[2]: types.NewLayerID(10),
-				},
-				hareOutput: votes{
-					blocks[0]: support,
-					blocks[1]: against,
-					blocks[2]: against,
-				},
-			},
-			ballot: tortoiseBallot{
-				id: ballots[0], base: goodbase,
-				votes: votes{
-					blocks[0]: support,
-					blocks[1]: against,
-					blocks[2]: against,
-				},
-			},
-			expect: good,
-		},
-	} {
-		tc := tc
-		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.New(t)
-
-			v := newVerifying(Config{}, &tc.commonState)
-			v.goodBallots[goodbase] = good
-			v.goodBallots[abstainedBase] = abstained
-			require.Equal(t, tc.expect.String(), v.determineGoodness(logger, tc.ballot).String())
-		})
-	}
-}
-
 func TestVerifyingProcessLayer(t *testing.T) {
 	var (
-		goodbase, badbase = types.BallotID{0}, types.BallotID{0, 1}
-		ballots           = []types.BallotID{{1}, {2}, {3}, {4}}
-		ballotWeight      = weightFromUint64(10)
-		blocks            = []types.BlockID{{11}, {22}, {33}}
-		start             = types.GetEffectiveGenesis()
+		goodbase     = types.BallotID{9, 9, 9}
+		ballots      = []types.BallotID{{1}, {2}, {3}, {4}}
+		ballotWeight = util.WeightFromUint64(10)
+		start        = types.GetEffectiveGenesis()
 	)
-	genCommonState := func() commonState {
-		state := newCommonState()
-		state.hareOutput = votes{
-			blocks[0]: support,
-			blocks[1]: support,
-			blocks[2]: against,
-		}
-		state.blockLayer = map[types.BlockID]types.LayerID{
-			blocks[0]: start.Add(1),
-			blocks[1]: start.Add(1),
-			blocks[1]: start.Add(2),
-		}
-		state.ballotLayer = map[types.BallotID]types.LayerID{
-			ballots[0]: start.Add(1),
-			ballots[1]: start.Add(1),
-			ballots[2]: start.Add(2),
-			ballots[3]: start.Add(2),
-		}
-		state.ballotWeight = map[types.BallotID]weight{
-			ballots[0]: ballotWeight,
-			ballots[1]: ballotWeight,
-			ballots[2]: ballotWeight,
-			ballots[3]: ballotWeight,
-		}
-		return state
-	}
 
 	for _, tc := range []struct {
-		desc            string
-		ballots         [][]tortoiseBallot
-		layerWeights    []weight
-		total           []weight
-		abstainedWeight []map[types.LayerID]weight
+		desc      string
+		ballots   [][]*ballotInfo
+		uncounted []util.Weight
+		total     []util.Weight
 	}{
 		{
 			desc: "AllGood",
-			ballots: [][]tortoiseBallot{
+			ballots: [][]*ballotInfo{
 				{
 					{
-						id: ballots[0], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id: ballots[0],
+						base: baseInfo{
+							id: goodbase,
+						},
+						reference: &referenceInfo{},
+						weight:    ballotWeight,
 					},
 					{
-						id: ballots[1], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id: ballots[1],
+						base: baseInfo{
+							id: goodbase,
+						},
+						reference: &referenceInfo{},
+						weight:    ballotWeight,
 					},
 				},
 				{
 					{
-						id: ballots[2], base: ballots[0], weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id: ballots[2],
+						base: baseInfo{
+							id: goodbase,
+						},
+						reference: &referenceInfo{},
+						weight:    ballotWeight,
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(20), weightFromUint64(10)},
-			total:        []weight{weightFromUint64(20), weightFromUint64(30)},
+			uncounted: []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(30)},
+			total:     []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(30)},
 		},
 		{
 			desc: "AllBad",
-			ballots: [][]tortoiseBallot{
+			ballots: [][]*ballotInfo{
 				{
 					{
-						id: ballots[0], base: badbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id:     ballots[0],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
+						reference: &referenceInfo{},
 					},
 					{
-						id: ballots[1], base: badbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id:     ballots[1],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
+						reference: &referenceInfo{},
 					},
 				},
 				{
 					{
-						id: ballots[2], base: badbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id:        ballots[2],
+						weight:    ballotWeight,
+						reference: &referenceInfo{},
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(0), weightFromUint64(0)},
-			total:        []weight{weightFromUint64(0), weightFromUint64(0)},
+			uncounted: []util.Weight{util.WeightFromUint64(0), util.WeightFromUint64(0)},
+			total:     []util.Weight{util.WeightFromUint64(0), util.WeightFromUint64(0)},
 		},
 		{
 			desc: "GoodInFirstLayer",
-			ballots: [][]tortoiseBallot{
+			ballots: [][]*ballotInfo{
 				{
 					{
-						id: ballots[0], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id:     ballots[0],
+						weight: ballotWeight,
+						base: baseInfo{
+							id: goodbase,
+						},
+						reference: &referenceInfo{},
 					},
 					{
-						id: ballots[1], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id:     ballots[1],
+						weight: ballotWeight,
+						base: baseInfo{
+							id: goodbase,
+						},
+						reference: &referenceInfo{},
 					},
 				},
 				{
 					{
-						id: ballots[2], base: badbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
+						id:     ballots[2],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
+						reference: &referenceInfo{},
 					},
 				},
 			},
-			layerWeights: []weight{weightFromUint64(20), weightFromUint64(0)},
-			total:        []weight{weightFromUint64(20), weightFromUint64(20)},
-		},
-		{
-			desc: "AbstainedWeight",
-			ballots: [][]tortoiseBallot{
-				{
-					{
-						id: ballots[0], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
-						abstain: map[types.LayerID]struct{}{
-							start: {},
-						},
-					},
-					{
-						id: ballots[1], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
-						abstain: map[types.LayerID]struct{}{
-							start: {},
-						},
-					},
-				},
-				{
-					{
-						id: ballots[3], base: goodbase, weight: ballotWeight,
-						votes: votes{blocks[0]: support},
-						abstain: map[types.LayerID]struct{}{
-							start.Add(1): {},
-						},
-					},
-				},
-			},
-			layerWeights: []weight{weightFromUint64(20), weightFromUint64(10)},
-			total:        []weight{weightFromUint64(20), weightFromUint64(30)},
-			abstainedWeight: []map[types.LayerID]weight{
-				{
-					start: weightFromFloat64(20),
-				},
-				{
-					start:        weightFromFloat64(20),
-					start.Add(1): weightFromFloat64(10),
-				},
-			},
+			uncounted: []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(20)},
+			total:     []util.Weight{util.WeightFromUint64(20), util.WeightFromUint64(20)},
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
-
-			state := genCommonState()
-			v := newVerifying(Config{}, &state)
-			v.goodBallots[goodbase] = good
+			v := newVerifying(Config{}, newState())
+			v.ballotRefs[goodbase] = &ballotInfo{
+				id: goodbase,
+				conditions: conditions{
+					baseGood:   true,
+					consistent: true,
+				},
+			}
+			v.processed = start.Add(1).Add(uint32(len(tc.ballots)))
 
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))
-				v.countVotes(logger, lid, tc.ballots[i])
-				require.Equal(t, tc.layerWeights[i], v.goodWeight[lid])
-				require.Equal(t, tc.total[i], v.totalGoodWeight)
-				if tc.abstainedWeight != nil {
-					require.Equal(t, tc.abstainedWeight[i], v.abstainedWeight)
+				for _, ballot := range tc.ballots[i] {
+					ballot.layer = lid
+					v.countBallot(logger, ballot)
 				}
+				require.Equal(t, tc.uncounted[i].String(), v.layer(lid).verifying.goodUncounted.String())
+				require.Equal(t, tc.total[i].String(), v.totalGoodWeight.String())
 			}
 		})
 	}
 }
 
-func TestVerifyingVerifyLayers(t *testing.T) {
+func TestVerifying_Verify(t *testing.T) {
 	require.Equal(t, 4, int(types.GetLayersPerEpoch()))
-	start := types.NewLayerID(0)
-	for _, tc := range []struct {
-		desc                string
-		epochWeight         map[types.EpochID]weight
-		layersWeight        map[types.LayerID]weight
-		abstainedWeight     map[types.LayerID]weight
-		totalWeight         weight
-		verified, processed types.LayerID
-		blocks              map[types.LayerID][]types.BlockID
-		localOpinion        votes
-		config              Config
+	start := types.GetEffectiveGenesis()
+	verified := start
+	processed := start.Add(4)
 
-		expected            types.LayerID
-		expectedTotalWeight weight
+	const localHeight = 100
+	epochs := map[types.EpochID]*epochInfo{
+		2: {weight: 40, height: localHeight},
+		3: {weight: 40, height: localHeight},
+	}
+
+	config := Config{
+		LocalThreshold:  big.NewRat(1, 10),
+		GlobalThreshold: big.NewRat(7, 10),
+		WindowSize:      10,
+		Hdist:           10,
+		Zdist:           1,
+	}
+
+	for _, tc := range []struct {
+		desc        string
+		totalWeight util.Weight
+		layers      map[types.LayerID]*layerInfo
+
+		expected         types.LayerID
+		expectedValidity map[types.BlockID]sign
 	}{
 		{
-			desc: "All",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			desc:        "sanity",
+			totalWeight: util.WeightFromUint64(32),
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(8),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(8),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(6),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+				},
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(8),
-				start.Add(2): weightFromUint64(8),
-				start.Add(3): weightFromUint64(6),
-				start.Add(4): weightFromUint64(10),
-			},
-			abstainedWeight: map[types.LayerID]weight{},
-			totalWeight:     weightFromUint64(32),
-			verified:        start,
-			processed:       start.Add(4),
-			blocks:          map[types.LayerID][]types.BlockID{},
-			localOpinion:    votes{},
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
-			},
-			expected:            start.Add(3),
-			expectedTotalWeight: weightFromUint64(10),
+			expected: start.Add(3),
 		},
 		{
-			desc: "Abstained",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			desc: "with abstained votes",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(8),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(16),
+						abstained:     util.WeightFromUint64(2),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(22),
+						abstained:     util.WeightFromUint64(5),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(34),
+					},
+				},
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(8),
-				start.Add(2): weightFromUint64(8),
-				start.Add(3): weightFromUint64(6),
-				start.Add(4): weightFromUint64(10),
-			},
-			abstainedWeight: map[types.LayerID]weight{
-				start.Add(2): weightFromUint64(2),
-				start.Add(3): weightFromUint64(4),
-			},
-			totalWeight:  weightFromUint64(34),
-			verified:     start,
-			processed:    start.Add(4),
-			blocks:       map[types.LayerID][]types.BlockID{},
-			localOpinion: votes{},
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
-			},
-			expected:            start.Add(2),
-			expectedTotalWeight: weightFromUint64(18),
+			totalWeight: util.WeightFromUint64(34),
+			expected:    start.Add(2),
 		},
 		{
-			desc: "Some",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			desc:        "some crossed threshold",
+			totalWeight: util.WeightFromUint64(36),
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(12),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(26),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(28),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(36),
+					},
+				},
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(12),
-				start.Add(2): weightFromUint64(14),
-				start.Add(3): weightFromUint64(2),
-				start.Add(4): weightFromUint64(8),
-			},
-			abstainedWeight: map[types.LayerID]weight{},
-			totalWeight:     weightFromUint64(36),
-			verified:        start,
-			processed:       start.Add(4),
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
-			},
-			expected:            start.Add(1),
-			expectedTotalWeight: weightFromUint64(24),
+			expected: start.Add(1),
 		},
 		{
-			desc: "Undecided",
-			epochWeight: map[types.EpochID]weight{
-				0: weightFromUint64(10),
-				1: weightFromUint64(10),
+			desc: "hare undecided",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{3}, hare: neutral, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
 			},
-			layersWeight: map[types.LayerID]weight{
-				start.Add(1): weightFromUint64(10),
-				start.Add(2): weightFromUint64(10),
-				start.Add(3): weightFromUint64(10),
-				start.Add(4): weightFromUint64(10),
+			totalWeight: util.WeightFromUint64(40),
+			expected:    start.Add(2),
+		},
+		{
+			desc: "multiple blocks",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
+						{id: types.BlockID{2}, hare: against, layer: start.Add(1)},
+						{id: types.BlockID{3}, hare: against, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{4}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
 			},
-			abstainedWeight: map[types.LayerID]weight{},
-			totalWeight:     weightFromUint64(40),
-			verified:        start,
-			processed:       start.Add(4),
-			blocks: map[types.LayerID][]types.BlockID{
-				start.Add(3): {{1}},
+			totalWeight: util.WeightFromUint64(40),
+			expected:    start.Add(3),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
 			},
-			localOpinion: votes{{1}: abstain},
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 10),
-				GlobalThreshold:                 big.NewRat(7, 10),
-				VerifyingModeVerificationWindow: 10,
+		},
+		{
+			desc: "multiple blocks hare lowest",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, height: 10, layer: start.Add(1)},
+						{id: types.BlockID{2}, hare: against, height: 20, layer: start.Add(1)},
+						{id: types.BlockID{3}, hare: against, height: 30, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{4}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
 			},
-			expected:            start.Add(2),
-			expectedTotalWeight: weightFromUint64(20),
+			totalWeight: util.WeightFromUint64(40),
+			expected:    start.Add(3),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "multiple blocks hare highest",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, height: 30, layer: start.Add(1)},
+						{id: types.BlockID{2}, hare: against, height: 20, layer: start.Add(1)},
+						{id: types.BlockID{3}, hare: against, height: 10, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{4}, hare: support, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
+			},
+			totalWeight: util.WeightFromUint64(40),
+			expected:    start.Add(3),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "multiple blocks higher than local height",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{4}, hare: support, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, height: 20, layer: start.Add(2)},
+						{id: types.BlockID{2}, hare: against, height: localHeight + 1, layer: start.Add(2)},
+						{id: types.BlockID{3}, hare: against, height: localHeight + 1, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{5}, hare: support, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
+			},
+			totalWeight: util.WeightFromUint64(40),
+			expected:    start.Add(3),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: support,
+				{2}: against,
+				{3}: against,
+				{4}: support,
+				{5}: support,
+			},
+		},
+		{
+			desc: "hare output higher than local height",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{4}, hare: support, layer: start.Add(1)},
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{1}, hare: support, height: localHeight + 1, layer: start.Add(2)},
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+					blocks: []*blockInfo{
+						{id: types.BlockID{5}, hare: neutral, layer: start.Add(3)},
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
+			},
+			totalWeight: util.WeightFromUint64(40),
+			expected:    start.Add(1),
+			expectedValidity: map[types.BlockID]sign{
+				{1}: abstain,
+				{4}: support,
+			},
+		},
+		{
+			desc: "all empty layers",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(30),
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(40),
+					},
+				},
+			},
+			totalWeight:      util.WeightFromUint64(40),
+			expected:         start.Add(3),
+			expectedValidity: map[types.BlockID]sign{},
+		},
+		{
+			desc: "some empty layers are not verified",
+			layers: map[types.LayerID]*layerInfo{
+				start.Add(1): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(10),
+					},
+				},
+				start.Add(2): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(20),
+					},
+				},
+				start.Add(3): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(24),
+					},
+				},
+				start.Add(4): {
+					verifying: verifyingInfo{
+						goodUncounted: util.WeightFromUint64(34),
+					},
+				},
+			},
+			totalWeight:      util.WeightFromUint64(34),
+			expected:         start.Add(1),
+			expectedValidity: map[types.BlockID]sign{},
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
 
-			state := newCommonState()
-			state.epochWeight = tc.epochWeight
-			state.verified = tc.verified
-			state.processed = tc.processed
-			state.last = tc.processed
-			state.blocks = tc.blocks
-			state.hareOutput = tc.localOpinion
+			state := newState()
+			state.epochs = epochs
+			state.verified = verified
+			state.processed = processed
+			state.last = processed
+			state.layers = tc.layers
+			for _, layer := range state.layers {
+				for _, block := range layer.blocks {
+					state.blockRefs[block.id] = block
+					state.updateRefHeight(layer, block)
+				}
+			}
 
-			state.localThreshold, state.globalThreshold = computeThresholds(logger, tc.config, mode{},
-				state.verified.Add(1), state.processed, state.processed,
-				state.epochWeight,
-			)
-
-			v := newVerifying(tc.config, &state)
-			v.goodWeight = tc.layersWeight
+			v := newVerifying(config, state)
 			v.totalGoodWeight = tc.totalWeight
-			v.abstainedWeight = tc.abstainedWeight
-			iterateLayers(tc.verified.Add(1), tc.processed.Sub(1), func(lid types.LayerID) bool {
+
+			iterateLayers(verified.Add(1), processed.Sub(1), func(lid types.LayerID) bool {
 				if !v.verify(logger, lid) {
 					return false
 				}
 				state.verified = lid
-				state.localThreshold, state.globalThreshold = computeThresholds(logger, tc.config, mode{},
-					state.verified.Add(1), state.processed, state.processed,
-					state.epochWeight,
-				)
 				return true
 			})
 			require.Equal(t, tc.expected, state.verified)
-			require.Equal(t, tc.expectedTotalWeight.String(), v.totalGoodWeight.String())
+			for block, sig := range tc.expectedValidity {
+				ref, exist := state.blockRefs[block]
+				require.True(t, exist, "block %d should be in state", block)
+				require.Equal(t, sig, ref.validity)
+			}
 		})
 	}
 }

@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const keyFilename = "p2p.key"
@@ -30,7 +29,7 @@ func genIdentity() (crypto.PrivKey, error) {
 
 func identityInfoFromDir(dir string) (*identityInfo, error) {
 	path := filepath.Join(dir, keyFilename)
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
@@ -42,7 +41,14 @@ func identityInfoFromDir(dir string) (*identityInfo, error) {
 	return &info, nil
 }
 
-func ensureIdentity(dir string) (crypto.PrivKey, error) {
+// PrettyIdentityInfoFromDir returns a printable ID from a given identity directory.
+func PrettyIdentityInfoFromDir(dir string) (string, error) {
+	identityInfo, err := identityInfoFromDir(dir)
+	return identityInfo.ID.Pretty(), err
+}
+
+// EnsureIdentity generates an identity key file in given directory.
+func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 	// TODO add crc check
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("ensure that directory %s exist: %w", dir, err)
@@ -75,7 +81,7 @@ func ensureIdentity(dir string) (crypto.PrivKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := ioutil.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
 			return nil, fmt.Errorf("write identity data: %w", err)
 		}
 		return key, nil

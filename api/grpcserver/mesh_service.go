@@ -16,13 +16,14 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	Mesh             api.TxAPI // Mesh
-	GenTime          api.GenesisTimeAPI
-	LayersPerEpoch   uint32
-	NetworkID        uint32
-	LayerDurationSec int
-	LayerAvgSize     int
-	TxsPerBlock      int
+	mesh             api.MeshAPI // Mesh
+	conState         api.ConservativeState
+	genTime          api.GenesisTimeAPI
+	layersPerEpoch   uint32
+	genesisID        types.Hash20
+	layerDurationSec int
+	layerAvgSize     int
+	txsPerProposal   int
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -32,17 +33,19 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data.
 func NewMeshService(
-	tx api.TxAPI, genTime api.GenesisTimeAPI,
-	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
-	layerAvgSize int, txsPerBlock int) *MeshService {
+	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
+	layersPerEpoch uint32, genesisID types.Hash20, layerDurationSec int,
+	layerAvgSize int, txsPerProposal int,
+) *MeshService {
 	return &MeshService{
-		Mesh:             tx,
-		GenTime:          genTime,
-		LayersPerEpoch:   layersPerEpoch,
-		NetworkID:        networkID,
-		LayerDurationSec: layerDurationSec,
-		LayerAvgSize:     layerAvgSize,
-		TxsPerBlock:      txsPerBlock,
+		mesh:             msh,
+		conState:         cstate,
+		genTime:          genTime,
+		layersPerEpoch:   layersPerEpoch,
+		genesisID:        genesisID,
+		layerDurationSec: layerDurationSec,
+		layerAvgSize:     layerAvgSize,
+		txsPerProposal:   txsPerProposal,
 	}
 }
 
@@ -50,7 +53,7 @@ func NewMeshService(
 func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	log.Info("GRPC MeshService.GenesisTime")
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
-		Value: uint64(s.GenTime.GetGenesisTime().Unix()),
+		Value: uint64(s.genTime.GetGenesisTime().Unix()),
 	}}, nil
 }
 
@@ -58,32 +61,30 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
-		Number: uint32(s.GenTime.GetCurrentLayer().Uint32()),
+		Number: uint32(s.genTime.GetCurrentLayer().Uint32()),
 	}}, nil
 }
 
 // CurrentEpoch returns the current epoch number.
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
-	curLayer := s.GenTime.GetCurrentLayer()
+	curLayer := s.genTime.GetCurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
 		Value: uint64(curLayer.GetEpoch()),
 	}}, nil
 }
 
-// NetID returns the network ID.
-func (s MeshService) NetID(context.Context, *pb.NetIDRequest) (*pb.NetIDResponse, error) {
+// GenesisID returns the network ID.
+func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.GenesisIDResponse, error) {
 	log.Info("GRPC MeshService.NetId")
-	return &pb.NetIDResponse{Netid: &pb.SimpleInt{
-		Value: uint64(s.NetworkID),
-	}}, nil
+	return &pb.GenesisIDResponse{GenesisId: s.genesisID.Bytes()}, nil
 }
 
 // EpochNumLayers returns the number of layers per epoch (a network parameter).
 func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
 	log.Info("GRPC MeshService.EpochNumLayers")
 	return &pb.EpochNumLayersResponse{Numlayers: &pb.SimpleInt{
-		Value: uint64(s.LayersPerEpoch),
+		Value: uint64(s.layersPerEpoch),
 	}}, nil
 }
 
@@ -91,7 +92,7 @@ func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) 
 func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
 	log.Info("GRPC MeshService.LayerDuration")
 	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
-		Value: uint64(s.LayerDurationSec),
+		Value: uint64(s.layerDurationSec),
 	}}, nil
 }
 
@@ -99,29 +100,29 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
 	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
-		Value: uint64(s.TxsPerBlock * s.LayerAvgSize / s.LayerDurationSec),
+		Value: uint64(s.txsPerProposal * s.layerAvgSize / s.layerDurationSec),
 	}}, nil
 }
 
 // QUERIES
 
 func (s MeshService) getFilteredTransactions(from types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	latest := s.Mesh.LatestLayer()
-	txs, err := s.Mesh.GetTransactionsByAddress(from, latest, address)
+	latest := s.mesh.LatestLayer()
+	txs, err := s.conState.GetTransactionsByAddress(from, latest, address)
 	if err != nil {
 		return nil, fmt.Errorf("reading txs for address %s: %w", address, err)
 	}
 	return txs, nil
 }
 
-func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
+func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice
 	// but to read all of them.
 	// TODO: index activations by layer (and maybe by coinbase)
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
 	var atxids []types.ATXID
-	for l := startLayer; !l.After(s.Mesh.LatestLayer()); l = l.Add(1) {
-		layer, err := s.Mesh.GetLayer(l)
+	for l := startLayer; !l.After(s.mesh.LatestLayer()); l = l.Add(1) {
+		layer, err := s.mesh.GetLayer(l)
 		if layer == nil || err != nil {
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
@@ -134,7 +135,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 	}
 
 	// Look up full data
-	atxs, matxs := s.Mesh.GetATXs(ctx, atxids)
+	atxs, matxs := s.mesh.GetATXs(ctx, atxids)
 	if len(matxs) != 0 {
 		log.Error("could not find activations %v", matxs)
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
@@ -157,7 +158,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		startLayer = types.NewLayerID(in.MinLayer.Number)
 	}
 
-	if startLayer.After(s.Mesh.LatestLayer()) {
+	if startLayer.After(s.mesh.LatestLayer()) {
 		return nil, status.Errorf(codes.InvalidArgument, "`LatestLayer` must be less than or equal to latest layer")
 	}
 	if in.Filter == nil {
@@ -175,7 +176,10 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
 
 	// Gather transaction data
-	addr := types.BytesToAddress(in.Filter.AccountId.Address)
+	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Filter.AccountId.Address `%s`: %w", in.Filter.AccountId.Address, err)
+	}
 	res := &pb.AccountMeshDataQueryResponse{}
 	if filterTx {
 		txs, err := s.getFilteredTransactions(startLayer, addr)
@@ -249,38 +253,39 @@ func convertLayerID(l types.LayerID) *pb.LayerNumber {
 }
 
 func convertTransaction(t *types.Transaction) *pb.Transaction {
-	return &pb.Transaction{
-		Id: &pb.TransactionId{Id: t.ID().Bytes()},
-		Datum: &pb.Transaction_CoinTransfer{
-			CoinTransfer: &pb.CoinTransferTransaction{
-				Receiver: &pb.AccountId{Address: t.GetRecipient().Bytes()},
-			},
-		},
-		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
-		GasOffered: &pb.GasOffered{
-			// We don't currently implement gas price. t.Fee is the gas actually paid
-			// by the tx; GasLimit is the max gas. MeshService is concerned with the
-			// pre-STF tx, which includes a gas offer but not an amount of gas actually
-			// consumed.
-			// GasPrice:    nil,
-			GasProvided: t.Fee,
-		},
-		Amount:  &pb.Amount{Value: t.Amount},
-		Counter: t.AccountNonce,
-		Signature: &pb.Signature{
-			Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
-			Signature: t.Signature[:],
-			PublicKey: t.Origin().Bytes(),
-		},
+	tx := &pb.Transaction{
+		Id:  t.ID[:],
+		Raw: t.Raw,
 	}
+	if t.TxHeader != nil {
+		tx.Principal = &pb.AccountId{
+			Address: t.Principal.String(),
+		}
+		tx.Template = &pb.AccountId{
+			Address: t.TemplateAddress.String(),
+		}
+		tx.Method = uint32(t.Method)
+		tx.Nonce = &pb.Nonce{
+			Counter:  t.Nonce.Counter,
+			Bitfield: uint32(t.Nonce.Bitfield),
+		}
+		tx.Limits = &pb.LayerLimits{
+			Min: t.LayerLimits.Min,
+			Max: t.LayerLimits.Max,
+		}
+		tx.MaxGas = t.MaxGas
+		tx.GasPrice = t.GasPrice
+		tx.MaxSpend = t.MaxSpend
+	}
+	return tx
 }
 
-func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
+func convertActivation(a *types.VerifiedActivationTx) (*pb.Activation, error) {
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
-		SmesherId: &pb.SmesherId{Id: a.NodeID.ToBytes()},
-		Coinbase:  &pb.AccountId{Address: a.Coinbase.Bytes()},
+		SmesherId: &pb.SmesherId{Id: a.NodeID().ToBytes()},
+		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
 	}, nil
@@ -294,7 +299,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	var activations []types.ATXID
 
 	// read layer blocks
-	layer, err := s.Mesh.GetLayer(layerID)
+	layer, err := s.mesh.GetLayer(layerID)
 	// TODO: Be careful with how we handle missing layers here.
 	// A layer that's newer than the currentLayer (defined above)
 	// is clearly an input error. A missing layer that's older than
@@ -310,7 +315,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	// TODO add proposal data as needed.
 
 	for _, b := range layer.Blocks() {
-		txs, missing := s.Mesh.GetTransactions(b.TxIDs)
+		mtxs, missing := s.conState.GetMeshTransactions(b.TxIDs)
 		// TODO: Do we ever expect txs to be missing here?
 		// E.g., if this node has not synced/received them yet.
 		if len(missing) != 0 {
@@ -319,9 +324,9 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		var pbTxs []*pb.Transaction
-		for _, t := range txs {
-			pbTxs = append(pbTxs, convertTransaction(t))
+		pbTxs := make([]*pb.Transaction, 0, len(mtxs))
+		for _, t := range mtxs {
+			pbTxs = append(pbTxs, convertTransaction(&t.Transaction))
 		}
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
@@ -339,7 +344,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	var pbActivations []*pb.Activation
 
 	// Add unique ATXIDs
-	atxs, matxs := s.Mesh.GetATXs(ctx, activations)
+	atxs, matxs := s.mesh.GetATXs(ctx, activations)
 	if len(matxs) != 0 {
 		log.With().Error("could not find activations from layer",
 			log.String("missing", fmt.Sprint(matxs)), layer.Index())
@@ -354,7 +359,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		pbActivations = append(pbActivations, pbatx)
 	}
 
-	stateRoot, err := s.Mesh.GetLayerStateRoot(layer.Index())
+	stateRoot, err := s.conState.GetLayerStateRoot(layer.Index())
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
@@ -384,8 +389,8 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	}
 
 	// Get the latest layers that passed both consensus engines.
-	lastLayerPassedHare := s.Mesh.LatestLayerInState()
-	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
+	lastLayerPassedHare := s.mesh.LatestLayerInState()
+	lastLayerPassedTortoise := s.mesh.ProcessedLayer()
 
 	var layers []*pb.Layer
 	for l := startLayer; !l.After(endLayer); l = l.Add(1) {
@@ -400,7 +405,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
 		}
 
-		layer, err := s.Mesh.GetLayer(l)
+		layer, err := s.mesh.GetLayer(l)
 		// TODO: Be careful with how we handle missing layers here.
 		// A layer that's newer than the currentLayer (defined above)
 		// is clearly an input error. A missing layer that's older than
@@ -437,7 +442,10 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	if in.Filter.AccountMeshDataFlags == uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
 	}
-	addr := types.BytesToAddress(in.Filter.AccountId.Address)
+	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
+	if err != nil {
+		return fmt.Errorf("invalid in.Filter.AccountId.Address `%s`: %w", in.Filter.AccountId.Address, err)
+	}
 
 	// Read the filter flags
 	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
@@ -469,7 +477,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			log.Info("activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent := <-activationsCh:
-			activation := activationEvent.(events.ActivationTx).ActivationTx
+			activation := activationEvent.(events.ActivationTx).VerifiedActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
 				pbActivation, err := convertActivation(activation)
@@ -492,7 +500,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		case txEvent := <-txCh:
 			tx := txEvent.(events.Transaction)
 			// Apply address filter
-			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.GetRecipient() == addr) {
+			if tx.Valid && tx.Transaction.TxHeader != nil && tx.Transaction.Principal == addr {
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{
@@ -563,6 +571,8 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 		return pb.Layer_LAYER_STATUS_APPROVED
 	case events.LayerStatusTypeConfirmed:
 		return pb.Layer_LAYER_STATUS_CONFIRMED
+	case events.LayerStatusTypeApplied:
+		return pb.Layer_LAYER_STATUS_APPLIED
 	default:
 		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}

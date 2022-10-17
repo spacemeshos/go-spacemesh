@@ -40,18 +40,17 @@ func AddCommands(cmd *cobra.Command) {
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
 		config.PoETServer, "The poet server url. (temporary) ")
-	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
-		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	cmd.PersistentFlags().StringVar(&config.Genesis.GenesisTime, "genesis-time",
+		config.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	cmd.PersistentFlags().StringVar(&config.Genesis.ExtraData, "genesis-extra-data",
+		config.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
-	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
-		config.GoldenATXID, "golden ATX hash")
-	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
-		config.BlockCacheSize, "size in layers of meshdb block cache")
+	cmd.PersistentFlags().Uint64Var(&config.TickSize, "tick-size", config.TickSize, "number of poet leaves in a single tick")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&config.ProfilerURL, "profiler-url",
@@ -61,8 +60,12 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
-	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
-		config.TxsPerBlock, "the number of transactions to select per block on block creation")
+	cmd.PersistentFlags().IntVar(&config.TxsPerProposal, "txs-per-proposal",
+		config.TxsPerProposal, "the number of transactions to select per proposal")
+	cmd.PersistentFlags().Uint64Var(&config.BlockGasLimit, "block-gas-limit",
+		config.BlockGasLimit, "max gas allowed per block")
+	cmd.PersistentFlags().IntVar(&config.OptFilterThreshold, "optimistic-filtering-threshold",
+		config.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
@@ -75,8 +78,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
 	cmd.PersistentFlags().BoolVar(&config.P2P.DisableNatPort, "disable-natport",
 		config.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
-	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
-		config.P2P.NetworkID, "network-id to participate in")
 	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "low-peers",
 		config.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "high-peers",
@@ -89,17 +90,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== TIME Flags ========================== **/
 
-	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
-		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
-	cmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
-		config.TIME.NtpQueries, "Number of ntp queries to do")
-	cmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",
-		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
-	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
-		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
-	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
-		"ntp-servers", config.TIME.NTPServers, "A list of NTP servers to query (e.g., 'time.google.com'). Overrides the list in config. Must contain more servers than the number of ntp-queries.")
-	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "disable", config.TIME.Peersync.Disable,
+	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "peersync-disable", config.TIME.Peersync.Disable,
 		"disable verification that local time is in sync with peers")
 	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundRetryInterval, "peersync-round-retry-interval",
 		config.TIME.Peersync.RoundRetryInterval, "when to retry a sync round after a failure")
@@ -189,8 +180,6 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "tortoise-hdist",
 		config.Tortoise.Hdist, "hdist")
-	cmd.PersistentFlags().DurationVar(&config.Tortoise.RerunInterval, "tortoise-rerun-interval",
-		config.Tortoise.RerunInterval, "Tortoise will verify layers from scratch every interval.")
 
 	// TODO(moshababo): add usage desc
 
@@ -226,10 +215,19 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&config.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		config.SMESHING.Opts.Throttle, "")
 
-	/**========================Consensus Flags ========================== **/
+	/**======================== Consensus Flags ========================== **/
 
 	cmd.PersistentFlags().Uint32Var(&config.LayersPerEpoch, "layers-per-epoch",
 		config.LayersPerEpoch, "number of layers in epoch")
+
+	/**======================== PoET Flags ========================== **/
+
+	cmd.PersistentFlags().DurationVar(&config.POET.PhaseShift, "phase-shift",
+		config.POET.PhaseShift, "phase shift of poet server")
+	cmd.PersistentFlags().DurationVar(&config.POET.CycleGap, "cycle-gap",
+		config.POET.CycleGap, "cycle gap of poet server")
+	cmd.PersistentFlags().DurationVar(&config.POET.GracePeriod, "grace-period",
+		config.POET.GracePeriod, "propagation time for ATXs in the network")
 
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())

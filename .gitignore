@@ -2,18 +2,20 @@
 
 cmd/tmp
 /tmp
-*/**/*un~
-*/**/*.test
-*/**/temp.js
+*un~
+*.test
+temp.js
 .DS_Store
-*/**/.DS_Store
+*.log
 /build
+/bin
 libgpu-setup-*
 libsvm-*
 
 .project
 .settings
 .idea
+.vscode
 .vagrant
 
 *.out
@@ -21,12 +23,14 @@ libsvm-*
 /go-spacemesh
 /go-hare
 /cp.out
-/cover.out
 /cover-all.out
-*/**/cover.out
+cover.out
 gcloud.json
 spacemesh.json
 database/data
 *.pyc
 /devtools
 .python-version
+
+vendor/*
+systest/vendor/*

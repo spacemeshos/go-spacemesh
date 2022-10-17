@@ -3,42 +3,37 @@ package hare
 import (
 	"bytes"
 	"fmt"
-	"hash/fnv"
-	"math"
 	"sort"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
-type messageType byte
+// MessageType is a message type.
+type MessageType byte
 
 // declare all known message types.
 const (
-	status   messageType = 0
-	proposal messageType = 1
-	commit   messageType = 2
-	notify   messageType = 3
-	pre      messageType = 10
-	certify  messageType = 11
+	status   MessageType = 0
+	proposal MessageType = 1
+	commit   MessageType = 2
+	notify   MessageType = 3
+	pre      MessageType = 10
 )
 
 const (
-	preRound     uint32 = math.MaxUint32
-	certifyRound uint32 = math.MaxUint32 >> 1
-)
-
-// declare round identifiers.
-const (
-	statusRound uint32 = iota
-	proposalRound
-	commitRound
-	notifyRound
+	preRound      = eligibility.HarePreRound
+	statusRound   = eligibility.HareStatusRound
+	proposalRound = eligibility.HareProposalRound
+	commitRound   = eligibility.HareCommitRound
+	notifyRound   = eligibility.HareNotifyRound
 )
 
 const defaultSetSize = 200
 
-func (mType messageType) String() string {
+func (mType MessageType) String() string {
 	switch mType {
 	case status:
 		return "Status"
@@ -50,8 +45,6 @@ func (mType messageType) String() string {
 		return "Notify"
 	case pre:
 		return "PreRound"
-	case certify:
-		return "Certification"
 	default:
 		return "Unknown message type"
 	}
@@ -61,7 +54,7 @@ func (mType messageType) String() string {
 type Set struct {
 	valuesMu  sync.RWMutex
 	values    map[types.ProposalID]struct{}
-	id        uint32
+	id        types.Hash32
 	isIDValid bool
 }
 
@@ -74,7 +67,7 @@ func NewDefaultEmptySet() *Set {
 func NewEmptySet(size int) *Set {
 	s := &Set{}
 	s.initWithSize(size)
-	s.id = 0
+	s.id = types.Hash32{}
 	s.isIDValid = false
 
 	return s
@@ -88,7 +81,7 @@ func NewSetFromValues(values ...types.ProposalID) *Set {
 	for _, v := range values {
 		s.Add(v)
 	}
-	s.id = 0
+	s.id = types.Hash32{}
 	s.isIDValid = false
 
 	return s
@@ -101,8 +94,11 @@ func NewSet(data []types.ProposalID) *Set {
 	s.isIDValid = false
 
 	s.initWithSize(len(data))
+
+	// SAFETY: It's safe not to lock here as `s` was just
+	// created and nobody else has access to it yet.
 	for _, bid := range data {
-		s.add(bid)
+		s.values[bid] = struct{}{}
 	}
 
 	return s
@@ -210,18 +206,18 @@ func (s *Set) updateID() {
 	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
 
 	// calc
-	h := fnv.New32()
+	h := hash.New()
 	for i := 0; i < len(keys); i++ {
 		h.Write(keys[i].Bytes())
 	}
 
 	// update
-	s.id = h.Sum32()
+	s.id = types.BytesToHash(h.Sum([]byte{}))
 	s.isIDValid = true
 }
 
 // ID returns the ObjectID of the set.
-func (s *Set) ID() uint32 {
+func (s *Set) ID() types.Hash32 {
 	if !s.isIDValid {
 		s.updateID()
 	}
@@ -324,13 +320,6 @@ func (s *Set) Size() int {
 	return s.len()
 }
 
-func (s *Set) init() {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	s.values = make(map[types.ProposalID]struct{})
-}
-
 func (s *Set) initWithSize(size int) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
@@ -351,20 +340,6 @@ func (s *Set) contains(id types.ProposalID) bool {
 
 	_, ok := s.values[id]
 	return ok
-}
-
-func (s *Set) add(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	s.values[id] = struct{}{}
-}
-
-func (s *Set) remove(id types.ProposalID) {
-	s.valuesMu.Lock()
-	defer s.valuesMu.Unlock()
-
-	delete(s.values, id)
 }
 
 func (s *Set) elements() []types.ProposalID {

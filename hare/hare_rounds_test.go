@@ -15,6 +15,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 )
 
 const skipMoreTests = true
@@ -50,38 +53,49 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 
 type (
 	funcOracle   func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
-	funcLayers   func(types.LayerID, *testHare) ([]*types.Proposal, error)
-	funcValidate func(types.LayerID, types.BlockID, *testHare)
+	funcValidate func(types.LayerID, *testHare)
 	testHare     struct {
 		*hareWithMocks
 		N int
 	}
 )
 
-func (testHare) Register(bool, string)   {}
-func (testHare) Unregister(bool, string) {}
-
-func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concurrent int, oracle funcOracle, bp funcLayers, validate funcValidate) *TestHareWrapper {
+func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, createProposal bool, oracle funcOracle, validate funcValidate) *TestHareWrapper {
 	r := require.New(t)
 	w := newTestHareWrapper(maxLayers)
 	cfg := config.Config{
 		N:               nodes,
 		F:               nodes/2 - 1,
+		WakeupDelta:     1,
 		RoundDuration:   1,
 		ExpectedLeaders: leaders,
 		LimitIterations: limitIterations,
 		LimitConcurrent: maxLayers,
 	}
 
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), nodes)
+	mesh, err := mocknet.FullMeshLinked(nodes)
 	require.NoError(t, err)
+	dbs := make([]*sql.Database, 0, nodes)
+	for i := 0; i < nodes; i++ {
+		dbs = append(dbs, sql.InMemory())
+	}
+	if createProposal {
+		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(types.GetEffectiveGenesis().Add(uint32(maxLayers))); lid = lid.Add(1) {
+			p := types.GenLayerProposal(lid, []types.TransactionID{})
+			for i := 0; i < nodes; i++ {
+				require.NoError(t, ballots.Add(dbs[i], &p.Ballot))
+				require.NoError(t, proposals.Add(dbs[i], p))
+			}
+		}
+	}
+
 	for i := 0; i < nodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(context.TODO(), logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 
-		th := &testHare{createTestHare(t, cfg, w.clock, host.ID(), mp2p, t.Name()), i}
+		th := &testHare{createTestHare(t, dbs[i], cfg, w.clock, host.ID(), mp2p, t.Name()), i}
 		th.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte{}, nil).AnyTimes()
 		th.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
@@ -89,16 +103,11 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 				return oracle(layer, round, committeeSize, id, sig, th)
 			}).AnyTimes()
 		th.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		th.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		th.mockProposalDB.EXPECT().LayerProposals(gomock.Any()).DoAndReturn(
-			func(layer types.LayerID) ([]*types.Proposal, error) {
-				return bp(layer, th)
-			}).AnyTimes()
-		th.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, layer types.LayerID, blockID types.BlockID) error {
-				validate(layer, blockID, th)
-				return nil
-			}).AnyTimes()
+		go func() {
+			for out := range th.blockGenCh {
+				validate(out.Layer, th)
+			}
+		}()
 		w.hare = append(w.hare, th.Hare)
 		e := th.Start(context.TODO())
 		r.NoError(e)
@@ -109,24 +118,20 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 }
 
 func Test_HarePreRoundEmptySet(t *testing.T) {
-	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
 
 	var mu sync.RWMutex
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 2, 5,
+	w := runNodesFor(t, nodes, 2, layers, 2, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round/4 > 1 && round != preRound {
 				t.Fatalf("out of round %d limit", round)
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]*types.Proposal, error) {
-			return []*types.Proposal{}, nil
-		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 
 			mu.Lock()
@@ -136,6 +141,10 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
+
+	for _, h := range w.hare {
+		close(h.blockGenCh)
+	}
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -154,22 +163,18 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 		t.SkipNow()
 	}
 
-	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, 5,
+	w := runNodesFor(t, nodes, 2, layers, 1, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == statusRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]*types.Proposal, error) {
-			return []*types.Proposal{}, nil
-		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -190,22 +195,18 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, 5,
+	w := runNodesFor(t, nodes, 2, layers, 1, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == proposalRound {
 				return 0, nil
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]*types.Proposal, error) {
-			return []*types.Proposal{}, nil
-		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -226,22 +227,18 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, 5,
+	w := runNodesFor(t, nodes, 2, layers, 1, true,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == commitRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]*types.Proposal, error) {
-			return []*types.Proposal{types.GenLayerProposal(layer, nil)}, nil
-		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -262,22 +259,18 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, 5,
+	w := runNodesFor(t, nodes, 2, layers, 1, true,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == notifyRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]*types.Proposal, error) {
-			return []*types.Proposal{types.GenLayerProposal(layer, nil)}, nil
-		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
@@ -298,19 +291,15 @@ func Test_HareComplete(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, 5,
+	w := runNodesFor(t, nodes, 2, layers, 1, true,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]*types.Proposal, error) {
-			return []*types.Proposal{types.GenLayerProposal(layer, nil)}, nil
-		},
-		func(layer types.LayerID, _ types.BlockID, hare *testHare) {
+		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
 		})
