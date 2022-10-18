@@ -90,24 +90,35 @@ func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	layer := v.layer(lid)
+
+	uncounted := v.expectedWeight(v.Config, lid).
+		Sub(v.totalGoodWeight).
+		Add(layer.verifying.goodUncounted)
+
 	margin := util.WeightFromUint64(0).
 		Add(v.totalGoodWeight).
 		Sub(layer.verifying.goodUncounted).
 		Sub(layer.verifying.abstained)
+	if uncounted.Sign() > 0 {
+		margin.Sub(uncounted)
+	}
 
 	threshold := v.globalThreshold(v.Config, lid)
 	logger = logger.WithFields(
 		log.String("verifier", "verifying"),
-		log.Stringer("candidate_layer", lid),
+		log.Stringer("candidate layer", lid),
 		log.Stringer("margin", margin),
-		log.Stringer("abstained_weight", layer.verifying.abstained),
-		log.Stringer("local_threshold", v.localThreshold),
-		log.Stringer("global_threshold", threshold),
+		log.Stringer("uncounted", uncounted),
+		log.Stringer("total good weight", v.totalGoodWeight),
+		log.Stringer("good uncounted", layer.verifying.goodUncounted),
+		log.Stringer("abstained weight", layer.verifying.abstained),
+		log.Stringer("global threshold", threshold),
 	)
-
-	if sign(margin.Cmp(threshold)) == neutral {
+	if sign(margin.Cmp(threshold)) != support {
 		logger.With().Debug("doesn't cross global threshold")
 		return false
+	} else {
+		logger.With().Debug("crosses global threshold")
 	}
 	return verifyLayer(
 		logger,

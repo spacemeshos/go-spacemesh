@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -167,11 +166,9 @@ func TestVerifying_Verify(t *testing.T) {
 	}
 
 	config := Config{
-		LocalThreshold:  big.NewRat(1, 10),
-		GlobalThreshold: big.NewRat(7, 10),
-		WindowSize:      10,
-		Hdist:           10,
-		Zdist:           1,
+		WindowSize: 10,
+		Hdist:      10,
+		Zdist:      1,
 	}
 
 	for _, tc := range []struct {
@@ -240,8 +237,8 @@ func TestVerifying_Verify(t *testing.T) {
 				},
 				start.Add(3): {
 					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(22),
-						abstained:     util.WeightFromUint64(5),
+						goodUncounted: util.WeightFromUint64(25),
+						abstained:     util.WeightFromUint64(6),
 					},
 					blocks: []*blockInfo{
 						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
@@ -581,17 +578,17 @@ func TestVerifying_Verify(t *testing.T) {
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
 					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(10),
+						goodUncounted: util.WeightFromUint64(13),
 					},
 				},
 				start.Add(2): {
 					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(20),
+						goodUncounted: util.WeightFromUint64(26),
 					},
 				},
 				start.Add(3): {
 					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(24),
+						goodUncounted: util.WeightFromUint64(28),
 					},
 				},
 				start.Add(4): {
