@@ -242,7 +242,7 @@ func (pb *ProposalBuilder) createProposal(
 			MeshHash: mesh,
 		},
 	}
-	p.Ballot.Signature = pb.signer.Sign(p.Ballot.Bytes())
+	p.Ballot.Signature = pb.signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = pb.signer.Sign(p.Bytes())
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))

@@ -123,7 +123,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, vrfSigner *signing.V
 			b.RefBallot = blts[0].ID()
 		}
 		b.EligibilityProofs = proofs
-		b.Signature = signer.Sign(b.Bytes())
+		b.Signature = signer.Sign(b.SignedBytes())
 		require.NoError(tb, b.Initialize())
 		blts = append(blts, b)
 	}

@@ -117,7 +117,7 @@ func GenLayerBallot(layerID LayerID) *Ballot {
 	b := RandomBallot()
 	b.LayerIndex = layerID
 	signer := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.Bytes())
+	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()
 	return b
 }
@@ -152,7 +152,7 @@ func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
 		},
 	}
 	signer := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.Initialize()
 	return p

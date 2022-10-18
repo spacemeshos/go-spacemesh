@@ -739,7 +739,7 @@ func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *t
 	ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
 	}
-	ballot.Signature = signing.NewEdSigner().Sign(ballot.Bytes())
+	ballot.Signature = signing.NewEdSigner().Sign(ballot.SignedBytes())
 	require.NoError(tb, ballot.Initialize())
 	return ballot
 }
@@ -1460,7 +1460,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				}
 				ballot.Votes.Base = types.GenesisBallotID
 
-				ballot.Signature = sig.Sign(ballot.Bytes())
+				ballot.Signature = sig.Sign(ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())
 				blts = append(blts, ballot)
 

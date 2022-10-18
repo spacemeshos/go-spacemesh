@@ -114,7 +114,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				Beacon:    beacon,
 			}
 		}
-		ballot.Signature = c.signer.Sign(ballot.Bytes())
+		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()

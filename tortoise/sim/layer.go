@@ -185,7 +185,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			},
 			Votes: voting,
 		}
-		ballot.Signature = signer.Sign(ballot.Bytes())
+		ballot.Signature = signer.Sign(ballot.SignedBytes())
 		if err = ballot.Initialize(); err != nil {
 			g.logger.With().Panic("failed to init ballot", log.Err(err))
 		}

@@ -388,7 +388,7 @@ func TestFullCountVotes(t *testing.T) {
 						}
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
-					ballot.Signature = signer.Sign(ballot.Bytes())
+					ballot.Signature = signer.Sign(ballot.SignedBytes())
 					require.NoError(t, ballot.Initialize())
 					layerBallots = append(layerBallots, ballot)
 				}

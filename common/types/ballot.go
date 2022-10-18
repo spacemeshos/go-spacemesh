@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -197,13 +198,22 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-
 	if b.Signature == nil {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
-	b.ballotID = BallotID(CalcObjectHash32(b).ToHash20())
 
-	data := b.Bytes()
+	hasher := hash.New()
+	_, err := codec.EncodeTo(hasher, &b.InnerBallot)
+	if err != nil {
+		return fmt.Errorf("failed to encode inner ballot for hashing")
+	}
+	_, err = codec.EncodeByteSlice(hasher, b.Signature)
+	if err != nil {
+		return fmt.Errorf("failed to encode byte slice")
+	}
+	b.ballotID = BallotID(BytesToHash(hasher.Sum(nil)).ToHash20())
+
+	data := b.SignedBytes()
 	pubkey, err := signing.ExtractPublicKey(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
@@ -212,8 +222,8 @@ func (b *Ballot) Initialize() error {
 	return nil
 }
 
-// Bytes returns the serialization of the InnerBallot.
-func (b *Ballot) Bytes() []byte {
+// SignedBytes returns the serialization of the InnerBallot for signing.
+func (b *Ballot) SignedBytes() []byte {
 	data, err := codec.Encode(&b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
