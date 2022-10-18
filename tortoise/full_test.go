@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"math/big"
 	mrand "math/rand"
 	"testing"
 	"time"
@@ -419,7 +418,6 @@ func TestFullVerify(t *testing.T) {
 	epoch := types.EpochID(1)
 	target := epoch.FirstLayer().Sub(1)
 	last := target.Add(types.GetLayersPerEpoch())
-	cfg := Config{GlobalThreshold: big.NewRat(60, 100)}
 	epochs := map[types.EpochID]*epochInfo{
 		1: {weight: 10},
 	}
@@ -527,7 +525,7 @@ func TestFullVerify(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			full := newFullTortoise(cfg, newState())
+			full := newFullTortoise(Config{}, newState())
 			full.epochs = epochs
 			full.last = last
 			full.processed = last
