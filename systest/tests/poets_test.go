@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -72,7 +71,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil
 		}
-		if layer.Layer.GetStatus() != v1.Layer_LAYER_STATUS_APPLIED {
+		if layer.Layer.GetStatus() != spacemeshv1.Layer_LAYER_STATUS_APPLIED {
 			return true, nil
 		}
 		// don't kill a poet if this is not ~middle of epoch
