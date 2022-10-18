@@ -679,7 +679,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	lid = lid.Add(1)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// for some reasons this account wasn't applied in layer 98.
-	// the account receive enough funds in layer 99 (via rewards or incoming transfer) for both mtx0 and mtx1
+	// but the account receive enough funds in layer 98 (via rewards or incoming transfer) for both mtx0 and mtx1
 	ta.balance = mtx0.Spending() + mtx1.Spending()
 	require.NoError(t, tc.cache.ApplyLayer(context.TODO(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
 	checkTX(t, tc.cache, mtx0)

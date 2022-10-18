@@ -70,6 +70,8 @@ type accountCache struct {
 	//   (that may contain incoming funds for that account)
 	// - a better tx arrived (higher fee) and made higher nonce txs infeasible due to insufficient balance
 	//   deemed by conservative state.
+	// TODO: evict accounts that only has DB-only txs
+	// https://github.com/spacemeshos/go-spacemesh/issues/3668
 	moreInDB bool
 
 	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with the cache instance
@@ -733,11 +735,11 @@ func (c *cache) ApplyLayer(
 		acctResetDuration.Observe(float64(time.Since(t1)))
 	}
 
-	for principal, cash := range c.pending {
+	for principal, accCache := range c.pending {
 		if _, ok := toCleanup[principal]; ok {
 			continue
 		}
-		if cash.moreInDB {
+		if accCache.moreInDB {
 			toReset[principal] = struct{}{}
 		}
 	}
