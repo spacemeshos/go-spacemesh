@@ -4,6 +4,7 @@ package types
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -25,7 +26,7 @@ const (
 )
 
 var (
-	genesisLayer   *Layer
+	genesisLayer   genesisLayerWrapper
 	layersPerEpoch uint32
 	// effectiveGenesis marks when actual proposals would start being created in the network. It takes into account
 	// the first genesis epoch and the following epoch in which ATXs are published.
@@ -53,17 +54,25 @@ func GetLayersPerEpoch() uint32 {
 
 // GenesisLayer returns the genesis layer.
 func GenesisLayer() *Layer {
-	if genesisLayer == nil {
-		InitGenesisData()
-	}
-	return genesisLayer
+	return genesisLayer.get()
 }
 
-// InitGenesisData generate the genesis data.
-func InitGenesisData() {
+type genesisLayerWrapper struct {
+	layer    *Layer
+	initOnce sync.Once // used to initialize `layer` only once
+}
+
+func (l *genesisLayerWrapper) get() *Layer {
+	l.initOnce.Do(func() { l.layer = genesisData() })
+	return l.layer
+}
+
+// genesisData generates the genesis data.
+func genesisData() *Layer {
+	genesisLayerId := GetEffectiveGenesis()
 	ballot := &Ballot{
 		InnerBallot: InnerBallot{
-			LayerIndex: GetEffectiveGenesis(),
+			LayerIndex: genesisLayerId,
 			EpochData: &EpochData{
 				Beacon: HexToBeacon(BootstrapBeacon),
 			},
@@ -72,11 +81,11 @@ func InitGenesisData() {
 	}
 	block := &Block{
 		InnerBlock: InnerBlock{
-			LayerIndex: GetEffectiveGenesis(),
+			LayerIndex: genesisLayerId,
 		},
 		blockID: GenesisBlockID,
 	}
-	genesisLayer = NewExistingLayer(GetEffectiveGenesis(), Hash32{}, []*Ballot{ballot}, []*Block{block})
+	return NewExistingLayer(genesisLayerId, Hash32{}, []*Ballot{ballot}, []*Block{block})
 }
 
 // GetEffectiveGenesis returns when actual proposals would be created.
