@@ -625,6 +625,8 @@ github.com/spacemeshos/poet v0.1.1-0.20221011061754-9bb56a12fb8f h1:57WdnvBAa3sj
 github.com/spacemeshos/poet v0.1.1-0.20221011061754-9bb56a12fb8f/go.mod h1:VsP1vPvUXP53FaD2u2x17JCGMa40rjy1zqjvMNzkorU=
 github.com/spacemeshos/post v0.0.0-20221018142814-aaea144da06d h1:jDnCiYMIcknfp1JQKcuIT3oIj27DE3JMBQR5jtVgEhI=
 github.com/spacemeshos/post v0.0.0-20221018142814-aaea144da06d/go.mod h1:PI5309qTYd62p6gYrCIHOLBZKhxI2/H7G7QvEeKh7jo=
+github.com/spacemeshos/post v0.0.0-20221018145343-723fe7aef532 h1:Gpeh0JiB6wHxDparxRhA+seTVHUem9G7iQmaNAlh6tY=
+github.com/spacemeshos/post v0.0.0-20221018145343-723fe7aef532/go.mod h1:PI5309qTYd62p6gYrCIHOLBZKhxI2/H7G7QvEeKh7jo=
 github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d h1:09R53k+V+cPCwTH3AnvOJO2OmCb4dJlG6hfgqQlTm6w=
 github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 h1:RC6RW7j+1+HkWaX/Yh71Ee5ZHaHYt7ZP4sQgUrm6cDU=
 github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572/go.mod h1:w0SWMsp6j9O/dk4/ZpIhL+3CkG8ofA2vuv7k+ltqUMc=
