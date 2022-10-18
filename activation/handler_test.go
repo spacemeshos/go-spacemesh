@@ -87,7 +87,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	numTicks := uint64(100)
-	numUnits := uint(100)
+	numUnits := uint32(100)
 
 	npst := newNIPostWithChallenge(&chlng, poetRef)
 	posATX := newActivationTx(t, sig, 0, *types.EmptyATXID, *types.EmptyATXID, nil, types.NewLayerID(1000), 0, numTicks, coinbase1, numUnits, npst)

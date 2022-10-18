@@ -7,20 +7,20 @@ type PostSetupComputeProvider initialization.ComputeProvider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	BitsPerLabel  uint `mapstructure:"post-bits-per-label"`
-	LabelsPerUnit uint `mapstructure:"post-labels-per-unit"`
-	MinNumUnits   uint `mapstructure:"post-min-numunits"`
-	MaxNumUnits   uint `mapstructure:"post-max-numunits"`
-	K1            uint `mapstructure:"post-k1"`
-	K2            uint `mapstructure:"post-k2"`
+	MinNumUnits   uint32 `mapstructure:"post-min-numunits"`
+	MaxNumUnits   uint32 `mapstructure:"post-max-numunits"`
+	BitsPerLabel  uint8  `mapstructure:"post-bits-per-label"`
+	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
+	K1            uint32 `mapstructure:"post-k1"`
+	K2            uint32 `mapstructure:"post-k2"`
 }
 
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
 	DataDir           string `mapstructure:"smeshing-opts-datadir"`
-	NumUnits          uint   `mapstructure:"smeshing-opts-numunits"`
-	NumFiles          uint   `mapstructure:"smeshing-opts-numfiles"`
+	NumUnits          uint32 `mapstructure:"smeshing-opts-numunits"`
+	NumFiles          uint32 `mapstructure:"smeshing-opts-numfiles"`
 	ComputeProviderID int    `mapstructure:"smeshing-opts-provider"`
 	Throttle          bool   `mapstructure:"smeshing-opts-throttle"`
 }

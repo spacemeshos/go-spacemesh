@@ -32,10 +32,10 @@ require (
 	github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
-	github.com/spacemeshos/go-scale v0.0.0-20220915084948-ecda42870b1b
-	github.com/spacemeshos/merkle-tree v0.0.0-20220909175028-45e6d3500683
+	github.com/spacemeshos/go-scale v1.0.0
+	github.com/spacemeshos/merkle-tree v0.0.0-20221018112432-1d52068dc4aa
 	github.com/spacemeshos/poet v0.1.1-0.20221011061754-9bb56a12fb8f
-	github.com/spacemeshos/post v0.0.0-20220826151255-1c6c817f3797
+	github.com/spacemeshos/post v0.0.0-20221018145343-723fe7aef532
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
@@ -158,8 +158,7 @@ require (
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
-	github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 // indirect
-	github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d // indirect
+	github.com/spacemeshos/bitstream v0.0.0-20220825090124-a402b591ff20 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect

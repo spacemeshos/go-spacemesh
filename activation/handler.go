@@ -193,7 +193,7 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
 	}
 
-	leaves, err := h.nipostValidator.Validate(commitment, atx.NIPost, *expectedChallengeHash, uint(atx.NumUnits))
+	leaves, err := h.nipostValidator.Validate(commitment, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -242,7 +242,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
 	commitment := GetCommitmentBytes(atx.NodeID(), *atx.CommitmentATX)
-	if err := h.nipostValidator.ValidatePost(commitment, atx.InitialPost, &initialPostMetadata, uint(atx.NumUnits)); err != nil {
+	if err := h.nipostValidator.ValidatePost(commitment, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 

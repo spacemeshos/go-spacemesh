@@ -378,27 +378,27 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postSetupOpts.NumUnits))
 
 	newPostCfg = postCfg
-	newPostCfg.LabelsPerUnit = uint(nipost.PostMetadata.LabelsPerUnit) + 1
+	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 
 	newPostCfg = postCfg
-	newPostCfg.BitsPerLabel = uint(nipost.PostMetadata.BitsPerLabel) + 1
+	newPostCfg.BitsPerLabel = nipost.PostMetadata.BitsPerLabel + 1
 	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
 
 	newPostCfg = postCfg
-	newPostCfg.K1 = uint(nipost.PostMetadata.K2) - 1
+	newPostCfg.K1 = nipost.PostMetadata.K2 - 1
 	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", newPostCfg.K1, nipost.PostMetadata.K1))
 
 	newPostCfg = postCfg
-	newPostCfg.K2 = uint(nipost.PostMetadata.K2) + 1
+	newPostCfg.K2 = nipost.PostMetadata.K2 + 1
 	err = validateNIPost(minerID, goldenATXID, nipost, nipostChallenge, poetDb, newPostCfg, postSetupOpts.NumUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg atypes.PostConfig, numUnits uint) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg atypes.PostConfig, numUnits uint32) error {
 	v := &Validator{poetDb, postCfg}
 	commitment := GetCommitmentBytes(minerID, commitmentAtx)
 	_, err := v.Validate(commitment[:], nipost, challenge, numUnits)
