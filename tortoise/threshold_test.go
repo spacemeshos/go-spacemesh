@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
@@ -29,36 +28,27 @@ func TestComputeThreshold(t *testing.T) {
 		expectedGlobal util.Weight
 	}{
 		{
-			desc: "sanity",
-			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-			},
+			desc:      "sanity",
 			processed: genesis.Add(length),
 			last:      genesis.Add(length),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
+				2: {weight: 45},
 			},
-			expectedGlobal: util.WeightFromUint64(20),
+			expectedGlobal: util.WeightFromUint64(15),
 		},
 		{
-			desc: "shorter than epoch",
-			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-			},
+			desc:      "shorter than epoch",
 			processed: genesis.Add(length / 2),
 			last:      genesis.Add(length / 2),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
+				2: {weight: 45},
 			},
-			expectedGlobal: util.WeightFromUint64(10),
+			expectedGlobal: util.WeightFromFloat64(7.5),
 		},
 		{
-			desc: "multi epoch",
-			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-			},
+			desc:      "multi epoch",
 			processed: genesis.Add(length * 3),
 			last:      genesis.Add(length * 3),
 			target:    genesis,
@@ -67,61 +57,53 @@ func TestComputeThreshold(t *testing.T) {
 				3: {weight: 40},
 				4: {weight: 40},
 			},
-			expectedGlobal: util.WeightFromUint64(60),
+			expectedGlobal: util.WeightFromUint64(40),
 		},
 		{
-			desc: "not full epoch",
-			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-			},
+			desc:      "not full epoch",
 			processed: genesis.Add(length - 1),
 			last:      genesis.Add(length - 1),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
 				2: {weight: 40},
 			},
-			expectedGlobal: util.WeightFromUint64(15),
+			expectedGlobal: util.WeightFromUint64(10),
 		},
 		{
-			desc: "multiple not full epochs",
-			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-			},
+			desc:      "multiple not full epochs",
 			processed: genesis.Add(length*2 - 2),
 			last:      genesis.Add(length*2 - 2),
 			target:    genesis.Add(1),
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
-				3: {weight: 40},
+				2: {weight: 60},
+				3: {weight: 60},
 			},
 			expectedGlobal: util.WeightFromUint64(25),
 		},
 		{
 			desc: "window size",
 			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-				WindowSize:      2,
+				WindowSize: 2,
 			},
 			last:   genesis.Add(length),
 			target: genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
+				2: {weight: 45},
 			},
-			expectedGlobal: util.WeightFromUint64(10),
+			expectedGlobal: util.WeightFromFloat64(7.5),
 		},
 		{
 			desc: "window size is ignored if processed is past window",
 			config: Config{
-				GlobalThreshold: big.NewRat(1, 2),
-				WindowSize:      2,
+				WindowSize: 2,
 			},
 			last:      genesis.Add(length),
 			processed: genesis.Add(length - 1),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
+				2: {weight: 45},
 			},
-			expectedGlobal: util.WeightFromUint64(15),
+			expectedGlobal: util.WeightFromFloat64(11.25),
 		},
 	} {
 		tc := tc

@@ -18,11 +18,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// Configuration is the config params for syncer.
-type Configuration struct {
+// Config is the config params for syncer.
+type Config struct {
 	SyncInterval     time.Duration
 	HareDelayLayers  uint32
 	SyncCertDistance uint32
+}
+
+// DefaultConfig for the syncer.
+func DefaultConfig() Config {
+	return Config{
+		SyncInterval:     5 * time.Second,
+		HareDelayLayers:  10,
+		SyncCertDistance: 10,
+	}
 }
 
 const (
@@ -65,17 +74,49 @@ var (
 	errBeaconNotAvailable = errors.New("beacon not available")
 )
 
+// Option is a type to configure a syncer.
+type Option func(*Syncer)
+
+// WithContext ...
+func WithContext(c context.Context) Option {
+	return func(s *Syncer) {
+		shutdownCtx, cancel := context.WithCancel(c)
+		s.shutdownCtx = shutdownCtx
+		s.cancelFunc = cancel
+	}
+}
+
+// WithConfig ...
+func WithConfig(c Config) Option {
+	return func(s *Syncer) {
+		s.cfg = c
+	}
+}
+
+// WithLogger ...
+func WithLogger(l log.Log) Option {
+	return func(s *Syncer) {
+		s.logger = l
+	}
+}
+
+func withDataFetcher(d fetchLogic) Option {
+	return func(s *Syncer) {
+		s.dataFetcher = d
+	}
+}
+
 // Syncer is responsible to keep the node in sync with the network.
 type Syncer struct {
 	logger log.Log
 
-	conf          Configuration
-	db            *sql.Database
+	cfg           Config
+	db            sql.Executor
 	ticker        layerTicker
 	beacon        system.BeaconGetter
 	mesh          *mesh.Mesh
 	certHandler   certHandler
-	fetcher       layerFetcher
+	dataFetcher   fetchLogic
 	patrol        layerPatrol
 	syncOnce      sync.Once
 	syncState     atomic.Value
@@ -102,33 +143,34 @@ type Syncer struct {
 
 // NewSyncer creates a new Syncer instance.
 func NewSyncer(
-	ctx context.Context,
-	conf Configuration,
-	db *sql.Database,
+	db sql.Executor,
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
-	fetcher layerFetcher,
+	fetcher fetcher,
 	patrol layerPatrol,
 	ch certHandler,
-	logger log.Log,
+	opts ...Option,
 ) *Syncer {
-	shutdownCtx, cancel := context.WithCancel(ctx)
 	s := &Syncer{
-		logger:           logger,
-		conf:             conf,
+		logger:           log.NewNop(),
+		cfg:              DefaultConfig(),
 		db:               db,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
 		certHandler:      ch,
-		fetcher:          fetcher,
 		patrol:           patrol,
-		syncTimer:        time.NewTicker(conf.SyncInterval),
-		validateTimer:    time.NewTicker(conf.SyncInterval * 3),
 		awaitATXSyncedCh: make([]chan struct{}, 0),
-		shutdownCtx:      shutdownCtx,
-		cancelFunc:       cancel,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
+	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
+	if s.dataFetcher == nil {
+		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -459,30 +501,18 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	}
 
 	s.logger.WithContext(ctx).With().Info("polling layer data", layerID)
-	if err := s.fetchLayerData(ctx, layerID); err != nil {
-		return err
+	if err := s.dataFetcher.PollLayerData(ctx, layerID); err != nil {
+		return fmt.Errorf("PollLayerData: %w", err)
 	}
 	return nil
 }
 
 func (s *Syncer) fetchEpochATX(ctx context.Context, epoch types.EpochID) error {
 	s.logger.WithContext(ctx).With().Info("syncing atxs for epoch", epoch)
-	if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
+	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
 		s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", epoch, log.Err(err))
 		return err
 	}
 	s.setLastSyncedATXs(epoch)
-	return nil
-}
-
-func (s *Syncer) fetchLayerData(ctx context.Context, layerID types.LayerID) error {
-	ch := s.fetcher.PollLayerData(ctx, layerID)
-	select {
-	case res := <-ch:
-		if res.Err != nil {
-			return fmt.Errorf("PollLayerData: %w", res.Err)
-		}
-	case <-ctx.Done():
-	}
 	return nil
 }

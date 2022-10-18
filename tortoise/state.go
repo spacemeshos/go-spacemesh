@@ -81,15 +81,20 @@ type (
 
 func newState() *state {
 	return &state{
-		epochs:     map[types.EpochID]*epochInfo{},
-		layers:     map[types.LayerID]*layerInfo{},
-		ballotRefs: map[types.BallotID]*ballotInfo{},
-		blockRefs:  map[types.BlockID]*blockInfo{},
+		localThreshold: util.WeightFromUint64(0),
+		epochs:         map[types.EpochID]*epochInfo{},
+		layers:         map[types.LayerID]*layerInfo{},
+		ballotRefs:     map[types.BallotID]*ballotInfo{},
+		blockRefs:      map[types.BlockID]*blockInfo{},
 	}
 }
 
 func (s *state) globalThreshold(cfg Config, target types.LayerID) weight {
 	return computeGlobalThreshold(cfg, s.localThreshold, s.epochs, target, s.processed, s.last)
+}
+
+func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
+	return computeExpectedWeightInWindow(cfg, s.epochs, target, s.processed, s.last)
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {

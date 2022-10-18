@@ -86,7 +86,7 @@ const (
 	ProposalListenerLogger = "proposalListener"
 	PoetListenerLogger     = "poetListener"
 	NipostBuilderLogger    = "nipostBuilder"
-	LayerFetcher           = "layerFetcher"
+	Fetcher                = "fetcher"
 	TimeSyncLogger         = "timesync"
 	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
@@ -230,7 +230,7 @@ func WithLog(logger log.Log) Option {
 	}
 }
 
-// WithConfig overvwrites default App config.
+// WithConfig overwrites default App config.
 func WithConfig(conf *config.Config) Option {
 	return func(app *App) {
 		app.Config = conf
@@ -281,7 +281,7 @@ type App struct {
 	log              log.Log
 	svm              *vm.VM
 	conState         *txs.ConservativeState
-	layerFetch       *fetch.Logic
+	fetcher          *fetch.Fetch
 	ptimesync        *peersync.Sync
 	tortoise         *tortoise.Tortoise
 
@@ -563,24 +563,29 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
-	dataHandlers := fetch.DataHandlers{
-		ATX:      atxHandler,
-		Block:    blockHandler,
-		Ballot:   proposalListener,
-		Proposal: proposalListener,
-		TX:       txHandler,
-		Poet:     poetDb,
-	}
-	layerFetch := fetch.NewLogic(app.Config.FETCH, cdb, msh, app.host, dataHandlers, app.addLogger(LayerFetcher, lg))
-	fetcherWrapped.Fetcher = layerFetch
+	fetcher := fetch.NewFetch(cdb, msh, app.host,
+		fetch.WithContext(ctx),
+		fetch.WithConfig(app.Config.FETCH),
+		fetch.WithLogger(app.addLogger(Fetcher, lg)),
+		fetch.WithATXHandler(atxHandler),
+		fetch.WithBallotHandler(proposalListener),
+		fetch.WithBlockHandler(blockHandler),
+		fetch.WithProposalHandler(proposalListener),
+		fetch.WithTXHandler(txHandler),
+		fetch.WithPoetHandler(poetDb),
+	)
+	fetcherWrapped.Fetcher = fetcher
 
 	patrol := layerpatrol.New()
-	syncerConf := syncer.Configuration{
+	syncerConf := syncer.Config{
 		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, sqlDB, clock, beaconProtocol, msh, layerFetch, patrol, app.certifier, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(sqlDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+		syncer.WithContext(ctx),
+		syncer.WithConfig(syncerConf),
+		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 
@@ -689,7 +694,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
-	app.layerFetch = layerFetch
+	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
 	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
@@ -742,7 +747,7 @@ func (app *App) HareFactory(
 }
 
 func (app *App) startServices(ctx context.Context) error {
-	app.layerFetch.Start()
+	app.fetcher.Start()
 	go app.startSyncer(ctx)
 	app.beaconProtocol.Start(ctx)
 
@@ -899,9 +904,9 @@ func (app *App) stopServices() {
 		app.certifier.Stop()
 	}
 
-	if app.layerFetch != nil {
+	if app.fetcher != nil {
 		app.log.Info("closing layerFetch")
-		app.layerFetch.Close()
+		app.fetcher.Stop()
 	}
 
 	if app.syncer != nil {

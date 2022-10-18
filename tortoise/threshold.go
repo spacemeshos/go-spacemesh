@@ -10,6 +10,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 )
 
+var (
+	// by assumption adversarial weight can't be larger than 1/3.
+	adversarialWeightFraction = big.NewRat(1, 3)
+	// nodes should not be on different sides of the local threshold if they receive different adversarial votes.
+	localThresholdFraction = big.NewRat(1, 3)
+	// for comleteness:
+	// global threshold is set in a such way so that if adversary
+	// cancels their weight (adversarialWeightFraction) - honest nodes should still cross local threshold.
+)
+
 func getBallotHeight(cdb *datastore.CachedDB, ballot *types.Ballot) (uint64, error) {
 	atx, err := cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
@@ -77,15 +87,18 @@ func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last typ
 
 // computeGlobalTreshold computes global treshold based on the expected weight.
 func computeGlobalThreshold(config Config, localThreshold weight, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) util.Weight {
+	return computeExpectedWeightInWindow(config, epochs, target, processed, last).
+		Fraction(adversarialWeightFraction).
+		Add(localThreshold)
+}
+
+func computeExpectedWeightInWindow(config Config, epochs map[types.EpochID]*epochInfo, target, processed, last types.LayerID) util.Weight {
 	window := last
 	if last.Difference(target) > config.WindowSize {
 		window = target.Add(config.WindowSize)
+		if processed.After(window) {
+			window = processed
+		}
 	}
-	window = maxLayer(window, processed)
-	return computeExpectedWeight(epochs,
-		target,
-		window,
-	).
-		Fraction(config.GlobalThreshold).
-		Add(localThreshold)
+	return computeExpectedWeight(epochs, target, window)
 }

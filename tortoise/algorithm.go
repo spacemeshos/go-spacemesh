@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"context"
-	"math/big"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -18,10 +17,8 @@ type Config struct {
 	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
-	WindowSize      uint32   `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
-	GlobalThreshold *big.Rat `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
-	LocalThreshold  *big.Rat `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
-	MaxExceptions   int      `mapstructure:"tortoise-max-exceptions"`   // if candidate for base block has more than max exceptions it will be ignored
+	WindowSize    uint32 `mapstructure:"tortoise-window-size"`    // size of the tortoise sliding window (in layers)
+	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
@@ -35,8 +32,6 @@ func DefaultConfig() Config {
 		Hdist:                    10,
 		Zdist:                    8,
 		WindowSize:               1000,
-		GlobalThreshold:          big.NewRat(60, 100),
-		LocalThreshold:           big.NewRat(20, 100),
 		BadBeaconVoteDelayLayers: 6,
 		MaxExceptions:            30 * 100, // 100 layers of average size
 	}
