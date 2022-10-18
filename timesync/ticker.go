@@ -123,8 +123,8 @@ func (t *Ticker) Notify() (int, error) {
 	// the tick was delayed by more than the threshold
 	if t.timeSinceCurrentStart() > sendTickThreshold {
 		t.log.With().Error("skipping tick since we missed the time of the tick by more than the allowed threshold",
-			log.FieldNamed("current_layer", layer),
-			log.String("threshold", sendTickThreshold.String()))
+			log.Stringer("current_layer", layer),
+			log.Duration("threshold", sendTickThreshold))
 		return 0, errMissedTickTime
 	}
 
@@ -134,8 +134,8 @@ func (t *Ticker) Notify() (int, error) {
 		// the risk is worth it in favor of code simplicity. otherwise lastTickedLayer needs to start at -1.
 		if !layer.After(t.lastTickedLayer) {
 			t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
-				log.FieldNamed("current_layer", layer),
-				log.FieldNamed("last_ticked_layer", t.lastTickedLayer))
+				log.Stringer("current_layer", layer),
+				log.Stringer("last_ticked_layer", t.lastTickedLayer))
 			return 0, errNotMonotonic
 		}
 	}

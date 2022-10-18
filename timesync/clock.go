@@ -66,8 +66,8 @@ func (t *TimeClock) startClock() error {
 		}
 		nextTickTime := t.Ticker.LayerToTime(nextLayer)
 		t.log.With().Info("global clock going to sleep before next layer",
-			log.FieldNamed("curr_layer", currLayer),
-			log.FieldNamed("next_layer", nextLayer),
+			log.Stringer("curr_layer", currLayer),
+			log.Stringer("next_layer", nextLayer),
 			log.Time("next_tick_time", nextTickTime),
 		)
 
