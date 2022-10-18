@@ -88,6 +88,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 			layer:    genesis,
 			hare:     support,
 			validity: support,
+			margin:   util.WeightFromUint64(0),
 		}
 		t.layers[genesis].blocks = append(t.layers[genesis].blocks, blinfo)
 		t.blockRefs[blinfo.id] = blinfo
@@ -631,7 +632,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 	}
 	if atx.TargetEpoch() == t.last.GetEpoch() {
 		t.localThreshold = util.WeightFromUint64(epoch.weight).
-			Fraction(t.LocalThreshold).
+			Fraction(localThresholdFraction).
 			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	}
 }

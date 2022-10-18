@@ -70,7 +70,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			if current.After(lid) {
 				lag = current.Sub(lid.Uint32())
 			}
-			if lag.Value < s.conf.HareDelayLayers {
+			if lag.Value < s.cfg.HareDelayLayers {
 				s.logger.WithContext(ctx).With().Info("skip validating layer: hare still working", lid)
 				return errHareInCharge
 			}
@@ -134,24 +134,23 @@ func (s *Syncer) needValidity(logger log.Log, lid types.LayerID) (bool, error) {
 func (s *Syncer) fetchLayerOpinions(ctx context.Context, lid types.LayerID) error {
 	logger := s.logger.WithContext(ctx).WithFields(lid)
 	logger.Info("polling layer opinions")
-	ch := s.fetcher.PollLayerOpinions(ctx, lid)
-	select {
-	case res := <-ch:
-		if res.Err != nil {
-			return fmt.Errorf("PollLayerOpinions: %w", res.Err)
-		}
-		if len(res.Opinions) == 0 {
-			logger.Warning("no opinions available from peers")
-			return errNoOpinionsAvailable
-		}
+	opinions, err := s.dataFetcher.PollLayerOpinions(ctx, lid)
+	if err != nil {
+		logger.With().Warning("failed to fetch opinions", log.Err(err))
+		return fmt.Errorf("PollLayerOpinions: %w", err)
+	}
 
-		// TODO: check if the node agree with peers' aggregated hashes
+	if len(opinions) == 0 {
+		logger.Warning("no opinions available from peers")
+		return errNoOpinionsAvailable
+	}
 
-		if err := s.adopt(ctx, lid, res.Opinions); err != nil {
-			logger.With().Info("opinions not fully adopted", log.Err(err))
-			return err
-		}
-	case <-ctx.Done():
+	// TODO: check if the node agree with peers' aggregated hashes
+	// https://github.com/spacemeshos/go-spacemesh/issues/2507
+
+	if err := s.adopt(ctx, lid, opinions); err != nil {
+		logger.With().Info("opinions not fully adopted", log.Err(err))
+		return err
 	}
 	return nil
 }
@@ -251,8 +250,8 @@ func (s *Syncer) certCutoffLayer() types.LayerID {
 	cutoff := types.GetEffectiveGenesis()
 	// TODO: change this to current layer after https://github.com/spacemeshos/go-spacemesh/issues/2921 is done
 	last := s.mesh.ProcessedLayer()
-	if last.Uint32() > s.conf.SyncCertDistance {
-		limit := last.Sub(s.conf.SyncCertDistance)
+	if last.Uint32() > s.cfg.SyncCertDistance {
+		limit := last.Sub(s.cfg.SyncCertDistance)
 		if limit.After(cutoff) {
 			cutoff = limit
 		}
@@ -271,7 +270,7 @@ func (s *Syncer) adoptValidity(ctx context.Context, valid, invalid []types.Block
 	all := valid
 	all = append(all, invalid...)
 	if len(all) > 0 {
-		if err := s.fetcher.GetBlocks(ctx, all); err != nil {
+		if err := s.dataFetcher.GetBlocks(ctx, all); err != nil {
 			return fmt.Errorf("opinions get blocks: %w", err)
 		}
 	}
