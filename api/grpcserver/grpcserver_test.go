@@ -51,6 +51,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/utils"
 )
 
 const (
@@ -116,6 +117,22 @@ var (
 	}
 	stateRoot = types.HexToHash32("11111")
 )
+
+func dialGrpc(t testing.TB, cfg config.Config) *grpc.ClientConn {
+	t.Helper()
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(
+		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, conn.Close())
+	})
+	return conn
+}
 
 func TestMain(m *testing.M) {
 	// run on a random port
@@ -560,15 +577,7 @@ func TestNodeService(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewNodeServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -690,15 +699,7 @@ func TestGlobalStateService(t *testing.T) {
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -979,15 +980,7 @@ func TestSmesherService(t *testing.T) {
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewSmesherServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1076,7 +1069,7 @@ func TestSmesherService(t *testing.T) {
 		}},
 		{"PostSetupComputeProviders", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			_, err = c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
+			_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
 			require.NoError(t, err)
 		}},
 		{"PostSetupStatusStream", func(t *testing.T) {
@@ -1104,15 +1097,7 @@ func TestMeshService(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1643,14 +1628,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	req.NoError(err)
-
-	defer func() { req.NoError(conn.Close()) }()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1694,15 +1672,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 	for i := 0; i < expected; i++ {
 		res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
@@ -1727,15 +1697,7 @@ func TestTransactionService(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1755,14 +1717,14 @@ func TestTransactionService(t *testing.T) {
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			_, err = c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{})
+			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{})
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`TransactionId` must include")
 		}},
 		{"TransactionsState_TransactionIdZeroLen", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			_, err = c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{
+			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{
 				TransactionId: []*pb.TransactionId{},
 			})
 			statusCode := status.Code(err)
@@ -1851,7 +1813,7 @@ func TestTransactionService(t *testing.T) {
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
-			wg.Wait()
+			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 		}},
 		{"TransactionsStateStream_All", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1880,7 +1842,7 @@ func TestTransactionService(t *testing.T) {
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
-			wg.Wait()
+			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 		}},
 		// Submit a tx, then receive it over the stream
 		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
@@ -1934,7 +1896,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 			wgBroadcast.Done()
 
-			wg.Wait()
+			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 		}},
 		{"TransactionsStateStream_ManySubscribers", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1973,7 +1935,7 @@ func TestTransactionService(t *testing.T) {
 			// TODO send header after stream has subscribed
 			time.Sleep(100 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
-			wg.Wait()
+			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 		}},
 		{"TransactionsStateStream_NoEventReceiving", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2010,7 +1972,7 @@ func TestTransactionService(t *testing.T) {
 				events.ReportNewTx(types.LayerID{}, globalTx)
 			}
 
-			wg.Wait()
+			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 		}},
 	}
 
@@ -2088,15 +2050,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2174,8 +2128,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	// close the stream
 	events.CloseEventReporter()
 
-	// wait for the goroutine
-	wg.Wait()
+	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
@@ -2187,15 +2140,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2280,7 +2225,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
-	wg.Wait()
+	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
@@ -2289,15 +2234,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2383,7 +2320,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
-	wg.Wait()
+	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
@@ -2396,15 +2333,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	conn := dialGrpc(t, cfg)
 
 	// Need to wait for goroutine to end before ending the test
 	wg := sync.WaitGroup{}
@@ -2462,7 +2391,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine
-	wg.Wait()
+	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 }
 
 func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
@@ -2571,15 +2500,8 @@ func TestMultiService(t *testing.T) {
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+	conn := dialGrpc(t, cfg)
 
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
 	c1 := pb.NewNodeServiceClient(conn)
 	c2 := pb.NewMeshServiceClient(conn)
 
@@ -2622,9 +2544,6 @@ func TestJsonApi(t *testing.T) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, "v1/node/echo")
 	_, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), fmt.Sprintf(
-		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		cfg.JSONServerPort))
 	shutDown()
 
 	// enable services and try again
@@ -2660,13 +2579,7 @@ func TestDebugService(t *testing.T) {
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() { require.NoError(t, conn.Close()) }()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
@@ -2725,14 +2638,7 @@ func TestGatewayService(t *testing.T) {
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
-	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-
-	defer func() { require.NoError(t, conn.Close()) }()
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGatewayServiceClient(conn)
 
 	// This should fail
@@ -2767,19 +2673,8 @@ func TestEventsReceived(t *testing.T) {
 	shutDown := launchServer(t, txService, gsService)
 	defer shutDown()
 
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
-
-	conn1, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn1.Close())
-	}()
-
-	conn2, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, conn2.Close())
-	}()
+	conn1 := dialGrpc(t, cfg)
+	conn2 := dialGrpc(t, cfg)
 
 	txClient := pb.NewTransactionServiceClient(conn1)
 	accountClient := pb.NewGlobalStateServiceClient(conn2)

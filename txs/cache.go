@@ -64,12 +64,14 @@ type accountCache struct {
 	startNonce   uint64
 	startBalance uint64
 	// moreInDB is used to indicate that an account has pending txs in db that need to be
-	// reconsidered for mempool after a layer is applied.even though none
+	// reconsidered for mempool after a layer is applied.
 	// - there are too many nonces for an account in the mempool. the extra (higher nonce) txs are in db only.
 	// - txs deemed insufficient balance by the conservative state, but can be feasible after a layer applied
 	//   (that may contain incoming funds for that account)
 	// - a better tx arrived (higher fee) and made higher nonce txs infeasible due to insufficient balance
 	//   deemed by conservative state.
+	// TODO: evict accounts that only has DB-only txs
+	// https://github.com/spacemeshos/go-spacemesh/issues/3668
 	moreInDB bool
 
 	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with the cache instance
@@ -670,28 +672,10 @@ func (c *cache) ApplyLayer(
 	defer c.mu.Unlock()
 
 	toCleanup := make(map[types.Address]struct{})
-	for _, rst := range results {
-		toCleanup[rst.Principal] = struct{}{}
-	}
-	skippedByPrincipal := make(map[types.Address]struct{})
-	for _, tx := range ineffective {
-		if tx.TxHeader == nil {
-			logger.With().Warning("tx header not parsed", tx.ID)
-			continue
-		}
-		if !c.has(tx.ID) {
-			rawTxCount.WithLabelValues(updated).Inc()
-			if err := transactions.Add(db, &tx, time.Now()); err != nil {
-				return err
-			}
-		}
-		toCleanup[tx.Principal] = struct{}{}
-		skippedByPrincipal[tx.Principal] = struct{}{}
-	}
-	defer c.cleanupAccounts(toCleanup)
-
+	toReset := make(map[types.Address]struct{})
 	byPrincipal := make(map[types.Address][]types.TransactionWithResult)
 	for _, rst := range results {
+		toCleanup[rst.Principal] = struct{}{}
 		if !c.has(rst.ID) {
 			rawTxCount.WithLabelValues(updated).Inc()
 			if err := transactions.Add(db, &rst.Transaction, time.Now()); err != nil {
@@ -706,6 +690,29 @@ func (c *cache) ApplyLayer(
 		byPrincipal[principal] = append(byPrincipal[principal], rst)
 		events.ReportResult(rst)
 	}
+
+	for _, tx := range ineffective {
+		if tx.TxHeader == nil {
+			logger.With().Warning("tx header not parsed", tx.ID)
+			continue
+		}
+		if !c.has(tx.ID) {
+			rawTxCount.WithLabelValues(updated).Inc()
+			if err := transactions.Add(db, &tx, time.Now()); err != nil {
+				return err
+			}
+		}
+
+		toCleanup[tx.Principal] = struct{}{}
+		if _, ok := byPrincipal[tx.Principal]; ok {
+			continue
+		}
+		if _, ok := c.pending[tx.Principal]; !ok {
+			continue
+		}
+		toReset[tx.Principal] = struct{}{}
+	}
+	defer c.cleanupAccounts(toCleanup)
 
 	for principal, applied := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
@@ -727,13 +734,16 @@ func (c *cache) ApplyLayer(
 		}
 		acctResetDuration.Observe(float64(time.Since(t1)))
 	}
-	for principal := range skippedByPrincipal {
-		if _, ok := byPrincipal[principal]; ok {
+
+	for principal, accCache := range c.pending {
+		if _, ok := toCleanup[principal]; ok {
 			continue
 		}
-		if _, ok := c.pending[principal]; !ok {
-			continue
+		if accCache.moreInDB {
+			toReset[principal] = struct{}{}
 		}
+	}
+	for principal := range toReset {
 		nextNonce, balance := c.stateF(principal)
 		t2 := time.Now()
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
