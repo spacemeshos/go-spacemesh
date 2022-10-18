@@ -17,6 +17,8 @@ type DecodedBallot interface {
 
 // Tortoise is an interface provided by tortoise implementation.
 type Tortoise interface {
+	// DecodeBallot may return nil if ballot is not decodable due
+	// to the missing dependencies.
 	DecodeBallot(*types.Ballot) (DecodedBallot, error)
 	OnBlock(*types.Block)
 	OnHareOutput(types.LayerID, types.BlockID)

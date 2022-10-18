@@ -660,7 +660,7 @@ func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
 	if malicious {
 		ballot.SetMalicious()
 	}
-	// balots.Add and ballots.Count should be atomic
+	// ballots.Add and ballots.Count should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	err = msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
 		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
