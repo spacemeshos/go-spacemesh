@@ -58,25 +58,6 @@ func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
 	}
 }
 
-func okOpnCh(lid types.LayerID, opinions []*fetch.LayerOpinion) chan fetch.LayerPromiseOpinions {
-	ch := make(chan fetch.LayerPromiseOpinions, 1)
-	ch <- fetch.LayerPromiseOpinions{
-		Layer:    lid,
-		Opinions: opinions,
-	}
-	close(ch)
-	return ch
-}
-
-func failedOpnCh() chan fetch.LayerPromiseOpinions {
-	ch := make(chan fetch.LayerPromiseOpinions, 1)
-	ch <- fetch.LayerPromiseOpinions{
-		Err: errors.New("something baaahhhhhhd"),
-	}
-	close(ch)
-	return ch
-}
-
 func checkHasBlockValidity(t *testing.T, db sql.Executor, lid types.LayerID) {
 	cnt, err := blocks.CountContextualValidity(db, lid)
 	require.NoError(t, err)
@@ -130,14 +111,14 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				cert := layerOpns[lid][1].Cert
 				ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 				ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
-				ts.mLyrFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).DoAndReturn(
-					func(_ context.Context, lid types.LayerID) chan fetch.LayerPromiseOpinions {
+				ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).DoAndReturn(
+					func(_ context.Context, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
 						// fake the prev agg hash from opinions
 						prevLid := lid.Sub(1)
 						if prevLid.After(gLid) {
 							require.NoError(t, layers.SetHashes(ts.cdb, prevLid, types.RandomHash(), adopted[lid].PrevAggHash))
 						}
-						return okOpnCh(lid, layerOpns[lid])
+						return layerOpns[lid], nil
 					})
 				ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
 				if tc.hasCert {
@@ -148,7 +129,7 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 							return nil
 						})
 				}
-				ts.mLyrFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
+				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got []types.BlockID) error {
 						require.ElementsMatch(t, append(adopted[lid].Valid, adopted[lid].Invalid...), got)
 						for _, bid := range got {
@@ -244,7 +225,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				opn.Verified = tc.opnVerified
 				opn.Cert = nil
 			}
-			ts.mLyrFetcher.EXPECT().PollLayerOpinions(gomock.Any(), tc.requested).Return(okOpnCh(tc.requested, opns))
+			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), tc.requested).Return(opns, nil)
 			ts.mTortoise.EXPECT().LatestComplete().Return(tc.verified)
 			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), tc.requested)
 			ts.mTortoise.EXPECT().LatestComplete().Return(tc.requested.Sub(1))
@@ -322,7 +303,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
-	ts.mLyrFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(okOpnCh(lastSynced, nil))
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().LatestComplete().Return(lastSynced)
 	ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
@@ -334,7 +315,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 	ts := newSyncerWithoutSyncTimer(t)
 	ts.syncer.setATXSynced()
 	glayer := types.GetEffectiveGenesis()
-	lastSynced := glayer.Add(ts.syncer.conf.HareDelayLayers)
+	lastSynced := glayer.Add(ts.syncer.cfg.HareDelayLayers)
 	ts.syncer.setLastSyncedLayer(lastSynced)
 	current := lastSynced.Add(1)
 	ts.mTicker.advanceToLayer(current)
@@ -345,7 +326,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 		} else {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		}
-		ts.mLyrFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(okOpnCh(lid, nil))
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().LatestComplete().Return(glayer)
 	}
@@ -361,7 +342,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
-	ts.mLyrFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(failedOpnCh())
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, errors.New("meh"))
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().LatestComplete().Return(types.GetEffectiveGenesis())
 	require.False(t, ts.syncer.stateSynced())
@@ -461,7 +442,7 @@ func TestAdopt(t *testing.T) {
 			adopted := tc.opns[tc.exp]
 			ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, adopted.Cert).Return(tc.certErr).MaxTimes(1)
 			if tc.err == nil {
-				ts.mLyrFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
+				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got []types.BlockID) error {
 						require.ElementsMatch(t, append(adopted.Valid, adopted.Invalid...), got)
 						for _, bid := range got {
@@ -470,7 +451,7 @@ func TestAdopt(t *testing.T) {
 						return nil
 					})
 			} else if tc.fetchErr != nil {
-				ts.mLyrFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(tc.fetchErr).Times(len(tc.opns))
+				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(tc.fetchErr).Times(len(tc.opns))
 			}
 			require.ErrorIs(t, ts.syncer.adopt(context.TODO(), lid, tc.opns), tc.err)
 			if tc.err != nil {
