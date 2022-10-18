@@ -91,7 +91,7 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	return tpd
 }
 
-func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint) {
+func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
 		types.Address{},

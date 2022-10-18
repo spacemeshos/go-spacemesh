@@ -73,8 +73,8 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 
 	opts := atypes.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
-		NumUnits:          uint(in.Opts.NumUnits),
-		NumFiles:          uint(in.Opts.NumFiles),
+		NumUnits:          in.Opts.NumUnits,
+		NumFiles:          in.Opts.NumFiles,
 		ComputeProviderID: int(in.Opts.ComputeProviderId),
 		Throttle:          in.Opts.Throttle,
 	}

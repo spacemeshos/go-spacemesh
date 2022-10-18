@@ -143,11 +143,11 @@ func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, type
 // TODO(mafa): use gomock instead of this; see handler_test.go for examples.
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate([]byte, *types.NIPost, types.Hash32, uint) (uint64, error) {
+func (*ValidatorMock) Validate([]byte, *types.NIPost, types.Hash32, uint32) (uint64, error) {
 	return 1, nil
 }
 
-func (*ValidatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
+func (*ValidatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint32) error {
 	return nil
 }
 
@@ -187,7 +187,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(t testing.TB, challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint, coinbase types.Address) *types.ActivationTx {
+func newAtx(t testing.TB, challenge types.NIPostChallenge, sig *MockSigning, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	require.NoError(t, SignAtx(sig, atx))
 	require.NoError(t, atx.CalcAndSetID())
@@ -205,7 +205,7 @@ func newActivationTx(
 	pubLayerID types.LayerID,
 	startTick, numTicks uint64,
 	coinbase types.Address,
-	numUnits uint,
+	numUnits uint32,
 	nipost *types.NIPost,
 ) *types.VerifiedActivationTx {
 	challenge := newChallenge(sequence, prevATX, positioningATX, pubLayerID, cATX)
