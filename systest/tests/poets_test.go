@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -65,23 +66,24 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		})
 	}
 
-	client := cl.Client(0)
-	watchProposals(ctx, eg, client, func(proposal *spacemeshv1.Proposal) (bool, error) {
+	watchLayers(ctx, eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 		// Will kill a poet from time to time
-		if proposal.Layer.Number > last {
+		if layer.Layer.Number.Number > last {
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil
 		}
-		// don't kill a poet if this is not ~middle of epoch
-		if ((proposal.Layer.Number + epochSize/2) % epochSize) != 0 {
+		if layer.Layer.GetStatus() != v1.Layer_LAYER_STATUS_APPLIED {
 			return true, nil
 		}
-		if proposal.Status == spacemeshv1.Proposal_Created {
-			poetToDelete := cl.Poet(0)
-			tctx.Log.Debugw("deleting poet pod", "poet", poetToDelete.Name)
-			require.NoError(t, cl.DeletePoet(tctx, 0))
-			require.NoError(t, cl.AddPoet(tctx))
+		// don't kill a poet if this is not ~middle of epoch
+		if ((layer.Layer.GetNumber().GetNumber() + epochSize/2) % epochSize) != 0 {
+			return true, nil
 		}
+
+		poetToDelete := cl.Poet(0)
+		tctx.Log.Debugw("deleting poet pod", "poet", poetToDelete.Name, "layer", layer.Layer.GetNumber().GetNumber())
+		require.NoError(t, cl.DeletePoet(tctx, 0))
+		require.NoError(t, cl.AddPoet(tctx))
 
 		return true, nil
 	})
