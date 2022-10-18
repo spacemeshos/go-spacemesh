@@ -257,7 +257,6 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge *types.Hash
 		}
 	}
 
-	// Send the best proof (if any) and close the channel.
 	if bestProof != nil {
 		nb.log.With().Debug("Selected the best PoET proof",
 			log.Uint64("leafCount", bestProof.leafCount),
