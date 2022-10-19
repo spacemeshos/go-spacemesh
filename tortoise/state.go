@@ -61,8 +61,8 @@ type (
 
 		changedOpinion struct {
 			// sector of layers on which opinion is different from hdist
-			// once max fall out of hdist distance - opinion needs
-			// can be recomputed starting from min layer
+			// once max falls out of hdist distance - opinion must
+			// be recomputed starting from min layer
 			min, max types.LayerID
 		}
 

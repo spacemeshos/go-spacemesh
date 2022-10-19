@@ -485,7 +485,7 @@ func (t *turtle) verifyLayers() error {
 				}
 			}
 			if block.validity == abstain {
-				logger.With().Panic("bug: layer should not be verified if there is an undecided block", target, block.id)
+				logger.With().Fatal("bug: layer should not be verified if there is an undecided block", target, block.id)
 			}
 			err := t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
 			if err != nil {
