@@ -8,18 +8,8 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/tortoise.go -source=./tortoise.go
 
-// DecodedBallot contains all information required by tortoise.
-type DecodedBallot interface {
-	Opinion() types.Hash32
-	CancelWeight()
-	Store() error
-}
-
 // Tortoise is an interface provided by tortoise implementation.
 type Tortoise interface {
-	// DecodeBallot may return nil if ballot is not decodable due
-	// to the missing dependencies.
-	DecodeBallot(*types.Ballot) (DecodedBallot, error)
 	OnBlock(*types.Block)
 	OnHareOutput(types.LayerID, types.BlockID)
 	TallyVotes(context.Context, types.LayerID)

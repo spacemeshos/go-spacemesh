@@ -208,7 +208,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 
 // DecodedBallot created after unwrapping exceptions list and computing internal opinion.
 type DecodedBallot struct {
-	t    *Tortoise
+	types.Ballot
 	info *ballotInfo
 }
 
@@ -217,20 +217,8 @@ func (d *DecodedBallot) Opinion() types.Hash32 {
 	return d.info.opinion()
 }
 
-// CancelWeight zeroes out ballot weight.
-func (d *DecodedBallot) CancelWeight() {
-	d.info.weight = weight{}
-}
-
-// Store adds decoded ballot to the tortoise in-memory state.
-func (d *DecodedBallot) Store() error {
-	d.t.mu.Lock()
-	defer d.t.mu.Unlock()
-	return d.t.trtl.storeBallot(d.info)
-}
-
 // DecodeBallot decodes ballot if it wasn't processed earlier.
-func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (system.DecodedBallot, error) {
+func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	info, err := t.trtl.decodeBallot(ballot)
@@ -240,7 +228,17 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (system.DecodedBallot, err
 	if info == nil {
 		return nil, nil
 	}
-	return &DecodedBallot{t: t, info: info}, nil
+	return &DecodedBallot{Ballot: *ballot, info: info}, nil
+}
+
+// StoreBallot stores previously decoded ballot.
+func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if decoded.IsMalicious() {
+		decoded.info.weight = weight{}
+	}
+	return t.trtl.storeBallot(decoded.info)
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block

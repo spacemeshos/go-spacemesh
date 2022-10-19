@@ -2428,7 +2428,7 @@ func TestEncodeVotes(t *testing.T) {
 
 		decoded, err := tortoise.DecodeBallot(&ballot)
 		require.NoError(t, err)
-		require.NoError(t, decoded.Store())
+		require.NoError(t, tortoise.StoreBallot(decoded))
 
 		current := lid.Add(1)
 		tortoise.TallyVotes(ctx, current)

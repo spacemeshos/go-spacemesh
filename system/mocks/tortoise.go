@@ -10,71 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	system "github.com/spacemeshos/go-spacemesh/system"
 )
-
-// MockDecodedBallot is a mock of DecodedBallot interface.
-type MockDecodedBallot struct {
-	ctrl     *gomock.Controller
-	recorder *MockDecodedBallotMockRecorder
-}
-
-// MockDecodedBallotMockRecorder is the mock recorder for MockDecodedBallot.
-type MockDecodedBallotMockRecorder struct {
-	mock *MockDecodedBallot
-}
-
-// NewMockDecodedBallot creates a new mock instance.
-func NewMockDecodedBallot(ctrl *gomock.Controller) *MockDecodedBallot {
-	mock := &MockDecodedBallot{ctrl: ctrl}
-	mock.recorder = &MockDecodedBallotMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockDecodedBallot) EXPECT() *MockDecodedBallotMockRecorder {
-	return m.recorder
-}
-
-// CancelWeight mocks base method.
-func (m *MockDecodedBallot) CancelWeight() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CancelWeight")
-}
-
-// CancelWeight indicates an expected call of CancelWeight.
-func (mr *MockDecodedBallotMockRecorder) CancelWeight() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelWeight", reflect.TypeOf((*MockDecodedBallot)(nil).CancelWeight))
-}
-
-// Opinion mocks base method.
-func (m *MockDecodedBallot) Opinion() types.Hash32 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Opinion")
-	ret0, _ := ret[0].(types.Hash32)
-	return ret0
-}
-
-// Opinion indicates an expected call of Opinion.
-func (mr *MockDecodedBallotMockRecorder) Opinion() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Opinion", reflect.TypeOf((*MockDecodedBallot)(nil).Opinion))
-}
-
-// Store mocks base method.
-func (m *MockDecodedBallot) Store() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Store")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Store indicates an expected call of Store.
-func (mr *MockDecodedBallotMockRecorder) Store() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockDecodedBallot)(nil).Store))
-}
 
 // MockTortoise is a mock of Tortoise interface.
 type MockTortoise struct {
@@ -97,21 +33,6 @@ func NewMockTortoise(ctrl *gomock.Controller) *MockTortoise {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTortoise) EXPECT() *MockTortoiseMockRecorder {
 	return m.recorder
-}
-
-// DecodeBallot mocks base method.
-func (m *MockTortoise) DecodeBallot(arg0 *types.Ballot) (system.DecodedBallot, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DecodeBallot", arg0)
-	ret0, _ := ret[0].(system.DecodedBallot)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// DecodeBallot indicates an expected call of DecodeBallot.
-func (mr *MockTortoiseMockRecorder) DecodeBallot(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MockTortoise)(nil).DecodeBallot), arg0)
 }
 
 // LatestComplete mocks base method.
