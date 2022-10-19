@@ -31,11 +31,11 @@ func newCacheDB(logger log.Log, conf config) *datastore.CachedDB {
 	return datastore.NewCachedDB(db, logger)
 }
 
-func intInRange(rng *rand.Rand, ints [2]int) int {
+func intInRange(rng *rand.Rand, ints [2]int) uint32 {
 	if ints[0] == ints[1] {
-		return ints[0]
+		return uint32(ints[0])
 	}
-	return rng.Intn(ints[1]-ints[0]) + ints[0]
+	return uint32(rng.Intn(ints[1]-ints[0]) + ints[0])
 }
 
 var _ system.BeaconGetter = (*beaconStore)(nil)

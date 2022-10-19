@@ -41,7 +41,7 @@ func TestPostSetupManager(t *testing.T) {
 			req.Equal(opts, *status.LastOpts)
 			req.Nil(status.LastError)
 
-			if uint(status.NumLabelsWritten) == opts.NumUnits*cfg.LabelsPerUnit {
+			if status.NumLabelsWritten == uint64(opts.NumUnits)*cfg.LabelsPerUnit {
 				// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
 				// req.Equal(postSetupStateComplete, status.State)
 			} else {
@@ -174,7 +174,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 				prevStatus = status
 			} else {
 				// Verify last status.
-				req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, prevStatus.NumLabelsWritten)
 				break
 			}
 		}
@@ -219,7 +219,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 				prevStatus = status
 			} else {
 				// Verify last status.
-				req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, prevStatus.NumLabelsWritten)
 				break
 			}
 		}
@@ -330,5 +330,5 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	status = mgr.Status()
 	req.Equal(&opts, status.LastOpts)
 	req.Equal(atypes.PostSetupStateComplete, status.State)
-	req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
+	req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, status.NumLabelsWritten)
 }

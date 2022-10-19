@@ -204,7 +204,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	g.activations = make([]types.ATXID, miners)
 	g.prevHeight = make([]uint64, miners)
 
-	for i := 0; i < miners; i++ {
+	for i := uint32(0); i < miners; i++ {
 		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
 	}
 }
@@ -218,7 +218,7 @@ func (g *Generator) generateAtxs() {
 		nipost := types.NIPostChallenge{
 			PubLayerID: g.nextLayer.Sub(1),
 		}
-		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
+		atx := types.NewActivationTx(nipost, address, nil, units, nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
