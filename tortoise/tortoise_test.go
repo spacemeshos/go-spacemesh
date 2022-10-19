@@ -2404,6 +2404,7 @@ func TestEncodeVotes(t *testing.T) {
 		hare := types.GetEffectiveGenesis().Add(1)
 		block := types.Block{InnerBlock: types.InnerBlock{LayerIndex: hare}}
 		block.Initialize()
+		blockID := block.ID()
 		tortoise.OnBlock(&block)
 		tortoise.OnHareOutput(hare, block.ID())
 
@@ -2426,6 +2427,15 @@ func TestEncodeVotes(t *testing.T) {
 		ballot.Votes.Support = []types.BlockID{types.GenesisBlockID, block.ID()}
 		ballot.SetID(types.BallotID{1})
 
+		hasher := hash.New()
+		hasher.Write(types.GenesisBlockID[:])
+		buf := hasher.Sum(nil)
+		hasher.Reset()
+
+		hasher.Write(buf)
+		hasher.Write(blockID[:])
+		hasher.Sum(ballot.OpinionHash[:0])
+
 		decoded, err := tortoise.DecodeBallot(&ballot)
 		require.NoError(t, err)
 		require.NoError(t, tortoise.StoreBallot(decoded))
@@ -2444,9 +2454,9 @@ func TestEncodeVotes(t *testing.T) {
 		require.Len(t, rewritten.Abstain, 1)
 		require.Equal(t, rewritten.Against, []types.BlockID{block.ID()})
 
-		hasher := hash.New()
+		hasher.Reset()
 		hasher.Write(types.GenesisBlockID[:])
-		buf := hasher.Sum(nil)
+		buf = hasher.Sum(nil)
 		hasher.Reset()
 
 		hasher.Write(buf)

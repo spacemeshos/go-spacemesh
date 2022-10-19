@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -221,7 +222,13 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 		return nil, err
 	}
 	if info == nil {
-		return nil, nil
+		return nil, fmt.Errorf("can't decode ballot %s", ballot.ID())
+	}
+	if info.opinion() != ballot.OpinionHash {
+		return nil, fmt.Errorf(
+			"computed opinion hash %s doesn't match signed %s for ballot %s",
+			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
+		)
 	}
 	return &DecodedBallot{Ballot: ballot, info: info}, nil
 }
