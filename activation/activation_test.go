@@ -118,26 +118,26 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 
 type NIPostBuilderMock struct {
 	poetRef         []byte
-	buildNIPostFunc func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error)
+	buildNIPostFunc func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error)
 	SleepTime       int
 }
 
-func (np NIPostBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
+func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, _ chan struct{}) (*types.NIPost, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, _ time.Time) (*types.NIPost, time.Duration, error) {
 	if np.buildNIPostFunc != nil {
 		return np.buildNIPostFunc(challenge, commitmentAtx)
 	}
-	return newNIPostWithChallenge(challenge, np.poetRef), nil
+	return newNIPostWithChallenge(challenge, np.poetRef), 0, nil
 }
 
 // TODO(mafa): use gomock instead of this.
 type NIPostErrBuilderMock struct{}
 
-func (np *NIPostErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
+func (np *NIPostErrBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, types.ATXID, chan struct{}) (*types.NIPost, error) {
-	return nil, fmt.Errorf("NIPost builder error")
+func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
+	return nil, 0, fmt.Errorf("NIPost builder error")
 }
 
 // TODO(mafa): use gomock instead of this; see handler_test.go for examples.
@@ -245,7 +245,7 @@ func (m *mockSyncer) RegisterForATXSynced() chan struct{} {
 	return ch
 }
 
-func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builder {
+func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler, opts ...BuilderOption) *Builder {
 	net.atxHdlr = hdlr
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -253,7 +253,7 @@ func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler) *Builde
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, hdlr, net, nipostBuilderMock, &postSetupProviderMock{},
-		layerClockMock, &mockSyncer{}, logtest.New(tb).WithName("atxBuilder"))
+		layerClockMock, &mockSyncer{}, logtest.New(tb).WithName("atxBuilder"), opts...)
 	b.initialPost = initialPost
 	b.commitmentAtx = &goldenATXID
 	return b
@@ -291,10 +291,10 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 
 func publishAtx(b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration uint32) (published, builtNIPost bool, err error) {
 	net.lastTransmission = nil
-	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error) {
+	nipostBuilderMock.buildNIPostFunc = func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
 		builtNIPost = true
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
-		return newNIPostWithChallenge(challenge, poetBytes), nil
+		return newNIPostWithChallenge(challenge, poetBytes), 0, nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer().Add(3)
 	err = b.PublishActivationTx(context.TODO())
@@ -1073,14 +1073,14 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	tries := 0
 	builderConfirmation := make(chan struct{})
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
-	nipostBuilder.buildNIPostFunc = func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, error) {
+	nipostBuilder.buildNIPostFunc = func(challenge *types.Hash32, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
 		tries++
 		if tries == expectedTries {
 			close(builderConfirmation)
 		} else if tries < expectedTries {
-			return nil, ErrPoetServiceUnstable
+			return nil, 0, ErrPoetServiceUnstable
 		}
-		return newNIPostWithChallenge(challenge, poetBytes), nil
+		return newNIPostWithChallenge(challenge, poetBytes), 0, nil
 	}
 	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
 	ctx, cancel := context.WithCancel(context.TODO())
@@ -1133,4 +1133,42 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 
 	require.NoError(t, b.generateProof(context.TODO()))
 	require.Equal(t, 1, postSetupProvider.called)
+}
+
+func TestBuilder_UpdatePoets(t *testing.T) {
+	r := require.New(t)
+
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	b := newBuilder(t, cdb, atxHdlr, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
+		poet := mocks.NewMockPoetProvingServiceClient(gomock.NewController(t))
+		poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return([]byte("poetid"), nil)
+		return poet
+	}))
+
+	r.Nil(b.receivePendingPoetClients())
+
+	err := b.UpdatePoETServers(context.TODO(), []string{"poet0", "poet1"})
+	r.NoError(err)
+
+	clients := b.receivePendingPoetClients()
+	r.NotNil(clients)
+	r.Len(*clients, 2)
+	r.Nil(b.receivePendingPoetClients())
+}
+
+func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
+	r := require.New(t)
+
+	cdb := newCachedDB(t)
+	atxHdlr := newAtxHandler(t, cdb)
+	b := newBuilder(t, cdb, atxHdlr, WithPoETClientInitializer(func(string) PoetProvingServiceClient {
+		poet := mocks.NewMockPoetProvingServiceClient(gomock.NewController(t))
+		poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return([]byte("poetid"), errors.New("ERROR"))
+		return poet
+	}))
+
+	err := b.UpdatePoETServers(context.TODO(), []string{"poet0", "poet1"})
+	r.ErrorIs(err, ErrPoetServiceUnstable)
+	r.Nil(b.receivePendingPoetClients())
 }

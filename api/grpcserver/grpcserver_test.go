@@ -495,7 +495,7 @@ type ActivationAPIMock struct {
 	UpdatePoETErr error
 }
 
-func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
+func (a *ActivationAPIMock) UpdatePoETServers(context.Context, []string) error {
 	return a.UpdatePoETErr
 }
 
@@ -673,17 +673,17 @@ func TestNodeService(t *testing.T) {
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: "test"})
+			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 			require.NoError(t, err)
 			require.EqualValues(t, res.Status.Code, code.Code_OK)
 		}},
 		{"UpdatePoetServerUnavailable", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
-			url := "test"
-			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: url})
+			urls := []string{"test"}
+			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: urls})
 			require.Nil(t, res)
-			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", url))
+			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}

@@ -118,28 +118,17 @@ func (mr *MockpoetDbAPIMockRecorder) GetProof(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockpoetDbAPI)(nil).GetProof), arg0)
 }
 
-// SubscribeToProofRef mocks base method.
-func (m *MockpoetDbAPI) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
+// GetProofRef mocks base method.
+func (m *MockpoetDbAPI) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeToProofRef", poetID, roundID)
-	ret0, _ := ret[0].(chan types.PoetProofRef)
-	return ret0
+	ret := m.ctrl.Call(m, "GetProofRef", poetID, roundID)
+	ret0, _ := ret[0].(types.PoetProofRef)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// SubscribeToProofRef indicates an expected call of SubscribeToProofRef.
-func (mr *MockpoetDbAPIMockRecorder) SubscribeToProofRef(poetID, roundID interface{}) *gomock.Call {
+// GetProofRef indicates an expected call of GetProofRef.
+func (mr *MockpoetDbAPIMockRecorder) GetProofRef(poetID, roundID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToProofRef", reflect.TypeOf((*MockpoetDbAPI)(nil).SubscribeToProofRef), poetID, roundID)
-}
-
-// UnsubscribeFromProofRef mocks base method.
-func (m *MockpoetDbAPI) UnsubscribeFromProofRef(poetID []byte, roundID string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UnsubscribeFromProofRef", poetID, roundID)
-}
-
-// UnsubscribeFromProofRef indicates an expected call of UnsubscribeFromProofRef.
-func (mr *MockpoetDbAPIMockRecorder) UnsubscribeFromProofRef(poetID, roundID interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsubscribeFromProofRef", reflect.TypeOf((*MockpoetDbAPI)(nil).UnsubscribeFromProofRef), poetID, roundID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProofRef", reflect.TypeOf((*MockpoetDbAPI)(nil).GetProofRef), poetID, roundID)
 }

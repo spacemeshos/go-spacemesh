@@ -128,16 +128,16 @@ func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.Shutdow
 }
 
 // UpdatePoetServer update server that is used for generating PoETs.
-func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetServerRequest) (*pb.UpdatePoetServerResponse, error) {
-	err := s.atxAPI.UpdatePoETServer(ctx, req.Url)
+func (s NodeService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoetServersRequest) (*pb.UpdatePoetServersResponse, error) {
+	err := s.atxAPI.UpdatePoETServers(ctx, req.Urls)
 	if err == nil {
-		return &pb.UpdatePoetServerResponse{
+		return &pb.UpdatePoetServersResponse{
 			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		}, nil
 	}
 	switch {
 	case errors.Is(err, activation.ErrPoetServiceUnstable):
-		return nil, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", req.Url)
+		return nil, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", err)
 	}
 	return nil, status.Errorf(codes.Internal, "failed to update poet server")
 }

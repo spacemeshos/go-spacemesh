@@ -13,8 +13,8 @@ func TestAddNIPostBuilderState(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
 	state := &types.NIPostBuilderState{
-		PoetRound: &types.PoetRound{
-			ID: "asdf",
+		PoetRequests: []types.PoetRequest{
+			{PoetRound: &types.PoetRound{ID: "asdf"}},
 		},
 	}
 
@@ -31,13 +31,13 @@ func TestOverwriteNIPostBuilderState(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
 	state := &types.NIPostBuilderState{
-		PoetRound: &types.PoetRound{
-			ID: "asdf",
+		PoetRequests: []types.PoetRequest{
+			{PoetRound: &types.PoetRound{ID: "asdf"}},
 		},
 	}
 	newState := &types.NIPostBuilderState{
-		PoetRound: &types.PoetRound{
-			ID: "1234",
+		PoetRequests: []types.PoetRequest{
+			{PoetRound: &types.PoetRound{ID: "1234"}},
 		},
 	}
 
@@ -55,8 +55,8 @@ func TestClearNIPostBuilderState(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
 	state := &types.NIPostBuilderState{
-		PoetRound: &types.PoetRound{
-			ID: "asdf",
+		PoetRequests: []types.PoetRequest{
+			{PoetRound: &types.PoetRound{ID: "asdf"}},
 		},
 	}
 	require.NoError(t, AddNIPostBuilderState(db, state))
