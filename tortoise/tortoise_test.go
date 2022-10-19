@@ -2265,8 +2265,8 @@ func TestSwitchMode(t *testing.T) {
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
 		var last types.LayerID
-		last = s.Next(sim.WithNumBlocks(1))
-		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(gapVote))
+		s.Next(sim.WithNumBlocks(1))
+		s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(gapVote))
 		for i := 0; i < int(cfg.Hdist)-1; i++ {
 			last = s.Next(sim.WithNumBlocks(1))
 		}
