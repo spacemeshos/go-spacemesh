@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 var (
@@ -50,6 +51,7 @@ type Handler struct {
 	fetcher   system.Fetcher
 	mesh      meshProvider
 	validator eligibilityValidator
+	decoder   ballotDecoder
 }
 
 // Config defines configuration for the handler.
@@ -93,7 +95,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(cdb *datastore.CachedDB, f system.Fetcher, bc system.BeaconCollector, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(cdb *datastore.CachedDB, f system.Fetcher, bc system.BeaconCollector, m meshProvider, decoder ballotDecoder, opts ...Opt) *Handler {
 	b := &Handler{
 		logger:  log.NewNop(),
 		cfg:     defaultConfig(),
@@ -269,13 +271,14 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 
 	logger.With().Info("new ballot", log.Inline(b))
 
-	if err := h.checkBallotSyntacticValidity(ctx, logger, b); err != nil {
+	decoded, err := h.checkBallotSyntacticValidity(ctx, logger, b)
+	if err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))
 		return fmt.Errorf("syntactic-check ballot: %w", err)
 	}
 
 	t1 := time.Now()
-	if err := h.mesh.AddBallot(b); err != nil {
+	if err := h.mesh.AddBallot(decoded); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 		}
@@ -287,39 +290,46 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	return nil
 }
 
-func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.Log, b *types.Ballot) error {
+func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.Log, b *types.Ballot) (*tortoise.DecodedBallot, error) {
 	logger.With().Debug("checking proposal syntactic validity")
 
 	t0 := time.Now()
 	if err := h.checkBallotDataIntegrity(b); err != nil {
 		logger.With().Warning("ballot integrity check failed", log.Err(err))
-		return err
+		return nil, err
 	}
 	ballotDuration.WithLabelValues(dataCheck).Observe(float64(time.Since(t0)))
 
 	t1 := time.Now()
 	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
 		logger.With().Warning("ballot data availability check failed", log.Err(err))
-		return err
+		return nil, err
 	}
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
+	decoded, err := h.decoder.DecodeBallot(b)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode %s: %d", b.ID(), err)
+	}
+
 	t2 := time.Now()
+	// note that computed opinion has to match signed opinion, otherwise it is unknown
+	// if votes sidecar was modified or not
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		logger.With().Warning("ballot votes consistency check failed", log.Err(err))
-		return err
+		return nil, err
 	}
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t2)))
 
 	t3 := time.Now()
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
-		return errNotEligible
+		return nil, errNotEligible
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t3)))
 
 	logger.With().Debug("ballot is syntactically valid")
-	return nil
+	return decoded, nil
 }
 
 func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {

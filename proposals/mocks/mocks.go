@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	tortoise "github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 // MockmeshProvider is a mock of meshProvider interface.
@@ -36,7 +37,7 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 }
 
 // AddBallot mocks base method.
-func (m *MockmeshProvider) AddBallot(arg0 *types.Ballot) error {
+func (m *MockmeshProvider) AddBallot(arg0 *tortoise.DecodedBallot) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddBallot", arg0)
 	ret0, _ := ret[0].(error)
@@ -99,4 +100,42 @@ func (m *MockeligibilityValidator) CheckEligibility(arg0 context.Context, arg1 *
 func (mr *MockeligibilityValidatorMockRecorder) CheckEligibility(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckEligibility", reflect.TypeOf((*MockeligibilityValidator)(nil).CheckEligibility), arg0, arg1)
+}
+
+// MockballotDecoder is a mock of ballotDecoder interface.
+type MockballotDecoder struct {
+	ctrl     *gomock.Controller
+	recorder *MockballotDecoderMockRecorder
+}
+
+// MockballotDecoderMockRecorder is the mock recorder for MockballotDecoder.
+type MockballotDecoderMockRecorder struct {
+	mock *MockballotDecoder
+}
+
+// NewMockballotDecoder creates a new mock instance.
+func NewMockballotDecoder(ctrl *gomock.Controller) *MockballotDecoder {
+	mock := &MockballotDecoder{ctrl: ctrl}
+	mock.recorder = &MockballotDecoderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockballotDecoder) EXPECT() *MockballotDecoderMockRecorder {
+	return m.recorder
+}
+
+// DecodeBallot mocks base method.
+func (m *MockballotDecoder) DecodeBallot(arg0 *types.Ballot) (*tortoise.DecodedBallot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DecodeBallot", arg0)
+	ret0, _ := ret[0].(*tortoise.DecodedBallot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DecodeBallot indicates an expected call of DecodeBallot.
+func (mr *MockballotDecoderMockRecorder) DecodeBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MockballotDecoder)(nil).DecodeBallot), arg0)
 }

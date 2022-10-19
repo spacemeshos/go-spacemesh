@@ -41,6 +41,7 @@ type mockSet struct {
 	mbc *smocks.MockBeaconCollector
 	mm  *mocks.MockmeshProvider
 	mv  *mocks.MockeligibilityValidator
+	md  *mocks.MockballotDecoder
 }
 
 type testHandler struct {
@@ -55,6 +56,7 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mbc: smocks.NewMockBeaconCollector(ctrl),
 		mm:  mocks.NewMockmeshProvider(ctrl),
 		mv:  mocks.NewMockeligibilityValidator(ctrl),
+		md:  mocks.NewMockballotDecoder(ctrl),
 	}
 }
 
@@ -62,7 +64,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mf, ms.mbc, ms.mm,
+		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), ms.mf, ms.mbc, ms.mm, ms.md,
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
 				LayersPerEpoch: layersPerEpoch,

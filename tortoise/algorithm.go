@@ -208,13 +208,8 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 
 // DecodedBallot created after unwrapping exceptions list and computing internal opinion.
 type DecodedBallot struct {
-	types.Ballot
+	*types.Ballot
 	info *ballotInfo
-}
-
-// Opinion returns computed opinion.
-func (d *DecodedBallot) Opinion() types.Hash32 {
-	return d.info.opinion()
 }
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
@@ -228,7 +223,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 	if info == nil {
 		return nil, nil
 	}
-	return &DecodedBallot{Ballot: *ballot, info: info}, nil
+	return &DecodedBallot{Ballot: ballot, info: info}, nil
 }
 
 // StoreBallot stores previously decoded ballot.

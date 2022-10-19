@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -293,7 +294,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
 	}
 	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
-	require.ErrorIs(t, err, ErrZeroTotalWeight)
+	require.ErrorIs(t, err, util.ErrZeroTotalWeight)
 	require.False(t, eligible)
 }
 
