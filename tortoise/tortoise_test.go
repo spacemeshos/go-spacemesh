@@ -2201,6 +2201,42 @@ func TestSwitchMode(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		require.False(t, tortoise.trtl.isFull)
 	})
+	t.Run("loaded validity", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = 2
+		cfg.Hdist = 2
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i <= int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithEmptyHareOutput())
+		}
+		tortoise.TallyVotes(ctx, last)
+		require.True(t, tortoise.trtl.isFull)
+
+		tortoise1 := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		for i := 0; i <= int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise1.TallyVotes(ctx, last)
+		}
+		tortoise1.TallyVotes(ctx, last)
+		require.False(t, tortoise1.trtl.isFull)
+	})
 }
 
 func TestOnBallotComputeOpinion(t *testing.T) {

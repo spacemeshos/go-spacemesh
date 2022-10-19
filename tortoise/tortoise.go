@@ -535,10 +535,14 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 			if !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
-		} else if valid {
-			block.validity = support
-		} else if !valid {
-			block.validity = against
+		} else {
+			// see TestSwitchMode/loaded_validity
+			block.dirty = true
+			if valid {
+				block.validity = support
+			} else if !valid {
+				block.validity = against
+			}
 		}
 	}
 	return nil
