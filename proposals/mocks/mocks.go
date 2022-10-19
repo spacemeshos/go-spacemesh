@@ -37,7 +37,7 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 }
 
 // AddBallot mocks base method.
-func (m *MockmeshProvider) AddBallot(arg0 *tortoise.DecodedBallot) error {
+func (m *MockmeshProvider) AddBallot(arg0 *types.Ballot) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddBallot", arg0)
 	ret0, _ := ret[0].(error)
@@ -138,4 +138,18 @@ func (m *MockballotDecoder) DecodeBallot(arg0 *types.Ballot) (*tortoise.DecodedB
 func (mr *MockballotDecoderMockRecorder) DecodeBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MockballotDecoder)(nil).DecodeBallot), arg0)
+}
+
+// StoreBallot mocks base method.
+func (m *MockballotDecoder) StoreBallot(arg0 *tortoise.DecodedBallot) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StoreBallot", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StoreBallot indicates an expected call of StoreBallot.
+func (mr *MockballotDecoderMockRecorder) StoreBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreBallot", reflect.TypeOf((*MockballotDecoder)(nil).StoreBallot), arg0)
 }

@@ -278,14 +278,16 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 
 	t1 := time.Now()
-	if err := h.mesh.AddBallot(decoded); err != nil {
+	if err := h.mesh.AddBallot(b); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 		}
 		return fmt.Errorf("save ballot: %w", err)
 	}
 	ballotDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t1)))
-
+	if err := h.decoder.StoreBallot(decoded); err != nil {
+		return fmt.Errorf("store decoded ballot %s: %w", decoded.ID(), err)
+	}
 	reportVotesMetrics(b)
 	return nil
 }
@@ -307,26 +309,28 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	}
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
+	t2 := time.Now()
 	decoded, err := h.decoder.DecodeBallot(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %s: %d", b.ID(), err)
 	}
+	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
-	t2 := time.Now()
+	t3 := time.Now()
 	// note that computed opinion has to match signed opinion, otherwise it is unknown
 	// if votes sidecar was modified or not
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		logger.With().Warning("ballot votes consistency check failed", log.Err(err))
 		return nil, err
 	}
-	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t2)))
+	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
-	t3 := time.Now()
+	t4 := time.Now()
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return nil, errNotEligible
 	}
-	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t3)))
+	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))
 
 	logger.With().Debug("ballot is syntactically valid")
 	return decoded, nil

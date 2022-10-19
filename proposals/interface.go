@@ -10,7 +10,7 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type meshProvider interface {
-	AddBallot(*tortoise.DecodedBallot) error
+	AddBallot(*types.Ballot) error
 	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 }
 
@@ -20,4 +20,5 @@ type eligibilityValidator interface {
 
 type ballotDecoder interface {
 	DecodeBallot(*types.Ballot) (*tortoise.DecodedBallot, error)
+	StoreBallot(*tortoise.DecodedBallot) error
 }
