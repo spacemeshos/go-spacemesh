@@ -581,6 +581,8 @@ func (app *App) initServices(ctx context.Context,
 		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
+		MaxHashesInReq:   100,
+		MaxStaleDuration: time.Hour,
 	}
 	newSyncer := syncer.NewSyncer(sqlDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
 		syncer.WithContext(ctx),
