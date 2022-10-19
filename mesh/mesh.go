@@ -622,9 +622,8 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 
 // SetZeroBlockLayer advances the latest layer in the network with a layer
 // that truly has no data.
-func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) error {
+func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) {
 	msh.setLatestLayer(msh.logger.WithContext(ctx), lid)
-	return nil
 }
 
 // AddTXsFromProposal adds the TXs in a Proposal into the database.

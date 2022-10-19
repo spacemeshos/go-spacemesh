@@ -627,7 +627,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 	}
 	if atx.TargetEpoch() == t.last.GetEpoch() {
 		t.localThreshold = util.WeightFromUint64(epoch.weight).
-			Fraction(t.LocalThreshold).
+			Fraction(localThresholdFraction).
 			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	}
 }

@@ -2,7 +2,6 @@ package sql
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,11 +15,6 @@ func testTables(db Executor) error {
 		return err
 	}
 	return nil
-}
-
-func testURI(tb testing.TB) string {
-	tb.Helper()
-	return "file:" + filepath.Join(tb.TempDir(), "state.sql")
 }
 
 func TestTransactionIsolation(t *testing.T) {

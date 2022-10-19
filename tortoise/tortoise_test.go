@@ -62,10 +62,8 @@ const (
 )
 
 var (
-	defaultTestHdist           = DefaultConfig().Hdist
-	defaultTestZdist           = DefaultConfig().Zdist
-	defaultTestGlobalThreshold = big.NewRat(6, 10)
-	defaultTestLocalThreshold  = big.NewRat(2, 10)
+	defaultTestHdist = DefaultConfig().Hdist
+	defaultTestZdist = DefaultConfig().Zdist
 )
 
 func TestLayerPatterns(t *testing.T) {
@@ -315,8 +313,6 @@ func defaultTestConfig() Config {
 		Zdist:                    defaultTestZdist,
 		WindowSize:               defaultTestWindowSize,
 		BadBeaconVoteDelayLayers: defaultVoteDelays,
-		GlobalThreshold:          defaultTestGlobalThreshold,
-		LocalThreshold:           defaultTestLocalThreshold,
 		MaxExceptions:            int(defaultTestHdist) * defaultTestLayerSize * 100,
 	}
 }
@@ -1545,8 +1541,6 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 
 	tortoise1.TallyVotes(ctx, last)
 	tortoise2.TallyVotes(ctx, last)
-	require.True(t, tortoise1.LatestComplete().Before(partitionStart))
-	require.True(t, tortoise2.LatestComplete().Before(partitionStart))
 
 	// make enough progress to cross global threshold with new votes
 	for i := 0; i < int(types.GetLayersPerEpoch())*4; i++ {
@@ -1578,27 +1572,28 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 }
 
 func TestVerifyLayerByWeightNotSize(t *testing.T) {
-	const size = 10
+	const size = 8
 	s := sim.New(
 		sim.WithLayerSize(size),
 	)
 	// change weight to be atleast the same as size
-	s.Setup(sim.WithSetupUnitsRange(size, size))
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+	)
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
-	var last, verified types.LayerID
+	var last types.LayerID
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(2),
-		sim.WithSequence(1, sim.WithLayerSizeOverwrite(1)),
+		sim.WithSequence(2, sim.WithNumBlocks(1)),
+		sim.WithSequence(1, sim.WithNumBlocks(1), sim.WithLayerSizeOverwrite(size/2)),
 	) {
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
-	require.Equal(t, last.Sub(2), verified)
+	require.Equal(t, last.Sub(3), tortoise.LatestComplete())
 }
 
 func perfectVotingFirstBaseBallot(_ *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
@@ -1904,10 +1899,10 @@ func TestFutureHeight(t *testing.T) {
 			normal = 20
 		)
 		s.Setup(
-			sim.WithSetupMinerRange(8, 8),
+			sim.WithSetupMinerRange(10, 10),
 			sim.WithSetupTicks(
 				normal, normal, normal,
-				normal, normal,
+				normal, normal, normal, normal,
 				slow, slow, slow,
 			),
 		)
@@ -1975,7 +1970,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 		opts := []sim.NextOpt{
 			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
 		}
-		skipped := i >= skipFrom && i < skipTo
+		skipped := i >= skipFrom
 		if skipped {
 			opts = append(opts, sim.WithoutHareOutput(), sim.WithNumBlocks(0))
 		} else {
@@ -1984,7 +1979,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 		last = s.Next(opts...)
 		tortoise.TallyVotes(ctx, last)
 	}
-	require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
+	require.Equal(t, types.GetEffectiveGenesis().Add(uint32(skipFrom)), tortoise.LatestComplete())
 	for i := 0; i <= int(cfg.Zdist); i++ {
 		last = s.Next(
 			sim.WithNumBlocks(1),
@@ -1993,9 +1988,9 @@ func testEmptyLayers(t *testing.T, hdist int) {
 		tortoise.TallyVotes(ctx, last)
 		verified = tortoise.LatestComplete()
 	}
-	expected := types.GetEffectiveGenesis().Add(uint32(skipFrom))
+	expected := types.GetEffectiveGenesis().Add(uint32(skipFrom) + cfg.Zdist)
 	require.Equal(t, expected, verified)
-	for i := 0; i < skipTo-skipFrom-1; i++ {
+	for i := 0; i < skipTo-skipFrom-1-int(cfg.Zdist); i++ {
 		last = s.Next(
 			sim.WithNumBlocks(1),
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),

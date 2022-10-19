@@ -12,7 +12,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *types.MeshTransaction {
+type MeshTransactionOption func(*types.MeshTransaction)
+
+func WithReceived(received time.Time) MeshTransactionOption {
+	return func(h *types.MeshTransaction) {
+		h.Received = received
+	}
+}
+
+func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID, opts ...MeshTransactionOption) *types.MeshTransaction {
 	t.Helper()
 	nonce := types.Nonce{Counter: 223}
 	amount := uint64(rand.Int())
@@ -26,13 +34,19 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID) *ty
 	parsed.MaxSpend = amount
 	parsed.Nonce = nonce
 	parsed.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
-	return &types.MeshTransaction{
+	meshTx := types.MeshTransaction{
 		Transaction: parsed,
 		LayerID:     lid,
 		BlockID:     types.BlockID{1, 3, 5},
 		Received:    time.Now(),
 		State:       types.MEMPOOL,
 	}
+
+	for _, opt := range opts {
+		opt(&meshTx)
+	}
+
+	return &meshTx
 }
 
 func TestNewNanoTX(t *testing.T) {
@@ -74,19 +88,23 @@ func TestUpdateMaybe(t *testing.T) {
 
 func TestBetter_PanicOnInvalidArguments(t *testing.T) {
 	signer := signing.NewEdSigner()
-	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
-	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), types.LayerID{}))
+	received := time.Now()
+	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
+	received = received.Add(time.Nanosecond)
+	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), types.LayerID{}, WithReceived(received)))
 	require.Panics(t, func() { ntx0.Better(ntx1, nil) })
 
-	ntx2 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
+	received = received.Add(time.Nanosecond)
+	ntx2 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
 	ntx2.Nonce.Counter = ntx0.Nonce.Counter + 1
 	require.Panics(t, func() { ntx0.Better(ntx2, nil) })
 }
 
 func TestBetter(t *testing.T) {
 	signer := signing.NewEdSigner()
-	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
-	ntx1 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}))
+	received := time.Now()
+	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
+	ntx1 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received.Add(time.Nanosecond))))
 	require.Equal(t, ntx0.Principal, ntx1.Principal)
 	require.Equal(t, ntx0.Nonce, ntx1.Nonce)
 	// fees are equal, ntx0 is better due to earlier timestamp

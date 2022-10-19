@@ -480,7 +480,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
 			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
-			require.Eventually(t, func() bool { return !builder.Smeshing() }, 10*time.Millisecond, time.Millisecond, "failed on execution %d", i)
+			require.Eventually(t, func() bool { return !builder.Smeshing() }, 100*time.Millisecond, time.Millisecond, "failed on execution %d", i)
 		}
 	})
 

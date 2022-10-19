@@ -2,11 +2,37 @@ package fetch
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 //go:generate scalegen
+
+// RequestMessage is sent to the peer for hash query.
+type RequestMessage struct {
+	Hint datastore.Hint
+	Hash types.Hash32
+}
+
+// ResponseMessage is sent to the node as a response.
+type ResponseMessage struct {
+	Hash types.Hash32
+	Data []byte
+}
+
+// RequestBatch is a batch of requests and a hash of all requests as ID.
+type RequestBatch struct {
+	ID       types.Hash32
+	Requests []RequestMessage
+}
+
+// ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
+// as stated in RequestBatch even if not all Data is present.
+type ResponseBatch struct {
+	ID        types.Hash32
+	Responses []ResponseMessage
+}
 
 // LayerData is the data response for a given layer ID.
 type LayerData struct {

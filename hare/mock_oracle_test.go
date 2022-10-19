@@ -2,11 +2,8 @@ package hare
 
 import (
 	"context"
-	"encoding/binary"
 	"math"
-	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -59,14 +56,6 @@ func TestMockHashOracle_Concurrency(t *testing.T) {
 	assert.Equal(t, len(oracle.clients), 100)
 }
 
-func genSig() []byte {
-	s1 := rand.NewSource(time.Now().UnixNano())
-	r1 := rand.New(s1)
-	sig := make([]byte, 4)
-	binary.LittleEndian.PutUint32(sig, r1.Uint32())
-	return sig[:]
-}
-
 func TestMockHashOracle_Role(t *testing.T) {
 	oracle := newMockHashOracle(numOfClients)
 	for i := 0; i < numOfClients; i++ {
@@ -77,7 +66,7 @@ func TestMockHashOracle_Role(t *testing.T) {
 	committeeSize := 20
 	counter := 0
 	for i := 0; i < numOfClients; i++ {
-		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, committeeSize, types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes()), []byte(genSig()))
+		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, committeeSize, types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes()), types.RandomBytes(4))
 		if res {
 			counter++
 		}
