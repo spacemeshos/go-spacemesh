@@ -60,9 +60,7 @@ type (
 		evicted types.LayerID
 
 		changedOpinion struct {
-			// sector of layers on which opinion is different from hdist
-			// once max falls out of hdist distance - opinion must
-			// be recomputed starting from min layer
+			// sector of layers where opinion is different from previously computed opinion
 			min, max types.LayerID
 		}
 
