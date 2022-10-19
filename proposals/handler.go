@@ -102,6 +102,7 @@ func NewHandler(cdb *datastore.CachedDB, f system.Fetcher, bc system.BeaconColle
 		cdb:     cdb,
 		fetcher: f,
 		mesh:    m,
+		decoder: decoder,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -273,8 +274,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 
 	decoded, err := h.checkBallotSyntacticValidity(ctx, logger, b)
 	if err != nil {
-		logger.With().Error("ballot syntactically invalid", log.Err(err))
-		return fmt.Errorf("syntactic-check ballot: %w", err)
+		return err
 	}
 
 	t1 := time.Now()
@@ -310,15 +310,20 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
 	t2 := time.Now()
+	// ballot can be decoded only if all dependencies (blocks, ballots, atxs) were downloaded
+	// and added to the tortoise.
 	decoded, err := h.decoder.DecodeBallot(b)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode %s: %d", b.ID(), err)
+		return nil, fmt.Errorf("decode ballot %s: %w", b.ID(), err)
 	}
 	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
 	t3 := time.Now()
 	// note that computed opinion has to match signed opinion, otherwise it is unknown
 	// if votes sidecar was modified or not
+	//
+	// TODO this check can work only on the list with decoded votes, otherwise
+	// otherwise it validates only diff, which is very easy to bypass
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		logger.With().Warning("ballot votes consistency check failed", log.Err(err))
 		return nil, err

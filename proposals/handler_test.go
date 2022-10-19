@@ -44,6 +44,12 @@ type mockSet struct {
 	md  *mocks.MockballotDecoder
 }
 
+func (ms *mockSet) expectAnyBallots() *mockSet {
+	ms.md.EXPECT().DecodeBallot(gomock.Any()).AnyTimes()
+	ms.md.EXPECT().StoreBallot(gomock.Any()).AnyTimes()
+	return ms
+}
+
 type testHandler struct {
 	*Handler
 	*mockSet
@@ -73,7 +79,7 @@ func createTestHandler(t *testing.T) *testHandler {
 				Hdist:          5,
 			}),
 			withValidator(ms.mv)),
-		mockSet: ms,
+		mockSet: ms.expectAnyBallots(),
 	}
 }
 
