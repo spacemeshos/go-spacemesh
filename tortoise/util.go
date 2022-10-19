@@ -98,7 +98,6 @@ func verifyLayer(logger log.Log, blocks []*blockInfo, getDecision func(*blockInf
 	for i, decision := range decisions {
 		if blocks[i].validity != decision {
 			changes = true
-			blocks[i].dirty = true
 		}
 		blocks[i].validity = decision
 	}

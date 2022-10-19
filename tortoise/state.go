@@ -40,8 +40,8 @@ type (
 		margin weight
 
 		validity sign
-		// if validity requires persisting it to the disk
-		dirty bool
+		// persisted validity
+		persisted sign
 	}
 
 	state struct {

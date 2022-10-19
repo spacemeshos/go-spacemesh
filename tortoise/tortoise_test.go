@@ -1027,6 +1027,14 @@ func skipLayers(n int) sim.VotesGenerator {
 	}
 }
 
+func addSupport(bid types.BlockID) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		votes := sim.PerfectVoting(rng, layers, i)
+		votes.Support = append(votes.Support, bid)
+		return votes
+	}
+}
+
 // olderExceptions will vote for block older then base ballot.
 func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	if len(layers) < 2 {
@@ -2236,6 +2244,44 @@ func TestSwitchMode(t *testing.T) {
 		}
 		tortoise1.TallyVotes(ctx, last)
 		require.False(t, tortoise1.trtl.isFull)
+	})
+	t.Run("changed to hare", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = 2
+		cfg.Hdist = 2
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		last := s.Next(sim.WithNumBlocks(1))
+		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(gapVote))
+		for i := 0; i < int(cfg.Hdist)-1; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+		}
+		tortoise.TallyVotes(ctx, last)
+		layer := tortoise.trtl.layer(types.GetEffectiveGenesis().Add(1))
+		require.Len(t, layer.blocks, 1)
+		require.Equal(t, layer.blocks[0].validity, against)
+
+		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(layer.blocks[0].id)))
+		tortoise.TallyVotes(ctx, last)
+		for i := 0; i < 10; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise.TallyVotes(ctx, last)
+		}
+		tortoise.TallyVotes(ctx, last)
+		require.False(t, tortoise.trtl.isFull)
 	})
 }
 

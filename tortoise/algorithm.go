@@ -176,7 +176,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		t.logger.Error("failed on layer", lid, log.Err(err))
+		t.logger.With().Error("failed on layer", lid, log.Err(err))
 	}
 }
 

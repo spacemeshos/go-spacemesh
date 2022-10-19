@@ -80,11 +80,12 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	}
 	for _, block := range genesisLayer.Blocks() {
 		blinfo := &blockInfo{
-			id:       block.ID(),
-			layer:    genesis,
-			hare:     support,
-			validity: support,
-			margin:   util.WeightFromUint64(0),
+			id:        block.ID(),
+			layer:     genesis,
+			hare:      support,
+			validity:  support,
+			persisted: support,
+			margin:    util.WeightFromUint64(0),
 		}
 		t.layers[genesis].blocks = append(t.layers[genesis].blocks, blinfo)
 		t.blockRefs[blinfo.id] = blinfo
@@ -471,12 +472,12 @@ func (t *turtle) verifyLayers() error {
 		}
 		verified = target
 		for _, block := range t.layers[target].blocks {
-			if !block.dirty {
+			if block.persisted == block.validity {
 				continue
 			}
 			// record range of layers where opinion has changed.
 			// once those layers fall out of hdist window - opinion can be recomputed
-			if block.validity != block.hare {
+			if block.validity != block.hare || (block.persisted != block.validity && block.persisted != abstain) {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
@@ -487,11 +488,16 @@ func (t *turtle) verifyLayers() error {
 			if block.validity == abstain {
 				logger.With().Fatal("bug: layer should not be verified if there is an undecided block", target, block.id)
 			}
+			logger.With().Debug("update validity", block.layer, block.id,
+				log.Stringer("validity", block.validity),
+				log.Stringer("hare", block.hare),
+				log.Stringer("persisted", block.persisted),
+			)
 			err := t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
 			if err != nil {
 				return fmt.Errorf("saving validity for %s: %w", block.id, err)
 			}
-			block.dirty = false
+			block.persisted = block.validity
 		}
 	}
 	t.verified = verified
@@ -535,14 +541,10 @@ func (t *turtle) loadContextualValidity(lid types.LayerID) error {
 			if !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
+		} else if valid {
+			block.validity = support
 		} else {
-			// see TestSwitchMode/loaded_validity
-			block.dirty = true
-			if valid {
-				block.validity = support
-			} else if !valid {
-				block.validity = against
-			}
+			block.validity = against
 		}
 	}
 	return nil
