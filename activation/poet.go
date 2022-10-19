@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/integration"
+	"github.com/spacemeshos/poet/rpc/api"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -75,7 +76,7 @@ func NewHTTPPoetClient(target string) *HTTPPoetClient {
 // Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
 // since it requires administrative permissions to the proving service.
 func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) error {
-	reqBody := StartRequest{GatewayAddresses: gatewayAddresses}
+	reqBody := api.StartRequest{GatewayAddresses: gatewayAddresses}
 	if err := c.req(ctx, "POST", "/start", reqBody, nil); err != nil {
 		return fmt.Errorf("request: %w", err)
 	}
@@ -85,18 +86,18 @@ func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) e
 
 // Submit registers a challenge in the proving service current open round.
 func (c *HTTPPoetClient) Submit(ctx context.Context, challenge types.Hash32) (*types.PoetRound, error) {
-	reqBody := SubmitRequest{Challenge: challenge[:]}
-	resBody := &SubmitResponse{}
+	reqBody := api.SubmitRequest{Challenge: challenge[:]}
+	resBody := &api.SubmitResponse{}
 	if err := c.req(ctx, "POST", "/submit", reqBody, resBody); err != nil {
 		return nil, err
 	}
 
-	return &types.PoetRound{ID: resBody.RoundID}, nil
+	return &types.PoetRound{ID: resBody.RoundId}, nil
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
 func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) ([]byte, error) {
-	resBody := &GetInfoResponse{}
+	resBody := &api.GetInfoResponse{}
 	if err := c.req(ctx, "GET", "/info", nil, resBody); err != nil {
 		return nil, err
 	}
@@ -140,29 +141,4 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	}
 
 	return nil
-}
-
-// SubmitRequest is the request object for the submit endpoint.
-type SubmitRequest struct {
-	Challenge []byte `json:"challenge,omitempty"`
-}
-
-// StartRequest is the request object for the start endpoint.
-type StartRequest struct {
-	GatewayAddresses       []string `json:"gatewayAddresses,omitempty"`
-	DisableBroadcast       bool     `json:"disableBroadcast,omitempty"`
-	ConnAcksThreshold      int      `json:"connAcksThreshold,omitempty"`
-	BroadcastAcksThreshold int      `json:"broadcastAcksThreshold,omitempty"`
-}
-
-// SubmitResponse is the response object for the submit endpoint.
-type SubmitResponse struct {
-	RoundID string
-}
-
-// GetInfoResponse is the response object for the get-info endpoint.
-type GetInfoResponse struct {
-	OpenRoundID        string
-	ExecutingRoundsIDs []string
-	ServicePubKey      []byte
 }
