@@ -640,18 +640,6 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
-	decoded, err := msh.trtl.DecodeBallot(ballot)
-	if err != nil {
-		return fmt.Errorf("decode ballot %s: %w", ballot.ID(), err)
-	}
-	if decoded == nil {
-		return nil
-	}
-	if computed := decoded.Opinion(); computed != ballot.OpinionHash {
-		return fmt.Errorf("ballot %s/%v: decoded opinion (%s) doesn't match signed (%s)",
-			ballot.ID(), ballot.LayerIndex, computed.ShortString(), ballot.OpinionHash.String(),
-		)
-	}
 	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID().Bytes())
 	if err != nil {
 		return err
@@ -661,7 +649,7 @@ func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
 	}
 	// ballots.Add and ballots.Count should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	err = msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
+	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
 		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
@@ -683,13 +671,6 @@ func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	if ballot.IsMalicious() {
-		decoded.CancelWeight()
-	}
-	return decoded.Store()
 }
 
 // AddBlockWithTXs adds the block and its TXs in into the database.

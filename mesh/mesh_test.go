@@ -30,14 +30,6 @@ type testMesh struct {
 	*Mesh
 	mockState    *mocks.MockconservativeState
 	mockTortoise *smocks.MockTortoise
-	mockDecoded  *smocks.MockDecodedBallot
-}
-
-func (tm *testMesh) expectAnyBallots() *testMesh {
-	tm.mockTortoise.EXPECT().DecodeBallot(gomock.Any()).Return(tm.mockDecoded, nil).AnyTimes()
-	tm.mockDecoded.EXPECT().Opinion().AnyTimes()
-	tm.mockDecoded.EXPECT().Store().AnyTimes()
-	return tm
 }
 
 func createTestMesh(t *testing.T) *testMesh {
@@ -48,7 +40,6 @@ func createTestMesh(t *testing.T) *testMesh {
 	tm := &testMesh{
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: smocks.NewMockTortoise(ctrl),
-		mockDecoded:  smocks.NewMockDecodedBallot(ctrl),
 	}
 	msh, err := NewMesh(datastore.NewCachedDB(sql.InMemory(), lg), tm.mockTortoise, tm.mockState, lg)
 	require.NoError(t, err)
@@ -241,7 +232,7 @@ func TestMesh_LayerHashes(t *testing.T) {
 }
 
 func TestMesh_GetLayer(t *testing.T) {
-	tm := createTestMesh(t).expectAnyBallots()
+	tm := createTestMesh(t)
 	id := types.GetEffectiveGenesis().Add(1)
 	lyr, err := tm.GetLayer(id)
 	require.NoError(t, err)
@@ -520,7 +511,7 @@ func TestMesh_LatestKnownLayer(t *testing.T) {
 }
 
 func TestMesh_pushLayersToState_verified(t *testing.T) {
-	tm := createTestMesh(t).expectAnyBallots()
+	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
 	createLayerBallots(t, tm.Mesh, layerID)
@@ -586,7 +577,7 @@ func TestMesh_ValidityOrder(t *testing.T) {
 }
 
 func TestMesh_pushLayersToState_notVerified(t *testing.T) {
-	tm := createTestMesh(t).expectAnyBallots()
+	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
 	createLayerBallots(t, tm.Mesh, layerID)
@@ -749,51 +740,8 @@ func TestMesh_CallOnBlock(t *testing.T) {
 	require.NoError(t, tm.AddBlockWithTXs(context.TODO(), &block))
 }
 
-func TestMesh_DecodeBallot(t *testing.T) {
-	t.Run("added", func(t *testing.T) {
-		tm := createTestMesh(t)
-		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1, 1}, types.InnerBallot{})
-		tm.mockTortoise.EXPECT().DecodeBallot(&ballot).Return(tm.mockDecoded, nil)
-		tm.mockDecoded.EXPECT().Opinion().Return(ballot.OpinionHash)
-		tm.mockDecoded.EXPECT().Store()
-		require.NoError(t, tm.AddBallot(&ballot))
-		received, err := ballots.Get(tm.cdb, ballot.ID())
-		require.NoError(t, err)
-		require.Equal(t, &ballot, received)
-	})
-	t.Run("not saved on opinion mismatch", func(t *testing.T) {
-		tm := createTestMesh(t)
-		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1, 1}, types.InnerBallot{})
-		tm.mockTortoise.EXPECT().DecodeBallot(&ballot).Return(tm.mockDecoded, nil)
-		tm.mockDecoded.EXPECT().Opinion().Return(types.Hash32{1})
-		require.ErrorContains(t, tm.AddBallot(&ballot), "match signed")
-		received, err := ballots.Get(tm.cdb, ballot.ID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, received)
-	})
-	t.Run("not saved if tortoise fails to decode", func(t *testing.T) {
-		tm := createTestMesh(t)
-		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1, 1}, types.InnerBallot{})
-		merr := errors.New("test")
-		tm.mockTortoise.EXPECT().DecodeBallot(&ballot).Return(tm.mockDecoded, merr)
-		require.ErrorIs(t, tm.AddBallot(&ballot), merr)
-		received, err := ballots.Get(tm.cdb, ballot.ID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, received)
-	})
-	t.Run("not decoded is not passed to tortoise", func(t *testing.T) {
-		tm := createTestMesh(t)
-		ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1, 1}, types.InnerBallot{})
-		tm.mockTortoise.EXPECT().DecodeBallot(&ballot).Return(nil, nil)
-		require.NoError(t, tm.AddBallot(&ballot))
-		received, err := ballots.Get(tm.cdb, ballot.ID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, received)
-	})
-}
-
 func TestMesh_MaliciousBallots(t *testing.T) {
-	tm := createTestMesh(t).expectAnyBallots()
+	tm := createTestMesh(t)
 	lid := types.NewLayerID(1)
 	pub := []byte{1, 1, 1}
 
@@ -805,7 +753,6 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, tm.AddBallot(&blts[0]))
 	require.False(t, blts[0].IsMalicious())
 	for _, ballot := range blts[1:] {
-		tm.mockDecoded.EXPECT().CancelWeight()
 		require.NoError(t, tm.AddBallot(&ballot))
 		require.True(t, ballot.IsMalicious())
 	}
