@@ -17,6 +17,10 @@ var (
 	ErrBadBallotData = errors.New("bad ballot data")
 )
 
+// NOTE(dshulyak) this was moved into a separate module to disentangle dependencies
+// between tortoise and proposals. tests were kept in the proposals/util_test.go
+// i will refactor them in a followup
+
 // CalcEligibleLayer calculates the eligible layer from the VRF signature.
 func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
 	vrfInteger := util.BytesToUint64(vrfSig)

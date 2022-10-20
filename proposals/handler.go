@@ -320,10 +320,10 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 
 	t3 := time.Now()
 	// note that computed opinion has to match signed opinion, otherwise it is unknown
-	// if votes sidecar was modified or not
+	// if attached votes struct was modified
 	//
 	// TODO this check can work only on the list with decoded votes, otherwise
-	// otherwise it validates only diff, which is very easy to bypass
+	// otherwise it validates only diff, which is easy to bypass
 	if err := h.checkVotesConsistency(ctx, b); err != nil {
 		logger.With().Warning("ballot votes consistency check failed", log.Err(err))
 		return nil, err

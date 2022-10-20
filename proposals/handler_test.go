@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 const (
@@ -44,7 +45,7 @@ type mockSet struct {
 	md  *mocks.MockballotDecoder
 }
 
-func (ms *mockSet) expectAnyBallots() *mockSet {
+func (ms *mockSet) decodeAnyBallots() *mockSet {
 	ms.md.EXPECT().DecodeBallot(gomock.Any()).AnyTimes()
 	ms.md.EXPECT().StoreBallot(gomock.Any()).AnyTimes()
 	return ms
@@ -79,8 +80,14 @@ func createTestHandler(t *testing.T) *testHandler {
 				Hdist:          5,
 			}),
 			withValidator(ms.mv)),
-		mockSet: ms.expectAnyBallots(),
+		mockSet: ms,
 	}
+}
+
+func createTestHandlerNoopDecoder(t *testing.T) *testHandler {
+	th := createTestHandler(t)
+	th.mockSet.decodeAnyBallots()
+	return th
 }
 
 func createProposal(t *testing.T) *types.Proposal {
@@ -155,7 +162,7 @@ func checkIdentity(t *testing.T, cdb *datastore.CachedDB, b *types.Ballot, malic
 }
 
 func TestBallot_MalformedData(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	data, err := codec.Encode(&b.InnerBallot)
 	require.NoError(t, err)
@@ -163,7 +170,7 @@ func TestBallot_MalformedData(t *testing.T) {
 }
 
 func TestBallot_BadSignature(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	b.Signature = b.Signature[1:]
 	data := encodeBallot(t, b)
@@ -171,7 +178,7 @@ func TestBallot_BadSignature(t *testing.T) {
 }
 
 func TestBallot_KnownBallot(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	require.NoError(t, ballots.Add(th.cdb, b))
 	data := encodeBallot(t, b)
@@ -180,7 +187,7 @@ func TestBallot_KnownBallot(t *testing.T) {
 }
 
 func TestBallot_EmptyATXID(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.AtxID = *types.EmptyATXID
 	b = signAndInit(t, b)
@@ -190,7 +197,7 @@ func TestBallot_EmptyATXID(t *testing.T) {
 }
 
 func TestBallot_GoldenATXID(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.AtxID = genGoldenATXID()
 	b = signAndInit(t, b)
@@ -200,7 +207,7 @@ func TestBallot_GoldenATXID(t *testing.T) {
 }
 
 func TestBallot_MissingBaseBallot(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.Votes.Base = types.EmptyBallotID
 	b = signAndInit(t, b)
@@ -210,7 +217,7 @@ func TestBallot_MissingBaseBallot(t *testing.T) {
 }
 
 func TestBallot_RefBallotMissingEpochData(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
 	b.EpochData = nil
 	signAndInit(t, b)
@@ -220,7 +227,7 @@ func TestBallot_RefBallotMissingEpochData(t *testing.T) {
 }
 
 func TestBallot_RefBallotMissingBeacon(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
 	b.EpochData.Beacon = types.EmptyBeacon
 	signAndInit(t, b)
@@ -230,7 +237,7 @@ func TestBallot_RefBallotMissingBeacon(t *testing.T) {
 }
 
 func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
 	b.EpochData.ActiveSet = nil
 	signAndInit(t, b)
@@ -240,7 +247,7 @@ func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
 }
 
 func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
 	b.EpochData.ActiveSet = append(b.EpochData.ActiveSet, b.EpochData.ActiveSet[0])
 	signAndInit(t, b)
@@ -250,7 +257,7 @@ func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
 }
 
 func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.EpochData = &types.EpochData{}
 	b = signAndInit(t, b)
@@ -260,7 +267,7 @@ func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
 }
 
 func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	require.GreaterOrEqual(t, 2, len(b.Votes.Support))
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
@@ -278,7 +285,7 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 }
 
 func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	th.cfg.Hdist = b.LayerIndex.Add(1).Uint32()
 	require.GreaterOrEqual(t, 2, len(b.Votes.Support))
@@ -297,7 +304,7 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 }
 
 func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
 	for _, bid := range b.Votes.Support {
@@ -321,7 +328,7 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 }
 
 func TestBallot_ConflictingForAndAgainst(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.Votes.Against = b.Votes.Support
 	b = signAndInit(t, b)
@@ -339,7 +346,7 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 }
 
 func TestBallot_ConflictingForAndAbstain(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.Votes.Abstain = []types.LayerID{b.LayerIndex.Sub(1)}
 	b = signAndInit(t, b)
@@ -357,7 +364,7 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 }
 
 func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.Votes.Against = b.Votes.Support
 	b.Votes.Support = nil
@@ -377,7 +384,7 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 }
 
 func TestBallot_ExceedMaxExceptions(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	b.Votes.Support = append(b.Votes.Support, types.RandomBlockID(), types.RandomBlockID())
 	b = signAndInit(t, b)
@@ -395,7 +402,7 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 }
 
 func TestBallot_BallotsNotAvailable(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	data := encodeBallot(t, b)
 
@@ -407,7 +414,7 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 }
 
 func TestBallot_ATXsNotAvailable(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
@@ -419,7 +426,7 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 }
 
 func TestBallot_BlocksNotAvailable(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
@@ -432,7 +439,7 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 }
 
 func TestBallot_ErrorCheckingEligible(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 
 	for i, bid := range b.Votes.Support {
@@ -454,7 +461,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 }
 
 func TestBallot_NotEligible(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
 
 	for i, bid := range b.Votes.Support {
@@ -493,12 +500,15 @@ func TestBallot_Success(t *testing.T) {
 			return true, nil
 		})
 	th.mm.EXPECT().AddBallot(b).Return(nil)
+	decoded := &tortoise.DecodedBallot{Ballot: b}
+	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	th.md.EXPECT().StoreBallot(decoded).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
 	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_RefBallot(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
 	for i, bid := range b.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
@@ -522,8 +532,48 @@ func TestBallot_RefBallot(t *testing.T) {
 	checkIdentity(t, th.cdb, b, false)
 }
 
-func TestProposal_MalformedData(t *testing.T) {
+func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	th := createTestHandler(t)
+	b := createBallot(t)
+	b.Votes.Against = b.Votes.Support
+	for _, bid := range b.Votes.Support {
+		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(1)})
+		require.NoError(t, blocks.Add(th.cdb, blk))
+	}
+	expected := errors.New("test")
+
+	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+	decoded := &tortoise.DecodedBallot{Ballot: b}
+	th.md.EXPECT().DecodeBallot(b).Return(decoded, expected)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), expected)
+}
+
+func TestBallot_DecodedStoreFailure(t *testing.T) {
+	th := createTestHandler(t)
+	b := createBallot(t)
+	b.Votes.Support = nil // just to avoid creating blocks
+	expected := errors.New("test")
+
+	data := encodeBallot(t, b)
+	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
+
+	decoded := &tortoise.DecodedBallot{Ballot: b}
+	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
+	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.md.EXPECT().StoreBallot(decoded).Return(expected)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), expected)
+}
+
+func TestProposal_MalformedData(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
@@ -533,7 +583,7 @@ func TestProposal_MalformedData(t *testing.T) {
 }
 
 func TestProposal_BadSignature(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	p.Signature = p.Signature[1:]
 	data := encodeProposal(t, p)
@@ -543,7 +593,7 @@ func TestProposal_BadSignature(t *testing.T) {
 }
 
 func TestProposal_KnownProposal(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
 	require.NoError(t, proposals.Add(th.cdb, p))
@@ -554,7 +604,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 }
 
 func TestProposal_DuplicateTXs(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
 	signer := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.SignedBytes())
@@ -591,7 +641,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 }
 
 func TestProposal_TXsNotAvailable(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
@@ -620,7 +670,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 }
 
 func TestProposal_FailedToAddProposalTXs(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
@@ -649,7 +699,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 }
 
 func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
@@ -711,7 +761,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			th := createTestHandler(t)
+			th := createTestHandlerNoopDecoder(t)
 			p := createProposal(t)
 			for i, bid := range p.Votes.Support {
 				blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
@@ -751,7 +801,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 }
 
 func TestProposal_ValidProposal(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
@@ -779,7 +829,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 }
 
 func TestMetrics(t *testing.T) {
-	th := createTestHandler(t)
+	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
 		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
