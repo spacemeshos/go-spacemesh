@@ -5,11 +5,14 @@ import (
 	"errors"
 	"io"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -38,12 +41,22 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	svc := NewTransactionService(db, nil, nil, nil, nil)
 	t.Cleanup(launchServer(t, svc))
 
-	conn := dialGrpc(t, cfg)
+	conn, err := grpc.Dial(
+		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(3*time.Second),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
+
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
-		stream, err := client.StreamResults(context.Background(),
-			&pb.TransactionResultsRequest{})
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{})
 		require.NoError(t, err)
 		var i int
 		for {
@@ -124,6 +137,10 @@ func TestTransactionService_StreamResults(t *testing.T) {
 
 func BenchmarkStreamResults(b *testing.B) {
 	db := sql.InMemory()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	var (
 		gen      = fixture.NewTransactionResultGenerator().WithAddresses(10_000)
 		count    = map[types.Address]int{}
@@ -131,7 +148,7 @@ func BenchmarkStreamResults(b *testing.B) {
 		maxcount int
 		start    = time.Now()
 	)
-	tx, err := db.Tx(context.Background())
+	tx, err := db.Tx(ctx)
 	require.NoError(b, err)
 	for i := 0; i < 1_000; i++ {
 		rst := gen.Next()
@@ -149,7 +166,14 @@ func BenchmarkStreamResults(b *testing.B) {
 	require.NoError(b, tx.Release())
 	svc := NewTransactionService(db, nil, nil, nil, nil)
 	b.Cleanup(launchServer(b, svc))
-	conn := dialGrpc(b, cfg)
+
+	conn, err := grpc.DialContext(ctx,
+		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	require.NoError(b, err)
+	b.Cleanup(func() { require.NoError(b, conn.Close()) })
 	client := pb.NewTransactionServiceClient(conn)
 
 	b.Logf("setup took %s", time.Since(start))
@@ -158,7 +182,7 @@ func BenchmarkStreamResults(b *testing.B) {
 
 	stats := runtime.MemStats{}
 	for i := 0; i < b.N; i++ {
-		stream, err := client.StreamResults(context.TODO(), &pb.TransactionResultsRequest{Address: maxaddr.String()})
+		stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{Address: maxaddr.String()})
 		if err != nil {
 			b.Fatal(err)
 		}
