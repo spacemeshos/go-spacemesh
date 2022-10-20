@@ -27,12 +27,12 @@ func NewValidator(poetDb poetDbAPI, cfg atypes.PostConfig) *Validator {
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
+func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
 
-	if uint(nipost.PostMetadata.BitsPerLabel) < v.cfg.BitsPerLabel {
+	if nipost.PostMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
 		return 0, fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel)
 	}
 
@@ -48,11 +48,11 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 		return 0, fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", v.cfg.MaxNumUnits, numUnits)
 	}
 
-	if uint(nipost.PostMetadata.K1) > v.cfg.K1 {
+	if nipost.PostMetadata.K1 > v.cfg.K1 {
 		return 0, fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.cfg.K1, nipost.PostMetadata.K1)
 	}
 
-	if uint(nipost.PostMetadata.K2) < v.cfg.K2 {
+	if nipost.PostMetadata.K2 < v.cfg.K2 {
 		return 0, fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.cfg.K2, nipost.PostMetadata.K2)
 	}
 
@@ -82,17 +82,17 @@ func isIncluded(proof *types.PoetProof, member []byte) bool {
 
 // ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+func (v *Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
 	m := new(proving.ProofMetadata)
 	m.ID = commitment
 	m.NumUnits = numUnits
 	m.Challenge = PostMetadata.Challenge
-	m.BitsPerLabel = uint(PostMetadata.BitsPerLabel)
-	m.LabelsPerUnit = uint(PostMetadata.LabelsPerUnit)
-	m.K1 = uint(PostMetadata.K1)
-	m.K2 = uint(PostMetadata.K2)
+	m.BitsPerLabel = PostMetadata.BitsPerLabel
+	m.LabelsPerUnit = PostMetadata.LabelsPerUnit
+	m.K1 = PostMetadata.K1
+	m.K2 = PostMetadata.K2
 
 	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)

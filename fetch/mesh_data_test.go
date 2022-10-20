@@ -428,12 +428,12 @@ func TestGetTxs(t *testing.T) {
 	}
 }
 
-func genATXs(t *testing.T, num int) []*types.ActivationTx {
+func genATXs(t *testing.T, num uint32) []*types.ActivationTx {
 	t.Helper()
 	sig := signing.NewEdSigner()
 	atxs := make([]*types.ActivationTx, 0, num)
-	for i := 0; i < num; i++ {
-		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, uint(i), nil)
+	for i := uint32(0); i < num; i++ {
+		atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{1, 2, 3}, &types.NIPost{}, i, nil)
 		require.NoError(t, activation.SignAtx(sig, atx))
 		require.NoError(t, atx.CalcAndSetID())
 		require.NoError(t, atx.CalcAndSetNodeID())

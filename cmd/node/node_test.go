@@ -1043,7 +1043,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	nodeID := types.BytesToNodeID(pub.Bytes())
 
 	err := smApp.initServices(context.TODO(), nodeID, storePath, edSgn,
-		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
 	}

@@ -855,6 +855,14 @@ func skipLayers(n int) sim.VotesGenerator {
 	}
 }
 
+func addSupport(bid types.BlockID) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		votes := sim.PerfectVoting(rng, layers, i)
+		votes.Support = append(votes.Support, bid)
+		return votes
+	}
+}
+
 // olderExceptions will vote for block older then base ballot.
 func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	if len(layers) < 2 {
@@ -1287,9 +1295,10 @@ func TestComputeLocalOpinion(t *testing.T) {
 			require.NoError(t, err)
 			for _, bid := range blks {
 				vote, _ := getLocalVote(
+					cfg,
 					tortoise.trtl.state.verified,
 					tortoise.trtl.state.last,
-					cfg, tortoise.trtl.blockRefs[bid])
+					tortoise.trtl.blockRefs[bid])
 				if tc.expected == support {
 					hareOutput, err := layers.GetHareOutput(s.GetState(0).DB, tc.lid)
 					require.NoError(t, err)
@@ -1950,8 +1959,8 @@ func testEmptyLayers(t *testing.T, hdist int) {
 	cfg.LayerSize = size
 
 	// TODO(dshulyak) parametrize test with varying skipFrom, skipTo
-	// skipping layers 9, 10, 11, 12, 13
-	skipFrom, skipTo := 1, 6
+	// skipping layers 9, 10
+	skipFrom, skipTo := 1, 3
 
 	s := sim.New(
 		sim.WithLayerSize(cfg.LayerSize),
@@ -1962,10 +1971,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 	tortoise := tortoiseFromSimState(
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
-	var (
-		last     = types.GetEffectiveGenesis()
-		verified types.LayerID
-	)
+	last := types.GetEffectiveGenesis()
 	for i := 0; i < int(skipTo); i++ {
 		opts := []sim.NextOpt{
 			sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
@@ -1980,39 +1986,132 @@ func testEmptyLayers(t *testing.T, hdist int) {
 		tortoise.TallyVotes(ctx, last)
 	}
 	require.Equal(t, types.GetEffectiveGenesis().Add(uint32(skipFrom)), tortoise.LatestComplete())
-	for i := 0; i <= int(cfg.Zdist); i++ {
+	for i := 0; i <= int(cfg.Hdist); i++ {
 		last = s.Next(
 			sim.WithNumBlocks(1),
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
 		)
 		tortoise.TallyVotes(ctx, last)
-		verified = tortoise.LatestComplete()
 	}
-	expected := types.GetEffectiveGenesis().Add(uint32(skipFrom) + cfg.Zdist)
-	require.Equal(t, expected, verified)
-	for i := 0; i < skipTo-skipFrom-1-int(cfg.Zdist); i++ {
-		last = s.Next(
-			sim.WithNumBlocks(1),
-			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
-		)
-		tortoise.TallyVotes(ctx, last)
-		require.Equal(t, expected.Add(uint32(i)+1), tortoise.LatestComplete())
-	}
-	last = s.Next(
-		sim.WithNumBlocks(1),
-		sim.WithVoteGenerator(tortoiseVotingWithCurrent(tortoise)),
-	)
-	tortoise.TallyVotes(ctx, last)
-	verified = tortoise.LatestComplete()
-	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
 }
 
 func TestEmptyLayers(t *testing.T) {
-	t.Run("terminated using zdist", func(t *testing.T) {
-		testEmptyLayers(t, 10)
+	t.Run("verifying", func(t *testing.T) {
+		testEmptyLayers(t, 13)
 	})
-	t.Run("full mode", func(t *testing.T) {
+	t.Run("full", func(t *testing.T) {
 		testEmptyLayers(t, 5)
+	})
+}
+
+func TestSwitchMode(t *testing.T) {
+	t.Run("temporary inconsistent", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = 2
+		cfg.Hdist = 2
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i <= int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithEmptyHareOutput())
+		}
+		tortoise.TallyVotes(ctx, last)
+		require.True(t, tortoise.trtl.isFull)
+		for i := 0; i <= int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise.TallyVotes(ctx, last)
+		}
+		tortoise.TallyVotes(ctx, last)
+		require.False(t, tortoise.trtl.isFull)
+	})
+	t.Run("loaded validity", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = 2
+		cfg.Hdist = 2
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i <= int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1), sim.WithEmptyHareOutput())
+		}
+		tortoise.TallyVotes(ctx, last)
+		require.True(t, tortoise.trtl.isFull)
+
+		tortoise1 := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		for i := 0; i <= int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise1.TallyVotes(ctx, last)
+		}
+		tortoise1.TallyVotes(ctx, last)
+		require.False(t, tortoise1.trtl.isFull)
+	})
+	t.Run("changed to hare", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = 2
+		cfg.Hdist = 2
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		s.Next(sim.WithNumBlocks(1))
+		s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(gapVote))
+		for i := 0; i < int(cfg.Hdist)-1; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+		}
+		tortoise.TallyVotes(ctx, last)
+		layer := tortoise.trtl.layer(types.GetEffectiveGenesis().Add(1))
+		require.Len(t, layer.blocks, 1)
+		require.Equal(t, layer.blocks[0].validity, against)
+
+		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(layer.blocks[0].id)))
+		tortoise.TallyVotes(ctx, last)
+		for i := 0; i < 10; i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise.TallyVotes(ctx, last)
+		}
+		tortoise.TallyVotes(ctx, last)
+		require.False(t, tortoise.trtl.isFull)
 	})
 }
 

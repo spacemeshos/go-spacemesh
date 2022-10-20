@@ -21,7 +21,6 @@ type (
 		// 10 and above, therefore its weight needs to be added to goodUncounted
 		// for layers 10 and above
 		goodUncounted   weight
-		abstained       weight
 		referenceHeight uint64
 	}
 
@@ -33,15 +32,6 @@ type (
 		height uint64
 	}
 
-	layerInfo struct {
-		lid            types.LayerID
-		empty          weight
-		hareTerminated bool
-		blocks         []*blockInfo
-		ballots        []*ballotInfo
-		verifying      verifyingInfo
-	}
-
 	blockInfo struct {
 		id     types.BlockID
 		layer  types.LayerID
@@ -50,8 +40,8 @@ type (
 		margin weight
 
 		validity sign
-		// if validity requires persisting it to the disk
-		dirty bool
+		// persisted validity
+		persisted sign
 	}
 
 	state struct {
@@ -68,6 +58,11 @@ type (
 		processed types.LayerID
 		// last evicted layer
 		evicted types.LayerID
+
+		changedOpinion struct {
+			// sector of layers where opinion is different from previously computed opinion
+			min, max types.LayerID
+		}
 
 		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
@@ -156,6 +151,44 @@ func (s *state) updateRefHeight(layer *layerInfo, block *blockInfo) error {
 	return nil
 }
 
+type layerInfo struct {
+	lid            types.LayerID
+	empty          weight
+	hareTerminated bool
+	blocks         []*blockInfo
+	ballots        []*ballotInfo
+	verifying      verifyingInfo
+
+	opinion types.Hash32
+	// a pointer to the value stored on the previous layerInfo object
+	// it is stored as a pointer so that when previous layerInfo is evicted
+	// we still have access in case we need to recompute opinion for this layer
+	prevOpinion *types.Hash32
+}
+
+func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
+	hasher := hash.New()
+	if l.prevOpinion != nil {
+		hasher.Write(l.prevOpinion[:])
+	}
+	if !l.hareTerminated {
+		hasher.Write(abstainSentinel)
+	} else if withinDistance(hdist, l.lid, last) {
+		for _, block := range l.blocks {
+			if block.hare == support {
+				hasher.Write(block.id[:])
+			}
+		}
+	} else {
+		for _, block := range l.blocks {
+			if block.validity == support {
+				hasher.Write(block.id[:])
+			}
+		}
+	}
+	hasher.Sum(l.opinion[:0])
+}
+
 type (
 	baseInfo struct {
 		id    types.BallotID
@@ -163,13 +196,8 @@ type (
 	}
 
 	conditions struct {
-		baseGood bool
-		// is ballot consistent with local opinion within [base.layer, layer)
-		consistent bool
 		// set after comparing with local beacon
 		badBeacon bool
-		// any exceptions before base.layer
-		votesBeforeBase bool
 	}
 
 	referenceInfo struct {
@@ -188,14 +216,6 @@ type (
 		conditions conditions
 	}
 )
-
-func (b *ballotInfo) good() bool {
-	return b.canBeGood() && b.conditions.baseGood
-}
-
-func (b *ballotInfo) canBeGood() bool {
-	return !b.conditions.badBeacon && !b.conditions.votesBeforeBase && b.conditions.consistent
-}
 
 func (b *ballotInfo) opinion() types.Hash32 {
 	return b.votes.opinion()
