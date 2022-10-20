@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -23,7 +24,7 @@ var (
 
 // CalcEligibleLayer calculates the eligible layer from the VRF signature.
 func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
-	vrfInteger := util.BytesToUint64(vrfSig)
+	vrfInteger := binary.LittleEndian.Uint64(vrfSig)
 	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
 	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
 }
