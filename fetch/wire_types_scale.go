@@ -261,6 +261,58 @@ func (t *MeshHashes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.Beacon[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.Weight))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSlice(enc, t.AtxIDs)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.Beacon[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Weight = uint64(field)
+	}
+	{
+		field, n, err := scale.DecodeStructSlice[types.ATXID](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.AtxIDs = field
+	}
+	return total, nil
+}
+
 func (t *LayerData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeStructSlice(enc, t.Ballots)

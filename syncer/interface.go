@@ -29,7 +29,6 @@ type fetchLogic interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetEpochATXIDs(context.Context, p2p.Peer, types.EpochID, func([]byte), func(error)) error
 	GetLayerData(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 	GetLayerOpinions(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 
@@ -39,6 +38,7 @@ type fetcher interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 
 	GetPeers() []p2p.Peer
+	PeerEpochInfo(context.Context, p2p.Peer, types.EpochID) (*fetch.EpochData, error)
 	PeerMeshHashes(context.Context, p2p.Peer, *fetch.MeshHashRequest) (*fetch.MeshHashes, error)
 }
 

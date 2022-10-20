@@ -231,20 +231,6 @@ func (mr *MockfetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*Mockfetcher)(nil).GetBlocks), arg0, arg1)
 }
 
-// GetEpochATXIDs mocks base method.
-func (m *Mockfetcher) GetEpochATXIDs(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID, arg3 func([]byte), arg4 func(error)) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEpochATXIDs", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetEpochATXIDs indicates an expected call of GetEpochATXIDs.
-func (mr *MockfetcherMockRecorder) GetEpochATXIDs(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXIDs", reflect.TypeOf((*Mockfetcher)(nil).GetEpochATXIDs), arg0, arg1, arg2, arg3, arg4)
-}
-
 // GetLayerData mocks base method.
 func (m *Mockfetcher) GetLayerData(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
 	m.ctrl.T.Helper()
@@ -285,6 +271,21 @@ func (m *Mockfetcher) GetPeers() []p2p.Peer {
 func (mr *MockfetcherMockRecorder) GetPeers() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockfetcher)(nil).GetPeers))
+}
+
+// PeerEpochInfo mocks base method.
+func (m *Mockfetcher) PeerEpochInfo(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) (*fetch.EpochData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerEpochInfo", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*fetch.EpochData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PeerEpochInfo indicates an expected call of PeerEpochInfo.
+func (mr *MockfetcherMockRecorder) PeerEpochInfo(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerEpochInfo", reflect.TypeOf((*Mockfetcher)(nil).PeerEpochInfo), arg0, arg1, arg2)
 }
 
 // PeerMeshHashes mocks base method.

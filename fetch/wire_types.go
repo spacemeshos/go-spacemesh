@@ -52,6 +52,12 @@ type MeshHashes struct {
 	Hashes []types.Hash32
 }
 
+type EpochData struct {
+	Beacon types.Beacon
+	Weight uint64
+	AtxIDs []types.ATXID
+}
+
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
 	Ballots []types.BallotID

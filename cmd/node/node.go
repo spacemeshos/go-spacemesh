@@ -563,7 +563,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
-	fetcher := fetch.NewFetch(cdb, msh, app.host,
+	fetcher := fetch.NewFetch(cdb, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),

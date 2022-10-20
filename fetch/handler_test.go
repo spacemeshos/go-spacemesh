@@ -2,7 +2,9 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -14,25 +16,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testHandler struct {
 	*handler
 	cdb *datastore.CachedDB
 	mm  *mocks.MockmeshProvider
+	mb  *smocks.MockBeaconGetter
 }
 
 func createTestHandler(t *testing.T) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	mm := mocks.NewMockmeshProvider(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	mm := mocks.NewMockmeshProvider(ctrl)
+	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
 		cdb:     cdb,
 		mm:      mm,
+		mb:      mb,
 	}
 }
 
@@ -227,6 +235,84 @@ func TestHandleMeshHashReq(t *testing.T) {
 				require.EqualValues(t, len(got), req.Steps+1)
 			} else {
 				require.ErrorIs(t, err, tc.err)
+			}
+		})
+	}
+}
+
+func newAtx(t *testing.T, target types.EpochID) *types.VerifiedActivationTx {
+	t.Helper()
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: (target - 1).FirstLayer(),
+				PrevATXID:  types.RandomATXID(),
+			},
+			NumUnits: 2,
+		},
+	}
+
+	bts, err := atx.InnerBytes()
+	require.NoError(t, err)
+	atx.Sig = signing.NewEdSigner().Sign(bts)
+	vatx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	return vatx
+}
+
+func TestHandleEpochInfoReq(t *testing.T) {
+	beaconErr := errors.New("beacon unavailable")
+	tt := []struct {
+		name           string
+		missingData    bool
+		beaconErr, err error
+	}{
+		{
+			name: "all good",
+		},
+		{
+			name:        "no epoch data",
+			missingData: true,
+		},
+		{
+			name:      "beacon missing",
+			beaconErr: beaconErr,
+			err:       beaconErr,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			epoch := types.EpochID(11)
+			var expected EpochData
+			if !tc.missingData {
+				for i := 0; i < 10; i++ {
+					vatx := newAtx(t, epoch)
+					require.NoError(t, atxs.Add(th.cdb, vatx, time.Now()))
+					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+					expected.Weight += vatx.GetWeight()
+				}
+			}
+			if tc.beaconErr == nil {
+				beacon := types.RandomBeacon()
+				expected.Beacon = beacon
+				th.mb.EXPECT().GetBeacon(epoch).Return(beacon, nil)
+			} else {
+				th.mb.EXPECT().GetBeacon(epoch).Return(types.EmptyBeacon, tc.beaconErr)
+			}
+
+			out, err := th.handleEpochInfoReq(context.TODO(), epoch.ToBytes())
+			require.ErrorIs(t, err, tc.err)
+			if tc.err == nil {
+				var got EpochData
+				require.NoError(t, codec.Decode(out, &got))
+				require.Equal(t, expected.Beacon, got.Beacon)
+				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+				require.Equal(t, expected.Weight, got.Weight)
 			}
 		})
 	}

@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -11,10 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 type handler struct {
@@ -22,34 +21,46 @@ type handler struct {
 	cdb    *datastore.CachedDB
 	bs     *datastore.BlobStore
 	msh    meshProvider
+	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
 		bs:     bs,
 		msh:    m,
+		beacon: b,
 	}
 }
 
-// handleEpochATXIDsReq returns the ATXs published in the specified epoch.
-func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte, error) {
+// handleEpochInfoReq returns the ATXs published in the specified epoch.
+func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
-	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
+	weight, atxIDs, err := h.cdb.GetEpochWeight(epoch)
 	if err != nil {
-		return nil, fmt.Errorf("get epoch ATXs for epoch %v: %w", epoch, err)
+		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", epoch, log.Err(err))
+		return nil, err
 	}
-
-	h.logger.WithContext(ctx).With().Debug("responded to epoch atx request",
+	beacon, err := h.beacon.GetBeacon(epoch)
+	if err != nil {
+		h.logger.WithContext(ctx).With().Debug("failed to get beacon", epoch, log.Err(err))
+		return nil, err
+	}
+	ed := EpochData{
+		Beacon: beacon,
+		Weight: weight,
+		AtxIDs: atxIDs,
+	}
+	h.logger.WithContext(ctx).With().Debug("responded to epoch info request",
 		epoch,
-		log.Int("count", len(atxids)))
-	bts, err := codec.EncodeSlice(atxids)
+		log.Stringer("beacon", ed.Beacon),
+		log.Uint64("weight", ed.Weight),
+		log.Int("atx_count", len(ed.AtxIDs)))
+	bts, err := codec.Encode(&ed)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("failed to serialize epoch atx", epoch, log.Err(err))
-		return bts, fmt.Errorf("serialize: %w", err)
 	}
-
 	return bts, nil
 }
 

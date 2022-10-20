@@ -280,47 +280,19 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
-type epochAtxRes struct {
-	err    error
-	atxIDs []types.ATXID
-}
-
 // GetEpochATXs fetches all ATXs in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
-	resCh := make(chan epochAtxRes, 1)
 	peers := d.fetcher.GetPeers()
 	if len(peers) == 0 {
 		return errNoPeers
 	}
 	peer := peers[rand.Intn(len(peers))]
-	okFunc := func(data []byte) {
-		atxIDs, err := codec.DecodeSlice[types.ATXID](data)
-		resCh <- epochAtxRes{
-			err:    err,
-			atxIDs: atxIDs,
-		}
+	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
+	if err != nil {
+		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
-	errFunc := func(err error) {
-		resCh <- epochAtxRes{
-			err: err,
-		}
-	}
-	if err := d.fetcher.GetEpochATXIDs(ctx, peer, epoch, okFunc, errFunc); err != nil {
-		return fmt.Errorf("get ATXIDs (peer %v): %w", peer, err)
-	}
-	var res epochAtxRes
-	select {
-	case res = <-resCh:
-		break
-	case <-ctx.Done():
-		return errTimeout
-	}
-	if res.err != nil {
-		return res.err
-	}
-
-	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(res.atxIDs))
-	if err := d.fetcher.GetAtxs(ctx, res.atxIDs); err != nil {
+	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
+	if err := d.fetcher.GetAtxs(ctx, ed.AtxIDs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
 	}
 	return nil

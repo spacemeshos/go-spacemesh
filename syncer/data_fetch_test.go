@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 )
@@ -39,14 +40,6 @@ const (
 	numBallots = 10
 	numBlocks  = 3
 )
-
-func generateEpochData(t *testing.T) ([]types.ATXID, []byte) {
-	t.Helper()
-	atxIDs := types.RandomActiveSet(11)
-	data, err := codec.EncodeSlice(atxIDs)
-	require.NoError(t, err)
-	return atxIDs, data
-}
 
 func generateLayerOpinions(t *testing.T) []byte {
 	t.Helper()
@@ -258,7 +251,7 @@ func Test_GetEpochATXs(t *testing.T) {
 			name: "success",
 		},
 		{
-			name:   "get ID failure",
+			name:   "get failure",
 			getErr: errGetID,
 			err:    errGetID,
 		},
@@ -275,19 +268,22 @@ func Test_GetEpochATXs(t *testing.T) {
 			t.Parallel()
 
 			td := newTestDataFetch(t)
+			ed := &fetch.EpochData{
+				Beacon: types.RandomBeacon(),
+				AtxIDs: types.RandomActiveSet(11),
+				Weight: rand.Uint64(),
+			}
 			td.mFetcher.EXPECT().GetPeers().Return(peers)
-			td.mFetcher.EXPECT().GetEpochATXIDs(gomock.Any(), gomock.Any(), epoch, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, peer p2p.Peer, _ types.EpochID, okCB func([]byte), errCB func(error)) error {
+			td.mFetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), epoch).DoAndReturn(
+				func(_ context.Context, peer p2p.Peer, _ types.EpochID) (*fetch.EpochData, error) {
 					require.Contains(t, peers, peer)
 					if tc.getErr != nil {
-						errCB(tc.getErr)
+						return nil, tc.getErr
 					} else {
-						atxIDs, data := generateEpochData(t)
-						okCB(data)
-						td.mFetcher.EXPECT().RegisterPeerHashes(peer, types.ATXIDsToHashes(atxIDs))
-						td.mFetcher.EXPECT().GetAtxs(gomock.Any(), atxIDs).Return(tc.fetchErr)
+						td.mFetcher.EXPECT().RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
+						td.mFetcher.EXPECT().GetAtxs(gomock.Any(), ed.AtxIDs).Return(tc.fetchErr)
+						return ed, nil
 					}
-					return nil
 				})
 			require.ErrorIs(t, td.GetEpochATXs(context.TODO(), epoch), tc.err)
 		})
