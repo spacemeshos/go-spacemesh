@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/integration"
-	"github.com/spacemeshos/poet/rpc/api"
+	"github.com/spacemeshos/poet/release/proto/go/rpc/api"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
