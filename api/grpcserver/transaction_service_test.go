@@ -24,10 +24,13 @@ import (
 func TestTransactionService_StreamResults(t *testing.T) {
 	db := sql.InMemory()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	gen := fixture.NewTransactionResultGenerator().
 		WithAddresses(2)
 	txs := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
 		for i := range txs {
 			tx := gen.Next()
 
@@ -41,21 +44,16 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	svc := NewTransactionService(db, nil, nil, nil, nil)
 	t.Cleanup(launchServer(t, svc))
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.DialContext(ctx,
 		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(time.Second),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
-
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
 		stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{})
 		require.NoError(t, err)
 		var i int
