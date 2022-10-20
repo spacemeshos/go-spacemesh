@@ -1724,7 +1724,7 @@ func TestTransactionService(t *testing.T) {
 		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(3*time.Second),
+		grpc.WithTimeout(time.Second),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
@@ -2674,7 +2674,7 @@ func TestDebugService(t *testing.T) {
 		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(3*time.Second),
+		grpc.WithTimeout(time.Second),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
