@@ -43,7 +43,7 @@ func createLayer(t *testing.T, db *datastore.CachedDB, lid types.LayerID) ([]typ
 	for i := 0; i < num; i++ {
 		b := types.RandomBallot()
 		b.LayerIndex = lid
-		b.Signature = signing.NewEdSigner().Sign(b.Bytes())
+		b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(db, b))
 		blts = append(blts, b.ID())

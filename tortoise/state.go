@@ -101,6 +101,15 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	return layer
 }
 
+func (s *state) epoch(eid types.EpochID) *epochInfo {
+	epoch, exist := s.epochs[eid]
+	if !exist {
+		epoch = &epochInfo{atxs: map[types.ATXID]uint64{}}
+		s.epochs[eid] = epoch
+	}
+	return epoch
+}
+
 func (s *state) addBallot(ballot *ballotInfo) {
 	layer := s.layer(ballot.layer)
 	layer.ballots = append(layer.ballots, ballot)
@@ -110,6 +119,8 @@ func (s *state) addBallot(ballot *ballotInfo) {
 func (s *state) addBlock(block *blockInfo) {
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
+	sortBlocks(layer.blocks)
+
 	s.blockRefs[block.id] = block
 	s.updateRefHeight(layer, block)
 }
@@ -207,10 +218,7 @@ type (
 )
 
 func (b *ballotInfo) opinion() types.Hash32 {
-	if b.votes.tail != nil {
-		return b.votes.tail.opinion
-	}
-	return types.Hash32{}
+	return b.votes.opinion()
 }
 
 type votes struct {
@@ -264,6 +272,13 @@ func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
 		}
 	}
 	return abstain
+}
+
+func (v *votes) opinion() types.Hash32 {
+	if v.tail == nil {
+		return types.Hash32{}
+	}
+	return v.tail.opinion
 }
 
 type layerVote struct {
@@ -349,8 +364,8 @@ func (l *layerVote) computeOpinion() {
 
 func sortBlocks(blocks []*blockInfo) {
 	sort.Slice(blocks, func(i, j int) bool {
-		if blocks[i].height < blocks[j].height {
-			return true
+		if blocks[i].height != blocks[j].height {
+			return blocks[i].height < blocks[j].height
 		}
 		return blocks[i].id.Compare(blocks[j].id)
 	})

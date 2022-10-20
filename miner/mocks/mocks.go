@@ -114,14 +114,14 @@ func (m *MockvotesEncoder) EXPECT() *MockvotesEncoderMockRecorder {
 }
 
 // EncodeVotes mocks base method.
-func (m *MockvotesEncoder) EncodeVotes(arg0 context.Context, arg1 ...tortoise.EncodeVotesOpts) (*types.Votes, error) {
+func (m *MockvotesEncoder) EncodeVotes(arg0 context.Context, arg1 ...tortoise.EncodeVotesOpts) (*types.Opinion, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0}
 	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "EncodeVotes", varargs...)
-	ret0, _ := ret[0].(*types.Votes)
+	ret0, _ := ret[0].(*types.Opinion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

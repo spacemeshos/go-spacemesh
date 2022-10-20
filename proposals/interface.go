@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -15,4 +16,9 @@ type meshProvider interface {
 
 type eligibilityValidator interface {
 	CheckEligibility(context.Context, *types.Ballot) (bool, error)
+}
+
+type ballotDecoder interface {
+	DecodeBallot(*types.Ballot) (*tortoise.DecodedBallot, error)
+	StoreBallot(*tortoise.DecodedBallot) error
 }

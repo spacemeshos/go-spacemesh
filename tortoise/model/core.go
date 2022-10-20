@@ -90,7 +90,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		ballot := &types.Ballot{}
 		ballot.LayerIndex = ev.LayerID
-		ballot.Votes = *votes
+		ballot.Votes = votes.Votes
+		ballot.OpinionHash = votes.Hash
 		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
 			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})
@@ -113,7 +114,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				Beacon:    beacon,
 			}
 		}
-		ballot.Signature = c.signer.Sign(ballot.Bytes())
+		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()

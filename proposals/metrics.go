@@ -59,10 +59,11 @@ const (
 	dbSave     = "db_w"
 	linkTxs    = "link"
 
-	dataCheck = "data"  // check data integrity
-	fetchRef  = "fetch" // check referenced ballots/atxs/blocks are available
-	votes     = "votes" // check votes are consistent
-	eligible  = "elig"  // check ballot eligibility
+	dataCheck = "data"   // check data integrity
+	fetchRef  = "fetch"  // check referenced ballots/atxs/blocks are available
+	decode    = "decode" // decoding ballot using tortoise
+	votes     = "votes"  // check votes are consistent
+	eligible  = "elig"   // check ballot eligibility
 )
 
 var (
