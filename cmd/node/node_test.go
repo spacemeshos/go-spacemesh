@@ -50,7 +50,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/utils"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -168,7 +167,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
 }
 
-func testArgs(args ...string) (string, error) {
+func testArgs(ctx context.Context, args ...string) (string, error) {
 	root := Cmd
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
@@ -178,7 +177,7 @@ func testArgs(args ...string) (string, error) {
 		args = []string{""}
 	}
 	root.SetArgs(args)
-	_, err := root.ExecuteC() // runs Run()
+	_, err := root.ExecuteContextC(ctx) // runs Run()
 	return buf.String(), err
 }
 
@@ -195,7 +194,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 		// We don't expect this to be called at all
 		r.Fail("Command.Run not expected to run")
 	}
-	str, err := testArgs("illegal")
+	str, err := testArgs(context.Background(), "illegal")
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
@@ -204,7 +203,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
-	str, err = testArgs("--log-encoder", "json")
+	str, err = testArgs(context.Background(), "--log-encoder", "json")
 
 	r.NoError(err)
 	r.Empty(str)
@@ -246,7 +245,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("parse services list: unrecognized GRPC service requested: illegal", err.Error())
 	}
-	str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
+	str, err := testArgs(context.Background(), "--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	// This should still be set
@@ -259,7 +258,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try enabling two services, one with a legal name and one with an illegal name
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
+	str, err = testArgs(context.Background(), "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -271,7 +270,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs(context.Background(), "--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -282,7 +281,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Use commas instead
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
+	str, err = testArgs(context.Background(), "--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -294,7 +293,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
-	str, err = testArgs("--grpc", "node")
+	str, err = testArgs(context.Background(), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -303,7 +302,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	events.CloseEventReporter()
 
 	// This should work too
-	str, err = testArgs("--grpc", "node,node")
+	str, err = testArgs(context.Background(), "--grpc", "node,node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -317,7 +316,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
-	str, err = testArgs("--grpc", "node,mesh")
+	str, err = testArgs(context.Background(), "--grpc", "node,mesh")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -330,7 +329,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
-	str, err = testArgs("--grpc", "node", "--grpc", "mesh")
+	str, err = testArgs(context.Background(), "--grpc", "node", "--grpc", "mesh")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -352,7 +351,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("parse services list: must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
-	str, err := testArgs("--json-server")
+	str, err := testArgs(context.Background(), "--json-server")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartJSONServer)
@@ -365,7 +364,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
-	str, err = testArgs("--grpc", "node", "--json-server")
+	str, err = testArgs(context.Background(), "--grpc", "node", "--json-server")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -377,7 +376,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--json-port", "1234")
+	str, err = testArgs(context.Background(), "--json-port", "1234")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -424,7 +423,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	defer app.stopServices()
 
 	// Make sure the service is not running by default
-	str, err := testArgs() // no args
+	str, err := testArgs(context.Background()) // no args
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -433,7 +432,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(100*time.Millisecond),
+		grpc.WithTimeout(2*time.Second),
 	)
 	r.ErrorContains(err, "context deadline exceeded")
 
@@ -442,7 +441,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	// Test starting the server from the command line
 	// uses Cmd.Run from above
-	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs(context.Background(), "--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(port, app.Config.API.GrpcServerPort)
@@ -483,7 +482,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		app.startAPIServices(context.TODO())
 	}
 	defer app.stopServices()
-	str, err := testArgs()
+	str, err := testArgs(context.Background())
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartJSONServer)
@@ -509,7 +508,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs("--json-server", "--grpc", "node", "--json-port", "1234")
+	str, err = testArgs(context.Background(), "--json-server", "--grpc", "node", "--json-port", "1234")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.JSONServerPort)
@@ -588,6 +587,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		require.NoError(t, app.Start())
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
 	wg := sync.WaitGroup{}
@@ -595,16 +597,16 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	go func() {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
-		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "localhost")
+		str, err := testArgs(ctx, "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "localhost")
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 	}()
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.DialContext(
+		ctx,
 		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
@@ -614,7 +616,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
+		streamStatus, err := c.StatusStream(ctx, &pb.StatusStreamRequest{})
 		require.NoError(t, err)
 
 		// We don't really control the order in which these are received,
@@ -637,13 +639,16 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		}
 	}()
 
-	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
+	streamErr, err := c.ErrorStream(ctx, &pb.ErrorStreamRequest{})
 	require.NoError(t, err)
 	_, err = streamErr.Header()
 	require.NoError(t, err)
 
 	// Report two errors and make sure they're both received
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		errlog.Error("test123")
 		errlog.Error("test456")
 		assert.Panics(t, func() {
@@ -669,7 +674,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cmdp.Cancel()() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
-	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+	wg.Wait()
 }
 
 // E2E app test of the transaction service.
@@ -721,12 +726,15 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		require.NoError(t, app.Start())
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		str, err := testArgs()
+		str, err := testArgs(ctx)
 		r.Empty(str)
 		r.NoError(err)
 		wg.Done()
@@ -744,7 +752,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
 
-	stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
+	stream, err := c.TransactionsStateStream(ctx, &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
 		IncludeTransactions: true,
 	})
@@ -756,11 +764,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2 := sync.WaitGroup{}
 	wg2.Add(1)
 	go func() {
-		// Make sure the channel is closed if we encounter an unexpected
-		// error, but don't close the channel twice if we don't!
-		var once sync.Once
-		oncebody := func() { wg2.Done() }
-		defer once.Do(oncebody)
+		defer wg2.Done()
 
 		// Now listen on the stream
 		res, err := stream.Recv()
@@ -772,11 +776,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 		require.Equal(t, tx1.ID.Bytes(), inTx.Id)
 		require.Equal(t, address.String(), inTx.Principal.Address)
-		// Let the test end
-		once.Do(oncebody)
-
-		// Wait for the app to exit
-		require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
 	}()
 
 	// Submit the txs
@@ -789,13 +788,13 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res1.Txstate.State)
 
 	// Wait for messages to be received
-	r.NoError(utils.WaitWithTimeout(&wg2, time.Second*10))
+	wg2.Wait()
 
 	// This stops the app
 	cmdp.Cancel()()
 
 	// Wait for it to stop
-	r.NoError(utils.WaitWithTimeout(&wg, time.Second*10))
+	wg.Wait()
 }
 
 func TestInitialize_BadTortoiseParams(t *testing.T) {

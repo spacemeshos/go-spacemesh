@@ -51,7 +51,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/txs"
-	"github.com/spacemeshos/go-spacemesh/utils"
 )
 
 const (
@@ -1794,7 +1793,9 @@ func TestTransactionService(t *testing.T) {
 
 			events.InitializeReporter()
 
-			stream, err := c.TransactionsStateStream(context.Background(), req)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			stream, err := c.TransactionsStateStream(ctx, req)
 			require.NoError(t, err)
 
 			wg := sync.WaitGroup{}
@@ -1813,7 +1814,7 @@ func TestTransactionService(t *testing.T) {
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
-			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+			wg.Wait()
 		}},
 		{"TransactionsStateStream_All", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1827,8 +1828,12 @@ func TestTransactionService(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				stream, err := c.TransactionsStateStream(ctx, req)
 				require.NoError(t, err)
+
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
@@ -1842,7 +1847,7 @@ func TestTransactionService(t *testing.T) {
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
-			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+			wg.Wait()
 		}},
 		// Submit a tx, then receive it over the stream
 		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
@@ -1859,22 +1864,30 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
 			// Simulate the process by which a newly-broadcast tx lands in the mempool
 			wgBroadcast := sync.WaitGroup{}
 			wgBroadcast.Add(1)
+			broadcastSignal := make(chan struct{})
 			go func() {
-				// Wait until the data is available
-				wgBroadcast.Wait()
-
-				// We assume the data is valid here, and put it directly into the txpool
-				conStateAPI.Put(globalTx.ID, globalTx)
+				defer wgBroadcast.Done()
+				select {
+				case <-ctx.Done():
+					require.Fail(t, "context deadline exceeded while waiting for broadcast signal")
+					return
+				case <-broadcastSignal:
+					// We assume the data is valid here, and put it directly into the txpool
+					conStateAPI.Put(globalTx.ID, globalTx)
+				}
 			}()
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
+				stream, err := c.TransactionsStateStream(ctx, req)
 				require.NoError(t, err)
 				res, err := stream.Recv()
 				require.NoError(t, err)
@@ -1887,16 +1900,17 @@ func TestTransactionService(t *testing.T) {
 			// SUBMIT
 			events.CloseEventReporter()
 			events.InitializeReporter()
-			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+			res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
 				Transaction: globalTx.Raw,
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
-			wgBroadcast.Done()
 
-			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+			close(broadcastSignal)
+			wgBroadcast.Wait()
+			wg.Wait()
 		}},
 		{"TransactionsStateStream_ManySubscribers", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1906,6 +1920,9 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
@@ -1914,7 +1931,7 @@ func TestTransactionService(t *testing.T) {
 				const subscriberCount = 10
 				streams := make([]pb.TransactionService_TransactionsStateStreamClient, 0, subscriberCount)
 				for i := 0; i < subscriberCount; i++ {
-					stream, err := c.TransactionsStateStream(context.Background(), req)
+					stream, err := c.TransactionsStateStream(ctx, req)
 					require.NoError(t, err)
 					streams = append(streams, stream)
 				}
@@ -1935,7 +1952,7 @@ func TestTransactionService(t *testing.T) {
 			// TODO send header after stream has subscribed
 			time.Sleep(100 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
-			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+			wg.Wait()
 		}},
 		{"TransactionsStateStream_NoEventReceiving", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1948,7 +1965,10 @@ func TestTransactionService(t *testing.T) {
 			events.CloseEventReporter()
 			events.InitializeReporter()
 
-			stream, err := c.TransactionsStateStream(context.Background(), req)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			stream, err := c.TransactionsStateStream(ctx, req)
 			require.NoError(t, err)
 			_, err = stream.Header()
 			require.NoError(t, err)
@@ -1972,7 +1992,7 @@ func TestTransactionService(t *testing.T) {
 				events.ReportNewTx(types.LayerID{}, globalTx)
 			}
 
-			require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+			wg.Wait()
 		}},
 	}
 
@@ -2063,6 +2083,9 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Need to wait for goroutine to end before ending the test
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -2070,7 +2093,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
-		stream, err := c.AccountMeshDataStream(context.Background(), req)
+		stream, err := c.AccountMeshDataStream(ctx, req)
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.AccountMeshDataStreamResponse
@@ -2128,7 +2151,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	// close the stream
 	events.CloseEventReporter()
 
-	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+	wg.Wait()
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
@@ -2154,6 +2177,9 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Synchronize the two routines
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -2161,7 +2187,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
-		stream, err := c.AccountDataStream(context.Background(), req)
+		stream, err := c.AccountDataStream(ctx, req)
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.AccountDataStreamResponse
@@ -2225,7 +2251,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
-	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+	wg.Wait()
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
@@ -2245,6 +2271,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Synchronize the two routines
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -2252,7 +2281,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
-		stream, err := c.GlobalStateStream(context.Background(), req)
+		stream, err := c.GlobalStateStream(ctx, req)
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.GlobalStateStreamResponse
@@ -2320,7 +2349,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
-	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+	wg.Wait()
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
@@ -2336,17 +2365,18 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	conn := dialGrpc(t, cfg)
 
 	// Need to wait for goroutine to end before ending the test
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-
-	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
 
 		// set up the grpc listener stream
 		req := &pb.LayerStreamRequest{}
 		c := pb.NewMeshServiceClient(conn)
-		stream, err := c.LayerStream(context.Background(), req)
+		stream, err := c.LayerStream(ctx, req)
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.LayerStreamResponse
@@ -2391,7 +2421,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine
-	require.NoError(t, utils.WaitWithTimeout(&wg, time.Second*10))
+	wg.Wait()
 }
 
 func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
