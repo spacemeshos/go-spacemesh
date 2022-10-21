@@ -5,14 +5,11 @@ import (
 	"errors"
 	"io"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -44,13 +41,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	svc := NewTransactionService(db, nil, nil, nil, nil)
 	t.Cleanup(launchServer(t, svc))
 
-	conn, err := grpc.DialContext(ctx,
-		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, conn.Close()) })
+	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
@@ -165,13 +156,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	svc := NewTransactionService(db, nil, nil, nil, nil)
 	b.Cleanup(launchServer(b, svc))
 
-	conn, err := grpc.DialContext(ctx,
-		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	require.NoError(b, err)
-	b.Cleanup(func() { require.NoError(b, conn.Close()) })
+	conn := dialGrpc(ctx, b, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	b.Logf("setup took %s", time.Since(start))
