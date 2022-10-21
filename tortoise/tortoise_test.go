@@ -260,9 +260,15 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	tortoise.TallyVotes(ctx, last.Add(1))
 	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(last.Add(1)))
 	require.NoError(t, err)
-	bids, err := blocks.IDsInLayer(s.GetState(0).DB, last)
+	blocks, err := blocks.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
-	require.Equal(t, votes.Support, bids)
+	var supported []types.SupportVote
+	for _, block := range blocks {
+		supported = append(supported, types.SupportVote{
+			ID: block.ID(), LayerID: block.LayerIndex, Height: block.TickHeight,
+		})
+	}
+	require.Equal(t, votes.Support, supported)
 	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
 }
 
@@ -837,20 +843,26 @@ func skipLayers(n int) sim.VotesGenerator {
 			panic(fmt.Sprintf("need at least %d layers", position))
 		}
 		baseLayer := layers[len(layers)-position]
-		support := layers[len(layers)-position].BlocksIDs()
+		support := layers[len(layers)-position].Blocks()
 		blts := baseLayer.Ballots()
 		base := blts[rng.Intn(len(blts))]
 		votes := sim.Voting{}
 		votes.Base = base.ID()
-		votes.Support = support
+		for _, block := range support {
+			votes.Support = append(votes.Support, types.SupportVote{
+				ID:      block.ID(),
+				LayerID: block.LayerIndex,
+				Height:  block.TickHeight,
+			})
+		}
 		return votes
 	}
 }
 
-func addSupport(bid types.BlockID) sim.VotesGenerator {
+func addSupport(support types.SupportVote) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		votes := sim.PerfectVoting(rng, layers, i)
-		votes.Support = append(votes.Support, bid)
+		votes.Support = append(votes.Support, support)
 		return votes
 	}
 }
@@ -865,7 +877,14 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	base := blts[rng.Intn(len(blts))]
 	voting := sim.Voting{Base: base.ID()}
 	for _, layer := range layers[len(layers)-2:] {
-		voting.Support = append(voting.Support, layer.BlocksIDs()...)
+		supported := layer.Blocks()
+		for _, support := range supported {
+			voting.Support = append(voting.Support, types.SupportVote{
+				ID:      support.ID(),
+				LayerID: support.LayerIndex,
+				Height:  support.TickHeight,
+			})
+		}
 	}
 	return voting
 }
@@ -881,7 +900,15 @@ func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 		li := len(layers) - window
 		blts := layers[li].Ballots()
 		base := blts[rng.Intn(len(blts))]
-		opinion := sim.Voting{Base: base.ID(), Support: layers[li].BlocksIDs()}
+		supported := layers[li].Blocks()
+		opinion := sim.Voting{Base: base.ID()}
+		for _, support := range supported {
+			opinion.Support = append(opinion.Support, types.SupportVote{
+				ID:      support.ID(),
+				LayerID: support.LayerIndex,
+				Height:  support.TickHeight,
+			})
+		}
 		return opinion
 	}
 }
@@ -935,8 +962,8 @@ func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, votes *t
 	require.NoError(tb, err)
 	require.Equal(tb, lid, blts.LayerIndex)
 
-	for _, bid := range votes.Support {
-		block, err := blocks.Get(cdb, bid)
+	for _, vote := range votes.Support {
+		block, err := blocks.Get(cdb, vote.ID)
 		require.NoError(tb, err)
 		require.Equal(tb, lid, block.LayerIndex, "block=%s block layer=%s last=%s", block.ID(), block.LayerIndex, lid)
 	}
@@ -1055,24 +1082,32 @@ func TestBaseBallotPrioritization(t *testing.T) {
 func splitVoting(n int) sim.VotesGenerator {
 	return func(_ *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		var (
-			support []types.BlockID
-			last    = layers[len(layers)-1]
-			bids    = last.BlocksIDs()
-			half    = len(bids) / 2
-			ballots = last.BallotIDs()
-			base    types.BallotID
+			supported []*types.Block
+			last      = layers[len(layers)-1]
+			blocks    = last.Blocks()
+			half      = len(blocks) / 2
+			ballots   = last.BallotIDs()
+			base      types.BallotID
 		)
-		if len(bids) < 2 {
+		if len(blocks) < 2 {
 			panic("make sure that the previous layer has atleast 2 blocks in it")
 		}
 		if i < n/2 {
 			base = ballots[0]
-			support = bids[:half]
+			supported = blocks[:half]
 		} else {
 			base = ballots[len(ballots)-1]
-			support = bids[half:]
+			supported = blocks[half:]
 		}
-		return sim.Voting{Base: base, Support: support}
+		voting := sim.Voting{Base: base}
+		for _, support := range supported {
+			voting.Support = append(voting.Support, types.SupportVote{
+				ID:      support.ID(),
+				LayerID: support.LayerIndex,
+				Height:  support.TickHeight,
+			})
+		}
+		return voting
 	}
 }
 
@@ -1139,7 +1174,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, votes.Support, 2)
-	block, err := blocks.Get(s.GetState(0).DB, votes.Support[0])
+	block, err := blocks.Get(s.GetState(0).DB, votes.Support[0].ID)
 	require.NoError(t, err)
 	require.Equal(t, block.LayerIndex, genesis.Add(2))
 
@@ -1601,11 +1636,18 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 
 func perfectVotingFirstBaseBallot(_ *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	baseLayer := layers[len(layers)-1]
-	support := layers[len(layers)-1].BlocksIDs()[0:1]
-	against := layers[len(layers)-1].BlocksIDs()[1:]
+	supported := layers[len(layers)-1].Blocks()[0:1]
 	blts := baseLayer.Ballots()
 	base := blts[0]
-	return sim.Voting{Base: base.ID(), Against: against, Support: support}
+	voting := sim.Voting{Base: base.ID()}
+	for _, support := range supported {
+		voting.Support = append(voting.Support, types.SupportVote{
+			ID:      support.ID(),
+			LayerID: support.LayerIndex,
+			Height:  support.TickHeight,
+		})
+	}
+	return voting
 }
 
 func abstainVoting(_ *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
@@ -1652,10 +1694,14 @@ func voteWithBaseBallot(base types.BallotID) sim.VotesGenerator {
 	}
 }
 
-func voteForBlock(block types.BlockID) sim.VotesGenerator {
+func voteForBlock(block *types.Block) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		voting := sim.PerfectVoting(rng, layers, i)
-		voting.Support = append(voting.Support, block)
+		voting.Support = append(voting.Support, types.SupportVote{
+			ID:      block.ID(),
+			LayerID: block.LayerIndex,
+			Height:  block.TickHeight,
+		})
 		return voting
 	}
 }
@@ -1741,7 +1787,7 @@ func TestLateBlock(t *testing.T) {
 	require.NoError(t, blocks.Add(s.GetState(0).DB, &block))
 
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(1, sim.WithVoteGenerator(voteForBlock(block.ID()))),
+		sim.WithSequence(1, sim.WithVoteGenerator(voteForBlock(&block))),
 		sim.WithSequence(1),
 	) {
 		tortoise.TallyVotes(ctx, last)
@@ -2098,7 +2144,12 @@ func TestSwitchMode(t *testing.T) {
 		require.Len(t, layer.blocks, 1)
 		require.Equal(t, layer.blocks[0].validity, against)
 
-		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(layer.blocks[0].id)))
+		block := layer.blocks[0]
+		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(types.SupportVote{
+			ID:      block.id,
+			LayerID: block.layer,
+			Height:  block.height,
+		})))
 		tortoise.TallyVotes(ctx, last)
 		for i := 0; i < 10; i++ {
 			last = s.Next(sim.WithNumBlocks(1))
@@ -2193,7 +2244,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		hasher.Reset()
 
 		hasher.Write(buf)
-		hasher.Write(ballot.Votes.Support[0][:])
+		hasher.Write(ballot.Votes.Support[0].ID[:])
 		require.Equal(t, hasher.Sum(nil), info.opinion().Bytes())
 	})
 }
@@ -2274,7 +2325,7 @@ func TestDecodeExceptions(t *testing.T) {
 
 	layer := tortoise.trtl.layer(last)
 	require.Equal(t, against, layer.blocks[0].hare)
-	block := layer.blocks[0].id
+	block := layer.blocks[0]
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
@@ -2284,26 +2335,30 @@ func TestDecodeExceptions(t *testing.T) {
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
-		sim.WithVoteGenerator(voteForBlock(block)),
+		sim.WithVoteGenerator(addSupport(types.SupportVote{
+			ID:      block.id,
+			LayerID: block.layer,
+			Height:  block.height,
+		})),
 	)
 	tortoise.TallyVotes(ctx, last)
 	ballots2 := tortoise.trtl.layer(last).ballots
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
-		sim.WithVoteGenerator(voteAgainst(block)),
+		sim.WithVoteGenerator(voteAgainst(block.id)),
 	)
 	tortoise.TallyVotes(ctx, last)
 	ballots3 := tortoise.trtl.layer(last).ballots
 
 	for _, ballot := range ballots1 {
-		require.Equal(t, against, ballot.votes.find(layer.lid, block), "base ballot votes against")
+		require.Equal(t, against, ballot.votes.find(layer.lid, block.id), "base ballot votes against")
 	}
 	for _, ballot := range ballots2 {
-		require.Equal(t, support, ballot.votes.find(layer.lid, block), "new ballot overwrites vote")
+		require.Equal(t, support, ballot.votes.find(layer.lid, block.id), "new ballot overwrites vote")
 	}
 	for _, ballot := range ballots3 {
-		require.Equal(t, against, ballot.votes.find(layer.lid, block), "latest ballot overwrites back to against")
+		require.Equal(t, against, ballot.votes.find(layer.lid, block.id), "latest ballot overwrites back to against")
 	}
 }
 
@@ -2507,7 +2562,9 @@ func TestEncodeVotes(t *testing.T) {
 		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
 		ballot.AtxID = atxid
 		ballot.LayerIndex = lid
-		ballot.Votes.Support = []types.BlockID{block.ID()}
+		ballot.Votes.Support = []types.SupportVote{
+			{ID: block.ID(), LayerID: block.LayerIndex, Height: block.TickHeight},
+		}
 		ballot.SetID(types.BallotID{1})
 
 		hasher := hash.New()

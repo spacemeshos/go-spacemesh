@@ -101,7 +101,7 @@ func RandomBallot() *Ballot {
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),
-			Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			Against: []BlockID{RandomBlockID(), RandomBlockID()},
 		},
 	}
 }

@@ -267,7 +267,11 @@ func (t *turtle) encodeVotes(
 			switch vote {
 			case support:
 				logger.With().Debug("support before base ballot", block.id, block.layer)
-				votes.Support = append(votes.Support, block.id)
+				votes.Support = append(votes.Support, types.SupportVote{
+					ID:      block.id,
+					LayerID: block.layer,
+					Height:  block.height,
+				})
 			case against:
 				logger.With().Debug("explicit against overwrites base ballot opinion", block.id, block.layer)
 				votes.Against = append(votes.Against, block.id)
@@ -294,7 +298,11 @@ func (t *turtle) encodeVotes(
 			switch vote {
 			case support:
 				logger.With().Debug("support after base ballot", block.id, block.layer, log.Stringer("reason", reason))
-				votes.Support = append(votes.Support, block.id)
+				votes.Support = append(votes.Support, types.SupportVote{
+					ID:      block.id,
+					LayerID: block.layer,
+					Height:  block.height,
+				})
 			case against:
 				logger.With().Debug("implicit against after base ballot", block.id, block.layer, log.Stringer("reason", reason))
 			case abstain:
@@ -791,25 +799,35 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) votes {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
-	for vote, bids := range map[sign][]types.BlockID{
-		support: exceptions.Support,
-		against: exceptions.Against,
-	} {
-		for _, bid := range bids {
-			block, exist := t.blockRefs[bid]
-			if !exist {
-				continue
-			}
-			if block.layer.Before(from) {
-				from = block.layer
-			}
-			layerdiff, exist := diff[block.layer]
-			if !exist {
-				layerdiff = map[types.BlockID]sign{}
-				diff[block.layer] = layerdiff
-			}
-			layerdiff[block.id] = vote
+	for _, supported := range exceptions.Support {
+		block, exist := t.blockRefs[supported.ID]
+		if !exist {
+			continue
 		}
+		if block.layer.Before(from) {
+			from = block.layer
+		}
+		layerdiff, exist := diff[block.layer]
+		if !exist {
+			layerdiff = map[types.BlockID]sign{}
+			diff[block.layer] = layerdiff
+		}
+		layerdiff[block.id] = support
+	}
+	for _, bid := range exceptions.Against {
+		block, exist := t.blockRefs[bid]
+		if !exist {
+			continue
+		}
+		if block.layer.Before(from) {
+			from = block.layer
+		}
+		layerdiff, exist := diff[block.layer]
+		if !exist {
+			layerdiff = map[types.BlockID]sign{}
+			diff[block.layer] = layerdiff
+		}
+		layerdiff[block.id] = against
 	}
 	for _, lid := range exceptions.Abstain {
 		if lid.Before(from) {

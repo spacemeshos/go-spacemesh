@@ -398,9 +398,9 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	// a ballot should not vote for multiple blocks in the same layer within hdist,
 	// since hare only output a single block each layer and miner should vote according
 	// to the hare output within hdist of the current layer when producing a ballot.
-	for _, bid := range b.Votes.Support {
-		exceptions[bid] = struct{}{}
-		lid, err := blocks.GetLayer(h.cdb, bid)
+	for _, vote := range b.Votes.Support {
+		exceptions[vote.ID] = struct{}{}
+		lid, err := blocks.GetLayer(h.cdb, vote.ID)
 		if err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
