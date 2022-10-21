@@ -195,7 +195,11 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	g.ticks = conf.Ticks
 	g.ticksRange = conf.TicksRange
 	if len(g.layers) == 0 {
-		g.layers = append(g.layers, types.GenesisLayer())
+		genesis := types.NewLayer(types.GetEffectiveGenesis())
+		ballot := &types.Ballot{}
+		ballot.LayerIndex = genesis.Index()
+		genesis.AddBallot(ballot)
+		g.layers = append(g.layers, genesis)
 	}
 	last := g.layers[len(g.layers)-1]
 	g.nextLayer = last.Index().Add(1)

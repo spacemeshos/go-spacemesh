@@ -55,14 +55,12 @@ func newTurtle(
 		beacons: beacons,
 		updater: updater,
 	}
-	t.verifying = newVerifying(config, &t.state)
-	t.full = newFullTortoise(config, &t.state)
-	return t
-}
+	genesis := types.GetEffectiveGenesis()
 
-func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
-	// Mark the genesis layer as “good”
-	genesis := genesisLayer.Index()
+	t.last = genesis
+	t.processed = genesis
+	t.verified = genesis
+	t.evicted = genesis.Sub(1)
 
 	t.epochs[genesis.GetEpoch()] = &epochInfo{}
 	t.layers[genesis] = &layerInfo{
@@ -70,33 +68,12 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 		empty:          util.WeightFromUint64(0),
 		hareTerminated: true,
 	}
-	for _, ballot := range genesisLayer.Ballots() {
-		binfo := &ballotInfo{
-			id:     ballot.ID(),
-			layer:  ballot.LayerIndex,
-			weight: util.WeightFromUint64(0),
-		}
-		t.addBallot(binfo)
-	}
-	for _, block := range genesisLayer.Blocks() {
-		blinfo := &blockInfo{
-			id:        block.ID(),
-			layer:     genesis,
-			hare:      support,
-			validity:  support,
-			persisted: support,
-			margin:    util.WeightFromUint64(0),
-		}
-		t.layers[genesis].blocks = append(t.layers[genesis].blocks, blinfo)
-		t.blockRefs[blinfo.id] = blinfo
-	}
-	t.layer(genesis).computeOpinion(t.Hdist, genesis)
-
-	t.last = genesis
-	t.processed = genesis
-	t.verified = genesis
-	t.evicted = genesis.Sub(1)
+	gen := t.layer(genesis)
+	gen.computeOpinion(t.Hdist, t.last)
+	t.verifying = newVerifying(config, &t.state)
+	t.full = newFullTortoise(config, &t.state)
 	t.full.counted = genesis
+	return t
 }
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
@@ -179,6 +156,9 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 	}
 
 	prioritizeBallots(choices, disagreements)
+	if len(choices) == 0 {
+		choices = append(choices, &ballotInfo{layer: types.GetEffectiveGenesis()})
+	}
 	for _, base = range choices {
 		opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 		if err == nil {
@@ -392,6 +372,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		if err := t.loadBallots(process); err != nil {
 			return err
 		}
+
 		layer.prevOpinion = &prev.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		t.logger.With().Debug("initial local opinion",
@@ -694,17 +675,24 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		log.Uint32("processed", t.processed.Value),
 	)
 
-	base, exists := t.state.ballotRefs[ballot.Votes.Base]
-	if !exists {
-		t.logger.With().Warning("base ballot not in state",
-			log.Stringer("base", ballot.Votes.Base),
-		)
-		return nil, nil
-	}
 	var (
+		base    *ballotInfo
 		weight  util.Weight
 		refinfo *referenceInfo
 	)
+
+	if ballot.Votes.Base == types.EmptyBallotID {
+		base = &ballotInfo{layer: types.GetEffectiveGenesis()}
+	} else {
+		base = t.state.ballotRefs[ballot.Votes.Base]
+		if base == nil {
+			t.logger.With().Warning("base ballot not in state",
+				log.Stringer("base", ballot.Votes.Base),
+			)
+			return nil, nil
+		}
+	}
+
 	if ballot.EpochData != nil {
 		beacon := ballot.EpochData.Beacon
 		height, err := getBallotHeight(t.cdb, ballot)
