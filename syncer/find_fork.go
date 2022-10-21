@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -16,63 +15,30 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-var ErrPeerMeshChangedMidSession = errors.New("peer mesh changed mid session")
+var (
+	ErrPeerMeshChangedMidSession = errors.New("peer mesh changed mid session")
+	ErrNodeMeshChangedMidSession = errors.New("node mesh changed mid session")
+)
 
 type layerHash struct {
-	lid     types.LayerID
+	layer   types.LayerID
 	hash    types.Hash32
 	created time.Time
-}
-
-func newLayerHash(lid types.LayerID, hash types.Hash32) *layerHash {
-	return &layerHash{
-		lid:  lid,
-		hash: hash,
-	}
 }
 
 // boundary is used to define the to and from layers in the hash mesh requests to peers.
 // the hashes of the boundary layers are known to the node and are used to double-check that
 // the peer has not changed its opinions on those layers.
-// if the boundary hashes change during the fork-finding session, the session is aborted.
-type boundary [2]*layerHash
-
-func newBoundary() *boundary {
-	return &boundary{
-		newLayerHash(types.LayerID{}, types.Hash32{}),
-		newLayerHash(types.LayerID{}, types.Hash32{}),
-	}
-}
-
-func (b *boundary) setFrom(lh *layerHash) {
-	b[0] = lh
-}
-
-func (b *boundary) setTo(lh *layerHash) {
-	b[1] = lh
-}
-
-func (b *boundary) fromLayer() types.LayerID {
-	return b[0].lid
-}
-
-func (b *boundary) fomHash() types.Hash32 {
-	return b[0].hash
-}
-
-func (b *boundary) toLayer() types.LayerID {
-	return b[1].lid
-}
-
-func (b *boundary) toHash() types.Hash32 {
-	return b[1].hash
+// if the boundary hashes change during a fork-finding session, the session is aborted.
+type boundary struct {
+	from, to *layerHash
 }
 
 func (b *boundary) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddUint32("from", b.fromLayer().Uint32())
-	encoder.AddString("from_hash", b.fomHash().ShortString())
-	encoder.AddUint32("to", b.toLayer().Uint32())
-	encoder.AddString("to_hash", b.toHash().ShortString())
+	encoder.AddUint32("from", b.from.layer.Uint32())
+	encoder.AddString("from_hash", b.from.hash.ShortString())
+	encoder.AddUint32("to", b.to.layer.Uint32())
+	encoder.AddString("to_hash", b.to.hash.ShortString())
 	return nil
 }
 
@@ -115,9 +81,13 @@ func (ff *ForkFinder) Purge(all bool, toPurge ...p2p.Peer) {
 		return
 	}
 
-	uniquePeers := util.SliceToSetStringer(ff.fetcher.GetPeers())
+	peers := ff.fetcher.GetPeers()
+	uniquePeers := make(map[p2p.Peer]struct{})
+	for _, p := range peers {
+		uniquePeers[p] = struct{}{}
+	}
 	for p, lh := range ff.agreedPeers {
-		if _, ok := uniquePeers[p.String()]; !ok {
+		if _, ok := uniquePeers[p]; !ok {
 			if time.Since(lh.created) >= ff.maxStaleDuration {
 				delete(ff.agreedPeers, p)
 			}
@@ -141,20 +111,20 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 		log.Stringer("peer", peer))
 	logger.With().Info("finding hash fork with peer")
 
-	bnd, err := ff.setupBoundary(peer, newLayerHash(diffLid, diffHash))
+	bnd, err := ff.setupBoundary(peer, &layerHash{layer: diffLid, hash: diffHash})
 	if err != nil {
 		return types.LayerID{}, err
 	}
 
 	numReqs := 0
-	if bnd.fromLayer().Add(1) == bnd.toLayer() {
+	if bnd.from.layer.Add(1) == bnd.to.layer {
 		logger.With().Info("found hash fork with peer",
-			log.Stringer("before_fork", bnd.fromLayer()),
-			log.Stringer("before_fork_hash", bnd.fomHash()),
-			log.Stringer("forked", bnd.toLayer()),
-			log.Stringer("forked_hash", bnd.toHash()),
+			log.Stringer("fork", bnd.from.layer),
+			log.Stringer("fork_hash", bnd.from.hash),
+			log.Stringer("after_fork", bnd.to.layer),
+			log.Stringer("after_fork_hash", bnd.to.hash),
 		)
-		return bnd.fromLayer(), nil
+		return bnd.from.layer, nil
 	}
 
 	for {
@@ -177,26 +147,26 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 			lid := mh.Layers[i]
 			ownHash := ownHashes[i]
 			if ownHash != hash {
-				if lid == latestSame.lid.Add(1) {
+				if latestSame != nil && lid == latestSame.layer.Add(1) {
 					lg.With().Info("found hash fork with peer",
 						log.Int("num_reqs", numReqs),
-						log.Stringer("before_fork", latestSame.lid),
-						log.Stringer("before_fork_hash", latestSame.hash),
-						log.Stringer("forked", lid),
-						log.Stringer("forked_hash", hash))
-					return latestSame.lid, nil
+						log.Stringer("fork", latestSame.layer),
+						log.Stringer("fork_hash", latestSame.hash),
+						log.Stringer("after_fork", lid),
+						log.Stringer("after_fork_hash", hash))
+					return latestSame.layer, nil
 				}
-				oldestDiff = newLayerHash(lid, hash)
+				oldestDiff = &layerHash{layer: lid, hash: hash}
 				break
 			}
-			latestSame = newLayerHash(lid, hash)
+			latestSame = &layerHash{layer: lid, hash: hash}
 			ff.updateAgreement(peer, latestSame, time.Now())
 		}
 		if latestSame == nil || oldestDiff == nil {
 			// every layer hash is different/same from node's. this can only happen when
 			// the node's local hashes change while the mesh hash request is running
 			ff.Purge(true)
-			return types.LayerID{}, errors.New("node or peer hashes changed during request")
+			return types.LayerID{}, ErrNodeMeshChangedMidSession
 		}
 		bnd, err = ff.setupBoundary(peer, oldestDiff)
 		if err != nil {
@@ -207,7 +177,7 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 
 // UpdateAgreement updates the layer at which the peer agreed with the node.
 func (ff *ForkFinder) UpdateAgreement(peer p2p.Peer, lid types.LayerID, hash types.Hash32, created time.Time) {
-	ff.updateAgreement(peer, newLayerHash(lid, hash), created)
+	ff.updateAgreement(peer, &layerHash{layer: lid, hash: hash}, created)
 }
 
 func (ff *ForkFinder) updateAgreement(peer p2p.Peer, update *layerHash, created time.Time) {
@@ -219,43 +189,43 @@ func (ff *ForkFinder) updateAgreement(peer p2p.Peer, update *layerHash, created 
 	defer ff.mu.Unlock()
 	// unconditional update instead of comparing layers because peers can change its opinions on historical layers.
 	ff.agreedPeers[peer] = &layerHash{
-		lid:     update.lid,
+		layer:   update.layer,
 		hash:    update.hash,
 		created: created,
 	}
 }
 
 // setupBoundary sets up the boundary for the hash requests.
-// boundary[0] contains the latest layer node and peer agree on hash.
-// boundary[1] contains the oldest layer node and peer disagree on hash.
+// boundary.from contains the latest layer node and peer agree on hash.
+// boundary.to contains the oldest layer node and peer disagree on hash.
 func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boundary, error) {
 	ff.mu.Lock()
 	defer ff.mu.Unlock()
 
-	bnd := newBoundary()
+	var bnd boundary
 	lastAgreed := ff.agreedPeers[peer]
 	if lastAgreed != nil {
 		// double check if the node still has the same hash
-		nodeHash, err := layers.GetAggregatedHash(ff.db, lastAgreed.lid)
+		nodeHash, err := layers.GetAggregatedHash(ff.db, lastAgreed.layer)
 		if err != nil {
-			return bnd, fmt.Errorf("find fork get boundary hash %v: %w", lastAgreed.lid, err)
+			return nil, fmt.Errorf("find fork get boundary hash %v: %w", lastAgreed.layer, err)
 		}
 		if nodeHash == lastAgreed.hash {
-			bnd.setFrom(lastAgreed)
+			bnd.from = lastAgreed
 		} else {
 			delete(ff.agreedPeers, peer)
 		}
 	}
-	if bnd.fromLayer() == (types.LayerID{}) {
+	if bnd.from == nil {
 		glid := types.GetEffectiveGenesis()
 		ghash, err := layers.GetAggregatedHash(ff.db, glid)
 		if err != nil {
-			return bnd, fmt.Errorf("find fork get genesis hash: %w", err)
+			return nil, fmt.Errorf("find fork get genesis hash: %w", err)
 		}
-		bnd.setFrom(newLayerHash(glid, ghash))
+		bnd.from = &layerHash{layer: glid, hash: ghash}
 	}
-	bnd.setTo(oldestDiff)
-	return bnd, nil
+	bnd.to = oldestDiff
+	return &bnd, nil
 }
 
 // get layer hashes from peers in the range defined by the boundary.
@@ -263,13 +233,14 @@ func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boun
 // otherwise, set appropriate params such that the number of hashes requested is maxHashesInReq
 // while ensuring hashes for the boundary layers are requested.
 func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.Peer, bnd *boundary) (*fetch.MeshHashes, error) {
-	from := bnd[0]
-	to := bnd[1]
-	if !to.lid.After(from.lid) {
+	if bnd == nil {
 		logger.Fatal("invalid args")
+	} else if bnd.from == nil || bnd.to == nil || !bnd.to.layer.After(bnd.from.layer) {
+		logger.With().Fatal("invalid args", log.Object("boundary", bnd))
 	}
+
 	var delta, steps uint32
-	dist := to.lid.Difference(from.lid)
+	dist := bnd.to.layer.Difference(bnd.from.layer)
 	if dist+1 <= ff.maxHashesInReq {
 		steps = dist
 		delta = 1
@@ -284,8 +255,8 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 		}
 	}
 	req := &fetch.MeshHashRequest{
-		From:  from.lid,
-		To:    to.lid,
+		From:  bnd.from.layer,
+		To:    bnd.to.layer,
 		Delta: delta,
 		Steps: steps,
 	}
@@ -294,21 +265,22 @@ func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.
 	if err != nil {
 		return nil, fmt.Errorf("find fork hash req: %w", err)
 	}
+	logger.With().Debug("received response",
+		log.Int("num_layers", len(mh.Layers)),
+		log.Int("num_hashes", len(mh.Hashes)))
 	if len(mh.Layers) != len(mh.Hashes) || uint32(len(mh.Layers)) != steps+1 {
 		return nil, errors.New("inconsistent layers for mesh hashes")
 	}
-
-	logger.With().Debug("received response", log.Int("num_hashes", len(mh.Hashes)))
-	if mh.Layers[0] != from.lid || mh.Layers[steps] != to.lid {
+	if mh.Layers[0] != bnd.from.layer || mh.Layers[steps] != bnd.to.layer {
 		logger.With().Warning("invalid boundary in response",
 			log.Stringer("rsp_from", mh.Layers[0]),
 			log.Stringer("rsp_to", mh.Layers[steps]))
 		return nil, errors.New("invalid boundary in response")
 	}
-	if mh.Hashes[0] != from.hash || mh.Hashes[steps] != to.hash {
+	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[steps] != bnd.to.hash {
 		logger.With().Warning("peer boundary hashes have changed",
-			log.Stringer("hash_from", from.hash),
-			log.Stringer("hash_to", to.hash),
+			log.Stringer("hash_from", bnd.from.hash),
+			log.Stringer("hash_to", bnd.to.hash),
 			log.Stringer("peer_hash_from", mh.Hashes[0]),
 			log.Stringer("peer_hash_to", mh.Hashes[steps]))
 		ff.Purge(false, peer)

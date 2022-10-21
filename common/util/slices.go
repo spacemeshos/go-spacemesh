@@ -14,11 +14,3 @@ func UniqueSliceStringer[T fmt.Stringer](s []T) []T {
 	}
 	return result
 }
-
-func SliceToSetStringer[T fmt.Stringer](s []T) map[string]struct{} {
-	res := make(map[string]struct{})
-	for _, str := range s {
-		res[str.String()] = struct{}{}
-	}
-	return res
-}

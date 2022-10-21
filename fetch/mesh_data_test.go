@@ -708,27 +708,25 @@ func TestFetch_GetEpochATXIDs(t *testing.T) {
 	}
 }
 
-func toLayerIDs(nums []uint32) []types.LayerID {
-	result := make([]types.LayerID, 0, len(nums))
-	for _, num := range nums {
-		result = append(result, types.NewLayerID(num))
-	}
-	return result
-}
-
 func TestFetch_GetMeshHashes(t *testing.T) {
 	peer := p2p.Peer("p0")
 	errUnknown := errors.New("unknown")
 	tt := []struct {
 		name     string
 		params   [4]uint32 // from, to, delta, steps
-		expected []uint32
+		expected []types.LayerID
 		err      error
 	}{
 		{
-			name:     "success",
-			params:   [4]uint32{7, 23, 5, 4},
-			expected: []uint32{7, 12, 17, 22, 23},
+			name:   "success",
+			params: [4]uint32{7, 23, 5, 4},
+			expected: []types.LayerID{
+				types.NewLayerID(7),
+				types.NewLayerID(12),
+				types.NewLayerID(17),
+				types.NewLayerID(22),
+				types.NewLayerID(23),
+			},
 		},
 		{
 			name:   "failure",
@@ -751,12 +749,11 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			}
 			var expected MeshHashes
 			if tc.err == nil {
-				expLids := toLayerIDs(tc.expected)
-				hashes := make([]types.Hash32, len(expLids))
+				hashes := make([]types.Hash32, len(tc.expected))
 				for i := range hashes {
 					hashes[i] = types.RandomHash()
 				}
-				expected.Layers = expLids
+				expected.Layers = tc.expected
 				expected.Hashes = hashes
 			}
 			reqData, err := codec.Encode(req)
