@@ -118,6 +118,7 @@ var (
 )
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.ClientConn {
+	tb.Helper()
 	conn, err := grpc.DialContext(ctx,
 		"localhost:"+strconv.Itoa(cfg.GrpcServerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
