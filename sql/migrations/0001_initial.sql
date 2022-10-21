@@ -11,7 +11,6 @@ CREATE TABLE ballots
 (
     id        CHAR(20) PRIMARY KEY,
     layer     INT NOT NULL,
-    signature VARCHAR,
     pubkey    VARCHAR,
     ballot    BLOB
 ) WITHOUT ROWID;

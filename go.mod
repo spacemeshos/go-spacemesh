@@ -28,13 +28,13 @@ require (
 	github.com/prometheus/common v0.37.0
 	github.com/pyroscope-io/pyroscope v0.32.0
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.4.1-0.20221011085707-0a5255087c72
+	github.com/spacemeshos/api/release/go v1.4.1-0.20221019072634-69354b150238
 	github.com/spacemeshos/economics v0.0.0-20220810190316-045462b489e8
 	github.com/spacemeshos/ed25519 v0.0.0-20220825090204-1f103b5756da
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.0.0
 	github.com/spacemeshos/merkle-tree v0.0.0-20221018112432-1d52068dc4aa
-	github.com/spacemeshos/poet v0.1.1-0.20221011061754-9bb56a12fb8f
+	github.com/spacemeshos/poet v0.1.1-0.20221020131117-e5e48d018c25
 	github.com/spacemeshos/post v0.0.0-20221018145343-723fe7aef532
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5

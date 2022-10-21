@@ -39,7 +39,7 @@ func TestAddNodes(t *testing.T) {
 	total := min(tctx.ClusterSize, 30)
 
 	require.NoError(t, cl.AddBootnodes(tctx, 2))
-	require.NoError(t, cl.AddPoet(tctx))
+	require.NoError(t, cl.AddPoets(tctx))
 	require.NoError(t, cl.AddSmeshers(tctx, total-2-addedLater))
 
 	var eg errgroup.Group

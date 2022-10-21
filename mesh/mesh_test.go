@@ -90,7 +90,7 @@ func createLayerBallots(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.
 	for i := 0; i < numBallots; i++ {
 		ballot := types.GenLayerBallot(lyrID)
 		blts = append(blts, ballot)
-		require.NoError(t, mesh.addBallot(ballot))
+		require.NoError(t, mesh.AddBallot(ballot))
 	}
 	return blts
 }
@@ -513,7 +513,6 @@ func TestMesh_LatestKnownLayer(t *testing.T) {
 func TestMesh_pushLayersToState_verified(t *testing.T) {
 	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
-	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
 	createLayerBallots(t, tm.Mesh, layerID)
 
@@ -580,7 +579,6 @@ func TestMesh_ValidityOrder(t *testing.T) {
 func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
-	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
 	createLayerBallots(t, tm.Mesh, layerID)
 
@@ -621,7 +619,6 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 	r := require.New(t)
 	tm := createTestMesh(t)
 	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
-	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 
 	txIDs := types.RandomTXSet(numTXs)
 	layerID := types.GetEffectiveGenesis().Add(1)
@@ -743,13 +740,6 @@ func TestMesh_CallOnBlock(t *testing.T) {
 	require.NoError(t, tm.AddBlockWithTXs(context.TODO(), &block))
 }
 
-func TestMesh_CallOnBallot(t *testing.T) {
-	tm := createTestMesh(t)
-	ballot := types.RandomBallot()
-	tm.mockTortoise.EXPECT().OnBallot(ballot)
-	require.NoError(t, tm.AddBallot(ballot))
-}
-
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
 	lid := types.NewLayerID(1)
@@ -760,10 +750,10 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
 		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
 	}
-	require.NoError(t, tm.addBallot(&blts[0]))
+	require.NoError(t, tm.AddBallot(&blts[0]))
 	require.False(t, blts[0].IsMalicious())
 	for _, ballot := range blts[1:] {
-		require.NoError(t, tm.addBallot(&ballot))
+		require.NoError(t, tm.AddBallot(&ballot))
 		require.True(t, ballot.IsMalicious())
 	}
 }

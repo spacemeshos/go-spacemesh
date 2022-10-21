@@ -640,40 +640,32 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
-	if err := msh.addBallot(ballot); err != nil {
-		return err
-	}
-	msh.trtl.OnBallot(ballot)
-	return nil
-}
-
-func (msh *Mesh) addBallot(b *types.Ballot) error {
-	mal, err := identities.IsMalicious(msh.cdb, b.SmesherID().Bytes())
+	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID().Bytes())
 	if err != nil {
 		return err
 	}
-	if mal {
-		b.SetMalicious()
+	if malicious {
+		ballot.SetMalicious()
 	}
-
-	// it is important to run add ballot and set identity to malicious atomically
+	// ballots.Add and ballots.Count should be atomic
+	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
-		if !mal {
-			count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+		if !malicious {
+			count, err := ballots.CountByPubkeyLayer(tx, ballot.LayerIndex, ballot.SmesherID().Bytes())
 			if err != nil {
 				return err
 			}
 			if count > 1 {
-				if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+				if err := identities.SetMalicious(tx, ballot.SmesherID().Bytes()); err != nil {
 					return err
 				}
-				b.SetMalicious()
+				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", b.SmesherID()),
-					log.Inline(b),
+					log.Stringer("smesher", ballot.SmesherID()),
+					log.Inline(ballot),
 				)
 			}
 		}
@@ -722,8 +714,8 @@ func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 // sortBlocks sort blocks tick height, if height is equal by lexicographic order.
 func sortBlocks(blks []*types.Block) []*types.Block {
 	sort.Slice(blks, func(i, j int) bool {
-		if blks[i].TickHeight < blks[j].TickHeight {
-			return true
+		if blks[i].TickHeight != blks[j].TickHeight {
+			return blks[i].TickHeight < blks[j].TickHeight
 		}
 		return blks[i].ID().Compare(blks[j].ID())
 	})

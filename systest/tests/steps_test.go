@@ -45,14 +45,17 @@ func TestStepRedeployPoets(t *testing.T) {
 
 	require.Zero(t, cl.Poets())
 	tctx.Log.Debug("adding poet servers")
-	require.NoError(t, cl.AddPoet(tctx))
+	require.NoError(t, cl.AddPoets(tctx))
+
+	poetEndpoints := make([]string, 0, tctx.PoetSize)
+	for i := 0; i < tctx.PoetSize; i++ {
+		poetEndpoints = append(poetEndpoints, cluster.MakePoetEndpoint(i))
+	}
 
 	for i := 0; i < cl.Total(); i++ {
 		node := cl.Client(i)
-		idx := i % tctx.PoetSize
-		target := cluster.MakePoetEndpoint(idx)
-		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poet", target)
-		updated, err := updatePoetServer(tctx, node, target)
+		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poets", poetEndpoints)
+		updated, err := updatePoetServers(tctx, node, poetEndpoints)
 		require.NoError(t, err)
 		require.True(t, updated)
 	}

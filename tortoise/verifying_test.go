@@ -12,7 +12,6 @@ import (
 
 func TestVerifyingProcessLayer(t *testing.T) {
 	var (
-		goodbase     = types.BallotID{9, 9, 9}
 		ballots      = []types.BallotID{{1}, {2}, {3}, {4}}
 		ballotWeight = util.WeightFromUint64(10)
 		start        = types.GetEffectiveGenesis()
@@ -29,28 +28,19 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			ballots: [][]*ballotInfo{
 				{
 					{
-						id: ballots[0],
-						base: baseInfo{
-							id: goodbase,
-						},
+						id:        ballots[0],
 						reference: &referenceInfo{},
 						weight:    ballotWeight,
 					},
 					{
-						id: ballots[1],
-						base: baseInfo{
-							id: goodbase,
-						},
+						id:        ballots[1],
 						reference: &referenceInfo{},
 						weight:    ballotWeight,
 					},
 				},
 				{
 					{
-						id: ballots[2],
-						base: baseInfo{
-							id: goodbase,
-						},
+						id:        ballots[2],
 						reference: &referenceInfo{},
 						weight:    ballotWeight,
 					},
@@ -82,8 +72,11 @@ func TestVerifyingProcessLayer(t *testing.T) {
 				},
 				{
 					{
-						id:        ballots[2],
-						weight:    ballotWeight,
+						id:     ballots[2],
+						weight: ballotWeight,
+						conditions: conditions{
+							badBeacon: true,
+						},
 						reference: &referenceInfo{},
 					},
 				},
@@ -96,19 +89,13 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			ballots: [][]*ballotInfo{
 				{
 					{
-						id:     ballots[0],
-						weight: ballotWeight,
-						base: baseInfo{
-							id: goodbase,
-						},
+						id:        ballots[0],
+						weight:    ballotWeight,
 						reference: &referenceInfo{},
 					},
 					{
-						id:     ballots[1],
-						weight: ballotWeight,
-						base: baseInfo{
-							id: goodbase,
-						},
+						id:        ballots[1],
+						weight:    ballotWeight,
 						reference: &referenceInfo{},
 					},
 				},
@@ -131,13 +118,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
 			v := newVerifying(Config{}, newState())
-			v.ballotRefs[goodbase] = &ballotInfo{
-				id: goodbase,
-				conditions: conditions{
-					baseGood:   true,
-					consistent: true,
-				},
-			}
 			v.processed = start.Add(1).Add(uint32(len(tc.ballots)))
 
 			for i := range tc.ballots {
@@ -184,6 +164,7 @@ func TestVerifying_Verify(t *testing.T) {
 			totalWeight: util.WeightFromUint64(32),
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(8),
 					},
@@ -192,6 +173,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(8),
 					},
@@ -200,6 +182,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(6),
 					},
@@ -216,48 +199,11 @@ func TestVerifying_Verify(t *testing.T) {
 			expected: start.Add(3),
 		},
 		{
-			desc: "with abstained votes",
-			layers: map[types.LayerID]*layerInfo{
-				start.Add(1): {
-					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(8),
-					},
-					blocks: []*blockInfo{
-						{id: types.BlockID{1}, hare: support, layer: start.Add(1)},
-					},
-				},
-				start.Add(2): {
-					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(16),
-						abstained:     util.WeightFromUint64(2),
-					},
-					blocks: []*blockInfo{
-						{id: types.BlockID{2}, hare: support, layer: start.Add(2)},
-					},
-				},
-				start.Add(3): {
-					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(25),
-						abstained:     util.WeightFromUint64(6),
-					},
-					blocks: []*blockInfo{
-						{id: types.BlockID{3}, hare: support, layer: start.Add(3)},
-					},
-				},
-				start.Add(4): {
-					verifying: verifyingInfo{
-						goodUncounted: util.WeightFromUint64(34),
-					},
-				},
-			},
-			totalWeight: util.WeightFromUint64(34),
-			expected:    start.Add(2),
-		},
-		{
 			desc:        "some crossed threshold",
 			totalWeight: util.WeightFromUint64(36),
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(12),
 					},
@@ -266,6 +212,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(26),
 					},
@@ -274,6 +221,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(28),
 					},
@@ -293,6 +241,7 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "hare undecided",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
@@ -301,6 +250,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
@@ -329,6 +279,7 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "multiple blocks",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
@@ -339,6 +290,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
@@ -347,6 +299,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(30),
 					},
@@ -374,6 +327,7 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "multiple blocks hare lowest",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
@@ -384,6 +338,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
@@ -392,6 +347,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(30),
 					},
@@ -419,6 +375,7 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "multiple blocks hare highest",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
@@ -429,6 +386,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
@@ -437,6 +395,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(30),
 					},
@@ -464,6 +423,7 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "multiple blocks higher than local height",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
@@ -472,6 +432,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
@@ -482,6 +443,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(30),
 					},
@@ -509,6 +471,7 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "hare output higher than local height",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
@@ -517,6 +480,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
@@ -525,6 +489,7 @@ func TestVerifying_Verify(t *testing.T) {
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(30),
 					},
@@ -549,21 +514,25 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "all empty layers",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(10),
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(20),
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(30),
 					},
 				},
 				start.Add(4): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(40),
 					},
@@ -577,21 +546,25 @@ func TestVerifying_Verify(t *testing.T) {
 			desc: "some empty layers are not verified",
 			layers: map[types.LayerID]*layerInfo{
 				start.Add(1): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(13),
 					},
 				},
 				start.Add(2): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(26),
 					},
 				},
 				start.Add(3): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(28),
 					},
 				},
 				start.Add(4): {
+					hareTerminated: true,
 					verifying: verifyingInfo{
 						goodUncounted: util.WeightFromUint64(34),
 					},

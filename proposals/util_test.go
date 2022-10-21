@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -61,7 +62,7 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 	b.RefBallot = types.EmptyBallotID
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, b, layerAvgSize, layersPerEpoch)
-	require.ErrorIs(t, err, errBadBallotData)
+	require.ErrorIs(t, err, putil.ErrBadBallotData)
 	require.True(t, got.IsNil())
 }
 
