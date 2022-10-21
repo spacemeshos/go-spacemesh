@@ -27,7 +27,6 @@ var (
 	errMalformedData         = errors.New("malformed data")
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
-	errMissingBaseBallot     = errors.New("base ballot is missing")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
 	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
