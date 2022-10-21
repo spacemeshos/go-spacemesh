@@ -31,7 +31,7 @@ type turtle struct {
 	beacons system.BeaconGetter
 	updater blockValidityUpdater
 
-	state
+	*state
 
 	verifying *verifying
 
@@ -49,7 +49,7 @@ func newTurtle(
 ) *turtle {
 	t := &turtle{
 		Config:  config,
-		state:   *newState(),
+		state:   newState(),
 		logger:  logger,
 		cdb:     cdb,
 		beacons: beacons,
@@ -68,11 +68,12 @@ func newTurtle(
 		empty:          util.WeightFromUint64(0),
 		hareTerminated: true,
 	}
+	t.verifying = newVerifying(config, t.state)
+	t.full = newFullTortoise(config, t.state)
+	t.full.counted = genesis
+
 	gen := t.layer(genesis)
 	gen.computeOpinion(t.Hdist, t.last)
-	t.verifying = newVerifying(config, &t.state)
-	t.full = newFullTortoise(config, &t.state)
-	t.full.counted = genesis
 	return t
 }
 
