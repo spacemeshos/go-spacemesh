@@ -34,6 +34,24 @@ type ResponseBatch struct {
 	Responses []ResponseMessage
 }
 
+type MeshHashRequest struct {
+	From, To     types.LayerID
+	Delta, Steps uint32
+}
+
+func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("from", r.From.Uint32())
+	encoder.AddUint32("to", r.To.Uint32())
+	encoder.AddUint32("delta", r.Delta)
+	encoder.AddUint32("steps", r.Steps)
+	return nil
+}
+
+type MeshHashes struct {
+	Layers []types.LayerID
+	Hashes []types.Hash32
+}
+
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
 	Ballots []types.BallotID

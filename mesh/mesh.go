@@ -86,31 +86,8 @@ func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, state conservativeSt
 			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
 				return fmt.Errorf("mesh init: %w", err)
 			}
-			if err = persistLayerHashes(msh.logger, dbtx, i, []types.BlockID{types.EmptyBlockID}); err != nil {
-				return err
-			}
 		}
-
-		gLayer := types.GenesisLayer()
-		for _, b := range gLayer.Ballots() {
-			msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-			if err = ballots.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-		}
-		for _, b := range gLayer.Blocks() {
-			msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-			if err = blocks.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-			if err = blocks.SetValid(dbtx, b.ID()); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-		}
-		if err = layers.SetHareOutput(dbtx, gLayer.Index(), types.GenesisBlockID); err != nil {
-			return fmt.Errorf("mesh init: %w", err)
-		}
-		return nil
+		return persistLayerHashes(msh.logger, dbtx, gLid, nil)
 	}); err != nil {
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
@@ -403,19 +380,20 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []
 	types.SortBlockIDs(bids)
 	var (
 		hash     = types.CalcBlocksHash32(bids, nil)
-		prevHash = types.EmptyLayerHash
+		prevHash []byte
 		err      error
 	)
-	if prevLid := lid.Sub(1); prevLid.Uint32() > 0 {
-		prevHash, err = layers.GetAggregatedHash(dbtx, prevLid)
+	if lid.After(types.GetEffectiveGenesis()) {
+		prev, err := layers.GetAggregatedHash(dbtx, lid.Sub(1))
 		if err != nil {
 			logger.With().Error("failed to get previous aggregated hash", lid, log.Err(err))
 			return err
 		}
+		logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prev.ShortString()))
+		prevHash = prev[:]
 	}
 
-	logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prevHash.ShortString()))
-	newAggHash := types.CalcBlocksHash32(bids, prevHash.Bytes())
+	newAggHash := types.CalcBlocksHash32(bids, prevHash)
 	if err = layers.SetHashes(dbtx, lid, hash, newAggHash); err != nil {
 		logger.With().Error("failed to set layer hashes", lid, log.Err(err))
 		return err

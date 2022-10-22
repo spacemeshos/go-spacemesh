@@ -23,6 +23,8 @@ type Config struct {
 	SyncInterval     time.Duration
 	HareDelayLayers  uint32
 	SyncCertDistance uint32
+	MaxHashesInReq   uint32
+	MaxStaleDuration time.Duration
 }
 
 // DefaultConfig for the syncer.
@@ -31,6 +33,8 @@ func DefaultConfig() Config {
 		SyncInterval:     5 * time.Second,
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
+		MaxHashesInReq:   5,
+		MaxStaleDuration: time.Second,
 	}
 }
 
@@ -106,6 +110,12 @@ func withDataFetcher(d fetchLogic) Option {
 	}
 }
 
+func withForkFinder(f forkFinder) Option {
+	return func(s *Syncer) {
+		s.forkFinder = f
+	}
+}
+
 // Syncer is responsible to keep the node in sync with the network.
 type Syncer struct {
 	logger log.Log
@@ -118,6 +128,7 @@ type Syncer struct {
 	certHandler   certHandler
 	dataFetcher   fetchLogic
 	patrol        layerPatrol
+	forkFinder    forkFinder
 	syncOnce      sync.Once
 	syncState     atomic.Value
 	atxSyncState  atomic.Value
@@ -171,6 +182,9 @@ func NewSyncer(
 	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
 		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
+	}
+	if s.forkFinder == nil {
+		s.forkFinder = NewForkFinder(s.logger, db, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -254,6 +268,7 @@ func (s *Syncer) Start(ctx context.Context) {
 					return nil
 				case <-s.validateTimer.C:
 					_ = s.processLayers(ctx)
+					s.forkFinder.Purge(false)
 				}
 			}
 		})

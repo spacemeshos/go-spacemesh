@@ -112,7 +112,6 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 		updater,
 		t.cfg,
 	)
-	t.trtl.init(t.ctx, types.GenesisLayer())
 	if needsRecovery {
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last layer", t.cfg.MeshProcessed),
