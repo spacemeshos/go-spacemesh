@@ -13,7 +13,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0
-	github.com/hashicorp/golang-lru v0.5.5-0.20221011183528-d4900dc688bf
+	github.com/hashicorp/golang-lru v0.5.5-0.20221021133340-6da3f98b755a
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-libp2p v0.23.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
@@ -34,7 +34,7 @@ require (
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.0.0
 	github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b
-	github.com/spacemeshos/poet v0.1.1-0.20221020165647-f31bfbbab194
+	github.com/spacemeshos/poet v0.1.1-0.20221021160245-c52b8394e11d
 	github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5

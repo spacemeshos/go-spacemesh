@@ -296,8 +296,8 @@ github.com/hashicorp/go-multierror v1.1.1 h1:H5DkEtf6CXdFp0N0Em5UCwQpXMWke8IA0+l
 github.com/hashicorp/go-multierror v1.1.1/go.mod h1:iw975J/qwKPdAO1clOe2L8331t/9/fmwbPZ6JB6eMoM=
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
-github.com/hashicorp/golang-lru v0.5.5-0.20221011183528-d4900dc688bf h1:BQyif+/dqmbIGXyGhe5bDx/3grIchislVu5pK7j/bMQ=
-github.com/hashicorp/golang-lru v0.5.5-0.20221011183528-d4900dc688bf/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
+github.com/hashicorp/golang-lru v0.5.5-0.20221021133340-6da3f98b755a h1:DGNezy9BvdrUnTS2y9yBOPB5a+ZJlFpFg54HUczEk1U=
+github.com/hashicorp/golang-lru v0.5.5-0.20221021133340-6da3f98b755a/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
@@ -617,8 +617,8 @@ github.com/spacemeshos/go-scale v1.0.0 h1:xwOtuDi7wFt9wLTwN5iihHvCratKjpzuLQT+2T
 github.com/spacemeshos/go-scale v1.0.0/go.mod h1:82OPgK0o+s6IzdienL6n0TURSQvHPThZ+h+CeDoawbc=
 github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b h1:jxoC9Vj7hPpiQMadwxFnQH24oXdrYD+LDeXlXWSQJsI=
 github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b/go.mod h1:M2tTxS4vSdJaeDKUrNQtwaolCucBrtC07sijswIwJmA=
-github.com/spacemeshos/poet v0.1.1-0.20221020165647-f31bfbbab194 h1:xzYB7KSB/9W2uNf6iGS1HphRldJtoDg4QiKXo4mhYO4=
-github.com/spacemeshos/poet v0.1.1-0.20221020165647-f31bfbbab194/go.mod h1:c/GfSx4rjKv0KDo0CNcxnC1X/pms9FbutTaxyuXs4Q4=
+github.com/spacemeshos/poet v0.1.1-0.20221021160245-c52b8394e11d h1:CbzVDoiL941Z2cYLuLs6kZilEoekMY9JghTDuwUN4Y4=
+github.com/spacemeshos/poet v0.1.1-0.20221021160245-c52b8394e11d/go.mod h1:c/GfSx4rjKv0KDo0CNcxnC1X/pms9FbutTaxyuXs4Q4=
 github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0 h1:RZXLlyCq/6FsvrDaW9kwiv/rZMxOyTh+fRWKr8m/A9M=
 github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0/go.mod h1:LcZpwuV5+KWGQEd8UB2zopkbUlQSBFKQ24eh1sQ0fIg=
 github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d h1:09R53k+V+cPCwTH3AnvOJO2OmCb4dJlG6hfgqQlTm6w=
