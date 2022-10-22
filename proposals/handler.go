@@ -27,7 +27,6 @@ var (
 	errMalformedData         = errors.New("malformed data")
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
-	errMissingBaseBallot     = errors.New("base ballot is missing")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
 	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
@@ -346,10 +345,6 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		return errInvalidATXID
 	}
 
-	if b.Votes.Base == types.EmptyBallotID {
-		return errMissingBaseBallot
-	}
-
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
@@ -474,7 +469,10 @@ func ballotBlockView(b *types.Ballot) []types.BlockID {
 }
 
 func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot) error {
-	blts := []types.BallotID{b.Votes.Base}
+	blts := []types.BallotID{}
+	if b.Votes.Base != types.EmptyBallotID {
+		blts = append(blts, b.Votes.Base)
+	}
 	if b.RefBallot != types.EmptyBallotID {
 		blts = append(blts, b.RefBallot)
 	}
