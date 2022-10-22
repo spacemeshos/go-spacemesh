@@ -2,6 +2,7 @@ package layers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -300,4 +301,38 @@ func GetHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
 // GetAggregatedHash for layer.
 func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
 	return getHash(db, aggregatedHashField, lid)
+}
+
+func makeInClause(num int) string {
+	var sb strings.Builder
+	for i := 0; i < num; i++ {
+		sb.WriteString("?")
+		if i < num-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
+}
+
+func GetAggHashes(db sql.Executor, lids []types.LayerID) ([]types.Hash32, error) {
+	hashes := make([]types.Hash32, 0, len(lids))
+	inClause := makeInClause(len(lids))
+	if _, err := db.Exec(fmt.Sprintf("select aggregated_hash from layers where id in (%s) order by id asc;", inClause),
+		func(stmt *sql.Statement) {
+			for i, lid := range lids {
+				stmt.BindInt64(i+1, int64(lid.Uint32()))
+			}
+		},
+		func(stmt *sql.Statement) bool {
+			var h types.Hash32
+			stmt.ColumnBytes(0, h[:])
+			hashes = append(hashes, h)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("get aggHashes %v: %w", lids, err)
+	}
+	if len(hashes) != len(lids) {
+		return nil, fmt.Errorf("%w layers %s", sql.ErrNotFound, lids)
+	}
+	return hashes, nil
 }
