@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 func TestVotesUpdate(t *testing.T) {
@@ -102,9 +101,9 @@ func TestComputeOpinion(t *testing.T) {
 		v.append(&layerVote{
 			supported: append([]*blockInfo{}, blocks...),
 		})
-		hh := hash.New()
-		hh.Write(blocks[1].id[:])
-		hh.Write(blocks[0].id[:])
+		hh := types.NewOpinionHasher()
+		hh.WriteSupport(blocks[1].id, blocks[1].height)
+		hh.WriteSupport(blocks[0].id, blocks[0].height)
 		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
 	})
 	t.Run("abstain sentinel", func(t *testing.T) {
@@ -112,8 +111,8 @@ func TestComputeOpinion(t *testing.T) {
 		v.append(&layerVote{
 			vote: abstain,
 		})
-		hh := hash.New()
-		hh.Write(abstainSentinel)
+		hh := types.NewOpinionHasher()
+		hh.WriteAbstain()
 		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
 	})
 	t.Run("recursive", func(t *testing.T) {
@@ -131,12 +130,13 @@ func TestComputeOpinion(t *testing.T) {
 			layerInfo: &layerInfo{lid: types.NewLayerID(1)},
 		})
 
-		hh := hash.New()
-		hh.Write(blocks[0].id[:])
-		buf := hh.Sum(nil)
+		hh := types.NewOpinionHasher()
+		hh.WriteSupport(blocks[0].id, blocks[0].height)
+		rst := types.Hash32{}
+		hh.Sum(rst[:0])
 		hh.Reset()
-		hh.Write(buf)
-		hh.Write(blocks[1].id[:])
+		hh.WritePrevious(rst)
+		hh.WriteSupport(blocks[1].id, blocks[1].height)
 		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
 	})
 	t.Run("empty layer", func(t *testing.T) {
@@ -153,11 +153,12 @@ func TestComputeOpinion(t *testing.T) {
 			layerInfo: &layerInfo{lid: types.NewLayerID(1)},
 		})
 
-		hh := hash.New()
-		hh.Write(blocks[0].id[:])
-		buf := hh.Sum(nil)
+		hh := types.NewOpinionHasher()
+		hh.WriteSupport(blocks[0].id, blocks[0].height)
+		rst := types.Hash32{}
+		hh.Sum(rst[:0])
 		hh.Reset()
-		hh.Write(buf)
+		hh.WritePrevious(rst)
 		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
 	})
 	t.Run("rehash after update", func(t *testing.T) {
@@ -180,11 +181,12 @@ func TestComputeOpinion(t *testing.T) {
 		v := original.update(updated, map[types.LayerID]map[types.BlockID]sign{
 			updated: {blocks[0].id: against},
 		})
-		hh := hash.New()
-		buf := hh.Sum(nil)
+		hh := types.NewOpinionHasher()
+		rst := types.Hash32{}
+		hh.Sum(rst[:0])
 		hh.Reset()
-		hh.Write(buf)
-		hh.Write(blocks[1].id[:])
+		hh.WritePrevious(rst)
+		hh.WriteSupport(blocks[1].id, blocks[1].height)
 		require.Equal(t, hh.Sum(nil), v.tail.opinion.Bytes())
 	})
 }

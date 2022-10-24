@@ -272,7 +272,7 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 	require.GreaterOrEqual(t, 2, len(b.Votes.Support))
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
 	for _, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: cutoff.Add(1)})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: cutoff.Add(1)})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -290,7 +290,7 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 	th.cfg.Hdist = b.LayerIndex.Add(1).Uint32()
 	require.GreaterOrEqual(t, 2, len(b.Votes.Support))
 	for _, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(1)})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(1)})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -308,7 +308,7 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 	b := createBallot(t)
 	cutoff := b.LayerIndex.Sub(th.cfg.Hdist)
 	for _, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: cutoff.Sub(1)})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: cutoff.Sub(1)})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -333,7 +333,7 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 	b.Votes.Against = b.Votes.Support
 	b = signAndInit(t, b)
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -351,7 +351,7 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 	b.Votes.Abstain = []types.LayerID{b.LayerIndex.Sub(1)}
 	b = signAndInit(t, b)
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -371,7 +371,7 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 	b.Votes.Abstain = []types.LayerID{b.LayerIndex.Sub(1)}
 	b = signAndInit(t, b)
 	for i, bid := range b.Votes.Against {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -386,10 +386,11 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 func TestBallot_ExceedMaxExceptions(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := types.RandomBallot()
-	b.Votes.Support = append(b.Votes.Support, types.RandomBlockID(), types.RandomBlockID())
+	b.Votes.Support = append(b.Votes.Support,
+		types.Vote{ID: types.RandomBlockID()}, types.Vote{ID: types.RandomBlockID()})
 	b = signAndInit(t, b)
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -443,7 +444,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 	b := createBallot(t)
 
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -465,7 +466,7 @@ func TestBallot_NotEligible(t *testing.T) {
 	b := createBallot(t)
 
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -486,7 +487,7 @@ func TestBallot_Success(t *testing.T) {
 	th := createTestHandler(t)
 	b := createBallot(t)
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeBallot(t, b)
@@ -511,7 +512,7 @@ func TestBallot_RefBallot(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)
 	for i, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	signAndInit(t, b)
@@ -537,7 +538,7 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	b := createBallot(t)
 	b.Votes.Against = b.Votes.Support
 	for _, bid := range b.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(1)})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: b.LayerIndex.Sub(1)})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	expected := errors.New("test")
@@ -618,7 +619,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
 	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeProposal(t, p)
@@ -644,7 +645,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeProposal(t, p)
@@ -673,7 +674,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeProposal(t, p)
@@ -702,7 +703,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeProposal(t, p)
@@ -764,7 +765,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			th := createTestHandlerNoopDecoder(t)
 			p := createProposal(t)
 			for i, bid := range p.Votes.Support {
-				blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+				blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 				require.NoError(t, blocks.Add(th.cdb, blk))
 			}
 			data := encodeProposal(t, p)
@@ -804,7 +805,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeProposal(t, p)
@@ -832,7 +833,7 @@ func TestMetrics(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
 	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
+		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
 		require.NoError(t, blocks.Add(th.cdb, blk))
 	}
 	data := encodeProposal(t, p)
@@ -870,7 +871,7 @@ func TestCollectHashes(t *testing.T) {
 	b := p.Ballot
 	expected := []types.Hash32{b.RefBallot.AsHash32()}
 	expected = append(expected, b.Votes.Base.AsHash32())
-	expected = append(expected, types.BlockIDsToHashes(b.Votes.Support)...)
+	expected = append(expected, types.BlockIDsToHashes(ballotBlockView(&b))...)
 	require.ElementsMatch(t, expected, collectHashes(b))
 
 	expected = append(expected, types.TransactionIDsToHashes(p.TxIDs)...)

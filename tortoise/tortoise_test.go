@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -2198,11 +2197,12 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		tortoise.OnBallot(&ballot)
 
 		info := tortoise.trtl.ballotRefs[id]
-		hasher := hash.New()
+		hasher := types.NewOpinionHasher()
+		h32 := types.Hash32{}
 		for i := 0; i < distance-1; i++ {
-			buf := hasher.Sum(nil)
+			hasher.Sum(h32[:0])
 			hasher.Reset()
-			hasher.Write(buf)
+			hasher.WritePrevious(h32)
 		}
 		require.Equal(t, hasher.Sum(nil), info.opinion().Bytes())
 	})
@@ -2235,16 +2235,17 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		tortoise.OnBallot(ballot)
 
 		info := tortoise.trtl.ballotRefs[id]
-		hasher := hash.New()
-		buf := hasher.Sum(nil)
+		hasher := types.NewOpinionHasher()
+		h32 := types.Hash32{}
+		hasher.Sum(h32[:0])
 		hasher.Reset()
-		hasher.Write(buf)
-		hasher.Write(abstainSentinel)
-		buf = hasher.Sum(nil)
+		hasher.WritePrevious(h32)
+		hasher.WriteAbstain()
+		hasher.Sum(h32[:0])
 		hasher.Reset()
 
-		hasher.Write(buf)
-		hasher.Write(ballot.Votes.Support[0].ID[:])
+		hasher.WritePrevious(h32)
+		hasher.WriteSupport(ballot.Votes.Support[0].ID, ballot.Votes.Support[0].Height)
 		require.Equal(t, hasher.Sum(nil), info.opinion().Bytes())
 	})
 }
@@ -2451,11 +2452,11 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, opinion.Support, 1)
 
-		hasher := hash.New()
-		buf := hasher.Sum(nil)
-		id := block.ID()
-		hasher.Write(buf)
-		hasher.Write(id[:])
+		hasher := types.NewOpinionHasher()
+		rst := types.Hash32{}
+		hasher.Sum(rst[:0])
+		hasher.WritePrevious(rst)
+		hasher.WriteSupport(block.ID(), block.TickHeight)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("against", func(t *testing.T) {
@@ -2469,10 +2470,10 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, opinion.Support)
 
-		hasher := hash.New()
-		buf := hasher.Sum(nil)
-		hasher.Reset()
-		hasher.Write(buf)
+		hasher := types.NewOpinionHasher()
+		rst := types.Hash32{}
+		hasher.Sum(rst[:0])
+		hasher.WritePrevious(rst)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("abstain", func(t *testing.T) {
@@ -2485,11 +2486,12 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, opinion.Support)
 
-		hasher := hash.New()
-		buf := hasher.Sum(nil)
-		hasher.Reset()
-		hasher.Write(buf)
-		hasher.Write(abstainSentinel)
+		hasher := types.NewOpinionHasher()
+		rst := types.Hash32{}
+		hasher.Sum(rst[:0])
+
+		hasher.WritePrevious(rst)
+		hasher.WriteAbstain()
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("support multiple", func(t *testing.T) {
@@ -2520,21 +2522,17 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, opinion.Support, 2)
 
-		hasher := hash.New()
-		buf := hasher.Sum(nil)
+		hasher := types.NewOpinionHasher()
+		rst := types.Hash32{}
+		hasher.Sum(rst[:0])
+
+		hasher.WritePrevious(rst)
+		hasher.WriteSupport(blocks[1].ID(), blocks[1].TickHeight) // note the order due to the height
+		hasher.WriteSupport(blocks[0].ID(), blocks[0].TickHeight)
+		hasher.Sum(rst[:0])
 		hasher.Reset()
 
-		hasher.Write(buf)
-
-		id0 := blocks[0].ID()
-		id1 := blocks[1].ID()
-
-		hasher.Write(id1[:]) // note the order due to the height
-		hasher.Write(id0[:])
-		buf = hasher.Sum(nil)
-		hasher.Reset()
-
-		hasher.Write(buf)
+		hasher.WritePrevious(rst)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
@@ -2547,7 +2545,6 @@ func TestEncodeVotes(t *testing.T) {
 		hare := types.GetEffectiveGenesis().Add(1)
 		block := types.Block{InnerBlock: types.InnerBlock{LayerIndex: hare}}
 		block.Initialize()
-		blockID := block.ID()
 		tortoise.OnBlock(&block)
 		tortoise.OnHareOutput(hare, block.ID())
 
@@ -2571,11 +2568,12 @@ func TestEncodeVotes(t *testing.T) {
 		}
 		ballot.SetID(types.BallotID{1})
 
-		hasher := hash.New()
-		buf := hasher.Sum(nil)
-		hasher.Reset()
-		hasher.Write(buf)
-		hasher.Write(blockID[:])
+		hasher := types.NewOpinionHasher()
+		rst := types.Hash32{}
+		hasher.Sum(rst[:0])
+
+		hasher.WritePrevious(rst)
+		hasher.WriteSupport(block.ID(), block.TickHeight)
 		hasher.Sum(ballot.OpinionHash[:0])
 
 		decoded, err := tortoise.DecodeBallot(&ballot)
@@ -2597,15 +2595,15 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, rewritten.Against, []types.Vote{block.ToVote()})
 
 		hasher.Reset()
-		buf = hasher.Sum(nil)
+		hasher.Sum(rst[:0])
 		hasher.Reset()
 
-		hasher.Write(buf)
-		buf = hasher.Sum(nil)
+		hasher.WritePrevious(rst)
+		hasher.Sum(rst[:0])
 		hasher.Reset()
 
-		hasher.Write(buf)
-		hasher.Write(abstainSentinel)
+		hasher.WritePrevious(rst)
+		hasher.WriteAbstain()
 		require.Equal(t, hasher.Sum(nil), rewritten.Hash[:])
 	})
 }

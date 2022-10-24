@@ -400,20 +400,23 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	// to the hare output within hdist of the current layer when producing a ballot.
 	for _, vote := range b.Votes.Support {
 		exceptions[vote.ID] = struct{}{}
-		lid, err := blocks.GetLayer(h.cdb, vote.ID)
+		block, err := blocks.Get(h.cdb, vote.ID)
 		if err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
-		if voted, ok := layers[lid]; ok {
+		if block.ToVote() != vote {
+			return fmt.Errorf("layer/height in the encoded vote %+v doesn't match actual layer/heigt %+v", vote, block.ToVote())
+		}
+		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
-			if voted != bid && !lid.Before(cutoff) {
+			if voted != vote.ID && !vote.LayerID.Before(cutoff) {
 				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
 					b.ID(),
 					b.LayerIndex,
 					log.Stringer("smesher", b.SmesherID()),
 					log.Stringer("voted_bid", voted),
-					log.Stringer("voted_bid", bid),
+					log.Stringer("voted_bid", vote.ID),
 					log.Uint32("hdist", h.cfg.Hdist))
 				if err = h.setBallotMalicious(ctx, b); err != nil {
 					return err
@@ -421,25 +424,28 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				return errDoubleVoting
 			}
 		} else {
-			layers[lid] = bid
+			layers[vote.LayerID] = vote.ID
 		}
 	}
 	// a ballot should not vote support and against on the same block.
-	for _, bid := range b.Votes.Against {
-		if _, exist := exceptions[bid]; exist {
-			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", bid, b.ID(), b.LayerIndex)
+	for _, vote := range b.Votes.Against {
+		if _, exist := exceptions[vote.ID]; exist {
+			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.LayerIndex)
 			if err := h.setBallotMalicious(ctx, b); err != nil {
 				return err
 			}
 			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
-				errConflictingExceptions, bid, b.ID(), b.LayerIndex)
+				errConflictingExceptions, vote.ID, b.ID(), b.LayerIndex)
 		}
-		lid, err := blocks.GetLayer(h.cdb, bid)
+		block, err := blocks.Get(h.cdb, vote.ID)
 		if err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
-		layers[lid] = bid
+		if block.ToVote() != vote {
+			return fmt.Errorf("layer/height in the encoded vote %+v doesn't match actual layer/heigt %+v", vote, block.ToVote())
+		}
+		layers[vote.LayerID] = vote.ID
 	}
 	if len(exceptions) > h.cfg.MaxExceptions {
 		h.logger.WithContext(ctx).With().Warning("exceptions exceed limits",
@@ -468,8 +474,12 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 
 func ballotBlockView(b *types.Ballot) []types.BlockID {
 	combined := make([]types.BlockID, 0, len(b.Votes.Support)+len(b.Votes.Against))
-	combined = append(combined, b.Votes.Support...)
-	combined = append(combined, b.Votes.Against...)
+	for _, vote := range b.Votes.Support {
+		combined = append(combined, vote.ID)
+	}
+	for _, vote := range b.Votes.Against {
+		combined = append(combined, vote.ID)
+	}
 	return combined
 }
 
