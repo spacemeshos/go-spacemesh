@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -182,9 +181,6 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
-	if util.IsWindows() {
-		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3625)")
-	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -205,10 +201,7 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig
 	r.NoError(err)
 	r.NotNil(poetProver)
 	tb.Cleanup(func() {
-		err := poetProver.Teardown(true)
-		if assert.NoError(tb, err, "failed to tear down harness") {
-			tb.Log("harness torn down")
-		}
+		assert.NoError(tb, poetProver.Teardown(true), "failed to tear down harness")
 	})
 
 	cdb := newCachedDB(tb)
@@ -216,8 +209,8 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig
 	r.NoError(err)
 	r.NotNil(postProvider)
 	tb.Cleanup(func() {
-		r.NoError(postProvider.LastError())
-		r.NoError(postProvider.StopSession(true))
+		assert.NoError(tb, postProvider.LastError())
+		assert.NoError(tb, postProvider.StopSession(true))
 	})
 
 	done, err := postProvider.StartSession(postSetupOpts, goldenATXID)
@@ -233,9 +226,6 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig
 }
 
 func TestNewNIPostBuilderNotInitialized(t *testing.T) {
-	if util.IsWindows() && util.IsCi() {
-		t.Skip("Skipping test in Windows on CI (https://github.com/spacemeshos/go-spacemesh/issues/3629)")
-	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -249,18 +239,18 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	postProvider, err := NewPostSetupManager(minerIDNotInitialized, postCfg, logtest.New(t), cdb, goldenATXID)
 	r.NoError(err)
 	r.NotNil(postProvider)
-	defer func() {
-		r.NoError(postProvider.LastError())
-		r.NoError(postProvider.StopSession(true))
-	}()
+	t.Cleanup(func() {
+		assert.NoError(t, postProvider.LastError())
+		assert.NoError(t, postProvider.StopSession(true), "failed to stop session")
+	})
 
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
-	defer func() {
-		err = poetProver.Teardown(true)
-		r.NoError(err)
-	}()
+	t.Cleanup(func() {
+		assert.NoError(t, poetProver.Teardown(true), "failed to tear down harness")
+	})
+
 	poetDb := newPoetDbMock()
 	nb := NewNIPostBuilder(minerIDNotInitialized, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t))
@@ -277,8 +267,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	err = validateNIPost(minerIDNotInitialized, goldenATXID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
-	r.NoError(err)
+	r.NoError(validateNIPost(minerIDNotInitialized, goldenATXID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits))
 }
 
 func TestNIPostBuilder_BuildNIPost(t *testing.T) {
