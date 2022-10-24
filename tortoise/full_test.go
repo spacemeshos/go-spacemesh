@@ -381,9 +381,11 @@ func TestFullCountVotes(t *testing.T) {
 					// since we don't care about block goodness in this test
 					if i > 0 {
 						for _, support := range getDiff(blocks, b.Support) {
-							ballot.Votes.Support = append(ballot.Votes.Support, types.SupportVote{ID: support})
+							ballot.Votes.Support = append(ballot.Votes.Support, types.Vote{ID: support})
 						}
-						ballot.Votes.Against = getDiff(blocks, b.Against)
+						for _, against := range getDiff(blocks, b.Against) {
+							ballot.Votes.Against = append(ballot.Votes.Against, types.Vote{ID: against})
+						}
 						for _, layerNumber := range b.Abstain {
 							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
 						}

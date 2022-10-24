@@ -262,9 +262,9 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	require.NoError(t, err)
 	blocks, err := blocks.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
-	var supported []types.SupportVote
+	var supported []types.Vote
 	for _, block := range blocks {
-		supported = append(supported, types.SupportVote{
+		supported = append(supported, types.Vote{
 			ID: block.ID(), LayerID: block.LayerIndex, Height: block.TickHeight,
 		})
 	}
@@ -849,7 +849,7 @@ func skipLayers(n int) sim.VotesGenerator {
 		votes := sim.Voting{}
 		votes.Base = base.ID()
 		for _, block := range support {
-			votes.Support = append(votes.Support, types.SupportVote{
+			votes.Support = append(votes.Support, types.Vote{
 				ID:      block.ID(),
 				LayerID: block.LayerIndex,
 				Height:  block.TickHeight,
@@ -859,7 +859,7 @@ func skipLayers(n int) sim.VotesGenerator {
 	}
 }
 
-func addSupport(support types.SupportVote) sim.VotesGenerator {
+func addSupport(support types.Vote) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		votes := sim.PerfectVoting(rng, layers, i)
 		votes.Support = append(votes.Support, support)
@@ -879,7 +879,7 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	for _, layer := range layers[len(layers)-2:] {
 		supported := layer.Blocks()
 		for _, support := range supported {
-			voting.Support = append(voting.Support, types.SupportVote{
+			voting.Support = append(voting.Support, types.Vote{
 				ID:      support.ID(),
 				LayerID: support.LayerIndex,
 				Height:  support.TickHeight,
@@ -903,7 +903,7 @@ func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 		supported := layers[li].Blocks()
 		opinion := sim.Voting{Base: base.ID()}
 		for _, support := range supported {
-			opinion.Support = append(opinion.Support, types.SupportVote{
+			opinion.Support = append(opinion.Support, types.Vote{
 				ID:      support.ID(),
 				LayerID: support.LayerIndex,
 				Height:  support.TickHeight,
@@ -1101,7 +1101,7 @@ func splitVoting(n int) sim.VotesGenerator {
 		}
 		voting := sim.Voting{Base: base}
 		for _, support := range supported {
-			voting.Support = append(voting.Support, types.SupportVote{
+			voting.Support = append(voting.Support, types.Vote{
 				ID:      support.ID(),
 				LayerID: support.LayerIndex,
 				Height:  support.TickHeight,
@@ -1235,9 +1235,9 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	ensureBallotLayerWithin(t, s.GetState(0).DB, votes.Base, last, last)
 
 	require.Len(t, votes.Against, len(unsupported))
-	for _, bid := range votes.Against {
-		ensureBlockLayerWithin(t, s.GetState(0).DB, bid, genesis, last.Sub(1))
-		require.Contains(t, unsupported, bid)
+	for _, vote := range votes.Against {
+		ensureBlockLayerWithin(t, s.GetState(0).DB, vote.ID, genesis, last.Sub(1))
+		require.Contains(t, unsupported, vote.ID)
 	}
 	require.Len(t, votes.Support, numValidBlock)
 }
@@ -1641,7 +1641,7 @@ func perfectVotingFirstBaseBallot(_ *mrand.Rand, layers []*types.Layer, _ int) s
 	base := blts[0]
 	voting := sim.Voting{Base: base.ID()}
 	for _, support := range supported {
-		voting.Support = append(voting.Support, types.SupportVote{
+		voting.Support = append(voting.Support, types.Vote{
 			ID:      support.ID(),
 			LayerID: support.LayerIndex,
 			Height:  support.TickHeight,
@@ -1697,7 +1697,7 @@ func voteWithBaseBallot(base types.BallotID) sim.VotesGenerator {
 func voteForBlock(block *types.Block) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		voting := sim.PerfectVoting(rng, layers, i)
-		voting.Support = append(voting.Support, types.SupportVote{
+		voting.Support = append(voting.Support, types.Vote{
 			ID:      block.ID(),
 			LayerID: block.LayerIndex,
 			Height:  block.TickHeight,
@@ -1706,10 +1706,10 @@ func voteForBlock(block *types.Block) sim.VotesGenerator {
 	}
 }
 
-func voteAgainst(block types.BlockID) sim.VotesGenerator {
+func addAgainst(vote types.Vote) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		voting := sim.PerfectVoting(rng, layers, i)
-		voting.Against = append(voting.Against, block)
+		voting.Against = append(voting.Against, vote)
 		return voting
 	}
 }
@@ -2145,7 +2145,7 @@ func TestSwitchMode(t *testing.T) {
 		require.Equal(t, layer.blocks[0].validity, against)
 
 		block := layer.blocks[0]
-		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(types.SupportVote{
+		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(types.Vote{
 			ID:      block.id,
 			LayerID: block.layer,
 			Height:  block.height,
@@ -2335,7 +2335,7 @@ func TestDecodeExceptions(t *testing.T) {
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
-		sim.WithVoteGenerator(addSupport(types.SupportVote{
+		sim.WithVoteGenerator(addSupport(types.Vote{
 			ID:      block.id,
 			LayerID: block.layer,
 			Height:  block.height,
@@ -2346,7 +2346,11 @@ func TestDecodeExceptions(t *testing.T) {
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
-		sim.WithVoteGenerator(voteAgainst(block.id)),
+		sim.WithVoteGenerator(addAgainst(types.Vote{
+			ID:      block.id,
+			LayerID: block.layer,
+			Height:  block.height,
+		})),
 	)
 	tortoise.TallyVotes(ctx, last)
 	ballots3 := tortoise.trtl.layer(last).ballots
@@ -2562,7 +2566,7 @@ func TestEncodeVotes(t *testing.T) {
 		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
 		ballot.AtxID = atxid
 		ballot.LayerIndex = lid
-		ballot.Votes.Support = []types.SupportVote{
+		ballot.Votes.Support = []types.Vote{
 			{ID: block.ID(), LayerID: block.LayerIndex, Height: block.TickHeight},
 		}
 		ballot.SetID(types.BallotID{1})
@@ -2590,7 +2594,7 @@ func TestEncodeVotes(t *testing.T) {
 		rewritten, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
 		require.Len(t, rewritten.Abstain, 1)
-		require.Equal(t, rewritten.Against, []types.BlockID{block.ID()})
+		require.Equal(t, rewritten.Against, []types.Vote{block.ToVote()})
 
 		hasher.Reset()
 		buf = hasher.Sum(nil)
@@ -2632,8 +2636,14 @@ func BenchmarkOnBallot(b *testing.B) {
 	require.NoError(b, err)
 	hare, err := layers.GetHareOutput(s.GetState(0).DB, last.Sub(window/2))
 	require.NoError(b, err)
+	block, err := blocks.Get(s.GetState(0).DB, hare)
+	require.NoError(b, err)
 	modified := *ballots[0]
-	modified.Votes.Against = append(modified.Votes.Against, hare)
+	modified.Votes.Against = append(modified.Votes.Against, types.Vote{
+		ID:      block.ID(),
+		LayerID: block.LayerIndex,
+		Height:  block.TickHeight,
+	})
 
 	bench := func(b *testing.B) {
 		b.ResetTimer()

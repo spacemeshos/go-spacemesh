@@ -267,14 +267,18 @@ func (t *turtle) encodeVotes(
 			switch vote {
 			case support:
 				logger.With().Debug("support before base ballot", block.id, block.layer)
-				votes.Support = append(votes.Support, types.SupportVote{
+				votes.Support = append(votes.Support, types.Vote{
 					ID:      block.id,
 					LayerID: block.layer,
 					Height:  block.height,
 				})
 			case against:
 				logger.With().Debug("explicit against overwrites base ballot opinion", block.id, block.layer)
-				votes.Against = append(votes.Against, block.id)
+				votes.Against = append(votes.Against, types.Vote{
+					ID:      block.id,
+					LayerID: block.layer,
+					Height:  block.height,
+				})
 			case abstain:
 				logger.With().Error("layers that are not terminated should have been encoded earlier",
 					block.id, block.layer, log.Stringer("reason", reason),
@@ -298,7 +302,7 @@ func (t *turtle) encodeVotes(
 			switch vote {
 			case support:
 				logger.With().Debug("support after base ballot", block.id, block.layer, log.Stringer("reason", reason))
-				votes.Support = append(votes.Support, types.SupportVote{
+				votes.Support = append(votes.Support, types.Vote{
 					ID:      block.id,
 					LayerID: block.layer,
 					Height:  block.height,
@@ -799,8 +803,8 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) votes {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
-	for _, supported := range exceptions.Support {
-		block, exist := t.blockRefs[supported.ID]
+	for _, svote := range exceptions.Support {
+		block, exist := t.blockRefs[svote.ID]
 		if !exist {
 			continue
 		}
@@ -814,8 +818,8 @@ func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *co
 		}
 		layerdiff[block.id] = support
 	}
-	for _, bid := range exceptions.Against {
-		block, exist := t.blockRefs[bid]
+	for _, avote := range exceptions.Against {
+		block, exist := t.blockRefs[avote.ID]
 		if !exist {
 			continue
 		}
