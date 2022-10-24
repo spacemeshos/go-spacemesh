@@ -60,50 +60,46 @@ type testSyncer struct {
 	msh     *mesh.Mesh
 	mTicker *mockLayerTicker
 
-	mDataFetcher *mocks.MockdataFetcher
+	mDataFetcher *mocks.MockfetchLogic
 	mBeacon      *smocks.MockBeaconGetter
 	mLyrPatrol   *mocks.MocklayerPatrol
 	mConState    *mmocks.MockconservativeState
 	mTortoise    *smocks.MockTortoise
 	mCertHdr     *mocks.MockcertHandler
+	mForkFinder  *mocks.MockforkFinder
 }
 
 func newTestSyncer(ctx context.Context, t *testing.T, interval time.Duration) *testSyncer {
 	lg := logtest.New(t)
-
 	mt := newMockLayerTicker()
 	ctrl := gomock.NewController(t)
-	mcs := mmocks.NewMockconservativeState(ctrl)
-	mtrt := smocks.NewMockTortoise(ctrl)
-	mb := smocks.NewMockBeaconGetter(ctrl)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	mm, err := mesh.NewMesh(cdb, mtrt, mcs, lg)
+	ts := &testSyncer{
+		mTicker:      mt,
+		mDataFetcher: mocks.NewMockfetchLogic(ctrl),
+		mBeacon:      smocks.NewMockBeaconGetter(ctrl),
+		mLyrPatrol:   mocks.NewMocklayerPatrol(ctrl),
+		mConState:    mmocks.NewMockconservativeState(ctrl),
+		mTortoise:    smocks.NewMockTortoise(ctrl),
+		mCertHdr:     mocks.NewMockcertHandler(ctrl),
+		mForkFinder:  mocks.NewMockforkFinder(ctrl),
+	}
+	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
+	var err error
+	ts.msh, err = mesh.NewMesh(ts.cdb, ts.mTortoise, ts.mConState, lg)
 	require.NoError(t, err)
 
-	mp := mocks.NewMocklayerPatrol(ctrl)
-	mf := mocks.NewMockdataFetcher(ctrl)
 	cfg := Config{
 		SyncInterval:     interval,
 		SyncCertDistance: 4,
 		HareDelayLayers:  5,
 	}
-	mc := mocks.NewMockcertHandler(ctrl)
-	return &testSyncer{
-		syncer: NewSyncer(cdb, mt, mb, mm, nil, mp, mc,
-			WithContext(ctx),
-			WithConfig(cfg),
-			WithLogger(lg),
-			withDataFetcher(mf)),
-		cdb:          cdb,
-		msh:          mm,
-		mTicker:      mt,
-		mDataFetcher: mf,
-		mBeacon:      mb,
-		mLyrPatrol:   mp,
-		mConState:    mcs,
-		mTortoise:    mtrt,
-		mCertHdr:     mc,
-	}
+	ts.syncer = NewSyncer(ts.cdb, mt, ts.mBeacon, ts.msh, nil, ts.mLyrPatrol, ts.mCertHdr,
+		WithContext(ctx),
+		WithConfig(cfg),
+		WithLogger(lg),
+		withDataFetcher(ts.mDataFetcher),
+		withForkFinder(ts.mForkFinder))
+	return ts
 }
 
 func newSyncerWithoutSyncTimer(t *testing.T) *testSyncer {
@@ -125,6 +121,7 @@ func TestStartAndShutdown(t *testing.T) {
 	// the node is synced when current layer is <= 1
 	ts.syncer.Start(context.TODO())
 
+	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
 	require.Eventually(t, func() bool {
 		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(context.TODO())
 	}, time.Second, 10*time.Millisecond)

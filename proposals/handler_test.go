@@ -239,16 +239,6 @@ func TestBallot_GoldenATXID(t *testing.T) {
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidATXID)
 }
 
-func TestBallot_MissingBaseBallot(t *testing.T) {
-	th := createTestHandlerNoopDecoder(t)
-	b := types.RandomBallot()
-	b.Votes.Base = types.EmptyBallotID
-	b = signAndInit(t, b)
-	data := encodeBallot(t, b)
-	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errMissingBaseBallot)
-}
-
 func TestBallot_RefBallotMissingEpochData(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createRefBallot(t)

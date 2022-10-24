@@ -235,3 +235,23 @@ func TestProcessed(t *testing.T) {
 		require.Equal(t, types.NewLayerID(expected[i]), lid)
 	}
 }
+
+func TestGetAggHashes(t *testing.T) {
+	db := sql.InMemory()
+
+	lids := []types.LayerID{types.NewLayerID(9), types.NewLayerID(11), types.NewLayerID(7)}
+	got, err := GetAggHashes(db, lids)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Empty(t, got)
+
+	hashes := []types.Hash32{{1}, {2}, {3}}
+	aggHashes := []types.Hash32{{6}, {7}, {8}}
+	expected := []types.Hash32{{8}, {6}, {7}} // in layer order
+	for i, lid := range lids {
+		require.NoError(t, SetHashes(db, lid, hashes[i], aggHashes[i]))
+	}
+
+	got, err = GetAggHashes(db, lids)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
