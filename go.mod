@@ -34,12 +34,12 @@ require (
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
 	github.com/spacemeshos/go-scale v1.0.0
 	github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b
-	github.com/spacemeshos/poet v0.1.1-0.20221021160245-c52b8394e11d
+	github.com/spacemeshos/poet v0.2.0
 	github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.8.1
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
 	golang.org/x/net v0.0.0-20220920203100-d0c6ba3f52d9

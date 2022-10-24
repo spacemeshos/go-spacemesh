@@ -617,8 +617,8 @@ github.com/spacemeshos/go-scale v1.0.0 h1:xwOtuDi7wFt9wLTwN5iihHvCratKjpzuLQT+2T
 github.com/spacemeshos/go-scale v1.0.0/go.mod h1:82OPgK0o+s6IzdienL6n0TURSQvHPThZ+h+CeDoawbc=
 github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b h1:jxoC9Vj7hPpiQMadwxFnQH24oXdrYD+LDeXlXWSQJsI=
 github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b/go.mod h1:M2tTxS4vSdJaeDKUrNQtwaolCucBrtC07sijswIwJmA=
-github.com/spacemeshos/poet v0.1.1-0.20221021160245-c52b8394e11d h1:CbzVDoiL941Z2cYLuLs6kZilEoekMY9JghTDuwUN4Y4=
-github.com/spacemeshos/poet v0.1.1-0.20221021160245-c52b8394e11d/go.mod h1:c/GfSx4rjKv0KDo0CNcxnC1X/pms9FbutTaxyuXs4Q4=
+github.com/spacemeshos/poet v0.2.0 h1:miXQXI71GyC+CXL6KT0Ei1WzVCL/W2heWby3+L6mceA=
+github.com/spacemeshos/poet v0.2.0/go.mod h1:XhPStvt3yrfjGglkVhx3A/38L0Vn1oOZpcixYq7akMo=
 github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0 h1:RZXLlyCq/6FsvrDaW9kwiv/rZMxOyTh+fRWKr8m/A9M=
 github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0/go.mod h1:LcZpwuV5+KWGQEd8UB2zopkbUlQSBFKQ24eh1sQ0fIg=
 github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d h1:09R53k+V+cPCwTH3AnvOJO2OmCb4dJlG6hfgqQlTm6w=
@@ -644,6 +644,7 @@ github.com/stoewer/go-strcase v1.2.0/go.mod h1:IBiWB2sKIp3wVVQ3Y035++gc+knqhUQag
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
+github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
@@ -651,8 +652,9 @@ github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/stretchr/testify v1.8.0 h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PKk=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
+github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKsk=
+github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/subosito/gotenv v1.4.1 h1:jyEFiXpy21Wm81FBN71l9VoMMV8H8jG+qIK3GCpY6Qs=
 github.com/subosito/gotenv v1.4.1/go.mod h1:ayKnFf/c6rvx/2iiLrJUk1e6plDbT3edrFNGqEflhK0=
 github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 h1:epCh84lMvA70Z7CTTCmYQn2CKbY8j86K7/FAIr141uY=
