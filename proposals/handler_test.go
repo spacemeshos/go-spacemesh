@@ -90,17 +90,46 @@ func createTestHandlerNoopDecoder(t *testing.T) *testHandler {
 	return th
 }
 
-func createProposal(t *testing.T) *types.Proposal {
+type opt any
+
+type createBallotOpt func(b *types.Ballot)
+
+type createProposalOpt func(p *types.Proposal)
+
+func withSupportBlocks(blocks ...*types.Block) createBallotOpt {
+	return func(b *types.Ballot) {
+		b.Votes.Support = nil
+		for _, block := range blocks {
+			b.Votes.Support = append(b.Votes.Support, block.ToVote())
+		}
+	}
+}
+
+func withLayer(lid types.LayerID) createBallotOpt {
+	return func(b *types.Ballot) {
+		b.LayerIndex = lid
+	}
+}
+
+func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	t.Helper()
 	b := types.RandomBallot()
-	signer := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.SignedBytes())
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *b,
 			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
 		},
 	}
+	for _, opt := range opts {
+		switch unwrap := opt.(type) {
+		case createBallotOpt:
+			unwrap(&p.Ballot)
+		case createProposalOpt:
+			unwrap(p)
+		}
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(b.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
 	return p
@@ -113,9 +142,13 @@ func encodeProposal(t *testing.T, p *types.Proposal) []byte {
 	return data
 }
 
-func createBallot(t *testing.T) *types.Ballot {
+func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {
 	t.Helper()
-	return signAndInit(t, types.RandomBallot())
+	b := types.RandomBallot()
+	for _, opt := range opts {
+		opt(b)
+	}
+	return signAndInit(t, b)
 }
 
 func signAndInit(t *testing.T, b *types.Ballot) *types.Ballot {
@@ -729,12 +762,12 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	wg.Add(2)
 	var res1, res2 pubsub.ValidationResult
 	go func() {
+		defer wg.Done()
 		res1 = th.HandleProposal(context.TODO(), p2p.NoPeer, data)
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
 		res2 = th.HandleProposal(context.TODO(), p2p.NoPeer, data)
-		wg.Done()
 	}()
 	wg.Wait()
 	if res1 == pubsub.ValidationAccept {
@@ -803,15 +836,22 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 
 func TestProposal_ValidProposal(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
-	for i, bid := range p.Votes.Support {
-		blk := types.NewExistingBlock(bid.ID, types.InnerBlock{LayerIndex: p.LayerIndex.Sub(uint32(i + 1))})
-		require.NoError(t, blocks.Add(th.cdb, blk))
+	lid := types.NewLayerID(10)
+	blks := []*types.Block{
+		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
+		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
+	}
+	p := createProposal(t,
+		withLayer(lid),
+		withSupportBlocks(blks...),
+	)
+	for _, block := range blks {
+		require.NoError(t, blocks.Add(th.cdb, block))
 	}
 	data := encodeProposal(t, p)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
-	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), toIds(p.Votes.Support)).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
@@ -876,4 +916,11 @@ func TestCollectHashes(t *testing.T) {
 
 	expected = append(expected, types.TransactionIDsToHashes(p.TxIDs)...)
 	require.ElementsMatch(t, expected, collectHashes(*p))
+}
+
+func toIds(votes []types.Vote) (rst []types.BlockID) {
+	for _, vote := range votes {
+		rst = append(rst, vote.ID)
+	}
+	return rst
 }
