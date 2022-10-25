@@ -558,7 +558,7 @@ func TestLongTermination(t *testing.T) {
 			zdist = 2
 			hdist = zdist + 3
 			skip  = 1 // skipping layer generated at this position
-			limit = hdist
+			limit = hdist - 1
 		)
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup(sim.WithSetupMinerRange(4, 4))
@@ -1123,7 +1123,7 @@ func TestWeakCoinVoting(t *testing.T) {
 
 	for _, lid := range sim.GenLayers(s,
 		sim.WithSequence(1, sim.WithNumBlocks(2), sim.WithEmptyHareOutput()),
-		sim.WithSequence(hdist+1,
+		sim.WithSequence(hdist,
 			sim.WithNumBlocks(2),
 			sim.WithEmptyHareOutput(),
 			sim.WithVoteGenerator(splitVoting(size)),
@@ -1850,7 +1850,7 @@ func TestFutureHeight(t *testing.T) {
 		)
 		tortoise.TallyVotes(context.Background(),
 			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(100_000)))
-		for i := 0; i < int(cfg.Hdist); i++ {
+		for i := 0; i < int(cfg.Hdist)-1; i++ {
 			tortoise.TallyVotes(context.Background(), s.Next())
 		}
 		require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
@@ -2361,7 +2361,7 @@ func TestNonTerminatedLayers(t *testing.T) {
 	tortoise := tortoiseFromSimState(
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
-	for i := 0; i <= int(cfg.Zdist); i++ {
+	for i := 0; i < int(cfg.Zdist); i++ {
 		tortoise.TallyVotes(ctx, s.Next(
 			sim.WithNumBlocks(0), sim.WithoutHareOutput()))
 	}

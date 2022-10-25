@@ -111,7 +111,7 @@ func sortOpinions(opinions []*fetch.LayerOpinion) {
 
 func (s *Syncer) needCert(logger log.Log, lid types.LayerID) (bool, error) {
 	cutoff := s.certCutoffLayer()
-	if lid.Before(cutoff) {
+	if !lid.After(cutoff) {
 		return false, nil
 	}
 	cert, err := layers.GetCert(s.db, lid)
