@@ -36,7 +36,7 @@ require (
 	github.com/spacemeshos/merkle-tree v0.0.0-20221019141051-1d2e1586ca5b
 	github.com/spacemeshos/poet v0.2.0
 	github.com/spacemeshos/post v0.0.0-20221020205024-ee0e51e627a0
-	github.com/spf13/cobra v1.6.0
+	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.1
