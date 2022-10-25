@@ -869,12 +869,8 @@ func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *co
 }
 
 func withinDistance(dist uint32, lid, last types.LayerID) bool {
-	genesis := types.GetEffectiveGenesis()
-	limit := types.GetEffectiveGenesis()
-	if last.After(genesis.Add(dist)) {
-		limit = last.Sub(dist)
-	}
-	return !lid.Before(limit)
+	// layer + distance > last
+	return lid.Add(dist).After(last)
 }
 
 func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo) (sign, voteReason) {

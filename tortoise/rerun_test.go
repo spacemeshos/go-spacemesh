@@ -62,6 +62,7 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	s.Setup(sim.WithSetupUnitsRange(2, 2))
 
 	cfg := defaultTestConfig()
+	cfg.Hdist = good + 1
 	cfg.LayerSize = size
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
