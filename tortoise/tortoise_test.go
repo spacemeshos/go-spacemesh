@@ -43,15 +43,7 @@ func TestMain(m *testing.M) {
 }
 
 func newCachedDB(t *testing.T, logger log.Log) *datastore.CachedDB {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
-	glayer := types.GenesisLayer()
-	for _, b := range glayer.Ballots() {
-		require.NoError(t, ballots.Add(cdb, b))
-	}
-	for _, b := range glayer.Blocks() {
-		require.NoError(t, blocks.Add(cdb, b))
-	}
-	return cdb
+	return datastore.NewCachedDB(sql.InMemory(), logger)
 }
 
 const (
@@ -566,7 +558,7 @@ func TestLongTermination(t *testing.T) {
 			zdist = 2
 			hdist = zdist + 3
 			skip  = 1 // skipping layer generated at this position
-			limit = hdist
+			limit = hdist - 1
 		)
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup(sim.WithSetupMinerRange(4, 4))
@@ -925,12 +917,15 @@ func TestBaseBallotGenesis(t *testing.T) {
 
 	s := sim.New()
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg),
+		WithLogger(logtest.New(t)))
 
 	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
-	require.Equal(t, votes.Support, []types.BlockID{types.GenesisBlockID})
-	require.Equal(t, types.GenesisBallotID, votes.Base)
+	require.Empty(t, votes.Support)
+	require.Empty(t, votes.Against)
+	require.Empty(t, votes.Abstain)
+	require.Empty(t, votes.Base)
 }
 
 func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, votes *types.Opinion, cdb *datastore.CachedDB) {
@@ -1128,7 +1123,7 @@ func TestWeakCoinVoting(t *testing.T) {
 
 	for _, lid := range sim.GenLayers(s,
 		sim.WithSequence(1, sim.WithNumBlocks(2), sim.WithEmptyHareOutput()),
-		sim.WithSequence(hdist+1,
+		sim.WithSequence(hdist,
 			sim.WithNumBlocks(2),
 			sim.WithEmptyHareOutput(),
 			sim.WithVoteGenerator(splitVoting(size)),
@@ -1463,7 +1458,6 @@ func TestComputeBallotWeight(t *testing.T) {
 				} else {
 					ballot.RefBallot = blts[b.RefBallot].ID()
 				}
-				ballot.Votes.Base = types.GenesisBallotID
 
 				ballot.Signature = sig.Sign(ballot.SignedBytes())
 				require.NoError(t, ballot.Initialize())
@@ -1785,7 +1779,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 
 	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
-	require.Equal(t, types.GenesisBallotID, votes.Base)
+	require.Empty(t, votes.Base)
 }
 
 func TestStateManagement(t *testing.T) {
@@ -1856,7 +1850,7 @@ func TestFutureHeight(t *testing.T) {
 		)
 		tortoise.TallyVotes(context.Background(),
 			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(100_000)))
-		for i := 0; i < int(cfg.Hdist); i++ {
+		for i := 0; i < int(cfg.Hdist)-1; i++ {
 			tortoise.TallyVotes(context.Background(), s.Next())
 		}
 		require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
@@ -2146,15 +2140,14 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 
 		id := types.BallotID{1}
 		ballot := types.NewExistingBallot(id, nil, nil, rst[0].InnerBallot)
-		ballot.Votes.Base = types.GenesisBallotID
-		ballot.Votes.Support = []types.BlockID{types.GenesisBlockID}
+		ballot.Votes.Base = types.EmptyBallotID
+		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil
 
 		tortoise.OnBallot(&ballot)
 
 		info := tortoise.trtl.ballotRefs[id]
 		hasher := hash.New()
-		hasher.Write(types.GenesisBlockID[:])
 		for i := 0; i < distance-1; i++ {
 			buf := hasher.Sum(nil)
 			hasher.Reset()
@@ -2162,7 +2155,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		}
 		require.Equal(t, hasher.Sum(nil), info.opinion().Bytes())
 	})
-	t.Run("support abstain support", func(t *testing.T) {
+	t.Run("against abstain support", func(t *testing.T) {
 		const distance = 3
 		s := sim.New(
 			sim.WithLayerSize(cfg.LayerSize),
@@ -2192,10 +2185,8 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 
 		info := tortoise.trtl.ballotRefs[id]
 		hasher := hash.New()
-		hasher.Write(types.GenesisBlockID[:])
 		buf := hasher.Sum(nil)
 		hasher.Reset()
-
 		hasher.Write(buf)
 		hasher.Write(abstainSentinel)
 		buf = hasher.Sum(nil)
@@ -2370,7 +2361,7 @@ func TestNonTerminatedLayers(t *testing.T) {
 	tortoise := tortoiseFromSimState(
 		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 	)
-	for i := 0; i <= int(cfg.Zdist); i++ {
+	for i := 0; i < int(cfg.Zdist); i++ {
 		tortoise.TallyVotes(ctx, s.Next(
 			sim.WithNumBlocks(0), sim.WithoutHareOutput()))
 	}
@@ -2399,15 +2390,13 @@ func TestEncodeVotes(t *testing.T) {
 		tortoise.TallyVotes(ctx, block.LayerIndex.Add(1))
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(block.LayerIndex.Add(1)))
 		require.NoError(t, err)
-		require.Len(t, opinion.Support, 2)
+		require.Len(t, opinion.Support, 1)
 
 		hasher := hash.New()
-		hasher.Write(opinion.Support[0][:])
 		buf := hasher.Sum(nil)
-		hasher.Reset()
-
+		id := block.ID()
 		hasher.Write(buf)
-		hasher.Write(opinion.Support[1][:])
+		hasher.Write(id[:])
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("against", func(t *testing.T) {
@@ -2419,13 +2408,11 @@ func TestEncodeVotes(t *testing.T) {
 		tortoise.TallyVotes(ctx, current)
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
-		require.Len(t, opinion.Support, 1)
+		require.Empty(t, opinion.Support)
 
 		hasher := hash.New()
-		hasher.Write(opinion.Support[0][:])
 		buf := hasher.Sum(nil)
 		hasher.Reset()
-
 		hasher.Write(buf)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
@@ -2437,13 +2424,11 @@ func TestEncodeVotes(t *testing.T) {
 		tortoise.TallyVotes(ctx, current)
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
-		require.Len(t, opinion.Support, 1)
+		require.Empty(t, opinion.Support)
 
 		hasher := hash.New()
-		hasher.Write(opinion.Support[0][:])
 		buf := hasher.Sum(nil)
 		hasher.Reset()
-
 		hasher.Write(buf)
 		hasher.Write(abstainSentinel)
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
@@ -2474,17 +2459,17 @@ func TestEncodeVotes(t *testing.T) {
 
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
-		require.Len(t, opinion.Support, 3)
+		require.Len(t, opinion.Support, 2)
 
 		hasher := hash.New()
-		hasher.Write(types.GenesisBlockID[:])
 		buf := hasher.Sum(nil)
 		hasher.Reset()
+
+		hasher.Write(buf)
 
 		id0 := blocks[0].ID()
 		id1 := blocks[1].ID()
 
-		hasher.Write(buf)
 		hasher.Write(id1[:]) // note the order due to the height
 		hasher.Write(id0[:])
 		buf = hasher.Sum(nil)
@@ -2522,15 +2507,12 @@ func TestEncodeVotes(t *testing.T) {
 		ballot.EpochData = &types.EpochData{ActiveSet: []types.ATXID{atxid}}
 		ballot.AtxID = atxid
 		ballot.LayerIndex = lid
-		ballot.Votes.Base = types.GenesisBallotID
-		ballot.Votes.Support = []types.BlockID{types.GenesisBlockID, block.ID()}
+		ballot.Votes.Support = []types.BlockID{block.ID()}
 		ballot.SetID(types.BallotID{1})
 
 		hasher := hash.New()
-		hasher.Write(types.GenesisBlockID[:])
 		buf := hasher.Sum(nil)
 		hasher.Reset()
-
 		hasher.Write(buf)
 		hasher.Write(blockID[:])
 		hasher.Sum(ballot.OpinionHash[:0])
@@ -2554,7 +2536,6 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, rewritten.Against, []types.BlockID{block.ID()})
 
 		hasher.Reset()
-		hasher.Write(types.GenesisBlockID[:])
 		buf = hasher.Sum(nil)
 		hasher.Reset()
 

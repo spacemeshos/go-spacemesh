@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -45,7 +46,6 @@ func createTestMesh(t *testing.T) *testMesh {
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
-	checkLatestInDB(t, msh, gLid)
 	checkProcessedInDB(t, msh, gLid)
 	tm.Mesh = msh
 	return tm
@@ -102,13 +102,6 @@ func checkLastAppliedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	require.Equal(t, expected, lid)
 }
 
-func checkLatestInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
-	t.Helper()
-	lid, err := ballots.LatestLayer(mesh.cdb)
-	require.NoError(t, err)
-	require.Equal(t, expected, lid)
-}
-
 func checkProcessedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
 	t.Helper()
 	lid, err := layers.GetProcessed(mesh.cdb)
@@ -125,30 +118,10 @@ func TestMesh_FromGenesis(t *testing.T) {
 	gotL := tm.Mesh.LatestLayer()
 	require.Equal(t, types.GetEffectiveGenesis(), gotL)
 
-	gLayer := types.GenesisLayer()
-	for _, b := range gLayer.Ballots() {
-		has, err := ballots.Has(tm.cdb, b.ID())
-		require.NoError(t, err)
-		require.True(t, has)
-	}
-
-	for _, b := range gLayer.Ballots() {
-		has, err := ballots.Has(tm.cdb, b.ID())
-		require.NoError(t, err)
-		require.True(t, has)
-	}
-
-	for _, b := range gLayer.Blocks() {
-		has, err := blocks.Has(tm.cdb, b.ID())
-		require.NoError(t, err)
-		require.True(t, has)
-		valid, err := blocks.IsValid(tm.cdb, b.ID())
-		require.NoError(t, err)
-		require.True(t, valid)
-	}
-	bid, err := layers.GetHareOutput(tm.cdb, gLayer.Index())
+	opinion, err := layers.GetAggregatedHash(tm.cdb, types.GetEffectiveGenesis())
 	require.NoError(t, err)
-	require.Equal(t, types.GenesisBlockID, bid)
+	buf := hash.Sum(nil)
+	require.Equal(t, buf[:], opinion[:])
 }
 
 func TestMesh_WakeUpWhileGenesis(t *testing.T) {
@@ -156,7 +129,6 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
-	checkLatestInDB(t, msh, gLid)
 	checkProcessedInDB(t, msh, gLid)
 	checkLastAppliedInDB(t, msh, gLid)
 	gotL := msh.LatestLayer()
