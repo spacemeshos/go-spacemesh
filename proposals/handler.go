@@ -39,6 +39,7 @@ var (
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
+	errInvalidVote           = errors.New("invalid layer/height in the vote")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -401,7 +402,7 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
 		if block.ToVote() != vote {
-			return fmt.Errorf("layer/height in the encoded vote %+v doesn't match actual layer/heigt %+v", vote, block.ToVote())
+			return fmt.Errorf("%w: encoded vote %+v doesn't match actual %+v", errInvalidVote, vote, block.ToVote())
 		}
 		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
@@ -438,7 +439,8 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
 		if block.ToVote() != vote {
-			return fmt.Errorf("layer/height in the encoded vote %+v doesn't match actual layer/heigt %+v", vote, block.ToVote())
+			return fmt.Errorf("%w encoded vote %+v doesn't match actual %+v",
+				errInvalidVote, vote, block.ToVote())
 		}
 		layers[vote.LayerID] = vote.ID
 	}
@@ -496,7 +498,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 
 	bids := ballotBlockView(b)
 	if len(bids) > 0 {
-		if err := h.fetcher.GetBlocks(ctx, ballotBlockView(b)); err != nil {
+		if err := h.fetcher.GetBlocks(ctx, bids); err != nil {
 			return fmt.Errorf("fetch blocks: %w", err)
 		}
 	}
