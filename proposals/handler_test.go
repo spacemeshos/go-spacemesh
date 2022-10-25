@@ -91,8 +91,6 @@ func createTestHandlerNoopDecoder(t *testing.T) *testHandler {
 	return th
 }
 
-type createOpt any
-
 type createBallotOpt func(b *types.Ballot)
 
 func withSupportBlocks(blocks ...*types.Block) createBallotOpt {
