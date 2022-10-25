@@ -375,13 +375,13 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	return nil
 }
 
-func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []types.BlockID) error {
-	logger.With().Debug("persisting layer hash", lid, log.Int("num_blocks", len(bids)))
-	types.SortBlockIDs(bids)
+func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
+	logger.With().Debug("persisting layer hash", lid, log.Int("num_blocks", len(valids)))
+	sortBlocks(valids)
 	var (
-		hash     = types.CalcBlocksHash32(bids, nil)
-		prevHash []byte
-		err      error
+		hash   = types.CalcBlocksHash32(types.ToBlockIDs(valids), nil)
+		hasher = types.NewOpinionHasher()
+		err    error
 	)
 	if lid.After(types.GetEffectiveGenesis()) {
 		prev, err := layers.GetAggregatedHash(dbtx, lid.Sub(1))
@@ -390,11 +390,13 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []
 			return err
 		}
 		logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prev.ShortString()))
-		prevHash = prev[:]
+		hasher.WritePrevious(prev)
 	}
-
-	newAggHash := types.CalcBlocksHash32(bids, prevHash)
-	if err = layers.SetHashes(dbtx, lid, hash, newAggHash); err != nil {
+	for _, block := range valids {
+		hasher.WriteSupport(block.ID(), block.TickHeight)
+	}
+	newAggHash := hasher.Hash()
+	if err = layers.SetHashes(dbtx, lid, hash, hasher.Hash()); err != nil {
 		logger.With().Error("failed to set layer hashes", lid, log.Err(err))
 		return err
 	}
@@ -533,7 +535,7 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
 			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
 		}
-		if err := persistLayerHashes(logger, dbtx, lid, types.ToBlockIDs(valids)); err != nil {
+		if err := persistLayerHashes(logger, dbtx, lid, valids); err != nil {
 			logger.With().Error("failed to persist layer hashes", log.Err(err))
 			return err
 		}

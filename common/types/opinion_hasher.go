@@ -14,37 +14,51 @@ func NewOpinionHasher() *OpinionHasher {
 	return &OpinionHasher{enc: scale.NewEncoder(hasher), h: hasher}
 }
 
-// OpinionHasher implements utility struct for computing opinion hash.
+// OpinionHasher is a utility for computing opinion hash.
 type OpinionHasher struct {
 	enc *scale.Encoder
 	h   hash.Hash
 }
 
 // WritePrevious aggregated hash.
-func (h *OpinionHasher) WritePrevious(hash Hash32) error {
+func (h *OpinionHasher) WritePrevious(hash Hash32) {
 	_, err := h.h.Write(hash[:])
-	return err
+	if err != nil {
+		panic("unexpected hash write failure: " + err.Error())
+	}
 }
 
 // WriteAbstain writes abstain sentinel as an opinion.
-func (h *OpinionHasher) WriteAbstain() error {
+func (h *OpinionHasher) WriteAbstain() {
 	_, err := h.h.Write(abstainSentinel)
-	return err
+	if err != nil {
+		panic("unexpected hash write failure: " + err.Error())
+	}
 }
 
 // WriteSupport writes id and height of the block.
-func (h *OpinionHasher) WriteSupport(id BlockID, height uint64) error {
+func (h *OpinionHasher) WriteSupport(id BlockID, height uint64) {
 	_, err := scale.EncodeByteArray(h.enc, id[:])
 	if err != nil {
-		return err
+		if err != nil {
+			panic("unexpected scale encode failure: " + err.Error())
+		}
 	}
 	_, err = scale.EncodeUint64(h.enc, height)
-	return err
+	if err != nil {
+		panic("unexpected scale encode failure: " + err.Error())
+	}
 }
 
 // Sum appends hash sum to dst.
 func (h *OpinionHasher) Sum(dst []byte) []byte {
 	return h.h.Sum(dst)
+}
+
+// Hash instantiates 32bytes and write hash.Sum to it.
+func (h *OpinionHasher) Hash() (rst Hash32) {
+	h.Sum(rst[:0])
+	return rst
 }
 
 // Reset opinion hasher state.
