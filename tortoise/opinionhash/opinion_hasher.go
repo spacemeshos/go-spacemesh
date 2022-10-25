@@ -1,15 +1,16 @@
-package types
+package opinionhash
 
 import (
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 var abstainSentinel = []byte{0}
 
-// NewOpinionHasher returns new instance of the opinion hasher.
-func NewOpinionHasher() *OpinionHasher {
+// New returns new instance of the opinion hasher.
+func New() *OpinionHasher {
 	hasher := hash.New()
 	return &OpinionHasher{enc: scale.NewEncoder(hasher), h: hasher}
 }
@@ -21,7 +22,7 @@ type OpinionHasher struct {
 }
 
 // WritePrevious aggregated hash.
-func (h *OpinionHasher) WritePrevious(hash Hash32) {
+func (h *OpinionHasher) WritePrevious(hash types.Hash32) {
 	_, err := h.h.Write(hash[:])
 	if err != nil {
 		panic("unexpected hash write failure: " + err.Error())
@@ -37,7 +38,7 @@ func (h *OpinionHasher) WriteAbstain() {
 }
 
 // WriteSupport writes id and height of the block.
-func (h *OpinionHasher) WriteSupport(id BlockID, height uint64) {
+func (h *OpinionHasher) WriteSupport(id types.BlockID, height uint64) {
 	_, err := scale.EncodeByteArray(h.enc, id[:])
 	if err != nil {
 		if err != nil {
@@ -56,7 +57,7 @@ func (h *OpinionHasher) Sum(dst []byte) []byte {
 }
 
 // Hash instantiates 32bytes and write hash.Sum to it.
-func (h *OpinionHasher) Hash() (rst Hash32) {
+func (h *OpinionHasher) Hash() (rst types.Hash32) {
 	h.Sum(rst[:0])
 	return rst
 }

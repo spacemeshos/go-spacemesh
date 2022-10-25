@@ -6,9 +6,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
-
-var abstainSentinel = []byte{0}
 
 type (
 	weight = util.Weight
@@ -166,7 +165,7 @@ type layerInfo struct {
 }
 
 func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
-	hasher := types.NewOpinionHasher()
+	hasher := opinionhash.New()
 	if l.prevOpinion != nil {
 		hasher.WritePrevious(*l.prevOpinion)
 	}
@@ -347,7 +346,7 @@ func (l *layerVote) sortSupported() {
 }
 
 func (l *layerVote) computeOpinion() {
-	hasher := types.NewOpinionHasher()
+	hasher := opinionhash.New()
 	if l.prev != nil {
 		hasher.WritePrevious(l.prev.opinion)
 	}

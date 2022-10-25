@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
 const (
@@ -195,7 +196,7 @@ func TestMesh_LayerHashes(t *testing.T) {
 		h, err = layers.GetHash(tm.cdb, i)
 		require.NoError(t, err)
 		require.Equal(t, expectedHash, h)
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		hasher.WritePrevious(prevAggHash)
 		hasher.WriteSupport(blk.ID(), blk.TickHeight)
 		expectedAggHash := hasher.Hash()

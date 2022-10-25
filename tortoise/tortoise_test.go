@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
@@ -2197,7 +2198,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		tortoise.OnBallot(&ballot)
 
 		info := tortoise.trtl.ballotRefs[id]
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		h32 := types.Hash32{}
 		for i := 0; i < distance-1; i++ {
 			hasher.Sum(h32[:0])
@@ -2235,7 +2236,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		tortoise.OnBallot(ballot)
 
 		info := tortoise.trtl.ballotRefs[id]
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		h32 := types.Hash32{}
 		hasher.Sum(h32[:0])
 		hasher.Reset()
@@ -2452,7 +2453,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, opinion.Support, 1)
 
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		rst := types.Hash32{}
 		hasher.Sum(rst[:0])
 		hasher.WritePrevious(rst)
@@ -2470,7 +2471,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, opinion.Support)
 
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		rst := types.Hash32{}
 		hasher.Sum(rst[:0])
 		hasher.WritePrevious(rst)
@@ -2486,7 +2487,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, opinion.Support)
 
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		rst := types.Hash32{}
 		hasher.Sum(rst[:0])
 
@@ -2522,7 +2523,7 @@ func TestEncodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, opinion.Support, 2)
 
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		rst := types.Hash32{}
 		hasher.Sum(rst[:0])
 
@@ -2568,7 +2569,7 @@ func TestEncodeVotes(t *testing.T) {
 		}
 		ballot.SetID(types.BallotID{1})
 
-		hasher := types.NewOpinionHasher()
+		hasher := opinionhash.New()
 		rst := types.Hash32{}
 		hasher.Sum(rst[:0])
 

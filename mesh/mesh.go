@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -380,7 +381,7 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids 
 	sortBlocks(valids)
 	var (
 		hash   = types.CalcBlocksHash32(types.ToBlockIDs(valids), nil)
-		hasher = types.NewOpinionHasher()
+		hasher = opinionhash.New()
 		err    error
 	)
 	if lid.After(types.GetEffectiveGenesis()) {
