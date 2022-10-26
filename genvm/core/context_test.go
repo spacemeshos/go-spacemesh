@@ -70,7 +70,7 @@ func TestApply(t *testing.T) {
 		ss := core.NewStagedCache(sql.InMemory())
 		ctx := core.Context{Loader: ss}
 		ctx.PrincipalAccount.Address = core.Address{1}
-		ctx.Header.Nonce = core.Nonce{Counter: 10}
+		ctx.Header.Nonce = 10
 
 		err := ctx.Apply(ss)
 		require.NoError(t, err)
@@ -88,7 +88,7 @@ func TestApply(t *testing.T) {
 		ctx.Header.MaxGas = 10
 
 		ctx.PrincipalAccount.Address = core.Address{1}
-		ctx.Header.Nonce = core.Nonce{Counter: 10}
+		ctx.Header.Nonce = 10
 
 		require.NoError(t, ctx.Consume(5))
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)

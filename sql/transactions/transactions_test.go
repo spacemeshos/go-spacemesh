@@ -21,10 +21,10 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 
 	var raw []byte
 	if nonce == 0 {
-		raw = wallet.SelfSpawn(principal.PrivateKey(), types.Nonce{}, sdk.WithGasPrice(fee))
+		raw = wallet.SelfSpawn(principal.PrivateKey(), 0, sdk.WithGasPrice(fee))
 	} else {
 		raw = wallet.Spend(principal.PrivateKey(), dest, amount,
-			types.Nonce{Counter: nonce}, sdk.WithGasPrice(fee))
+			nonce, sdk.WithGasPrice(fee))
 	}
 
 	parsed := types.Transaction{
@@ -34,7 +34,7 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 	// this is a fake principal for the purposes of testing.
 	addr := types.GenerateAddress(principal.PublicKey().Bytes())
 	copy(parsed.Principal[:], addr.Bytes())
-	parsed.Nonce = types.Nonce{Counter: nonce}
+	parsed.Nonce = nonce
 	parsed.GasPrice = fee
 	return &parsed
 }
@@ -327,7 +327,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 
 		sameNonce := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
 		require.NoError(t, Add(db, sameNonce, time.Now()))
-		require.NoError(t, DiscardByAcctNonce(db, tx.ID, lid, tx.Principal, tx.Nonce.Counter))
+		require.NoError(t, DiscardByAcctNonce(db, tx.ID, lid, tx.Principal, tx.Nonce))
 		discarded = append(discarded, sameNonce.ID)
 	}
 
@@ -414,9 +414,9 @@ func TestDiscardNonceBelow(t *testing.T) {
 	for _, tx := range txs {
 		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
 		if tx.Principal == principal {
-			if tx.Nonce.Counter == 0 {
+			if tx.Nonce == 0 {
 				expected = makeMeshTX(tx, lid, bid, received, types.APPLIED)
-			} else if tx.Nonce.Counter < cutoff {
+			} else if tx.Nonce < cutoff {
 				expected.State = types.DISCARDED
 				numDiscarded++
 			}
@@ -465,7 +465,7 @@ func TestDiscardByAcctNonce(t *testing.T) {
 	for _, tx := range txs {
 		mtx, err := Get(db, tx.ID)
 		require.NoError(t, err)
-		if tx.Principal == principal && tx.Nonce.Counter == nonce && tx.ID != applied {
+		if tx.Principal == principal && tx.Nonce == nonce && tx.ID != applied {
 			require.Equal(t, types.DISCARDED, mtx.State)
 		} else {
 			require.Equal(t, types.MEMPOOL, mtx.State)

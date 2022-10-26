@@ -156,9 +156,9 @@ func (v *VM) AccountExists(address core.Address) (bool, error) {
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(v.db, address)
 	if err != nil {
-		return core.Nonce{}, err
+		return 0, err
 	}
-	return core.Nonce{Counter: account.NextNonce}, nil
+	return account.NextNonce, nil
 }
 
 // GetBalance returns balance for an address.
@@ -332,7 +332,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			continue
 		}
 
-		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce.Counter {
+		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce {
 			logger.With().Warning("ineffective transaction. nonce too low",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),

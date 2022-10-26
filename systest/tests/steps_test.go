@@ -125,7 +125,7 @@ func TestStepTransactions(t *testing.T) {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
 				defer cancel()
-				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, types.Nonce{}))
+				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, 0))
 				if err != nil {
 					return err
 				}
@@ -155,7 +155,7 @@ func TestStepTransactions(t *testing.T) {
 					client.account.PrivateKey,
 					receiver,
 					rng.Uint64()%amountLimit,
-					types.Nonce{Counter: nonce},
+					nonce,
 				)
 				_, err := client.submit(tctx, raw)
 				if err != nil {

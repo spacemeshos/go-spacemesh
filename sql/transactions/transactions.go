@@ -43,7 +43,7 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 			if header != nil {
 				stmt.BindBytes(3, header)
 				stmt.BindBytes(6, tx.Principal[:])
-				stmt.BindBytes(7, util.Uint64ToBytesBigEndian(tx.Nonce.Counter))
+				stmt.BindBytes(7, util.Uint64ToBytesBigEndian(tx.Nonce))
 			}
 
 			stmt.BindInt64(8, received.UnixNano())

@@ -30,7 +30,7 @@ func (h *TxHeader) Spending() uint64 {
 // MarshalLogObject implements encoding for the tx header.
 func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("principal", h.Principal.String())
-	encoder.AddUint64("nonce_counter", h.Nonce.Counter)
+	encoder.AddUint64("nonce_counter", h.Nonce)
 	encoder.AddUint32("layer_min", h.LayerLimits.Min)
 	encoder.AddUint32("layer_max", h.LayerLimits.Max)
 	encoder.AddUint64("max_gas", h.MaxGas)
@@ -44,8 +44,5 @@ type LayerLimits struct {
 	Min, Max uint32
 }
 
-// Nonce is for ordering transactions.
-// TODO(dshulyak) we are using only counter until bitfield is defined.
-type Nonce struct {
-	Counter uint64
-}
+// Nonce alias to uint64.
+type Nonce = uint64

@@ -51,7 +51,7 @@ func (s *candidate) block() types.BlockID {
 }
 
 func (s *candidate) nonce() uint64 {
-	return s.best.Nonce.Counter
+	return s.best.Nonce
 }
 
 func (s *candidate) maxSpending() uint64 {
@@ -98,10 +98,10 @@ func (ac *accountCache) precheck(logger log.Log, ntx *txtypes.NanoTX) (*list.Ele
 	var prev *list.Element
 	for e := ac.txsByNonce.Back(); e != nil; e = e.Prev() {
 		cand := e.Value.(*candidate)
-		if cand.nonce() > ntx.Nonce.Counter {
+		if cand.nonce() > ntx.Nonce {
 			continue
 		}
-		if cand.nonce() == ntx.Nonce.Counter {
+		if cand.nonce() == ntx.Nonce {
 			balance = cand.postBalance + cand.maxSpending()
 		} else {
 			balance = cand.postBalance
@@ -114,7 +114,7 @@ func (ac *accountCache) precheck(logger log.Log, ntx *txtypes.NanoTX) (*list.Ele
 		logger.With().Debug("insufficient balance",
 			ntx.ID,
 			ntx.Principal,
-			log.Uint64("nonce", ntx.Nonce.Counter),
+			log.Uint64("nonce", ntx.Nonce),
 			log.Uint64("cons_balance", balance),
 			log.Uint64("cons_spending", ntx.MaxSpending()))
 		return nil, nil, errInsufficientBalance
@@ -136,7 +136,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, blockSeed []
 
 	if prev == nil { // insert at the first position
 		added = ac.txsByNonce.PushFront(cand)
-	} else if prevCand := prev.Value.(*candidate); prevCand.nonce() < ntx.Nonce.Counter {
+	} else if prevCand := prev.Value.(*candidate); prevCand.nonce() < ntx.Nonce {
 		added = ac.txsByNonce.InsertAfter(cand, prev)
 	} else { // existing nonce
 		if !ntx.Better(prevCand.best, blockSeed) {
@@ -154,14 +154,14 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, blockSeed []
 		logger.With().Debug("better transaction replaced for nonce",
 			log.Stringer("better", ntx.ID),
 			log.Stringer("replaced", replaced.ID),
-			log.Uint64("nonce", ntx.Nonce.Counter),
+			log.Uint64("nonce", ntx.Nonce),
 			log.Uint64("max_spending", ntx.MaxSpending()),
 			log.Uint64("post_balance", cand.postBalance),
 			log.Uint64("avail_balance", ac.availBalance()))
 	} else {
 		logger.With().Debug("new nonce added",
 			ntx.ID,
-			log.Uint64("nonce", ntx.Nonce.Counter),
+			log.Uint64("nonce", ntx.Nonce),
 			log.Uint64("max_spending", ntx.MaxSpending()),
 			log.Uint64("post_balance", cand.postBalance),
 			log.Uint64("avail_balance", ac.availBalance()))
@@ -286,11 +286,11 @@ func findBest(ntxs []*txtypes.NanoTX, balance uint64, blockSeed []byte) *txtypes
 //     if it is better than the best candidate in that nonce group, swap
 //   - nonce not present: add to cache.
 func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time.Time) error {
-	if tx.Nonce.Counter < ac.startNonce {
+	if tx.Nonce < ac.startNonce {
 		logger.With().Warning("nonce too small",
 			tx.ID,
 			log.Uint64("next_nonce", ac.startNonce),
-			log.Uint64("tx_nonce", tx.Nonce.Counter))
+			log.Uint64("tx_nonce", tx.Nonce))
 		return errBadNonce
 	}
 
@@ -380,8 +380,8 @@ func (ac *accountCache) getMempool(logger log.Log) []*txtypes.NanoTX {
 			log.Int("offset", offset),
 			log.Int("size", ac.txsByNonce.Len()),
 			log.Int("added", len(bests)),
-			log.Uint64("from", bests[0].Nonce.Counter),
-			log.Uint64("to", bests[len(bests)-1].Nonce.Counter))
+			log.Uint64("from", bests[0].Nonce),
+			log.Uint64("to", bests[len(bests)-1].Nonce))
 	} else {
 		logger.With().Debug("account has no txs for mempool",
 			log.Int("offset", offset),
@@ -399,14 +399,14 @@ func (ac *accountCache) applyLayer(logger log.Log, db *sql.Database, applied []t
 			if err != nil {
 				logger.With().Error("failed to add result",
 					tx.ID,
-					log.Uint64("nonce", tx.Nonce.Counter),
+					log.Uint64("nonce", tx.Nonce),
 					log.Err(err))
 				return fmt.Errorf("apply %w", err)
 			}
-			if err = transactions.DiscardByAcctNonce(dbtx, tx.ID, tx.Layer, tx.Principal, tx.Nonce.Counter); err != nil {
+			if err = transactions.DiscardByAcctNonce(dbtx, tx.ID, tx.Layer, tx.Principal, tx.Nonce); err != nil {
 				logger.With().Error("failed to discard at nonce",
 					tx.ID,
-					log.Uint64("nonce", tx.Nonce.Counter),
+					log.Uint64("nonce", tx.Nonce),
 					log.Err(err))
 				return fmt.Errorf("apply discard %w", err)
 			}
@@ -470,16 +470,16 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 		if _, ok := byPrincipal[principal]; !ok {
 			byPrincipal[principal] = make(map[uint64][]*txtypes.NanoTX)
 		}
-		if _, ok := byPrincipal[principal][mtx.Nonce.Counter]; !ok {
-			byPrincipal[principal][mtx.Nonce.Counter] = make([]*txtypes.NanoTX, 0, maxTXsPerNonce)
+		if _, ok := byPrincipal[principal][mtx.Nonce]; !ok {
+			byPrincipal[principal][mtx.Nonce] = make([]*txtypes.NanoTX, 0, maxTXsPerNonce)
 		}
-		if len(byPrincipal[principal][mtx.Nonce.Counter]) < maxTXsPerNonce {
-			byPrincipal[principal][mtx.Nonce.Counter] = append(byPrincipal[principal][mtx.Nonce.Counter], txtypes.NewNanoTX(mtx))
+		if len(byPrincipal[principal][mtx.Nonce]) < maxTXsPerNonce {
+			byPrincipal[principal][mtx.Nonce] = append(byPrincipal[principal][mtx.Nonce], txtypes.NewNanoTX(mtx))
 		} else {
 			logger.With().Warning("too many txs in same nonce. ignoring tx",
 				mtx.ID,
 				principal,
-				log.Uint64("nonce", mtx.Nonce.Counter),
+				log.Uint64("nonce", mtx.Nonce),
 				log.Uint64("fee", mtx.Fee()))
 		}
 	}

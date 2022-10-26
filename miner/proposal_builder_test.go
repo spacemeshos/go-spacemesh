@@ -69,7 +69,7 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	tb.Helper()
 
 	raw := wallet.Spend(signer.PrivateKey(), recipient, defaultFee,
-		types.Nonce{Counter: nonce},
+		nonce,
 	)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
@@ -78,7 +78,7 @@ func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing
 	tx.MaxGas = defaultGasLimit
 	tx.MaxSpend = defaultFee
 	tx.GasPrice = 1
-	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Nonce = nonce
 	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return &tx
 }

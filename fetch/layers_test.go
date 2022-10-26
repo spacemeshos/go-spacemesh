@@ -662,7 +662,7 @@ func TestGetProposals(t *testing.T) {
 func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
-		types.Nonce{Counter: nonce},
+		nonce,
 	)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
@@ -671,7 +671,7 @@ func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, n
 	tx.MaxGas = 100
 	tx.MaxSpend = amount
 	tx.GasPrice = price
-	tx.Nonce = types.Nonce{Counter: nonce}
+	tx.Nonce = nonce
 	tx.Principal = types.GenerateAddress(signer.PublicKey().Bytes())
 	return tx
 }

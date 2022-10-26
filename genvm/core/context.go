@@ -176,7 +176,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 
 // Apply is executed if transaction was consumed.
 func (c *Context) Apply(updater AccountUpdater) error {
-	c.PrincipalAccount.NextNonce = c.Header.Nonce.Counter + 1
+	c.PrincipalAccount.NextNonce = c.Header.Nonce + 1
 	if err := updater.Update(c.PrincipalAccount); err != nil {
 		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}

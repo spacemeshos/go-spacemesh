@@ -307,7 +307,7 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 
 func (t *tester) addAccount(account testAccount) {
 	t.accounts = append(t.accounts, account)
-	t.nonces = append(t.nonces, core.Nonce{})
+	t.nonces = append(t.nonces, 0)
 }
 
 func (t *tester) addSingleSig(n int) *tester {
@@ -384,14 +384,14 @@ func (t *tester) applyGenesisWithBalance(amount uint64) *tester {
 
 func (t *tester) nextNonce(i int) core.Nonce {
 	nonce := t.nonces[i]
-	t.nonces[i].Counter++
+	t.nonces[i]++
 	return nonce
 }
 
 func (t *tester) spawnAll() []types.RawTx {
 	var rst []types.RawTx
 	for i := 0; i < len(t.accounts); i++ {
-		if t.nonces[i].Counter != 0 {
+		if t.nonces[i] != 0 {
 			continue
 		}
 		rst = append(rst, t.selfSpawn(i))
@@ -456,7 +456,7 @@ func (t *tester) rewards(all ...reward) []types.AnyReward {
 
 func (t *tester) estimateSpawnGas(principal int) int {
 	return t.accounts[principal].spawnGas() +
-		len(t.accounts[principal].selfSpawn(core.Nonce{}))*int(t.VM.cfg.StorageCostFactor)
+		len(t.accounts[principal].selfSpawn(0))*int(t.VM.cfg.StorageCostFactor)
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
@@ -671,7 +671,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 10, 100},
 					},
 					expected: map[int]change{
-						0:  spent{amount: 100 + defaultGasPrice*ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1})},
+						0:  spent{amount: 100 + defaultGasPrice*ref.estimateSpendGas(0, 10, 100, 1)},
 						1:  same{},
 						10: earned{amount: 100},
 					},
@@ -692,7 +692,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 							change: spent{amount: 100 +
 								defaultGasPrice*
 									(ref.estimateSpawnGas(0)+
-										ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1}))},
+										ref.estimateSpendGas(0, 10, 100, 1))},
 						},
 						10: earned{amount: 100},
 					},
@@ -715,9 +715,9 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						0: spent{amount: 100*3 + defaultGasPrice*
-							(ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1})+
-								ref.estimateSpendGas(0, 11, 100, core.Nonce{Counter: 2})+
-								ref.estimateSpendGas(0, 12, 100, core.Nonce{Counter: 3}))},
+							(ref.estimateSpendGas(0, 10, 100, 1)+
+								ref.estimateSpendGas(0, 11, 100, 2)+
+								ref.estimateSpendGas(0, 12, 100, 3))},
 						10: earned{amount: 100},
 						11: earned{amount: 100},
 						12: earned{amount: 100},
@@ -741,11 +741,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						0: spent{amount: 10000 + defaultGasPrice*
-							ref.estimateSpendGas(0, 10, 10_000, core.Nonce{Counter: 1})},
+							ref.estimateSpendGas(0, 10, 10_000, 1)},
 						10: spawned{
 							template: template,
 							change: earned{amount: 10000 - 100 - defaultGasPrice*(ref.estimateSpawnGas(10)+
-								ref.estimateSpendGas(10, 11, 100, core.Nonce{Counter: 1}))},
+								ref.estimateSpendGas(10, 11, 100, 1))},
 						},
 						11: earned{amount: 100},
 					},
@@ -757,8 +757,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						10: spent{amount: 2*100 + defaultGasPrice*
-							(ref.estimateSpendGas(10, 11, 100, core.Nonce{Counter: 2})+
-								ref.estimateSpendGas(10, 12, 100, core.Nonce{Counter: 3}))},
+							(ref.estimateSpendGas(10, 11, 100, 2)+
+								ref.estimateSpendGas(10, 12, 100, 3))},
 						11: earned{amount: 100},
 						12: earned{amount: 100},
 					},
@@ -781,10 +781,10 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: defaultGasPrice * ref.estimateSpendGas(0, 10, 1000, core.Nonce{Counter: 1}),
+							amount: defaultGasPrice * ref.estimateSpendGas(0, 10, 1000, 1),
 							change: nonce{increased: 1},
 						},
-						1:  spent{amount: 1000 + defaultGasPrice*ref.estimateSpendGas(1, 0, 1000, core.Nonce{Counter: 1})},
+						1:  spent{amount: 1000 + defaultGasPrice*ref.estimateSpendGas(1, 0, 1000, 1)},
 						10: earned{amount: 1000},
 					},
 				},
@@ -795,10 +795,10 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: defaultGasPrice * ref.estimateSpendGas(0, 10, 1000, core.Nonce{Counter: 1}),
+							amount: defaultGasPrice * ref.estimateSpendGas(0, 10, 1000, 1),
 							change: nonce{increased: 1},
 						},
-						1:  spent{amount: 1000 + defaultGasPrice*ref.estimateSpendGas(1, 0, 1000, core.Nonce{Counter: 1})},
+						1:  spent{amount: 1000 + defaultGasPrice*ref.estimateSpendGas(1, 0, 1000, 1)},
 						10: earned{amount: 1000},
 					},
 				},
@@ -818,7 +818,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: defaultGasPrice * ref.estimateSpendGas(0, 0, 1000, core.Nonce{Counter: 1}),
+							amount: defaultGasPrice * ref.estimateSpendGas(0, 0, 1000, 1),
 							change: nonce{increased: 1},
 						},
 					},
@@ -885,7 +885,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64((ref.estimateSpendGas(11, 12, 1, core.Nonce{Counter: 1}) - 1) * defaultGasPrice)},
+						&spendTx{0, 11, uint64((ref.estimateSpendGas(11, 12, 1, 1) - 1) * defaultGasPrice)},
 						// send enough funds to cover spawn, but no spend
 						&spendTx{11, 12, 1},
 					},
@@ -907,10 +907,10 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 12, 100},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0) +
-						ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1})),
+						ref.estimateSpendGas(0, 10, 100, 1)),
 					ineffective: []int{2, 3},
 					expected: map[int]change{
-						0:  spent{amount: 100 + ref.estimateSpawnGas(0) + ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1})},
+						0:  spent{amount: 100 + ref.estimateSpawnGas(0) + ref.estimateSpendGas(0, 10, 100, 1)},
 						10: earned{amount: 100},
 						11: same{},
 						12: same{},
@@ -929,14 +929,14 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0) +
-						ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1}) +
+						ref.estimateSpendGas(0, 10, 100, 1) +
 						ref.estimateSpawnGas(1)),
 					failed:      map[int]error{2: core.ErrNoBalance},
 					ineffective: []int{3},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(1) - 1 +
 							ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 1})},
+							ref.estimateSpendGas(0, 10, 100, 1)},
 						10: nonce{increased: 1},
 						11: same{},
 					},
@@ -949,8 +949,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						spendTx{0, 11, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 1}),
+						spendTx{0, 11, 100}.withNonce(2),
+						spendTx{0, 10, 100}.withNonce(1),
 					},
 					ineffective: []int{2},
 					headers: map[int]struct{}{
@@ -959,7 +959,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0)+ref.estimateSpendGas(0, 11, 100, core.Nonce{Counter: 2}))},
+							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0)+ref.estimateSpendGas(0, 11, 100, 2))},
 						},
 						10: same{},
 						11: earned{amount: 100},
@@ -967,12 +967,12 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 3}),
-						spendTx{0, 12, 100}.withNonce(core.Nonce{Counter: 6}),
+						spendTx{0, 10, 100}.withNonce(3),
+						spendTx{0, 12, 100}.withNonce(6),
 					},
 					expected: map[int]change{
-						0: spent{amount: 2*100 + defaultGasPrice*(ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 3})+
-							ref.estimateSpendGas(0, 10, 100, core.Nonce{Counter: 6}))},
+						0: spent{amount: 2*100 + defaultGasPrice*(ref.estimateSpendGas(0, 10, 100, 3)+
+							ref.estimateSpendGas(0, 10, 100, 6))},
 						10: earned{amount: 100},
 						12: earned{amount: 100},
 					},
@@ -1030,13 +1030,13 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 5}),
+						spendTx{0, 10, 100}.withNonce(5),
 					},
 				},
 				{
 					txs: []testTx{
-						spendTx{0, 10, 100}.withNonce(core.Nonce{Counter: 2}),
-						spendTx{0, 11, 100}.withNonce(core.Nonce{Counter: 3}),
+						spendTx{0, 10, 100}.withNonce(2),
+						spendTx{0, 11, 100}.withNonce(3),
 					},
 					ineffective: []int{0, 1},
 					headers:     map[int]struct{}{0: {}, 1: {}},
@@ -1069,7 +1069,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11) + ref.estimateSpendGas(11, 12, 1_000, core.Nonce{Counter: 1}))},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1_000},
 					},
@@ -1081,11 +1081,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64(ref.estimateSpendGas(11, 12, 1_000, core.Nonce{Counter: 2})) + 1_000},
+						&spendTx{0, 11, uint64(ref.estimateSpendGas(11, 12, 1_000, 2)) + 1_000},
 						&spendTx{11, 12, 1_000},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateSpendGas(11, 12, 1_000, core.Nonce{Counter: 2})*2 + 1_000, change: nonce{increased: 1}},
+						0:  spent{amount: ref.estimateSpendGas(11, 12, 1_000, 2)*2 + 1_000, change: nonce{increased: 1}},
 						11: nonce{increased: 1},
 						12: earned{amount: 1_000},
 					},
@@ -1105,7 +1105,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(11) - 1 +
 							ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1})},
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1)},
 						11: nonce{increased: 1},
 					},
 				},
@@ -1116,7 +1116,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(11) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11), core.Nonce{Counter: 2})},
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11), 2)},
 						11: spawned{template: template, change: nonce{increased: 1}},
 					},
 				},
@@ -1155,18 +1155,18 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{11},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0) +
-						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1}) +
+						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
 						ref.estimateSpawnGas(11)),
 					failed:  map[int]error{2: core.ErrNoBalance},
 					rewards: []reward{{address: 20, share: 1}},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1}) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
 							ref.estimateSpawnGas(11) - 1},
 						11: nonce{increased: 1},
 						// fees from every transaction (including failed) + testBaseReward
 						20: earned{amount: ref.estimateSpawnGas(0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, core.Nonce{Counter: 1}) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11)-1, 1) +
 							ref.estimateSpawnGas(11) - 1 +
 							int(rewards.TotalSubsidyAtLayer(0))},
 					},
@@ -1201,7 +1201,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					txs: []testTx{
 						&selfSpawnTx{0},
 						&spawnTx{0, 11},
-						&spendTx{0, 11, 200 + uint64(ref.estimateSpendGas(11, 12, 200, core.Nonce{}))},
+						&spendTx{0, 11, 200 + uint64(ref.estimateSpendGas(11, 12, 200, 0))},
 					},
 					expected: map[int]change{
 						11: spawned{template: template},
@@ -1213,7 +1213,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					expected: map[int]change{
 						11: spent{amount: 200 +
-							ref.estimateSpendGas(11, 12, 200, core.Nonce{})},
+							ref.estimateSpendGas(11, 12, 200, 0)},
 						12: earned{amount: 200},
 					},
 				},
@@ -1456,9 +1456,9 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				Method:          1,
 				TemplateAddress: template,
 				GasPrice:        1,
-				Nonce:           core.Nonce{Counter: 1},
+				Nonce:           1,
 				MaxSpend:        100,
-				MaxGas:          uint64(tt.estimateSpendGas(0, 1, 100, core.Nonce{Counter: 1})),
+				MaxGas:          uint64(tt.estimateSpendGas(0, 1, 100, 1)),
 			},
 		},
 		{
@@ -1532,7 +1532,7 @@ func testSpawnOther(t *testing.T, genTester func(t *testing.T) *tester) {
 					},
 					expected: map[int]change{
 						i: earned{amount: 1000},
-						j: spent{amount: 1000 + ref.estimateSpendGas(j, i, 1000, core.Nonce{})},
+						j: spent{amount: 1000 + ref.estimateSpendGas(j, i, 1000, 0)},
 					},
 				},
 			},
@@ -1641,7 +1641,7 @@ func TestVestingWithVault(t *testing.T) {
 						&drainVault{0, 20, 11, 500},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateDrainGas(0, 20, 11, 500, core.Nonce{Counter: 2})},
+						0:  spent{amount: ref.estimateDrainGas(0, 20, 11, 500, 2)},
 						20: spent{amount: 500},
 						11: earned{amount: 500},
 					},
@@ -1677,7 +1677,7 @@ func TestVestingWithVault(t *testing.T) {
 					expected: map[int]change{
 						0: same{},
 						1: spent{
-							amount: ref.estimateDrainGas(1, 20, 11, 100, core.Nonce{Counter: 1}),
+							amount: ref.estimateDrainGas(1, 20, 11, 100, 1),
 							change: nonce{increased: 1},
 						},
 						11: same{},
@@ -1724,9 +1724,9 @@ func TestVestingWithVault(t *testing.T) {
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: ref.estimateDrainGas(0, 20, 11, 1001, core.Nonce{Counter: 3}) +
-								ref.estimateDrainGas(0, 20, 11, 1000, core.Nonce{Counter: 4}) +
-								ref.estimateDrainGas(0, 20, 11, 1000, core.Nonce{Counter: 5}),
+							amount: ref.estimateDrainGas(0, 20, 11, 1001, 3) +
+								ref.estimateDrainGas(0, 20, 11, 1000, 4) +
+								ref.estimateDrainGas(0, 20, 11, 1000, 5),
 						},
 						11: earned{amount: 1000},
 						20: spent{amount: 1000},
@@ -1747,8 +1747,8 @@ func TestVestingWithVault(t *testing.T) {
 						0: vault.ErrAmountNotAvailable,
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateDrainGas(0, 20, 10, 10000, core.Nonce{Counter: 5}) +
-							ref.estimateDrainGas(0, 20, 10, 5000, core.Nonce{Counter: 6})},
+						0: spent{amount: ref.estimateDrainGas(0, 20, 10, 10000, 5) +
+							ref.estimateDrainGas(0, 20, 10, 5000, 6)},
 						10: earned{amount: 5000},
 						20: spent{amount: 5000},
 					},
@@ -1769,8 +1769,8 @@ func TestVestingWithVault(t *testing.T) {
 						0: vault.ErrAmountNotAvailable,
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateDrainGas(0, 20, 9, 5001, core.Nonce{Counter: 7}) +
-							ref.estimateDrainGas(0, 20, 9, 5000, core.Nonce{Counter: 8})},
+						0: spent{amount: ref.estimateDrainGas(0, 20, 9, 5001, 7) +
+							ref.estimateDrainGas(0, 20, 9, 5000, 8)},
 						9:  earned{amount: 5000},
 						20: spent{amount: 5000},
 					},

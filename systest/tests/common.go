@@ -216,7 +216,7 @@ func getAppliedBalance(ctx context.Context, client *cluster.NodeClient, address 
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx, wallet.SelfSpawn(cluster.Private(account), types.Nonce{}), client)
+	_, err := submitTransaction(ctx, wallet.SelfSpawn(cluster.Private(account), 0), client)
 	return err
 }
 
@@ -226,7 +226,7 @@ func submitSpend(ctx context.Context, pk ed25519.PrivateKey, receiver types.Addr
 	_, err := submitTransaction(ctx,
 		wallet.Spend(
 			signing.PrivateKey(pk), receiver, amount,
-			types.Nonce{Counter: nonce},
+			nonce,
 		),
 		client)
 	return err

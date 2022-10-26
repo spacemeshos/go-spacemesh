@@ -743,7 +743,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), types.Nonce{}))
+	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), 0))
 
 	stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
