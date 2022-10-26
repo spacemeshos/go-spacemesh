@@ -601,53 +601,48 @@ func TestBallot_NotEligible(t *testing.T) {
 }
 
 func TestBallot_InvalidVote(t *testing.T) {
-	t.Run("support", func(t *testing.T) {
-		th := createTestHandlerNoopDecoder(t)
-		lid := types.NewLayerID(100)
-		supported := []*types.Block{
-			types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
-			types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
-		}
-		b := createBallot(t,
-			withLayer(lid),
-			withSupportBlocks(supported...),
-		)
-		for _, blk := range supported {
-			blk.TickHeight = 100
-			require.NoError(t, blocks.Add(th.cdb, blk))
-		}
-		data := encodeBallot(t, b)
-		th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-		th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		th.mf.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidVote)
-		checkIdentity(t, th.cdb, b, false)
-	})
-	t.Run("against", func(t *testing.T) {
-		th := createTestHandlerNoopDecoder(t)
-		lid := types.NewLayerID(100)
-		against := []*types.Block{
-			types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
-			types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
-		}
-		b := createBallot(t,
-			withLayer(lid),
-			withSupportBlocks(),
-			withAgainstBlocks(against...),
-		)
-		for _, blk := range against {
-			blk.TickHeight = 100
-			require.NoError(t, blocks.Add(th.cdb, blk))
-		}
-		data := encodeBallot(t, b)
-		th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-		th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		th.mf.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidVote)
-		checkIdentity(t, th.cdb, b, false)
-	})
+	lid := types.NewLayerID(100)
+	blks := []*types.Block{
+		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
+		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
+	}
+	for _, tc := range []struct {
+		desc string
+		opts []createBallotOpt
+	}{
+		{
+			desc: "support",
+			opts: []createBallotOpt{
+				withLayer(lid),
+				withSupportBlocks(blks...),
+			},
+		},
+		{
+			desc: "against",
+			opts: []createBallotOpt{
+				withLayer(lid),
+				withSupportBlocks(),
+				withAgainstBlocks(blks...),
+			},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			th := createTestHandlerNoopDecoder(t)
+			for i := range blks {
+				// don't overwrite values used for test cases
+				blk := *blks[i]
+				blk.TickHeight = 100
+				require.NoError(t, blocks.Add(th.cdb, &blk))
+			}
+			b := createBallot(t, tc.opts...)
+			data := encodeBallot(t, b)
+			th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
+			th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			th.mf.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidVote)
+		})
+	}
 }
 
 func TestBallot_Success(t *testing.T) {
