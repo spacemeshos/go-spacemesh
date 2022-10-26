@@ -25,6 +25,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -42,6 +43,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -2786,4 +2788,38 @@ func TestEventsReceived(t *testing.T) {
 		[]types.Transaction{*globalTx}, rewards)
 
 	wg.Wait()
+}
+
+func TestVMAccountUpdates(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	db := sql.InMemory()
+	svm := vm.New(db)
+	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+
+	keys := make([]ed25519.PrivateKey, 10)
+	accounts := make([]types.Account, len(keys))
+	for i := range keys {
+		pub, pk, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		keys[i] = pk
+		accounts[i] = types.Account{
+			Address: wallet.Address(pub),
+			Balance: 100_000_000,
+		}
+	}
+	require.NoError(t, svm.ApplyGenesis(accounts))
+	spawns := []types.Transaction{}
+	for _, pk := range keys {
+		spawns = append(spawns, types.Transaction{
+			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, core.Nonce{})),
+		})
+	}
+	lid := types.GetEffectiveGenesis().Add(1)
+	_, _, err := svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
 }
