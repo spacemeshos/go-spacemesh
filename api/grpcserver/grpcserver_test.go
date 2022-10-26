@@ -2012,7 +2012,7 @@ func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.GasPrice, tx.GasPrice)
 	require.Equal(t, globalTx.MaxGas, tx.MaxGas)
 	require.Equal(t, globalTx.MaxSpend, tx.MaxSpend)
-	require.Equal(t, globalTx.Nonce, tx.Nonce)
+	require.Equal(t, globalTx.Nonce, tx.Nonce.Counter)
 }
 
 func checkLayer(t *testing.T, l *pb.Layer) {
