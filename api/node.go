@@ -13,9 +13,6 @@ import (
 // Publisher interface for publishing messages.
 type Publisher = pubsub.Publisher
 
-// PostSetupAPI is an alias to PostSetupProvider.
-type PostSetupAPI = activation.PostSetupProvider
-
 // SmeshingAPI is an alias to SmeshingProvider.
 type SmeshingAPI = activation.SmeshingProvider
 
@@ -75,5 +72,5 @@ type PeerCounter interface {
 
 // ActivationAPI is an API for activation module.
 type ActivationAPI interface {
-	UpdatePoETServer(context.Context, string) error
+	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }

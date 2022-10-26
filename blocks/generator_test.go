@@ -162,7 +162,7 @@ func createProposal(t *testing.T, epochData *types.EpochData, lid types.LayerID,
 			TxIDs: txIDs,
 		},
 	}
-	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
 	return p

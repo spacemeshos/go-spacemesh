@@ -11,7 +11,6 @@ CREATE TABLE ballots
 (
     id        CHAR(20) PRIMARY KEY,
     layer     INT NOT NULL,
-    signature VARCHAR,
     pubkey    VARCHAR,
     ballot    BLOB
 ) WITHOUT ROWID;
@@ -132,12 +131,11 @@ CREATE TABLE poets
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 
-CREATE TABLE niposts
+CREATE TABLE kvstore
 (
     id VARCHAR PRIMARY KEY,
     value BLOB
 ) WITHOUT ROWID;
-
 
 CREATE TABLE accounts
 (

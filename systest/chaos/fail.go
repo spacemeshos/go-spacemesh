@@ -3,7 +3,7 @@ package chaos
 import (
 	"context"
 
-	chaosv1alpha1 "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -14,13 +14,13 @@ type Teardown func(context.Context) error
 
 // Fail the list of pods and prevents them from respawning until teardown is called.
 func Fail(cctx *testcontext.Context, name string, pods ...string) (Teardown, error) {
-	fail := chaosv1alpha1.PodChaos{}
+	fail := chaos.PodChaos{}
 	fail.Name = name
 	fail.Namespace = cctx.Namespace
 
-	fail.Spec.Action = chaosv1alpha1.PodFailureAction
-	fail.Spec.Mode = chaosv1alpha1.AllMode
-	fail.Spec.Selector = chaosv1alpha1.PodSelectorSpec{
+	fail.Spec.Action = chaos.PodFailureAction
+	fail.Spec.Mode = chaos.AllMode
+	fail.Spec.Selector = chaos.PodSelectorSpec{
 		Pods: map[string][]string{
 			cctx.Namespace: pods,
 		},

@@ -18,55 +18,54 @@ import (
 
 func TestFullBallotFilter(t *testing.T) {
 	for _, tc := range []struct {
-		desc             string
-		badBeaconBallots map[types.BallotID]struct{}
-		distance         uint32
-		ballot           types.BallotID
-		ballotlid        types.LayerID
-		last             types.LayerID
-		expect           bool
+		desc     string
+		distance uint32
+		ballot   ballotInfo
+		last     types.LayerID
+		expect   bool
 	}{
 		{
-			desc:             "Good",
-			badBeaconBallots: map[types.BallotID]struct{}{},
-			ballot:           types.BallotID{1},
-			expect:           false,
+			desc: "Good",
+			ballot: ballotInfo{
+				id: types.BallotID{1},
+			},
+			expect: false,
 		},
 		{
 			desc: "BadFromRecent",
-			badBeaconBallots: map[types.BallotID]struct{}{
-				{1}: {},
+			ballot: ballotInfo{
+				id:    types.BallotID{1},
+				layer: types.NewLayerID(10),
+				conditions: conditions{
+					badBeacon: true,
+				},
 			},
-			ballot:    types.BallotID{1},
-			ballotlid: types.NewLayerID(10),
-			last:      types.NewLayerID(11),
-			distance:  2,
-			expect:    true,
+			last:     types.NewLayerID(11),
+			distance: 2,
+			expect:   true,
 		},
 		{
 			desc: "BadFromOld",
-			badBeaconBallots: map[types.BallotID]struct{}{
-				{1}: {},
+			ballot: ballotInfo{
+				id:    types.BallotID{1},
+				layer: types.NewLayerID(8),
+				conditions: conditions{
+					badBeacon: true,
+				},
 			},
-			ballot:    types.BallotID{1},
-			ballotlid: types.NewLayerID(8),
-			last:      types.NewLayerID(11),
-			distance:  2,
-			expect:    false,
+			last:     types.NewLayerID(11),
+			distance: 2,
+			expect:   false,
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			state := newCommonState()
-			state.badBeaconBallots = tc.badBeaconBallots
+			state := newState()
 			state.last = tc.last
-
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
-
-			f := newFullTortoise(config, &state)
-
-			require.Equal(t, tc.expect, f.shouldBeDelayed(tc.ballot, tc.ballotlid))
+			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(
+				logtest.New(t), &tc.ballot))
 		})
 	}
 }
@@ -343,6 +342,9 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise := defaultAlgorithm(t, cdb)
 			tortoise.trtl.cdb = cdb
 			consensus := tortoise.trtl
+			consensus.ballotRefs[types.EmptyBallotID] = &ballotInfo{
+				layer: genesis,
+			}
 
 			var blocks [][]types.Block
 			for i, layer := range tc.layerBlocks {
@@ -356,7 +358,9 @@ func TestFullCountVotes(t *testing.T) {
 					b.Initialize()
 					layerBlocks = append(layerBlocks, b)
 				}
-				consensus.referenceHeight[lid.GetEpoch()] = localHeight
+				consensus.epochs[lid.GetEpoch()] = &epochInfo{
+					height: localHeight,
+				}
 				for _, block := range layerBlocks {
 					consensus.onBlock(lid, &block)
 				}
@@ -383,7 +387,7 @@ func TestFullCountVotes(t *testing.T) {
 						}
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
-					ballot.Signature = signer.Sign(ballot.Bytes())
+					ballot.Signature = signer.Sign(ballot.SignedBytes())
 					require.NoError(t, ballot.Initialize())
 					layerBallots = append(layerBallots, ballot)
 				}
@@ -399,150 +403,150 @@ func TestFullCountVotes(t *testing.T) {
 			}
 			block := blocks[tc.target[0]][tc.target[1]]
 			var target *blockInfo
-			for _, info := range consensus.blocks[block.LayerIndex] {
+			for _, info := range consensus.layer(block.LayerIndex).blocks {
 				if info.id == block.ID() {
-					target = &info
+					target = info
 				}
 			}
 			require.NotNil(t, target)
-			require.Equal(t, tc.expect.String(), target.weight.String())
+			require.Equal(t, tc.expect.String(), target.margin.String())
 		})
 	}
 }
 
 func TestFullVerify(t *testing.T) {
-	const emptyThreshold = 20
+	epoch := types.EpochID(1)
+	target := epoch.FirstLayer().Sub(1)
+	last := target.Add(types.GetLayersPerEpoch())
+	epochs := map[types.EpochID]*epochInfo{
+		1: {weight: 10},
+	}
+	positive := 7
+	negative := -7
+	neutral := 3
 	type testBlock struct {
 		height, margin int
 	}
 	for _, tc := range []struct {
-		desc      string
-		blocks    []testBlock
-		threshold uint64
-		validity  []sign
+		desc   string
+		blocks []testBlock
+		empty  int
+
+		validity []sign
 	}{
 		{
-			desc:      "support",
-			blocks:    []testBlock{{margin: 11}},
-			threshold: 10,
-			validity:  []sign{support},
+			desc:     "support",
+			blocks:   []testBlock{{margin: positive}},
+			validity: []sign{support},
 		},
 		{
-			desc:      "abstain",
-			blocks:    []testBlock{{margin: 10}},
-			threshold: emptyThreshold + 1,
+			desc:   "abstain",
+			blocks: []testBlock{{margin: neutral}},
 		},
 		{
 			desc: "abstain before support",
 			blocks: []testBlock{
-				{margin: 10, height: 10},
-				{margin: 11, height: 20},
+				{margin: neutral, height: 10},
+				{margin: positive, height: 20},
 			},
-			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "abstain after support",
 			blocks: []testBlock{
-				{margin: 10, height: 30},
-				{margin: 11, height: 20},
+				{margin: neutral, height: 30},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{against, support},
+			validity: []sign{against, support},
 		},
 		{
 			desc: "abstained same height",
 			blocks: []testBlock{
-				{margin: 11, height: 20},
-				{margin: 10, height: 20},
+				{margin: positive, height: 20},
+				{margin: neutral, height: 20},
 			},
-			threshold: emptyThreshold + 1,
 		},
 		{
 			desc: "support after against",
 			blocks: []testBlock{
-				{margin: -11, height: 10},
-				{margin: 11, height: 20},
+				{margin: negative, height: 10},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{against, support},
+			validity: []sign{against, support},
 		},
 		{
 			desc: "only against",
 			blocks: []testBlock{
-				{margin: -11, height: 10},
-				{margin: -11, height: 20},
+				{margin: negative, height: 10},
+				{margin: negative, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{against, against},
+			validity: []sign{against, against},
 		},
 		{
 			desc: "support same height",
 			blocks: []testBlock{
-				{margin: 11, height: 10},
-				{margin: 11, height: 10},
+				{margin: positive, height: 10},
+				{margin: positive, height: 10},
 			},
-			threshold: 10,
-			validity:  []sign{support, support},
+			validity: []sign{support, support},
 		},
 		{
 			desc: "support different height",
 			blocks: []testBlock{
-				{margin: 11, height: 10},
-				{margin: 11, height: 20},
+				{margin: positive, height: 10},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{support, support},
+			validity: []sign{support, support},
 		},
 		{
 			desc: "support abstain support",
 			blocks: []testBlock{
-				{margin: 11, height: 10},
-				{margin: 10, height: 11},
-				{margin: 11, height: 20},
+				{margin: positive, height: 10},
+				{margin: neutral, height: 11},
+				{margin: positive, height: 20},
 			},
-			threshold: 10,
-			validity:  []sign{support, against, support},
+			validity: []sign{support, against, support},
 		},
 		{
 			desc: "against abstain support",
 			blocks: []testBlock{
-				{margin: -11, height: 10},
-				{margin: 10, height: 10},
-				{margin: 11, height: 10},
+				{margin: negative, height: 10},
+				{margin: neutral, height: 10},
+				{margin: positive, height: 10},
 			},
-			threshold: emptyThreshold + 1,
 		},
 		{
-			desc:      "empty layer",
-			threshold: 10,
-			validity:  []sign{},
+			desc:     "empty layer",
+			empty:    positive,
+			validity: []sign{},
 		},
 		{
-			desc:      "empty layer not verified",
-			threshold: emptyThreshold + 1,
+			desc:  "empty layer not verified",
+			empty: neutral,
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			lid := types.LayerID{}
-			full := newFullTortoise(Config{}, &commonState{
-				blocks:   map[types.LayerID][]blockInfo{},
-				validity: votes{},
-			})
-			full.globalThreshold = util.WeightFromUint64(tc.threshold)
-			full.empty[lid] = util.WeightFromInt64(int64(emptyThreshold))
+			full := newFullTortoise(Config{}, newState())
+			full.epochs = epochs
+			full.last = last
+			full.processed = last
+
+			layer := full.layer(target)
+			layer.empty = util.WeightFromInt64(int64(tc.empty))
 			for i, block := range tc.blocks {
-				id := types.BlockID{uint8(i) + 1}
-				full.blocks[lid] = append(full.blocks[lid], blockInfo{
-					id:     id,
+				block := &blockInfo{
+					id:     types.BlockID{uint8(i) + 1},
+					layer:  target,
 					height: uint64(block.height),
-					weight: util.WeightFromInt64(int64(block.margin)),
-				})
+					margin: util.WeightFromInt64(int64(block.margin)),
+				}
+				layer.blocks = append(layer.blocks, block)
+				full.state.blockRefs[block.id] = block
 			}
-			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), lid))
+			require.Equal(t, tc.validity != nil, full.verify(logtest.New(t), target))
 			if tc.validity != nil {
 				for i, expect := range tc.validity {
 					id := types.BlockID{uint8(i) + 1}
-					require.Equal(t, expect, full.validity[id])
+					require.Equal(t, expect, full.state.blockRefs[id].validity)
 				}
 			}
 		})

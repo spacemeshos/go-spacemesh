@@ -2,14 +2,12 @@ package types
 
 import (
 	"math/rand"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // RandomBytes generates random data in bytes for testing.
 func RandomBytes(size int) []byte {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, size)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -50,7 +48,6 @@ func RandomTXSet(size int) []TransactionID {
 
 // RandomATXID generates a random ATXID for testing.
 func RandomATXID() ATXID {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, ATXIDSize)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -61,7 +58,6 @@ func RandomATXID() ATXID {
 
 // RandomBallotID generates a random BallotID for testing.
 func RandomBallotID() BallotID {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, BallotIDSize)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -72,7 +68,6 @@ func RandomBallotID() BallotID {
 
 // RandomProposalID generates a random ProposalID for testing.
 func RandomProposalID() ProposalID {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, ProposalIDSize)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -88,7 +83,6 @@ func RandomBlockID() BlockID {
 
 // RandomTransactionID generates a random TransactionID for testing.
 func RandomTransactionID() TransactionID {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, TransactionIDSize)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -101,13 +95,13 @@ func RandomTransactionID() TransactionID {
 func RandomBallot() *Ballot {
 	return &Ballot{
 		InnerBallot: InnerBallot{
-			AtxID: RandomATXID(),
-			Votes: Votes{
-				Base:    RandomBallotID(),
-				Support: []BlockID{RandomBlockID(), RandomBlockID()},
-			},
+			AtxID:      RandomATXID(),
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
+		},
+		Votes: Votes{
+			Base:    RandomBallotID(),
+			Support: []BlockID{RandomBlockID(), RandomBlockID()},
 		},
 	}
 }
@@ -117,7 +111,7 @@ func GenLayerBallot(layerID LayerID) *Ballot {
 	b := RandomBallot()
 	b.LayerIndex = layerID
 	signer := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.Bytes())
+	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()
 	return b
 }
@@ -152,7 +146,7 @@ func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
 		},
 	}
 	signer := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.Initialize()
 	return p

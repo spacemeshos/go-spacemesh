@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -16,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -29,12 +29,6 @@ func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
 	return l < 2
-}
-
-// NeedsGoldenPositioningATX returns true if ATXs in this epoch require positioning ATX to be equal to the Golden ATX.
-// All ATXs in epoch 1 must have the Golden ATX as positioning ATX.
-func (l EpochID) NeedsGoldenPositioningATX() bool {
-	return l == 1
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
@@ -106,10 +100,13 @@ var EmptyATXID = &ATXID{}
 type NIPostChallenge struct {
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
-	Sequence           uint64
-	PrevATXID          ATXID
-	PubLayerID         LayerID
-	PositioningATX     ATXID
+	Sequence       uint64
+	PrevATXID      ATXID
+	PubLayerID     LayerID
+	PositioningATX ATXID
+
+	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
+	CommitmentATX      *ATXID
 	InitialPostIndices []byte
 }
 
@@ -169,12 +166,12 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint32, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			NIPostChallenge: challenge,
 			Coinbase:        coinbase,
-			NumUnits:        uint32(numUnits),
+			NumUnits:        numUnits,
 
 			NIPost:      nipost,
 			InitialPost: initialPost,
@@ -201,6 +198,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
+	if atx.CommitmentATX != nil {
+		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
+	}
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("pub_layer_id", atx.PubLayerID.Value)
 	encoder.AddUint32("epoch", uint32(atx.PublishEpoch()))
@@ -225,7 +225,7 @@ func (atx *ActivationTx) CalcAndSetNodeID() error {
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
-	pub, err := ed25519.ExtractPublicKey(b, atx.Sig)
+	pub, err := signing.ExtractPublicKey(b, atx.Sig)
 	if err != nil {
 		return fmt.Errorf("failed to derive NodeID: %w", err)
 	}
@@ -297,6 +297,8 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	return vAtx, nil
 }
 
+type PoetProofRef []byte
+
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
@@ -314,7 +316,7 @@ type PoetProofMessage struct {
 }
 
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
-func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
+func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",

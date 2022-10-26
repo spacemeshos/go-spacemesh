@@ -10,8 +10,8 @@ import (
 
 // Tortoise is an interface provided by tortoise implementation.
 type Tortoise interface {
-	OnBallot(*types.Ballot)
 	OnBlock(*types.Block)
 	OnHareOutput(types.LayerID, types.BlockID)
-	HandleIncomingLayer(context.Context, types.LayerID) types.LayerID
+	TallyVotes(context.Context, types.LayerID)
+	LatestComplete() types.LayerID
 }

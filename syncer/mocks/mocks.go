@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MocklayerTicker is a mock of layerTicker interface.
@@ -50,31 +51,80 @@ func (mr *MocklayerTickerMockRecorder) GetCurrentLayer() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerTicker)(nil).GetCurrentLayer))
 }
 
-// MocklayerFetcher is a mock of layerFetcher interface.
-type MocklayerFetcher struct {
+// MockmeshProvider is a mock of meshProvider interface.
+type MockmeshProvider struct {
 	ctrl     *gomock.Controller
-	recorder *MocklayerFetcherMockRecorder
+	recorder *MockmeshProviderMockRecorder
 }
 
-// MocklayerFetcherMockRecorder is the mock recorder for MocklayerFetcher.
-type MocklayerFetcherMockRecorder struct {
-	mock *MocklayerFetcher
+// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
+type MockmeshProviderMockRecorder struct {
+	mock *MockmeshProvider
 }
 
-// NewMocklayerFetcher creates a new mock instance.
-func NewMocklayerFetcher(ctrl *gomock.Controller) *MocklayerFetcher {
-	mock := &MocklayerFetcher{ctrl: ctrl}
-	mock.recorder = &MocklayerFetcherMockRecorder{mock}
+// NewMockmeshProvider creates a new mock instance.
+func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
+	mock := &MockmeshProvider{ctrl: ctrl}
+	mock.recorder = &MockmeshProviderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocklayerFetcher) EXPECT() *MocklayerFetcherMockRecorder {
+func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 	return m.recorder
 }
 
+// SetZeroBlockLayer mocks base method.
+func (m *MockmeshProvider) SetZeroBlockLayer(arg0 context.Context, arg1 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetZeroBlockLayer", arg0, arg1)
+}
+
+// SetZeroBlockLayer indicates an expected call of SetZeroBlockLayer.
+func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0, arg1)
+}
+
+// MockfetchLogic is a mock of fetchLogic interface.
+type MockfetchLogic struct {
+	ctrl     *gomock.Controller
+	recorder *MockfetchLogicMockRecorder
+}
+
+// MockfetchLogicMockRecorder is the mock recorder for MockfetchLogic.
+type MockfetchLogicMockRecorder struct {
+	mock *MockfetchLogic
+}
+
+// NewMockfetchLogic creates a new mock instance.
+func NewMockfetchLogic(ctrl *gomock.Controller) *MockfetchLogic {
+	mock := &MockfetchLogic{ctrl: ctrl}
+	mock.recorder = &MockfetchLogicMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockfetchLogic) EXPECT() *MockfetchLogicMockRecorder {
+	return m.recorder
+}
+
+// GetBlocks mocks base method.
+func (m *MockfetchLogic) GetBlocks(arg0 context.Context, arg1 []types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlocks", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetBlocks indicates an expected call of GetBlocks.
+func (mr *MockfetchLogicMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockfetchLogic)(nil).GetBlocks), arg0, arg1)
+}
+
 // GetEpochATXs mocks base method.
-func (m *MocklayerFetcher) GetEpochATXs(arg0 context.Context, arg1 types.EpochID) error {
+func (m *MockfetchLogic) GetEpochATXs(arg0 context.Context, arg1 types.EpochID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetEpochATXs", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -82,37 +132,186 @@ func (m *MocklayerFetcher) GetEpochATXs(arg0 context.Context, arg1 types.EpochID
 }
 
 // GetEpochATXs indicates an expected call of GetEpochATXs.
-func (mr *MocklayerFetcherMockRecorder) GetEpochATXs(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockfetchLogicMockRecorder) GetEpochATXs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MocklayerFetcher)(nil).GetEpochATXs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MockfetchLogic)(nil).GetEpochATXs), arg0, arg1)
 }
 
 // PollLayerData mocks base method.
-func (m *MocklayerFetcher) PollLayerData(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
+func (m *MockfetchLogic) PollLayerData(arg0 context.Context, arg1 types.LayerID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PollLayerData", arg0, arg1)
-	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PollLayerData indicates an expected call of PollLayerData.
-func (mr *MocklayerFetcherMockRecorder) PollLayerData(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockfetchLogicMockRecorder) PollLayerData(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerData", reflect.TypeOf((*MocklayerFetcher)(nil).PollLayerData), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerData", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerData), arg0, arg1)
 }
 
 // PollLayerOpinions mocks base method.
-func (m *MocklayerFetcher) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID) chan fetch.LayerPromiseResult {
+func (m *MockfetchLogic) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID) ([]*fetch.LayerOpinion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1)
-	ret0, _ := ret[0].(chan fetch.LayerPromiseResult)
-	return ret0
+	ret0, _ := ret[0].([]*fetch.LayerOpinion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // PollLayerOpinions indicates an expected call of PollLayerOpinions.
-func (mr *MocklayerFetcherMockRecorder) PollLayerOpinions(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockfetchLogicMockRecorder) PollLayerOpinions(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MocklayerFetcher)(nil).PollLayerOpinions), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions), arg0, arg1)
+}
+
+// Mockfetcher is a mock of fetcher interface.
+type Mockfetcher struct {
+	ctrl     *gomock.Controller
+	recorder *MockfetcherMockRecorder
+}
+
+// MockfetcherMockRecorder is the mock recorder for Mockfetcher.
+type MockfetcherMockRecorder struct {
+	mock *Mockfetcher
+}
+
+// NewMockfetcher creates a new mock instance.
+func NewMockfetcher(ctrl *gomock.Controller) *Mockfetcher {
+	mock := &Mockfetcher{ctrl: ctrl}
+	mock.recorder = &MockfetcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockfetcher) EXPECT() *MockfetcherMockRecorder {
+	return m.recorder
+}
+
+// GetAtxs mocks base method.
+func (m *Mockfetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetAtxs indicates an expected call of GetAtxs.
+func (mr *MockfetcherMockRecorder) GetAtxs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*Mockfetcher)(nil).GetAtxs), arg0, arg1)
+}
+
+// GetBallots mocks base method.
+func (m *Mockfetcher) GetBallots(arg0 context.Context, arg1 []types.BallotID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallots", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetBallots indicates an expected call of GetBallots.
+func (mr *MockfetcherMockRecorder) GetBallots(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*Mockfetcher)(nil).GetBallots), arg0, arg1)
+}
+
+// GetBlocks mocks base method.
+func (m *Mockfetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlocks", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetBlocks indicates an expected call of GetBlocks.
+func (mr *MockfetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*Mockfetcher)(nil).GetBlocks), arg0, arg1)
+}
+
+// GetEpochATXIDs mocks base method.
+func (m *Mockfetcher) GetEpochATXIDs(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID, arg3 func([]byte), arg4 func(error)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEpochATXIDs", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetEpochATXIDs indicates an expected call of GetEpochATXIDs.
+func (mr *MockfetcherMockRecorder) GetEpochATXIDs(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXIDs", reflect.TypeOf((*Mockfetcher)(nil).GetEpochATXIDs), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetLayerData mocks base method.
+func (m *Mockfetcher) GetLayerData(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerData", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerData indicates an expected call of GetLayerData.
+func (mr *MockfetcherMockRecorder) GetLayerData(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*Mockfetcher)(nil).GetLayerData), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetLayerOpinions mocks base method.
+func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerOpinions indicates an expected call of GetLayerOpinions.
+func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetPeers mocks base method.
+func (m *Mockfetcher) GetPeers() []p2p.Peer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPeers")
+	ret0, _ := ret[0].([]p2p.Peer)
+	return ret0
+}
+
+// GetPeers indicates an expected call of GetPeers.
+func (mr *MockfetcherMockRecorder) GetPeers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockfetcher)(nil).GetPeers))
+}
+
+// PeerMeshHashes mocks base method.
+func (m *Mockfetcher) PeerMeshHashes(arg0 context.Context, arg1 p2p.Peer, arg2 *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerMeshHashes", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*fetch.MeshHashes)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PeerMeshHashes indicates an expected call of PeerMeshHashes.
+func (mr *MockfetcherMockRecorder) PeerMeshHashes(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerMeshHashes", reflect.TypeOf((*Mockfetcher)(nil).PeerMeshHashes), arg0, arg1, arg2)
+}
+
+// RegisterPeerHashes mocks base method.
+func (m *Mockfetcher) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterPeerHashes", peer, hashes)
+}
+
+// RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
+func (mr *MockfetcherMockRecorder) RegisterPeerHashes(peer, hashes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*Mockfetcher)(nil).RegisterPeerHashes), peer, hashes)
 }
 
 // MocklayerPatrol is a mock of layerPatrol interface.
@@ -152,39 +351,94 @@ func (mr *MocklayerPatrolMockRecorder) IsHareInCharge(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHareInCharge", reflect.TypeOf((*MocklayerPatrol)(nil).IsHareInCharge), arg0)
 }
 
-// MocklayerProcessor is a mock of layerProcessor interface.
-type MocklayerProcessor struct {
+// MockcertHandler is a mock of certHandler interface.
+type MockcertHandler struct {
 	ctrl     *gomock.Controller
-	recorder *MocklayerProcessorMockRecorder
+	recorder *MockcertHandlerMockRecorder
 }
 
-// MocklayerProcessorMockRecorder is the mock recorder for MocklayerProcessor.
-type MocklayerProcessorMockRecorder struct {
-	mock *MocklayerProcessor
+// MockcertHandlerMockRecorder is the mock recorder for MockcertHandler.
+type MockcertHandlerMockRecorder struct {
+	mock *MockcertHandler
 }
 
-// NewMocklayerProcessor creates a new mock instance.
-func NewMocklayerProcessor(ctrl *gomock.Controller) *MocklayerProcessor {
-	mock := &MocklayerProcessor{ctrl: ctrl}
-	mock.recorder = &MocklayerProcessorMockRecorder{mock}
+// NewMockcertHandler creates a new mock instance.
+func NewMockcertHandler(ctrl *gomock.Controller) *MockcertHandler {
+	mock := &MockcertHandler{ctrl: ctrl}
+	mock.recorder = &MockcertHandlerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocklayerProcessor) EXPECT() *MocklayerProcessorMockRecorder {
+func (m *MockcertHandler) EXPECT() *MockcertHandlerMockRecorder {
 	return m.recorder
 }
 
-// ProcessLayer mocks base method.
-func (m *MocklayerProcessor) ProcessLayer(arg0 context.Context, arg1 types.LayerID) error {
+// HandleSyncedCertificate mocks base method.
+func (m *MockcertHandler) HandleSyncedCertificate(arg0 context.Context, arg1 types.LayerID, arg2 *types.Certificate) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessLayer", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleSyncedCertificate", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ProcessLayer indicates an expected call of ProcessLayer.
-func (mr *MocklayerProcessorMockRecorder) ProcessLayer(arg0, arg1 interface{}) *gomock.Call {
+// HandleSyncedCertificate indicates an expected call of HandleSyncedCertificate.
+func (mr *MockcertHandlerMockRecorder) HandleSyncedCertificate(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayer", reflect.TypeOf((*MocklayerProcessor)(nil).ProcessLayer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncedCertificate", reflect.TypeOf((*MockcertHandler)(nil).HandleSyncedCertificate), arg0, arg1, arg2)
+}
+
+// MockforkFinder is a mock of forkFinder interface.
+type MockforkFinder struct {
+	ctrl     *gomock.Controller
+	recorder *MockforkFinderMockRecorder
+}
+
+// MockforkFinderMockRecorder is the mock recorder for MockforkFinder.
+type MockforkFinderMockRecorder struct {
+	mock *MockforkFinder
+}
+
+// NewMockforkFinder creates a new mock instance.
+func NewMockforkFinder(ctrl *gomock.Controller) *MockforkFinder {
+	mock := &MockforkFinder{ctrl: ctrl}
+	mock.recorder = &MockforkFinderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockforkFinder) EXPECT() *MockforkFinderMockRecorder {
+	return m.recorder
+}
+
+// FindFork mocks base method.
+func (m *MockforkFinder) FindFork(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID, arg3 types.Hash32) (types.LayerID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindFork", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(types.LayerID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindFork indicates an expected call of FindFork.
+func (mr *MockforkFinderMockRecorder) FindFork(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindFork", reflect.TypeOf((*MockforkFinder)(nil).FindFork), arg0, arg1, arg2, arg3)
+}
+
+// Purge mocks base method.
+func (m *MockforkFinder) Purge(arg0 bool, arg1 ...p2p.Peer) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Purge", varargs...)
+}
+
+// Purge indicates an expected call of Purge.
+func (mr *MockforkFinderMockRecorder) Purge(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*MockforkFinder)(nil).Purge), varargs...)
 }

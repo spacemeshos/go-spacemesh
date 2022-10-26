@@ -17,7 +17,8 @@ type Context struct {
 	Loader   AccountLoader
 
 	// LayerID of the block.
-	LayerID LayerID
+	LayerID   LayerID
+	GenesisID types.Hash20
 
 	PrincipalHandler  Handler
 	PrincipalTemplate Template
@@ -46,6 +47,11 @@ func (c *Context) Principal() Address {
 // Layer returns block layer id.
 func (c *Context) Layer() LayerID {
 	return c.LayerID
+}
+
+// GetGenesisID returns genesis id.
+func (c *Context) GetGenesisID() Hash20 {
+	return c.GenesisID
 }
 
 // Template of the principal account.

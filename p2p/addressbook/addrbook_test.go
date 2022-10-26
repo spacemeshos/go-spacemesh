@@ -186,12 +186,11 @@ func TestAddrBook_GetAllAddressesUsedBefore(t *testing.T) {
 	info := genRandomInfo(t, rng)
 	require.Equal(t, 0, len(n.GetAddresses()))
 	n.AddAddress(info, info)
+	now := time.Now()
+	n.Good(info.ID)
 
-	require.Equal(t, 1, len(n.GetAllAddressesUsedBefore(time.Now())))
-	require.Equal(t, 0, len(n.GetAllAddressesUsedBefore(time.Now().Add(-1*time.Minute))))
-
-	time.Sleep(2 * time.Second)
-	require.Equal(t, 1, len(n.GetAllAddressesUsedBefore(time.Now().Add(-1*time.Second))))
+	require.Equal(t, 1, len(n.GetAddressesNotConnectedSince(now.Add(time.Minute))))
+	require.Equal(t, 0, len(n.GetAddressesNotConnectedSince(now.Add(-1*time.Minute))))
 }
 
 func TestAddrBook_RemoveAddress(t *testing.T) {
@@ -207,11 +206,22 @@ func TestAddrBook_RemoveAddress(t *testing.T) {
 	require.NotNil(t, n.Lookup(info.ID))
 	require.Equal(t, info.ID, n.Lookup(info.ID).ID)
 
-	n.RemoveAddress(info.ID)
-	require.Nil(t, n.Lookup(info.ID))
+	removalTime := time.Now()
+	removedAt, wasRemoved := n.WasRecentlyRemoved(info.ID)
+	require.Nil(t, removedAt)
+	require.False(t, wasRemoved)
 
 	n.RemoveAddress(info.ID)
 	require.Nil(t, n.Lookup(info.ID))
+	removedAt, wasRemoved = n.WasRecentlyRemoved(info.ID)
+	require.True(t, !removedAt.Before(removalTime))
+	require.True(t, wasRemoved)
+
+	n.RemoveAddress(info.ID)
+	require.Nil(t, n.Lookup(info.ID))
+	removedAt2, wasRemoved := n.WasRecentlyRemoved(info.ID)
+	require.Equal(t, removedAt, removedAt2)
+	require.True(t, wasRemoved)
 }
 
 func TestAddrBook_Connected(t *testing.T) {

@@ -4,20 +4,23 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=mocks -destination=./mocks/interface.go -source=./interface.go
 
-type poetValidatorPersistor interface {
-	HasProof([]byte) bool
+type atxReceiver interface {
+	OnAtx(*types.ActivationTxHeader)
+}
+
+type poetValidatorPersister interface {
+	HasProof(types.PoetProofRef) bool
 	Validate(types.PoetProof, []byte, string, []byte) error
-	StoreProof([]byte, *types.PoetProofMessage) error
+	StoreProof(types.PoetProofRef, *types.PoetProofMessage) error
 }
 
 type nipostValidator interface {
-	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error)
-	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
+	Validate(commitment []byte, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error)
+	ValidatePost(commitment []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error
 }
 
 type layerClock interface {

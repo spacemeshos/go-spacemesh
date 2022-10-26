@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
@@ -34,6 +35,7 @@ func DefaultConfig() Config {
 		CheckTimeout:         30 * time.Second,
 		CheckPeersNumber:     10,
 		CheckPeersUsedBefore: 30 * time.Minute,
+		peerExchange:         peerexchange.DefaultPeerExchangeConfig(),
 	}
 }
 
@@ -48,7 +50,6 @@ type Config struct {
 	DisableNatPort bool     `mapstructure:"disable-natport"`
 	Flood          bool     `mapstructure:"flood"`
 	Listen         string   `mapstructure:"listen"`
-	NetworkID      uint32   `mapstructure:"network-id"`
 	Bootnodes      []string `mapstructure:"bootnodes"`
 	TargetOutbound int      `mapstructure:"target-outbound"`
 	LowPeers       int      `mapstructure:"low-peers"`
@@ -59,10 +60,12 @@ type Config struct {
 	CheckTimeout         time.Duration
 	CheckPeersNumber     int
 	CheckPeersUsedBefore time.Duration
+
+	peerExchange peerexchange.PeerExchangeConfig `mapstructure:"peer-exchange"`
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, error) {
+func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -119,5 +122,5 @@ func New(_ context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, err
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
 	opts = append(opts, WithConfig(cfg), WithLog(logger))
-	return Upgrade(h, opts...)
+	return Upgrade(h, genesisID, opts...)
 }

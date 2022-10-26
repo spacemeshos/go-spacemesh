@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	chaosv1alpha1 "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -12,18 +12,18 @@ import (
 
 // Partition2 partitions pods in array a from pods in array b.
 func Partition2(ctx *testcontext.Context, name string, a, b []string) (Teardown, error) {
-	partition := chaosv1alpha1.NetworkChaos{}
+	partition := chaos.NetworkChaos{}
 	partition.Name = name
 	partition.Namespace = ctx.Namespace
 
-	partition.Spec.Action = chaosv1alpha1.PartitionAction
-	partition.Spec.Mode = chaosv1alpha1.AllMode
+	partition.Spec.Action = chaos.PartitionAction
+	partition.Spec.Mode = chaos.AllMode
 	partition.Spec.Selector.Pods = map[string][]string{
 		ctx.Namespace: a,
 	}
-	partition.Spec.Direction = chaosv1alpha1.Both
-	partition.Spec.Target = &chaosv1alpha1.PodSelector{
-		Mode: chaosv1alpha1.AllMode,
+	partition.Spec.Direction = chaos.Both
+	partition.Spec.Target = &chaos.PodSelector{
+		Mode: chaos.AllMode,
 	}
 	partition.Spec.Target.Selector.Pods = map[string][]string{
 		ctx.Namespace: b,

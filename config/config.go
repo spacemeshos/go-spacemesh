@@ -4,17 +4,17 @@ package config
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -31,34 +31,39 @@ const (
 )
 
 var (
-	defaultHomeDir = filesystem.GetUserHomeDirectory()
-	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
+	defaultHomeDir string
+	defaultDataDir string
 )
+
+func init() {
+	defaultHomeDir, _ = os.UserHomeDir()
+	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
+}
 
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Address         *types.Config            `mapstructure:"address"`
-	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
-	Tortoise        tortoise.Config          `mapstructure:"tortoise"`
-	P2P             p2p.Config               `mapstructure:"p2p"`
-	API             apiConfig.Config         `mapstructure:"api"`
-	HARE            hareConfig.Config        `mapstructure:"hare"`
-	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
-	Beacon          beacon.Config            `mapstructure:"beacon"`
-	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
-	VM              vm.Config                `mapstructure:"vm"`
-	POST            activation.PostConfig    `mapstructure:"post"`
-	POET            activation.PoetConfig    `mapstructure:"poet"`
-	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
-	LOGGING         LoggerConfig             `mapstructure:"logging"`
-	FETCH           fetch.Config             `mapstructure:"fetch"`
+	Address         *types.Config         `mapstructure:"address"`
+	Genesis         *GenesisConfig        `mapstructure:"genesis"`
+	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
+	P2P             p2p.Config            `mapstructure:"p2p"`
+	API             apiConfig.Config      `mapstructure:"api"`
+	HARE            hareConfig.Config     `mapstructure:"hare"`
+	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
+	Beacon          beacon.Config         `mapstructure:"beacon"`
+	TIME            timeConfig.TimeConfig `mapstructure:"time"`
+	VM              vm.Config             `mapstructure:"vm"`
+	POST            atypes.PostConfig     `mapstructure:"post"`
+	POET            activation.PoetConfig `mapstructure:"poet"`
+	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
 // with a subfolder named after the network ID.
 func (cfg *Config) DataDir() string {
-	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.P2P.NetworkID))
+	return filepath.Clean(cfg.DataDirParent)
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
@@ -79,16 +84,13 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
-	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
 
-	PoETServer string `mapstructure:"poet-server"`
+	PoETServers []string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
-
-	GoldenATXID string `mapstructure:"golden-atx"`
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
@@ -108,9 +110,9 @@ type BaseConfig struct {
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                     `mapstructure:"smeshing-start"`
-	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
+	Start           bool                 `mapstructure:"smeshing-start"`
+	CoinbaseAccount string               `mapstructure:"smeshing-coinbase"`
+	Opts            atypes.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.
@@ -118,7 +120,7 @@ func DefaultConfig() Config {
 	return Config{
 		Address:         types.DefaultAddressConfig(),
 		BaseConfig:      defaultBaseConfig(),
-		Genesis:         apiConfig.DefaultGenesisConfig(),
+		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),
@@ -158,11 +160,9 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
-		GenesisTime:         time.Now().Format(time.RFC3339),
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
-		PoETServer:          "127.0.0.1",
-		GoldenATXID:         "0x5678", // TODO: Change the value
+		PoETServers:         []string{"127.0.0.1"},
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
 		TxsPerProposal:      100,

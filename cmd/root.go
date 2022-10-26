@@ -38,18 +38,18 @@ func AddCommands(cmd *cobra.Command) {
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
-	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
-		config.PoETServer, "The poet server url. (temporary) ")
-	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
-		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	cmd.PersistentFlags().StringArrayVar(&config.PoETServers, "poet-server",
+		config.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
+	cmd.PersistentFlags().StringVar(&config.Genesis.GenesisTime, "genesis-time",
+		config.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	cmd.PersistentFlags().StringVar(&config.Genesis.ExtraData, "genesis-extra-data",
+		config.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
-	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
-		config.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().Uint64Var(&config.TickSize, "tick-size", config.TickSize, "number of poet leaves in a single tick")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
@@ -78,8 +78,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
 	cmd.PersistentFlags().BoolVar(&config.P2P.DisableNatPort, "disable-natport",
 		config.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
-	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
-		config.P2P.NetworkID, "network-id to participate in")
 	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "low-peers",
 		config.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "high-peers",
@@ -182,22 +180,20 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "tortoise-hdist",
 		config.Tortoise.Hdist, "hdist")
-	cmd.PersistentFlags().DurationVar(&config.Tortoise.RerunInterval, "tortoise-rerun-interval",
-		config.Tortoise.RerunInterval, "Tortoise will verify layers from scratch every interval.")
 
 	// TODO(moshababo): add usage desc
 
-	cmd.PersistentFlags().UintVar(&config.POST.BitsPerLabel, "post-bits-per-label",
+	cmd.PersistentFlags().Uint8Var(&config.POST.BitsPerLabel, "post-bits-per-label",
 		config.POST.BitsPerLabel, "")
-	cmd.PersistentFlags().UintVar(&config.POST.LabelsPerUnit, "post-labels-per-unit",
+	cmd.PersistentFlags().Uint64Var(&config.POST.LabelsPerUnit, "post-labels-per-unit",
 		config.POST.LabelsPerUnit, "")
-	cmd.PersistentFlags().UintVar(&config.POST.MinNumUnits, "post-min-numunits",
+	cmd.PersistentFlags().Uint32Var(&config.POST.MinNumUnits, "post-min-numunits",
 		config.POST.MinNumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.POST.MaxNumUnits, "post-max-numunits",
+	cmd.PersistentFlags().Uint32Var(&config.POST.MaxNumUnits, "post-max-numunits",
 		config.POST.MaxNumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.POST.K1, "post-k1",
+	cmd.PersistentFlags().Uint32Var(&config.POST.K1, "post-k1",
 		config.POST.K1, "")
-	cmd.PersistentFlags().UintVar(&config.POST.K2, "post-k2",
+	cmd.PersistentFlags().Uint32Var(&config.POST.K2, "post-k2",
 		config.POST.K2, "")
 
 	/**======================== Smeshing Flags ========================== **/
@@ -210,9 +206,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.SMESHING.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.SMESHING.Opts.DataDir, "smeshing-opts-datadir",
 		config.SMESHING.Opts.DataDir, "")
-	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
+	cmd.PersistentFlags().Uint32Var(&config.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
 		config.SMESHING.Opts.NumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
+	cmd.PersistentFlags().Uint32Var(&config.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
 		config.SMESHING.Opts.NumFiles, "")
 	cmd.PersistentFlags().IntVar(&config.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
 		config.SMESHING.Opts.ComputeProviderID, "")

@@ -91,7 +91,7 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	return tpd
 }
 
-func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint) {
+func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
 		types.Address{},
@@ -780,10 +780,7 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 	extractedPK, err := verifier.Extract(message, signature)
 	r.NoError(err)
 
-	ok := verifier.Verify(extractedPK, message, signature)
-
 	r.Equal(signer.PublicKey().String(), extractedPK.String())
-	r.True(ok)
 }
 
 func TestBeacon_signAndVerifyVRF(t *testing.T) {

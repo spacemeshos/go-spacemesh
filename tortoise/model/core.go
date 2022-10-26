@@ -90,7 +90,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		ballot := &types.Ballot{}
 		ballot.LayerIndex = ev.LayerID
-		ballot.Votes = *votes
+		ballot.Votes = votes.Votes
+		ballot.OpinionHash = votes.Hash
 		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
 			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})
@@ -113,7 +114,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				Beacon:    beacon,
 			}
 		}
-		ballot.Signature = c.signer.Sign(ballot.Bytes())
+		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()
@@ -122,8 +123,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			verified := c.tortoise.HandleIncomingLayer(context.TODO(), ev.LayerID)
-			m.Notify(EventVerified{ID: c.id, Verified: verified, Layer: ev.LayerID})
+			c.tortoise.TallyVotes(context.TODO(), ev.LayerID)
+			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
 
 		if ev.LayerID.GetEpoch() == ev.LayerID.Add(1).GetEpoch() {
@@ -134,7 +135,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
+		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil)
 		if err := activation.SignAtx(c.signer, atx); err != nil {
 			panic(err)
 		}

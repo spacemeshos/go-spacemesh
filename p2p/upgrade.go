@@ -6,6 +6,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/addressbook"
 	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
@@ -78,7 +79,7 @@ func isBootnode(h host.Host, bootnodes []string) (bool, error) {
 }
 
 // Upgrade creates Host instance from host.Host.
-func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
+func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:    context.Background(),
 		cfg:    DefaultConfig(),
@@ -112,6 +113,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		CheckTimeout:         cfg.CheckTimeout,
 		CheckInterval:        cfg.CheckInterval,
 		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
+		PeerExchange:         cfg.peerExchange,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}
@@ -121,7 +123,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}, fh, fh.discovery); err != nil {
 		return nil, fmt.Errorf("failed to initiliaze bootstrap: %w", err)
 	}
-	fh.hs = handshake.New(fh, cfg.NetworkID, handshake.WithLog(fh.logger))
+	fh.hs = handshake.New(fh, genesisID, handshake.WithLog(fh.logger))
 	return fh, nil
 }
 

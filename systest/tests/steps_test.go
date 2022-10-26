@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
@@ -44,14 +45,17 @@ func TestStepRedeployPoets(t *testing.T) {
 
 	require.Zero(t, cl.Poets())
 	tctx.Log.Debug("adding poet servers")
-	require.NoError(t, cl.AddPoet(tctx))
+	require.NoError(t, cl.AddPoets(tctx))
+
+	poetEndpoints := make([]string, 0, tctx.PoetSize)
+	for i := 0; i < tctx.PoetSize; i++ {
+		poetEndpoints = append(poetEndpoints, cluster.MakePoetEndpoint(i))
+	}
 
 	for i := 0; i < cl.Total(); i++ {
 		node := cl.Client(i)
-		idx := i % tctx.PoetSize
-		target := cluster.MakePoetEndpoint(idx)
-		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poet", target)
-		updated, err := updatePoetServer(tctx, node, target)
+		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poets", poetEndpoints)
+		updated, err := updatePoetServers(tctx, node, poetEndpoints)
 		require.NoError(t, err)
 		require.True(t, updated)
 	}
@@ -125,7 +129,7 @@ func TestStepTransactions(t *testing.T) {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
 				defer cancel()
-				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, 0))
+				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, 0, sdk.WithGenesisID(cl.GenesisID())))
 				if err != nil {
 					return err
 				}
@@ -156,6 +160,7 @@ func TestStepTransactions(t *testing.T) {
 					receiver,
 					rng.Uint64()%amountLimit,
 					nonce,
+					sdk.WithGenesisID(cl.GenesisID()),
 				)
 				_, err := client.submit(tctx, raw)
 				if err != nil {

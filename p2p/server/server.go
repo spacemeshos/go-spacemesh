@@ -64,11 +64,6 @@ type Host interface {
 	Network() network.Network
 }
 
-// Requestor is an interface for requesting replies from peer server.
-type Requestor interface {
-	Request(context.Context, peer.ID, []byte, func([]byte), func(error)) error
-}
-
 // Server for the Handler.
 type Server struct {
 	logger   log.Log

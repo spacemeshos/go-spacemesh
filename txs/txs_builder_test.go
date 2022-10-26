@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
@@ -232,6 +233,9 @@ func Test_checkStateConsensus_allEmpty(t *testing.T) {
 }
 
 func Test_checkStateConsensus_ownMeshDiffer(t *testing.T) {
+	if util.IsWindows() {
+		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
+	}
 	cfg := CSConfig{OptFilterThreshold: 100}
 	lid := types.NewLayerID(11)
 	meshHash := types.RandomHash()
@@ -250,6 +254,10 @@ func Test_checkStateConsensus_ownMeshDiffer(t *testing.T) {
 }
 
 func Test_checkStateConsensus_NoConsensus(t *testing.T) {
+	if util.IsWindows() {
+		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
+	}
+
 	cfg := CSConfig{OptFilterThreshold: 100}
 	lid := types.NewLayerID(11)
 	meshHash0 := types.RandomHash()

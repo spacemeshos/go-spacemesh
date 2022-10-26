@@ -7,17 +7,14 @@ include Makefile-gpu.Inc
 #include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
-TEST_LOG_LEVEL ?=
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest)
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-export GO111MODULE := on
 export CGO_ENABLED := 1
 export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
-
-PKGS = $(shell go list ./...)
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
@@ -65,14 +62,14 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
-
 install:
-	go run scripts/check-go-version.go --major 1 --minor 18
+	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
-	GO111MODULE=off go get golang.org/x/lint/golint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.48.0
-	go install github.com/spacemeshos/go-scale/scalegen
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
+	go install github.com/spacemeshos/go-scale/scalegen@v1.0.0
 	go install github.com/golang/mock/mockgen
+	go install gotest.tools/gotestsum@v1.8.2
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 .PHONY: install
 
 build: go-spacemesh
@@ -116,22 +113,25 @@ endif
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
 docker-local-build: go-spacemesh hare p2p harness
-	cd build; docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
+	cd build; DOCKER_BUILDKIT=1 docker build -f ../Dockerfile.prebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
 
-test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
+# Clear tests cache
+clear-test-cache:
+	go clean -testcache
+.PHONY: clear-test-cache
 
 test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -v -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go generate ./...
 .PHONY: generate
 
 staticcheck: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
 .PHONY: staticcheck
 
 test-tidy:
@@ -149,32 +149,23 @@ test-fmt:
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
-lint: golangci-lint
-	# Golint is deprecated and frozen. Using golangci-lint instead.
-	# golint --set_exit_status ./...
+lint: get-libs
 	go vet ./...
+	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
-golangci-lint:
-	golangci-lint run --config .golangci.yml
-.PHONY: golangci-lint
-
 # Auto-fixes golangci-lint issues where possible.
-golangci-lint-fix:
-	golangci-lint run --config .golangci.yml --fix
-.PHONY: golangci-lint-fix
+lint-fix: get-libs
+	./bin/golangci-lint run --config .golangci.yml --fix
+.PHONY: lint-fix
 
-golangci-lint-github-action:
+lint-github-action: get-libs
+	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: golangci-lint-github-action
+.PHONY: lint-github-action
 
-cover:
-	@echo "mode: count" > cover-all.out
-	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
-	  $(foreach pkg,$(PKGS),\
-		go test -coverprofile=cover.out -covermode=count $(pkg);\
-		tail -n +2 cover.out >> cover-all.out;)
-	go tool cover -html=cover-all.out
+cover: get-libs
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: cover
 
 tag-and-build:
@@ -183,7 +174,7 @@ tag-and-build:
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
 	git push origin ${VERSION}
-	docker build -t go-spacemesh:${VERSION} .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:${VERSION} .
 	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
 	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
 .PHONY: tag-and-build
@@ -194,7 +185,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE) .
+	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only

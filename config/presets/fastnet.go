@@ -3,7 +3,6 @@ package presets
 import (
 	"time"
 
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -36,7 +35,9 @@ func fastnet() config.Config {
 
 	conf.P2P.TargetOutbound = 10
 
-	conf.Genesis = &apiConfig.GenesisConfig{}
+	conf.Genesis = &config.GenesisConfig{
+		ExtraData: "fastnet",
+	}
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 1_000

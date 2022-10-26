@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
@@ -19,74 +18,100 @@ import (
 
 func TestComputeThreshold(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
-
+	length := types.GetLayersPerEpoch()
 	for _, tc := range []struct {
-		desc                      string
-		config                    Config
-		processed, last, verified types.LayerID
-		mode                      mode
-		epochWeight               map[types.EpochID]util.Weight
+		desc                    string
+		config                  Config
+		processed, last, target types.LayerID
+		epochs                  map[types.EpochID]*epochInfo
 
-		expectedLocal  util.Weight
 		expectedGlobal util.Weight
 	}{
 		{
-			desc: "WindowIsNotShorterThanProcessed",
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 2),
-				GlobalThreshold:                 big.NewRat(1, 2),
-				VerifyingModeVerificationWindow: 1,
+			desc:      "sanity",
+			processed: genesis.Add(length),
+			last:      genesis.Add(length),
+			target:    genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 45},
 			},
-			processed: genesis.Add(4),
-			last:      genesis.Add(4),
-			verified:  genesis,
-			epochWeight: map[types.EpochID]util.Weight{
-				2: util.WeightFromUint64(10),
-			},
-			expectedLocal:  util.WeightFromUint64(5),
-			expectedGlobal: util.WeightFromUint64(20),
-		},
-		{
-			desc: "VerifyingLimitIsUsed",
-			config: Config{
-				LocalThreshold:                  big.NewRat(1, 2),
-				GlobalThreshold:                 big.NewRat(1, 2),
-				VerifyingModeVerificationWindow: 2,
-			},
-			processed: genesis.Add(1),
-			last:      genesis.Add(4),
-			verified:  genesis,
-			epochWeight: map[types.EpochID]util.Weight{
-				2: util.WeightFromUint64(10),
-			},
-			expectedLocal:  util.WeightFromUint64(5),
 			expectedGlobal: util.WeightFromUint64(15),
 		},
 		{
-			desc: "FullLimitIsUsed",
+			desc:      "shorter than epoch",
+			processed: genesis.Add(length / 2),
+			last:      genesis.Add(length / 2),
+			target:    genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 45},
+			},
+			expectedGlobal: util.WeightFromFloat64(7.5),
+		},
+		{
+			desc:      "multi epoch",
+			processed: genesis.Add(length * 3),
+			last:      genesis.Add(length * 3),
+			target:    genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 40},
+				3: {weight: 40},
+				4: {weight: 40},
+			},
+			expectedGlobal: util.WeightFromUint64(40),
+		},
+		{
+			desc:      "not full epoch",
+			processed: genesis.Add(length - 1),
+			last:      genesis.Add(length - 1),
+			target:    genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 40},
+			},
+			expectedGlobal: util.WeightFromUint64(10),
+		},
+		{
+			desc:      "multiple not full epochs",
+			processed: genesis.Add(length*2 - 2),
+			last:      genesis.Add(length*2 - 2),
+			target:    genesis.Add(1),
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 60},
+				3: {weight: 60},
+			},
+			expectedGlobal: util.WeightFromUint64(25),
+		},
+		{
+			desc: "window size",
 			config: Config{
-				LocalThreshold:             big.NewRat(1, 2),
-				GlobalThreshold:            big.NewRat(1, 2),
-				FullModeVerificationWindow: 3,
+				WindowSize: 2,
 			},
-			processed: genesis.Add(1),
-			last:      genesis.Add(4),
-			verified:  genesis,
-			mode:      mode{}.toggleMode(),
-			epochWeight: map[types.EpochID]util.Weight{
-				2: util.WeightFromUint64(10),
+			last:   genesis.Add(length),
+			target: genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 45},
 			},
-			expectedLocal:  util.WeightFromUint64(5),
-			expectedGlobal: util.WeightFromUint64(20),
+			expectedGlobal: util.WeightFromFloat64(7.5),
+		},
+		{
+			desc: "window size is ignored if processed is past window",
+			config: Config{
+				WindowSize: 2,
+			},
+			last:      genesis.Add(length),
+			processed: genesis.Add(length - 1),
+			target:    genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: 45},
+			},
+			expectedGlobal: util.WeightFromFloat64(11.25),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			local, global := computeThresholds(
-				logtest.New(t), tc.config, tc.mode,
-				tc.verified.Add(1), tc.last, tc.processed, tc.epochWeight,
+			global := computeGlobalThreshold(
+				tc.config, weight{}, tc.epochs,
+				tc.target, tc.processed, tc.last,
 			)
-			require.Equal(t, tc.expectedLocal.String(), local.String())
 			require.Equal(t, tc.expectedGlobal.String(), global.String())
 		})
 	}

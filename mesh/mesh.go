@@ -86,31 +86,8 @@ func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, state conservativeSt
 			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
 				return fmt.Errorf("mesh init: %w", err)
 			}
-			if err = persistLayerHashes(msh.logger, dbtx, i, []types.BlockID{types.EmptyBlockID}); err != nil {
-				return err
-			}
 		}
-
-		gLayer := types.GenesisLayer()
-		for _, b := range gLayer.Ballots() {
-			msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-			if err = ballots.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-		}
-		for _, b := range gLayer.Blocks() {
-			msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-			if err = blocks.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-			if err = blocks.SetValid(dbtx, b.ID()); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-		}
-		if err = layers.SetHareOutput(dbtx, gLayer.Index(), types.GenesisBlockID); err != nil {
-			return fmt.Errorf("mesh init: %w", err)
-		}
-		return nil
+		return persistLayerHashes(msh.logger, dbtx, gLid, nil)
 	}); err != nil {
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
@@ -368,7 +345,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	logger.Info("processing layer")
 
 	// pass the layer to tortoise for processing
-	newVerified := msh.trtl.HandleIncomingLayer(ctx, layerID)
+	msh.trtl.TallyVotes(ctx, layerID)
+	newVerified := msh.trtl.LatestComplete()
 	logger.With().Debug("tortoise results", log.Stringer("verified", newVerified))
 
 	// set processed layer even if later code will fail, as that failure is not related
@@ -402,19 +380,20 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []
 	types.SortBlockIDs(bids)
 	var (
 		hash     = types.CalcBlocksHash32(bids, nil)
-		prevHash = types.EmptyLayerHash
+		prevHash []byte
 		err      error
 	)
-	if prevLid := lid.Sub(1); prevLid.Uint32() > 0 {
-		prevHash, err = layers.GetAggregatedHash(dbtx, prevLid)
+	if lid.After(types.GetEffectiveGenesis()) {
+		prev, err := layers.GetAggregatedHash(dbtx, lid.Sub(1))
 		if err != nil {
 			logger.With().Error("failed to get previous aggregated hash", lid, log.Err(err))
 			return err
 		}
+		logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prev.ShortString()))
+		prevHash = prev[:]
 	}
 
-	logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prevHash.ShortString()))
-	newAggHash := types.CalcBlocksHash32(bids, prevHash.Bytes())
+	newAggHash := types.CalcBlocksHash32(bids, prevHash)
 	if err = layers.SetHashes(dbtx, lid, hash, newAggHash); err != nil {
 		logger.With().Error("failed to set layer hashes", lid, log.Err(err))
 		return err
@@ -621,9 +600,8 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 
 // SetZeroBlockLayer advances the latest layer in the network with a layer
 // that truly has no data.
-func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) error {
+func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) {
 	msh.setLatestLayer(msh.logger.WithContext(ctx), lid)
-	return nil
 }
 
 // AddTXsFromProposal adds the TXs in a Proposal into the database.
@@ -640,40 +618,32 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
-	if err := msh.addBallot(ballot); err != nil {
-		return err
-	}
-	msh.trtl.OnBallot(ballot)
-	return nil
-}
-
-func (msh *Mesh) addBallot(b *types.Ballot) error {
-	mal, err := identities.IsMalicious(msh.cdb, b.SmesherID().Bytes())
+	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID().Bytes())
 	if err != nil {
 		return err
 	}
-	if mal {
-		b.SetMalicious()
+	if malicious {
+		ballot.SetMalicious()
 	}
-
-	// it is important to run add ballot and set identity to malicious atomically
+	// ballots.Add and ballots.Count should be atomic
+	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
-		if !mal {
-			count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+		if !malicious {
+			count, err := ballots.CountByPubkeyLayer(tx, ballot.LayerIndex, ballot.SmesherID().Bytes())
 			if err != nil {
 				return err
 			}
 			if count > 1 {
-				if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+				if err := identities.SetMalicious(tx, ballot.SmesherID().Bytes()); err != nil {
 					return err
 				}
-				b.SetMalicious()
+				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", b.SmesherID()),
-					log.Inline(b),
+					log.Stringer("smesher", ballot.SmesherID()),
+					log.Inline(ballot),
 				)
 			}
 		}
@@ -722,10 +692,15 @@ func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 // sortBlocks sort blocks tick height, if height is equal by lexicographic order.
 func sortBlocks(blks []*types.Block) []*types.Block {
 	sort.Slice(blks, func(i, j int) bool {
-		if blks[i].TickHeight < blks[j].TickHeight {
-			return true
+		if blks[i].TickHeight != blks[j].TickHeight {
+			return blks[i].TickHeight < blks[j].TickHeight
 		}
 		return blks[i].ID().Compare(blks[j].ID())
 	})
 	return blks
+}
+
+// LastVerified returns the latest layer verified by tortoise.
+func (msh *Mesh) LastVerified() types.LayerID {
+	return msh.trtl.LatestComplete()
 }

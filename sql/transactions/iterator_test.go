@@ -143,6 +143,7 @@ func TestIterateResults(t *testing.T) {
 
 func TestIterateSnapshot(t *testing.T) {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	gen := fixture.NewTransactionResultGenerator()
 	expect := 10

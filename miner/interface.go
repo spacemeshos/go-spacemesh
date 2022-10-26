@@ -18,5 +18,6 @@ type conservativeState interface {
 }
 
 type votesEncoder interface {
-	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Votes, error)
+	TallyVotes(context.Context, types.LayerID)
+	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
 }
