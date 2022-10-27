@@ -2065,7 +2065,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, globalTx.GasPrice, resTx.GasPrice)
 	require.Equal(t, globalTx.MaxGas, resTx.MaxGas)
 	require.Equal(t, globalTx.MaxSpend, resTx.MaxSpend)
-	require.Equal(t, globalTx.Nonce, resTx.Nonce)
+	require.Equal(t, globalTx.Nonce, resTx.Nonce.Counter)
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
