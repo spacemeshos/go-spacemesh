@@ -2340,7 +2340,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
-		Status:  events.LayerStatusTypeConfirmed,
+		Status:  events.LayerStatusTypeApplied,
 	})
 
 	// close the stream

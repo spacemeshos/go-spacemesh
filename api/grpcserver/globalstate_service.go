@@ -416,11 +416,13 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 		case layerEvent := <-layersCh:
 			layer := layerEvent.(events.LayerUpdate)
-
+			if layer.Status != events.LayerStatusTypeApplied {
+				continue
+			}
 			root, err := s.conState.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
-				log.Error("error retrieving layer data: %s", err)
-				return status.Errorf(codes.Internal, "error retrieving layer data")
+				log.With().Warning("error retrieving layer data", log.Err(err))
+				root = types.Hash32{}
 			}
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
