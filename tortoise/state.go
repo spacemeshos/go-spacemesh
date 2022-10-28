@@ -6,10 +6,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
-
-var abstainSentinel = []byte{0}
 
 type (
 	weight = util.Weight
@@ -167,22 +165,22 @@ type layerInfo struct {
 }
 
 func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
-	hasher := hash.New()
+	hasher := opinionhash.New()
 	if l.prevOpinion != nil {
-		hasher.Write(l.prevOpinion[:])
+		hasher.WritePrevious(*l.prevOpinion)
 	}
 	if !l.hareTerminated {
-		hasher.Write(abstainSentinel)
+		hasher.WriteAbstain()
 	} else if withinDistance(hdist, l.lid, last) {
 		for _, block := range l.blocks {
 			if block.hare == support {
-				hasher.Write(block.id[:])
+				hasher.WriteSupport(block.id, block.height)
 			}
 		}
 	} else {
 		for _, block := range l.blocks {
 			if block.validity == support {
-				hasher.Write(block.id[:])
+				hasher.WriteSupport(block.id, block.height)
 			}
 		}
 	}
@@ -348,16 +346,16 @@ func (l *layerVote) sortSupported() {
 }
 
 func (l *layerVote) computeOpinion() {
-	hasher := hash.New()
+	hasher := opinionhash.New()
 	if l.prev != nil {
-		hasher.Write(l.prev.opinion[:])
+		hasher.WritePrevious(l.prev.opinion)
 	}
 	if len(l.supported) > 0 {
 		for _, block := range l.supported {
-			hasher.Write(block.id[:])
+			hasher.WriteSupport(block.id, block.height)
 		}
 	} else if l.vote == abstain {
-		hasher.Write(abstainSentinel)
+		hasher.WriteAbstain()
 	}
 	hasher.Sum(l.opinion[:0])
 }

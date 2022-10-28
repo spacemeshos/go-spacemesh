@@ -94,6 +94,11 @@ func (b *Block) ID() BlockID {
 	return b.blockID
 }
 
+// ToVote creates Vote struct from block.
+func (b *Block) ToVote() Vote {
+	return Vote{ID: b.ID(), LayerID: b.LayerIndex, Height: b.TickHeight}
+}
+
 // MarshalLogObject implements logging encoder for Block.
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())

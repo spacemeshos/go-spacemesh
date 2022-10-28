@@ -21,8 +21,13 @@ func PerfectVoting(rng *rand.Rand, layers []*types.Layer, _ int) Voting {
 	base := ballots[rng.Intn(len(ballots))]
 	votes := Voting{Base: base.ID()}
 	if len(layers[len(layers)-1].BlocksIDs()) > 0 {
-		votes.Support = layers[len(layers)-1].BlocksIDs()[0:1]
-		votes.Against = layers[len(layers)-1].BlocksIDs()[1:]
+		support := layers[len(layers)-1].Blocks()[0]
+		votes.Support = append(votes.Support,
+			types.Vote{
+				ID:      support.ID(),
+				LayerID: support.LayerIndex,
+				Height:  support.TickHeight,
+			})
 	}
 	return votes
 }
@@ -34,8 +39,13 @@ func ConsistentVoting(rng *rand.Rand, layers []*types.Layer, i int) Voting {
 	base := ballots[i%len(ballots)]
 	votes := Voting{Base: base.ID()}
 	if len(layers[len(layers)-1].BlocksIDs()) > 0 {
-		votes.Support = layers[len(layers)-1].BlocksIDs()[0:1]
-		votes.Against = layers[len(layers)-1].BlocksIDs()[1:]
+		support := layers[len(layers)-1].Blocks()[0]
+		votes.Support = append(votes.Support,
+			types.Vote{
+				ID:      support.ID(),
+				LayerID: support.LayerIndex,
+				Height:  support.TickHeight,
+			})
 	}
 	return votes
 }
