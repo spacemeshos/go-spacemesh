@@ -559,13 +559,13 @@ func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
-	logger.With().Info("successfully reverted state", log.Stringer("state_root", root))
+	logger.With().Info("successfully reverted vm state", log.Stringer("state_root", root))
 
 	if err = layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
 		logger.With().Error("failed to unset applied layer", log.Err(err))
 		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
-	logger.Info("successfully reverted state")
+	logger.Info("successfully reverted db state")
 	return nil
 }
 

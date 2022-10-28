@@ -322,7 +322,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
 	cp.SetInbox(c)
-	if err = cp.Start(ctx); err != nil {
+	if err = cp.Start(log.WithNewSessionID(ctx)); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(ctx, cp.ID())
 		return false, fmt.Errorf("start consensus: %w", err)
@@ -442,12 +442,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				continue
 			}
 			go func(l types.LayerID) {
-				started, err := h.onTick(ctx, l)
-				if err != nil {
-					h.With().Error("failed to handle tick", log.Err(err))
-				} else if !started {
-					h.WithContext(ctx).With().Warning("consensus not started for layer", l)
-				}
+				_, _ = h.onTick(ctx, l) // error logged in `onTick`
 			}(layer)
 		case <-h.CloseChannel():
 			return
