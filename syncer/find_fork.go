@@ -109,7 +109,7 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 		log.Stringer("diff_layer", diffLid),
 		log.Stringer("diff_hash", diffHash),
 		log.Stringer("peer", peer))
-	logger.With().Info("finding hash fork with peer")
+	logger.With().Info("begin fork finding with peer")
 
 	bnd, err := ff.setupBoundary(peer, &layerHash{layer: diffLid, hash: diffHash})
 	if err != nil {
@@ -205,13 +205,17 @@ func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boun
 	var bnd boundary
 	lastAgreed := ff.agreedPeers[peer]
 	if lastAgreed != nil {
-		// double check if the node still has the same hash
-		nodeHash, err := layers.GetAggregatedHash(ff.db, lastAgreed.layer)
-		if err != nil {
-			return nil, fmt.Errorf("find fork get boundary hash %v: %w", lastAgreed.layer, err)
-		}
-		if nodeHash == lastAgreed.hash {
-			bnd.from = lastAgreed
+		if lastAgreed.layer.Before(oldestDiff.layer) {
+			// double check if the node still has the same hash
+			nodeHash, err := layers.GetAggregatedHash(ff.db, lastAgreed.layer)
+			if err != nil {
+				return nil, fmt.Errorf("find fork get boundary hash %v: %w", lastAgreed.layer, err)
+			}
+			if nodeHash == lastAgreed.hash {
+				bnd.from = lastAgreed
+			} else {
+				delete(ff.agreedPeers, peer)
+			}
 		} else {
 			delete(ff.agreedPeers, peer)
 		}

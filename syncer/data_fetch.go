@@ -48,23 +48,26 @@ type (
 
 // DataFetch contains the logic of fetching mesh data.
 type DataFetch struct {
-	logger  log.Log
-	msh     meshProvider
-	fetcher fetcher
+	fetcher
+
+	logger log.Log
+	msh    meshProvider
 }
 
 // NewDataFetch creates a new DataFetch instance.
 func NewDataFetch(msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
 	return &DataFetch{
+		fetcher: fetch,
 		logger:  lg,
 		msh:     msh,
-		fetcher: fetch,
 	}
 }
 
 // PollLayerData polls all peers for data in the specified layer.
-func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID) error {
-	peers := d.fetcher.GetPeers()
+func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
+	if len(peers) == 0 {
+		peers = d.fetcher.GetPeers()
+	}
 	if len(peers) == 0 {
 		return errNoPeers
 	}
@@ -296,9 +299,4 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 		return fmt.Errorf("get ATXs: %w", err)
 	}
 	return nil
-}
-
-// GetBlocks fetches all blocks specified in the list of BlockID.
-func (d *DataFetch) GetBlocks(ctx context.Context, bids []types.BlockID) error {
-	return d.fetcher.GetBlocks(ctx, bids)
 }

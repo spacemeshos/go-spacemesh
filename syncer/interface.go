@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -21,10 +22,11 @@ type meshProvider interface {
 // fetchLogic is the interface between syncer and low-level fetching.
 // it handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
 type fetchLogic interface {
-	PollLayerData(context.Context, types.LayerID) error
+	fetcher
+
+	PollLayerData(context.Context, types.LayerID, ...p2p.Peer) error
 	PollLayerOpinions(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error)
 	GetEpochATXs(context.Context, types.EpochID) error
-	GetBlocks(context.Context, []types.BlockID) error
 }
 
 // fetcher is the interface to the low-level fetching.
@@ -51,6 +53,7 @@ type certHandler interface {
 }
 
 type forkFinder interface {
+	UpdateAgreement(p2p.Peer, types.LayerID, types.Hash32, time.Time)
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)
 }

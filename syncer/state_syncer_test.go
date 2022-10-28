@@ -3,14 +3,18 @@ package syncer
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -58,6 +62,16 @@ func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
 	}
 }
 
+func uniqueBlockIDs(opn *fetch.LayerOpinion) []types.BlockID {
+	var bids []types.BlockID
+	if opn.Cert != nil {
+		bids = append(bids, opn.Cert.BlockID)
+	}
+	bids = append(bids, opn.Valid...)
+	bids = append(bids, opn.Invalid...)
+	return util.UniqueSliceStringer(bids)
+}
+
 func checkHasBlockValidity(t *testing.T, db sql.Executor, lid types.LayerID) {
 	cnt, err := blocks.CountContextualValidity(db, lid)
 	require.NoError(t, err)
@@ -84,12 +98,15 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ts := newSyncerWithoutSyncTimer(t)
+			ts.mForkFinder.EXPECT().UpdateAgreement(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 			ts.syncer.setATXSynced()
 			current := gLid.Add(10)
 			ts.syncer.setLastSyncedLayer(current.Sub(1))
 			ts.mTicker.advanceToLayer(current)
 			layerOpns := make(map[types.LayerID][]*fetch.LayerOpinion)
 			adopted := make(map[types.LayerID]*fetch.LayerOpinion)
+			expectedFetch := make(map[types.LayerID][]types.BlockID)
+			actualFetch := make(map[types.LayerID][]types.BlockID)
 			for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
 				prevHash := types.RandomHash()
 				if lid.Sub(1) == gLid {
@@ -105,6 +122,10 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				}
 				layerOpns[lid] = opns
 				adopted[lid] = opns[1]
+				expectedFetch[lid] = []types.BlockID{}
+				for _, opn := range opns {
+					expectedFetch[lid] = append(expectedFetch[lid], uniqueBlockIDs(opn)...)
+				}
 			}
 			for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
 				lid := lid
@@ -121,24 +142,40 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 						return layerOpns[lid], nil
 					})
 				ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
-				if tc.hasCert {
-					ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, cert).DoAndReturn(
-						func(_ context.Context, gotL types.LayerID, gotC *types.Certificate) error {
-							require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(gotC.BlockID, types.InnerBlock{LayerIndex: lid})))
-							require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, gotL, gotC))
-							return nil
-						})
-				}
 				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got []types.BlockID) error {
-						require.ElementsMatch(t, append(adopted[lid].Valid, adopted[lid].Invalid...), got)
+						if _, ok := actualFetch[lid]; !ok {
+							actualFetch[lid] = []types.BlockID{}
+						}
+						actualFetch[lid] = append(actualFetch[lid], got...)
 						for _, bid := range got {
 							require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: lid})))
 						}
 						return nil
-					})
-				ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-				ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+					}).Times(len(layerOpns[lid]))
+				if tc.hasCert {
+					ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, cert).DoAndReturn(
+						func(_ context.Context, gotL types.LayerID, gotC *types.Certificate) error {
+							require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, gotL, gotC))
+							return nil
+						})
+				}
+				verified := lid.Sub(1)
+				ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid).DoAndReturn(
+					func(_ context.Context, gotL types.LayerID) {
+						// mesh will fail the contextual validity check if any of the blocks' validity is not set
+						// for verified layer. syncer only adopts block validity from one opinion. set the rest of
+						// blocks invalid in the same verified layer if it's not set.
+						bvs, err := blocks.ContextualValidity(ts.cdb, verified)
+						require.NoError(t, err)
+						for _, bv := range bvs {
+							if !bv.Validity {
+								require.NoError(t, blocks.SetInvalid(ts.cdb, bv.ID))
+							}
+						}
+					},
+				)
+				ts.mTortoise.EXPECT().LatestComplete().Return(verified)
 				if tc.hasCert || lid != current.Sub(1) {
 					ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 						func(_ context.Context, got *types.Block) error {
@@ -157,7 +194,83 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 			require.NoError(t, ts.syncer.processLayers(context.TODO()))
 			require.True(t, ts.syncer.stateSynced())
 			for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
+				require.ElementsMatch(t, expectedFetch[lid], actualFetch[lid])
 				checkHasBlockValidity(t, ts.cdb, lid)
+			}
+		})
+	}
+}
+
+func TestFetchOpinions_OpinionsNotGood(t *testing.T) {
+	gLid := types.GetEffectiveGenesis()
+	tt := []struct {
+		name          string
+		opns          []*fetch.LayerOpinion
+		err, fetchErr error
+	}{
+		{
+			name: "all good",
+			opns: []*fetch.LayerOpinion{
+				{
+					Valid:   []types.BlockID{{1, 2, 3}},
+					Invalid: []types.BlockID{{2, 3, 4}},
+				},
+			},
+		},
+		{
+			name: "blocks missing",
+			opns: []*fetch.LayerOpinion{
+				{
+					Valid:   []types.BlockID{{1, 2, 3}},
+					Invalid: []types.BlockID{{2, 3, 4}},
+				},
+			},
+			fetchErr: errors.New("unknown"),
+			err:      errNoOpinionsAvailable,
+		},
+		{
+			name: "conflicting opinions",
+			opns: []*fetch.LayerOpinion{
+				{
+					Valid:   []types.BlockID{{1, 2, 3}},
+					Invalid: []types.BlockID{{1, 2, 3}},
+				},
+			},
+			err: errNoOpinionsAvailable,
+		},
+		{
+			name: "invalid Invalid",
+			opns: []*fetch.LayerOpinion{
+				{
+					Valid:   []types.BlockID{{1, 2, 3}},
+					Invalid: []types.BlockID{types.EmptyBlockID},
+				},
+			},
+			err: errNoOpinionsAvailable,
+		},
+	}
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ts := newSyncerWithoutSyncTimer(t)
+			ts.syncer.setATXSynced()
+			current := gLid.Add(2)
+			lid := current.Sub(1)
+			ts.syncer.setLastSyncedLayer(lid)
+			ts.mTicker.advanceToLayer(current)
+			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(tc.opns, nil)
+			if tc.fetchErr != nil {
+				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(tc.fetchErr).AnyTimes()
+			} else if tc.err == nil {
+				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			}
+			got, err := ts.syncer.fetchOpinions(context.TODO(), ts.syncer.logger, lid)
+			require.ErrorIs(t, err, tc.err)
+			if tc.err == nil {
+				require.ElementsMatch(t, got, tc.opns)
+			} else {
+				require.Empty(t, got)
 			}
 		})
 	}
@@ -220,19 +333,30 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			}
 			ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(tc.requested).Return(false)
+			var expectedFetch, actualFetch []types.BlockID
 			opns := opinions(types.Hash32{})
 			for _, opn := range opns {
 				opn.Verified = tc.opnVerified
 				opn.Cert = nil
+				expectedFetch = append(expectedFetch, uniqueBlockIDs(opn)...)
 			}
 			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), tc.requested).Return(opns, nil)
 			ts.mTortoise.EXPECT().LatestComplete().Return(tc.verified)
+			ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, got []types.BlockID) error {
+					actualFetch = append(actualFetch, got...)
+					for _, bid := range got {
+						require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: tc.requested})))
+					}
+					return nil
+				}).Times(len(opns))
 			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), tc.requested)
 			ts.mTortoise.EXPECT().LatestComplete().Return(tc.requested.Sub(1))
 
 			require.False(t, ts.syncer.stateSynced())
 			require.NoError(t, ts.syncer.processLayers(context.TODO()))
 			require.True(t, ts.syncer.stateSynced())
+			require.ElementsMatch(t, expectedFetch, actualFetch)
 			if tc.localOpn == types.EmptyBlockID {
 				need, err := ts.syncer.needCert(logtest.New(t), tc.requested)
 				require.NoError(t, err)
@@ -241,11 +365,16 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, need)
 			} else {
-				bv, err := blocks.ContextualValidity(ts.cdb, tc.requested)
+				bvs, err := blocks.ContextualValidity(ts.cdb, tc.requested)
 				require.NoError(t, err)
-				require.Len(t, bv, 1)
-				require.Equal(t, tc.localOpn, bv[0].ID)
-				require.True(t, bv[0].Validity)
+				require.Len(t, bvs, len(expectedFetch)+1)
+				for _, bv := range bvs {
+					if bv.ID == tc.localOpn {
+						require.True(t, bv.Validity)
+					} else {
+						require.False(t, bv.Validity)
+					}
+				}
 			}
 		})
 	}
@@ -365,10 +494,10 @@ func TestAdopt(t *testing.T) {
 	gLid := types.GetEffectiveGenesis()
 	prevHash := types.RandomHash()
 	tt := []struct {
-		name                   string
-		opns                   []*fetch.LayerOpinion
-		exp                    int
-		err, certErr, fetchErr error
+		name         string
+		opns         []*fetch.LayerOpinion
+		exp          int
+		err, certErr error
 	}{
 		{
 			name: "all good",
@@ -413,13 +542,6 @@ func TestAdopt(t *testing.T) {
 			err: errMissingValidity,
 		},
 		{
-			name:     "blocks missing",
-			exp:      1,
-			opns:     opinions(prevHash),
-			fetchErr: errors.New("meh"),
-			err:      errNoValidityAdopted,
-		},
-		{
 			name: "no matching prev hash",
 			exp:  1,
 			opns: opinions(types.RandomHash()),
@@ -431,9 +553,15 @@ func TestAdopt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ts := newSyncerWithoutSyncTimer(t)
-
-			require.NoError(t, layers.SetHashes(ts.cdb, gLid, types.RandomHash(), prevHash))
+			ts.mForkFinder.EXPECT().UpdateAgreement(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 			lid := gLid.Add(1)
+			numBlocks := 0
+			for _, opn := range tc.opns {
+				for _, bid := range uniqueBlockIDs(opn) {
+					require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: lid})))
+					numBlocks++
+				}
+			}
 			cnt, err := blocks.CountContextualValidity(ts.cdb, lid)
 			require.NoError(t, err)
 			require.Zero(t, cnt)
@@ -441,19 +569,7 @@ func TestAdopt(t *testing.T) {
 			ts.mTortoise.EXPECT().LatestComplete().Return(gLid)
 			adopted := tc.opns[tc.exp]
 			ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, adopted.Cert).Return(tc.certErr).MaxTimes(1)
-			if tc.err == nil {
-				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got []types.BlockID) error {
-						require.ElementsMatch(t, append(adopted.Valid, adopted.Invalid...), got)
-						for _, bid := range got {
-							require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: lid})))
-						}
-						return nil
-					})
-			} else if tc.fetchErr != nil {
-				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(tc.fetchErr).Times(len(tc.opns))
-			}
-			require.ErrorIs(t, ts.syncer.adopt(context.TODO(), lid, tc.opns), tc.err)
+			require.ErrorIs(t, ts.syncer.adopt(context.TODO(), lid, prevHash, tc.opns), tc.err)
 			if tc.err != nil {
 				need, err := ts.syncer.needCert(logtest.New(t), lid)
 				require.NoError(t, err)
@@ -466,16 +582,108 @@ func TestAdopt(t *testing.T) {
 				for _, bid := range adopted.Valid {
 					exp[bid] = true
 				}
-				for _, bid := range adopted.Invalid {
-					exp[bid] = false
-				}
 				bvs, err := blocks.ContextualValidity(ts.cdb, lid)
 				require.NoError(t, err)
-				require.Len(t, bvs, len(adopted.Valid)+len(adopted.Invalid))
+				require.Len(t, bvs, numBlocks)
 				for _, bv := range bvs {
-					require.Equal(t, exp[bv.ID], bv.Validity)
+					if _, ok := exp[bv.ID]; ok {
+						require.True(t, bv.Validity)
+					} else {
+						require.False(t, bv.Validity)
+					}
 				}
 			}
 		})
 	}
+}
+
+func TestMeshAgreement(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	current := types.GetEffectiveGenesis().Add(131)
+	ts.mTicker.advanceToLayer(current)
+	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+		ts.mConState.EXPECT().GetStateRoot().Return(types.RandomHash(), nil)
+		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lid, types.EmptyBlockID))
+	}
+	ts.syncer.setLastSyncedLayer(current.Sub(1))
+	instate := ts.syncer.mesh.LatestLayerInState()
+	prevHash, err := layers.GetAggregatedHash(ts.cdb, instate.Sub(1))
+	require.NoError(t, err)
+	numPeers := 6
+	opns := make([]*fetch.LayerOpinion, 0, numPeers)
+	eds := make([]*fetch.EpochData, 0, numPeers)
+	for i := 0; i < numPeers; i++ {
+		opn := &fetch.LayerOpinion{PrevAggHash: types.RandomHash()}
+		opn.SetPeer(p2p.Peer(strconv.Itoa(i)))
+		opns = append(opns, opn)
+		ed := &fetch.EpochData{
+			Beacon: types.RandomBeacon(),
+			AtxIDs: types.RandomActiveSet(11),
+			Weight: rand.Uint64(),
+		}
+		eds = append(eds, ed)
+	}
+	opns[1].PrevAggHash = prevHash
+	// node will engage hash resolution with p0 and p2 because
+	// p1 has the same mesh hash as node
+	// p3's ATXs are not available,
+	// p4 failed epoch info query
+	// p5 failed fork finding sessions
+	epoch := instate.GetEpoch()
+	errUnknown := errors.New("unknown")
+
+	t.Run("beacon not available", func(t *testing.T) {
+		ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.RandomBeacon(), errUnknown)
+		_, err = ts.syncer.ensureMeshAgreement(context.TODO(), ts.syncer.logger, instate, opns, map[p2p.Peer]struct{}{})
+		require.ErrorIs(t, err, errUnknown)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.RandomBeacon(), nil)
+		ts.mForkFinder.EXPECT().UpdateAgreement(opns[1].Peer(), instate.Sub(1), prevHash, gomock.Any())
+		ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[0].Peer(), epoch).Return(eds[0], nil)
+		ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[2].Peer(), epoch).Return(eds[2], nil)
+		ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[3].Peer(), epoch).Return(eds[3], nil)
+		ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[4].Peer(), epoch).Return(nil, errUnknown)
+		ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch).Return(eds[5], nil)
+		ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got []types.ATXID) error {
+				require.ElementsMatch(t, eds[0].AtxIDs, got)
+				return nil
+			},
+		)
+		ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got []types.ATXID) error {
+				require.ElementsMatch(t, eds[2].AtxIDs, got)
+				return nil
+			},
+		)
+		ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got []types.ATXID) error {
+				require.ElementsMatch(t, eds[3].AtxIDs, got)
+				return errors.New("not available")
+			},
+		)
+		ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got []types.ATXID) error {
+				require.ElementsMatch(t, eds[5].AtxIDs, got)
+				return nil
+			},
+		)
+		ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[0].Peer(), instate.Sub(1), opns[0].PrevAggHash).Return(types.NewLayerID(101), nil)
+		ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[2].Peer(), instate.Sub(1), opns[2].PrevAggHash).Return(types.NewLayerID(121), nil)
+		ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[5].Peer(), instate.Sub(1), opns[5].PrevAggHash).Return(types.LayerID{}, errUnknown)
+		expected := types.NewLayerID(101).Add(1)
+		for lid := expected; lid.Before(current); lid = lid.Add(1) {
+			ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, []p2p.Peer{opns[0].Peer(), opns[2].Peer()})
+		}
+		ts.mForkFinder.EXPECT().Purge(true)
+		got, err := ts.syncer.ensureMeshAgreement(context.TODO(), ts.syncer.logger, instate, opns, map[p2p.Peer]struct{}{})
+		require.NoError(t, err)
+		require.Equal(t, expected, got)
+	})
 }

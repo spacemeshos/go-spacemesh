@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -22,6 +26,7 @@ var (
 	errNoValidityAdopted   = errors.New("no validity adopted from peers")
 	errMissingCertificate  = errors.New("certificate missing from all peers")
 	errMissingValidity     = errors.New("validity missing from all peers")
+	errMeshHashDiverged    = errors.New("mesh hash diverged with peer")
 )
 
 func minLayer(a, b types.LayerID) types.LayerID {
@@ -52,15 +57,17 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		return nil
 	}
 
+	resyncPeers := make(map[p2p.Peer]struct{})
 	for lid := start.Add(1); !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
 		if s.isClosed() {
 			return errShuttingDown
 		}
 
+		logger := s.logger.WithContext(ctx).WithFields(lid, lid.GetEpoch())
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
 		if _, err := s.beacon.GetBeacon(lid.GetEpoch()); err != nil {
-			s.logger.WithContext(ctx).With().Debug("beacon not available", lid)
+			logger.Debug("beacon not available")
 			return errBeaconNotAvailable
 		}
 
@@ -71,12 +78,20 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 				lag = current.Sub(lid.Uint32())
 			}
 			if lag.Value < s.cfg.HareDelayLayers {
-				s.logger.WithContext(ctx).With().Info("skip validating layer: hare still working", lid)
+				logger.Info("skip validating layer: hare still working")
 				return errHareInCharge
 			}
 		}
 
-		_ = s.fetchLayerOpinions(ctx, lid)
+		if opinions, err := s.fetchOpinions(ctx, logger, lid); err == nil {
+			if err = s.adoptOpinions(ctx, logger, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
+				logger.With().Warning("mesh hash diverged, checking agreement",
+					log.Stringer("diverged", lid.Sub(1)))
+				if _, err = s.ensureMeshAgreement(ctx, logger, lid, opinions, resyncPeers); err != nil {
+					logger.With().Warning("failed to reach mesh agreement with peers", log.Err(err))
+				}
+			}
+		}
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
 		// has a chance to count ballots and form its own opinions
 
@@ -114,7 +129,7 @@ func (s *Syncer) needCert(logger log.Log, lid types.LayerID) (bool, error) {
 	if !lid.After(cutoff) {
 		return false, nil
 	}
-	cert, err := layers.GetCert(s.db, lid)
+	cert, err := layers.GetCert(s.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("state sync failed to get cert", log.Err(err))
 		return false, err
@@ -123,7 +138,7 @@ func (s *Syncer) needCert(logger log.Log, lid types.LayerID) (bool, error) {
 }
 
 func (s *Syncer) needValidity(logger log.Log, lid types.LayerID) (bool, error) {
-	count, err := blocks.CountContextualValidity(s.db, lid)
+	count, err := blocks.CountContextualValidity(s.cdb, lid)
 	if err != nil {
 		logger.With().Error("state sync failed to get validity", log.Err(err))
 		return false, err
@@ -131,31 +146,103 @@ func (s *Syncer) needValidity(logger log.Log, lid types.LayerID) (bool, error) {
 	return count == 0, nil
 }
 
-func (s *Syncer) fetchLayerOpinions(ctx context.Context, lid types.LayerID) error {
-	logger := s.logger.WithContext(ctx).WithFields(lid)
+func toList[T comparable](set map[T]struct{}) []T {
+	result := make([]T, 0, len(set))
+	for bid := range set {
+		result = append(result, bid)
+	}
+	return result
+}
+
+func (s *Syncer) checkOpinionsIntegrity(ctx context.Context, logger log.Log, opinions []*fetch.LayerOpinion) []*fetch.LayerOpinion {
+	goodOpinions := make([]*fetch.LayerOpinion, 0, len(opinions))
+	for _, opn := range opinions {
+		good := true
+		toFetch := make(map[types.BlockID]struct{})
+		valids := make(map[types.BlockID]struct{})
+		for _, bid := range opn.Valid {
+			valids[bid] = struct{}{}
+			if bid != types.EmptyBlockID {
+				toFetch[bid] = struct{}{}
+			}
+		}
+		for _, bid := range opn.Invalid {
+			if _, ok := valids[bid]; ok {
+				logger.With().Warning("peer has conflicting opinions", log.Inline(opn))
+				good = false
+				break
+			}
+			if bid == types.EmptyBlockID {
+				logger.With().Warning("peer has invalid opinions", log.Inline(opn))
+				good = false
+				break
+			}
+			toFetch[bid] = struct{}{}
+		}
+		if opn.Cert != nil && opn.Cert.BlockID != types.EmptyBlockID {
+			toFetch[opn.Cert.BlockID] = struct{}{}
+		}
+		if good && len(toFetch) > 0 {
+			if err := s.dataFetcher.GetBlocks(ctx, toList(toFetch)); err != nil {
+				logger.With().Warning("failed to fetch blocks referenced in peer opinions",
+					log.Stringer("peer", opn.Peer()),
+					log.Array("blocks", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+						for bid := range toFetch {
+							encoder.AppendString(bid.String())
+						}
+						return nil
+					})))
+				good = false
+			}
+		}
+		if good {
+			goodOpinions = append(goodOpinions, opn)
+		}
+	}
+	return goodOpinions
+}
+
+func (s *Syncer) fetchOpinions(ctx context.Context, logger log.Log, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
 	logger.Info("polling layer opinions")
 	opinions, err := s.dataFetcher.PollLayerOpinions(ctx, lid)
 	if err != nil {
 		logger.With().Warning("failed to fetch opinions", log.Err(err))
-		return fmt.Errorf("PollLayerOpinions: %w", err)
+		return nil, fmt.Errorf("PollLayerOpinions: %w", err)
 	}
 
+	opinions = s.checkOpinionsIntegrity(ctx, logger, opinions)
 	if len(opinions) == 0 {
-		logger.Warning("no opinions available from peers")
-		return errNoOpinionsAvailable
+		logger.Warning("no good opinions available from peers")
+		return nil, errNoOpinionsAvailable
 	}
 
-	// TODO: check if the node agree with peers' aggregated hashes
-	// https://github.com/spacemeshos/go-spacemesh/issues/2507
+	return opinions, nil
+}
 
-	if err := s.adopt(ctx, lid, opinions); err != nil {
+func (s *Syncer) adoptOpinions(ctx context.Context, logger log.Log, lid types.LayerID, opinions []*fetch.LayerOpinion) error {
+	// before adopting any opinions, make sure nodes agree on the mesh hash
+	var (
+		prevHash types.Hash32
+		err      error
+	)
+	prevHash, err = layers.GetAggregatedHash(s.cdb, lid.Sub(1))
+	if err != nil {
+		logger.With().Error("failed to get prev agg hash", log.Err(err))
+		return fmt.Errorf("opinions prev hash: %w", err)
+	}
+	for _, opn := range opinions {
+		if opn.PrevAggHash != (types.Hash32{}) && opn.PrevAggHash != prevHash {
+			return errMeshHashDiverged
+		}
+	}
+	if err = s.adopt(ctx, lid, prevHash, opinions); err != nil {
 		logger.With().Info("opinions not fully adopted", log.Err(err))
 		return err
 	}
 	return nil
 }
 
-func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch.LayerOpinion) error {
+func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, prevHash types.Hash32, opinions []*fetch.LayerOpinion) error {
 	logger := s.logger.WithContext(ctx).WithFields(lid)
 	latestVerified := s.mesh.LastVerified()
 	if !latestVerified.Before(lid) {
@@ -174,15 +261,6 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 	if !needCert && !needValidity {
 		logger.With().Debug("node already has local opinions")
 		return nil
-	}
-
-	var prevHash types.Hash32
-	if needValidity {
-		prevHash, err = layers.GetAggregatedHash(s.db, lid.Sub(1))
-		if err != nil {
-			logger.With().Error("failed to get prev agg hash", log.Err(err))
-			return fmt.Errorf("opinions prev hash: %w", err)
-		}
 	}
 
 	sortOpinions(opinions)
@@ -213,11 +291,11 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 			if len(opn.Valid) == 0 && len(opn.Invalid) == 0 {
 				noValidity++
 				logger.With().Debug("peer has no validity", log.Inline(opn))
-			} else if opn.PrevAggHash != prevHash {
+			} else if opn.PrevAggHash != prevHash { // double-checking
 				logger.With().Warning("peer has different prev hash",
 					log.Inline(opn),
 					log.Stringer("node_hash", prevHash))
-			} else if err = s.adoptValidity(ctx, opn.Valid, opn.Invalid); err != nil {
+			} else if err = s.adoptValidity(opn.Valid, opn.Invalid); err != nil {
 				logger.With().Warning("failed to adopt validity", log.Inline(opn), log.Err(err))
 			} else {
 				logger.With().Info("adopted validity from peer",
@@ -266,23 +344,168 @@ func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.C
 	return nil
 }
 
-func (s *Syncer) adoptValidity(ctx context.Context, valid, invalid []types.BlockID) error {
-	all := valid
-	all = append(all, invalid...)
-	if len(all) > 0 {
-		if err := s.dataFetcher.GetBlocks(ctx, all); err != nil {
-			return fmt.Errorf("opinions get blocks: %w", err)
-		}
-	}
+func (s *Syncer) adoptValidity(valid, invalid []types.BlockID) error {
 	for _, bid := range valid {
-		if err := blocks.SetValid(s.db, bid); err != nil {
+		if bid == types.EmptyBlockID {
+			continue
+		}
+		if err := blocks.SetValid(s.cdb, bid); err != nil {
 			return fmt.Errorf("opinions set valid: %w", err)
 		}
 	}
 	for _, bid := range invalid {
-		if err := blocks.SetInvalid(s.db, bid); err != nil {
+		if err := blocks.SetInvalid(s.cdb, bid); err != nil {
 			return fmt.Errorf("opinions set invalid: %w", err)
 		}
 	}
 	return nil
+}
+
+// see https://github.com/spacemeshos/go-spacemesh/issues/2507 for implementation rationale.
+func (s *Syncer) ensureMeshAgreement(
+	ctx context.Context,
+	logger log.Log,
+	diffLayer types.LayerID,
+	opinions []*fetch.LayerOpinion,
+	resyncPeers map[p2p.Peer]struct{},
+) (types.LayerID, error) {
+	logger.Info("checking mesh hash agreement")
+	prevLid := diffLayer.Sub(1)
+	prevHash, err := layers.GetAggregatedHash(s.cdb, prevLid)
+	if err != nil {
+		logger.With().Error("mesh hash failed to get prev hash", log.Err(err))
+		return types.LayerID{}, fmt.Errorf("mesh hash check previous: %w", err)
+	}
+
+	beacon, err := s.beacon.GetBeacon(diffLayer.GetEpoch())
+	if err != nil {
+		logger.With().Warning("mesh hash failed to get beacon", log.Err(err))
+		return types.LayerID{}, fmt.Errorf("mesh hash get beacon: %w", err)
+	}
+
+	var (
+		peers         = make([]p2p.Peer, 0, len(opinions))
+		minFork, fork types.LayerID
+		ed            *fetch.EpochData
+		seen          = make(map[types.Hash32]struct{})
+	)
+	for _, opn := range opinions {
+		if opn.PrevAggHash == (types.Hash32{}) {
+			continue
+		}
+		if _, ok := seen[opn.PrevAggHash]; ok {
+			continue
+		}
+		if _, ok := resyncPeers[opn.Peer()]; ok {
+			continue
+		}
+		if opn.PrevAggHash == prevHash {
+			s.forkFinder.UpdateAgreement(opn.Peer(), prevLid, prevHash, time.Now())
+			continue
+		}
+		logger.With().Warning("found mesh disagreement",
+			log.Stringer("node_prev_hash", prevHash),
+			log.Stringer("disagreed", prevLid),
+			log.Object("peer_opinion", opn))
+		ed, err = s.dataFetcher.PeerEpochInfo(ctx, opn.Peer(), diffLayer.GetEpoch())
+		if err != nil {
+			logger.With().Warning("failed to get epoch info", log.Stringer("peer", opn.Peer()), log.Err(err))
+			continue
+		}
+		if ed.Beacon != beacon {
+			logger.With().Warning("detected different beacon",
+				log.Stringer("peer", opn.Peer()),
+				log.Stringer("peer_beacon", ed.Beacon),
+				log.Stringer("beacon", beacon))
+		}
+		missing := make(map[types.ATXID]struct{})
+		ignored := ed.Weight
+		for _, id := range ed.AtxIDs {
+			if _, ok := missing[id]; ok {
+				continue
+			}
+			hdr, _ := s.cdb.GetAtxHeader(id)
+			if hdr == nil {
+				missing[id] = struct{}{}
+				continue
+			}
+			ignored -= hdr.GetWeight()
+		}
+		if len(missing) > 0 {
+			toFetch := toList(missing)
+			logger.With().Info("fetching missing atxs from peer",
+				log.Stringer("peer", opn.Peer()),
+				log.Uint64("weight", ignored),
+				log.Array("atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+					for _, id := range toFetch {
+						encoder.AppendString(id.ShortString())
+					}
+					return nil
+				})),
+			)
+			// node and peer has different state. check if peer has valid ATXs to back up its opinions
+			if err = s.dataFetcher.GetAtxs(ctx, toFetch); err != nil {
+				// if the node cannot download the ATXs claimed by this peer, it does not trust this peer's mesh
+				logger.With().Warning("failed to download missing ATX claimed by peer",
+					log.Stringer("peer", opn.Peer()),
+					log.Uint64("weight", ignored),
+					log.Err(err))
+				continue
+			}
+		} else {
+			logger.With().Info("peer does not have unknown atx",
+				log.Stringer("peer", opn.Peer()),
+				log.Int("num_atxs", len(ed.AtxIDs)))
+		}
+
+		// find the divergent layer and adopt the peer's mesh from there
+		fork, err = s.forkFinder.FindFork(ctx, opn.Peer(), prevLid, opn.PrevAggHash)
+		if err != nil {
+			logger.With().Warning("failed to find fork", log.Stringer("peer", opn.Peer()), log.Err(err))
+			continue
+		}
+
+		peers = append(peers, opn.Peer())
+		resyncPeers[opn.Peer()] = struct{}{}
+		if minFork == (types.LayerID{}) || fork.Before(minFork) {
+			minFork = fork
+		}
+		seen[opn.PrevAggHash] = struct{}{}
+	}
+
+	if minFork == (types.LayerID{}) {
+		return types.LayerID{}, nil
+	}
+
+	from := minFork.Add(1)
+	logger.With().Info("mesh hash syncing data from peers",
+		log.Stringer("from", from),
+		log.Array("peers", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			for _, p := range peers {
+				encoder.AppendString(p.String())
+			}
+			return nil
+		})))
+	to := from
+	for lid := from; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
+		// ideally syncer should import opinions from peer and let tortoise decide whether to rerun
+		// verifying tortoise or enter full tortoise mode.
+		// however, for genesis running full tortoise with 10_000 layers as a sliding window is completely
+		// viable. so here we don't sync opinions, just the data.
+		// see https://github.com/spacemeshos/go-spacemesh/issues/2507
+		if err = s.syncLayer(ctx, lid, peers...); err != nil {
+			logger.With().Warning("mesh hash failed to sync layer",
+				log.Stringer("sync_lid", lid),
+				log.Err(err))
+		}
+		to = lid
+	}
+	logger.With().Info("resync'ed mesh from peers",
+		log.Int("num_peers", len(peers)),
+		log.Stringer("from", from),
+		log.Stringer("to", to))
+
+	// clear the agreement cache after importing new opinions
+	s.forkFinder.Purge(true)
+	return from, nil
 }
