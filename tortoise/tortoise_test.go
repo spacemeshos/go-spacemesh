@@ -2268,17 +2268,21 @@ func TestOnHareOutput(t *testing.T) {
 		{
 			desc:          "empty after abstain",
 			failedOptions: []sim.NextOpt{sim.WithoutHareOutput()},
-			genDistance:   int(cfg.Zdist), // after zdist minprocessed is updated
+			genDistance:   int(cfg.Zdist) + 1,
+		},
+		{
+			desc:          "recompute on hare output",
+			failedOptions: []sim.NextOpt{sim.WithoutHareOutput()},
 		},
 		{
 			desc:          "empty",
 			failedOptions: []sim.NextOpt{sim.WithEmptyHareOutput()},
-			genDistance:   int(cfg.Zdist - 1),
+			genDistance:   int(cfg.Zdist),
 		},
 		{
 			desc:          "different hare output",
 			failedOptions: []sim.NextOpt{sim.WithHareOutputIndex(1)},
-			genDistance:   int(cfg.Zdist - 1),
+			genDistance:   int(cfg.Zdist),
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -2292,7 +2296,7 @@ func TestOnHareOutput(t *testing.T) {
 				s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 			)
 			tortoise.TallyVotes(ctx, s.Next(tc.failedOptions...))
-			for i := 0; i <= tc.genDistance; i++ {
+			for i := 0; i < tc.genDistance; i++ {
 				tortoise.TallyVotes(ctx, s.Next())
 			}
 			require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
