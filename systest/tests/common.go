@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	attempts = 3
+	attempts       = 3
+	layersPerEpoch = 4
 )
 
 func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
@@ -38,6 +39,41 @@ func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient)
 		return nil, fmt.Errorf("tx state should not be nil")
 	}
 	return response.Txstate.Id.Id, nil
+}
+
+func watchStateHashes(
+	ctx context.Context,
+	eg *errgroup.Group,
+	node *cluster.NodeClient,
+	collector func(*spacemeshv1.GlobalStateStreamResponse) (bool, error),
+) {
+	eg.Go(func() error {
+		return stateHashStream(ctx, node, collector)
+	})
+}
+
+func stateHashStream(
+	ctx context.Context,
+	node *cluster.NodeClient,
+	collector func(*spacemeshv1.GlobalStateStreamResponse) (bool, error),
+) error {
+	stateapi := spacemeshv1.NewGlobalStateServiceClient(node)
+	states, err := stateapi.GlobalStateStream(ctx,
+		&spacemeshv1.GlobalStateStreamRequest{
+			GlobalStateDataFlags: uint32(spacemeshv1.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
+		})
+	if err != nil {
+		return err
+	}
+	for {
+		state, err := states.Recv()
+		if err != nil {
+			return fmt.Errorf("stream err from client %v: %w", node.Name, err)
+		}
+		if cont, err := collector(state); !cont {
+			return err
+		}
+	}
 }
 
 func watchLayers(ctx context.Context, eg *errgroup.Group,
