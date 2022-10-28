@@ -817,6 +817,12 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	err := app.Initialize()
 	assert.EqualError(t, err, "incompatible tortoise hare params")
+
+	conf, err = presets.Get("fastnet")
+	conf.Genesis.GenesisTime = "2006-01-02T15:04:05Z"
+	require.NoError(t, err)
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
 }
 
 func TestConfig_Preset(t *testing.T) {
