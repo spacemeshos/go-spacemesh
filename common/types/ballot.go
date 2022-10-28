@@ -124,8 +124,10 @@ type InnerBallot struct {
 type Votes struct {
 	// Base ballot.
 	Base BallotID
-	// Support and Against blocks that base ballot votes differently.
-	Support, Against []BlockID
+	// Support block id at a particular layer and height.
+	Support []Vote
+	// Against previously supported block.
+	Against []Vote
 	// Abstain on layers until they are terminated.
 	Abstain []LayerID
 }
@@ -134,14 +136,14 @@ type Votes struct {
 func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("base", v.Base.String())
 	encoder.AddArray("support", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, bid := range v.Support {
-			encoder.AppendString(bid.String())
+		for _, vote := range v.Support {
+			encoder.AppendObject(&vote)
 		}
 		return nil
 	}))
 	encoder.AddArray("against", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, bid := range v.Against {
-			encoder.AppendString(bid.String())
+		for _, vote := range v.Against {
+			encoder.AppendObject(&vote)
 		}
 		return nil
 	}))
@@ -151,6 +153,22 @@ func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 		}
 		return nil
 	}))
+	return nil
+}
+
+// Vote additionally carries layer id and height
+// in order for the tortoise to count votes without downloading block body.
+type Vote struct {
+	ID      BlockID
+	LayerID LayerID
+	Height  uint64
+}
+
+// MarshalLogObject implements logging interface.
+func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("id", s.ID.String())
+	encoder.AddUint32("layer", s.LayerID.Value)
+	encoder.AddUint64("height", s.Height)
 	return nil
 }
 
