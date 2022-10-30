@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +26,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -42,6 +45,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -2786,4 +2790,86 @@ func TestEventsReceived(t *testing.T) {
 		[]types.Transaction{*globalTx}, rewards)
 
 	wg.Wait()
+}
+
+func TestVMAccountUpdates(t *testing.T) {
+	logtest.SetupGlobal(t)
+	events.CloseEventReporter()
+	events.InitializeReporter()
+
+	// in memory database doesn't allow reads while writer locked db
+	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
+	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+
+	keys := make([]ed25519.PrivateKey, 10)
+	accounts := make([]types.Account, len(keys))
+	const initial = 100_000_000
+	for i := range keys {
+		pub, pk, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		keys[i] = pk
+		accounts[i] = types.Account{
+			Address: wallet.Address(pub),
+			Balance: initial,
+		}
+	}
+	require.NoError(t, svm.ApplyGenesis(accounts))
+	spawns := []types.Transaction{}
+	for _, pk := range keys {
+		spawns = append(spawns, types.Transaction{
+			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, core.Nonce{})),
+		})
+	}
+	lid := types.GetEffectiveGenesis().Add(1)
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	eg, ctx := errgroup.WithContext(ctx)
+	states := make(chan *pb.AccountState, len(accounts))
+	for _, account := range accounts {
+		stream, err := client.AccountDataStream(ctx, &pb.AccountDataStreamRequest{
+			Filter: &pb.AccountDataFilter{
+				AccountId:        &pb.AccountId{Address: account.Address.String()},
+				AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
+			},
+		})
+		require.NoError(t, err)
+		_, err = stream.Header()
+		require.NoError(t, err)
+		eg.Go(func() error {
+			response, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			states <- response.Datum.GetAccountWrapper().StateCurrent
+			return nil
+		})
+	}
+
+	spends := []types.Transaction{}
+	const amount = 100_000
+	for _, pk := range keys {
+		spends = append(spends, types.Transaction{
+			RawTx: types.NewRawTx(wallet.Spend(
+				pk, types.Address{1}, amount, types.Nonce{Counter: 1},
+			)),
+		})
+	}
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid.Add(1)}, spends, nil)
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
+	close(states)
+	i := 0
+	for state := range states {
+		i++
+		require.Equal(t, 2, int(state.Counter))
+		require.Less(t, int(state.Balance.Value), initial-amount)
+	}
+	require.Equal(t, len(accounts), i)
 }
