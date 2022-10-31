@@ -232,7 +232,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 			return false
 		}
 		account.EncodeScale(encoder)
-		events.ReportAccountUpdate(account.Address)
 		return true
 	})
 	if err != nil {
@@ -248,6 +247,10 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
+	ss.IterateChanged(func(account *core.Account) bool {
+		events.ReportAccountUpdate(account.Address)
+		return true
+	})
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
