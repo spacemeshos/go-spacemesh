@@ -338,7 +338,7 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 
 		case layerID := <-pb.layerTimer:
 			lyrCtx := log.WithNewSessionID(ctx)
-			_ = pb.handleLayer(lyrCtx, layerID) // err logged in `handleLayer`
+			_ = pb.handleLayer(lyrCtx, layerID)
 		}
 	}
 }
