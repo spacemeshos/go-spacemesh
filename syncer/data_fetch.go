@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
-const pollTimeOut = time.Second * 30
+const pollTimeOut = 30 * time.Second
 
 var (
 	errNoPeers = errors.New("no peers")
