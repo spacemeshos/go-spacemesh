@@ -149,7 +149,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	latestState := latest.Sub(1)
 	require.NoError(t, layers.SetApplied(tm.cdb, latestState, types.RandomBlockID()))
 
-	tm.mockState.EXPECT().RevertState(latestState).Return(types.RandomHash(), nil)
+	tm.mockState.EXPECT().RevertState(latestState).Return(nil)
 	msh, err := NewMesh(tm.cdb, tm.mockTortoise, tm.mockState, logtest.New(t))
 	require.NoError(t, err)
 	gotL := msh.LatestLayer()
@@ -439,7 +439,8 @@ func TestMesh_Revert(t *testing.T) {
 	tm.mockTortoise.EXPECT().OnHareOutput(gPlus4, blocks4[0].ID())
 	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gPlus4)
 	tm.mockTortoise.EXPECT().LatestComplete().Return(gPlus3)
-	tm.mockState.EXPECT().RevertState(gPlus1).Return(types.Hash32{}, nil)
+	tm.mockState.EXPECT().RevertState(gPlus1).Return(nil)
+	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	for i := gPlus2; !i.After(gPlus4); i = i.Add(1) {
 		hareOutput := layerBlocks[i]
 		tm.mockState.EXPECT().ApplyLayer(context.TODO(), hareOutput).Return(nil)
@@ -732,4 +733,34 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		require.NoError(t, tm.AddBallot(&ballot))
 		require.True(t, ballot.IsMalicious())
 	}
+}
+
+func TestMesh_UpdateBlockValidity(t *testing.T) {
+	tm := createTestMesh(t)
+	lid := types.NewLayerID(111)
+	b0 := types.NewExistingBlock(types.BlockID{1},
+		types.InnerBlock{LayerIndex: lid, TxIDs: []types.TransactionID{{1, 1, 1}}})
+	require.NoError(t, blocks.Add(tm.cdb, b0))
+
+	require.Equal(t, types.LayerID{}, tm.getMinUpdatedLayer())
+
+	// b0 validity was never set
+	tm.UpdateBlockValidity(b0.ID(), b0.LayerIndex, false)
+	require.Equal(t, lid, tm.getMinUpdatedLayer())
+
+	// b1 was valid, but updated to invalid
+	b1 := types.NewExistingBlock(types.BlockID{2},
+		types.InnerBlock{LayerIndex: lid.Sub(1), TxIDs: []types.TransactionID{{2, 2, 2}}})
+	require.NoError(t, blocks.Add(tm.cdb, b1))
+	require.NoError(t, blocks.SetValid(tm.cdb, b1.ID()))
+	tm.UpdateBlockValidity(b1.ID(), b1.LayerIndex, false)
+	require.Equal(t, lid.Sub(1), tm.getMinUpdatedLayer())
+
+	// b2 was valid, got updated to still be valid
+	b2 := types.NewExistingBlock(types.BlockID{3},
+		types.InnerBlock{LayerIndex: lid.Sub(2), TxIDs: []types.TransactionID{{3, 3, 3}}})
+	require.NoError(t, blocks.Add(tm.cdb, b2))
+	require.NoError(t, blocks.SetValid(tm.cdb, b2.ID()))
+	tm.UpdateBlockValidity(b2.ID(), b2.LayerIndex, true)
+	require.Equal(t, lid.Sub(1), tm.getMinUpdatedLayer())
 }
