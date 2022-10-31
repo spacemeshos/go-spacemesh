@@ -140,12 +140,13 @@ func (v *VM) revert(lid types.LayerID) error {
 	return tx.Commit()
 }
 
-// Revert all changes that we made after the layer. Returns state hash of the layer.
-func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
+// Revert all changes that we made after the layer.
+func (v *VM) Revert(lid types.LayerID) error {
 	if err := v.revert(lid); err != nil {
-		return types.Hash32{}, err
+		return err
 	}
-	return v.GetStateRoot()
+	v.logger.With().Info("vm reverted to layer", lid)
+	return nil
 }
 
 // AccountExists returns true if the address exists, spawned or not.
