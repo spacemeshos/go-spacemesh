@@ -188,6 +188,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 					"client_hash", clientState[layer],
 					"ref_hash", refState[layer])
 				agree = false
+				break
 			}
 		}
 		if agree {
@@ -208,7 +209,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	testPartition(t, tctx, cl, 30, 2)
@@ -217,7 +218,7 @@ func TestPartition_30_70(t *testing.T) {
 func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	testPartition(t, tctx, cl, 50, 3)

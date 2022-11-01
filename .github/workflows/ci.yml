@@ -263,7 +263,7 @@ jobs:
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 60
+    timeout-minutes: 90
     concurrency: cloud-limits
     steps:
       - uses: actions/checkout@v3
@@ -304,16 +304,19 @@ jobs:
       - name: Push tests docker images
         run: cd systest && make push
 
-      - name: Run tests
+      - name: Run tests I
         timeout-minutes: 50
         run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
+      - name: Run tests II
+        timeout-minutes: 30
+        run: cd systest && make run test_name=. size=30 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=destructive storage=premium-rwo=10Gi
+
       - name: System test result
+        # SUCCESS will capture all the pods exit status separated by space. adding up all the numbers.
         run: |
           SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
-          SUCCESS="${SUCCESS//'%'/'%25'}"
-          SUCCESS="${SUCCESS//$'\n'/'%0A'}"
-          SUCCESS="${SUCCESS//$'\r'/'%0D'}"
+          SUCCESS=$(echo $SUCCESS | tr ' ' '+' | bc -l)
           echo "::set-output name=content::$SUCCESS"
         id: tests_logs
 
