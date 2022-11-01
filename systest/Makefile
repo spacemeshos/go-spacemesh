@@ -18,6 +18,11 @@ namespace ?=
 label ?=
 env ?=
 
+params ?= $(test_pod_name)
+smesher_config ?= parameters/fastnet/smesher.json
+poet_config ?= parameters/fastnet/poet.json
+optional_literals ?= 
+
 
 .PHONY: docker
 docker:
@@ -29,13 +34,21 @@ push:
 
 .PHONY: run
 run:
+	@if [ $(params) = $(test_pod_name) ]; then\
+		@kubectl create configmap $(test_pod_name) --labels="testid=$(test_id)" \
+			--from-file=smesher=$(smesher_config) \ 
+			--from-file=poet=$(poet_config) \
+			--from-literal=cluster-size=$(size) \
+			--from-literal=bootsrap-duration=$(bootstrap) \ 
+			$(optional_literals);\
+	fi
 	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--env=$(env) \
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
-    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -size=$(size) -poet-size=$(poet_size) -image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id) -labels=$(label)
+    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -poet-size=$(poet_size) -image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) -keep=$(keep) -testid=$(test_id) -labels=$(label) -params=$(params)
 	-@kubectl wait --timeout=10s --for=condition=ready pod/$(test_pod_name)
 	@kubectl logs $(test_pod_name) -f
 

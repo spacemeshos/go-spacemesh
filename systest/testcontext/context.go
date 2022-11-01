@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -28,6 +30,7 @@ import (
 )
 
 var (
+	params    = flag.String("params", "", "config map name. if not empty parameters will be loaded from specified configmap")
 	testid    = flag.String("testid", "", "Name of the pod that runs tests.")
 	imageFlag = flag.String("image", "spacemeshos/go-spacemesh-dev:proposal-events",
 		"go-spacemesh image")
@@ -47,6 +50,10 @@ var (
 	labels       = stringSet{}
 	tokens       chan struct{}
 	initTokens   sync.Once
+)
+
+const (
+	nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 const (
@@ -74,6 +81,7 @@ func rngName() string {
 type Context struct {
 	context.Context
 	Client            *kubernetes.Clientset
+	Parameters        *parameters.Parameters
 	BootstrapDuration time.Duration
 	ClusterSize       int
 	PoetSize          int
@@ -246,15 +254,28 @@ func New(t *testing.T, opts ...Opt) *Context {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
 	t.Cleanup(cancel)
+
+	paramsName := *testid
+	if len(*params) > 0 {
+		paramsName = *params
+	}
+	podns, err := ioutil.ReadFile(nsfile)
+	require.NoError(t, err, "reading nsfile at %s", nsfile)
+	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, paramsName, apimetav1.GetOptions{})
+	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *params)
+
+	p := parameters.FromValues(paramsData.Data)
+
 	cctx := &Context{
 		Context:           ctx,
+		Parameters:        p,
 		Namespace:         ns,
-		BootstrapDuration: *bootstrapDuration,
+		BootstrapDuration: parameters.Get(p, parameters.BootstrapDuration),
 		Client:            clientset,
 		Generic:           generic,
 		TestID:            *testid,
 		Keep:              *keep,
-		ClusterSize:       *clusterSize,
+		ClusterSize:       parameters.Get(p, parameters.ClusterSize),
 		PoetSize:          *poetSize,
 		Image:             *imageFlag,
 		PoetImage:         *poetImage,

@@ -99,17 +99,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
-	cluster.addFlag(CycleGap(10 * time.Second))
-	cluster.addFlag(PhaseShift(20 * time.Second))
-	cluster.addFlag(GracePeriod(5 * time.Second))
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
-	// NOTE(dshulyak) epoch duration needs to be in sync with go-spacemesh
-	// configuration. consider to move epoch configuration from preset to systest
-	cluster.addPoetFlag(EpochDuration(60 * time.Second))
-	cluster.addPoetFlag(CycleGap(10 * time.Second))
-	cluster.addPoetFlag(PhaseShift(20 * time.Second))
 
 	for _, opt := range opts {
 		opt(cluster)

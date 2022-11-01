@@ -92,8 +92,6 @@ type BaseConfig struct {
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
-	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
-
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
 
 	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
@@ -161,6 +159,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		LayerDurationSec:    30,
+		LayerAvgSize:        50,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},
 		SyncRequestTimeout:  2000,

@@ -103,7 +103,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 }
 
 func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
-	ctx.Log.Debugw("Deploying Poet Service", "id", id)
+	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels("poet", id)
 	svc := corev1.Service(id, ctx.Namespace).
 		WithLabels(labels).
@@ -453,11 +453,6 @@ func (d DeploymentFlag) Flag() string {
 	return d.Name + "=" + d.Value
 }
 
-// RerunInterval flag.
-func RerunInterval(duration time.Duration) DeploymentFlag {
-	return DeploymentFlag{Name: "--tortoise-rerun-interval", Value: duration.String()}
-}
-
 // PoetEndpoint flag.
 func PoetEndpoint(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
@@ -510,24 +505,4 @@ func DurationFlag(flag string, d time.Duration) DeploymentFlag {
 // PoetRestListen socket pair with http api.
 func PoetRestListen(port int) DeploymentFlag {
 	return DeploymentFlag{Name: "--restlisten", Value: fmt.Sprintf("0.0.0.0:%d", port)}
-}
-
-// EpochDuration ...
-func EpochDuration(d time.Duration) DeploymentFlag {
-	return DurationFlag("--epoch-duration", d)
-}
-
-// CycleGap ...
-func CycleGap(d time.Duration) DeploymentFlag {
-	return DurationFlag("--cycle-gap", d)
-}
-
-// PhaseShift ...
-func PhaseShift(d time.Duration) DeploymentFlag {
-	return DurationFlag("--phase-shift", d)
-}
-
-// GracePeriod ...
-func GracePeriod(d time.Duration) DeploymentFlag {
-	return DurationFlag("--grace-period", d)
 }
