@@ -22,9 +22,9 @@ label ?=
 configname ?= $(test_pod_name)
 smesher_config ?= parameters/fastnet/smesher.json
 poet_config ?= parameters/fastnet/poet.conf
-properties_file ?=
-ifneq ($(properties_file),)
-	optional_properties = --from-env-file=$(properties_file)
+properties ?=
+ifneq ($(properties),)
+	optional_properties = --from-env-file=$(properties)
 endif 
 ifeq ($(configname),$(test_pod_name))
 	run_deps = config
