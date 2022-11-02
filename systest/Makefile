@@ -18,7 +18,6 @@ storage ?= standard=1Gi
 node_selector ?=
 namespace ?=
 label ?=
-env ?=
 
 configname ?= $(test_pod_name)
 smesher_config ?= parameters/fastnet/smesher.json
@@ -61,7 +60,6 @@ config:
 run: $(run_deps)
 	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
-	--env=$(env) \
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
