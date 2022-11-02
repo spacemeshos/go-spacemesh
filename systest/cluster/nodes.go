@@ -23,10 +23,31 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 
+	"github.com/spacemeshos/go-spacemesh/systest/parameters"
+	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-const persistentVolumeName = "data"
+var (
+	poetConfig = parameters.NewBytes(
+		"poet-config",
+		"configuration for poet service",
+		fastnet.PoetConfig,
+	)
+	smesherConfig = parameters.NewBytes(
+		"smesher-config",
+		"configuration for smesher service",
+		fastnet.SmesherConfig,
+	)
+)
+
+const (
+	configDir = "/etc/config/"
+
+	persistentVolumeName  = "data"
+	attachedPoetConfig    = "poet.json"
+	attachedSmesherConfig = "smesher.json"
+)
 
 func persistentVolumeClaim(podname string) string {
 	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
@@ -65,23 +86,41 @@ type NodeClient struct {
 }
 
 func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
-	var args []string
+	var args = []string{"--configfile=" + configDir + attachedPoetConfig}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
 
 	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
+	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(id, ctx.Namespace).WithBinaryData(map[string][]byte{
+			attachedPoetConfig: parameters.Get(ctx.Parameters, poetConfig),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, id, err)
+	}
+
 	labels := nodeLabels("poet", id)
 	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
 			corev1.PodSpec().
 				WithNodeSelector(ctx.NodeSelector).
+				WithVolumes(corev1.Volume().
+					WithName("config").
+					WithConfigMap(corev1.ConfigMapVolumeSource().WithName(cfg.Name)),
+				).
 				WithContainers(corev1.Container().
 					WithName("poet").
 					WithImage(ctx.PoetImage).
 					WithArgs(args...).
 					WithPorts(corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort)).
+					WithVolumeMounts(
+						corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+					).
 					WithResources(corev1.ResourceRequirements().WithRequests(
 						v1.ResourceList{
 							v1.ResourceCPU:    resource.MustParse("0.5"),
@@ -91,7 +130,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 				),
 		)
 
-	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err = ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
@@ -149,6 +188,7 @@ func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*
 }
 
 func deletePoet(ctx *testcontext.Context, id string) error {
+	errCfg := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{})
 	errPod := ctx.Client.CoreV1().Pods(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
 	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
@@ -159,7 +199,9 @@ func deletePoet(ctx *testcontext.Context, id string) error {
 			}
 		}
 	}
-
+	if errCfg != nil {
+		return errSvc
+	}
 	if errPod != nil {
 		return errPod
 	}
@@ -264,6 +306,9 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 
 func deleteNode(ctx *testcontext.Context, podname string) error {
 	setname := setName(podname)
+	if err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("deleting configmap %s/%s: %w", ctx.Namespace, setname, err)
+	}
 	if err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
 		Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
 		return err
@@ -291,8 +336,21 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	if err != nil {
 		return fmt.Errorf("apply headless service: %w", err)
 	}
+
+	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(name, ctx.Namespace).WithBinaryData(map[string][]byte{
+			attachedSmesherConfig: parameters.Get(ctx.Parameters, smesherConfig),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, name, err)
+	}
+
 	cmd := []string{
 		"/bin/go-spacemesh",
+		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
 		"--preset=fastnet",
 		"--smeshing-start=true",
@@ -331,6 +389,10 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 				WithLabels(labels).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
+					WithVolumes(corev1.Volume().
+						WithName("config").
+						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(cfg.Name)),
+					).
 					WithContainers(corev1.Container().
 						WithName("smesher").
 						WithImage(ctx.Image).
@@ -342,6 +404,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
 						WithResources(corev1.ResourceRequirements().WithRequests(
 							v1.ResourceList{

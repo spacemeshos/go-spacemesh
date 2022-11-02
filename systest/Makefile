@@ -18,10 +18,10 @@ namespace ?=
 label ?=
 env ?=
 
-params ?= $(test_pod_name)
+configname ?= $(test_pod_name)
 smesher_config ?= parameters/fastnet/smesher.json
 poet_config ?= parameters/fastnet/poet.json
-optional_literals ?= 
+optional_properties ?= properties.conf 
 
 
 .PHONY: docker
@@ -32,28 +32,32 @@ docker:
 push:
 	docker push $(image_name)
 
+.PHONY: config
+config:
+	@kubectl create configmap $(configname) --labels="testid=$(test_id)" \
+		--from-file=smesher=$(smesher_config) \ 
+		--from-file=poet=$(poet_config) \
+		--from-literal=cluster-size=$(size) \
+		--from-literal=bootsrap-duration=$(bootstrap) \ 
+		--from-env-file=$(optional_properties)
+
 .PHONY: run
 run:
-	@if [ $(params) = $(test_pod_name) ]; then\
-		@kubectl create configmap $(test_pod_name) --labels="testid=$(test_id)" \
-			--from-file=smesher=$(smesher_config) \ 
-			--from-file=poet=$(poet_config) \
-			--from-literal=cluster-size=$(size) \
-			--from-literal=bootsrap-duration=$(bootstrap) \ 
-			$(optional_literals);\
-	fi
+	@if [ $(configname) = $(test_pod_name) ]; then config; fi
 	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--env=$(env) \
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
-    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -poet-size=$(poet_size) -image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) -keep=$(keep) -testid=$(test_id) -labels=$(label) -params=$(params)
+    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -poet-size=$(poet_size) -image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) -keep=$(keep) -testid=$(test_id) -labels=$(label) -configname=$(configname)
 	-@kubectl wait --timeout=10s --for=condition=ready pod/$(test_pod_name)
 	@kubectl logs $(test_pod_name) -f
 
 .PHONY: clean
 clean:
+	@each "deleting configmaps with testid=$(test_id)"
+	@kubectl delete configmap --selector=testid=$(test_id)
 	@echo "deleting test pods with testid=$(test_id)"
 	@kubectl delete pod --selector=testid=$(test_id)
 	@kubectl wait --for delete pod --selector=testid=$(test_id)

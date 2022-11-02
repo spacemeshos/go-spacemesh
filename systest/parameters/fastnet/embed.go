@@ -5,7 +5,7 @@ import (
 )
 
 //go:embed "smesher.json"
-var SmesherConfig string
+var SmesherConfig []byte
 
 //go:embed "poet.json"
-var PoetConfig string
+var PoetConfig []byte

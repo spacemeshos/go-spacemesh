@@ -30,17 +30,14 @@ import (
 )
 
 var (
-	params    = flag.String("params", "", "config map name. if not empty parameters will be loaded from specified configmap")
-	testid    = flag.String("testid", "", "Name of the pod that runs tests.")
-	imageFlag = flag.String("image", "spacemeshos/go-spacemesh-dev:proposal-events",
+	configname = flag.String("configname", "", "config map name. if not empty parameters will be loaded from specified configmap")
+	testid     = flag.String("testid", "", "Name of the pod that runs tests.")
+	imageFlag  = flag.String("image", "spacemeshos/go-spacemesh-dev:proposal-events",
 		"go-spacemesh image")
 	poetImage     = flag.String("poet-image", "spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4", "poet server image")
 	namespaceFlag = flag.String("namespace", "",
 		"namespace for the cluster. if empty every test will use random namespace")
-	logLevel          = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
-	bootstrapDuration = flag.Duration("bootstrap", 30*time.Second,
-		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management")
-	clusterSize  = flag.Int("size", 10, "size of the cluster. all test must use at most this number of smeshers")
+	logLevel     = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
 	poetSize     = flag.Int("poet-size", 1, "size of the poet servers")
 	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
@@ -52,9 +49,20 @@ var (
 	initTokens   sync.Once
 )
 
-const (
-	nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+var (
+	bootstrapDuration = parameters.NewDuration(
+		"bootstrap-duration",
+		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management",
+		30*time.Second,
+	)
+	clusterSize = parameters.NewInt(
+		"cluster-size",
+		"size of the cluster. all test must use at most this number of smeshers",
+		10,
+	)
 )
+
+const nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
 const (
 	keepLabel        = "keep"
@@ -255,27 +263,22 @@ func New(t *testing.T, opts ...Opt) *Context {
 	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
 	t.Cleanup(cancel)
 
-	paramsName := *testid
-	if len(*params) > 0 {
-		paramsName = *params
-	}
 	podns, err := ioutil.ReadFile(nsfile)
 	require.NoError(t, err, "reading nsfile at %s", nsfile)
-	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, paramsName, apimetav1.GetOptions{})
-	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *params)
+	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
+	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *configname)
 
 	p := parameters.FromValues(paramsData.Data)
-
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
 		Namespace:         ns,
-		BootstrapDuration: parameters.Get(p, parameters.BootstrapDuration),
+		BootstrapDuration: parameters.Get(p, bootstrapDuration),
 		Client:            clientset,
 		Generic:           generic,
 		TestID:            *testid,
 		Keep:              *keep,
-		ClusterSize:       parameters.Get(p, parameters.ClusterSize),
+		ClusterSize:       parameters.Get(p, clusterSize),
 		PoetSize:          *poetSize,
 		Image:             *imageFlag,
 		PoetImage:         *poetImage,

@@ -274,7 +274,7 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 
 	id := createPoetIdentifier(c.firstFreePoetId())
-	cctx.Log.Debugw("Deploying Poet", "id", id)
+	cctx.Log.Debugw("deploying poet", "id", id)
 	pod, err := deployPoet(cctx, id, flags...)
 	if err != nil {
 		return err

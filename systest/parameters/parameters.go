@@ -3,8 +3,6 @@ package parameters
 import (
 	"strconv"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 )
 
 // New creates Parameters instance with default values.
@@ -30,22 +28,44 @@ func (p *Parameters) Update(values map[string]string) {
 }
 
 func Get[T any](params *Parameters, param Parameter[T]) T {
-	value, exist := params.values[param.Name]
+	value, exist := params.values[param.name]
 	var rst T
 	if !exist {
-		return param.Default
+		return param.defaults
 	}
-	rst, err := param.fromString(value)
+	rst, err := param.parser(value)
 	if err != nil {
 		panic("not a valid param " + err.Error())
 	}
 	return rst
 }
 
+type Parser[T any] func(string) (T, error)
+
 type Parameter[T any] struct {
-	Name, Description string
-	Default           T
-	fromString        func(string) (T, error)
+	name, desc string
+	defaults   T
+	parser     Parser[T]
+}
+
+func NewParameter[T any](name, desc string, defaults T, parser Parser[T]) Parameter[T] {
+	return Parameter[T]{name: name, desc: desc, defaults: defaults, parser: parser}
+}
+
+func NewString(name, desc, defaults string) Parameter[string] {
+	return NewParameter(name, desc, defaults, toString)
+}
+
+func NewBytes(name, desc string, defaults []byte) Parameter[[]byte] {
+	return NewParameter(name, desc, defaults, toBytes)
+}
+
+func NewDuration(name, desc string, defaults time.Duration) Parameter[time.Duration] {
+	return NewParameter(name, desc, defaults, toDuration)
+}
+
+func NewInt(name, desc string, defaults int) Parameter[int] {
+	return NewParameter(name, desc, defaults, toInt)
 }
 
 func toBytes(value string) ([]byte, error) {
@@ -71,30 +91,3 @@ func toDuration(value string) (time.Duration, error) {
 	}
 	return rst, nil
 }
-
-var (
-	BootstrapDuration = Parameter[time.Duration]{
-		Name:        "bootstrap-duration",
-		Description: "bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management",
-		Default:     30 * time.Second,
-		fromString:  toDuration,
-	}
-	ClusterSize = Parameter[int]{
-		Name:        "cluster-size",
-		Description: "size of the cluster. all test must use at most this number of smeshers",
-		Default:     10,
-		fromString:  toInt,
-	}
-	PoetConfig = Parameter[string]{
-		Name:        "poet-config",
-		Description: "configuration for poet service",
-		Default:     fastnet.PoetConfig,
-		fromString:  toString,
-	}
-	SmesherConfig = Parameter[string]{
-		Name:        "smesher-config",
-		Description: "configuration for smesher service",
-		Default:     fastnet.SmesherConfig,
-		fromString:  toString,
-	}
-)
