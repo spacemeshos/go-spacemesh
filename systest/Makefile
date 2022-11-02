@@ -21,7 +21,11 @@ env ?=
 configname ?= $(test_pod_name)
 smesher_config ?= parameters/fastnet/smesher.json
 poet_config ?= parameters/fastnet/poet.json
-optional_properties ?= properties.env 
+properties_file ?=
+ifneq ($(properties_file),)
+	optional_properties = --from-env-file=$(properties_file)
+endif 
+
 
 
 .PHONY: docker
@@ -39,7 +43,7 @@ config:
 		--from-file=poet=$(poet_config) \
 		--from-literal=cluster-size=$(size) \
 		--from-literal=bootsrap-duration=$(bootstrap) \ 
-		--from-env-file=$(optional_properties)
+		$(optional_properties)
 
 .PHONY: run
 run:
