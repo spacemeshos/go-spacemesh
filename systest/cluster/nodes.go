@@ -86,7 +86,9 @@ type NodeClient struct {
 }
 
 func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
-	var args = []string{"-c=" + configDir + attachedPoetConfig}
+	args := []string{
+		"-c=" + configDir + attachedPoetConfig,
+	}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
