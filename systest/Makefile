@@ -1,11 +1,12 @@
-test_name ?= TestSmeshing
 version_info ?= $(shell git rev-parse --short HEAD)
+date := $(shell date +'%s')
+
+test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
 poet_image ?= spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 test_id ?= systest-$(version_info)
-date = $(shell date +'%s')
 test_pod_name ?= systest-$(version_info)-$(date)
 keep ?= false
 clusters ?= 1
@@ -21,7 +22,7 @@ env ?=
 
 configname ?= $(test_pod_name)
 smesher_config ?= parameters/fastnet/smesher.json
-poet_config ?= parameters/fastnet/poet.json
+poet_config ?= parameters/fastnet/poet.conf
 properties_file ?=
 ifneq ($(properties_file),)
 	optional_properties = --from-env-file=$(properties_file)

@@ -1,6 +1,0 @@
-{
-    "epoch-duration": "20m",
-    "phase-shift": "10m",
-    "cycle-gap": "10s",
-    "grace-period": "5s"  
-}

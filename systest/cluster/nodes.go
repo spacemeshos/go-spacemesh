@@ -29,12 +29,12 @@ import (
 )
 
 var (
-	poetConfig = parameters.NewBytes(
+	poetConfig = parameters.NewString(
 		"poet",
 		"configuration for poet service",
 		fastnet.PoetConfig,
 	)
-	smesherConfig = parameters.NewBytes(
+	smesherConfig = parameters.NewString(
 		"smesher",
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
@@ -45,7 +45,7 @@ const (
 	configDir = "/etc/config/"
 
 	persistentVolumeName  = "data"
-	attachedPoetConfig    = "poet.json"
+	attachedPoetConfig    = "poet.conf"
 	attachedSmesherConfig = "smesher.json"
 )
 
@@ -86,7 +86,7 @@ type NodeClient struct {
 }
 
 func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
-	var args = []string{"--configfile=" + configDir + attachedPoetConfig}
+	var args = []string{"-c=" + configDir + attachedPoetConfig}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
@@ -94,7 +94,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
 	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
-		corev1.ConfigMap(id, ctx.Namespace).WithBinaryData(map[string][]byte{
+		corev1.ConfigMap(id, ctx.Namespace).WithData(map[string]string{
 			attachedPoetConfig: parameters.Get(ctx.Parameters, poetConfig),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
@@ -339,7 +339,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 
 	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
-		corev1.ConfigMap(name, ctx.Namespace).WithBinaryData(map[string][]byte{
+		corev1.ConfigMap(name, ctx.Namespace).WithData(map[string]string{
 			attachedSmesherConfig: parameters.Get(ctx.Parameters, smesherConfig),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
@@ -362,7 +362,6 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
-	ctx.Log.Debug("smesher image", "image", ctx.Image)
 	sset := appsv1.StatefulSet(name, ctx.Namespace).
 		WithSpec(appsv1.StatefulSetSpec().
 			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).
