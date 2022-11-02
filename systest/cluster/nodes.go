@@ -30,12 +30,12 @@ import (
 
 var (
 	poetConfig = parameters.NewBytes(
-		"poet-config",
+		"poet",
 		"configuration for poet service",
 		fastnet.PoetConfig,
 	)
 	smesherConfig = parameters.NewBytes(
-		"smesher-config",
+		"smesher",
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
 	)

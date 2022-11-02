@@ -21,7 +21,7 @@ env ?=
 configname ?= $(test_pod_name)
 smesher_config ?= parameters/fastnet/smesher.json
 poet_config ?= parameters/fastnet/poet.json
-optional_properties ?= properties.conf 
+optional_properties ?= properties.env 
 
 
 .PHONY: docker
