@@ -1,3 +1,4 @@
 systest
 *.test
 build/
+properties.env
