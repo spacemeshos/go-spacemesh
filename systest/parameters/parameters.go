@@ -44,7 +44,9 @@ func (p *Parameter[T]) Get(params *Parameters) T {
 	}
 	rst, err := p.parser(value)
 	if err != nil {
-		panic("not a valid param " + err.Error())
+		// TODO(dshulyak) move this to part to validation that is exucuted
+		// when values are updated (Parameters.Update)
+		panic(fmt.Sprintf("invalid parameter %s: %s. default (%v): %v", p.name, p.desc, p.defaults, err))
 	}
 	return rst
 }
