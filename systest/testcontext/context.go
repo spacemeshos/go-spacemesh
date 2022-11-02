@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -287,7 +286,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
 	t.Cleanup(cancel)
 
-	podns, err := ioutil.ReadFile(nsfile)
+	podns, err := os.ReadFile(nsfile)
 	require.NoError(t, err, "reading nsfile at %s", nsfile)
 	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
 	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *configname)
