@@ -1,6 +1,7 @@
 package parameters
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -27,19 +28,6 @@ func (p *Parameters) Update(values map[string]string) {
 	}
 }
 
-func Get[T any](params *Parameters, param Parameter[T]) T {
-	value, exist := params.values[param.name]
-	var rst T
-	if !exist {
-		return param.defaults
-	}
-	rst, err := param.parser(value)
-	if err != nil {
-		panic("not a valid param " + err.Error())
-	}
-	return rst
-}
-
 type Parser[T any] func(string) (T, error)
 
 type Parameter[T any] struct {
@@ -48,24 +36,53 @@ type Parameter[T any] struct {
 	parser     Parser[T]
 }
 
+func (p *Parameter[T]) Get(params *Parameters) T {
+	value, exist := params.values[p.name]
+	var rst T
+	if !exist {
+		return p.defaults
+	}
+	rst, err := p.parser(value)
+	if err != nil {
+		panic("not a valid param " + err.Error())
+	}
+	return rst
+}
+
 func NewParameter[T any](name, desc string, defaults T, parser Parser[T]) Parameter[T] {
 	return Parameter[T]{name: name, desc: desc, defaults: defaults, parser: parser}
 }
 
-func NewString(name, desc, defaults string) Parameter[string] {
+func String(name, desc, defaults string) Parameter[string] {
 	return NewParameter(name, desc, defaults, toString)
 }
 
-func NewBytes(name, desc string, defaults []byte) Parameter[[]byte] {
+func Bytes(name, desc string, defaults []byte) Parameter[[]byte] {
 	return NewParameter(name, desc, defaults, toBytes)
 }
 
-func NewDuration(name, desc string, defaults time.Duration) Parameter[time.Duration] {
+func Duration(name, desc string, defaults time.Duration) Parameter[time.Duration] {
 	return NewParameter(name, desc, defaults, toDuration)
 }
 
-func NewInt(name, desc string, defaults int) Parameter[int] {
+func Int(name, desc string, defaults int) Parameter[int] {
 	return NewParameter(name, desc, defaults, toInt)
+}
+
+func Bool(name, desc string) Parameter[bool] {
+	return NewParameter(name, desc, false, func(value string) (bool, error) {
+		switch value {
+		case "true":
+			return true, nil
+		case "1":
+			return true, nil
+		case "false":
+			return false, nil
+		case "0":
+			return false, nil
+		}
+		return false, fmt.Errorf("not a boolean %v", value)
+	})
 }
 
 func toBytes(value string) ([]byte, error) {

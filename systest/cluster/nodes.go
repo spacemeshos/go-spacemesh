@@ -29,12 +29,12 @@ import (
 )
 
 var (
-	poetConfig = parameters.NewString(
+	poetConfig = parameters.String(
 		"poet",
 		"configuration for poet service",
 		fastnet.PoetConfig,
 	)
-	smesherConfig = parameters.NewString(
+	smesherConfig = parameters.String(
 		"smesher",
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
@@ -97,7 +97,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
 		corev1.ConfigMap(id, ctx.Namespace).WithData(map[string]string{
-			attachedPoetConfig: parameters.Get(ctx.Parameters, poetConfig),
+			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
@@ -342,7 +342,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
 		corev1.ConfigMap(name, ctx.Namespace).WithData(map[string]string{
-			attachedSmesherConfig: parameters.Get(ctx.Parameters, smesherConfig),
+			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)

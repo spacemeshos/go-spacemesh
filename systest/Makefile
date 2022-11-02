@@ -46,6 +46,14 @@ config:
 		--from-file=smesher=$(smesher_config) --from-file=poet=$(poet_config) \
 		--from-literal=cluster-size=$(size) \
 		--from-literal=bootsrap-duration=$(bootstrap) \
+		--from-literal=namespace=$(namespace) \
+		--from-literal=storage=$(storage) \
+		--from-literal=node-selector=$(node_selector) \
+		--from-literal=image=$(smesher_image) \
+		--from-literal=poet-image=$(poet_image) \
+		--from-literal=poet-size=$(poet_size) \
+		--from-literal=keep=$(keep) \
+		--from-literal=testid=$(test_id) \
 		$(optional_properties)
 	@kubectl label configmap $(configname) testid=$(test_id)
 
@@ -57,7 +65,7 @@ run: $(run_deps)
 	--restart=Never \
 	--labels="testid=$(test_id)" \
     --image-pull-policy=IfNotPresent -- \
-    tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -poet-size=$(poet_size) -image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) -keep=$(keep) -testid=$(test_id) -labels=$(label) -configname=$(configname)
+    tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -level=$(level) -labels=$(label) -configname=$(configname)
 	-@kubectl wait --timeout=10s --for=condition=ready pod/$(test_pod_name)
 	@kubectl logs $(test_pod_name) -f
 

@@ -1,8 +1,6 @@
 package tests
 
 import (
-	"os"
-	"strconv"
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -11,7 +9,14 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
+	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+)
+
+var layersToCheck = parameters.Int(
+	"layers-to-check",
+	"number of layers to check in TestPoetsFailures",
+	20,
 )
 
 func TestPoetsFailures(t *testing.T) {
@@ -28,10 +33,7 @@ func TestPoetsFailures(t *testing.T) {
 }
 
 func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
-	layersCount := uint32(20)
-	if value, err := strconv.ParseUint(os.Getenv("SYSTEST_LAYERS_TO_CHECK"), 10, 32); err == nil {
-		layersCount = uint32(value)
-	}
+	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
 	const epochSize = 4
 	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), epochSize)
 	last := first + layersCount - 1

@@ -31,35 +31,68 @@ import (
 )
 
 var (
-	configname = flag.String("configname", "", "config map name. if not empty parameters will be loaded from specified configmap")
-	testid     = flag.String("testid", "", "Name of the pod that runs tests.")
-	imageFlag  = flag.String("image", "spacemeshos/go-spacemesh-dev:proposal-events",
-		"go-spacemesh image")
-	poetImage     = flag.String("poet-image", "spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4", "poet server image")
-	namespaceFlag = flag.String("namespace", "",
-		"namespace for the cluster. if empty every test will use random namespace")
-	logLevel     = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
-	poetSize     = flag.Int("poet-size", 1, "size of the poet servers")
-	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
-	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
-	clusters     = flag.Int("clusters", 1, "controls how many clusters are deployed on k8s")
-	storage      = flag.String("storage", "standard=1Gi", "<class>=<size> for the storage")
-	nodeSelector = stringToString{}
-	labels       = stringSet{}
-	tokens       chan struct{}
-	initTokens   sync.Once
+	configname  = flag.String("configname", "", "config map name. if not empty parameters will be loaded from specified configmap")
+	clusters    = flag.Int("clusters", 1, "controls tests parallelization by creating multiple spacemesh clusters at the same time")
+	logLevel    = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
+	testTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
+	labels      = stringSet{}
+
+	tokens     chan struct{}
+	initTokens sync.Once
 )
 
+func init() {
+	flag.Var(labels, "labels", "test will be executed only if it matches all labels")
+}
+
 var (
-	bootstrapDuration = parameters.NewDuration(
+	testid = parameters.String(
+		"testid", "Name of the pod that runs tests.", "",
+	)
+	imageFlag = parameters.String(
+		"image",
+		"go-spacemesh image",
+		"spacemeshos/go-spacemesh-dev:proposal-events",
+	)
+	poetImage = parameters.String(
+		"poet-image",
+		"spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4",
+		"poet server image",
+	)
+	namespaceFlag = parameters.String(
+		"namespace",
+		"namespace for the cluster. if empty every test will use random namespace",
+		"",
+	)
+	bootstrapDuration = parameters.Duration(
 		"bootstrap-duration",
 		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management",
 		30*time.Second,
 	)
-	clusterSize = parameters.NewInt(
+	clusterSize = parameters.Int(
 		"cluster-size",
 		"size of the cluster. all test must use at most this number of smeshers",
 		10,
+	)
+	poetSize = parameters.Int(
+		"poet-size", "size of the poet servers", 1,
+	)
+	storage = parameters.String(
+		"storage", "<class>=<size> for the storage", "standard=1Gi",
+	)
+	keep = parameters.Bool(
+		"keep", "if true cluster will not be removed after test is finished",
+	)
+	nodeSelector = parameters.NewParameter(
+		"node-selector", "select where test pods will be scheduled",
+		stringToString{},
+		func(value string) (stringToString, error) {
+			rst := stringToString{}
+			if err := rst.Set(value); err != nil {
+				return nil, err
+			}
+			return rst, nil
+		},
 	)
 )
 
@@ -70,11 +103,6 @@ const (
 	clusterSizeLabel = "size"
 	poetSizeLabel    = "poet-size"
 )
-
-func init() {
-	flag.Var(nodeSelector, "node-selector", "select where test pods will be scheduled")
-	flag.Var(labels, "labels", "test will be executed only if it matches all labels")
-}
 
 func rngName() string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -142,10 +170,11 @@ func deployNamespace(ctx *Context) error {
 	return nil
 }
 
-func getStorage() (string, string, error) {
-	parts := strings.Split(*storage, "=")
+func getStorage(p *parameters.Parameters) (string, string, error) {
+	value := storage.Get(p)
+	parts := strings.Split(value, "=")
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("malformed storage %s. see default value for example", *storage)
+		return "", "", fmt.Errorf("malformed storage %s. see default value for example", value)
 	}
 	return parts[0], parts[1], nil
 }
@@ -229,8 +258,6 @@ func New(t *testing.T, opts ...Opt) *Context {
 	initTokens.Do(func() {
 		tokens = make(chan struct{}, *clusters)
 	})
-	class, size, err := getStorage()
-	require.NoError(t, err)
 
 	c := newCfg()
 	for _, opt := range opts {
@@ -251,10 +278,6 @@ func New(t *testing.T, opts ...Opt) *Context {
 	clientset, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err)
 
-	ns := *namespaceFlag
-	if len(ns) == 0 {
-		ns = "test-" + rngName()
-	}
 	scheme := runtime.NewScheme()
 	require.NoError(t, chaos.AddToScheme(scheme))
 
@@ -270,20 +293,28 @@ func New(t *testing.T, opts ...Opt) *Context {
 	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *configname)
 
 	p := parameters.FromValues(paramsData.Data)
+
+	class, size, err := getStorage(p)
+	require.NoError(t, err)
+
+	ns := namespaceFlag.Get(p)
+	if len(ns) == 0 {
+		ns = "test-" + rngName()
+	}
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
 		Namespace:         ns,
-		BootstrapDuration: parameters.Get(p, bootstrapDuration),
+		BootstrapDuration: bootstrapDuration.Get(p),
 		Client:            clientset,
 		Generic:           generic,
-		TestID:            *testid,
-		Keep:              *keep,
-		ClusterSize:       parameters.Get(p, clusterSize),
-		PoetSize:          *poetSize,
-		Image:             *imageFlag,
-		PoetImage:         *poetImage,
-		NodeSelector:      nodeSelector,
+		TestID:            testid.Get(p),
+		Keep:              keep.Get(p),
+		ClusterSize:       clusterSize.Get(p),
+		PoetSize:          poetSize.Get(p),
+		Image:             imageFlag.Get(p),
+		PoetImage:         poetImage.Get(p),
+		NodeSelector:      nodeSelector.Get(p),
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
 	}
 	cctx.Storage.Class = class
