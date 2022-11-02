@@ -352,7 +352,6 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 		"/bin/go-spacemesh",
 		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
-		"--preset=fastnet",
 		"--smeshing-start=true",
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data/state",
@@ -363,7 +362,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
-
+	ctx.Log.Debug("smesher image", "image", ctx.Image)
 	sset := appsv1.StatefulSet(name, ctx.Namespace).
 		WithSpec(appsv1.StatefulSetSpec().
 			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).

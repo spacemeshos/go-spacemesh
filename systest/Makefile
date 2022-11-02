@@ -5,7 +5,8 @@ image_name ?= $(org)/systest:$(version_info)
 poet_image ?= spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 test_id ?= systest-$(version_info)
-test_pod_name ?= systest-$(version_info)-$(shell date +'%s')
+date = $(shell date +'%s')
+test_pod_name ?= systest-$(version_info)-$(date)
 keep ?= false
 clusters ?= 1
 size ?= 10
@@ -25,7 +26,9 @@ properties_file ?=
 ifneq ($(properties_file),)
 	optional_properties = --from-env-file=$(properties_file)
 endif 
-
+ifeq ($(configname),$(test_pod_name))
+	run_deps = config
+endif
 
 
 .PHONY: docker
@@ -38,16 +41,15 @@ push:
 
 .PHONY: config
 config:
-	@kubectl create configmap $(configname) --labels="testid=$(test_id)" \
-		--from-file=smesher=$(smesher_config) \ 
-		--from-file=poet=$(poet_config) \
+	@kubectl create configmap $(configname) \
+		--from-file=smesher=$(smesher_config) --from-file=poet=$(poet_config) \
 		--from-literal=cluster-size=$(size) \
-		--from-literal=bootsrap-duration=$(bootstrap) \ 
+		--from-literal=bootsrap-duration=$(bootstrap) \
 		$(optional_properties)
+	@kubectl label configmap $(configname) testid=$(test_id)
 
 .PHONY: run
-run:
-	@if [ $(configname) = $(test_pod_name) ]; then config; fi
+run: $(run_deps)
 	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--env=$(env) \
@@ -60,7 +62,7 @@ run:
 
 .PHONY: clean
 clean:
-	@each "deleting configmaps with testid=$(test_id)"
+	@echo "deleting configmaps with testid=$(test_id)"
 	@kubectl delete configmap --selector=testid=$(test_id)
 	@echo "deleting test pods with testid=$(test_id)"
 	@kubectl delete pod --selector=testid=$(test_id)
