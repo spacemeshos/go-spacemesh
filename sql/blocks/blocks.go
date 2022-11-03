@@ -68,6 +68,28 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 	return rst, err
 }
 
+// SetValidIfNotSet updates verified status for a block if not already set.
+func SetValidIfNotSet(db sql.Executor, id types.BlockID) error {
+	return setValidityIfNotSet(db, id, valid)
+}
+
+// SetInvalidIfNotSet updates blocks to an invalid status if not already set.
+func SetInvalidIfNotSet(db sql.Executor, id types.BlockID) error {
+	return setValidityIfNotSet(db, id, invalid)
+}
+
+func setValidityIfNotSet(db sql.Executor, id types.BlockID, validity int8) error {
+	if rows, err := db.Exec(`update blocks set validity=?2 where id = ?1 and validity is null returning id;`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+		stmt.BindInt64(2, int64(validity))
+	}, nil); err != nil {
+		return fmt.Errorf("update validity if not set %s: %w", id, err)
+	} else if rows == 0 {
+		return fmt.Errorf("%w block for update if not set %s", sql.ErrNotFound, id)
+	}
+	return nil
+}
+
 // SetValid updates verified status for a block.
 func SetValid(db sql.Executor, id types.BlockID) error {
 	return setValidity(db, id, valid)

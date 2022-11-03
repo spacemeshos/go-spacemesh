@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -68,9 +69,8 @@ func NewDataFetch(msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
 
 // PollLayerData polls all peers for data in the specified layer.
 func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
-	if len(peers) == 0 {
-		peers = d.fetcher.GetPeers()
-	}
+	peers = append(peers, d.fetcher.GetPeers()...)
+	peers = util.UniqueSliceStringer(peers)
 	if len(peers) == 0 {
 		return errNoPeers
 	}
@@ -161,16 +161,11 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 		return
 	}
 	var layerHashes []types.Hash32
-	for _, ballotID := range data.Ballots {
-		layerHashes = append(layerHashes, ballotID.AsHash32())
+	layerHashes = append(layerHashes, types.BallotIDsToHashes(data.Ballots)...)
+	layerHashes = append(layerHashes, types.BlockIDsToHashes(data.Blocks)...)
+	if len(layerHashes) > 0 {
+		fetcher.RegisterPeerHashes(peer, layerHashes)
 	}
-	for _, blkID := range data.Blocks {
-		layerHashes = append(layerHashes, blkID.AsHash32())
-	}
-	if len(layerHashes) == 0 {
-		return
-	}
-	fetcher.RegisterPeerHashes(peer, layerHashes)
 }
 
 func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *dataRequest, data *fetch.LayerData) {
@@ -305,13 +300,15 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 	if len(peers) == 0 {
 		return errNoPeers
 	}
+	ctx2, cancel := context.WithTimeout(ctx, pollTimeOut)
+	defer cancel()
 	peer := peers[rand.Intn(len(peers))]
-	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
+	ed, err := d.fetcher.PeerEpochInfo(ctx2, peer, epoch)
 	if err != nil {
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	if err := d.fetcher.GetAtxs(ctx, ed.AtxIDs); err != nil {
+	if err := d.fetcher.GetAtxs(ctx2, ed.AtxIDs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
 	}
 	return nil

@@ -281,17 +281,6 @@ func mockedBeacons(tb testing.TB) system.BeaconGetter {
 	return mockBeacons
 }
 
-type updater struct {
-	cdb *datastore.CachedDB
-}
-
-func (u *updater) UpdateBlockValidity(bid types.BlockID, _ types.LayerID, valid bool) error {
-	if valid {
-		return blocks.SetValid(u.cdb, bid)
-	}
-	return blocks.SetInvalid(u.cdb, bid)
-}
-
 func defaultTurtle(tb testing.TB) *turtle {
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
@@ -299,7 +288,6 @@ func defaultTurtle(tb testing.TB) *turtle {
 		lg,
 		cdb,
 		mockedBeacons(tb),
-		&updater{cdb},
 		defaultTestConfig(),
 	)
 }
@@ -316,12 +304,12 @@ func defaultTestConfig() Config {
 }
 
 func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
-	return New(state.DB, state.Beacons, &updater{state.DB}, opts...)
+	return New(state.DB, state.Beacons, opts...)
 }
 
 func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 	tb.Helper()
-	return New(cdb, mockedBeacons(tb), &updater{cdb},
+	return New(cdb, mockedBeacons(tb),
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
@@ -1454,7 +1442,7 @@ func TestComputeBallotWeight(t *testing.T) {
 			cdb := newCachedDB(t, logtest.New(t))
 			cfg := DefaultConfig()
 			cfg.LayerSize = tc.layerSize
-			trtl := New(cdb, nil, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
+			trtl := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
 
 			lid := types.NewLayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
@@ -2504,7 +2492,7 @@ func TestEncodeVotes(t *testing.T) {
 		cfg := defaultTestConfig()
 		cfg.Hdist = 1
 		cfg.Zdist = 1
-		tortoise := New(cdb, mockedBeacons(t), &updater{cdb},
+		tortoise := New(cdb, mockedBeacons(t),
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
 		)
@@ -2542,7 +2530,7 @@ func TestEncodeVotes(t *testing.T) {
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
 		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := New(cdb, mockedBeacons(t), &updater{cdb},
+		tortoise := New(cdb, mockedBeacons(t),
 			WithConfig(defaultTestConfig()),
 			WithLogger(logtest.New(t)),
 		)

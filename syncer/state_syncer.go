@@ -52,13 +52,14 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		log.Stringer("in_state", s.mesh.LatestLayerInState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()))
 
+	// at least check state at one layer
 	start := minLayer(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
-	if !start.Before(s.getLastSyncedLayer()) {
-		return nil
+	start = minLayer(start, s.getLastSyncedLayer())
+	if start == types.GetEffectiveGenesis() {
+		start = start.Add(1)
 	}
-
 	resyncPeers := make(map[p2p.Peer]struct{})
-	for lid := start.Add(1); !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
+	for lid := start; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
 		if s.isClosed() {
 			return errShuttingDown
 		}
@@ -83,11 +84,12 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			}
 		}
 
+		var resyncFrom types.LayerID
 		if opinions, err := s.fetchOpinions(ctx, logger, lid); err == nil {
 			if err = s.adoptOpinions(ctx, logger, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
 				logger.With().Warning("mesh hash diverged, checking agreement",
 					log.Stringer("diverged", lid.Sub(1)))
-				if _, err = s.ensureMeshAgreement(ctx, logger, lid, opinions, resyncPeers); err != nil {
+				if resyncFrom, err = s.ensureMeshAgreement(ctx, logger, lid, opinions, resyncPeers); err != nil {
 					logger.With().Warning("failed to reach mesh agreement with peers", log.Err(err))
 				}
 			}
@@ -95,7 +97,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
 		// has a chance to count ballots and form its own opinions
 
-		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
+		if err := s.mesh.ProcessLayer(ctx, lid, resyncFrom); err != nil {
 			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
 		}
 	}
@@ -179,11 +181,17 @@ func (s *Syncer) checkOpinionsIntegrity(ctx context.Context, logger log.Log, opi
 			}
 			toFetch[bid] = struct{}{}
 		}
-		if opn.Cert != nil && opn.Cert.BlockID != types.EmptyBlockID {
-			toFetch[opn.Cert.BlockID] = struct{}{}
+		if good && opn.Cert != nil && opn.Cert.BlockID != types.EmptyBlockID {
+			if len(toFetch) == 0 { // no validity is available
+				toFetch[opn.Cert.BlockID] = struct{}{}
+			} else if _, ok := toFetch[opn.Cert.BlockID]; !ok {
+				good = false
+			}
 		}
 		if good && len(toFetch) > 0 {
-			if err := s.dataFetcher.GetBlocks(ctx, toList(toFetch)); err != nil {
+			bids := toList(toFetch)
+			s.dataFetcher.RegisterPeerHashes(opn.Peer(), types.BlockIDsToHashes(bids))
+			if err := s.dataFetcher.GetBlocks(ctx, bids); err != nil {
 				logger.With().Warning("failed to fetch blocks referenced in peer opinions",
 					log.Stringer("peer", opn.Peer()),
 					log.Array("blocks", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
@@ -295,7 +303,7 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, prevHash types.Ha
 				logger.With().Warning("peer has different prev hash",
 					log.Inline(opn),
 					log.Stringer("node_hash", prevHash))
-			} else if err = s.adoptValidity(opn.Valid, opn.Invalid); err != nil {
+			} else if err = s.adoptValidity(ctx, opn.Valid, opn.Invalid); err != nil {
 				logger.With().Warning("failed to adopt validity", log.Inline(opn), log.Err(err))
 			} else {
 				logger.With().Info("adopted validity from peer",
@@ -344,21 +352,26 @@ func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.C
 	return nil
 }
 
-func (s *Syncer) adoptValidity(valid, invalid []types.BlockID) error {
-	for _, bid := range valid {
-		if bid == types.EmptyBlockID {
-			continue
-		}
-		if err := blocks.SetValid(s.cdb, bid); err != nil {
-			return fmt.Errorf("opinions set valid: %w", err)
-		}
+func (s *Syncer) adoptValidity(ctx context.Context, valid, invalid []types.BlockID) error {
+	if len(valid)+len(invalid) == 0 {
+		return nil
 	}
-	for _, bid := range invalid {
-		if err := blocks.SetInvalid(s.cdb, bid); err != nil {
-			return fmt.Errorf("opinions set invalid: %w", err)
+	return s.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+		for _, bid := range valid {
+			if bid == types.EmptyBlockID {
+				continue
+			}
+			if err := blocks.SetValidIfNotSet(dbtx, bid); err != nil {
+				return fmt.Errorf("opinions set valid: %w", err)
+			}
 		}
-	}
-	return nil
+		for _, bid := range invalid {
+			if err := blocks.SetInvalidIfNotSet(dbtx, bid); err != nil {
+				return fmt.Errorf("opinions set invalid: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 // see https://github.com/spacemeshos/go-spacemesh/issues/2507 for implementation rationale.
@@ -487,7 +500,7 @@ func (s *Syncer) ensureMeshAgreement(
 			return nil
 		})))
 	to := from
-	for lid := from; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
+	for lid := from; !lid.After(s.mesh.LatestLayer()); lid = lid.Add(1) {
 		// ideally syncer should import opinions from peer and let tortoise decide whether to rerun
 		// verifying tortoise or enter full tortoise mode.
 		// however, for genesis running full tortoise with 10_000 layers as a sliding window is completely

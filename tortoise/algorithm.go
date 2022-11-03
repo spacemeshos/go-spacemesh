@@ -82,7 +82,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockValidityUpdater, opts ...Opt) *Tortoise {
+func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -109,7 +109,6 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 		t.logger,
 		cdb,
 		beacons,
-		updater,
 		t.cfg,
 	)
 	if needsRecovery {

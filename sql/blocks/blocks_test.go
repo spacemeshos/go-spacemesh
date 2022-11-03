@@ -64,20 +64,56 @@ func TestValidity(t *testing.T) {
 	}
 	for _, block := range blocks {
 		require.NoError(t, Add(db, block))
+		_, err := IsValid(db, block.ID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
 	}
 	require.NoError(t, SetValid(db, blocks[0].ID()))
-
 	valid, err := IsValid(db, blocks[0].ID())
 	require.NoError(t, err)
 	require.True(t, valid)
-
-	_, err = IsValid(db, blocks[1].ID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, SetInvalid(db, blocks[0].ID()))
 	valid, err = IsValid(db, blocks[0].ID())
 	require.NoError(t, err)
 	require.False(t, valid)
+}
+
+func TestValidityIfNotSet(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.NewLayerID(1)
+	blocks := []*types.Block{
+		types.NewExistingBlock(
+			types.BlockID{1, 1},
+			types.InnerBlock{LayerIndex: lid},
+		),
+		types.NewExistingBlock(
+			types.BlockID{2, 2},
+			types.InnerBlock{LayerIndex: lid},
+		),
+	}
+	for _, block := range blocks {
+		require.NoError(t, Add(db, block))
+		_, err := IsValid(db, block.ID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	}
+
+	require.NoError(t, SetValidIfNotSet(db, blocks[0].ID()))
+	v, err := IsValid(db, blocks[0].ID())
+	require.NoError(t, err)
+	require.True(t, v)
+	require.ErrorIs(t, SetInvalidIfNotSet(db, blocks[0].ID()), sql.ErrNotFound)
+	v, err = IsValid(db, blocks[0].ID())
+	require.NoError(t, err)
+	require.True(t, v)
+
+	require.NoError(t, SetInvalidIfNotSet(db, blocks[1].ID()))
+	v, err = IsValid(db, blocks[1].ID())
+	require.NoError(t, err)
+	require.False(t, v)
+	require.ErrorIs(t, SetValidIfNotSet(db, blocks[1].ID()), sql.ErrNotFound)
+	v, err = IsValid(db, blocks[1].ID())
+	require.NoError(t, err)
+	require.False(t, v)
 }
 
 func TestLayerFilter(t *testing.T) {

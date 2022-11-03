@@ -27,7 +27,7 @@ import (
 
 const (
 	layersPerEpoch = 3
-	never          = time.Second * 60 * 24
+	never          = 60 * 24 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -123,7 +123,10 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.syncer.Start(context.TODO())
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
+	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
+	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
 	require.Eventually(t, func() bool {
 		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(context.TODO())
 	}, time.Second, 10*time.Millisecond)
@@ -530,7 +533,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(nil)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+		ts.mTortoise.EXPECT().LatestComplete().Return(genesis)
 		if lid.Before(failed) {
 			ts.msh.SetZeroBlockLayer(context.TODO(), lid)
 		}
@@ -540,7 +543,7 @@ func TestSyncMissingLayer(t *testing.T) {
 				func(_ context.Context, got *types.Block) error {
 					require.Equal(t, block.ID(), got.ID())
 					return errMissingTXs
-				})
+				}).Times(2)
 		}
 	}
 
@@ -555,10 +558,9 @@ func TestSyncMissingLayer(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), failed).Return(nil)
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 
-	for lid := failed; lid.Before(last); lid = lid.Add(1) {
+	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
 		if lid == failed {
 			ts.mConState.EXPECT().ApplyLayer(gomock.Any(), block).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
@@ -567,6 +569,7 @@ func TestSyncMissingLayer(t *testing.T) {
 				})
 		} else {
 			ts.msh.SetZeroBlockLayer(context.TODO(), lid)
+			ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
 		}
 	}
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
