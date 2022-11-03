@@ -159,7 +159,6 @@ func defaultBaseConfig() BaseConfig {
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		LayerDurationSec:    30,
-		LayerAvgSize:        30,
 		LayersPerEpoch:      3,
 		PoETServers:         []string{"127.0.0.1"},
 		SyncRequestTimeout:  2000,
