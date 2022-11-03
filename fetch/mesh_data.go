@@ -36,6 +36,9 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	for hash, resC := range results {
 		select {
 		case <-ctx.Done():
+			f.logger.WithContext(ctx).With().Warning("request timed out",
+				log.String("hint", string(hint)),
+				log.String("hash", hash.ShortString()))
 			return []error{ctx.Err()}
 		case res, open := <-resC:
 			if !open {

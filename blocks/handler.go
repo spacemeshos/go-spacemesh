@@ -69,7 +69,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, data []byte) error {
 		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())
 	}
 
-	logger = logger.WithFields(b.ID())
+	logger = logger.WithFields(b.ID(), b.LayerIndex)
 
 	if exists, err := blocks.Has(h.db, b.ID()); err != nil {
 		logger.With().Error("failed to check block exist", log.Err(err))

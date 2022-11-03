@@ -279,12 +279,11 @@ func (mr *MockvmStateMockRecorder) GetStateRoot() *gomock.Call {
 }
 
 // Revert mocks base method.
-func (m *MockvmState) Revert(arg0 types.LayerID) (types.Hash32, error) {
+func (m *MockvmState) Revert(arg0 types.LayerID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Revert", arg0)
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Revert indicates an expected call of Revert.

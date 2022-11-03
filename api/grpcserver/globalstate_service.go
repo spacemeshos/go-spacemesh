@@ -6,6 +6,7 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -234,6 +235,9 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
+	}
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return err
 	}
 
 	for {

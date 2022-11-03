@@ -104,21 +104,21 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 
 	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
-		msh.logger.With().Panic("failed to recover processed layer", log.Err(err))
+		msh.logger.With().Fatal("failed to recover processed layer", log.Err(err))
 	}
 	msh.processedLayer.Store(lyr)
 
 	applied, err := layers.GetLastApplied(msh.cdb)
 	if err != nil {
-		msh.logger.With().Panic("failed to recover latest applied layer", log.Err(err))
+		msh.logger.With().Fatal("failed to recover latest applied layer", log.Err(err))
 	}
 	msh.setLatestLayerInState(applied)
 
 	root := types.Hash32{}
 	if applied.After(types.GetEffectiveGenesis()) {
-		root, err = msh.conState.RevertState(msh.LatestLayerInState())
+		err = msh.conState.RevertState(msh.LatestLayerInState())
 		if err != nil {
-			msh.logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+			msh.logger.With().Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 		}
 	}
 
@@ -144,13 +144,12 @@ func (msh *Mesh) getMinUpdatedLayer() types.LayerID {
 
 // UpdateBlockValidity is the callback used when a block's contextual validity is updated by tortoise.
 func (msh *Mesh) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, newValid bool) error {
-	msh.logger.With().Debug("updating validity for block", lid, bid)
+	msh.logger.With().Debug("updating validity for block", lid, bid, log.Bool("new_valid", newValid))
 	oldValid, err := blocks.IsValid(msh.cdb, bid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("error reading contextual validity of block %v: %w", bid, err)
 	}
-
-	if oldValid != newValid {
+	if errors.Is(err, sql.ErrNotFound) || oldValid != newValid {
 		for {
 			minUpdated := msh.getMinUpdatedLayer()
 			if minUpdated != (types.LayerID{}) && !lid.Before(minUpdated) {
@@ -171,7 +170,7 @@ func (msh *Mesh) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, newVa
 
 // saveContextualValidity persists opinion on block to the database.
 func (msh *Mesh) saveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
-	msh.logger.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
+	msh.logger.With().Info("save block contextual validity", id, lid, log.Bool("validity", valid))
 	if valid {
 		return blocks.SetValid(msh.cdb, id)
 	}
@@ -412,7 +411,8 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids 
 func (msh *Mesh) pushLayersToState(ctx context.Context, from, to, latestVerified types.LayerID) error {
 	logger := msh.logger.WithContext(ctx).WithFields(
 		log.Stringer("from_layer", from),
-		log.Stringer("to_layer", to))
+		log.Stringer("to_layer", to),
+		log.Stringer("latest_verified", latestVerified))
 	logger.Info("pushing layers to state")
 	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Panic("tried to push genesis layers")
@@ -531,6 +531,8 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 			return fmt.Errorf("apply layer: %w", err)
 		}
 	}
+	logger = logger.WithFields(log.Stringer("applied", applied))
+	logger.With().Info("applying block for layer")
 
 	if err := msh.cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
@@ -555,17 +557,17 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
 func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
-	root, err := msh.conState.RevertState(revertTo)
-	if err != nil {
+	if err := msh.conState.RevertState(revertTo); err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
-	logger.With().Info("successfully reverted state", log.Stringer("state_root", root))
-
-	if err = layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
-		logger.With().Error("failed to unset applied layer", log.Err(err))
+	if err := layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
 		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
-	logger.Info("successfully reverted state")
+	stateHash, err := msh.conState.GetStateRoot()
+	if err != nil {
+		return fmt.Errorf("after revert get state: %w", err)
+	}
+	logger.With().Info("successfully reverted state", log.Stringer("state_hash", stateHash))
 	return nil
 }
 
