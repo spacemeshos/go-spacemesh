@@ -2,7 +2,6 @@ package fetch
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -63,21 +62,16 @@ func createLayer(t *testing.T, db *datastore.CachedDB, lid types.LayerID) ([]typ
 	return blts, blks
 }
 
-func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, genCert bool) ([]types.BlockID, types.Hash32) {
+func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, genCert bool) (types.BlockID, types.Hash32) {
 	_, blks := createLayer(t, db, lid)
+	certified := types.EmptyBlockID
 	if genCert {
-		require.NoError(t, layers.SetHareOutputWithCert(db, lid, &types.Certificate{BlockID: blks[0]}))
-	}
-	for i, bid := range blks {
-		if i == 0 {
-			require.NoError(t, blocks.SetValid(db, bid))
-		} else {
-			require.NoError(t, blocks.SetInvalid(db, bid))
-		}
+		certified = blks[0]
+		require.NoError(t, layers.SetHareOutputWithCert(db, lid, &types.Certificate{BlockID: certified}))
 	}
 	aggHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(db, lid.Sub(1), types.RandomHash(), aggHash))
-	return blks, aggHash
+	return certified, aggHash
 }
 
 func TestHandleLayerDataReq(t *testing.T) {
@@ -116,23 +110,16 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 func TestHandleLayerOpinionsReq(t *testing.T) {
 	tt := []struct {
-		name                string
-		verified, requested types.LayerID
-		missingCert         bool
+		name        string
+		requested   types.LayerID
+		missingCert bool
 	}{
 		{
 			name:      "all good",
-			verified:  types.NewLayerID(111),
-			requested: types.NewLayerID(111),
-		},
-		{
-			name:      "not verified",
-			verified:  types.NewLayerID(100),
 			requested: types.NewLayerID(111),
 		},
 		{
 			name:        "cert missing",
-			verified:    types.NewLayerID(111),
 			requested:   types.NewLayerID(111),
 			missingCert: true,
 		},
@@ -144,30 +131,20 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			blks, aggHash := createOpinions(t, th.cdb, tc.requested, !tc.missingCert)
+			certified, aggHash := createOpinions(t, th.cdb, tc.requested, !tc.missingCert)
 
-			th.mm.EXPECT().LastVerified().Return(tc.verified)
 			out, err := th.handleLayerOpinionsReq(context.TODO(), tc.requested.Bytes())
 			require.NoError(t, err)
 
 			var got LayerOpinion
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
-			require.Equal(t, uint64(0), got.EpochWeight)
 			require.Equal(t, aggHash, got.PrevAggHash)
-			require.Equal(t, tc.verified, got.Verified)
 			if tc.missingCert {
 				require.Nil(t, got.Cert)
 			} else {
 				require.NotNil(t, got.Cert)
-				require.Equal(t, blks[0], got.Cert.BlockID)
-			}
-			if !tc.verified.Before(tc.requested) {
-				require.ElementsMatch(t, blks[0:1], got.Valid)
-				require.ElementsMatch(t, blks[1:], got.Invalid)
-			} else {
-				require.Empty(t, got.Valid)
-				require.Empty(t, got.Invalid)
+				require.Equal(t, certified, got.Cert.BlockID)
 			}
 		})
 	}
@@ -261,7 +238,6 @@ func newAtx(t *testing.T, target types.EpochID) *types.VerifiedActivationTx {
 }
 
 func TestHandleEpochInfoReq(t *testing.T) {
-	beaconErr := errors.New("beacon unavailable")
 	tt := []struct {
 		name           string
 		missingData    bool
@@ -273,11 +249,6 @@ func TestHandleEpochInfoReq(t *testing.T) {
 		{
 			name:        "no epoch data",
 			missingData: true,
-		},
-		{
-			name:      "beacon missing",
-			beaconErr: beaconErr,
-			err:       beaconErr,
 		},
 	}
 
@@ -297,20 +268,12 @@ func TestHandleEpochInfoReq(t *testing.T) {
 					expected.Weight += vatx.GetWeight()
 				}
 			}
-			if tc.beaconErr == nil {
-				beacon := types.RandomBeacon()
-				expected.Beacon = beacon
-				th.mb.EXPECT().GetBeacon(epoch).Return(beacon, nil)
-			} else {
-				th.mb.EXPECT().GetBeacon(epoch).Return(types.EmptyBeacon, tc.beaconErr)
-			}
 
 			out, err := th.handleEpochInfoReq(context.TODO(), epoch.ToBytes())
 			require.ErrorIs(t, err, tc.err)
 			if tc.err == nil {
 				var got EpochData
 				require.NoError(t, codec.Decode(out, &got))
-				require.Equal(t, expected.Beacon, got.Beacon)
 				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 				require.Equal(t, expected.Weight, got.Weight)
 			}

@@ -269,7 +269,6 @@ func Test_GetEpochATXs(t *testing.T) {
 
 			td := newTestDataFetch(t)
 			ed := &fetch.EpochData{
-				Beacon: types.RandomBeacon(),
 				AtxIDs: types.RandomActiveSet(11),
 				Weight: rand.Uint64(),
 			}

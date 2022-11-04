@@ -666,7 +666,6 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 func generateEpochData(t *testing.T) (*EpochData, []byte) {
 	t.Helper()
 	ed := &EpochData{
-		Beacon: types.RandomBeacon(),
 		AtxIDs: types.RandomActiveSet(11),
 		Weight: rand.Uint64(),
 	}

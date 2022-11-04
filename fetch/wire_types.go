@@ -53,7 +53,6 @@ type MeshHashes struct {
 }
 
 type EpochData struct {
-	Beacon types.Beacon
 	Weight uint64
 	AtxIDs []types.ATXID
 }
@@ -66,11 +65,8 @@ type LayerData struct {
 
 // LayerOpinion is the response for opinion for a given layer.
 type LayerOpinion struct {
-	EpochWeight    uint64
-	PrevAggHash    types.Hash32
-	Verified       types.LayerID
-	Valid, Invalid []types.BlockID
-	Cert           *types.Certificate
+	PrevAggHash types.Hash32
+	Cert        *types.Certificate
 
 	peer p2p.Peer
 }
@@ -88,23 +84,9 @@ func (lo *LayerOpinion) Peer() p2p.Peer {
 // MarshalLogObject implements logging encoder for LayerOpinion.
 func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("peer", lo.peer.String())
-	encoder.AddUint64("epoch_weight", lo.EpochWeight)
-	encoder.AddUint32("verified", lo.Verified.Uint32())
 	encoder.AddString("prev_hash", lo.PrevAggHash.String())
 	if lo.Cert != nil {
 		encoder.AddString("cert_block_id", lo.Cert.BlockID.String())
 	}
-	encoder.AddArray("valid", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, bid := range lo.Valid {
-			encoder.AppendString(bid.String())
-		}
-		return nil
-	}))
-	encoder.AddArray("invalid", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, bid := range lo.Invalid {
-			encoder.AppendString(bid.String())
-		}
-		return nil
-	}))
 	return nil
 }

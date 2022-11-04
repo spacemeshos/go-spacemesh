@@ -42,19 +42,12 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", epoch, log.Err(err))
 		return nil, err
 	}
-	beacon, err := h.beacon.GetBeacon(epoch)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Debug("failed to get beacon", epoch, log.Err(err))
-		return nil, err
-	}
 	ed := EpochData{
-		Beacon: beacon,
 		Weight: weight,
 		AtxIDs: atxIDs,
 	}
 	h.logger.WithContext(ctx).With().Debug("responded to epoch info request",
 		epoch,
-		log.Stringer("beacon", ed.Beacon),
 		log.Uint64("weight", ed.Weight),
 		log.Int("atx_count", len(ed.AtxIDs)))
 	bts, err := codec.Encode(&ed)
@@ -92,48 +85,21 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 // handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinion.
 func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
-		lid           = types.BytesToLayerID(req)
-		blockValidity []types.BlockContextualValidity
-		lo            LayerOpinion
-		out           []byte
-		err           error
+		lid = types.BytesToLayerID(req)
+		lo  LayerOpinion
+		out []byte
+		err error
 	)
 
-	lo.EpochWeight, _, err = h.cdb.GetEpochWeight(lid.GetEpoch())
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", lid, lid.GetEpoch(), log.Err(err))
-		return nil, err
-	}
 	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get prev agg hash", lid, log.Err(err))
 		return nil, err
 	}
-	lo.Verified = h.msh.LastVerified()
-
 	lo.Cert, err = layers.GetCert(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get certificate", lid, log.Err(err))
 		return nil, err
-	}
-	if !lid.After(lo.Verified) {
-		blockValidity, err = blocks.ContextualValidity(h.cdb, lid)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			h.logger.WithContext(ctx).With().Warning("failed to get block validity", lid, log.Err(err))
-			return nil, err
-		}
-		if len(blockValidity) == 0 {
-			// the layer is verified and is empty
-			lo.Valid = append(lo.Valid, types.EmptyBlockID)
-		} else {
-			for _, bv := range blockValidity {
-				if bv.Validity {
-					lo.Valid = append(lo.Valid, bv.ID)
-				} else {
-					lo.Invalid = append(lo.Invalid, bv.ID)
-				}
-			}
-		}
 	}
 	out, err = codec.Encode(&lo)
 	if err != nil {

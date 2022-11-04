@@ -555,7 +555,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), failed).Return(nil)
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 
-	for lid := failed; lid.Before(last); lid = lid.Add(1) {
+	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
