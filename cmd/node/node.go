@@ -836,6 +836,9 @@ func (app *App) startAPIServices(ctx context.Context) {
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
+	if apiConf.StartActivationService {
+		registerService(&grpcserver.ActivationService{})
+	}
 
 	// Now that the services are registered, start the server.
 	if app.grpcAPIService != nil {
