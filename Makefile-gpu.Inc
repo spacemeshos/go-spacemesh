@@ -52,11 +52,11 @@ ifneq ($(VERBOSE),)
   $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARCH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
 endif
 
-GPU_SETUP_REV = 0.1.24
+GPU_SETUP_REV = 0.1.26
 GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
 GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(GPU_SETUP_ZIP)
 ifeq ($(platform), windows)
-  GPU_SETUP_LIBS = gpu-setup.dll
+  GPU_SETUP_LIBS = gpu-setup.dll gpu-setup.lib
 else
   ifneq (,$(findstring macos,$(platform)))
   	GPU_SETUP_LIBS = libgpu-setup.dylib libMoltenVK.dylib libvulkan.1.dylib MoltenVK_icd.json
