@@ -290,6 +290,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	current := types.GetEffectiveGenesis().Add(131)
 	ts.mTicker.advanceToLayer(current)
 	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.msh.SetZeroBlockLayer(context.TODO(), lid)
 		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
@@ -356,12 +357,16 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 			return nil
 		},
 	)
-	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[0].Peer(), instate.Sub(1), opns[0].PrevAggHash).Return(types.NewLayerID(101), nil)
-	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[2].Peer(), instate.Sub(1), opns[2].PrevAggHash).Return(types.NewLayerID(121), nil)
+	fork0 := types.NewLayerID(101)
+	fork2 := types.NewLayerID(121)
+	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[0].Peer(), instate.Sub(1), opns[0].PrevAggHash).Return(fork0, nil)
+	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[2].Peer(), instate.Sub(1), opns[2].PrevAggHash).Return(fork2, nil)
 	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[5].Peer(), instate.Sub(1), opns[5].PrevAggHash).Return(types.LayerID{}, errUnknown)
-	expected := types.NewLayerID(101).Add(1)
-	for lid := expected; lid.Before(current); lid = lid.Add(1) {
-		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, []p2p.Peer{opns[0].Peer(), opns[2].Peer()})
+	for lid := fork0.Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[0].Peer())
+	}
+	for lid := fork2.Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[2].Peer())
 	}
 	ts.mForkFinder.EXPECT().Purge(true)
 

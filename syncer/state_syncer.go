@@ -77,7 +77,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			if err = s.checkMeshAgreement(logger, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
 				logger.With().Warning("mesh hash diverged, trying to reach agreement",
 					log.Stringer("diverged", lid.Sub(1)))
-				if _, err = s.ensureMeshAgreement(ctx, logger, lid, opinions, resyncPeers); err != nil {
+				if err = s.ensureMeshAgreement(ctx, logger, lid, opinions, resyncPeers); err != nil {
 					logger.With().Warning("failed to reach mesh agreement with peers", log.Err(err))
 				}
 			}
@@ -215,20 +215,19 @@ func (s *Syncer) ensureMeshAgreement(
 	diffLayer types.LayerID,
 	opinions []*fetch.LayerOpinion,
 	resyncPeers map[p2p.Peer]struct{},
-) (types.LayerID, error) {
+) error {
 	logger.Info("checking mesh hash agreement")
 	prevLid := diffLayer.Sub(1)
 	prevHash, err := layers.GetAggregatedHash(s.cdb, prevLid)
 	if err != nil {
 		logger.With().Error("mesh hash failed to get prev hash", log.Err(err))
-		return types.LayerID{}, fmt.Errorf("mesh hash check previous: %w", err)
+		return fmt.Errorf("mesh hash check previous: %w", err)
 	}
 
 	var (
-		peers         = make([]p2p.Peer, 0, len(opinions))
-		minFork, fork types.LayerID
-		ed            *fetch.EpochData
-		seen          = make(map[types.Hash32]struct{})
+		fork types.LayerID
+		ed   *fetch.EpochData
+		seen = make(map[types.Hash32]struct{})
 	)
 	for _, opn := range opinions {
 		if opn.PrevAggHash == (types.Hash32{}) {
@@ -300,47 +299,31 @@ func (s *Syncer) ensureMeshAgreement(
 			continue
 		}
 
-		peers = append(peers, opn.Peer())
-		resyncPeers[opn.Peer()] = struct{}{}
-		if minFork == (types.LayerID{}) || fork.Before(minFork) {
-			minFork = fork
+		from := fork.Add(1)
+		to := from
+		for lid := from; !lid.After(s.mesh.LatestLayer()); lid = lid.Add(1) {
+			// ideally syncer should import opinions from peer and let tortoise decide whether to rerun
+			// verifying tortoise or enter full tortoise mode.
+			// however, for genesis running full tortoise with 10_000 layers as a sliding window is completely
+			// viable. so here we don't sync opinions, just the data.
+			// see https://github.com/spacemeshos/go-spacemesh/issues/2507
+			if err = s.syncLayer(ctx, lid, opn.Peer()); err != nil {
+				logger.With().Warning("mesh hash failed to sync layer",
+					log.Stringer("peer", opn.Peer()),
+					log.Stringer("sync_lid", lid),
+					log.Err(err))
+			}
+			to = lid
 		}
+		logger.With().Info("mesh hash synced data from peer",
+			log.Stringer("peer", opn.Peer()),
+			log.Stringer("from", from),
+			log.Stringer("to", to))
+		resyncPeers[opn.Peer()] = struct{}{}
 		seen[opn.PrevAggHash] = struct{}{}
 	}
 
-	if minFork == (types.LayerID{}) {
-		return types.LayerID{}, nil
-	}
-
-	from := minFork.Add(1)
-	logger.With().Info("mesh hash syncing data from peers",
-		log.Stringer("from", from),
-		log.Array("peers", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for _, p := range peers {
-				encoder.AppendString(p.String())
-			}
-			return nil
-		})))
-	to := from
-	for lid := from; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
-		// ideally syncer should import opinions from peer and let tortoise decide whether to rerun
-		// verifying tortoise or enter full tortoise mode.
-		// however, for genesis running full tortoise with 10_000 layers as a sliding window is completely
-		// viable. so here we don't sync opinions, just the data.
-		// see https://github.com/spacemeshos/go-spacemesh/issues/2507
-		if err = s.syncLayer(ctx, lid, peers...); err != nil {
-			logger.With().Warning("mesh hash failed to sync layer",
-				log.Stringer("sync_lid", lid),
-				log.Err(err))
-		}
-		to = lid
-	}
-	logger.With().Info("resync'ed mesh from peers",
-		log.Int("num_peers", len(peers)),
-		log.Stringer("from", from),
-		log.Stringer("to", to))
-
-	// clear the agreement cache after importing new opinions
+	// clear the agreement cache after syncing new data
 	s.forkFinder.Purge(true)
-	return from, nil
+	return nil
 }
