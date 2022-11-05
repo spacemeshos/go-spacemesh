@@ -51,6 +51,8 @@ type ForkFinder struct {
 
 	mu          sync.Mutex
 	agreedPeers map[p2p.Peer]*layerHash
+	// used to make sure we only resync based on the same layer hash once across runs.
+	resynced map[types.LayerID]map[types.Hash32]time.Time
 }
 
 func NewForkFinder(lg log.Log, db sql.Executor, f fetcher, maxHashes uint32, maxStale time.Duration) *ForkFinder {
@@ -61,6 +63,7 @@ func NewForkFinder(lg log.Log, db sql.Executor, f fetcher, maxHashes uint32, max
 		maxHashesInReq:   maxHashes,
 		maxStaleDuration: maxStale,
 		agreedPeers:      make(map[p2p.Peer]*layerHash),
+		resynced:         make(map[types.LayerID]map[types.Hash32]time.Time),
 	}
 }
 
@@ -93,6 +96,16 @@ func (ff *ForkFinder) Purge(all bool, toPurge ...p2p.Peer) {
 			}
 		}
 	}
+	for lid, val := range ff.resynced {
+		for hash, created := range val {
+			if time.Since(created) >= ff.maxStaleDuration {
+				delete(ff.resynced[lid], hash)
+				if len(ff.resynced[lid]) == 0 {
+					delete(ff.resynced, lid)
+				}
+			}
+		}
+	}
 }
 
 // NumPeersCached returns the number of peer agreement cached.
@@ -100,6 +113,25 @@ func (ff *ForkFinder) NumPeersCached() int {
 	ff.mu.Lock()
 	defer ff.mu.Unlock()
 	return len(ff.agreedPeers)
+}
+
+func (ff *ForkFinder) AddResynced(lid types.LayerID, hash types.Hash32) {
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if _, ok := ff.resynced[lid]; !ok {
+		ff.resynced[lid] = make(map[types.Hash32]time.Time)
+	}
+	ff.resynced[lid][hash] = time.Now()
+}
+
+func (ff *ForkFinder) NeedResync(lid types.LayerID, hash types.Hash32) bool {
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if _, ok := ff.resynced[lid]; ok {
+		_, resynced := ff.resynced[lid][hash]
+		return !resynced
+	}
+	return true
 }
 
 // FindFork finds the point of divergence in layer opinions between the node and the specified peer

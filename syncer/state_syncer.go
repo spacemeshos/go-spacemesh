@@ -47,6 +47,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		start = start.Add(1)
 	}
 
+	// used to make sure we only resync from the same peer once during each run.
 	resyncPeers := make(map[p2p.Peer]struct{})
 	for lid := start; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
 		if s.isClosed() {
@@ -227,13 +228,9 @@ func (s *Syncer) ensureMeshAgreement(
 	var (
 		fork types.LayerID
 		ed   *fetch.EpochData
-		seen = make(map[types.Hash32]struct{})
 	)
 	for _, opn := range opinions {
 		if opn.PrevAggHash == (types.Hash32{}) {
-			continue
-		}
-		if _, ok := seen[opn.PrevAggHash]; ok {
 			continue
 		}
 		if _, ok := resyncPeers[opn.Peer()]; ok {
@@ -243,13 +240,24 @@ func (s *Syncer) ensureMeshAgreement(
 			s.forkFinder.UpdateAgreement(opn.Peer(), prevLid, prevHash, time.Now())
 			continue
 		}
-		logger.With().Warning("found mesh disagreement",
-			log.Stringer("node_prev_hash", prevHash),
+
+		peer := opn.Peer()
+		logger = logger.WithFields(
+			log.Stringer("peer", peer),
 			log.Stringer("disagreed", prevLid),
-			log.Object("peer_opinion", opn))
-		ed, err = s.dataFetcher.PeerEpochInfo(ctx, opn.Peer(), diffLayer.GetEpoch())
+			log.Stringer("peer_hash", opn.PrevAggHash))
+
+		logger.With().Warning("found mesh disagreement",
+			log.Stringer("node_prev_hash", prevHash))
+
+		if !s.forkFinder.NeedResync(prevLid, opn.PrevAggHash) {
+			logger.Info("already resynced based on the same diverged hash")
+			continue
+		}
+
+		ed, err = s.dataFetcher.PeerEpochInfo(ctx, peer, diffLayer.GetEpoch())
 		if err != nil {
-			logger.With().Warning("failed to get epoch info", log.Stringer("peer", opn.Peer()), log.Err(err))
+			logger.With().Warning("failed to get epoch info", log.Err(err))
 			continue
 		}
 		missing := make(map[types.ATXID]struct{})
@@ -268,7 +276,6 @@ func (s *Syncer) ensureMeshAgreement(
 		if len(missing) > 0 {
 			toFetch := toList(missing)
 			logger.With().Info("fetching missing atxs from peer",
-				log.Stringer("peer", opn.Peer()),
 				log.Uint64("weight", ignored),
 				log.Array("atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 					for _, id := range toFetch {
@@ -281,21 +288,20 @@ func (s *Syncer) ensureMeshAgreement(
 			if err = s.dataFetcher.GetAtxs(ctx, toFetch); err != nil {
 				// if the node cannot download the ATXs claimed by this peer, it does not trust this peer's mesh
 				logger.With().Warning("failed to download missing ATX claimed by peer",
-					log.Stringer("peer", opn.Peer()),
+					log.Int("missing", len(missing)),
 					log.Uint64("weight", ignored),
 					log.Err(err))
 				continue
 			}
 		} else {
 			logger.With().Info("peer does not have unknown atx",
-				log.Stringer("peer", opn.Peer()),
 				log.Int("num_atxs", len(ed.AtxIDs)))
 		}
 
 		// find the divergent layer and adopt the peer's mesh from there
-		fork, err = s.forkFinder.FindFork(ctx, opn.Peer(), prevLid, opn.PrevAggHash)
+		fork, err = s.forkFinder.FindFork(ctx, peer, prevLid, opn.PrevAggHash)
 		if err != nil {
-			logger.With().Warning("failed to find fork", log.Stringer("peer", opn.Peer()), log.Err(err))
+			logger.With().Warning("failed to find fork", log.Err(err))
 			continue
 		}
 
@@ -307,20 +313,18 @@ func (s *Syncer) ensureMeshAgreement(
 			// however, for genesis running full tortoise with 10_000 layers as a sliding window is completely
 			// viable. so here we don't sync opinions, just the data.
 			// see https://github.com/spacemeshos/go-spacemesh/issues/2507
-			if err = s.syncLayer(ctx, lid, opn.Peer()); err != nil {
+			if err = s.syncLayer(ctx, lid, peer); err != nil {
 				logger.With().Warning("mesh hash failed to sync layer",
-					log.Stringer("peer", opn.Peer()),
 					log.Stringer("sync_lid", lid),
 					log.Err(err))
 			}
 			to = lid
 		}
 		logger.With().Info("mesh hash synced data from peer",
-			log.Stringer("peer", opn.Peer()),
 			log.Stringer("from", from),
 			log.Stringer("to", to))
 		resyncPeers[opn.Peer()] = struct{}{}
-		seen[opn.PrevAggHash] = struct{}{}
+		s.forkFinder.AddResynced(prevLid, opn.PrevAggHash)
 	}
 
 	// clear the agreement cache after syncing new data

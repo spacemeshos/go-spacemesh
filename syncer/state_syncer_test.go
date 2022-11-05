@@ -302,7 +302,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.syncer.setLastSyncedLayer(instate)
 	prevHash, err := layers.GetAggregatedHash(ts.cdb, instate.Sub(1))
 	require.NoError(t, err)
-	numPeers := 6
+	numPeers := 7
 	opns := make([]*fetch.LayerOpinion, 0, numPeers)
 	eds := make([]*fetch.EpochData, 0, numPeers)
 	for i := 0; i < numPeers; i++ {
@@ -321,6 +321,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	// p3's ATXs are not available,
 	// p4 failed epoch info query
 	// p5 failed fork finding sessions
+	// p6 already had a fork-finding session from previous runs.
 	epoch := instate.GetEpoch()
 	errUnknown := errors.New("unknown")
 
@@ -328,6 +329,17 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(instate).Return(false)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), instate).Return(opns, nil)
 	ts.mForkFinder.EXPECT().UpdateAgreement(opns[1].Peer(), instate.Sub(1), prevHash, gomock.Any())
+	for i := 0; i < numPeers; i++ {
+		if i == 1 {
+			continue
+		}
+		if i == 6 {
+			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(false)
+		} else {
+			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(true)
+		}
+	}
+
 	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[0].Peer(), epoch).Return(eds[0], nil)
 	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[2].Peer(), epoch).Return(eds[2], nil)
 	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[3].Peer(), epoch).Return(eds[3], nil)
@@ -368,6 +380,8 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	for lid := fork2.Add(1); lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[2].Peer())
 	}
+	ts.mForkFinder.EXPECT().AddResynced(instate.Sub(1), opns[0].PrevAggHash)
+	ts.mForkFinder.EXPECT().AddResynced(instate.Sub(1), opns[2].PrevAggHash)
 	ts.mForkFinder.EXPECT().Purge(true)
 
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), instate)

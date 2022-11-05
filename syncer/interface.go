@@ -53,6 +53,8 @@ type certHandler interface {
 }
 
 type forkFinder interface {
+	AddResynced(types.LayerID, types.Hash32)
+	NeedResync(types.LayerID, types.Hash32) bool
 	UpdateAgreement(p2p.Peer, types.LayerID, types.Hash32, time.Time)
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)

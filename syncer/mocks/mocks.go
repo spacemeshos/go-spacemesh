@@ -530,6 +530,18 @@ func (m *MockforkFinder) EXPECT() *MockforkFinderMockRecorder {
 	return m.recorder
 }
 
+// AddResynced mocks base method.
+func (m *MockforkFinder) AddResynced(arg0 types.LayerID, arg1 types.Hash32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddResynced", arg0, arg1)
+}
+
+// AddResynced indicates an expected call of AddResynced.
+func (mr *MockforkFinderMockRecorder) AddResynced(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddResynced", reflect.TypeOf((*MockforkFinder)(nil).AddResynced), arg0, arg1)
+}
+
 // FindFork mocks base method.
 func (m *MockforkFinder) FindFork(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID, arg3 types.Hash32) (types.LayerID, error) {
 	m.ctrl.T.Helper()
@@ -543,6 +555,20 @@ func (m *MockforkFinder) FindFork(arg0 context.Context, arg1 p2p.Peer, arg2 type
 func (mr *MockforkFinderMockRecorder) FindFork(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindFork", reflect.TypeOf((*MockforkFinder)(nil).FindFork), arg0, arg1, arg2, arg3)
+}
+
+// NeedResync mocks base method.
+func (m *MockforkFinder) NeedResync(arg0 types.LayerID, arg1 types.Hash32) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NeedResync", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// NeedResync indicates an expected call of NeedResync.
+func (mr *MockforkFinderMockRecorder) NeedResync(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeedResync", reflect.TypeOf((*MockforkFinder)(nil).NeedResync), arg0, arg1)
 }
 
 // Purge mocks base method.
