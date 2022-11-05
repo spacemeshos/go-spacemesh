@@ -47,7 +47,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -504,24 +503,27 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	trtlCfg := app.Config.Tortoise
-	trtlCfg.LayerSize = layerSize
-	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	lastProcessed, err := layers.GetProcessed(cdb)
+	var verifier blockValidityVerifier
+	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
+
+	processed := msh.ProcessedLayer()
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	trtlCfg.MeshProcessed = lastProcessed
-	trtl := tortoise.New(cdb, beaconProtocol,
+
+	trtlCfg := app.Config.Tortoise
+	trtlCfg.LayerSize = layerSize
+	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	trtlCfg.MeshProcessed = processed
+	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
-
-	msh, err := mesh.NewMesh(cdb, trtl, app.conState, app.addLogger(MeshLogger, lg))
-	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
-	}
+	verifier.Tortoise = trtl
 
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
@@ -1149,6 +1151,10 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
+}
+
+type blockValidityVerifier struct {
+	*tortoise.Tortoise
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {

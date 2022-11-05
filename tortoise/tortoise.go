@@ -29,6 +29,7 @@ type turtle struct {
 	cdb    *datastore.CachedDB
 
 	beacons system.BeaconGetter
+	updater blockValidityUpdater
 
 	*state
 
@@ -43,6 +44,7 @@ func newTurtle(
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	beacons system.BeaconGetter,
+	updater blockValidityUpdater,
 	config Config,
 ) *turtle {
 	t := &turtle{
@@ -51,6 +53,7 @@ func newTurtle(
 		logger:  logger,
 		cdb:     cdb,
 		beacons: beacons,
+		updater: updater,
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -398,7 +401,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			}
 		}
 	}
-	return t.verifyLayers(ctx)
+	return t.verifyLayers()
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -424,9 +427,9 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	return nil
 }
 
-func (t *turtle) verifyLayers(ctx context.Context) error {
+func (t *turtle) verifyLayers() error {
 	var (
-		logger = t.logger.WithContext(ctx).WithFields(
+		logger = t.logger.WithFields(
 			log.Stringer("last layer", t.last),
 		)
 		verified = maxLayer(t.evicted, types.GetEffectiveGenesis())
@@ -483,15 +486,9 @@ func (t *turtle) verifyLayers(ctx context.Context) error {
 				log.Stringer("hare", block.hare),
 				log.Stringer("persisted", block.persisted),
 			)
-			valid := block.validity == support
-			if valid {
-				if err := blocks.SetValid(t.cdb, block.id); err != nil {
-					return fmt.Errorf("setting %s valid: %w", block.id, err)
-				}
-			} else {
-				if err := blocks.SetInvalid(t.cdb, block.id); err != nil {
-					return fmt.Errorf("setting block %s invalid: %w", block.id, err)
-				}
+			err := t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
+			if err != nil {
+				return fmt.Errorf("saving validity for %s: %w", block.id, err)
 			}
 			block.persisted = block.validity
 		}

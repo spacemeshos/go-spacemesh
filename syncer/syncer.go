@@ -180,7 +180,7 @@ func NewSyncer(
 	}
 
 	s.syncTimer = time.NewTicker(s.cfg.SyncInterval)
-	s.validateTimer = time.NewTicker(s.cfg.SyncInterval)
+	s.validateTimer = time.NewTicker(s.cfg.SyncInterval * 2)
 	if s.dataFetcher == nil {
 		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
 	}
@@ -384,8 +384,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
-	logger.With().Info("starting sync run",
-		log.Uint64("run", s.run),
+	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
 		log.Stringer("sync_state", s.getSyncState()),
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 		log.Stringer("current", s.ticker.GetCurrentLayer()),
@@ -516,7 +515,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 		return errors.New("shutdown")
 	}
 
-	s.logger.WithContext(ctx).With().Info("polling layer data", layerID, log.Int("num_peers", len(peers)))
+	s.logger.WithContext(ctx).With().Info("polling layer data", layerID)
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
 		return fmt.Errorf("PollLayerData: %w", err)
 	}
