@@ -2,9 +2,7 @@ package tests
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
-	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -42,49 +40,13 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
-	for i := 0; i < cl.Accounts(); i++ {
-		i := i
-		client := cl.Client(i % cl.Total())
-		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number == stopSending {
-				return false, nil
-			}
-			if layer.Layer.Status != spacemeshv1.Layer_LAYER_STATUS_APPROVED ||
-				layer.Layer.Number.Number < first {
-				return true, nil
-			}
-			// give some time for a previous layer to be applied
-			// TODO(dshulyak) introduce api that simply subscribes to internal clock
-			// and outputs events when the tick for the layer is available
-			time.Sleep(200 * time.Millisecond)
-			nonce, err := getNonce(tctx, client, cl.Address(i))
-			require.NoError(t, err)
-			if nonce == 0 {
-				tctx.Log.Infow("address needs to be spawned", "account", i)
-				if err := submitSpawn(ctx, cl, i, client); err != nil {
-					return false, fmt.Errorf("failed to spawn %w", err)
-				}
-				return true, nil
-			}
-			tctx.Log.Debugw("submitting transactions",
-				"layer", layer.Layer.Number.Number,
-				"client", client.Name,
-				"batch", batch,
-			)
-			for j := 0; j < batch; j++ {
-				if err := submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client); err != nil {
-					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
-				}
-			}
-			return true, nil
-		})
-	}
+	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending)
 	txs := make([][]*spacemeshv1.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchTransactionResults(ctx, eg, client, func(rst *spacemeshv1.TransactionResult) (bool, error) {
+		watchTransactionResults(tctx.Context, eg, client, func(rst *spacemeshv1.TransactionResult) (bool, error) {
 			txs[i] = append(txs[i], rst.Tx)
 			count := len(txs[i])
 			tctx.Log.Debugw("received transaction client",

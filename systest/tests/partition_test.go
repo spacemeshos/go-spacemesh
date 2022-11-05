@@ -16,55 +16,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func sendTransactions(tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) *errgroup.Group {
-	var (
-		eg, ctx  = errgroup.WithContext(tctx)
-		first    = uint32(layersPerEpoch * 2)
-		receiver = types.GenerateAddress([]byte{11, 1, 1})
-		amount   = 100
-		batch    = 10
-	)
-	for i := 0; i < cl.Accounts(); i++ {
-		i := i
-		client := cl.Client(i % cl.Total())
-		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number >= stop {
-				return false, nil
-			}
-			if layer.Layer.Number.Number < first {
-				return true, nil
-			}
-			nonce, err := getNonce(tctx, client, cl.Address(i))
-			if err != nil {
-				tctx.Log.Debugw("failed to get nonce", "client", client.Name, "err", err.Error())
-				return false, fmt.Errorf("get nonce failed (%s:%s): %w", client.Name, cl.Address(i), err)
-			}
-			if nonce == 0 {
-				if err := submitSpawn(ctx, cl, i, client); err != nil {
-					tctx.Log.Debugw("failed to spawn", "client", client.Name, "err", err.Error())
-					return false, fmt.Errorf("spawn failed (%s:%s): %w", client.Name, cl.Address(i), err)
-				}
-				return true, nil
-			}
-
-			if layer.Layer.Number.Number > first+1 {
-				for j := 0; j < batch; j++ {
-					if err := submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client); err != nil {
-						tctx.Log.Debugw("failed to send", "client", client.Name, "err", err.Error())
-						return false, fmt.Errorf("spend failed (%s:%s): %w", client.Name, cl.Address(i), err)
-					}
-				}
-			}
-			return true, nil
-		})
-	}
-	return eg
-}
-
 func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
 	require.Greater(t, cl.Bootnodes(), 1)
 
 	var (
+		first      = uint32(layersPerEpoch * 2)
 		startSplit = uint32(4*layersPerEpoch) - 1
 		rejoin     = startSplit + 2*layersPerEpoch
 		stop       = rejoin + wait*layersPerEpoch
@@ -98,7 +54,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
-	txeg := sendTransactions(tctx, cl, stop)
+	eg2, ctx2 := errgroup.WithContext(tctx)
+	sendTransactions(ctx2, eg2, nil, cl, first, stop)
 
 	type stateUpdate struct {
 		layer  uint32
@@ -203,7 +160,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	}
 	require.NoError(t, finalErr)
 	require.True(t, pass)
-	_ = txeg.Wait()
+	_ = eg2.Wait()
 }
 
 func TestPartition_30_70(t *testing.T) {
