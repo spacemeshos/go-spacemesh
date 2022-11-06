@@ -22,6 +22,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-multiaddr v0.7.0
 	github.com/natefinch/atomic v1.0.1
+	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.1
