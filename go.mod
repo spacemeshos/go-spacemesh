@@ -36,7 +36,7 @@ require (
 	github.com/spacemeshos/go-scale v1.1.0
 	github.com/spacemeshos/merkle-tree v0.1.0
 	github.com/spacemeshos/poet v0.2.1-0.20221106164246-5ae492c2285c
-	github.com/spacemeshos/post v0.1.1
+	github.com/spacemeshos/post v0.1.2-0.20221106174554-7248d54711f3
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
