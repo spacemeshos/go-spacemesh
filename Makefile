@@ -1,6 +1,3 @@
-all: install build
-.PHONY: all
-
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-gpu.Inc
 # TODO(nkryuchkov): uncomment when go-svm is imported
@@ -61,6 +58,9 @@ DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
+
+all: install build
+.PHONY: all
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 19
