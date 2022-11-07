@@ -86,7 +86,7 @@ func (v *Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetada
 	p := (*proving.Proof)(PoST)
 
 	m := new(proving.ProofMetadata)
-	m.ID = commitment
+	m.Commitment = commitment
 	m.NumUnits = numUnits
 	m.Challenge = PostMetadata.Challenge
 	m.BitsPerLabel = PostMetadata.BitsPerLabel
