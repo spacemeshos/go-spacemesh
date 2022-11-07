@@ -17,17 +17,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type PostSetupProvider interface {
-	Status() *atypes.PostSetupStatus
-	StatusChan() <-chan *atypes.PostSetupStatus
-	ComputeProviders() []atypes.PostSetupComputeProvider
-	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
-	Config() atypes.PostConfig
-}
-
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider PostSetupProvider
+	postSetupProvider api.PostSetupProvider
 	smeshingProvider  api.SmeshingAPI
 }
 
@@ -37,7 +29,7 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
+func NewSmesherService(post api.PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
 	return &SmesherService{post, smeshing}
 }
 

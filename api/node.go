@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -58,7 +59,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/api NetworkIdentity
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,PostSetupProvider
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -68,6 +69,14 @@ type NetworkIdentity interface {
 // PeerCounter is an api to get amount of connected peers.
 type PeerCounter interface {
 	PeerCount() uint64
+}
+
+type PostSetupProvider interface {
+	Status() *atypes.PostSetupStatus
+	StatusChan() <-chan *atypes.PostSetupStatus
+	ComputeProviders() []atypes.PostSetupComputeProvider
+	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
+	Config() atypes.PostConfig
 }
 
 // ActivationAPI is an API for activation module.
