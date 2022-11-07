@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestPostConfig(t *testing.T) {
