@@ -39,6 +39,7 @@ var (
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
+	errInvalidVote           = errors.New("invalid layer/height in the vote")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -389,22 +390,25 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	// a ballot should not vote for multiple blocks in the same layer within hdist,
 	// since hare only output a single block each layer and miner should vote according
 	// to the hare output within hdist of the current layer when producing a ballot.
-	for _, bid := range b.Votes.Support {
-		exceptions[bid] = struct{}{}
-		lid, err := blocks.GetLayer(h.cdb, bid)
+	for _, vote := range b.Votes.Support {
+		exceptions[vote.ID] = struct{}{}
+		block, err := blocks.Get(h.cdb, vote.ID)
 		if err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
-		if voted, ok := layers[lid]; ok {
+		if block.ToVote() != vote {
+			return fmt.Errorf("%w: encoded vote %+v doesn't match actual %+v", errInvalidVote, vote, block.ToVote())
+		}
+		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
-			if voted != bid && lid.Add(h.cfg.Hdist).After(b.LayerIndex) {
+			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.LayerIndex) {
 				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
 					b.ID(),
 					b.LayerIndex,
 					log.Stringer("smesher", b.SmesherID()),
 					log.Stringer("voted_bid", voted),
-					log.Stringer("voted_bid", bid),
+					log.Stringer("voted_bid", vote.ID),
 					log.Uint32("hdist", h.cfg.Hdist))
 				if err = h.setBallotMalicious(ctx, b); err != nil {
 					return err
@@ -412,25 +416,29 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				return errDoubleVoting
 			}
 		} else {
-			layers[lid] = bid
+			layers[vote.LayerID] = vote.ID
 		}
 	}
 	// a ballot should not vote support and against on the same block.
-	for _, bid := range b.Votes.Against {
-		if _, exist := exceptions[bid]; exist {
-			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", bid, b.ID(), b.LayerIndex)
+	for _, vote := range b.Votes.Against {
+		if _, exist := exceptions[vote.ID]; exist {
+			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.LayerIndex)
 			if err := h.setBallotMalicious(ctx, b); err != nil {
 				return err
 			}
 			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
-				errConflictingExceptions, bid, b.ID(), b.LayerIndex)
+				errConflictingExceptions, vote.ID, b.ID(), b.LayerIndex)
 		}
-		lid, err := blocks.GetLayer(h.cdb, bid)
+		block, err := blocks.Get(h.cdb, vote.ID)
 		if err != nil {
 			h.logger.WithContext(ctx).With().Error("failed to get block layer", log.Err(err))
 			return fmt.Errorf("check exception get block layer: %w", err)
 		}
-		layers[lid] = bid
+		if block.ToVote() != vote {
+			return fmt.Errorf("%w encoded vote %+v doesn't match actual %+v",
+				errInvalidVote, vote, block.ToVote())
+		}
+		layers[vote.LayerID] = vote.ID
 	}
 	if len(exceptions) > h.cfg.MaxExceptions {
 		h.logger.WithContext(ctx).With().Warning("exceptions exceed limits",
@@ -459,8 +467,12 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 
 func ballotBlockView(b *types.Ballot) []types.BlockID {
 	combined := make([]types.BlockID, 0, len(b.Votes.Support)+len(b.Votes.Against))
-	combined = append(combined, b.Votes.Support...)
-	combined = append(combined, b.Votes.Against...)
+	for _, vote := range b.Votes.Support {
+		combined = append(combined, vote.ID)
+	}
+	for _, vote := range b.Votes.Against {
+		combined = append(combined, vote.ID)
+	}
 	return combined
 }
 
@@ -482,7 +494,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 
 	bids := ballotBlockView(b)
 	if len(bids) > 0 {
-		if err := h.fetcher.GetBlocks(ctx, ballotBlockView(b)); err != nil {
+		if err := h.fetcher.GetBlocks(ctx, bids); err != nil {
 			return fmt.Errorf("fetch blocks: %w", err)
 		}
 	}

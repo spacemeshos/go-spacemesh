@@ -204,7 +204,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	msg := VrfMessage{Beacon: v, Round: round, Layer: layer}
 	buf, err := codec.Encode(&msg)
 	if err != nil {
-		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
+		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
 	}
 	o.vrfMsgCache.Add(key, buf)
 	return buf, nil
@@ -257,13 +257,12 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		log.Int("committee_size", committeeSize))
 
 	if committeeSize < 1 {
-		logger.Error("committee size must be positive (received %d)", committeeSize)
+		logger.With().Error("committee size must be positive", log.Int("committee_size", committeeSize))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
 	}
 
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
-		logger.Error("eligibility: could not build vrf message")
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 

@@ -90,14 +90,14 @@ func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([
 					// TODO(dshulyak) skip request if connection is inbound
 					err = r.host.Connect(ctx, *ainfo)
 					if err != nil {
-						r.logger.With().Error("failed to connect to peer", log.Stringer("peer", ainfo.ID), log.Err(err))
+						r.logger.With().Warning("failed to connect to peer", log.Stringer("peer", ainfo.ID), log.Err(err))
 					}
 				}
 				var res []*addressbook.AddrInfo
 				if err == nil {
 					res, err = r.disc.Request(gctx, addr.ID)
 					if err != nil {
-						r.logger.With().Error("failed request from peer", log.Stringer("peer", ainfo.ID), log.Err(err))
+						r.logger.With().Warning("failed request from peer", log.Stringer("peer", ainfo.ID), log.Err(err))
 					}
 				}
 				select {
@@ -136,7 +136,7 @@ func (r *crawler) query(ctx context.Context, servers []*addressbook.AddrInfo) ([
 				if removedAt, ok := r.book.WasRecentlyRemoved(a.ID); ok {
 					r.logger.With().Debug(
 						"Skipped adding an address for a recently removed peer",
-						log.String("peer", a.ID.Pretty()),
+						log.Stringer("peer", a.ID),
 						log.Time("removedAt", *removedAt),
 					)
 				} else {

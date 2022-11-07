@@ -120,9 +120,9 @@ func GetBlob(db sql.Executor, id []byte) (proposal []byte, err error) {
 			stmt.ColumnBytes(0, proposal)
 			return true
 		}); err != nil {
-		return nil, fmt.Errorf("exec %s: %w", id, err)
+		return nil, fmt.Errorf("exec %s: %w", types.BytesToHash(id), err)
 	} else if rows == 0 {
-		return nil, fmt.Errorf("%w proposal ID %s", sql.ErrNotFound, id)
+		return nil, fmt.Errorf("%w proposal ID %s", sql.ErrNotFound, types.BytesToHash(id))
 	}
 
 	return proposal, err

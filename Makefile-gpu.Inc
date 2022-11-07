@@ -1,14 +1,19 @@
 PROJ_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 BIN_DIR ?= $(PROJ_DIR)build/
+
+export CGO_LDFLAGS := -L$(BIN_DIR)
+export CPATH := $(PROJ_DIR)build/
 export GOOS
 export GOARCH
 export GOARM
 export BIN_DIR
 
+CGO_TEST_LDFLAGS = $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
+
 ifeq ($(OS),Windows_NT)
   HOST_OS := windows
 else
-  HOST_OS := $(shell uname | tr "[A-Z]" "[a-z]")
+  HOST_OS := $(shell uname | tr [A-Z] [a-z])
 endif
 
 ifeq ($(GOOS),)
@@ -18,11 +23,6 @@ endif
 ifeq ($(GOARCH),)
   GOARCH := $(shell go env GOARCH)
 endif
-
-GOTAGS = # -tags ...
-export CGO_LDFLAGS := -L$(BIN_DIR)
-
-CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
 
 ifeq ($(GOOS),windows)
   platform := windows
@@ -52,16 +52,16 @@ ifneq ($(VERBOSE),)
   $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARCH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
 endif
 
-GPU_SETUP_REV = 0.1.24
+GPU_SETUP_REV = 0.1.26
 GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
 GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(GPU_SETUP_ZIP)
 ifeq ($(platform), windows)
-  GPU_SETUP_LIBS = gpu-setup.dll
+  GPU_SETUP_LIBS = gpu-setup.dll gpu-setup.lib libgpu-setup.a api.h
 else
-  ifneq (,$(findstring macos,$(platform)))
-  	GPU_SETUP_LIBS = libgpu-setup.dylib libMoltenVK.dylib libvulkan.1.dylib MoltenVK_icd.json
+  ifeq ($(platform), $(filter $(platform), macos macos-m1))
+    GPU_SETUP_LIBS = libgpu-setup.dylib libMoltenVK.dylib libvulkan.1.dylib MoltenVK_icd.json api.h
   else
-  	GPU_SETUP_LIBS = libgpu-setup.so
+    GPU_SETUP_LIBS = libgpu-setup.so api.h
   endif
 endif
 
@@ -97,7 +97,7 @@ $(SUBDIRS_ALL): get-gpu-setup
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%-all=%)/...
 
 print-test-targets:
-	@for i in test-all test-no-app-test test-only-app-test test-tidy test-fmt \
+	@for i in test-all test-tidy test-fmt \
 		$(sort \
 			$(SUBDIRS_LVL2) \
 			$(foreach X, $(SUBDIRS_ALL), $(if $(filter $(SUBDIRS_ONLY),$(X:%-all=%)), \
@@ -106,19 +106,3 @@ print-test-targets:
 	do echo $$i; \
 	done
 .PHONY: $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY) print-test-targets
-
-go-env: get-gpu-setup
-	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
-.PHONY: go-env
-
-go-env-test: get-gpu-setup
-	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
-.PHONY: go-env-test
-
-print-ldflags: get-gpu-setup
-	@echo $(CGO_LDFLAGS)
-.PHONY: print-ldflags
-
-print-test-ldflags: get-gpu-setup
-	@echo $(CGO_TEST_LDFLAGS)
-.PHONY: print-test-ldflags
