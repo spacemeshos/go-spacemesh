@@ -32,7 +32,6 @@ func DefaultPostSetupOpts() atypes.PostSetupOpts {
 // PostSetupProvider defines the functionality required for Post setup.
 type PostSetupProvider interface {
 	Status() *atypes.PostSetupStatus
-	StatusChan() <-chan *atypes.PostSetupStatus
 	ComputeProviders() []atypes.PostSetupComputeProvider
 	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
 	StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
@@ -108,42 +107,6 @@ func (mgr *PostSetupManager) Status() *atypes.PostSetupStatus {
 	status.LastError = mgr.LastError()
 
 	return status
-}
-
-// StatusChan returns a channel with status updates of the setup current or the upcoming session.
-func (mgr *PostSetupManager) StatusChan() <-chan *atypes.PostSetupStatus {
-	// Wait for session to start because only then the initializer instance
-	// used for retrieving the progress updates is already set.
-	mgr.mu.Lock()
-	startedChan := mgr.startedChan
-	mgr.mu.Unlock()
-
-	<-startedChan
-
-	statusChan := make(chan *atypes.PostSetupStatus, 1024)
-	go func() {
-		defer close(statusChan)
-
-		initialStatus := mgr.Status()
-		statusChan <- initialStatus
-
-		mgr.mu.Lock()
-		init := mgr.init
-		mgr.mu.Unlock()
-
-		ch := init.SessionNumLabelsWrittenChan()
-		for numLabelsWritten := range ch {
-			status := *initialStatus
-			status.NumLabelsWritten = numLabelsWritten
-			statusChan <- &status
-		}
-
-		if finalStatus := mgr.Status(); finalStatus.LastError != nil {
-			statusChan <- finalStatus
-		}
-	}()
-
-	return statusChan
 }
 
 // ComputeProviders returns a list of available compute providers for Post setup.
