@@ -1,0 +1,40 @@
+package grpcserver_test
+
+import (
+	"context"
+	"math/rand"
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	"github.com/spacemeshos/go-spacemesh/activation/types"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+func TestPostConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	postSetupProvider := mocks.NewMockPostSetupProvider(ctrl)
+	smeshingProvider := mocks.NewMockSmeshingProvider(ctrl)
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider)
+
+	postConfig := types.PostConfig{
+		MinNumUnits:   rand.Uint32(),
+		MaxNumUnits:   rand.Uint32(),
+		BitsPerLabel:  uint8(rand.Uint32()),
+		LabelsPerUnit: rand.Uint64(),
+		K1:            rand.Uint32(),
+		K2:            rand.Uint32(),
+	}
+	postSetupProvider.EXPECT().Config().Return(postConfig)
+
+	response, err := svc.PostConfig(context.Background(), &emptypb.Empty{})
+	require.NoError(t, err)
+	require.Equal(t, postConfig.MinNumUnits, response.MinNumUnits)
+	require.Equal(t, postConfig.MaxNumUnits, response.MaxNumUnits)
+	require.EqualValues(t, postConfig.BitsPerLabel, response.BitsPerLabel)
+	require.Equal(t, postConfig.LabelsPerUnit, response.LabelsPerUnit)
+	require.Equal(t, postConfig.K1, response.K1)
+	require.EqualValues(t, postConfig.K2, response.K2)
+}
