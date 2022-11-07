@@ -329,7 +329,6 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types
 		return nil, nil, errNotComplete
 	}
 
-	// TODO(mafa): id field in post package should be renamed to commitment otherwise error messages are confusing
 	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
 	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, commitment)
 	if err != nil {
