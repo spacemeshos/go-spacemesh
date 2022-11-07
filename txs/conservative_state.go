@@ -144,13 +144,13 @@ func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transacti
 }
 
 // RevertState reverts the VM state and database to the given layer.
-func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, error) {
-	root, err := cs.vmState.Revert(revertTo)
+func (cs *ConservativeState) RevertState(revertTo types.LayerID) error {
+	err := cs.vmState.Revert(revertTo)
 	if err != nil {
-		return root, fmt.Errorf("vm revert %v: %w", revertTo, err)
+		return fmt.Errorf("vm revert %v: %w", revertTo, err)
 	}
 
-	return root, cs.cache.RevertToLayer(cs.db, revertTo)
+	return cs.cache.RevertToLayer(cs.db, revertTo)
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.

@@ -338,9 +338,7 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 
 		case layerID := <-pb.layerTimer:
 			lyrCtx := log.WithNewSessionID(ctx)
-			if err := pb.handleLayer(lyrCtx, layerID); err != nil {
-				pb.logger.WithContext(lyrCtx).With().Warning("failed to create proposal", log.Err(err))
-			}
+			_ = pb.handleLayer(lyrCtx, layerID)
 		}
 	}
 }

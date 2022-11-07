@@ -519,6 +519,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	if err := s.dataFetcher.PollLayerData(ctx, layerID); err != nil {
 		return fmt.Errorf("PollLayerData: %w", err)
 	}
+	s.logger.WithContext(ctx).With().Debug("done polling layer data", layerID)
 	return nil
 }
 

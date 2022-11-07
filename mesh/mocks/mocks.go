@@ -93,12 +93,11 @@ func (mr *MockconservativeStateMockRecorder) LinkTXsWithProposal(arg0, arg1, arg
 }
 
 // RevertState mocks base method.
-func (m *MockconservativeState) RevertState(arg0 types.LayerID) (types.Hash32, error) {
+func (m *MockconservativeState) RevertState(arg0 types.LayerID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RevertState", arg0)
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // RevertState indicates an expected call of RevertState.
