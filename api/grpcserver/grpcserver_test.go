@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
@@ -1071,6 +1072,11 @@ func TestSmesherService(t *testing.T) {
 			require.Error(t, err)
 			statusCode := status.Code(err)
 			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"PostConfig", func(t *testing.T) {
+			logtest.SetupGlobal(t)
+			_, err := c.PostConfig(context.Background(), &emptypb.Empty{})
+			require.NoError(t, err)
 		}},
 		{"PostSetupComputeProviders", func(t *testing.T) {
 			logtest.SetupGlobal(t)
