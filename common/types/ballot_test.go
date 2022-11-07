@@ -5,9 +5,32 @@ import (
 
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+func TestBallotIDUnaffectedByVotes(t *testing.T) {
+	inner := InnerBallot{
+		LayerIndex: NewLayerID(1),
+	}
+	ballot1 := Ballot{
+		InnerBallot: inner,
+	}
+	ballot2 := Ballot{
+		InnerBallot: inner,
+	}
+	ballot1.Votes.Support = []Vote{{ID: BlockID{1}}}
+	ballot1.Votes.Support = []Vote{{ID: BlockID{2}}}
+	signer := signing.NewEdSigner()
+	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
+	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
+	ballot1.Initialize()
+	ballot2.Initialize()
+
+	require.NotEmpty(t, ballot1.ID())
+	require.Equal(t, ballot1.ID(), ballot2.ID())
+}
 
 func TestBallot_IDSize(t *testing.T) {
 	var id BallotID
@@ -17,17 +40,17 @@ func TestBallot_IDSize(t *testing.T) {
 func TestBallot_Initialize(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID: RandomATXID(),
-			Votes: Votes{
-				Base:    RandomBallotID(),
-				Support: []BlockID{RandomBlockID(), RandomBlockID()},
-			},
+			AtxID:      RandomATXID(),
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
+		Votes: Votes{
+			Base:    RandomBallotID(),
+			Against: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
+		},
 	}
 	signer := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.Bytes())
+	b.Signature = signer.Sign(b.SignedBytes())
 	assert.NoError(t, b.Initialize())
 	assert.NotEqual(t, EmptyBallotID, b.ID())
 	assert.Equal(t, signer.PublicKey(), b.SmesherID())
@@ -39,34 +62,18 @@ func TestBallot_Initialize(t *testing.T) {
 func TestBallot_Initialize_BadSignature(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID: RandomATXID(),
-			Votes: Votes{
-				Base:    RandomBallotID(),
-				Support: []BlockID{RandomBlockID(), RandomBlockID()},
-			},
+			AtxID:      RandomATXID(),
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
+		Votes: Votes{
+			Base:    RandomBallotID(),
+			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
+		},
 	}
-	b.Signature = signing.NewEdSigner().Sign(b.Bytes())[1:]
+	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())[1:]
 	err := b.Initialize()
 	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
-}
-
-func TestDBBallot(t *testing.T) {
-	layer := NewLayerID(100)
-	b := GenLayerBallot(layer)
-	assert.Equal(t, layer, b.LayerIndex)
-	assert.NotEqual(t, b.ID(), EmptyBallotID)
-	assert.NotNil(t, b.SmesherID())
-	dbb := &DBBallot{
-		InnerBallot: b.InnerBallot,
-		ID:          b.ID(),
-		Signature:   b.Signature,
-		SmesherID:   b.SmesherID().Bytes(),
-	}
-	got := dbb.ToBallot()
-	assert.Equal(t, b, got)
 }
 
 func FuzzBallotConsistency(f *testing.F) {
@@ -107,12 +114,4 @@ func FuzzVotingEligibilityProofConsistency(f *testing.F) {
 
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
 	tester.FuzzSafety[VotingEligibilityProof](f)
-}
-
-func FuzzDBBallotConsistency(f *testing.F) {
-	tester.FuzzConsistency[DBBallot](f)
-}
-
-func FuzzDBBallotSafety(f *testing.F) {
-	tester.FuzzSafety[DBBallot](f)
 }

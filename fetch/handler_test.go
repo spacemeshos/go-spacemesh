@@ -43,7 +43,7 @@ func createLayer(t *testing.T, db *datastore.CachedDB, lid types.LayerID) ([]typ
 	for i := 0; i < num; i++ {
 		b := types.RandomBallot()
 		b.LayerIndex = lid
-		b.Signature = signing.NewEdSigner().Sign(b.Bytes())
+		b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(db, b))
 		blts = append(blts, b.ID())
@@ -160,6 +160,73 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			} else {
 				require.Empty(t, got.Valid)
 				require.Empty(t, got.Invalid)
+			}
+		})
+	}
+}
+
+func TestHandleMeshHashReq(t *testing.T) {
+	tt := []struct {
+		name        string
+		params      [4]uint32 // from, to, delta, steps
+		hashMissing bool
+		err         error
+	}{
+		{
+			name:   "success",
+			params: [4]uint32{7, 23, 5, 4},
+		},
+		{
+			name:        "hash missing",
+			params:      [4]uint32{7, 23, 5, 4},
+			hashMissing: true,
+			err:         sql.ErrNotFound,
+		},
+		{
+			name:   "bad boundary",
+			params: [4]uint32{23, 23, 5, 4},
+			err:    errBadRequest,
+		},
+		{
+			name:   "not enough steps",
+			params: [4]uint32{7, 23, 5, 3},
+			err:    errBadRequest,
+		},
+		{
+			name:   "too many steps",
+			params: [4]uint32{7, 23, 5, 5},
+			err:    errBadRequest,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			req := &MeshHashRequest{
+				From:  types.NewLayerID(tc.params[0]),
+				To:    types.NewLayerID(tc.params[1]),
+				Delta: tc.params[2],
+				Steps: tc.params[3],
+			}
+			if !tc.hashMissing {
+				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
+					require.NoError(t, layers.SetHashes(th.cdb, lid, types.RandomHash(), types.RandomHash()))
+				}
+			}
+			reqData, err := codec.Encode(req)
+			require.NoError(t, err)
+
+			resp, err := th.handleMeshHashReq(context.TODO(), reqData)
+			if tc.err == nil {
+				require.NoError(t, err)
+				got, err := codec.DecodeSlice[types.Hash32](resp)
+				require.NoError(t, err)
+				require.EqualValues(t, len(got), req.Steps+1)
+			} else {
+				require.ErrorIs(t, err, tc.err)
 			}
 		})
 	}

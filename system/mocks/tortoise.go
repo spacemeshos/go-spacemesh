@@ -49,18 +49,6 @@ func (mr *MockTortoiseMockRecorder) LatestComplete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
 }
 
-// OnBallot mocks base method.
-func (m *MockTortoise) OnBallot(arg0 *types.Ballot) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnBallot", arg0)
-}
-
-// OnBallot indicates an expected call of OnBallot.
-func (mr *MockTortoiseMockRecorder) OnBallot(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBallot", reflect.TypeOf((*MockTortoise)(nil).OnBallot), arg0)
-}
-
 // OnBlock mocks base method.
 func (m *MockTortoise) OnBlock(arg0 *types.Block) {
 	m.ctrl.T.Helper()

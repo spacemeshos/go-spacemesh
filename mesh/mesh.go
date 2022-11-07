@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
 var errMissingHareOutput = errors.New("missing hare output")
@@ -86,31 +87,8 @@ func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, state conservativeSt
 			if err = layers.SetApplied(dbtx, i, types.EmptyBlockID); err != nil {
 				return fmt.Errorf("mesh init: %w", err)
 			}
-			if err = persistLayerHashes(msh.logger, dbtx, i, []types.BlockID{types.EmptyBlockID}); err != nil {
-				return err
-			}
 		}
-
-		gLayer := types.GenesisLayer()
-		for _, b := range gLayer.Ballots() {
-			msh.logger.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-			if err = ballots.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-		}
-		for _, b := range gLayer.Blocks() {
-			msh.logger.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-			if err = blocks.Add(dbtx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-			if err = blocks.SetValid(dbtx, b.ID()); err != nil {
-				return fmt.Errorf("mesh init: %w", err)
-			}
-		}
-		if err = layers.SetHareOutput(dbtx, gLayer.Index(), types.GenesisBlockID); err != nil {
-			return fmt.Errorf("mesh init: %w", err)
-		}
-		return nil
+		return persistLayerHashes(msh.logger, dbtx, gLid, nil)
 	}); err != nil {
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
@@ -126,21 +104,21 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 
 	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
-		msh.logger.With().Panic("failed to recover processed layer", log.Err(err))
+		msh.logger.With().Fatal("failed to recover processed layer", log.Err(err))
 	}
 	msh.processedLayer.Store(lyr)
 
 	applied, err := layers.GetLastApplied(msh.cdb)
 	if err != nil {
-		msh.logger.With().Panic("failed to recover latest applied layer", log.Err(err))
+		msh.logger.With().Fatal("failed to recover latest applied layer", log.Err(err))
 	}
 	msh.setLatestLayerInState(applied)
 
 	root := types.Hash32{}
 	if applied.After(types.GetEffectiveGenesis()) {
-		root, err = msh.conState.RevertState(msh.LatestLayerInState())
+		err = msh.conState.RevertState(msh.LatestLayerInState())
 		if err != nil {
-			msh.logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+			msh.logger.With().Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 		}
 	}
 
@@ -166,13 +144,12 @@ func (msh *Mesh) getMinUpdatedLayer() types.LayerID {
 
 // UpdateBlockValidity is the callback used when a block's contextual validity is updated by tortoise.
 func (msh *Mesh) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, newValid bool) error {
-	msh.logger.With().Debug("updating validity for block", lid, bid)
+	msh.logger.With().Debug("updating validity for block", lid, bid, log.Bool("new_valid", newValid))
 	oldValid, err := blocks.IsValid(msh.cdb, bid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("error reading contextual validity of block %v: %w", bid, err)
 	}
-
-	if oldValid != newValid {
+	if errors.Is(err, sql.ErrNotFound) || oldValid != newValid {
 		for {
 			minUpdated := msh.getMinUpdatedLayer()
 			if minUpdated != (types.LayerID{}) && !lid.Before(minUpdated) {
@@ -193,7 +170,7 @@ func (msh *Mesh) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, newVa
 
 // saveContextualValidity persists opinion on block to the database.
 func (msh *Mesh) saveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
-	msh.logger.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
+	msh.logger.With().Info("save block contextual validity", id, lid, log.Bool("validity", valid))
 	if valid {
 		return blocks.SetValid(msh.cdb, id)
 	}
@@ -398,25 +375,28 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	return nil
 }
 
-func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []types.BlockID) error {
-	logger.With().Debug("persisting layer hash", lid, log.Int("num_blocks", len(bids)))
-	types.SortBlockIDs(bids)
+func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
+	logger.With().Debug("persisting layer hash", lid, log.Int("num_blocks", len(valids)))
+	sortBlocks(valids)
 	var (
-		hash     = types.CalcBlocksHash32(bids, nil)
-		prevHash = types.EmptyLayerHash
-		err      error
+		hash   = types.CalcBlocksHash32(types.ToBlockIDs(valids), nil)
+		hasher = opinionhash.New()
+		err    error
 	)
-	if prevLid := lid.Sub(1); prevLid.Uint32() > 0 {
-		prevHash, err = layers.GetAggregatedHash(dbtx, prevLid)
+	if lid.After(types.GetEffectiveGenesis()) {
+		prev, err := layers.GetAggregatedHash(dbtx, lid.Sub(1))
 		if err != nil {
 			logger.With().Error("failed to get previous aggregated hash", lid, log.Err(err))
 			return err
 		}
+		logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prev.ShortString()))
+		hasher.WritePrevious(prev)
 	}
-
-	logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prevHash.ShortString()))
-	newAggHash := types.CalcBlocksHash32(bids, prevHash.Bytes())
-	if err = layers.SetHashes(dbtx, lid, hash, newAggHash); err != nil {
+	for _, block := range valids {
+		hasher.WriteSupport(block.ID(), block.TickHeight)
+	}
+	newAggHash := hasher.Hash()
+	if err = layers.SetHashes(dbtx, lid, hash, hasher.Hash()); err != nil {
 		logger.With().Error("failed to set layer hashes", lid, log.Err(err))
 		return err
 	}
@@ -431,7 +411,8 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, bids []
 func (msh *Mesh) pushLayersToState(ctx context.Context, from, to, latestVerified types.LayerID) error {
 	logger := msh.logger.WithContext(ctx).WithFields(
 		log.Stringer("from_layer", from),
-		log.Stringer("to_layer", to))
+		log.Stringer("to_layer", to),
+		log.Stringer("latest_verified", latestVerified))
 	logger.Info("pushing layers to state")
 	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Panic("tried to push genesis layers")
@@ -550,12 +531,14 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 			return fmt.Errorf("apply layer: %w", err)
 		}
 	}
+	logger = logger.WithFields(log.Stringer("applied", applied))
+	logger.With().Info("applying block for layer")
 
 	if err := msh.cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
 			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
 		}
-		if err := persistLayerHashes(logger, dbtx, lid, types.ToBlockIDs(valids)); err != nil {
+		if err := persistLayerHashes(logger, dbtx, lid, valids); err != nil {
 			logger.With().Error("failed to persist layer hashes", log.Err(err))
 			return err
 		}
@@ -574,17 +557,17 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
 func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
-	root, err := msh.conState.RevertState(revertTo)
-	if err != nil {
+	if err := msh.conState.RevertState(revertTo); err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
-	logger.With().Info("successfully reverted state", log.Stringer("state_root", root))
-
-	if err = layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
-		logger.With().Error("failed to unset applied layer", log.Err(err))
+	if err := layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
 		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
-	logger.Info("successfully reverted state")
+	stateHash, err := msh.conState.GetStateRoot()
+	if err != nil {
+		return fmt.Errorf("after revert get state: %w", err)
+	}
+	logger.With().Info("successfully reverted state", log.Stringer("state_hash", stateHash))
 	return nil
 }
 
@@ -640,40 +623,32 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
-	if err := msh.addBallot(ballot); err != nil {
-		return err
-	}
-	msh.trtl.OnBallot(ballot)
-	return nil
-}
-
-func (msh *Mesh) addBallot(b *types.Ballot) error {
-	mal, err := identities.IsMalicious(msh.cdb, b.SmesherID().Bytes())
+	malicious, err := identities.IsMalicious(msh.cdb, ballot.SmesherID().Bytes())
 	if err != nil {
 		return err
 	}
-	if mal {
-		b.SetMalicious()
+	if malicious {
+		ballot.SetMalicious()
 	}
-
-	// it is important to run add ballot and set identity to malicious atomically
+	// ballots.Add and ballots.Count should be atomic
+	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	return msh.cdb.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := ballots.Add(tx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
-		if !mal {
-			count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+		if !malicious {
+			count, err := ballots.CountByPubkeyLayer(tx, ballot.LayerIndex, ballot.SmesherID().Bytes())
 			if err != nil {
 				return err
 			}
 			if count > 1 {
-				if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+				if err := identities.SetMalicious(tx, ballot.SmesherID().Bytes()); err != nil {
 					return err
 				}
-				b.SetMalicious()
+				ballot.SetMalicious()
 				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", b.SmesherID()),
-					log.Inline(b),
+					log.Stringer("smesher", ballot.SmesherID()),
+					log.Inline(ballot),
 				)
 			}
 		}
@@ -722,8 +697,8 @@ func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
 // sortBlocks sort blocks tick height, if height is equal by lexicographic order.
 func sortBlocks(blks []*types.Block) []*types.Block {
 	sort.Slice(blks, func(i, j int) bool {
-		if blks[i].TickHeight < blks[j].TickHeight {
-			return true
+		if blks[i].TickHeight != blks[j].TickHeight {
+			return blks[i].TickHeight < blks[j].TickHeight
 		}
 		return blks[i].ID().Compare(blks[j].ID())
 	})

@@ -32,54 +32,30 @@ func (v *verifying) resetWeights(voted types.LayerID) {
 }
 
 func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
-	base, exist := v.ballotRefs[ballot.base.id]
-	if !exist {
-		return
-	}
-	ballot.conditions.baseGood = base.good()
-	ballot.conditions.consistent = validateConsistency(v.state, v.Config, ballot)
-	logger.With().Debug("ballot goodness",
-		ballot.id,
+	prev := v.layer(ballot.layer.Sub(1))
+	counted := !(ballot.conditions.badBeacon ||
+		prev.opinion != ballot.opinion() ||
+		prev.verifying.referenceHeight > ballot.reference.height)
+	logger.With().Debug("count ballot in verifying mode",
 		ballot.layer,
-		log.Stringer("base id", ballot.base.id),
-		log.Uint32("base layer", ballot.base.layer.Value),
-		log.Bool("good", ballot.good()))
-	if !ballot.good() {
+		ballot.id,
+		log.Stringer("ballot opinion", ballot.opinion()),
+		log.Stringer("local opinion", prev.opinion),
+		log.Bool("bad beacon", ballot.conditions.badBeacon),
+		log.Stringer("weight", ballot.weight),
+		log.Uint64("reference height", prev.verifying.referenceHeight),
+		log.Uint64("ballot height", ballot.reference.height),
+		log.Bool("counted", counted),
+	)
+	if !counted {
 		return
 	}
-	if ballot.weight.IsNil() {
-		logger.With().Debug("ballot weight is nil", ballot.id)
-		return
-	}
-	// get height of the max votable block
-	if refheight := v.layer(ballot.layer.Sub(1)).verifying.referenceHeight; refheight > ballot.reference.height {
-		logger.With().Debug("reference height is higher than the ballot height",
-			ballot.id,
-			log.Uint64("reference height", refheight),
-			log.Uint64("ballot height", ballot.reference.height),
-		)
-		return
-	}
+
 	for lid := ballot.layer; !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(ballot.weight)
 	}
 	v.totalGoodWeight = v.totalGoodWeight.Add(ballot.weight)
-	v.countAbstained(ballot)
-}
-
-func (v *verifying) countAbstained(ballot *ballotInfo) {
-	i := uint32(0)
-	for current := ballot.votes.tail; current != nil; current = current.prev {
-		i++
-		if current.vote != abstain {
-			continue
-		}
-		if i > v.Zdist {
-			return
-		}
-		current.verifying.abstained = current.verifying.abstained.Add(ballot.weight)
-	}
 }
 
 func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
@@ -90,15 +66,16 @@ func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	layer := v.layer(lid)
-
-	uncounted := v.expectedWeight(v.Config, lid).
-		Sub(v.totalGoodWeight).
-		Add(layer.verifying.goodUncounted)
+	if !layer.hareTerminated {
+		logger.With().Debug("hare is not terminated")
+		return false
+	}
 
 	margin := util.WeightFromUint64(0).
 		Add(v.totalGoodWeight).
-		Sub(layer.verifying.goodUncounted).
-		Sub(layer.verifying.abstained)
+		Sub(layer.verifying.goodUncounted)
+	uncounted := v.expectedWeight(v.Config, lid).
+		Sub(margin)
 	if uncounted.Sign() > 0 {
 		margin.Sub(uncounted)
 	}
@@ -111,7 +88,6 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("uncounted", uncounted),
 		log.Stringer("total good weight", v.totalGoodWeight),
 		log.Stringer("good uncounted", layer.verifying.goodUncounted),
-		log.Stringer("abstained weight", layer.verifying.abstained),
 		log.Stringer("global threshold", threshold),
 	)
 	if sign(margin.Cmp(threshold)) != support {
@@ -127,7 +103,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 			if block.height > layer.verifying.referenceHeight {
 				return neutral
 			}
-			decision, _ := getLocalVote(v.state.verified, v.state.last, v.Config, block)
+			decision, _ := getLocalVote(v.Config, v.state.verified, v.state.last, block)
 			return decision
 		},
 	)

@@ -38,8 +38,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
-	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
-		config.PoETServer, "The poet server url. (temporary) ")
+	cmd.PersistentFlags().StringArrayVar(&config.PoETServers, "poet-server",
+		config.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
 	cmd.PersistentFlags().StringVar(&config.Genesis.GenesisTime, "genesis-time",
 		config.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().StringVar(&config.Genesis.ExtraData, "genesis-extra-data",

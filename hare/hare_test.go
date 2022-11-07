@@ -107,7 +107,7 @@ func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
 		Beacon: beacon,
 	}
 	signer := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.TxIDs = []types.TransactionID{}
 	p.Initialize()

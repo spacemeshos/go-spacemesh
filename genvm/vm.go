@@ -140,12 +140,13 @@ func (v *VM) revert(lid types.LayerID) error {
 	return tx.Commit()
 }
 
-// Revert all changes that we made after the layer. Returns state hash of the layer.
-func (v *VM) Revert(lid types.LayerID) (types.Hash32, error) {
+// Revert all changes that we made after the layer.
+func (v *VM) Revert(lid types.LayerID) error {
 	if err := v.revert(lid); err != nil {
-		return types.Hash32{}, err
+		return err
 	}
-	return v.GetStateRoot()
+	v.logger.With().Info("vm reverted to layer", lid)
+	return nil
 }
 
 // AccountExists returns true if the address exists, spawned or not.
@@ -231,7 +232,6 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 			return false
 		}
 		account.EncodeScale(encoder)
-		events.ReportAccountUpdate(account.Address)
 		return true
 	})
 	if err != nil {
@@ -247,6 +247,10 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 	}
+	ss.IterateChanged(func(account *core.Account) bool {
+		events.ReportAccountUpdate(account.Address)
+		return true
+	})
 	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))

@@ -39,6 +39,7 @@ type fetcher interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 
 	GetPeers() []p2p.Peer
+	PeerMeshHashes(context.Context, p2p.Peer, *fetch.MeshHashRequest) (*fetch.MeshHashes, error)
 }
 
 type layerPatrol interface {
@@ -47,4 +48,9 @@ type layerPatrol interface {
 
 type certHandler interface {
 	HandleSyncedCertificate(context.Context, types.LayerID, *types.Certificate) error
+}
+
+type forkFinder interface {
+	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
+	Purge(bool, ...p2p.Peer)
 }

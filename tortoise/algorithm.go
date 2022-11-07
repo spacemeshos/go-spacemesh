@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -111,7 +112,6 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 		updater,
 		t.cfg,
 	)
-	t.trtl.init(t.ctx, types.GenesisLayer())
 	if needsRecovery {
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last layer", t.cfg.MeshProcessed),
@@ -161,7 +161,7 @@ func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
 }
 
 // EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Votes, error) {
+func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Opinion, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	conf := &encodeConf{}
@@ -176,7 +176,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onLayer(ctx, lid); err != nil {
-		t.logger.Error("failed on layer", lid, log.Err(err))
+		t.logger.With().Error("failed on layer", lid, log.Err(err))
 	}
 }
 
@@ -204,6 +204,42 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	if err := t.trtl.onBallot(ballot); err != nil {
 		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
+}
+
+// DecodedBallot created after unwrapping exceptions list and computing internal opinion.
+type DecodedBallot struct {
+	*types.Ballot
+	info *ballotInfo
+}
+
+// DecodeBallot decodes ballot if it wasn't processed earlier.
+func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	info, err := t.trtl.decodeBallot(ballot)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, fmt.Errorf("can't decode ballot %s", ballot.ID())
+	}
+	if info.opinion() != ballot.OpinionHash {
+		return nil, fmt.Errorf(
+			"computed opinion hash %s doesn't match signed %s for ballot %s",
+			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
+		)
+	}
+	return &DecodedBallot{Ballot: ballot, info: info}, nil
+}
+
+// StoreBallot stores previously decoded ballot.
+func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if decoded.IsMalicious() {
+		decoded.info.weight = weight{}
+	}
+	return t.trtl.storeBallot(decoded.info)
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block

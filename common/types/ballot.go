@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -38,10 +39,12 @@ func (id *BallotID) DecodeScale(d *scale.Decoder) (int, error) {
 
 // Ballot contains the smesher's signed vote on the mesh history.
 type Ballot struct {
-	// the actual votes on the mesh history
+	// InnerBallot is a signed part of the ballot.
 	InnerBallot
 	// smesher's signature on InnerBallot
 	Signature []byte
+	// Votes field is not signed.
+	Votes Votes
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -59,7 +62,10 @@ type InnerBallot struct {
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
 	EligibilityProofs []VotingEligibilityProof
-	Votes             Votes
+	// OpinionHash is a aggregated opinion on all previous layers.
+	// It is included into transferred data explicitly, so that signature
+	// can be verified before decoding votes.
+	OpinionHash Hash32
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
@@ -118,8 +124,10 @@ type InnerBallot struct {
 type Votes struct {
 	// Base ballot.
 	Base BallotID
-	// Support and Against blocks that base ballot votes differently.
-	Support, Against []BlockID
+	// Support block id at a particular layer and height.
+	Support []Vote
+	// Against previously supported block.
+	Against []Vote
 	// Abstain on layers until they are terminated.
 	Abstain []LayerID
 }
@@ -128,14 +136,14 @@ type Votes struct {
 func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("base", v.Base.String())
 	encoder.AddArray("support", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, bid := range v.Support {
-			encoder.AppendString(bid.String())
+		for _, vote := range v.Support {
+			encoder.AppendObject(&vote)
 		}
 		return nil
 	}))
 	encoder.AddArray("against", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, bid := range v.Against {
-			encoder.AppendString(bid.String())
+		for _, vote := range v.Against {
+			encoder.AppendObject(&vote)
 		}
 		return nil
 	}))
@@ -146,6 +154,34 @@ func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}))
 	return nil
+}
+
+// Vote additionally carries layer id and height
+// in order for the tortoise to count votes without downloading block body.
+type Vote struct {
+	ID      BlockID
+	LayerID LayerID
+	Height  uint64
+}
+
+// MarshalLogObject implements logging interface.
+func (s *Vote) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("id", s.ID.String())
+	encoder.AddUint32("layer", s.LayerID.Value)
+	encoder.AddUint64("height", s.Height)
+	return nil
+}
+
+// Opinion is a tuple from opinion hash and votes that decode to opinion hash.
+type Opinion struct {
+	Hash Hash32
+	Votes
+}
+
+// MarshalLogObject implements logging interface.
+func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("hash", o.Hash.String())
+	return o.Votes.MarshalLogObject(encoder)
 }
 
 // EpochData contains information that cannot be changed mid-epoch.
@@ -180,13 +216,22 @@ func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return fmt.Errorf("ballot already initialized")
 	}
-
 	if b.Signature == nil {
 		return fmt.Errorf("cannot calculate Ballot ID: signature is nil")
 	}
-	b.ballotID = BallotID(CalcObjectHash32(b).ToHash20())
 
-	data := b.Bytes()
+	hasher := hash.New()
+	_, err := codec.EncodeTo(hasher, &b.InnerBallot)
+	if err != nil {
+		return fmt.Errorf("failed to encode inner ballot for hashing")
+	}
+	_, err = codec.EncodeByteSlice(hasher, b.Signature)
+	if err != nil {
+		return fmt.Errorf("failed to encode byte slice")
+	}
+	b.ballotID = BallotID(BytesToHash(hasher.Sum(nil)).ToHash20())
+
+	data := b.SignedBytes()
 	pubkey, err := signing.ExtractPublicKey(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
@@ -195,8 +240,8 @@ func (b *Ballot) Initialize() error {
 	return nil
 }
 
-// Bytes returns the serialization of the InnerBallot.
-func (b *Ballot) Bytes() []byte {
+// SignedBytes returns the serialization of the InnerBallot for signing.
+func (b *Ballot) SignedBytes() []byte {
 	data, err := codec.Encode(&b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
@@ -204,9 +249,19 @@ func (b *Ballot) Bytes() []byte {
 	return data
 }
 
+// SetID from stored data.
+func (b *Ballot) SetID(id BallotID) {
+	b.ballotID = id
+}
+
 // ID returns the BallotID.
 func (b *Ballot) ID() BallotID {
 	return b.ballotID
+}
+
+// SetSmesherID from stored data.
+func (b *Ballot) SetSmesherID(id *signing.PublicKey) {
+	b.smesherID = id
 }
 
 // SmesherID returns the smesher's Edwards public key.
@@ -240,6 +295,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer_id", b.LayerIndex.Value)
 	encoder.AddUint32("epoch_id", uint32(b.LayerIndex.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
+	encoder.AddString("opinion hash", b.OpinionHash.String())
 	encoder.AddString("base_ballot", b.Votes.Base.String())
 	encoder.AddInt("support", len(b.Votes.Support))
 	encoder.AddInt("against", len(b.Votes.Against))
@@ -308,25 +364,5 @@ func NewExistingBallot(id BallotID, sig []byte, pub []byte, inner InnerBallot) B
 		Signature:   sig,
 		smesherID:   signing.NewPublicKey(pub),
 		InnerBallot: inner,
-	}
-}
-
-// DBBallot is a Ballot structure as it is stored in DB.
-type DBBallot struct {
-	InnerBallot
-	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
-	// to break if in future key for database will be changed
-	ID        BallotID
-	Signature []byte
-	SmesherID []byte // derived from signature when ballot is received
-}
-
-// ToBallot creates a Ballot from data that is stored locally.
-func (b *DBBallot) ToBallot() *Ballot {
-	return &Ballot{
-		ballotID:    b.ID,
-		InnerBallot: b.InnerBallot,
-		Signature:   b.Signature,
-		smesherID:   signing.NewPublicKey(b.SmesherID),
 	}
 }

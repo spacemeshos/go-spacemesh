@@ -154,7 +154,7 @@ func TestGetBlocks(t *testing.T) {
 
 			require.ErrorIs(t, f.GetBlocks(context.TODO(), blockIDs), tc.err)
 			f.cancel()
-			eg.Wait()
+			require.NoError(t, eg.Wait())
 		})
 	}
 }
@@ -226,7 +226,7 @@ func TestGetBallots(t *testing.T) {
 
 			require.ErrorIs(t, f.GetBallots(context.TODO(), ballotIDs), tc.err)
 			f.cancel()
-			eg.Wait()
+			require.NoError(t, eg.Wait())
 		})
 	}
 }
@@ -298,7 +298,7 @@ func TestGetProposals(t *testing.T) {
 
 			require.ErrorIs(t, f.GetProposals(context.TODO(), proposalIDs), tc.err)
 			f.cancel()
-			eg.Wait()
+			require.NoError(t, eg.Wait())
 		})
 	}
 }
@@ -376,7 +376,7 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 
 			require.ErrorIs(t, f.getTxs(tids), errUnknown)
 			f.cancel()
-			eg.Wait()
+			require.NoError(t, eg.Wait())
 		})
 	}
 }
@@ -423,7 +423,7 @@ func TestGetTxs(t *testing.T) {
 
 			require.ErrorIs(t, f.GetBlockTxs(context.TODO(), tids), tc.err)
 			f.cancel()
-			eg.Wait()
+			require.NoError(t, eg.Wait())
 		})
 	}
 }
@@ -506,7 +506,7 @@ func TestGetATXs(t *testing.T) {
 
 			require.ErrorIs(t, f.GetAtxs(context.TODO(), atxIDs), tc.err)
 			f.cancel()
-			eg.Wait()
+			require.NoError(t, eg.Wait())
 		})
 	}
 }
@@ -535,7 +535,7 @@ func TestGetPoetProof(t *testing.T) {
 	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(errors.New("unknown")).Times(1)
 	require.Error(t, f.GetPoetProof(context.TODO(), h))
 	f.cancel()
-	eg.Wait()
+	require.NoError(t, eg.Wait())
 }
 
 func TestFetch_GetLayerData(t *testing.T) {
@@ -583,11 +583,11 @@ func TestFetch_GetLayerData(t *testing.T) {
 				}
 				idx := i
 				f.mLyrS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, _ []byte, okFunc func([]byte), errFunc func(error)) error {
+					func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
 						if tc.errs[idx] == nil {
-							go okFunc(generateLayerContent(t))
+							go okCB(generateLayerContent(t))
 						} else {
-							go errFunc(tc.errs[idx])
+							go errCB(tc.errs[idx])
 						}
 						return nil
 					})
@@ -645,11 +645,11 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 				}
 				idx := i
 				f.mOpnS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, _ []byte, okFunc func([]byte), errFunc func(error)) error {
+					func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
 						if tc.errs[idx] == nil {
-							go okFunc([]byte("data"))
+							go okCB([]byte("data"))
 						} else {
-							go errFunc(tc.errs[idx])
+							go errCB(tc.errs[idx])
 						}
 						return nil
 					})
@@ -694,16 +694,93 @@ func TestFetch_GetEpochATXIDs(t *testing.T) {
 				wg.Done()
 			}
 			f.mAtxS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+				func(_ context.Context, _ p2p.Peer, req []byte, okCB func([]byte), errCB func(error)) error {
 					if tc.err == nil {
-						go okFunc([]byte("a"))
+						go okCB([]byte("a"))
 					} else {
-						go errFunc(tc.err)
+						go errCB(tc.err)
 					}
 					return nil
 				})
 			require.NoError(t, f.GetEpochATXIDs(context.TODO(), peer, types.EpochID(111), okFunc, errFunc))
 			wg.Wait()
+		})
+	}
+}
+
+func TestFetch_GetMeshHashes(t *testing.T) {
+	peer := p2p.Peer("p0")
+	errUnknown := errors.New("unknown")
+	tt := []struct {
+		name     string
+		params   [4]uint32 // from, to, delta, steps
+		expected []types.LayerID
+		err      error
+	}{
+		{
+			name:   "success",
+			params: [4]uint32{7, 23, 5, 4},
+			expected: []types.LayerID{
+				types.NewLayerID(7),
+				types.NewLayerID(12),
+				types.NewLayerID(17),
+				types.NewLayerID(22),
+				types.NewLayerID(23),
+			},
+		},
+		{
+			name:   "failure",
+			params: [4]uint32{7, 23, 5, 4},
+			err:    errUnknown,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := createFetch(t)
+			req := &MeshHashRequest{
+				From:  types.NewLayerID(tc.params[0]),
+				To:    types.NewLayerID(tc.params[1]),
+				Delta: tc.params[2],
+				Steps: tc.params[3],
+			}
+			var expected MeshHashes
+			if tc.err == nil {
+				hashes := make([]types.Hash32, len(tc.expected))
+				for i := range hashes {
+					hashes[i] = types.RandomHash()
+				}
+				expected.Layers = tc.expected
+				expected.Hashes = hashes
+			}
+			reqData, err := codec.Encode(req)
+			require.NoError(t, err)
+			f.mMHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ p2p.Peer, gotReq []byte, okCB func([]byte), errCB func(error)) error {
+					require.Equal(t, reqData, gotReq)
+					if tc.err == nil {
+						data, err := codec.EncodeSlice(expected.Hashes)
+						require.NoError(t, err)
+						go func() {
+							okCB(data)
+						}()
+					} else {
+						go func() {
+							errCB(tc.err)
+						}()
+					}
+					return nil
+				})
+			got, err := f.PeerMeshHashes(context.TODO(), peer, req)
+			if tc.err == nil {
+				require.NoError(t, err)
+				require.Equal(t, expected, *got)
+			} else {
+				require.ErrorIs(t, err, tc.err)
+			}
 		})
 	}
 }

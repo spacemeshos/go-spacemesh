@@ -172,9 +172,9 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 			stmt.ColumnBytes(0, buf)
 			return true
 		}); err != nil {
-		return nil, fmt.Errorf("get %s: %w", id, err)
+		return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
 	} else if rows == 0 {
-		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, id)
+		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
 	}
 	return buf, nil
 }
