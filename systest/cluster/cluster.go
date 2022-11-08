@@ -101,7 +101,7 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
 	cluster.addFlag(CycleGap(10 * time.Second))
 	cluster.addFlag(PhaseShift(20 * time.Second))
-	cluster.addFlag(GracePeriod(5 * time.Second))
+	cluster.addFlag(GracePeriod(3 * time.Second))
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
