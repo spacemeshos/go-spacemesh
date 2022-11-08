@@ -341,28 +341,40 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	}
 
 	// miner didn't publish ATX that targets current epoch.
+	// This estimate work if the majority of the nodes use poet servers that are configured the same way.
+	// TODO: do better when nodes use poet services with different phase shifts.
+	// We must wait till an ATX from other nodes arrives.
+	// To calculate the needed time we find the Poet round end
+	// and add twice network grace plus average PoST duration time.
+	// The first grace time is for poet proof propagation, The second one - for the ATX.
+	// Max wait time depicts an estimated safe moment to still be able to
+	// submit a poet challenge with the obtained ATX.
+	//
+	//                 Grace ──────┐
+	//                 Period      │  ┌─ATX arrives
+	//                     │  PoST │  │   ┌ wait deadline
+	//                     │ ┌───► │  │   │   ┌ Next round start
+	//   ┌────────────────┬┴─►   └─┴─►│   │   ▼───────
+	//   │  POET ROUND N  │           │   │   │ ROUND N+1
+	// ──┴────────────┬───┴───────────▼───▼───┴───────►time
+	//     EPOCH N    │      EPOCH N+1
+	// ───────────────┴───────────────────────────────
+	averagePostTime := time.Second // TODO should probably come up with a reasonable average value.
+	poetRoundEndOffset := b.poetCfg.PhaseShift - b.poetCfg.CycleGap
+	atxArrivalOffset := poetRoundEndOffset + 2*b.poetCfg.GracePeriod + averagePostTime
+	waitDeadline := b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift).Add(-b.poetCfg.GracePeriod)
 
-	// this estimate work if the majority of the nodes use poet servers that are configured the same way.
-	// TODO: do better when nodes use different poet services
-	window := b.poetCfg.PhaseShift - b.poetCfg.CycleGap + b.poetCfg.GracePeriod
-	windowEnd := b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(window)
-	wait := time.Until(windowEnd)
-	if wait <= 0 { // missed the window. wait for the next epoch
-		waitTill := (currEpoch + 1).FirstLayer()
-		b.log.WithContext(ctx).With().Info("waiting till next epoch to build atx",
-			log.Stringer("current_epoch", currEpoch),
-			log.Stringer("wait_till", waitTill),
-			log.Stringer("wait_till_epoch", waitTill.GetEpoch()))
-		select {
-		case <-ctx.Done():
-			return false
-		case <-b.layerClock.AwaitLayer(waitTill):
-			wait = window
-		}
+	var expectedAtxArrivalTime time.Time
+	if time.Now().After(waitDeadline) {
+		b.log.WithContext(ctx).With().Info("missed the window to submit a poet challenge. Will wait for next epoch.")
+		expectedAtxArrivalTime = b.layerClock.LayerToTime((currEpoch + 1).FirstLayer()).Add(atxArrivalOffset)
+	} else {
+		expectedAtxArrivalTime = b.layerClock.LayerToTime(currEpoch.FirstLayer()).Add(atxArrivalOffset)
 	}
-	timer := time.NewTimer(wait)
-	b.log.WithContext(ctx).With().Info("waiting for the poet window expires",
-		log.Duration("wait", wait))
+
+	waitTime := time.Until(expectedAtxArrivalTime)
+	timer := time.NewTimer(waitTime)
+	b.log.WithContext(ctx).With().Info("waiting for the first ATX", log.Duration("wait", waitTime))
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
@@ -637,6 +649,9 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// - the end of the current poet round + grace period
 	// - the start of the next one - grace period.
 	// It must also accommodate for PoST duration.
+	//
+	// We set the deadline to the earliest possible value so that
+	// the ATX we produce is available for the network ASAP.
 	// Details: https://community.spacemesh.io/t/redundant-poet-registration/310
 	//
 	//                                 PoST
@@ -649,30 +664,16 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	//  WE ARE HERE                DEADLINE FOR       ATX PUBLICATION
 	//                           WAITING FOR POET        DEADLINE
 	//                               PROOFS
-	pubEpoch := b.challenge.PublishEpoch()
 	// NiPoST must be ready before start of the next poet round.
+	pubEpoch := b.challenge.PublishEpoch()
 	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
 	poetRoundEnd := nextPoetRoundStart.Add(-b.poetCfg.CycleGap)
-	postDurationWithMargin := time.Duration(float64(b.lastPostGenDuration.Nanoseconds()) * 1.1)
-
-	poetProofDeadline := nextPoetRoundStart.Add(-postDurationWithMargin).Add(-b.poetCfg.GracePeriod)
-	// Safety check
-	if poetProofDeadline.Before(poetRoundEnd.Add(b.poetCfg.GracePeriod)) {
-		b.log.WithContext(ctx).With().Warning(
-			"calculated poet proof deadline is too soon",
-			log.Time("poet round end", poetRoundEnd),
-			log.Time("next poet round start", nextPoetRoundStart),
-			log.Time("deadline time", poetProofDeadline),
-			log.Duration("last PoST duration", postDurationWithMargin),
-		)
-		// Override to the earliest safe value.
-		poetProofDeadline = poetRoundEnd.Add(b.poetCfg.GracePeriod)
-	}
+	poetProofDeadline := poetRoundEnd.Add(b.poetCfg.GracePeriod)
 
 	b.log.With().Info("building NIPost",
+		log.Stringer("poet round start", nextPoetRoundStart),
 		log.Stringer("pub_epoch", pubEpoch),
 		log.Time("deadline time", poetProofDeadline),
-		log.Duration("last PoST duration", postDurationWithMargin),
 	)
 
 	commitmentAtx, err := b.getCommitmentAtx(ctx)
