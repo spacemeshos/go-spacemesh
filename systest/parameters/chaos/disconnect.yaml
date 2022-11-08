@@ -6,7 +6,7 @@ spec:
   schedule: "*/20 * * * *"
   historyLimit: 2
   type: "NetworkChaos"
-  podChaos:
+  networkChaos:
     action: partition
     duration: "60s"
     mode: random-max-percent
