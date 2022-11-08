@@ -348,7 +348,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 	current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
 	addPrevAtx(t, cdb, current.GetEpoch()-1)
 	mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
-	mClock.EXPECT().LayerToTime(current).Return(time.Now().Add(100 * time.Millisecond))
+	mClock.EXPECT().LayerToTime(current).AnyTimes().Return(time.Now().Add(100 * time.Millisecond))
 	require.True(t, b.waitForFirstATX(context.TODO()))
 }
 
@@ -375,10 +375,11 @@ func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
 	ch := make(chan struct{}, 1)
 	close(ch)
 	current := types.NewLayerID(layersPerEpoch * 2) // first layer of epoch 2
+	next := types.NewLayerID(current.Value + layersPerEpoch)
 	addPrevAtx(t, cdb, current.GetEpoch()-1)
 	mClock.EXPECT().GetCurrentLayer().Return(current)
 	mClock.EXPECT().LayerToTime(current).Return(time.Now().Add(-5 * time.Millisecond))
-	mClock.EXPECT().AwaitLayer(current.Add(layersPerEpoch)).Return(ch)
+	mClock.EXPECT().LayerToTime(next).Return(time.Now().Add(100 * time.Millisecond))
 	mClock.EXPECT().GetCurrentLayer().Return(current.Add(layersPerEpoch)).AnyTimes()
 	require.True(t, b.waitForFirstATX(context.TODO()))
 }
