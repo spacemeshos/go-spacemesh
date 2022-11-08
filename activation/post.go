@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -62,9 +63,10 @@ type PostSetupManager struct {
 	lastOpts *atypes.PostSetupOpts
 	lastErr  error
 
-	// startedChan indicates whether a data creation session has started.
-	// The channel instance is replaced in the end of the session.
-	startedChan chan struct{}
+	// ctx and cancel are the context and cancel function of the initialization
+	// they can be used to stop and monitor a started session
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// doneChan indicates whether the current data creation session has finished.
 	// The channel instance is replaced in the beginning of the session.
@@ -81,7 +83,6 @@ func NewPostSetupManager(id types.NodeID, cfg atypes.PostConfig, logger log.Log,
 		goldenATXID:       goldenATXID,
 		state:             atypes.PostSetupStateNotStarted,
 		initCompletedChan: make(chan struct{}),
-		startedChan:       make(chan struct{}),
 	}
 
 	return mgr, nil
@@ -186,7 +187,12 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 	}
 
 	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
-	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), commitment)
+	newInit, err := initialization.NewInitializer(
+		initialization.WithCommitment(commitment),
+		initialization.WithConfig(config.Config(mgr.cfg)),
+		initialization.WithInitOpts(config.InitOpts(opts)),
+		initialization.WithLogger(mgr.logger),
+	)
 	if err != nil {
 		mgr.mu.Lock()
 		mgr.state = atypes.PostSetupStateError
@@ -195,20 +201,19 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 		return nil, fmt.Errorf("new initializer: %w", err)
 	}
 
-	newInit.SetLogger(mgr.logger)
-
 	mgr.mu.Lock()
 	mgr.init = newInit
 	mgr.lastOpts = &opts
 	mgr.lastErr = nil
-	close(mgr.startedChan)
+	mgr.ctx, mgr.cancel = context.WithCancel(context.TODO())
 	mgr.doneChan = make(chan struct{})
 	mgr.mu.Unlock()
 
 	go func() {
 		defer func() {
 			mgr.mu.Lock()
-			mgr.startedChan = make(chan struct{})
+			mgr.cancel()
+			mgr.ctx, mgr.cancel = nil, nil
 			close(mgr.doneChan)
 			mgr.mu.Unlock()
 		}()
@@ -221,11 +226,11 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 			log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
 		)
 
-		if err := newInit.Initialize(); err != nil {
+		if err := newInit.Initialize(mgr.ctx); err != nil {
 			mgr.mu.Lock()
 			defer mgr.mu.Unlock()
 
-			if errors.Is(err, initialization.ErrStopped) {
+			if errors.Is(err, context.Canceled) {
 				mgr.logger.Info("post setup session stopped")
 				mgr.state = atypes.PostSetupStateNotStarted
 			} else {
@@ -261,9 +266,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 	mgr.mu.Unlock()
 
 	if state == atypes.PostSetupStateInProgress {
-		if err := init.Stop(); err != nil {
-			return fmt.Errorf("stop: %w", err)
-		}
+		mgr.cancel()
 
 		// Block until the current data creation session will be finished.
 		<-doneChan
