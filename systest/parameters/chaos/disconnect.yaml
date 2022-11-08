@@ -14,7 +14,7 @@ spec:
     selector:
       labelSelectors:
         "app": "smesher"
-    direction: both
+    direction: to
     target:
       mode: all
       selector:
