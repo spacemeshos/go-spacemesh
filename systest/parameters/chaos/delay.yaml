@@ -1,0 +1,15 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: delay-smesher
+spec:
+  action: delay
+  mode: all
+  selector:
+    labelSelectors:
+      "component": "spacemesh"
+  diraction: both
+  delay:
+    latency: "50ms"
+    correlation: "0"
+    jitter: "50ms"

@@ -1,0 +1,22 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: short-disconnect-every-20m
+spec:
+  schedule: "*/20 * * * *"
+  historyLimit: 2
+  type: "NetworkChaos"
+  podChaos:
+    action: partition
+    duration: "60s"
+    mode: random-max-percent
+    value: "5"
+    selector:
+      labelSelectors:
+        "app": "smesher"
+    direction: both
+    target:
+      mode: all
+      selector:
+        labelSelectors:
+          "component": "spacemesh"

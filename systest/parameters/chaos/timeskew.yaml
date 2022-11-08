@@ -1,0 +1,23 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: positive-offset
+spec:
+  mode: fixed-percent
+  value: "5"
+  selector:
+    labelSelectors:
+      "component": "spacemesh"
+  timeOffset: '400ms'
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: negative-offset
+spec:
+  mode: fixed-percent
+  value: "5"
+  selector:
+    labelSelectors:
+      "component": "spacemesh"
+  timeOffset: '-400ms'

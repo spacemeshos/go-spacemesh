@@ -1,0 +1,15 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: bandwidth
+spec:
+  action: bandwidth
+  mode: all
+  selector:
+    labelSelectors:
+      "component": "spacemesh"
+  diraction: both
+  bandwidth:
+    rate: "2mbps"
+    limit: 4194304
+    buffer: 10240

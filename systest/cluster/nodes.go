@@ -280,7 +280,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			setname := fmt.Sprintf("%s-%d", name, i)
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
-
+			labels["component"] = "spacemesh"
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}

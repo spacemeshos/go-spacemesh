@@ -1,0 +1,16 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: short-failure-every-20m
+spec:
+  schedule: "*/20 * * * *"
+  historyLimit: 2
+  type: "PodChaos"
+  podChaos:
+    action: pod-failure
+    mode: random-max-percent
+    value: "5"
+    selector:
+      labelSelectors:
+        "app": "smeshers"
+    duration: "60s"
