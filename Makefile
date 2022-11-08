@@ -11,7 +11,7 @@ SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 export CGO_ENABLED := 1
-export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
+export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
