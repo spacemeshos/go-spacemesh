@@ -12,5 +12,5 @@ spec:
     value: "5"
     selector:
       labelSelectors:
-        "app": "smeshers"
+        "app": "smesher"
     duration: "60s"
