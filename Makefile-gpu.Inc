@@ -2,7 +2,7 @@ PROJ_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 BIN_DIR ?= $(PROJ_DIR)build/
 
 export CGO_LDFLAGS := -L$(BIN_DIR)
-export CPATH := $(PROJ_DIR)build/
+export CGO_CFLAGS := -I$(PROJ_DIR)build/
 export GOOS
 export GOARCH
 export GOARM
@@ -106,3 +106,23 @@ print-test-targets:
 	do echo $$i; \
 	done
 .PHONY: $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY) print-test-targets
+
+go-env: get-gpu-setup
+	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
+	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
+.PHONY: go-env
+
+go-env-test: get-gpu-setup
+	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
+	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
+.PHONY: go-env-test
+
+print-env: get-gpu-setup
+	@echo CGO_CFLAGS="$(CGO_CFLAGS)"
+	@echo CGO_LDFLAGS="$(CGO_LDFLAGS)"
+.PHONY: print-env
+
+print-test-env: get-gpu-setup
+	@echo CGO_CFLAGS="$(CGO_CFLAGS)"
+	@echo CGO_TEST_LDFLAGS="$(CGO_TEST_LDFLAGS)"
+.PHONY: print-test-env
