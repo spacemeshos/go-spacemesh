@@ -31,23 +31,22 @@ func (s *activationService) RegisterService(server *Server) {
 
 // Get implements v1.ActivationServiceServer.
 func (s *activationService) Get(ctx context.Context, request *v1.GetRequest) (*v1.GetResponse, error) {
-	logger := log.GetLogger().WithFields(log.Binary("id", request.Id))
-
 	if l := len(request.Id); l != types.ATXIDSize {
-		logger.Debug("invalid ATX ID length")
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid ATX ID length (%d), expected (%d)", l, types.ATXIDSize))
 	}
 
 	atxId := types.ATXID(types.BytesToHash(request.Id))
+	logger := log.GetLogger().WithFields(log.Stringer("id", atxId))
+
 	atx, err := s.atxProvider.GetFullAtx(atxId)
 	if err != nil || atx == nil {
-		logger.Debug("failed to get the ATX (%v)", err)
+		logger.With().Debug("failed to get the ATX", log.Err(err))
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
 
 	id := atx.ID()
 	if atxId != id {
-		logger.With().Error("ID of the received ATX is different than requested", log.Binary("received ID", id.Bytes()))
+		logger.With().Error("ID of the received ATX is different than requested", log.Stringer("received ID", id))
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
