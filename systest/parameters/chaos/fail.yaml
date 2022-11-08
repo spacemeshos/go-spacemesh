@@ -8,8 +8,8 @@ spec:
   type: "PodChaos"
   podChaos:
     action: pod-failure
-    mode: random-max-percent
-    value: "5"
+    mode: fixed-percent
+    value: "10"
     selector:
       labelSelectors:
         "app": "smesher"

@@ -8,7 +8,7 @@ spec:
   selector:
     labelSelectors:
       "component": "spacemesh"
-  diraction: both
+  direction: to
   bandwidth:
     rate: "2mbps"
     limit: 4194304

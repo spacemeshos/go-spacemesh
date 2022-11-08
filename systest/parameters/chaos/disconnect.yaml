@@ -9,8 +9,8 @@ spec:
   networkChaos:
     action: partition
     duration: "60s"
-    mode: random-max-percent
-    value: "5"
+    mode: fixed-percent
+    value: "10"
     selector:
       labelSelectors:
         "app": "smesher"
