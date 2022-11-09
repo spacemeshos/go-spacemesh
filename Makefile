@@ -1,6 +1,3 @@
-all: install build
-.PHONY: all
-
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-gpu.Inc
 # TODO(nkryuchkov): uncomment when go-svm is imported
@@ -14,7 +11,7 @@ SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 export CGO_ENABLED := 1
-export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
+export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
@@ -61,6 +58,9 @@ DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
+
+all: install build
+.PHONY: all
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 19
