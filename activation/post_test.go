@@ -50,7 +50,7 @@ func TestPostSetupManager(t *testing.T) {
 				return nil
 			case <-timer.C:
 				status := mgr.Status()
-				req.True(status.NumLabelsWritten >= lastStatus.NumLabelsWritten)
+				req.GreaterOrEqual(status.NumLabelsWritten, lastStatus.NumLabelsWritten)
 				req.Equal(opts, *status.LastOpts)
 				req.Nil(status.LastError)
 
