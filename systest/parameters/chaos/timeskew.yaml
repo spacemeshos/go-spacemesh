@@ -1,23 +1,35 @@
 apiVersion: chaos-mesh.org/v1alpha1
-kind: TimeChaos
+kind: Schedule
 metadata:
-  name: positive-offset
+  name: positive-timeskew
 spec:
-  mode: fixed-percent
-  value: "5"
-  selector:
-    labelSelectors:
-      "component": "spacemesh"
-  timeOffset: '400ms'
+  schedule: "*/10 * * * *"
+  historyLimit: 2
+  type: "TimeChaos"
+  concurrencyPolicy: "Allow"
+  timeChaos:
+    timeOffset: "400ms"
+    mode: fixed-percent
+    value: "10"
+    selector:
+      labelSelectors:
+        "component": "spacemesh"
+    duration: "10m"
 ---
 apiVersion: chaos-mesh.org/v1alpha1
-kind: TimeChaos
+kind: Schedule
 metadata:
-  name: negative-offset
+  name: negative-timeskew
 spec:
-  mode: fixed-percent
-  value: "5"
-  selector:
-    labelSelectors:
-      "component": "spacemesh"
-  timeOffset: '-400ms'
+  schedule: "*/10 * * * *"
+  historyLimit: 2
+  type: "TimeChaos"
+  concurrencyPolicy: "Allow"
+  timeChaos:
+    timeOffset: "-400ms"
+    mode: fixed-percent
+    value: "10"
+    selector:
+      labelSelectors:
+        "component": "spacemesh"
+    duration: "10m"
