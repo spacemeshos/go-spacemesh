@@ -40,7 +40,7 @@ run: gomplate
 	@kubectl apply -f systest_job.yml
 	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
-	kubectl wait --for=condition=complete job/$(test_job_name)
+	kubectl wait --for=condition=complete job/$(test_job_name) --timeout=-1s
 
 .PHONY: clean
 clean:
