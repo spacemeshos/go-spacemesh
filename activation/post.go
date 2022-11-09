@@ -225,7 +225,7 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 			defer mgr.mu.Unlock()
 
 			if errors.Is(err, context.Canceled) {
-				mgr.logger.Info("post setup session stopped")
+				mgr.logger.Info("post setup session was stopped")
 				mgr.state = atypes.PostSetupStateNotStarted
 			} else {
 				mgr.state = atypes.PostSetupStateError

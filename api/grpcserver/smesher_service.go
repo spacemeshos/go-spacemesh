@@ -29,6 +29,8 @@ type PostSetupProvider interface {
 type SmesherService struct {
 	postSetupProvider PostSetupProvider
 	smeshingProvider  api.SmeshingAPI
+
+	streamInterval time.Duration
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -37,8 +39,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
-	return &SmesherService{post, smeshing}
+func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval}
 }
 
 // IsSmeshing reports whether the node is smeshing.
@@ -183,7 +185,7 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
 	log.Info("GRPC SmesherService.PostSetupStatusStream")
 
-	timer := time.NewTicker(time.Second)
+	timer := time.NewTicker(s.streamInterval)
 	defer timer.Stop()
 
 	for {
