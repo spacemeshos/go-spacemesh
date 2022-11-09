@@ -8,14 +8,15 @@ spec:
   historyLimit: 2
   type: "NetworkChaos"
   networkChaos:
-    duration: "10m"
     action: delay
-    mode: all
-    selector:
-      labelSelectors:
-        "component": "spacemesh"
-    direction: to
     delay:
       latency: "50ms"
       correlation: "0"
       jitter: "50ms"
+    duration: "10m"
+    mode: all
+    direction: to
+    selector:
+      labelSelectors:
+        "component": "spacemesh"
+    

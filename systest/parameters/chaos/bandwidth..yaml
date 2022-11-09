@@ -8,14 +8,15 @@ spec:
   historyLimit: 2
   type: "NetworkChaos"
   networkChaos:
-    duration: "10m"
-    action: delay
-    mode: all
-    selector:
-      labelSelectors:
-        "component": "spacemesh"
-    direction: to
+    action: bandwidth
     bandwidth:
       rate: "2mbps"
       limit: 4194304
       buffer: 10240
+    duration: "10m"
+    mode: all
+    direction: to
+    selector:
+      labelSelectors:
+        "component": "spacemesh"
+    
