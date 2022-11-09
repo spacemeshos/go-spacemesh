@@ -18,7 +18,10 @@ namespace ?=
 label ?=
 env ?=
 
-command := tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) -clusters=$(clusters) -storage=$(storage) -size=$(size) -poet-size=$(poet_size) -image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id) -labels=$(label)
+command := tests -test.v -test.timeout=0 -test.run=$(test_name) -namespace=$(namespace) \
+	-clusters=$(clusters) -storage=$(storage) -size=$(size) -poet-size=$(poet_size) \
+	-image=$(smesher_image) -poet-image=$(poet_image) -level=$(level) -node-selector=$(node_selector) \
+	-bootstrap=$(bootstrap) -keep=$(keep) -testid=$(test_id) -labels=$(label)
 
 .PHONY: docker
 docker:
@@ -28,7 +31,6 @@ docker:
 push:
 	docker push $(image_name)
 
-
 .PHONY: gomplate
 gomplate:
 	@go install github.com/hairyhenderson/gomplate/v3/cmd/gomplate@latest
@@ -36,8 +38,7 @@ gomplate:
 .PHONY: run
 run: gomplate
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
-	@testid=$(test_id) test_job_name=$(test_job_name) image_name=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl -o systest_job.yml
-	@kubectl apply -f systest_job.yml
+	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
 	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
 	kubectl wait --for=condition=complete job/$(test_job_name) --timeout=-1s

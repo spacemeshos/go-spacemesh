@@ -292,17 +292,13 @@ jobs:
       - name: Get branch and commit hash
         id: vars
         shell: bash
-        run: |
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-          echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build tests docker image
-        run: cd systest && make docker
+        run: make -C systest docker
 
       - name: Push tests docker images
-        run: cd systest && make push
+        run: make -C systest push
 
       - name: set up go
         uses: actions/setup-go@v3
@@ -311,7 +307,7 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 50
-        run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
+        run: make -C systest run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
       - name: Collect logs
         run: kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} > systests.log
@@ -330,7 +326,7 @@ jobs:
 
       - name: Delete pod
         if: always()
-        run: cd systest && make clean
+        run: make -C systest clean
 
       - name: Tests Passed or Failed
         run: |
