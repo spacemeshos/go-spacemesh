@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Env.test_job_name}}
+  labels:
+    testid: {{ .Env.testid }}
+spec:
+  backoffLimit: 1
+  completionMode: NonIndexed
+  template:
+    metadata:
+      labels:
+        testid: {{ .Env.testid }}
+    spec:
+      containers:
+      - command: [ "sh", "-c", "{{ .Env.command }} || exit 0"]
+        image: {{ .Env.image_name}}
+        imagePullPolicy: IfNotPresent
+        name: {{ .Env.test_job_name}}
+      restartPolicy: Never
