@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 )
@@ -270,7 +269,6 @@ func Test_GetEpochATXs(t *testing.T) {
 			td := newTestDataFetch(t)
 			ed := &fetch.EpochData{
 				AtxIDs: types.RandomActiveSet(11),
-				Weight: rand.Uint64(),
 			}
 			td.mFetcher.EXPECT().GetPeers().Return(peers)
 			td.mFetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), epoch).DoAndReturn(

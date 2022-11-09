@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
@@ -311,7 +310,6 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		opns = append(opns, opn)
 		ed := &fetch.EpochData{
 			AtxIDs: types.RandomActiveSet(11),
-			Weight: rand.Uint64(),
 		}
 		eds = append(eds, ed)
 	}
@@ -340,11 +338,11 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		}
 	}
 
-	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[0].Peer(), epoch).Return(eds[0], nil)
-	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[2].Peer(), epoch).Return(eds[2], nil)
-	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[3].Peer(), epoch).Return(eds[3], nil)
-	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[4].Peer(), epoch).Return(nil, errUnknown)
-	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch).Return(eds[5], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[0].Peer(), epoch-1).Return(eds[0], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[2].Peer(), epoch-1).Return(eds[2], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[3].Peer(), epoch-1).Return(eds[3], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[4].Peer(), epoch-1).Return(nil, errUnknown)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch-1).Return(eds[5], nil)
 	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, got []types.ATXID) error {
 			require.ElementsMatch(t, eds[0].AtxIDs, got)

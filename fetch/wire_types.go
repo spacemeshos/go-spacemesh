@@ -53,7 +53,6 @@ type MeshHashes struct {
 }
 
 type EpochData struct {
-	Weight uint64
 	AtxIDs []types.ATXID
 }
 

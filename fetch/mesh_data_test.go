@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -667,7 +666,6 @@ func generateEpochData(t *testing.T) (*EpochData, []byte) {
 	t.Helper()
 	ed := &EpochData{
 		AtxIDs: types.RandomActiveSet(11),
-		Weight: rand.Uint64(),
 	}
 	data, err := codec.Encode(ed)
 	require.NoError(t, err)

@@ -217,12 +217,12 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 }
 
-func newAtx(t *testing.T, target types.EpochID) *types.VerifiedActivationTx {
+func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	t.Helper()
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PubLayerID: (target - 1).FirstLayer(),
+				PubLayerID: published.FirstLayer(),
 				PrevATXID:  types.RandomATXID(),
 			},
 			NumUnits: 2,
@@ -265,7 +265,6 @@ func TestHandleEpochInfoReq(t *testing.T) {
 					vatx := newAtx(t, epoch)
 					require.NoError(t, atxs.Add(th.cdb, vatx, time.Now()))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
-					expected.Weight += vatx.GetWeight()
 				}
 			}
 
@@ -275,7 +274,6 @@ func TestHandleEpochInfoReq(t *testing.T) {
 				var got EpochData
 				require.NoError(t, codec.Decode(out, &got))
 				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
-				require.Equal(t, expected.Weight, got.Weight)
 			}
 		})
 	}

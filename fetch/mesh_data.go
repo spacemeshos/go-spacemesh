@@ -177,7 +177,7 @@ func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB
 	return nil
 }
 
-// PeerEpochInfo get the epoch info targeted for the given epoch from the specified peer.
+// PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
 func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.EpochID) (*EpochData, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
 		log.Stringer("peer", peer),

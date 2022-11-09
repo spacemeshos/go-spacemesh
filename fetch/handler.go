@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -37,18 +38,16 @@ func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
-	weight, atxIDs, err := h.cdb.GetEpochWeight(epoch)
+	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", epoch, log.Err(err))
+		h.logger.WithContext(ctx).With().Warning("failed to get epoch atx IDs", epoch, log.Err(err))
 		return nil, err
 	}
 	ed := EpochData{
-		Weight: weight,
-		AtxIDs: atxIDs,
+		AtxIDs: atxids,
 	}
 	h.logger.WithContext(ctx).With().Debug("responded to epoch info request",
 		epoch,
-		log.Uint64("weight", ed.Weight),
 		log.Int("atx_count", len(ed.AtxIDs)))
 	bts, err := codec.Encode(&ed)
 	if err != nil {

@@ -406,10 +406,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		current := s.ticker.GetCurrentLayer()
-		targetEpoch := current.GetEpoch() - 1
-		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < targetEpoch {
+		publishEpoch := current.GetEpoch() - 1
+		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < publishEpoch {
 			// sync ATX from last epoch
-			if err := s.fetchEpochATX(ctx, targetEpoch); err != nil {
+			if err := s.fetchEpochATX(ctx, publishEpoch); err != nil {
 				return false
 			}
 		}
@@ -523,6 +523,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 	return nil
 }
 
+// fetching ATXs published in the specified epoch.
 func (s *Syncer) fetchEpochATX(ctx context.Context, epoch types.EpochID) error {
 	s.logger.WithContext(ctx).With().Info("syncing atxs for epoch", epoch)
 	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {

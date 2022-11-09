@@ -255,13 +255,13 @@ func (s *Syncer) ensureMeshAgreement(
 			continue
 		}
 
-		ed, err = s.dataFetcher.PeerEpochInfo(ctx, peer, diffLayer.GetEpoch())
+		// getting the atx IDs targeting this epoch
+		ed, err = s.dataFetcher.PeerEpochInfo(ctx, peer, diffLayer.GetEpoch()-1)
 		if err != nil {
 			logger.With().Warning("failed to get epoch info", log.Err(err))
 			continue
 		}
 		missing := make(map[types.ATXID]struct{})
-		ignored := ed.Weight
 		for _, id := range ed.AtxIDs {
 			if _, ok := missing[id]; ok {
 				continue
@@ -271,13 +271,11 @@ func (s *Syncer) ensureMeshAgreement(
 				missing[id] = struct{}{}
 				continue
 			}
-			ignored -= hdr.GetWeight()
 		}
 		if len(missing) > 0 {
 			toFetch := toList(missing)
 			logger.With().Info("fetching missing atxs from peer",
-				log.Uint64("weight", ignored),
-				log.Array("atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				log.Array("missing_atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 					for _, id := range toFetch {
 						encoder.AppendString(id.ShortString())
 					}
@@ -288,8 +286,12 @@ func (s *Syncer) ensureMeshAgreement(
 			if err = s.dataFetcher.GetAtxs(ctx, toFetch); err != nil {
 				// if the node cannot download the ATXs claimed by this peer, it does not trust this peer's mesh
 				logger.With().Warning("failed to download missing ATX claimed by peer",
-					log.Int("missing", len(missing)),
-					log.Uint64("weight", ignored),
+					log.Array("missing_atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+						for _, id := range toFetch {
+							encoder.AppendString(id.ShortString())
+						}
+						return nil
+					})),
 					log.Err(err))
 				continue
 			}

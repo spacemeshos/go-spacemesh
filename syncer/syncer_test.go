@@ -316,6 +316,7 @@ func TestSynchronize_SyncEpochATXAtFirstLayer(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	require.True(t, ts.syncer.synchronize(context.TODO()))
+	require.Equal(t, current.GetEpoch()-1, ts.syncer.getLastSyncedATXs())
 }
 
 func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
