@@ -323,11 +323,9 @@ jobs:
 
       - name: System test result
         run: |
-          SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
-          SUCCESS="${SUCCESS//'%'/'%25'}"
-          SUCCESS="${SUCCESS//$'\n'/'%0A'}"
-          SUCCESS="${SUCCESS//$'\r'/'%0D'}"
-          echo "::set-output name=content::$SUCCESS"
+          RESULT=$(kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} --tail=1)
+          echo "Tests result is $RESULT"
+          echo "result=$RESULT" >> $GITHUB_OUTPUT
         id: tests_logs
 
       - name: Delete pod
@@ -336,9 +334,8 @@ jobs:
 
       - name: Tests Passed or Failed
         run: |
-          SUCCESS='${{ steps.tests_logs.outputs.content }}'
-          ISTRUE='0'
-          if [[ "$SUCCESS" == "$ISTRUE" ]]; then
+          RESULT='${{ steps.tests_logs.outputs.result }}'
+          if [[ "$RESULT" == "PASS" ]]; then
             exit 0
           else
             exit 1
