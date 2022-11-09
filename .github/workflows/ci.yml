@@ -263,7 +263,7 @@ jobs:
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 60
+    timeout-minutes: 90
     concurrency: cloud-limits
     steps:
       - uses: actions/checkout@v3
@@ -305,7 +305,7 @@ jobs:
         with:
           go-version: ${{ env.go-version }}
 
-      - name: Run tests
+      - name: Run tests I
         timeout-minutes: 50
         run: make -C systest run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
@@ -316,6 +316,10 @@ jobs:
         with:
           name: systests logs
           path: systests.log
+
+      - name: Run tests II
+        timeout-minutes: 30
+        run: cd systest && make run test_name=. size=30 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=destructive storage=premium-rwo=10Gi
 
       - name: System test result
         run: |
