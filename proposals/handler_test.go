@@ -356,7 +356,6 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errDoubleVoting)
-
 }
 
 func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
@@ -410,7 +409,6 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(append(supported, supported...))).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
-
 }
 
 func TestBallot_ConflictingForAndAbstain(t *testing.T) {
@@ -434,7 +432,6 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
-
 }
 
 func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
