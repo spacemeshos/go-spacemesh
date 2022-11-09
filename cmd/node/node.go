@@ -831,7 +831,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		app.closers = append(app.closers, nodeService)
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
