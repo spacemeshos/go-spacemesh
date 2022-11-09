@@ -509,15 +509,9 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	processed := msh.ProcessedLayer()
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("failed to load processed layer: %w", err)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtlCfg.MeshProcessed = processed
 	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
