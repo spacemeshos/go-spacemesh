@@ -331,26 +331,11 @@ jobs:
           clusters: 2
         run: make -C systest run test_name=.
 
-      - name: System test result
-        run: |
-          PASSED_TESTS=$(kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} --tail=1 | grep PASS | wc -l)
-          echo "$PASSED_TESTS tests passed"
-          echo "passed_tests=$PASSED_TESTS" >> $GITHUB_OUTPUT
-        id: tests_logs
-
       - name: Delete pod
         if: always()
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
-
-      - name: Tests Passed or Failed
-        run: |
-          if [[ ${{ steps.tests_logs.outputs.passed_tests }} -eq 2 ]]; then
-            exit 0
-          else
-            exit 1
-          fi
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!

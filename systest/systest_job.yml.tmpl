@@ -9,15 +9,14 @@ metadata:
   labels:
     testid: {{ .Env.testid }}
 spec:
-  backoffLimit: 1
-  completionMode: NonIndexed
+  backoffLimit: 0
   template:
     metadata:
       labels:
         testid: {{ .Env.testid }}
     spec:
       containers:
-      - command: [ "sh", "-c", "{{ .Env.command }} || exit 0"]
+      - command: [ "sh", "-c", "{{ .Env.command }}"]
         image: {{ .Env.image}}
         imagePullPolicy: IfNotPresent
         name: {{ .Env.job_name}}

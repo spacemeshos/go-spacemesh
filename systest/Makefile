@@ -41,7 +41,7 @@ run: gomplate
 	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
 	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
-	kubectl wait --for=condition=complete job/$(test_job_name) --timeout=-1s
+	test_job_name=$(test_job_name) ./wait_for_job.sh
 
 .PHONY: clean
 clean:
