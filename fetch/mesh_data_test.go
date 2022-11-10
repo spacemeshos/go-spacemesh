@@ -662,7 +662,17 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 	}
 }
 
-func TestFetch_GetEpochATXIDs(t *testing.T) {
+func generateEpochData(t *testing.T) (*EpochData, []byte) {
+	t.Helper()
+	ed := &EpochData{
+		AtxIDs: types.RandomActiveSet(11),
+	}
+	data, err := codec.Encode(ed)
+	require.NoError(t, err)
+	return ed, data
+}
+
+func Test_PeerEpochInfo(t *testing.T) {
 	peer := p2p.Peer("p0")
 	errUnknown := errors.New("unknown")
 	tt := []struct {
@@ -684,26 +694,23 @@ func TestFetch_GetEpochATXIDs(t *testing.T) {
 			t.Parallel()
 
 			f := createFetch(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			okFunc := func(_ []byte) {
-				wg.Done()
-			}
-			errFunc := func(err error) {
-				require.ErrorIs(t, err, tc.err)
-				wg.Done()
-			}
+			var expected *EpochData
 			f.mAtxS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req []byte, okCB func([]byte), errCB func(error)) error {
 					if tc.err == nil {
-						go okCB([]byte("a"))
+						var data []byte
+						expected, data = generateEpochData(t)
+						go okCB(data)
 					} else {
 						go errCB(tc.err)
 					}
 					return nil
 				})
-			require.NoError(t, f.GetEpochATXIDs(context.TODO(), peer, types.EpochID(111), okFunc, errFunc))
-			wg.Wait()
+			got, err := f.PeerEpochInfo(context.TODO(), peer, types.EpochID(111))
+			require.ErrorIs(t, err, tc.err)
+			if tc.err == nil {
+				require.Equal(t, expected, got)
+			}
 		})
 	}
 }

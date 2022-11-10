@@ -29,7 +29,7 @@ func fastnet() config.Config {
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.F = 399
-	conf.HARE.LimitIterations = 4
+	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2
 	conf.HARE.WakeupDelta = 3
 
@@ -43,6 +43,9 @@ func fastnet() config.Config {
 	conf.SyncRequestTimeout = 1_000
 	conf.LayerDurationSec = 15
 	conf.LayersPerEpoch = 4
+
+	conf.Tortoise.Hdist = 4
+	conf.Tortoise.Zdist = 2
 
 	conf.HareEligibility.ConfidenceParam = 2 // half epoch
 	conf.HareEligibility.EpochOffset = 0

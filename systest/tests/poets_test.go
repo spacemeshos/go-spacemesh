@@ -32,8 +32,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	if value, err := strconv.ParseUint(os.Getenv("SYSTEST_LAYERS_TO_CHECK"), 10, 32); err == nil {
 		layersCount = uint32(value)
 	}
-	const epochSize = 4
-	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), epochSize)
+	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
 	last := first + layersCount - 1
 	tctx.Log.Debugw("watching layers between", "first", first, "last", last)
 
@@ -75,7 +74,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			return true, nil
 		}
 		// don't kill a poet if this is not ~middle of epoch
-		if ((layer.Layer.GetNumber().GetNumber() + epochSize/2) % epochSize) != 0 {
+		if ((layer.Layer.GetNumber().GetNumber() + layersPerEpoch/2) % layersPerEpoch) != 0 {
 			return true, nil
 		}
 
