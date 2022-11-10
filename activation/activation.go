@@ -113,11 +113,6 @@ type Builder struct {
 	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
-	// lastPostGenDuration is the duration that the last PoST proof
-	// took to build. It is used to predict a safe moment in time
-	// when we need to collect the PoET proofs and start building
-	// PoST to complete building NiPoST.
-	lastPostGenDuration time.Duration
 }
 
 // BuilderOption ...
@@ -178,7 +173,6 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 		log:                   log,
 		poetRetryInterval:     defaultPoetRetryInterval,
 		poetClientInitializer: defaultPoetClientFunc,
-		lastPostGenDuration:   0,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -327,8 +321,7 @@ func (b *Builder) generateProof(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
-		b.lastPostGenDuration = time.Since(startTime)
-		metrics.PostDuration.Set(float64(b.lastPostGenDuration.Nanoseconds()))
+		metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	}
 
 	return nil
@@ -692,7 +685,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
-	b.lastPostGenDuration = postDuration
+	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.FieldNamed("pub_epoch", pubEpoch),
