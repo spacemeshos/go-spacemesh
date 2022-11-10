@@ -373,7 +373,7 @@ func TestScheduleBasic(t *testing.T) {
 	rn.wait()
 }
 
-func TestSchedulTransactions(t *testing.T) {
+func TestScheduleTransactions(t *testing.T) {
 	TestStepCreate(t)
 	rn := newRunner()
 	rn.concurrent(10*time.Second, func() bool {
