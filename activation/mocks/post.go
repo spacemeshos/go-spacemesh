@@ -151,20 +151,6 @@ func (mr *MockPostSetupProviderMockRecorder) Status() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockPostSetupProvider)(nil).Status))
 }
 
-// StatusChan mocks base method.
-func (m *MockPostSetupProvider) StatusChan() <-chan *types.PostSetupStatus {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StatusChan")
-	ret0, _ := ret[0].(<-chan *types.PostSetupStatus)
-	return ret0
-}
-
-// StatusChan indicates an expected call of StatusChan.
-func (mr *MockPostSetupProviderMockRecorder) StatusChan() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StatusChan", reflect.TypeOf((*MockPostSetupProvider)(nil).StatusChan))
-}
-
 // StopSession mocks base method.
 func (m *MockPostSetupProvider) StopSession(deleteFiles bool) error {
 	m.ctrl.T.Helper()

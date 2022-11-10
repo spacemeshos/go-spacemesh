@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := mocks.NewMockPostSetupProvider(ctrl)
 	smeshingProvider := mocks.NewMockSmeshingProvider(ctrl)
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider)
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
 
 	postConfig := types.PostConfig{
 		MinNumUnits:   rand.Uint32(),

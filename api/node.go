@@ -73,7 +73,6 @@ type PeerCounter interface {
 
 type PostSetupProvider interface {
 	Status() *atypes.PostSetupStatus
-	StatusChan() <-chan *atypes.PostSetupStatus
 	ComputeProviders() []atypes.PostSetupComputeProvider
 	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
 	Config() atypes.PostConfig
