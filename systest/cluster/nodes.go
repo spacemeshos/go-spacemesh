@@ -15,6 +15,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	appsv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -397,6 +398,11 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 									v1.ResourceMemory: resource.MustParse("400Mi"),
 								},
 							),
+						).
+						WithReadinessProbe(
+							corev1.Probe().WithTCPSocket(
+								corev1.TCPSocketAction().WithPort(intstr.FromInt(9092)),
+							).WithPeriodSeconds(10),
 						).
 						WithEnv(
 							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2"),
