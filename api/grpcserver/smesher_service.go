@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -19,7 +20,6 @@ import (
 
 type PostSetupProvider interface {
 	Status() *atypes.PostSetupStatus
-	StatusChan() <-chan *atypes.PostSetupStatus
 	ComputeProviders() []atypes.PostSetupComputeProvider
 	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
 	Config() atypes.PostConfig
@@ -29,6 +29,8 @@ type PostSetupProvider interface {
 type SmesherService struct {
 	postSetupProvider PostSetupProvider
 	smeshingProvider  api.SmeshingAPI
+
+	streamInterval time.Duration
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -37,8 +39,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
-	return &SmesherService{post, smeshing}
+func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval}
 }
 
 // IsSmeshing reports whether the node is smeshing.
@@ -183,13 +185,13 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
 	log.Info("GRPC SmesherService.PostSetupStatusStream")
 
-	statusChan := s.postSetupProvider.StatusChan()
+	timer := time.NewTicker(s.streamInterval)
+	defer timer.Stop()
+
 	for {
 		select {
-		case status, more := <-statusChan:
-			if !more {
-				return nil
-			}
+		case <-timer.C:
+			status := s.postSetupProvider.Status()
 			if err := stream.Send(&pb.PostSetupStatusStreamResponse{Status: statusToPbStatus(status)}); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
