@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -14,25 +15,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testHandler struct {
 	*handler
 	cdb *datastore.CachedDB
 	mm  *mocks.MockmeshProvider
+	mb  *smocks.MockBeaconGetter
 }
 
 func createTestHandler(t *testing.T) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	mm := mocks.NewMockmeshProvider(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	mm := mocks.NewMockmeshProvider(ctrl)
+	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
 		cdb:     cdb,
 		mm:      mm,
+		mb:      mb,
 	}
 }
 
@@ -55,21 +62,16 @@ func createLayer(t *testing.T, db *datastore.CachedDB, lid types.LayerID) ([]typ
 	return blts, blks
 }
 
-func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, genCert bool) ([]types.BlockID, types.Hash32) {
+func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, genCert bool) (types.BlockID, types.Hash32) {
 	_, blks := createLayer(t, db, lid)
+	certified := types.EmptyBlockID
 	if genCert {
-		require.NoError(t, layers.SetHareOutputWithCert(db, lid, &types.Certificate{BlockID: blks[0]}))
-	}
-	for i, bid := range blks {
-		if i == 0 {
-			require.NoError(t, blocks.SetValid(db, bid))
-		} else {
-			require.NoError(t, blocks.SetInvalid(db, bid))
-		}
+		certified = blks[0]
+		require.NoError(t, layers.SetHareOutputWithCert(db, lid, &types.Certificate{BlockID: certified}))
 	}
 	aggHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(db, lid.Sub(1), types.RandomHash(), aggHash))
-	return blks, aggHash
+	return certified, aggHash
 }
 
 func TestHandleLayerDataReq(t *testing.T) {
@@ -108,23 +110,16 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 func TestHandleLayerOpinionsReq(t *testing.T) {
 	tt := []struct {
-		name                string
-		verified, requested types.LayerID
-		missingCert         bool
+		name        string
+		requested   types.LayerID
+		missingCert bool
 	}{
 		{
 			name:      "all good",
-			verified:  types.NewLayerID(111),
-			requested: types.NewLayerID(111),
-		},
-		{
-			name:      "not verified",
-			verified:  types.NewLayerID(100),
 			requested: types.NewLayerID(111),
 		},
 		{
 			name:        "cert missing",
-			verified:    types.NewLayerID(111),
 			requested:   types.NewLayerID(111),
 			missingCert: true,
 		},
@@ -136,30 +131,20 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			blks, aggHash := createOpinions(t, th.cdb, tc.requested, !tc.missingCert)
+			certified, aggHash := createOpinions(t, th.cdb, tc.requested, !tc.missingCert)
 
-			th.mm.EXPECT().LastVerified().Return(tc.verified)
 			out, err := th.handleLayerOpinionsReq(context.TODO(), tc.requested.Bytes())
 			require.NoError(t, err)
 
 			var got LayerOpinion
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
-			require.Equal(t, uint64(0), got.EpochWeight)
 			require.Equal(t, aggHash, got.PrevAggHash)
-			require.Equal(t, tc.verified, got.Verified)
 			if tc.missingCert {
 				require.Nil(t, got.Cert)
 			} else {
 				require.NotNil(t, got.Cert)
-				require.Equal(t, blks[0], got.Cert.BlockID)
-			}
-			if !tc.verified.Before(tc.requested) {
-				require.ElementsMatch(t, blks[0:1], got.Valid)
-				require.ElementsMatch(t, blks[1:], got.Invalid)
-			} else {
-				require.Empty(t, got.Valid)
-				require.Empty(t, got.Invalid)
+				require.Equal(t, certified, got.Cert.BlockID)
 			}
 		})
 	}
@@ -227,6 +212,68 @@ func TestHandleMeshHashReq(t *testing.T) {
 				require.EqualValues(t, len(got), req.Steps+1)
 			} else {
 				require.ErrorIs(t, err, tc.err)
+			}
+		})
+	}
+}
+
+func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
+	t.Helper()
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PubLayerID: published.FirstLayer(),
+				PrevATXID:  types.RandomATXID(),
+			},
+			NumUnits: 2,
+		},
+	}
+
+	bts, err := atx.InnerBytes()
+	require.NoError(t, err)
+	atx.Sig = signing.NewEdSigner().Sign(bts)
+	vatx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	return vatx
+}
+
+func TestHandleEpochInfoReq(t *testing.T) {
+	tt := []struct {
+		name           string
+		missingData    bool
+		beaconErr, err error
+	}{
+		{
+			name: "all good",
+		},
+		{
+			name:        "no epoch data",
+			missingData: true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			epoch := types.EpochID(11)
+			var expected EpochData
+			if !tc.missingData {
+				for i := 0; i < 10; i++ {
+					vatx := newAtx(t, epoch)
+					require.NoError(t, atxs.Add(th.cdb, vatx, time.Now()))
+					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+				}
+			}
+
+			out, err := th.handleEpochInfoReq(context.TODO(), epoch.ToBytes())
+			require.ErrorIs(t, err, tc.err)
+			if tc.err == nil {
+				var got EpochData
+				require.NoError(t, codec.Decode(out, &got))
+				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 			}
 		})
 	}

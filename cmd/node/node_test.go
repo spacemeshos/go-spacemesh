@@ -19,6 +19,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	_ "github.com/nullstyle/go-xdr/xdr3" // without this go mod tidy will remove a necessary dependency
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
@@ -552,13 +553,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		err := poetHarness.Teardown(true)
 		if assert.NoError(t, err, "failed to tear down harness") {
 			t.Log("harness torn down")
 		}
 	})
-	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
