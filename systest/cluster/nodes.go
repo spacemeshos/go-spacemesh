@@ -399,7 +399,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 								},
 							),
 						).
-						WithReadinessProbe(
+						WithStartupProbe(
 							corev1.Probe().WithTCPSocket(
 								corev1.TCPSocketAction().WithPort(intstr.FromInt(9092)),
 							).WithPeriodSeconds(10),
