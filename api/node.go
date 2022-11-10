@@ -58,7 +58,7 @@ type MeshAPI interface {
 }
 
 // NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/api NetworkIdentity
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go . NetworkIdentity,AtxProvider
 
 // NetworkIdentity interface.
 type NetworkIdentity interface {
@@ -73,4 +73,9 @@ type PeerCounter interface {
 // ActivationAPI is an API for activation module.
 type ActivationAPI interface {
 	UpdatePoETServers(ctx context.Context, endpoints []string) error
+}
+
+// AtxProvider is used by ActivationService to get ATXes.
+type AtxProvider interface {
+	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 }
