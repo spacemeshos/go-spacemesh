@@ -306,11 +306,11 @@ jobs:
 
       - name: Run tests I
         timeout-minutes: 50
-        run: cd systest && make run test_name=. size=25 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
+        run: cd systest && make run test_name=. size=24 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
 
       - name: Run tests II
         timeout-minutes: 30
-        run: cd systest && make run test_name=. size=25 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=destructive storage=premium-rwo=10Gi
+        run: cd systest && make run test_name=. size=24 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=destructive storage=premium-rwo=10Gi
 
       - name: System test result
         # SUCCESS will capture all the pods exit status separated by space. adding up all the numbers.
