@@ -384,12 +384,20 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
-						WithResources(corev1.ResourceRequirements().WithRequests(
-							v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("0.5"),
-								v1.ResourceMemory: resource.MustParse("200Mi"),
-							},
-						)).
+						WithResources(corev1.ResourceRequirements().
+							WithRequests(
+								v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("0.2"),
+									v1.ResourceMemory: resource.MustParse("400Mi"),
+								},
+							).
+							WithLimits(
+								v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("0.2"),
+									v1.ResourceMemory: resource.MustParse("400Mi"),
+								},
+							),
+						).
 						WithEnv(
 							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2"),
 						).
