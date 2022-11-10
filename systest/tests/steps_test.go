@@ -177,7 +177,9 @@ func TestStepTransactions(t *testing.T) {
 			return nil
 		})
 	}
-	require.NoError(t, eg.Wait())
+	if err := eg.Wait(); err != nil {
+		tctx.Log.Errorw("failed to submit transactions", "error", err)
+	}
 }
 
 func TestStepReplaceNodes(t *testing.T) {
@@ -367,6 +369,15 @@ func TestScheduleBasic(t *testing.T) {
 	})
 	rn.one(60*time.Minute, func() bool {
 		return t.Run("replace nodes", TestStepReplaceNodes)
+	})
+	rn.wait()
+}
+
+func TestSchedulTransactions(t *testing.T) {
+	TestStepCreate(t)
+	rn := newRunner()
+	rn.concurrent(10*time.Second, func() bool {
+		return t.Run("txs", TestStepTransactions)
 	})
 	rn.wait()
 }

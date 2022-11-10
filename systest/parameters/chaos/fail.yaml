@@ -20,7 +20,7 @@ kind: Schedule
 metadata:
   name: long-failed-every-1h
 spec:
-  schedule: "* */1 * * *"
+  schedule: "0 * * * *"
   historyLimit: 2
   concurrencyPolicy: "Allow"
   type: "PodChaos"
