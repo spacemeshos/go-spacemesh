@@ -47,6 +47,9 @@ const (
 	persistentVolumeName  = "data"
 	attachedPoetConfig    = "poet.conf"
 	attachedSmesherConfig = "smesher.json"
+
+	poetConfigMapName      = "poet"
+	spacemeshConfigMapName = "spacemesh"
 )
 
 func persistentVolumeClaim(podname string) string {
@@ -94,16 +97,6 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 	}
 
 	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
-	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
-		ctx,
-		corev1.ConfigMap(id, ctx.Namespace).WithData(map[string]string{
-			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
-		}),
-		apimetav1.ApplyOptions{FieldManager: "test"},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, id, err)
-	}
 
 	labels := nodeLabels("poet", id)
 	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
@@ -113,7 +106,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 				WithNodeSelector(ctx.NodeSelector).
 				WithVolumes(corev1.Volume().
 					WithName("config").
-					WithConfigMap(corev1.ConfigMapVolumeSource().WithName(cfg.Name)),
+					WithConfigMap(corev1.ConfigMapVolumeSource().WithName(poetConfigMapName)),
 				).
 				WithContainers(corev1.Container().
 					WithName("poet").
@@ -132,7 +125,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 				),
 		)
 
-	_, err = ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
@@ -339,17 +332,6 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 		return fmt.Errorf("apply headless service: %w", err)
 	}
 
-	cfg, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
-		ctx,
-		corev1.ConfigMap(name, ctx.Namespace).WithData(map[string]string{
-			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
-		}),
-		apimetav1.ApplyOptions{FieldManager: "test"},
-	)
-	if err != nil {
-		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, name, err)
-	}
-
 	cmd := []string{
 		"/bin/go-spacemesh",
 		"-c=" + configDir + attachedSmesherConfig,
@@ -391,7 +373,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 					WithNodeSelector(ctx.NodeSelector).
 					WithVolumes(corev1.Volume().
 						WithName("config").
-						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(cfg.Name)),
+						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
 					).
 					WithContainers(corev1.Container().
 						WithName("smesher").
