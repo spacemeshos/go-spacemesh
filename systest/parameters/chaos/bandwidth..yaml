@@ -1,22 +1,15 @@
 apiVersion: chaos-mesh.org/v1alpha1
-kind: Schedule
+kind: NetworkChaos
 metadata:
-  name: natural-bandwidth-limit
+  name: bandwidth
 spec:
-  schedule: "*/10 * * * *"
-  concurrencyPolicy: "Allow"
-  historyLimit: 2
-  type: "NetworkChaos"
-  networkChaos:
-    action: bandwidth
-    bandwidth:
-      rate: "2mbps"
-      limit: 4194304
-      buffer: 10240
-    duration: "10m"
-    mode: all
-    direction: to
-    selector:
-      labelSelectors:
-        "component": "spacemesh"
-    
+  action: bandwidth
+  mode: all
+  selector:
+    labelSelectors:
+      "component": "spacemesh"
+  direction: to
+  bandwidth:
+    rate: "2mbps"
+    limit: 4194304
+    buffer: 10240

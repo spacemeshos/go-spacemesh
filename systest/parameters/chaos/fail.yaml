@@ -14,3 +14,21 @@ spec:
       labelSelectors:
         "app": "smesher"
     duration: "60s"
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: long-failed-every-1h
+spec:
+  schedule: "* */1 * * *"
+  historyLimit: 2
+  concurrencyPolicy: "Allow"
+  type: "PodChaos"
+  podChaos:
+    action: pod-failure
+    mode: fixed
+    value: "2"
+    selector:
+      labelSelectors:
+        "app": "smesher"
+    duration: "2h"

@@ -1,22 +1,15 @@
 apiVersion: chaos-mesh.org/v1alpha1
-kind: Schedule
+kind: NetworkChaos
 metadata:
-  name: natural-delay
+  name: delay-smesher
 spec:
-  schedule: "*/10 * * * *"
-  concurrencyPolicy: "Allow"
-  historyLimit: 2
-  type: "NetworkChaos"
-  networkChaos:
-    action: delay
-    delay:
-      latency: "50ms"
-      correlation: "0"
-      jitter: "50ms"
-    duration: "10m"
-    mode: all
-    direction: to
-    selector:
-      labelSelectors:
-        "component": "spacemesh"
-    
+  action: delay
+  mode: all
+  selector:
+    labelSelectors:
+      "component": "spacemesh"
+  direction: to
+  delay:
+    latency: "50ms"
+    correlation: "0"
+    jitter: "50ms"
