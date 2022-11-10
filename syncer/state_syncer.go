@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -105,12 +106,12 @@ func (s *Syncer) needCert(logger log.Log, lid types.LayerID) (bool, error) {
 	if !lid.After(cutoff) {
 		return false, nil
 	}
-	cert, err := layers.GetCert(s.cdb, lid)
+	_, err := certificates.Get(s.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		logger.With().Error("state sync failed to get cert", log.Err(err))
 		return false, err
 	}
-	return cert == nil, nil
+	return errors.Is(err, sql.ErrNotFound), nil
 }
 
 func toList[T comparable](set map[T]struct{}) []T {
@@ -158,8 +159,6 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 
 	var noCert int
 	for _, opn := range opinions {
-		// TODO: detect multiple hare certificate in the same network
-		// https://github.com/spacemeshos/go-spacemesh/issues/3467
 		if needCert {
 			if opn.Cert == nil {
 				noCert++

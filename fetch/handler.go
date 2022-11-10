@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -95,11 +96,27 @@ func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byt
 		h.logger.WithContext(ctx).With().Warning("failed to get prev agg hash", lid, log.Err(err))
 		return nil, err
 	}
-	lo.Cert, err = layers.GetCert(h.cdb, lid)
+
+	certs, err := certificates.Get(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get certificate", lid, log.Err(err))
 		return nil, err
 	}
+	if err == nil {
+		numValids := 0
+		for _, cert := range certs {
+			if cert.Valid {
+				numValids++
+				if lo.Cert == nil && cert.Cert != nil {
+					lo.Cert = cert.Cert
+				}
+			}
+		}
+		if numValids > 1 {
+			lo.Cert = nil
+		}
+	}
+
 	out, err = codec.Encode(&lo)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("failed to serialize layer opinions response", log.Err(err))

@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -1213,7 +1214,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 
 	unsupported := map[types.BlockID]struct{}{}
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
-		hareOutput, err := layers.GetHareOutput(s.GetState(0).DB, lid)
+		hareOutput, err := certificates.GetHareOutput(s.GetState(0).DB, lid)
 		require.NoError(t, err)
 		if hareOutput != types.EmptyBlockID {
 			layer := tortoise.trtl.layer(lid)
@@ -1330,7 +1331,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 					tortoise.trtl.state.last,
 					tortoise.trtl.blockRefs[bid])
 				if tc.expected == support {
-					hareOutput, err := layers.GetHareOutput(s.GetState(0).DB, tc.lid)
+					hareOutput, err := certificates.GetHareOutput(s.GetState(0).DB, tc.lid)
 					require.NoError(t, err)
 					// only one block is supported
 					if bid == hareOutput {
@@ -2637,7 +2638,7 @@ func BenchmarkOnBallot(b *testing.B) {
 	tortoise.TallyVotes(ctx, last)
 	ballots, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(b, err)
-	hare, err := layers.GetHareOutput(s.GetState(0).DB, last.Sub(window/2))
+	hare, err := certificates.GetHareOutput(s.GetState(0).DB, last.Sub(window/2))
 	require.NoError(b, err)
 	block, err := blocks.Get(s.GetState(0).DB, hare)
 	require.NoError(b, err)
