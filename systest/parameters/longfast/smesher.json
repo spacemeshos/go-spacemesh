@@ -10,8 +10,8 @@
         "grace-period": "3s"   
     },
     "tortoise": {
-        "zdist": 4,
-        "hdist": 10
+        "tortoise-zdist": 4,
+        "tortoise-hdist": 10
     },
     "hare": {
         "hare-wakeup-delta": 3,
