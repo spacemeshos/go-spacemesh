@@ -307,35 +307,46 @@ jobs:
 
       - name: Run tests I
         timeout-minutes: 50
-        run: make -C systest run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
-
-      - name: Collect logs
-        run: kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} > systests.log
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: systests logs
-          path: systests.log
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: sanity
+          storage=premium-rwo: 10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 50
+          bootstrap: 10m
+          level: info
+          clusters: 2
+        run: make -C systest run test_name=.
 
       - name: Run tests II
         timeout-minutes: 30
-        run: cd systest && make run test_name=. size=30 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=destructive storage=premium-rwo=10Gi
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: destructive
+          storage=premium-rwo: 10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 30
+          bootstrap: 10m
+          level: info
+          clusters: 2
+        run: make -C systest run test_name=.
 
       - name: System test result
         run: |
-          RESULT=$(kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} --tail=1)
-          echo "Tests result is $RESULT"
-          echo "result=$RESULT" >> $GITHUB_OUTPUT
+          FAILED_TESTS=$(kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} --tail=1 | grep FAIL | wc -l)
+          echo "$FAILED_TESTS tests failed"
+          echo "failed_tests=$FAILED_TESTS" >> $GITHUB_OUTPUT
         id: tests_logs
 
       - name: Delete pod
         if: always()
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
 
       - name: Tests Passed or Failed
         run: |
-          RESULT='${{ steps.tests_logs.outputs.result }}'
-          if [[ "$RESULT" == "PASS" ]]; then
+          if [[ ${{ steps.tests_logs.outputs.failed_tests }} -eq 0 ]]; then
             exit 0
           else
             exit 1
