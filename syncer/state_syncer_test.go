@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -10,8 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
@@ -19,233 +19,166 @@ import (
 func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
 	return []*fetch.LayerOpinion{
 		{
-			EpochWeight: 100,
-			Verified:    types.NewLayerID(17),
+			PrevAggHash: prevHash,
+		},
+		{
 			PrevAggHash: prevHash,
 			Cert: &types.Certificate{
 				BlockID: types.RandomBlockID(),
 			},
-			Valid:   []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-			Invalid: []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-		},
-		{
-			EpochWeight: 120,
-			Verified:    types.NewLayerID(16),
-			PrevAggHash: prevHash,
-			Cert: &types.Certificate{
-				BlockID: types.RandomBlockID(),
-			},
-			Valid:   []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-			Invalid: []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-		},
-		{
-			EpochWeight: 100,
-			Verified:    types.NewLayerID(18),
-			PrevAggHash: prevHash,
-			Valid:       []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-			Invalid:     []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-		},
-		{
-			EpochWeight: 100,
-			Verified:    types.NewLayerID(18),
-			PrevAggHash: prevHash,
-			Cert: &types.Certificate{
-				BlockID: types.RandomBlockID(),
-			},
-			Valid:   []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
-			Invalid: []types.BlockID{types.RandomBlockID(), types.RandomBlockID()},
 		},
 	}
-}
-
-func checkHasBlockValidity(t *testing.T, db sql.Executor, lid types.LayerID) {
-	cnt, err := blocks.CountContextualValidity(db, lid)
-	require.NoError(t, err)
-	require.Greater(t, cnt, 0)
 }
 
 func TestProcessLayers_MultiLayers(t *testing.T) {
 	gLid := types.GetEffectiveGenesis()
-	tt := []struct {
-		name                             string
-		requested, verified, opnVerified types.LayerID
-		hasCert                          bool
-	}{
-		{
-			name:    "all good",
-			hasCert: true,
-		},
-		{
-			name: "cert missing",
-		},
-	}
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			ts := newSyncerWithoutSyncTimer(t)
-			ts.syncer.setATXSynced()
-			current := gLid.Add(10)
-			ts.syncer.setLastSyncedLayer(current.Sub(1))
-			ts.mTicker.advanceToLayer(current)
-			layerOpns := make(map[types.LayerID][]*fetch.LayerOpinion)
-			adopted := make(map[types.LayerID]*fetch.LayerOpinion)
-			for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
-				prevHash := types.RandomHash()
-				if lid.Sub(1) == gLid {
-					h, err := layers.GetAggregatedHash(ts.cdb, lid.Sub(1))
-					require.NoError(t, err)
-					prevHash = h
-				}
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	current := gLid.Add(10)
+	ts.syncer.setLastSyncedLayer(current.Sub(1))
+	ts.mTicker.advanceToLayer(current)
+
+	ts.mForkFinder.EXPECT().UpdateAgreement(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	adopted := make(map[types.LayerID]types.BlockID)
+	for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
+		lid := lid
+		ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
+		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).DoAndReturn(
+			func(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error) {
+				prevLid := lid.Sub(1)
+				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
+				require.NoError(t, err)
 				opns := opinions(prevHash)
-				if !tc.hasCert {
-					for _, opn := range opns {
-						opn.Cert = nil
-					}
+				adopted[lid] = opns[1].Cert.BlockID
+				return opns, nil
+			})
+		ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got []types.BlockID) error {
+				require.Equal(t, []types.BlockID{adopted[lid]}, got)
+				for _, bid := range got {
+					require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: lid})))
 				}
-				layerOpns[lid] = opns
-				adopted[lid] = opns[1]
-			}
-			for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
-				lid := lid
-				cert := layerOpns[lid][1].Cert
-				ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
-				ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
-				ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).DoAndReturn(
-					func(_ context.Context, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
-						// fake the prev agg hash from opinions
-						prevLid := lid.Sub(1)
-						if prevLid.After(gLid) {
-							require.NoError(t, layers.SetHashes(ts.cdb, prevLid, types.RandomHash(), adopted[lid].PrevAggHash))
-						}
-						return layerOpns[lid], nil
-					})
-				ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
-				if tc.hasCert {
-					ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, cert).DoAndReturn(
-						func(_ context.Context, gotL types.LayerID, gotC *types.Certificate) error {
-							require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(gotC.BlockID, types.InnerBlock{LayerIndex: lid})))
-							require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, gotL, gotC))
-							return nil
-						})
-				}
-				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got []types.BlockID) error {
-						require.ElementsMatch(t, append(adopted[lid].Valid, adopted[lid].Invalid...), got)
-						for _, bid := range got {
-							require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: lid})))
-						}
-						return nil
-					})
-				ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-				ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
-				if tc.hasCert || lid != current.Sub(1) {
-					ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-						func(_ context.Context, got *types.Block) error {
-							if tc.hasCert {
-								require.Equal(t, cert.BlockID, got.ID())
-							} else {
-								types.SortBlockIDs(adopted[lid].Valid)
-								require.Equal(t, adopted[lid].Valid[0], got.ID())
-							}
-							return nil
-						})
-					ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
-				}
-			}
-			require.False(t, ts.syncer.stateSynced())
-			require.NoError(t, ts.syncer.processLayers(context.TODO()))
-			require.True(t, ts.syncer.stateSynced())
-			for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
-				checkHasBlockValidity(t, ts.cdb, lid)
-			}
-		})
+				return nil
+			})
+		ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ types.LayerID, gotC *types.Certificate) error {
+				require.Equal(t, adopted[lid], gotC.BlockID)
+				require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, lid, gotC))
+				return nil
+			})
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, got *types.Block) error {
+				require.Equal(t, adopted[lid], got.ID())
+				return nil
+			})
+		ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	}
+	require.False(t, ts.syncer.stateSynced())
+	require.NoError(t, ts.syncer.processLayers(context.TODO()))
+	require.True(t, ts.syncer.stateSynced())
 }
 
 func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 	gLid := types.GetEffectiveGenesis()
+	prevHash := types.RandomHash()
+	lid := gLid.Add(1)
 	tt := []struct {
-		name                             string
-		requested, verified, opnVerified types.LayerID
-		localOpn                         types.BlockID
+		name              string
+		opns              []*fetch.LayerOpinion
+		localCert         types.BlockID
+		certErr, fetchErr error
 	}{
 		{
-			name:        "node already has opinions",
-			localOpn:    types.RandomBlockID(),
-			requested:   gLid.Add(1),
-			verified:    gLid,
-			opnVerified: gLid.Add(10),
+			name:      "node already has cert",
+			opns:      opinions(prevHash),
+			localCert: types.RandomBlockID(),
 		},
 		{
-			name:        "no higher verified from peers",
-			requested:   gLid.Add(1),
-			verified:    gLid,
-			opnVerified: gLid,
+			name: "no certs available",
+			opns: []*fetch.LayerOpinion{
+				{PrevAggHash: prevHash},
+				{PrevAggHash: prevHash},
+			},
 		},
 		{
-			name:        "node already verified",
-			requested:   gLid.Add(1),
-			verified:    gLid.Add(1),
-			opnVerified: gLid.Add(10),
+			name: "cert not accepted",
+			opns: []*fetch.LayerOpinion{
+				{PrevAggHash: prevHash},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: types.RandomBlockID()}},
+			},
+			certErr: errors.New("meh"),
 		},
 		{
-			name:        "different prev hash",
-			requested:   gLid.Add(1),
-			verified:    gLid,
-			opnVerified: gLid.Add(10),
+			name: "cert block failed fetching",
+			opns: []*fetch.LayerOpinion{
+				{PrevAggHash: prevHash},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: types.RandomBlockID()}},
+			},
+			fetchErr: errors.New("meh"),
 		},
 	}
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			ts := newSyncerWithoutSyncTimer(t)
+			require.NoError(t, layers.SetHashes(ts.cdb, gLid, types.Hash32{}, prevHash))
 			ts.syncer.setATXSynced()
-			current := tc.requested.Add(1)
+			current := lid.Add(1)
 			ts.syncer.setLastSyncedLayer(current.Sub(1))
 			ts.mTicker.advanceToLayer(current)
 
+			hasCert := false
+			for _, opn := range tc.opns {
+				if opn.Cert != nil {
+					hasCert = true
+				}
+			}
+
 			// saves opinions
-			if tc.localOpn != types.EmptyBlockID {
-				require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(tc.localOpn, types.InnerBlock{LayerIndex: tc.requested})))
-				require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, tc.requested, &types.Certificate{BlockID: tc.localOpn}))
-				require.NoError(t, blocks.SetValid(ts.cdb, tc.localOpn))
+			if tc.localCert != types.EmptyBlockID {
+				require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(tc.localCert, types.InnerBlock{LayerIndex: lid})))
+				require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, lid, &types.Certificate{BlockID: tc.localCert}))
+				require.NoError(t, blocks.SetValid(ts.cdb, tc.localCert))
 				ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got *types.Block) error {
-						require.Equal(t, tc.localOpn, got.ID())
+						require.Equal(t, tc.localCert, got.ID())
 						return nil
 					})
 				ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 			}
 			ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
-			ts.mLyrPatrol.EXPECT().IsHareInCharge(tc.requested).Return(false)
-			opns := opinions(types.Hash32{})
-			for _, opn := range opns {
-				opn.Verified = tc.opnVerified
-				opn.Cert = nil
+			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
+			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(tc.opns, nil)
+			if tc.localCert == types.EmptyBlockID && hasCert {
+				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, got []types.BlockID) error {
+						require.Equal(t, []types.BlockID{tc.opns[1].Cert.BlockID}, got)
+						return tc.fetchErr
+					})
+				if tc.fetchErr == nil {
+					ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, tc.opns[1].Cert).Return(tc.certErr)
+				}
 			}
-			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), tc.requested).Return(opns, nil)
-			ts.mTortoise.EXPECT().LatestComplete().Return(tc.verified)
-			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), tc.requested)
-			ts.mTortoise.EXPECT().LatestComplete().Return(tc.requested.Sub(1))
+			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+			ts.mTortoise.EXPECT().LatestComplete().Return(gLid)
 
 			require.False(t, ts.syncer.stateSynced())
 			require.NoError(t, ts.syncer.processLayers(context.TODO()))
 			require.True(t, ts.syncer.stateSynced())
-			if tc.localOpn == types.EmptyBlockID {
-				need, err := ts.syncer.needCert(logtest.New(t), tc.requested)
+
+			if hasCert && tc.fetchErr == nil && tc.certErr == nil {
+				certified, err := layers.GetCert(ts.cdb, lid)
 				require.NoError(t, err)
-				require.True(t, need)
-				need, err = ts.syncer.needValidity(logtest.New(t), tc.requested)
-				require.NoError(t, err)
-				require.True(t, need)
-			} else {
-				bv, err := blocks.ContextualValidity(ts.cdb, tc.requested)
-				require.NoError(t, err)
-				require.Len(t, bv, 1)
-				require.Equal(t, tc.localOpn, bv[0].ID)
-				require.True(t, bv[0].Validity)
+				if tc.localCert != types.EmptyBlockID {
+					require.Equal(t, tc.localCert, certified.BlockID)
+				} else {
+					require.Equal(t, tc.opns[1].Cert, certified)
+				}
 			}
 		})
 	}
@@ -350,132 +283,106 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	require.True(t, ts.syncer.stateSynced())
 }
 
-func TestSortOpinions(t *testing.T) {
-	sorted := opinions(types.Hash32{})
-	unsorted := make([]*fetch.LayerOpinion, len(sorted))
-	copy(unsorted, sorted)
-	sortOpinions(sorted)
-	require.Equal(t, unsorted[1], sorted[0])
-	require.Equal(t, unsorted[3], sorted[1])
-	require.Equal(t, unsorted[2], sorted[2])
-	require.Equal(t, unsorted[0], sorted[3])
-}
-
-func TestAdopt(t *testing.T) {
-	gLid := types.GetEffectiveGenesis()
-	prevHash := types.RandomHash()
-	tt := []struct {
-		name                   string
-		opns                   []*fetch.LayerOpinion
-		exp                    int
-		err, certErr, fetchErr error
-	}{
-		{
-			name: "all good",
-			exp:  1,
-			opns: opinions(prevHash),
-		},
-		{
-			name: "no better opinions",
-			err:  errNoBetterOpinions,
-			opns: []*fetch.LayerOpinion{
-				{Verified: gLid},
-				{Verified: gLid},
-				{Verified: gLid},
-			},
-		},
-		{
-			name: "cert missing from all",
-			err:  errMissingCertificate,
-			opns: []*fetch.LayerOpinion{
-				{Verified: types.NewLayerID(11)},
-				{Verified: types.NewLayerID(11)},
-				{Verified: types.NewLayerID(11)},
-			},
-		},
-		{
-			name: "cert not adopted",
-			opns: []*fetch.LayerOpinion{
-				{Verified: types.NewLayerID(11), Cert: &types.Certificate{BlockID: types.RandomBlockID()}},
-				{Verified: types.NewLayerID(11)},
-				{Verified: types.NewLayerID(11)},
-			},
-			certErr: errors.New("meh"),
-			err:     errNoCertAdopted,
-		},
-		{
-			name: "validity missing from all",
-			opns: []*fetch.LayerOpinion{
-				{Verified: types.NewLayerID(11), Cert: &types.Certificate{BlockID: types.RandomBlockID()}},
-				{Verified: types.NewLayerID(11), Cert: &types.Certificate{BlockID: types.RandomBlockID()}},
-				{Verified: types.NewLayerID(11), Cert: &types.Certificate{BlockID: types.RandomBlockID()}},
-			},
-			err: errMissingValidity,
-		},
-		{
-			name:     "blocks missing",
-			exp:      1,
-			opns:     opinions(prevHash),
-			fetchErr: errors.New("meh"),
-			err:      errNoValidityAdopted,
-		},
-		{
-			name: "no matching prev hash",
-			exp:  1,
-			opns: opinions(types.RandomHash()),
-			err:  errNoValidityAdopted,
-		},
+func TestProcessLayers_MeshHashDiverged(t *testing.T) {
+	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.setATXSynced()
+	current := types.GetEffectiveGenesis().Add(131)
+	ts.mTicker.advanceToLayer(current)
+	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.msh.SetZeroBlockLayer(context.TODO(), lid)
+		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
+		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+		ts.mConState.EXPECT().GetStateRoot().Return(types.RandomHash(), nil)
+		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lid, types.EmptyBlockID))
 	}
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			ts := newSyncerWithoutSyncTimer(t)
-
-			require.NoError(t, layers.SetHashes(ts.cdb, gLid, types.RandomHash(), prevHash))
-			lid := gLid.Add(1)
-			cnt, err := blocks.CountContextualValidity(ts.cdb, lid)
-			require.NoError(t, err)
-			require.Zero(t, cnt)
-
-			ts.mTortoise.EXPECT().LatestComplete().Return(gLid)
-			adopted := tc.opns[tc.exp]
-			ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, adopted.Cert).Return(tc.certErr).MaxTimes(1)
-			if tc.err == nil {
-				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got []types.BlockID) error {
-						require.ElementsMatch(t, append(adopted.Valid, adopted.Invalid...), got)
-						for _, bid := range got {
-							require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(bid, types.InnerBlock{LayerIndex: lid})))
-						}
-						return nil
-					})
-			} else if tc.fetchErr != nil {
-				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(tc.fetchErr).Times(len(tc.opns))
-			}
-			require.ErrorIs(t, ts.syncer.adopt(context.TODO(), lid, tc.opns), tc.err)
-			if tc.err != nil {
-				need, err := ts.syncer.needCert(logtest.New(t), lid)
-				require.NoError(t, err)
-				require.True(t, need)
-				need, err = ts.syncer.needValidity(logtest.New(t), lid)
-				require.NoError(t, err)
-				require.True(t, need)
-			} else {
-				exp := make(map[types.BlockID]bool)
-				for _, bid := range adopted.Valid {
-					exp[bid] = true
-				}
-				for _, bid := range adopted.Invalid {
-					exp[bid] = false
-				}
-				bvs, err := blocks.ContextualValidity(ts.cdb, lid)
-				require.NoError(t, err)
-				require.Len(t, bvs, len(adopted.Valid)+len(adopted.Invalid))
-				for _, bv := range bvs {
-					require.Equal(t, exp[bv.ID], bv.Validity)
-				}
-			}
-		})
+	instate := ts.syncer.mesh.LatestLayerInState()
+	require.Equal(t, current.Sub(1), instate)
+	ts.syncer.setLastSyncedLayer(instate)
+	prevHash, err := layers.GetAggregatedHash(ts.cdb, instate.Sub(1))
+	require.NoError(t, err)
+	numPeers := 7
+	opns := make([]*fetch.LayerOpinion, 0, numPeers)
+	eds := make([]*fetch.EpochData, 0, numPeers)
+	for i := 0; i < numPeers; i++ {
+		opn := &fetch.LayerOpinion{PrevAggHash: types.RandomHash()}
+		opn.SetPeer(p2p.Peer(strconv.Itoa(i)))
+		opns = append(opns, opn)
+		ed := &fetch.EpochData{
+			AtxIDs: types.RandomActiveSet(11),
+		}
+		eds = append(eds, ed)
 	}
+	opns[1].PrevAggHash = prevHash
+	// node will engage hash resolution with p0 and p2 because
+	// p1 has the same mesh hash as node
+	// p3's ATXs are not available,
+	// p4 failed epoch info query
+	// p5 failed fork finding sessions
+	// p6 already had a fork-finding session from previous runs.
+	epoch := instate.GetEpoch()
+	errUnknown := errors.New("unknown")
+
+	ts.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil)
+	ts.mLyrPatrol.EXPECT().IsHareInCharge(instate).Return(false)
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), instate).Return(opns, nil)
+	ts.mForkFinder.EXPECT().UpdateAgreement(opns[1].Peer(), instate.Sub(1), prevHash, gomock.Any())
+	for i := 0; i < numPeers; i++ {
+		if i == 1 {
+			continue
+		}
+		if i == 6 {
+			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(false)
+		} else {
+			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(true)
+		}
+	}
+
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[0].Peer(), epoch-1).Return(eds[0], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[2].Peer(), epoch-1).Return(eds[2], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[3].Peer(), epoch-1).Return(eds[3], nil)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[4].Peer(), epoch-1).Return(nil, errUnknown)
+	ts.mDataFetcher.EXPECT().PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch-1).Return(eds[5], nil)
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID) error {
+			require.ElementsMatch(t, eds[0].AtxIDs, got)
+			return nil
+		},
+	)
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID) error {
+			require.ElementsMatch(t, eds[2].AtxIDs, got)
+			return nil
+		},
+	)
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID) error {
+			require.ElementsMatch(t, eds[3].AtxIDs, got)
+			return errors.New("not available")
+		},
+	)
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID) error {
+			require.ElementsMatch(t, eds[5].AtxIDs, got)
+			return nil
+		},
+	)
+	fork0 := types.NewLayerID(101)
+	fork2 := types.NewLayerID(121)
+	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[0].Peer(), instate.Sub(1), opns[0].PrevAggHash).Return(fork0, nil)
+	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[2].Peer(), instate.Sub(1), opns[2].PrevAggHash).Return(fork2, nil)
+	ts.mForkFinder.EXPECT().FindFork(gomock.Any(), opns[5].Peer(), instate.Sub(1), opns[5].PrevAggHash).Return(types.LayerID{}, errUnknown)
+	for lid := fork0.Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[0].Peer())
+	}
+	for lid := fork2.Add(1); lid.Before(current); lid = lid.Add(1) {
+		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid, opns[2].Peer())
+	}
+	ts.mForkFinder.EXPECT().AddResynced(instate.Sub(1), opns[0].PrevAggHash)
+	ts.mForkFinder.EXPECT().AddResynced(instate.Sub(1), opns[2].PrevAggHash)
+	ts.mForkFinder.EXPECT().Purge(true)
+
+	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), instate)
+	ts.mTortoise.EXPECT().LatestComplete().Return(instate.Sub(1))
+	require.NoError(t, ts.syncer.processLayers(context.TODO()))
 }

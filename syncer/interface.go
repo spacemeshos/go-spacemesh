@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -21,15 +22,15 @@ type meshProvider interface {
 // fetchLogic is the interface between syncer and low-level fetching.
 // it handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
 type fetchLogic interface {
-	PollLayerData(context.Context, types.LayerID) error
+	fetcher
+
+	PollLayerData(context.Context, types.LayerID, ...p2p.Peer) error
 	PollLayerOpinions(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error)
 	GetEpochATXs(context.Context, types.EpochID) error
-	GetBlocks(context.Context, []types.BlockID) error
 }
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetEpochATXIDs(context.Context, p2p.Peer, types.EpochID, func([]byte), func(error)) error
 	GetLayerData(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 	GetLayerOpinions(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 
@@ -39,6 +40,7 @@ type fetcher interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 
 	GetPeers() []p2p.Peer
+	PeerEpochInfo(context.Context, p2p.Peer, types.EpochID) (*fetch.EpochData, error)
 	PeerMeshHashes(context.Context, p2p.Peer, *fetch.MeshHashRequest) (*fetch.MeshHashes, error)
 }
 
@@ -51,6 +53,9 @@ type certHandler interface {
 }
 
 type forkFinder interface {
+	AddResynced(types.LayerID, types.Hash32)
+	NeedResync(types.LayerID, types.Hash32) bool
+	UpdateAgreement(p2p.Peer, types.LayerID, types.Hash32, time.Time)
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)
 }
