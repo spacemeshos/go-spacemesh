@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
-	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
@@ -170,7 +169,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 		corev1.ConfigMap(spacemeshConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
 		}),
-		apimetav1.ApplyOptions{FieldManager: "test"},
+		metav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
 		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
@@ -180,7 +179,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 		corev1.ConfigMap(poetConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
 		}),
-		apimetav1.ApplyOptions{FieldManager: "test"},
+		metav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
 		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
