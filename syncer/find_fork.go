@@ -51,6 +51,8 @@ type ForkFinder struct {
 
 	mu          sync.Mutex
 	agreedPeers map[p2p.Peer]*layerHash
+	// used to make sure we only resync based on the same layer hash once across runs.
+	resynced map[types.LayerID]map[types.Hash32]time.Time
 }
 
 func NewForkFinder(lg log.Log, db sql.Executor, f fetcher, maxHashes uint32, maxStale time.Duration) *ForkFinder {
@@ -61,6 +63,7 @@ func NewForkFinder(lg log.Log, db sql.Executor, f fetcher, maxHashes uint32, max
 		maxHashesInReq:   maxHashes,
 		maxStaleDuration: maxStale,
 		agreedPeers:      make(map[p2p.Peer]*layerHash),
+		resynced:         make(map[types.LayerID]map[types.Hash32]time.Time),
 	}
 }
 
@@ -93,6 +96,16 @@ func (ff *ForkFinder) Purge(all bool, toPurge ...p2p.Peer) {
 			}
 		}
 	}
+	for lid, val := range ff.resynced {
+		for hash, created := range val {
+			if time.Since(created) >= ff.maxStaleDuration {
+				delete(ff.resynced[lid], hash)
+				if len(ff.resynced[lid]) == 0 {
+					delete(ff.resynced, lid)
+				}
+			}
+		}
+	}
 }
 
 // NumPeersCached returns the number of peer agreement cached.
@@ -102,6 +115,25 @@ func (ff *ForkFinder) NumPeersCached() int {
 	return len(ff.agreedPeers)
 }
 
+func (ff *ForkFinder) AddResynced(lid types.LayerID, hash types.Hash32) {
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if _, ok := ff.resynced[lid]; !ok {
+		ff.resynced[lid] = make(map[types.Hash32]time.Time)
+	}
+	ff.resynced[lid][hash] = time.Now()
+}
+
+func (ff *ForkFinder) NeedResync(lid types.LayerID, hash types.Hash32) bool {
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if _, ok := ff.resynced[lid]; ok {
+		_, resynced := ff.resynced[lid][hash]
+		return !resynced
+	}
+	return true
+}
+
 // FindFork finds the point of divergence in layer opinions between the node and the specified peer
 // from a given disagreed layer.
 func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types.LayerID, diffHash types.Hash32) (types.LayerID, error) {
@@ -109,7 +141,7 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 		log.Stringer("diff_layer", diffLid),
 		log.Stringer("diff_hash", diffHash),
 		log.Stringer("peer", peer))
-	logger.With().Info("finding hash fork with peer")
+	logger.With().Info("begin fork finding with peer")
 
 	bnd, err := ff.setupBoundary(peer, &layerHash{layer: diffLid, hash: diffHash})
 	if err != nil {
@@ -205,13 +237,17 @@ func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boun
 	var bnd boundary
 	lastAgreed := ff.agreedPeers[peer]
 	if lastAgreed != nil {
-		// double check if the node still has the same hash
-		nodeHash, err := layers.GetAggregatedHash(ff.db, lastAgreed.layer)
-		if err != nil {
-			return nil, fmt.Errorf("find fork get boundary hash %v: %w", lastAgreed.layer, err)
-		}
-		if nodeHash == lastAgreed.hash {
-			bnd.from = lastAgreed
+		if lastAgreed.layer.Before(oldestDiff.layer) {
+			// double check if the node still has the same hash
+			nodeHash, err := layers.GetAggregatedHash(ff.db, lastAgreed.layer)
+			if err != nil {
+				return nil, fmt.Errorf("find fork get boundary hash %v: %w", lastAgreed.layer, err)
+			}
+			if nodeHash == lastAgreed.hash {
+				bnd.from = lastAgreed
+			} else {
+				delete(ff.agreedPeers, peer)
+			}
 		} else {
 			delete(ff.agreedPeers, peer)
 		}

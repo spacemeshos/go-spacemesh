@@ -36,7 +36,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 	first := currentLayer(tctx, t, cl.Client(0))
 	// TODO fetch epoch size from API
-	first = nextFirstLayer(first, 4)
+	first = nextFirstLayer(first, layersPerEpoch)
 	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 

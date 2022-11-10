@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -218,7 +219,7 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, opts ...Option) *Fetch {
+func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, host *p2p.Host, opts ...Option) *Fetch {
 	bs := datastore.NewBlobStore(cdb.Database)
 	f := &Fetch{
 		cfg:             DefaultConfig(),
@@ -242,8 +243,8 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, opts ..
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, f.logger)
-		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochATXIDsReq, srvOpts...)
+		h := newHandler(cdb, bs, msh, b, f.logger)
+		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
 		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
