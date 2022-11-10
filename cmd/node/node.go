@@ -557,7 +557,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
-	fetcher := fetch.NewFetch(cdb, msh, app.host,
+	fetcher := fetch.NewFetch(cdb, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
@@ -578,7 +578,7 @@ func (app *App) initServices(ctx context.Context,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 	}
-	newSyncer := syncer.NewSyncer(sqlDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(cdb, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
 		syncer.WithContext(ctx),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
@@ -825,7 +825,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		app.closers = append(app.closers, nodeService)
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))

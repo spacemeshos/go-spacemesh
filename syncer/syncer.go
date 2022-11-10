@@ -11,10 +11,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -121,7 +122,7 @@ type Syncer struct {
 	logger log.Log
 
 	cfg           Config
-	db            sql.Executor
+	cdb           *datastore.CachedDB
 	ticker        layerTicker
 	beacon        system.BeaconGetter
 	mesh          *mesh.Mesh
@@ -154,7 +155,7 @@ type Syncer struct {
 
 // NewSyncer creates a new Syncer instance.
 func NewSyncer(
-	db sql.Executor,
+	cdb *datastore.CachedDB,
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
@@ -166,7 +167,7 @@ func NewSyncer(
 	s := &Syncer{
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
-		db:               db,
+		cdb:              cdb,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
@@ -184,7 +185,7 @@ func NewSyncer(
 		s.dataFetcher = NewDataFetch(mesh, fetcher, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, db, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxHashesInReq, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -231,8 +232,7 @@ func (s *Syncer) ListenToATXGossip() bool {
 // IsSynced returns true if the node is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
 	res := s.getSyncState() == synced
-	// TODO(kimmy): downgrade log after syncer stablized.
-	s.logger.WithContext(ctx).With().Info("node sync state",
+	s.logger.WithContext(ctx).With().Debug("node sync state",
 		log.Bool("synced", res),
 		log.Stringer("current", s.ticker.GetCurrentLayer()),
 		log.Stringer("latest", s.mesh.LatestLayer()),
@@ -406,10 +406,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		current := s.ticker.GetCurrentLayer()
-		targetEpoch := current.GetEpoch() - 1
-		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < targetEpoch {
+		publishEpoch := current.GetEpoch() - 1
+		if current == current.GetEpoch().FirstLayer() && s.getLastSyncedATXs() < publishEpoch {
 			// sync ATX from last epoch
-			if err := s.fetchEpochATX(ctx, targetEpoch); err != nil {
+			if err := s.fetchEpochATX(ctx, publishEpoch); err != nil {
 				return false
 			}
 		}
@@ -510,19 +510,20 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	}
 }
 
-func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
+func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
 	if s.isClosed() {
 		return errors.New("shutdown")
 	}
 
 	s.logger.WithContext(ctx).With().Info("polling layer data", layerID)
-	if err := s.dataFetcher.PollLayerData(ctx, layerID); err != nil {
+	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
 		return fmt.Errorf("PollLayerData: %w", err)
 	}
 	s.logger.WithContext(ctx).With().Debug("done polling layer data", layerID)
 	return nil
 }
 
+// fetching ATXs published in the specified epoch.
 func (s *Syncer) fetchEpochATX(ctx context.Context, epoch types.EpochID) error {
 	s.logger.WithContext(ctx).With().Info("syncing atxs for epoch", epoch)
 	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {

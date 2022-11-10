@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 
@@ -23,8 +24,60 @@ import (
 )
 
 const (
-	attempts = 3
+	attempts       = 3
+	layersPerEpoch = 4
 )
+
+func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32) {
+	var (
+		receiver = types.GenerateAddress([]byte{11, 1, 1})
+		amount   = 100
+		batch    = 10
+	)
+	for i := 0; i < cl.Accounts(); i++ {
+		i := i
+		client := cl.Client(i % cl.Total())
+		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+			if layer.Layer.Number.Number == stop {
+				return false, nil
+			}
+			if layer.Layer.Status != spacemeshv1.Layer_LAYER_STATUS_APPROVED ||
+				layer.Layer.Number.Number < first {
+				return true, nil
+			}
+			// give some time for a previous layer to be applied
+			// TODO(dshulyak) introduce api that simply subscribes to internal clock
+			// and outputs events when the tick for the layer is available
+			time.Sleep(200 * time.Millisecond)
+			nonce, err := getNonce(ctx, client, cl.Address(i))
+			if err != nil {
+				return false, fmt.Errorf("get nonce failed (%s:%s): %w", client.Name, cl.Address(i), err)
+			}
+			if nonce == 0 {
+				if logger != nil {
+					logger.Infow("address needs to be spawned", "account", i)
+				}
+				if err := submitSpawn(ctx, cl, i, client); err != nil {
+					return false, fmt.Errorf("failed to spawn %w", err)
+				}
+				return true, nil
+			}
+			if logger != nil {
+				logger.Debugw("submitting transactions",
+					"layer", layer.Layer.Number.Number,
+					"client", client.Name,
+					"batch", batch,
+				)
+			}
+			for j := 0; j < batch; j++ {
+				if err := submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client); err != nil {
+					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
+				}
+			}
+			return true, nil
+		})
+	}
+}
 
 func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
 	txclient := spacemeshv1.NewTransactionServiceClient(node)
@@ -38,6 +91,41 @@ func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient)
 		return nil, fmt.Errorf("tx state should not be nil")
 	}
 	return response.Txstate.Id.Id, nil
+}
+
+func watchStateHashes(
+	ctx context.Context,
+	eg *errgroup.Group,
+	node *cluster.NodeClient,
+	collector func(*spacemeshv1.GlobalStateStreamResponse) (bool, error),
+) {
+	eg.Go(func() error {
+		return stateHashStream(ctx, node, collector)
+	})
+}
+
+func stateHashStream(
+	ctx context.Context,
+	node *cluster.NodeClient,
+	collector func(*spacemeshv1.GlobalStateStreamResponse) (bool, error),
+) error {
+	stateapi := spacemeshv1.NewGlobalStateServiceClient(node)
+	states, err := stateapi.GlobalStateStream(ctx,
+		&spacemeshv1.GlobalStateStreamRequest{
+			GlobalStateDataFlags: uint32(spacemeshv1.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
+		})
+	if err != nil {
+		return err
+	}
+	for {
+		state, err := states.Recv()
+		if err != nil {
+			return fmt.Errorf("stream err from client %v: %w", node.Name, err)
+		}
+		if cont, err := collector(state); !cont {
+			return err
+		}
+	}
 }
 
 func watchLayers(ctx context.Context, eg *errgroup.Group,
