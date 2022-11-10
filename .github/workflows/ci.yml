@@ -292,47 +292,50 @@ jobs:
       - name: Get branch and commit hash
         id: vars
         shell: bash
-        run: |
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-          echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build tests docker image
-        run: cd systest && make docker
+        run: make -C systest docker
 
       - name: Push tests docker images
-        run: cd systest && make push
+        run: make -C systest push
+
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.go-version }}
 
       - name: Run tests I
         timeout-minutes: 50
-        run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: sanity
+          storage=premium-rwo: 10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 50
+          bootstrap: 10m
+          level: info
+          clusters: 2
+        run: make -C systest run test_name=.
 
       - name: Run tests II
         timeout-minutes: 30
-        run: cd systest && make run test_name=. size=30 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=destructive storage=premium-rwo=10Gi
-
-      - name: System test result
-        # SUCCESS will capture all the pods exit status separated by space. adding up all the numbers.
-        run: |
-          SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
-          SUCCESS=$(echo $SUCCESS | tr ' ' '+' | bc -l)
-          echo "::set-output name=content::$SUCCESS"
-        id: tests_logs
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: destructive
+          storage=premium-rwo: 10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 30
+          bootstrap: 10m
+          level: info
+          clusters: 2
+        run: make -C systest run test_name=.
 
       - name: Delete pod
         if: always()
-        run: cd systest && make clean
-
-      - name: Tests Passed or Failed
-        run: |
-          SUCCESS='${{ steps.tests_logs.outputs.content }}'
-          ISTRUE='0'
-          if [[ "$SUCCESS" == "$ISTRUE" ]]; then
-            exit 0
-          else
-            exit 1
-          fi
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+        run: make -C systest clean
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
