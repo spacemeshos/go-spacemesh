@@ -333,9 +333,9 @@ jobs:
 
       - name: System test result
         run: |
-          FAILED_TESTS=$(kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} --tail=1 | grep FAIL | wc -l)
-          echo "$FAILED_TESTS tests failed"
-          echo "failed_tests=$FAILED_TESTS" >> $GITHUB_OUTPUT
+          PASSED_TESTS=$(kubectl logs --selector testid=systest-${{ steps.vars.outputs.sha_short }} --tail=1 | grep PASS | wc -l)
+          echo "$PASSED_TESTS tests passed"
+          echo "passed_tests=$PASSED_TESTS" >> $GITHUB_OUTPUT
         id: tests_logs
 
       - name: Delete pod
@@ -346,7 +346,7 @@ jobs:
 
       - name: Tests Passed or Failed
         run: |
-          if [[ ${{ steps.tests_logs.outputs.failed_tests }} -eq 0 ]]; then
+          if [[ ${{ steps.tests_logs.outputs.passed_tests }} -eq 2 ]]; then
             exit 0
           else
             exit 1
