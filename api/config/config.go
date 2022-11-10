@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 const (
@@ -18,6 +19,8 @@ const (
 	defaultStartNodeService        = false
 	defaultStartSmesherService     = false
 	defaultStartTransactionService = false
+
+	defaultSmesherStreamInterval = 1 * time.Second
 )
 
 // Config defines the api config params.
@@ -35,6 +38,8 @@ type Config struct {
 	StartNodeService        bool
 	StartSmesherService     bool
 	StartTransactionService bool
+
+	SmesherStreamInterval time.Duration
 }
 
 func init() {
@@ -57,6 +62,8 @@ func DefaultConfig() Config {
 		StartNodeService:        defaultStartNodeService,
 		StartSmesherService:     defaultStartSmesherService,
 		StartTransactionService: defaultStartTransactionService,
+
+		SmesherStreamInterval: defaultSmesherStreamInterval,
 	}
 }
 

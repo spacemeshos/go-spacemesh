@@ -28,14 +28,31 @@ type testForkFinder struct {
 }
 
 func newTestForkFinder(t *testing.T, maxHashes uint32) *testForkFinder {
+	return newTestForkFinderWithDuration(t, maxHashes, time.Hour)
+}
+
+func newTestForkFinderWithDuration(t *testing.T, maxHashes uint32, d time.Duration) *testForkFinder {
 	mf := mocks.NewMockfetcher(gomock.NewController(t))
 	db := sql.InMemory()
 	require.NoError(t, layers.SetHashes(db, types.GetEffectiveGenesis(), types.RandomHash(), types.RandomHash()))
 	return &testForkFinder{
-		ForkFinder: syncer.NewForkFinder(logtest.New(t), db, mf, maxHashes, time.Hour),
+		ForkFinder: syncer.NewForkFinder(logtest.New(t), db, mf, maxHashes, d),
 		db:         db,
 		mFetcher:   mf,
 	}
+}
+
+func TestResynced(t *testing.T) {
+	tf := newTestForkFinderWithDuration(t, 5, 0)
+	lid := types.NewLayerID(11)
+	hash := types.RandomHash()
+	require.True(t, tf.NeedResync(lid, hash))
+	tf.AddResynced(lid, hash)
+	require.False(t, tf.NeedResync(lid, hash))
+
+	tf.mFetcher.EXPECT().GetPeers().Return([]p2p.Peer{})
+	tf.Purge(false)
+	require.True(t, tf.NeedResync(lid, hash))
 }
 
 func TestForkFinder_Purge(t *testing.T) {
