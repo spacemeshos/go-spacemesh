@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -9,11 +8,9 @@ import (
 	"strings"
 	"time"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/emptypb"
 	apiappsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -60,7 +57,6 @@ type Node struct {
 	Name      string
 	IP        string
 	P2P, GRPC uint16
-	ID        string
 
 	// Identifier let's uniquely select the k8s resource
 	Identifier string
@@ -75,8 +71,8 @@ func (n Node) GRPCEndpoint() string {
 }
 
 // P2PEndpoint returns full p2p endpoint, including identity.
-func (n Node) P2PEndpoint() string {
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", n.IP, n.P2P, n.ID)
+func p2pEndpoint(n Node, id string) string {
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", n.IP, n.P2P, id)
 }
 
 // NodeClient is a Node with attached grpc connection.
@@ -468,21 +464,13 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 			Created:    set.CreationTimestamp.Time,
 			Restarted:  pod.CreationTimestamp.Time,
 		}
-		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
-		defer cancel()
-		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
+		// don't block connection, it is expected that some nodes are unavailable during test
+		conn, err := grpc.DialContext(tctx, node.GRPCEndpoint(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			return nil, err
 		}
-		dbg := spacemeshv1.NewDebugServiceClient(conn)
-		info, err := dbg.NetworkInfo(rctx, &emptypb.Empty{})
-		if err != nil {
-			return nil, err
-		}
-		node.ID = info.Id
 		return &NodeClient{
 			Node:       node,
 			ClientConn: conn,
