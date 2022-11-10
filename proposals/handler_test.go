@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -217,13 +216,6 @@ func checkProposal(t *testing.T, cdb *datastore.CachedDB, p *types.Proposal, exi
 	}
 }
 
-func checkIdentity(t *testing.T, cdb *datastore.CachedDB, b *types.Ballot, malicious bool) {
-	t.Helper()
-	gotM, err := identities.IsMalicious(cdb, b.SmesherID().Bytes())
-	require.NoError(t, err)
-	require.Equal(t, malicious, gotM)
-}
-
 func TestBallot_MalformedData(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
@@ -340,7 +332,6 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errDoubleVoting)
-	checkIdentity(t, th.cdb, b, true)
 }
 
 func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
@@ -365,7 +356,6 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errDoubleVoting)
-	checkIdentity(t, th.cdb, b, true)
 }
 
 func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
@@ -396,7 +386,6 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 		})
 	th.mm.EXPECT().AddBallot(b).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_ConflictingForAndAgainst(t *testing.T) {
@@ -420,7 +409,6 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(append(supported, supported...))).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
-	checkIdentity(t, th.cdb, b, true)
 }
 
 func TestBallot_ConflictingForAndAbstain(t *testing.T) {
@@ -444,7 +432,6 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
-	checkIdentity(t, th.cdb, b, true)
 }
 
 func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
@@ -469,7 +456,6 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(against)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
-	checkIdentity(t, th.cdb, b, true)
 }
 
 func TestBallot_ExceedMaxExceptions(t *testing.T) {
@@ -494,7 +480,6 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errExceptionsOverflow)
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_BallotsNotAvailable(t *testing.T) {
@@ -506,7 +491,6 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnknown)
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_ATXsNotAvailable(t *testing.T) {
@@ -518,7 +502,6 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnknown)
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_BlocksNotAvailable(t *testing.T) {
@@ -541,7 +524,6 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(errUnknown).Times(1)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnknown)
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_ErrorCheckingEligible(t *testing.T) {
@@ -569,7 +551,6 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 			return false, errors.New("unknown")
 		})
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errNotEligible)
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_NotEligible(t *testing.T) {
@@ -597,7 +578,6 @@ func TestBallot_NotEligible(t *testing.T) {
 			return false, nil
 		})
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errNotEligible)
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_InvalidVote(t *testing.T) {
@@ -674,7 +654,6 @@ func TestBallot_Success(t *testing.T) {
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_RefBallot(t *testing.T) {
@@ -706,7 +685,6 @@ func TestBallot_RefBallot(t *testing.T) {
 		})
 	th.mm.EXPECT().AddBallot(b).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
-	checkIdentity(t, th.cdb, b, false)
 }
 
 func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
@@ -998,7 +976,6 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
 			}
 			checkProposal(t, th.cdb, p, true)
-			checkIdentity(t, th.cdb, &p.Ballot, false)
 		})
 	}
 }
