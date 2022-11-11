@@ -1,7 +1,7 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: NetworkChaos
 metadata:
-  name: bandwidth
+  name: bandwidth-10mpbs
 spec:
   action: bandwidth
   mode: all
@@ -10,6 +10,6 @@ spec:
       "component": "spacemesh"
   direction: to
   bandwidth:
-    rate: "2mbps"
-    limit: 4194304
+    rate: "10mbps"
+    limit: 20971520
     buffer: 1048576
