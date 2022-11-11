@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 type handler struct {
@@ -22,34 +22,37 @@ type handler struct {
 	cdb    *datastore.CachedDB
 	bs     *datastore.BlobStore
 	msh    meshProvider
+	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
 		bs:     bs,
 		msh:    m,
+		beacon: b,
 	}
 }
 
-// handleEpochATXIDsReq returns the ATXs published in the specified epoch.
-func (h *handler) handleEpochATXIDsReq(ctx context.Context, msg []byte) ([]byte, error) {
+// handleEpochInfoReq returns the ATXs published in the specified epoch.
+func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 	if err != nil {
-		return nil, fmt.Errorf("get epoch ATXs for epoch %v: %w", epoch, err)
+		h.logger.WithContext(ctx).With().Warning("failed to get epoch atx IDs", epoch, log.Err(err))
+		return nil, err
 	}
-
-	h.logger.WithContext(ctx).With().Debug("responded to epoch atx request",
+	ed := EpochData{
+		AtxIDs: atxids,
+	}
+	h.logger.WithContext(ctx).With().Debug("responded to epoch info request",
 		epoch,
-		log.Int("count", len(atxids)))
-	bts, err := codec.EncodeSlice(atxids)
+		log.Int("atx_count", len(ed.AtxIDs)))
+	bts, err := codec.Encode(&ed)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("failed to serialize epoch atx", epoch, log.Err(err))
-		return bts, fmt.Errorf("serialize: %w", err)
 	}
-
 	return bts, nil
 }
 
@@ -81,48 +84,21 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 // handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinion.
 func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
 	var (
-		lid           = types.BytesToLayerID(req)
-		blockValidity []types.BlockContextualValidity
-		lo            LayerOpinion
-		out           []byte
-		err           error
+		lid = types.BytesToLayerID(req)
+		lo  LayerOpinion
+		out []byte
+		err error
 	)
 
-	lo.EpochWeight, _, err = h.cdb.GetEpochWeight(lid.GetEpoch())
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("failed to get epoch weight", lid, lid.GetEpoch(), log.Err(err))
-		return nil, err
-	}
 	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get prev agg hash", lid, log.Err(err))
 		return nil, err
 	}
-	lo.Verified = h.msh.LastVerified()
-
 	lo.Cert, err = layers.GetCert(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("failed to get certificate", lid, log.Err(err))
 		return nil, err
-	}
-	if !lid.After(lo.Verified) {
-		blockValidity, err = blocks.ContextualValidity(h.cdb, lid)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			h.logger.WithContext(ctx).With().Warning("failed to get block validity", lid, log.Err(err))
-			return nil, err
-		}
-		if len(blockValidity) == 0 {
-			// the layer is verified and is empty
-			lo.Valid = append(lo.Valid, types.EmptyBlockID)
-		} else {
-			for _, bv := range blockValidity {
-				if bv.Validity {
-					lo.Valid = append(lo.Valid, bv.ID)
-				} else {
-					lo.Invalid = append(lo.Invalid, bv.ID)
-				}
-			}
-		}
 	}
 	out, err = codec.Encode(&lo)
 	if err != nil {

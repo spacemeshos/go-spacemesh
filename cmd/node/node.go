@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -267,6 +268,7 @@ type App struct {
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
+	atxProvider      api.AtxProvider
 	clock            TickProvider
 	hare             HareService
 	blockGen         *blocks.Generator
@@ -509,15 +511,9 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	processed := msh.ProcessedLayer()
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("failed to load processed layer: %w", err)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtlCfg.MeshProcessed = processed
 	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
@@ -563,7 +559,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
-	fetcher := fetch.NewFetch(cdb, msh, app.host,
+	fetcher := fetch.NewFetch(cdb, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
@@ -584,7 +580,7 @@ func (app *App) initServices(ctx context.Context,
 		MaxHashesInReq:   100,
 		MaxStaleDuration: time.Hour,
 	}
-	newSyncer := syncer.NewSyncer(sqlDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(cdb, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
 		syncer.WithContext(ctx),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
@@ -688,6 +684,7 @@ func (app *App) initServices(ctx context.Context,
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
 	app.mesh = msh
+	app.atxProvider = cdb
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
@@ -831,10 +828,13 @@ func (app *App) startAPIServices(ctx context.Context) {
 		app.closers = append(app.closers, nodeService)
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
+	}
+	if apiConf.StartActivationService {
+		registerService(grpcserver.NewActivationService(app.atxProvider))
 	}
 
 	// Now that the services are registered, start the server.

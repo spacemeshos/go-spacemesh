@@ -1,16 +1,18 @@
 package util
 
-import "os"
+import (
+	"os"
+	"runtime"
+)
 
 const (
 	EnvCi        = "CI"
-	EnvOs        = "GOOS"
 	EnvOsWindows = "windows"
 )
 
 // IsWindows checks if we're running on Windows.
 func IsWindows() bool {
-	return os.Getenv(EnvOs) == EnvOsWindows
+	return runtime.GOOS == EnvOsWindows
 }
 
 // IsCi checks if we're running in CI.

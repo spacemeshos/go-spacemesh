@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math"
@@ -14,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +25,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -42,6 +44,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -975,7 +978,7 @@ func TestGlobalStateService(t *testing.T) {
 
 func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{})
+	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{}, 10*time.Millisecond)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -984,112 +987,118 @@ func TestSmesherService(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewSmesherServiceClient(conn)
 
-	// Construct an array of test cases to test each endpoint in turn
-	testCases := []struct {
-		name string
-		run  func(*testing.T)
-	}{
-		{"IsSmeshing", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
-		}},
-		{"StartSmeshingMissingArgs", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
-			require.Equal(t, codes.InvalidArgument, status.Code(err))
-		}},
-		{"StartSmeshing", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			opts := &pb.PostSetupOpts{}
-			opts.DataDir = t.TempDir()
-			opts.NumUnits = 1
-			opts.NumFiles = 1
+	t.Run("IsSmeshing", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
+	})
 
-			coinbase := &pb.AccountId{Address: addr1.String()}
+	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
 
-			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
-				Opts:     opts,
-				Coinbase: coinbase,
-			})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"StopSmeshing", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"SmesherID", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.SmesherID(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
-			resAddr, err := types.StringToAddress(res.AccountId.Address)
-			require.NoError(t, err)
-			require.Equal(t, nodeAddr.String(), resAddr.String())
-		}},
-		{"SetCoinbaseMissingArgs", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-		}},
-		{"SetCoinbase", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
-				Id: &pb.AccountId{Address: addr1.String()},
-			})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"Coinbase", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.Coinbase(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			addr, err := types.StringToAddress(res.AccountId.Address)
-			require.NoError(t, err)
-			require.Equal(t, addr1.Bytes(), addr.Bytes())
-		}},
-		{"MinGas", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.MinGas(context.Background(), &empty.Empty{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"SetMinGas", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"PostSetupComputeProviders", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
-			require.NoError(t, err)
-		}},
-		{"PostSetupStatusStream", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			stream, err := c.PostSetupStatusStream(context.Background(), &empty.Empty{})
+	t.Run("StartSmeshing", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		opts := &pb.PostSetupOpts{}
+		opts.DataDir = t.TempDir()
+		opts.NumUnits = 1
+		opts.NumFiles = 1
 
-			// Expecting the stream to return a single update before closing.
-			require.NoError(t, err)
+		coinbase := &pb.AccountId{Address: addr1.String()}
+
+		res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+			Opts:     opts,
+			Coinbase: coinbase,
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	})
+
+	t.Run("StopSmeshing", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	})
+
+	t.Run("SmesherID", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.SmesherID(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
+		resAddr, err := types.StringToAddress(res.AccountId.Address)
+		require.NoError(t, err)
+		require.Equal(t, nodeAddr.String(), resAddr.String())
+	})
+
+	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
+		require.Error(t, err)
+		statusCode := status.Code(err)
+		require.Equal(t, codes.InvalidArgument, statusCode)
+	})
+
+	t.Run("SetCoinbase", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
+			Id: &pb.AccountId{Address: addr1.String()},
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	})
+
+	t.Run("Coinbase", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.Coinbase(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		addr, err := types.StringToAddress(res.AccountId.Address)
+		require.NoError(t, err)
+		require.Equal(t, addr1.Bytes(), addr.Bytes())
+	})
+
+	t.Run("MinGas", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.MinGas(context.Background(), &empty.Empty{})
+		require.Error(t, err)
+		statusCode := status.Code(err)
+		require.Equal(t, codes.Unimplemented, statusCode)
+	})
+
+	t.Run("SetMinGas", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
+		require.Error(t, err)
+		statusCode := status.Code(err)
+		require.Equal(t, codes.Unimplemented, statusCode)
+	})
+
+	t.Run("PostSetupComputeProviders", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
+		require.NoError(t, err)
+	})
+
+	t.Run("PostSetupStatusStream", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		stream, err := c.PostSetupStatusStream(ctx, &empty.Empty{})
+		require.NoError(t, err)
+
+		// Expecting the stream to return updates before closing.
+		for i := 0; i < 3; i++ {
 			_, err = stream.Recv()
 			require.NoError(t, err)
-			_, err = stream.Recv()
-			require.EqualError(t, err, io.EOF.Error())
-		}},
-	}
+		}
 
-	// Run subtests
-	for _, tc := range testCases {
-		t.Run(tc.name, tc.run)
-	}
+		cancel()
+		_, err = stream.Recv()
+		require.ErrorContains(t, err, context.Canceled.Error())
+	})
 }
 
 func TestMeshService(t *testing.T) {
@@ -2340,7 +2349,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
-		Status:  events.LayerStatusTypeConfirmed,
+		Status:  events.LayerStatusTypeApplied,
 	})
 
 	// close the stream
@@ -2786,4 +2795,86 @@ func TestEventsReceived(t *testing.T) {
 		[]types.Transaction{*globalTx}, rewards)
 
 	wg.Wait()
+}
+
+func TestVMAccountUpdates(t *testing.T) {
+	logtest.SetupGlobal(t)
+	events.CloseEventReporter()
+	events.InitializeReporter()
+
+	// in memory database doesn't allow reads while writer locked db
+	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
+	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+
+	keys := make([]ed25519.PrivateKey, 10)
+	accounts := make([]types.Account, len(keys))
+	const initial = 100_000_000
+	for i := range keys {
+		pub, pk, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		keys[i] = pk
+		accounts[i] = types.Account{
+			Address: wallet.Address(pub),
+			Balance: initial,
+		}
+	}
+	require.NoError(t, svm.ApplyGenesis(accounts))
+	spawns := []types.Transaction{}
+	for _, pk := range keys {
+		spawns = append(spawns, types.Transaction{
+			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, core.Nonce{})),
+		})
+	}
+	lid := types.GetEffectiveGenesis().Add(1)
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	eg, ctx := errgroup.WithContext(ctx)
+	states := make(chan *pb.AccountState, len(accounts))
+	for _, account := range accounts {
+		stream, err := client.AccountDataStream(ctx, &pb.AccountDataStreamRequest{
+			Filter: &pb.AccountDataFilter{
+				AccountId:        &pb.AccountId{Address: account.Address.String()},
+				AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
+			},
+		})
+		require.NoError(t, err)
+		_, err = stream.Header()
+		require.NoError(t, err)
+		eg.Go(func() error {
+			response, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			states <- response.Datum.GetAccountWrapper().StateCurrent
+			return nil
+		})
+	}
+
+	spends := []types.Transaction{}
+	const amount = 100_000
+	for _, pk := range keys {
+		spends = append(spends, types.Transaction{
+			RawTx: types.NewRawTx(wallet.Spend(
+				pk, types.Address{1}, amount, types.Nonce{Counter: 1},
+			)),
+		})
+	}
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid.Add(1)}, spends, nil)
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
+	close(states)
+	i := 0
+	for state := range states {
+		i++
+		require.Equal(t, 2, int(state.Counter))
+		require.Less(t, int(state.Balance.Value), initial-amount)
+	}
+	require.Equal(t, len(accounts), i)
 }

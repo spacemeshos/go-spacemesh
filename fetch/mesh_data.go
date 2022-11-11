@@ -36,6 +36,9 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	for hash, resC := range results {
 		select {
 		case <-ctx.Done():
+			f.logger.WithContext(ctx).With().Warning("request timed out",
+				log.String("hint", string(hint)),
+				log.String("hash", hash.ShortString()))
 			return []error{ctx.Err()}
 		case res, open := <-resC:
 			if !open {
@@ -174,12 +177,38 @@ func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB
 	return nil
 }
 
-// GetEpochATXIDs get all ATXIDs targeted for a specified epoch from peers.
-func (f *Fetch) GetEpochATXIDs(ctx context.Context, peer p2p.Peer, epoch types.EpochID, okCB func([]byte), errCB func(error)) error {
-	if err := f.servers[atxProtocol].Request(ctx, peer, epoch.ToBytes(), okCB, errCB); err != nil {
-		return err
+// PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
+func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.EpochID) (*EpochData, error) {
+	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
+		log.Stringer("peer", peer),
+		log.Stringer("epoch", epoch))
+
+	var (
+		done = make(chan struct{}, 1)
+		ed   EpochData
+		err  error
+	)
+	okCB := func(data []byte) {
+		defer close(done)
+		err = codec.Decode(data, &ed)
 	}
-	return nil
+	errCB := func(perr error) {
+		defer close(done)
+		err = perr
+	}
+	if err = f.servers[atxProtocol].Request(ctx, peer, epoch.ToBytes(), okCB, errCB); err != nil {
+		return nil, err
+	}
+	select {
+	case <-done:
+		if err != nil {
+			return nil, err
+		}
+		f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
+		return &ed, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func iterateLayers(req *MeshHashRequest) ([]types.LayerID, error) {
