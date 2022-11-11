@@ -221,7 +221,7 @@ jobs:
       # this is the easiest way to access success/failure state of previous jobs in this workflow
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
     steps:
-      - uses: act10ns/slack@v1
+      - uses: act10ns/slack@v2
         name: Slack notification
         # skip if the secret is not accessible
         if: env.SLACK_WEBHOOK_URL
@@ -351,7 +351,7 @@ jobs:
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
-      - uses: act10ns/slack@v1
+      - uses: act10ns/slack@v2
         name: Slack notification
         with:
           status: ${{ env.status }}
