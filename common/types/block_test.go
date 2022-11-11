@@ -108,23 +108,24 @@ func Test_BlockIDCompare(t *testing.T) {
 	require.Equal(t, false, testBlockID_2.Compare(testBlockID_2))
 	require.Equal(t, false, testBlockID_2.Compare(testBlockID_1))
 	require.Equal(t, true, testBlockID_2.Compare(testBlockID_3))
-
 }
 
 func Test_SortBlockIDs(t *testing.T) {
-	testBlockIDs := []BlockID{BlockID{3, 3}, BlockID{2, 2}, BlockID{1, 1}}
-	expectedBlockIDs := []BlockID{BlockID{1, 1}, BlockID{2, 2}, BlockID{3, 3}}
+	testBlockIDs := []BlockID{{3, 3}, {2, 2}, {1, 1}}
+	expectedBlockIDs := []BlockID{{1, 1}, {2, 2}, {3, 3}}
 	actualBlockIDs := SortBlockIDs(testBlockIDs)
 
 	require.Equal(t, expectedBlockIDs, actualBlockIDs)
 }
 
 func TestToBlockIDs(t *testing.T) {
-	testBlocks := []*Block{&Block{blockID: BlockID{1, 1}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
-		&Block{blockID: BlockID{2, 2}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
-		&Block{blockID: BlockID{3, 3}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}}}
+	testBlocks := []*Block{
+		{blockID: BlockID{1, 1}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
+		{blockID: BlockID{2, 2}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
+		{blockID: BlockID{3, 3}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
+	}
 
-	expectedBlockIDs := []BlockID{BlockID{1, 1}, BlockID{2, 2}, BlockID{3, 3}}
+	expectedBlockIDs := []BlockID{{1, 1}, {2, 2}, {3, 3}}
 	actualBlockIDs := ToBlockIDs(testBlocks)
 
 	require.Equal(t, expectedBlockIDs, actualBlockIDs)
