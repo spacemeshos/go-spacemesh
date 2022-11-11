@@ -103,18 +103,18 @@ func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byt
 		return nil, err
 	}
 	if err == nil {
-		numValids := 0
+		var validCert *types.Certificate
 		for _, cert := range certs {
-			if cert.Valid {
-				numValids++
-				if lo.Cert == nil && cert.Cert != nil {
-					lo.Cert = cert.Cert
-				}
+			if !cert.Valid {
+				continue
 			}
+			if validCert != nil {
+				validCert = nil
+				break
+			}
+			validCert = cert.Cert
 		}
-		if numValids > 1 {
-			lo.Cert = nil
-		}
+		lo.Cert = validCert
 	}
 
 	out, err = codec.Encode(&lo)
