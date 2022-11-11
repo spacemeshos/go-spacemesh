@@ -464,7 +464,7 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVe
 			logger.With().Warning("failed to get hare output", layerID, log.Err(err))
 			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
 		}
-		// hare output an empty layer, or the network equivocated with multiple valid certificate
+		// hare output an empty layer, or the network have multiple valid certificates
 		if bid == types.EmptyBlockID {
 			return nil, nil
 		}

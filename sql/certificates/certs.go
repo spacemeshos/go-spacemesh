@@ -20,30 +20,27 @@ func SetHareOutput(db sql.Executor, lid types.LayerID, bid types.BlockID) error 
 	return nil
 }
 
-// GetHareOutput returns the block that's valid as hare output for the spcified layer.
+// GetHareOutput returns the block that's valid as hare output for the specified layer.
 // if there are more than one valid blocks, return types.EmptyBlockID.
 func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 	var (
-		result []types.BlockID
+		result types.BlockID
 		err    error
 		rows   int
 	)
 	if rows, err = db.Exec("select block from certificates where layer = ?1 and valid = 1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Value))
 	}, func(stmt *sql.Statement) bool {
-		var bid types.BlockID
-		stmt.ColumnBytes(0, bid[:])
-		result = append(result, bid)
+		stmt.ColumnBytes(0, result[:])
 		return true
 	}); err != nil {
 		return types.EmptyBlockID, fmt.Errorf("get certs %s: %w", lid, err)
 	} else if rows == 0 {
 		return types.EmptyBlockID, fmt.Errorf("get certs %s: %w", lid, sql.ErrNotFound)
-	}
-	if len(result) > 1 {
+	} else if rows > 1 {
 		return types.EmptyBlockID, nil
 	}
-	return result[0], nil
+	return result, nil
 }
 
 func Add(db sql.Executor, lid types.LayerID, cert *types.Certificate) error {
