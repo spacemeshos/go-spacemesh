@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -143,7 +144,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		layers.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
 	}
 	meshHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
@@ -196,7 +197,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		layers.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
 	}
 	meshHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(b.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
@@ -413,7 +414,7 @@ func TestBuilder_HandleLayer_NotVerified(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified.Sub(1))
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		layers.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
 	}
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -445,7 +446,7 @@ func TestBuilder_HandleLayer_NoHareOutput(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID.Sub(1)); lid = lid.Add(1) {
-		layers.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
 	}
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
@@ -477,7 +478,7 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	minVerified := layerID.Sub(b.cfg.hdist + 1)
 	b.mTortoise.EXPECT().LatestComplete().Return(minVerified)
 	for lid := minVerified; lid.Before(layerID); lid = lid.Add(1) {
-		layers.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
+		certificates.SetHareOutput(b.cdb, lid, types.EmptyBlockID)
 	}
 	b.mPubSub.EXPECT().Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {

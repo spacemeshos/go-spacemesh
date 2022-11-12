@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -280,7 +281,7 @@ func (pb *ProposalBuilder) decideMeshHash(logger log.Log, current types.LayerID)
 		log.Stringer("latest_verified", verified))
 
 	for lid := minVerified.Add(1); lid.Before(current); lid = lid.Add(1) {
-		_, err := layers.GetHareOutput(pb.cdb, lid)
+		_, err := certificates.GetHareOutput(pb.cdb, lid)
 		if err != nil {
 			logger.With().Warning("missing hare output for layer within hdist",
 				log.Stringer("missing_layer", lid),
