@@ -130,7 +130,7 @@ func checkStateConsensus(
 		return nil, errNodeHasBadMeshHash
 	}
 	md.optFilter = true
-	logger.With().Info("consensus on mesh and state. doing optimistic filtering",
+	logger.With().Info("consensus on mesh hash. doing optimistic filtering",
 		lid,
 		log.Stringer("mesh_hash", ms.hash))
 	return md, nil

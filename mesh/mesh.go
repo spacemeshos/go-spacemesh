@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
@@ -458,12 +459,12 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVe
 
 	if layerID.After(latestVerified) {
 		// tortoise has not verified this layer yet, simply apply the block that hare certified
-		bid, err := layers.GetHareOutput(cdb, layerID)
+		bid, err := certificates.GetHareOutput(cdb, layerID)
 		if err != nil {
 			logger.With().Warning("failed to get hare output", layerID, log.Err(err))
 			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
 		}
-		// hare output an empty layer
+		// hare output an empty layer, or the network have multiple valid certificates
 		if bid == types.EmptyBlockID {
 			return nil, nil
 		}
@@ -591,7 +592,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 	})
 
 	logger.Info("saving hare output for layer")
-	if err := layers.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
+	if err := certificates.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
 		logger.With().Error("failed to save hare output", log.Err(err))
 		return err
 	}

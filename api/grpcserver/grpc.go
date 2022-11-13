@@ -68,7 +68,7 @@ func (s *Server) startInternal(started chan<- struct{}) {
 
 // Close stops the server.
 func (s *Server) Close() error {
-	log.Info("stopping new grpc server")
+	log.Info("stopping the grpc server")
 	s.GrpcServer.Stop()
 
 	// We don't return any errors but we want to conform to io.Closer so return a nil error
