@@ -48,6 +48,10 @@ const (
 
 	poetConfigMapName      = "poet"
 	spacemeshConfigMapName = "spacemesh"
+
+	// smeshers are splitted in 10 approximately equal buckets
+	// to enable running chaos mesh tasks on the different parts of the cluster
+	buckets = 10
 )
 
 func persistentVolumeClaim(podname string) string {
@@ -244,6 +248,7 @@ func nodeLabels(name string, id string) map[string]string {
 		// app identifies resource kind (Node, Poet).
 		// It can be used to select all Pods of given kind.
 		"app": name,
+		name:  "true",
 		// id uniquely identifies a resource (i.e. poet-0).
 		"id": id,
 	}
@@ -270,7 +275,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			setname := fmt.Sprintf("%s-%d", name, i)
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
-			labels["component"] = "spacemesh"
+			labels[fmt.Sprintf("bucket-%d", i%buckets)] = "true"
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}

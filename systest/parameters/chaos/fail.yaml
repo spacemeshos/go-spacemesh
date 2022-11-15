@@ -8,11 +8,11 @@ spec:
   type: "PodChaos"
   podChaos:
     action: pod-failure
-    mode: fixed-percent
-    value: "10"
+    mode: fixed
+    value: "3"
     selector:
       labelSelectors:
-        "app": "smesher"
+        "bucket-3": "true"
     duration: "60s"
 ---
 apiVersion: chaos-mesh.org/v1alpha1
@@ -30,23 +30,5 @@ spec:
     value: "2"
     selector:
       labelSelectors:
-        "app": "smesher"
+        "bucket-4": "true"
     duration: "2h"
----
-apiVersion: chaos-mesh.org/v1alpha1
-kind: Schedule
-metadata:
-  name: long-failure-every-4h
-spec:
-  schedule: "0 */4 * * *"
-  historyLimit: 2
-  concurrencyPolicy: "Allow"
-  type: "PodChaos"
-  podChaos:
-    action: pod-failure
-    mode: fixed
-    value: "2"
-    selector:
-      labelSelectors:
-        "app": "smesher"
-    duration: "4h"

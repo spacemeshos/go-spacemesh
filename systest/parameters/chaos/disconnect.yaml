@@ -9,17 +9,18 @@ spec:
   networkChaos:
     action: partition
     duration: "60s"
-    mode: fixed-percent
-    value: "10"
+    mode: fixed
+    value: "5"
     selector:
       labelSelectors:
-        "app": "smesher"
+        "bucket-1": "true"
     direction: to
     target:
       mode: all
       selector:
         labelSelectors:
-          "component": "spacemesh"
+          "boot": "true"
+          "smesher": "true"
 ---
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Schedule
@@ -33,14 +34,15 @@ spec:
   networkChaos:
     action: partition
     duration: "2h"
-    mode: fixed-percent
-    value: "10"
+    mode: fixed
+    value: "2"
     selector:
       labelSelectors:
-        "app": "smesher"
+        "bucket-2": "true"
     direction: to
     target:
       mode: all
       selector:
         labelSelectors:
-          "component": "spacemesh"
+          "boot": "true"
+          "smesher": "true"
