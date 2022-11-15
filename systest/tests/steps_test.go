@@ -129,7 +129,9 @@ func TestStepTransactions(t *testing.T) {
 			rng := rand.New(rand.NewSource(time.Now().Unix() + int64(i)))
 			n := rng.Intn(batch) + batch
 			nonce, err := client.nonce(tctx)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			if nonce == 0 {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
