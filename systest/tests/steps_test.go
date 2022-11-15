@@ -112,7 +112,6 @@ func TestStepTransactions(t *testing.T) {
 
 	clients := make([]*txClient, cl.Accounts())
 	synced := syncedNodes(tctx, cl)
-	require.GreaterOrEqual(t, len(synced), tctx.ClusterSize/2)
 
 	for i := range clients {
 		clients[i] = &txClient{
