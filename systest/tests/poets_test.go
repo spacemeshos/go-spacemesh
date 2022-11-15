@@ -34,7 +34,6 @@ func TestPoetsFailures(t *testing.T) {
 
 func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
-	const epochSize = 4
 	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
 	last := first + layersCount - 1
 	tctx.Log.Debugw("watching layers between", "first", first, "last", last)
