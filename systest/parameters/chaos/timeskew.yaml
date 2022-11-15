@@ -3,12 +3,10 @@ kind: TimeChaos
 metadata:
   name: positive-offset
 spec:
-  mode: fixed
-  value: "5"
+  mode: all
   selector:
     labelSelectors:
-      "boot": "true"
-      "smesher": "true"
+      "bucket-4": "true"
   timeOffset: '400ms'
 ---
 apiVersion: chaos-mesh.org/v1alpha1
@@ -16,10 +14,8 @@ kind: TimeChaos
 metadata:
   name: negative-offset
 spec:
-  mode: fixed
-  value: "5"
+  mode: all
   selector:
     labelSelectors:
-      "boot": "true"
-      "smesher": "true"
+      "bucket-5": "true"
   timeOffset: '-400ms'

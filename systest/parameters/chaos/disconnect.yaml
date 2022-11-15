@@ -13,7 +13,7 @@ spec:
     value: "5"
     selector:
       labelSelectors:
-        "bucket-1": "true"
+        "bucket-0": "true"
     direction: to
     target:
       mode: all
@@ -38,7 +38,7 @@ spec:
     value: "2"
     selector:
       labelSelectors:
-        "bucket-2": "true"
+        "bucket-1": "true"
     direction: to
     target:
       mode: all

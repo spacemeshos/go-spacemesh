@@ -12,7 +12,7 @@ spec:
     value: "3"
     selector:
       labelSelectors:
-        "bucket-3": "true"
+        "bucket-2": "true"
     duration: "60s"
 ---
 apiVersion: chaos-mesh.org/v1alpha1
@@ -30,5 +30,5 @@ spec:
     value: "2"
     selector:
       labelSelectors:
-        "bucket-4": "true"
+        "bucket-3": "true"
     duration: "2h"
