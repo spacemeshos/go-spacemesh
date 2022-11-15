@@ -705,6 +705,10 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 			return nil, nil
 		}
 	}
+	if !base.layer.Before(ballot.LayerIndex) {
+		return nil, fmt.Errorf("votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
+			ballot.LayerIndex, ballot.ID(), base.layer, base.id)
+	}
 
 	if ballot.EpochData != nil {
 		beacon := ballot.EpochData.Beacon
