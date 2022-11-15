@@ -63,7 +63,7 @@ gomplate:
 	@go install github.com/hairyhenderson/gomplate/v3/cmd/gomplate@latest
 
 .PHONY: run
-run: $(run_deps)
+run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
 	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
 	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
