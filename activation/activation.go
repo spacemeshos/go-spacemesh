@@ -57,6 +57,8 @@ type syncer interface {
 	RegisterForATXSynced() chan struct{}
 }
 
+//go:generate mockgen -package=mocks -destination=./mocks/activation.go . SmeshingProvider
+
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool

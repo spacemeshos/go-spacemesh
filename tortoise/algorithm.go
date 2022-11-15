@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -23,7 +24,6 @@ type Config struct {
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
-	MeshProcessed            types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -103,7 +103,13 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 
-	needsRecovery := t.cfg.MeshProcessed.After(types.GetEffectiveGenesis())
+	latest, err := ballots.LatestLayer(cdb)
+	if err != nil {
+		t.logger.With().Panic("failed to load latest layer",
+			log.Err(err),
+		)
+	}
+	needsRecovery := latest.After(types.GetEffectiveGenesis())
 
 	t.trtl = newTurtle(
 		t.logger,
@@ -114,10 +120,10 @@ func New(cdb *datastore.CachedDB, beacons system.BeaconGetter, updater blockVali
 	)
 	if needsRecovery {
 		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last layer", t.cfg.MeshProcessed),
+			log.Stringer("last layer", latest),
 		)
 		t.eg.Go(func() error {
-			for lid := types.GetEffectiveGenesis().Add(1); !lid.After(t.cfg.MeshProcessed); lid = lid.Add(1) {
+			for lid := types.GetEffectiveGenesis().Add(1); !lid.After(latest); lid = lid.Add(1) {
 				err := t.trtl.onLayer(ctx, lid)
 				if err != nil {
 					t.ready <- err

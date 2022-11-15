@@ -284,6 +284,7 @@ func convertActivation(a *types.VerifiedActivationTx) *pb.Activation {
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
+		Sequence:  a.Sequence,
 	}
 }
 

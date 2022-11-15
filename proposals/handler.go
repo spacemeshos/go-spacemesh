@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -371,19 +370,6 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 	return nil
 }
 
-func (h *Handler) setBallotMalicious(ctx context.Context, b *types.Ballot) error {
-	if err := identities.SetMalicious(h.cdb, b.SmesherID().Bytes()); err != nil {
-		h.logger.WithContext(ctx).With().Error("failed to set smesher malicious",
-			b.ID(),
-			b.LayerIndex,
-			log.Stringer("smesher", b.SmesherID()),
-			log.Err(err))
-		return fmt.Errorf("set smesher malcious: %w", err)
-	}
-	b.SetMalicious()
-	return nil
-}
-
 func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) error {
 	exceptions := map[types.BlockID]struct{}{}
 	layers := make(map[types.LayerID]types.BlockID)
@@ -410,9 +396,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 					log.Stringer("voted_bid", voted),
 					log.Stringer("voted_bid", vote.ID),
 					log.Uint32("hdist", h.cfg.Hdist))
-				if err = h.setBallotMalicious(ctx, b); err != nil {
-					return err
-				}
 				return errDoubleVoting
 			}
 		} else {
@@ -423,9 +406,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 	for _, vote := range b.Votes.Against {
 		if _, exist := exceptions[vote.ID]; exist {
 			h.logger.WithContext(ctx).With().Warning("conflicting votes on block", vote.ID, b.ID(), b.LayerIndex)
-			if err := h.setBallotMalicious(ctx, b); err != nil {
-				return err
-			}
 			return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of ballot %s at layer %v",
 				errConflictingExceptions, vote.ID, b.ID(), b.LayerIndex)
 		}
@@ -456,9 +436,6 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				b.ID(),
 				b.LayerIndex,
 				log.Stringer("conflict_layer", lid))
-			if err := h.setBallotMalicious(ctx, b); err != nil {
-				return err
-			}
 			return errConflictingExceptions
 		}
 	}

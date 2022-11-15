@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -67,7 +68,7 @@ func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, gen
 	certified := types.EmptyBlockID
 	if genCert {
 		certified = blks[0]
-		require.NoError(t, layers.SetHareOutputWithCert(db, lid, &types.Certificate{BlockID: certified}))
+		require.NoError(t, certificates.Add(db, lid, &types.Certificate{BlockID: certified}))
 	}
 	aggHash := types.RandomHash()
 	require.NoError(t, layers.SetHashes(db, lid.Sub(1), types.RandomHash(), aggHash))
@@ -110,18 +111,19 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 func TestHandleLayerOpinionsReq(t *testing.T) {
 	tt := []struct {
-		name        string
-		requested   types.LayerID
-		missingCert bool
+		name                       string
+		missingCert, multipleCerts bool
 	}{
 		{
-			name:      "all good",
-			requested: types.NewLayerID(111),
+			name: "all good",
 		},
 		{
 			name:        "cert missing",
-			requested:   types.NewLayerID(111),
 			missingCert: true,
+		},
+		{
+			name:          "multiple certs",
+			multipleCerts: true,
 		},
 	}
 
@@ -131,16 +133,22 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			certified, aggHash := createOpinions(t, th.cdb, tc.requested, !tc.missingCert)
+			lid := types.NewLayerID(111)
+			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			if tc.multipleCerts {
+				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
+					BlockID: types.RandomBlockID(),
+				}))
+			}
 
-			out, err := th.handleLayerOpinionsReq(context.TODO(), tc.requested.Bytes())
+			out, err := th.handleLayerOpinionsReq(context.TODO(), lid.Bytes())
 			require.NoError(t, err)
 
 			var got LayerOpinion
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			require.Equal(t, aggHash, got.PrevAggHash)
-			if tc.missingCert {
+			if tc.missingCert || tc.multipleCerts {
 				require.Nil(t, got.Cert)
 			} else {
 				require.NotNil(t, got.Cert)

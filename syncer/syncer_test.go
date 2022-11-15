@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -520,10 +520,10 @@ func TestSyncMissingLayer(t *testing.T) {
 		TxIDs:      []types.TransactionID{{1, 1, 1}},
 	})
 	require.NoError(t, blocks.Add(ts.cdb, block))
-	require.NoError(t, layers.SetHareOutput(ts.cdb, failed, block.ID()))
+	require.NoError(t, certificates.SetHareOutput(ts.cdb, failed, block.ID()))
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		if lid != failed {
-			require.NoError(t, layers.SetHareOutput(ts.cdb, lid, types.EmptyBlockID))
+			require.NoError(t, certificates.SetHareOutput(ts.cdb, lid, types.EmptyBlockID))
 		}
 	}
 

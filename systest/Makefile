@@ -7,7 +7,7 @@ image_name ?= $(org)/systest:$(version_info)
 poet_image ?= spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 test_id ?= systest-$(version_info)
-test_pod_name ?= systest-$(version_info)-$(date)
+test_job_name ?= systest-$(version_info)-$(date)
 keep ?= false
 clusters ?= 1
 size ?= 10
@@ -19,17 +19,19 @@ node_selector ?=
 namespace ?=
 label ?=
 
-configname ?= $(test_pod_name)
+configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
 poet_config ?= parameters/fastnet/poet.conf
 properties ?=
 ifneq ($(properties),)
 	optional_properties = --from-env-file=$(properties)
 endif 
-ifeq ($(configname),$(test_pod_name))
+ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
+command := tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
+-level=$(level) -labels=$(label) -configname=$(configname)
 
 .PHONY: docker
 docker:
@@ -55,25 +57,26 @@ config:
 		--from-literal=testid=$(test_id) \
 		$(optional_properties)
 	@kubectl label configmap $(configname) testid=$(test_id)
+	
+.PHONY: gomplate
+gomplate:
+	@go install github.com/hairyhenderson/gomplate/v3/cmd/gomplate@latest
 
 .PHONY: run
 run: $(run_deps)
-	@echo "launching test pod with name=$(test_pod_name) and testid=$(test_id)"
-	@kubectl run --image $(image_name) $(test_pod_name) \
-	--restart=Never \
-	--labels="testid=$(test_id)" \
-    --image-pull-policy=IfNotPresent -- \
-    tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -level=$(level) -labels=$(label) -configname=$(configname)
-	-@kubectl wait --timeout=10s --for=condition=ready pod/$(test_pod_name)
-	@kubectl logs $(test_pod_name) -f
+	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
+	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
+	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
+	kubectl logs job/$(test_job_name) -f --ignore-errors
+	test_job_name=$(test_job_name) ./wait_for_job.sh
 
 .PHONY: clean
 clean:
 	@echo "deleting configmaps with testid=$(test_id)"
 	@kubectl delete configmap --selector=testid=$(test_id)
 	@echo "deleting test pods with testid=$(test_id)"
-	@kubectl delete pod --selector=testid=$(test_id)
-	@kubectl wait --for delete pod --selector=testid=$(test_id)
+	@kubectl delete job --selector=testid=$(test_id)
+	@kubectl wait --for delete job --selector=testid=$(test_id)
 	@echo "deleting ephemeral namespaces with testid=$(test_id)"
 	@kubectl delete ns --selector=testid=$(test_id),keep=false
 	@kubectl wait --timeout=60s --for delete namespace --selector=testid=$(test_id),keep=false
