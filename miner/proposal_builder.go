@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -48,24 +49,25 @@ type ProposalBuilder struct {
 	eg         errgroup.Group
 	layerTimer chan types.LayerID
 
-	publisher          pubsub.Publisher
-	signer             *signing.EdSigner
-	conState           conservativeState
-	baseBallotProvider votesEncoder
-	proposalOracle     proposalOracle
-	beaconProvider     system.BeaconGetter
-	syncer             system.SyncStateProvider
+	publisher      pubsub.Publisher
+	signer         *signing.EdSigner
+	conState       conservativeState
+	tortoise       votesEncoder
+	proposalOracle proposalOracle
+	beaconProvider system.BeaconGetter
+	syncer         system.SyncStateProvider
 }
 
 // config defines configuration for the ProposalBuilder.
 type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
+	hdist          uint32
 	minerID        types.NodeID
 	txsPerProposal int
 }
 
-// defaultConfig for BlockHandler.
+// defaultConfig for ProposalBuilder.
 func defaultConfig() config {
 	return config{
 		txsPerProposal: 100,
@@ -110,6 +112,12 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
+func WithHdist(dist uint32) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.hdist = dist
+	}
+}
+
 func withOracle(o proposalOracle) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.proposalOracle = o
@@ -124,7 +132,7 @@ func NewProposalBuilder(
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
 	publisher pubsub.Publisher,
-	bbp votesEncoder,
+	trtl votesEncoder,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
 	conState conservativeState,
@@ -132,18 +140,18 @@ func NewProposalBuilder(
 ) *ProposalBuilder {
 	sctx, cancel := context.WithCancel(ctx)
 	pb := &ProposalBuilder{
-		logger:             log.NewNop(),
-		cfg:                defaultConfig(),
-		ctx:                sctx,
-		cancel:             cancel,
-		signer:             signer,
-		layerTimer:         layerTimer,
-		cdb:                cdb,
-		publisher:          publisher,
-		baseBallotProvider: bbp,
-		beaconProvider:     beaconProvider,
-		syncer:             syncer,
-		conState:           conState,
+		logger:         log.NewNop(),
+		cfg:            defaultConfig(),
+		ctx:            sctx,
+		cancel:         cancel,
+		signer:         signer,
+		layerTimer:     layerTimer,
+		cdb:            cdb,
+		publisher:      publisher,
+		tortoise:       trtl,
+		beaconProvider: beaconProvider,
+		syncer:         syncer,
+		conState:       conState,
 	}
 
 	for _, opt := range opts {
@@ -192,7 +200,7 @@ func (pb *ProposalBuilder) createProposal(
 	activeSet []types.ATXID,
 	beacon types.Beacon,
 	txIDs []types.TransactionID,
-	votes types.Votes,
+	opinion types.Opinion,
 ) (*types.Proposal, error) {
 	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
 
@@ -203,8 +211,8 @@ func (pb *ProposalBuilder) createProposal(
 	ib := &types.InnerBallot{
 		AtxID:             atxID,
 		EligibilityProofs: proofs,
-		Votes:             votes,
 		LayerIndex:        layerID,
+		OpinionHash:       opinion.Hash,
 	}
 
 	epoch := layerID.GetEpoch()
@@ -228,26 +236,69 @@ func (pb *ProposalBuilder) createProposal(
 		ib.RefBallot = refBallot
 	}
 
-	mesh, err := layers.GetAggregatedHash(pb.cdb, layerID.Sub(1))
-	if err != nil {
-		logger.With().Warning("failed to get mesh hash", log.Err(err))
-	}
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: *ib,
+				Votes:       opinion.Votes,
 			},
 			TxIDs:    txIDs,
-			MeshHash: mesh,
+			MeshHash: pb.decideMeshHash(logger, layerID),
 		},
 	}
-	p.Ballot.Signature = pb.signer.Sign(p.Ballot.Bytes())
+	p.Ballot.Signature = pb.signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = pb.signer.Sign(p.Bytes())
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
 	logger.Event().Info("proposal created", p.ID(), log.Int("num_txs", len(p.TxIDs)))
 	return p, nil
+}
+
+// only output the mesh hash in the proposal when the following conditions are met:
+// - tortoise has verified every layer i < N-hdist.
+// - the node has hare output for every layer i such that N-hdist <= i <= N.
+// this is done such that when the node is generating the block based on hare output,
+// it can do optimistic filtering if the majority of the proposals agreed on the mesh hash.
+func (pb *ProposalBuilder) decideMeshHash(logger log.Log, current types.LayerID) types.Hash32 {
+	var minVerified types.LayerID
+	if current.Uint32() > pb.cfg.hdist+1 {
+		minVerified = current.Sub(pb.cfg.hdist + 1)
+	}
+	genesis := types.GetEffectiveGenesis()
+	if minVerified.Before(genesis) {
+		minVerified = genesis
+	}
+	verified := pb.tortoise.LatestComplete()
+	if minVerified.After(verified) {
+		logger.With().Warning("layers outside hdist not verified",
+			log.Stringer("min_verified", minVerified),
+			log.Stringer("latest_verified", verified))
+		return types.EmptyLayerHash
+	}
+	logger.With().Debug("verified layer meets optimistic filtering threshold",
+		log.Stringer("min_verified", minVerified),
+		log.Stringer("latest_verified", verified))
+
+	for lid := minVerified.Add(1); lid.Before(current); lid = lid.Add(1) {
+		_, err := certificates.GetHareOutput(pb.cdb, lid)
+		if err != nil {
+			logger.With().Warning("missing hare output for layer within hdist",
+				log.Stringer("missing_layer", lid),
+				log.Err(err))
+			return types.EmptyLayerHash
+		}
+	}
+	logger.With().Debug("hare outputs meet optimistic filtering threshold",
+		log.Stringer("from", minVerified.Add(1)),
+		log.Stringer("to", current.Sub(1)))
+
+	mesh, err := layers.GetAggregatedHash(pb.cdb, current.Sub(1))
+	if err != nil {
+		logger.With().Warning("failed to get mesh hash", log.Err(err))
+		return types.EmptyLayerHash
+	}
+	return mesh
 }
 
 func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerID) error {
@@ -290,16 +341,16 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 	logger.With().Info("eligible for proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 
-	pb.baseBallotProvider.TallyVotes(ctx, layerID)
+	pb.tortoise.TallyVotes(ctx, layerID)
 	// TODO(dshulyak) will get rid from the EncodeVotesWithCurrent option in a followup
 	// there are some dependencies in the tests
-	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
+	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
 	}
 
 	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
-	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)
+	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *opinion)
 	if err != nil {
 		logger.With().Error("failed to create new proposal", log.Err(err))
 		return err
@@ -337,9 +388,7 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 
 		case layerID := <-pb.layerTimer:
 			lyrCtx := log.WithNewSessionID(ctx)
-			if err := pb.handleLayer(lyrCtx, layerID); err != nil {
-				pb.logger.WithContext(lyrCtx).With().Warning("failed to create proposal", log.Err(err))
-			}
+			_ = pb.handleLayer(lyrCtx, layerID)
 		}
 	}
 }

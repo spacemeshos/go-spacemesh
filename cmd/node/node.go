@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -170,7 +171,7 @@ type TickProvider interface {
 	GetCurrentLayer() types.LayerID
 	StartNotifying()
 	GetGenesisTime() time.Time
-	LayerToTime(types.LayerID) time.Time
+	timesync.LayerConverter
 	Close()
 	AwaitLayer(types.LayerID) chan struct{}
 }
@@ -267,6 +268,7 @@ type App struct {
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
+	atxProvider      api.AtxProvider
 	clock            TickProvider
 	hare             HareService
 	blockGen         *blocks.Generator
@@ -435,7 +437,7 @@ func (app *App) initServices(ctx context.Context,
 	dbStorepath string,
 	sgn *signing.EdSigner,
 	layerSize uint32,
-	poetClient activation.PoetProvingServiceClient,
+	poetClients []activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32, clock TickProvider,
 ) error {
@@ -509,15 +511,9 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	processed := msh.ProcessedLayer()
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("failed to load processed layer: %w", err)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtlCfg.MeshProcessed = processed
 	trtl := tortoise.New(cdb, beaconProtocol, msh,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
@@ -535,7 +531,7 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(cdb, fetcherWrapped, beaconProtocol, msh,
+	proposalListener := proposals.NewHandler(cdb, fetcherWrapped, beaconProtocol, msh, trtl,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:      layerSize,
@@ -563,7 +559,7 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)))
 
-	fetcher := fetch.NewFetch(cdb, msh, app.host,
+	fetcher := fetch.NewFetch(cdb, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
@@ -581,8 +577,10 @@ func (app *App) initServices(ctx context.Context,
 		SyncInterval:     time.Duration(app.Config.SyncInterval) * time.Second,
 		HareDelayLayers:  app.Config.Tortoise.Zdist,
 		SyncCertDistance: app.Config.Tortoise.Hdist,
+		MaxHashesInReq:   100,
+		MaxStaleDuration: time.Hour,
 	}
-	newSyncer := syncer.NewSyncer(sqlDB, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(cdb, clock, beaconProtocol, msh, fetcher, patrol, app.certifier,
 		syncer.WithContext(ctx),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)))
@@ -615,6 +613,7 @@ func (app *App) initServices(ctx context.Context,
 		miner.WithTxsPerProposal(app.Config.TxsPerProposal),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
@@ -624,7 +623,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClient, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -686,6 +685,7 @@ func (app *App) initServices(ctx context.Context,
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
 	app.mesh = msh
+	app.atxProvider = cdb
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
@@ -829,10 +829,13 @@ func (app *App) startAPIServices(ctx context.Context) {
 		app.closers = append(app.closers, nodeService)
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
+	}
+	if apiConf.StartActivationService {
+		registerService(grpcserver.NewActivationService(app.atxProvider))
 	}
 
 	// Now that the services are registered, start the server.
@@ -1051,7 +1054,10 @@ func (app *App) Start() error {
 		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
-	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
+	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
+	for _, address := range app.Config.PoETServers {
+		poetClients = append(poetClients, activation.NewHTTPPoetClient(address))
+	}
 
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner := app.edSgn.VRFSigner()
@@ -1089,7 +1095,7 @@ func (app *App) Start() error {
 		dbStorepath,
 		app.edSgn,
 		uint32(app.Config.LayerAvgSize),
-		poetClient,
+		poetClients,
 		vrfSigner,
 		app.Config.LayersPerEpoch,
 		clock); err != nil {

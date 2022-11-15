@@ -21,11 +21,12 @@ import (
 
 type testFetch struct {
 	*Fetch
-	mh     *mocks.Mockhost
-	mAtxS  *mocks.Mockrequester
-	mLyrS  *mocks.Mockrequester
-	mOpnS  *mocks.Mockrequester
-	mHashS *mocks.Mockrequester
+	mh      *mocks.Mockhost
+	mAtxS   *mocks.Mockrequester
+	mLyrS   *mocks.Mockrequester
+	mOpnS   *mocks.Mockrequester
+	mHashS  *mocks.Mockrequester
+	mMHashS *mocks.Mockrequester
 
 	mMesh      *mocks.MockmeshProvider
 	mAtxH      *mocks.MockatxHandler
@@ -45,6 +46,7 @@ func createFetch(tb testing.TB) *testFetch {
 		mLyrS:      mocks.NewMockrequester(ctrl),
 		mOpnS:      mocks.NewMockrequester(ctrl),
 		mHashS:     mocks.NewMockrequester(ctrl),
+		mMHashS:    mocks.NewMockrequester(ctrl),
 		mAtxH:      mocks.NewMockatxHandler(ctrl),
 		mBallotH:   mocks.NewMockballotHandler(ctrl),
 		mBlocksH:   mocks.NewMockblockHandler(ctrl),
@@ -60,7 +62,7 @@ func createFetch(tb testing.TB) *testFetch {
 		3,
 	}
 	lg := logtest.New(tb)
-	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil,
+	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -71,10 +73,11 @@ func createFetch(tb testing.TB) *testFetch {
 		WithTXHandler(tf.mTxH),
 		WithPoetHandler(tf.mPoetH),
 		withServers(map[string]requester{
-			atxProtocol:     tf.mAtxS,
-			lyrDataProtocol: tf.mLyrS,
-			lyrOpnsProtocol: tf.mOpnS,
-			hashProtocol:    tf.mHashS,
+			atxProtocol:      tf.mAtxS,
+			lyrDataProtocol:  tf.mLyrS,
+			lyrOpnsProtocol:  tf.mOpnS,
+			hashProtocol:     tf.mHashS,
+			meshHashProtocol: tf.mMHashS,
 		}),
 		withHost(tf.mh))
 

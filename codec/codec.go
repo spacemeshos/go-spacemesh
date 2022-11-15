@@ -106,3 +106,13 @@ func EncodeStringSlice(w io.Writer, value []string) (int, error) {
 func DecodeStringSlice(w io.Reader) ([]string, int, error) {
 	return scale.DecodeStringSlice(scale.NewDecoder(w))
 }
+
+// EncodeByteSlice encodes []string to a buffer.
+func EncodeByteSlice(w io.Writer, value []byte) (int, error) {
+	return scale.EncodeByteSlice(scale.NewEncoder(w), value)
+}
+
+// DecodeByteSlice decodes []string from a buffer.
+func DecodeByteSlice(w io.Reader) ([]byte, int, error) {
+	return scale.DecodeByteSlice(scale.NewDecoder(w))
+}

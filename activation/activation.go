@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -23,15 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/kvstore"
-)
-
-var (
-	// ErrStopRequested is returned when builder is stopped.
-	ErrStopRequested = errors.New("builder: stop requested")
-	// ErrATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
-	ErrATXChallengeExpired = errors.New("builder: atx expired")
-	// ErrPoetServiceUnstable is returned when poet quality of service is low.
-	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -48,8 +39,8 @@ func DefaultPoetConfig() PoetConfig {
 const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
-	updatePoETProver(PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, timeout chan struct{}) (*types.NIPost, error)
+	updatePoETProvers([]PoetProvingServiceClient)
+	BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 
 type atxHandler interface {
@@ -65,6 +56,8 @@ type signer interface {
 type syncer interface {
 	RegisterForATXSynced() chan struct{}
 }
+
+//go:generate mockgen -package=mocks -destination=./mocks/activation.go . SmeshingProvider
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
@@ -87,8 +80,8 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClient atomic.UnsafePointer
-	started           *atomic.Bool
+	pendingPoetClients atomic.Pointer[[]PoetProvingServiceClient]
+	started            *atomic.Bool
 
 	signer
 	accountLock       sync.RWMutex
@@ -122,6 +115,11 @@ type Builder struct {
 	poetCfg               PoetConfig
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
+	// lastPostGenDuration is the duration that the last PoST proof
+	// took to build. It is used to predict a safe moment in time
+	// when we need to collect the PoET proofs and start building
+	// PoST to complete building NiPoST.
+	lastPostGenDuration time.Duration
 }
 
 // BuilderOption ...
@@ -182,6 +180,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.
 		log:                   log,
 		poetRetryInterval:     defaultPoetRetryInterval,
 		poetClientInitializer: defaultPoetClientFunc,
+		lastPostGenDuration:   0,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -325,10 +324,13 @@ func (b *Builder) generateProof(ctx context.Context) error {
 	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
+		startTime := time.Now()
 		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *commitmentAtx)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
+		b.lastPostGenDuration = time.Since(startTime)
+		metrics.PostDuration.Set(float64(b.lastPostGenDuration.Nanoseconds()))
 	}
 
 	return nil
@@ -382,6 +384,10 @@ func (b *Builder) waitForFirstATX(ctx context.Context) bool {
 	return true
 }
 
+func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
+	return b.pendingPoetClients.Swap(nil)
+}
+
 // loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
 	var poetRetryTimer *time.Timer
@@ -392,28 +398,26 @@ func (b *Builder) loop(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
-		client := b.pendingPoetClient.Load()
-		if client != nil {
-			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
-			// CaS here will not lose concurrent update
-			b.pendingPoetClient.CompareAndSwap(client, nil)
+		if poetClients := b.receivePendingPoetClients(); poetClients != nil {
+			b.nipostBuilder.updatePoETProvers(*poetClients)
 		}
 
 		ctx := log.WithNewSessionID(ctx)
 		if err := b.PublishActivationTx(ctx); err != nil {
-			if errors.Is(err, ErrStopRequested) {
-				return
-			}
 			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-
+			if errors.Is(err, ErrStopRequested) {
+				return
+			}
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
+				b.log.WithContext(ctx).Debug("Discarding challenge")
 				b.discardChallenge()
 				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
+				b.log.WithContext(ctx).Debug("Setting up poet retry timer")
 				if poetRetryTimer == nil {
 					poetRetryTimer = time.NewTimer(b.poetRetryInterval)
 				} else {
@@ -425,6 +429,7 @@ func (b *Builder) loop(ctx context.Context) {
 				case <-poetRetryTimer.C:
 				}
 			default:
+				b.log.WithContext(ctx).Warning("Unknown error")
 				// other failures are related to in-process software. we may as well panic here
 				currentLayer := b.layerClock.GetCurrentLayer()
 				select {
@@ -470,17 +475,29 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 }
 
 // UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
-func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
-	b.log.With().Debug("request to update poet service", log.String("target", target))
-	client := b.poetClientInitializer(target)
-	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
-	// Maybe it should be provided during update.
-	sid, err := client.PoetServiceID(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
+func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) error {
+	b.log.WithContext(ctx).With().Debug("request to update poet services",
+		log.Array("endpoints", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			for _, endpoint := range endpoints {
+				encoder.AppendString(endpoint)
+			}
+			return nil
+		})))
+
+	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		client := b.poetClientInitializer(endpoint)
+		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
+		// Maybe it should be provided during update.
+		sid, err := client.PoetServiceID(ctx)
+		if err != nil {
+			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
+		}
+		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
+		clients = append(clients, client)
 	}
-	b.pendingPoetClient.Store(unsafe.Pointer(&client))
-	b.log.With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
+
+	b.pendingPoetClients.Store(&clients)
 	return nil
 }
 
@@ -619,27 +636,64 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	b.log.With().Info("challenge ready")
 
-	pubEpoch := b.challenge.PublishEpoch()
-
 	hash, err := b.challenge.Hash()
 	if err != nil {
 		return nil, fmt.Errorf("getting challenge hash failed: %w", err)
 	}
 
-	// the following method waits for a PoET proof, which should take ~1 epoch
-	expireLayer := (pubEpoch + 2).FirstLayer()
-	atxExpired := b.layerClock.AwaitLayer(expireLayer) // this fires when the target epoch is over
+	// Calculate deadline for waiting for poet proofs.
+	// Deadline must fit between:
+	// - the end of the current poet round + grace period
+	// - the start of the next one - grace period.
+	// It must also accommodate for PoST duration.
+	// Details: https://community.spacemesh.io/t/redundant-poet-registration/310
+	//
+	//                                 PoST
+	//         ┌─────────────────────┐  ┌┐┌─────────────────────┐
+	//         │     POET ROUND      │  │││   NEXT POET ROUND   │
+	// ┌────▲──┴──────────────────┬──┴─▲┴┴┴─────────────────▲┬──┴───► time
+	// │    │      EPOCH          │    │       EPOCH        ││
+	// └────┼─────────────────────┴────┼────────────────────┼┴──────
+	//      │                          │                    │
+	//  WE ARE HERE                DEADLINE FOR       ATX PUBLICATION
+	//                           WAITING FOR POET        DEADLINE
+	//                               PROOFS
+	pubEpoch := b.challenge.PublishEpoch()
+	// NiPoST must be ready before start of the next poet round.
+	nextPoetRoundStart := b.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(b.poetCfg.PhaseShift)
+	poetRoundEnd := nextPoetRoundStart.Add(-b.poetCfg.CycleGap)
+	postDurationWithMargin := time.Duration(float64(b.lastPostGenDuration.Nanoseconds()) * 1.1)
+
+	poetProofDeadline := nextPoetRoundStart.Add(-postDurationWithMargin).Add(-b.poetCfg.GracePeriod)
+	// Safety check
+	if poetProofDeadline.Before(poetRoundEnd.Add(b.poetCfg.GracePeriod)) {
+		b.log.WithContext(ctx).With().Warning(
+			"calculated poet proof deadline is too soon",
+			log.Time("poet round end", poetRoundEnd),
+			log.Time("next poet round start", nextPoetRoundStart),
+			log.Time("deadline time", poetProofDeadline),
+			log.Duration("last PoST duration", postDurationWithMargin),
+		)
+		// Override to the earliest safe value.
+		poetProofDeadline = poetRoundEnd.Add(b.poetCfg.GracePeriod)
+	}
+
+	b.log.With().Info("building NIPost",
+		log.Stringer("pub_epoch", pubEpoch),
+		log.Time("deadline time", poetProofDeadline),
+		log.Duration("last PoST duration", postDurationWithMargin),
+	)
+
 	commitmentAtx, err := b.getCommitmentAtx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
 	}
 
-	b.log.With().Info("building NIPost", log.Stringer("pub_epoch", pubEpoch), log.Stringer("expire_layer", expireLayer))
-
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, *commitmentAtx, atxExpired)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, hash, *commitmentAtx, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
+	b.lastPostGenDuration = postDuration
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.FieldNamed("pub_epoch", pubEpoch),

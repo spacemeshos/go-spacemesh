@@ -38,8 +38,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
-	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
-		config.PoETServer, "The poet server url. (temporary) ")
+	cmd.PersistentFlags().StringArrayVar(&config.PoETServers, "poet-server",
+		config.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
 	cmd.PersistentFlags().StringVar(&config.Genesis.GenesisTime, "genesis-time",
 		config.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().StringVar(&config.Genesis.ExtraData, "genesis-extra-data",
@@ -183,17 +183,17 @@ func AddCommands(cmd *cobra.Command) {
 
 	// TODO(moshababo): add usage desc
 
-	cmd.PersistentFlags().UintVar(&config.POST.BitsPerLabel, "post-bits-per-label",
+	cmd.PersistentFlags().Uint8Var(&config.POST.BitsPerLabel, "post-bits-per-label",
 		config.POST.BitsPerLabel, "")
-	cmd.PersistentFlags().UintVar(&config.POST.LabelsPerUnit, "post-labels-per-unit",
+	cmd.PersistentFlags().Uint64Var(&config.POST.LabelsPerUnit, "post-labels-per-unit",
 		config.POST.LabelsPerUnit, "")
-	cmd.PersistentFlags().UintVar(&config.POST.MinNumUnits, "post-min-numunits",
+	cmd.PersistentFlags().Uint32Var(&config.POST.MinNumUnits, "post-min-numunits",
 		config.POST.MinNumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.POST.MaxNumUnits, "post-max-numunits",
+	cmd.PersistentFlags().Uint32Var(&config.POST.MaxNumUnits, "post-max-numunits",
 		config.POST.MaxNumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.POST.K1, "post-k1",
+	cmd.PersistentFlags().Uint32Var(&config.POST.K1, "post-k1",
 		config.POST.K1, "")
-	cmd.PersistentFlags().UintVar(&config.POST.K2, "post-k2",
+	cmd.PersistentFlags().Uint32Var(&config.POST.K2, "post-k2",
 		config.POST.K2, "")
 
 	/**======================== Smeshing Flags ========================== **/
@@ -206,9 +206,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.SMESHING.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.SMESHING.Opts.DataDir, "smeshing-opts-datadir",
 		config.SMESHING.Opts.DataDir, "")
-	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
+	cmd.PersistentFlags().Uint32Var(&config.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
 		config.SMESHING.Opts.NumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
+	cmd.PersistentFlags().Uint32Var(&config.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
 		config.SMESHING.Opts.NumFiles, "")
 	cmd.PersistentFlags().IntVar(&config.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
 		config.SMESHING.Opts.ComputeProviderID, "")

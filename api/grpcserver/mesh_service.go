@@ -205,13 +205,9 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 			return nil, err
 		}
 		for _, atx := range atxs {
-			pbatx, err := convertActivation(atx)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "error serializing activation data")
-			}
 			res.Data = append(res.Data, &pb.AccountMeshData{
 				Datum: &pb.AccountMeshData_Activation{
-					Activation: pbatx,
+					Activation: convertActivation(atx),
 				},
 			})
 		}
@@ -280,7 +276,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 	return tx
 }
 
-func convertActivation(a *types.VerifiedActivationTx) (*pb.Activation, error) {
+func convertActivation(a *types.VerifiedActivationTx) *pb.Activation {
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
@@ -288,7 +284,8 @@ func convertActivation(a *types.VerifiedActivationTx) (*pb.Activation, error) {
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
 		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
-	}, nil
+		Sequence:  a.Sequence,
+	}
 }
 
 func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
@@ -351,12 +348,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
-		pbatx, err := convertActivation(atx)
-		if err != nil {
-			log.With().Error("error serializing activation data", log.Err(err))
-			return nil, status.Errorf(codes.Internal, "error serializing activation data")
-		}
-		pbActivations = append(pbActivations, pbatx)
+		pbActivations = append(pbActivations, convertActivation(atx))
 	}
 
 	stateRoot, err := s.conState.GetLayerStateRoot(layer.Index())
@@ -480,16 +472,10 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			activation := activationEvent.(events.ActivationTx).VerifiedActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
-				pbActivation, err := convertActivation(activation)
-				if err != nil {
-					errmsg := "error serializing activation data"
-					log.With().Error(errmsg, log.Err(err))
-					return status.Errorf(codes.Internal, errmsg)
-				}
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Activation{
-							Activation: pbActivation,
+							Activation: convertActivation(activation),
 						},
 					},
 				}

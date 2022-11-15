@@ -17,13 +17,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
-	atxProtocol     = "ax/1"
-	lyrDataProtocol = "ld/1"
-	lyrOpnsProtocol = "lp/1"
-	hashProtocol    = "hs/1"
+	atxProtocol      = "ax/1"
+	lyrDataProtocol  = "ld/1"
+	lyrOpnsProtocol  = "lp/1"
+	hashProtocol     = "hs/1"
+	meshHashProtocol = "mh/1"
 
 	batchMaxSize = 20
 	cacheSize    = 1000
@@ -217,7 +219,7 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, opts ...Option) *Fetch {
+func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, host *p2p.Host, opts ...Option) *Fetch {
 	bs := datastore.NewBlobStore(cdb.Database)
 	f := &Fetch{
 		cfg:             DefaultConfig(),
@@ -236,24 +238,17 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, host *p2p.Host, opts ..
 	}
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
+	srvOpts := []server.Opt{
+		server.WithTimeout(f.cfg.RequestTimeout),
+		server.WithLog(f.logger),
+	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, f.logger)
-		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochATXIDsReq,
-			server.WithTimeout(f.cfg.RequestTimeout),
-			server.WithLog(f.logger),
-		)
-		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq,
-			server.WithTimeout(f.cfg.RequestTimeout),
-			server.WithLog(f.logger),
-		)
-		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq,
-			server.WithTimeout(f.cfg.RequestTimeout),
-			server.WithLog(f.logger),
-		)
-		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq,
-			server.WithTimeout(f.cfg.RequestTimeout),
-			server.WithLog(f.logger),
-		)
+		h := newHandler(cdb, bs, msh, b, f.logger)
+		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
+		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
+		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
+		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
+		f.servers[meshHashProtocol] = server.New(host, meshHashProtocol, h.handleMeshHashReq, srvOpts...)
 	}
 	return f
 }

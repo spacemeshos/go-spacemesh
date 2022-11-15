@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -35,7 +36,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 	first := currentLayer(tctx, t, cl.Client(0))
 	// TODO fetch epoch size from API
-	first = nextFirstLayer(first, 4)
+	first = nextFirstLayer(first, layersPerEpoch)
 	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
@@ -110,7 +111,7 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*spacemeshv1.Pr
 		for layer, proposals := range reference {
 			require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
 			for i := range proposals {
-				require.Equal(tb, proposals[i].Id, included[layer][i].Id, "client=%d layer=%d", i, layer)
+				assert.Equal(tb, proposals[i].Id, included[layer][i].Id, "client=%d layer=%d", i, layer)
 			}
 		}
 	}
@@ -130,7 +131,7 @@ func requireEqualEligibilities(tb testing.TB, proposals map[uint32][]*spacemeshv
 		if referenceEligibilities < 0 {
 			referenceEligibilities = eligibilities
 		} else {
-			require.Equal(tb, referenceEligibilities, eligibilities, prettyHex([]byte(smesher)))
+			assert.Equal(tb, referenceEligibilities, eligibilities, prettyHex([]byte(smesher)))
 		}
 	}
 }

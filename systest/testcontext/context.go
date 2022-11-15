@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	chaosoperatorv1alpha1 "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -239,7 +239,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		ns = "test-" + rngName()
 	}
 	scheme := runtime.NewScheme()
-	require.NoError(t, chaosoperatorv1alpha1.AddToScheme(scheme))
+	require.NoError(t, chaos.AddToScheme(scheme))
 
 	generic, err := client.New(config, client.Options{Scheme: scheme})
 	require.NoError(t, err)

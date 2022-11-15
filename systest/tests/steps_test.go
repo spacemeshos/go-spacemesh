@@ -45,14 +45,17 @@ func TestStepRedeployPoets(t *testing.T) {
 
 	require.Zero(t, cl.Poets())
 	tctx.Log.Debug("adding poet servers")
-	require.NoError(t, cl.AddPoet(tctx))
+	require.NoError(t, cl.AddPoets(tctx))
+
+	poetEndpoints := make([]string, 0, tctx.PoetSize)
+	for i := 0; i < tctx.PoetSize; i++ {
+		poetEndpoints = append(poetEndpoints, cluster.MakePoetEndpoint(i))
+	}
 
 	for i := 0; i < cl.Total(); i++ {
 		node := cl.Client(i)
-		idx := i % tctx.PoetSize
-		target := cluster.MakePoetEndpoint(idx)
-		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poet", target)
-		updated, err := updatePoetServer(tctx, node, target)
+		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poets", poetEndpoints)
+		updated, err := updatePoetServers(tctx, node, poetEndpoints)
 		require.NoError(t, err)
 		require.True(t, updated)
 	}
@@ -62,18 +65,23 @@ func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
+	require.Greater(t, cl.Bootnodes(), 1)
 
 	var (
 		enable = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
 		stop   = enable + 2
 	)
-	split := int(0.9 * float64(cl.Total()))
+	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
+	split := int(0.9*float64(cl.Total())) + 1
 
 	eg, ctx := errgroup.WithContext(tctx)
 	client := cl.Client(0)
 	scheduleChaos(ctx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
-		var left, right []string
-		for i := 0; i < cl.Total(); i++ {
+		var (
+			left  []string
+			right = []string{cl.Client(0).Name}
+		)
+		for i := 1; i < cl.Total(); i++ {
 			if i < split {
 				left = append(left, cl.Client(i).Name)
 			} else {

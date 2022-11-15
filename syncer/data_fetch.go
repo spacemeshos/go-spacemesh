@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -12,6 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
+
+const pollTimeOut = 30 * time.Second
 
 var (
 	errNoPeers = errors.New("no peers")
@@ -48,27 +51,33 @@ type (
 
 // DataFetch contains the logic of fetching mesh data.
 type DataFetch struct {
-	logger  log.Log
-	msh     meshProvider
-	fetcher fetcher
+	fetcher
+
+	logger log.Log
+	msh    meshProvider
 }
 
 // NewDataFetch creates a new DataFetch instance.
 func NewDataFetch(msh meshProvider, fetch fetcher, lg log.Log) *DataFetch {
 	return &DataFetch{
+		fetcher: fetch,
 		logger:  lg,
 		msh:     msh,
-		fetcher: fetch,
 	}
 }
 
 // PollLayerData polls all peers for data in the specified layer.
-func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID) error {
-	peers := d.fetcher.GetPeers()
+func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
+	if len(peers) == 0 {
+		peers = d.fetcher.GetPeers()
+	}
 	if len(peers) == 0 {
 		return errNoPeers
 	}
 
+	ctx2, cancel := context.WithTimeout(ctx, pollTimeOut)
+	defer cancel()
+	logger := d.logger.WithContext(ctx2).WithFields(lid)
 	req := &dataRequest{
 		lid:   lid,
 		peers: peers,
@@ -79,17 +88,16 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID) error 
 		ch: make(chan peerResult[fetch.LayerData], len(peers)),
 	}
 	okFunc := func(data []byte, peer p2p.Peer) {
-		d.receiveData(ctx, req, peer, data, nil)
+		d.receiveData(ctx2, req, peer, data, nil)
 	}
 	errFunc := func(err error, peer p2p.Peer) {
-		d.receiveData(ctx, req, peer, nil, err)
+		d.receiveData(ctx2, req, peer, nil, err)
 	}
-	if err := d.fetcher.GetLayerData(ctx, peers, lid, okFunc, errFunc); err != nil {
+	if err := d.fetcher.GetLayerData(ctx2, peers, lid, okFunc, errFunc); err != nil {
 		return err
 	}
 
 	req.peerResults = map[p2p.Peer]peerResult[fetch.LayerData]{}
-	logger := d.logger.WithContext(ctx).WithFields(lid)
 	var (
 		success      bool
 		candidateErr error
@@ -97,10 +105,13 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID) error 
 	for {
 		select {
 		case res := <-req.ch:
+			logger.Debug("received layer data")
 			req.peerResults[res.peer] = res
 			if res.err == nil {
 				success = true
-				fetchLayerData(ctx, logger, d.fetcher, req, res.data)
+				logger.Debug("fetching layer data")
+				fetchLayerData(ctx2, logger, d.fetcher, req, res.data)
+				logger.Debug("fetched layer data")
 			} else if candidateErr == nil {
 				candidateErr = res.err
 			}
@@ -112,10 +123,11 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID) error 
 				candidateErr = nil
 			}
 			if candidateErr == nil && len(req.response.blocks) == 0 {
-				d.msh.SetZeroBlockLayer(ctx, req.lid)
+				d.msh.SetZeroBlockLayer(ctx2, req.lid)
 			}
 			return candidateErr
-		case <-ctx.Done():
+		case <-ctx2.Done():
+			logger.Warning("request timed out")
 			return errTimeout
 		}
 	}
@@ -139,6 +151,7 @@ func (d *DataFetch) receiveData(ctx context.Context, req *dataRequest, peer p2p.
 	select {
 	case req.ch <- result:
 	case <-ctx.Done():
+		logger.Warning("request timed out")
 	}
 }
 
@@ -215,18 +228,22 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 	if len(peers) == 0 {
 		return nil, errNoPeers
 	}
+
+	ctx2, cancel := context.WithTimeout(ctx, pollTimeOut)
+	defer cancel()
+	logger := d.logger.WithContext(ctx2).WithFields(lid)
 	req := &opinionRequest{
 		lid:   lid,
 		peers: peers,
 		ch:    make(chan peerResult[fetch.LayerOpinion], len(peers)),
 	}
 	okFunc := func(data []byte, peer p2p.Peer) {
-		d.receiveOpinions(ctx, req, peer, data, nil)
+		d.receiveOpinions(ctx2, req, peer, data, nil)
 	}
 	errFunc := func(err error, peer p2p.Peer) {
-		d.receiveOpinions(ctx, req, peer, nil, err)
+		d.receiveOpinions(ctx2, req, peer, nil, err)
 	}
-	if err := d.fetcher.GetLayerOpinions(ctx, peers, lid, okFunc, errFunc); err != nil {
+	if err := d.fetcher.GetLayerOpinions(ctx2, peers, lid, okFunc, errFunc); err != nil {
 		return nil, err
 	}
 	req.peerResults = map[p2p.Peer]peerResult[fetch.LayerOpinion]{}
@@ -252,7 +269,8 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 				candidateErr = nil
 			}
 			return req.response.opinions, candidateErr
-		case <-ctx.Done():
+		case <-ctx2.Done():
+			logger.Warning("request timed out")
 			return nil, errTimeout
 		}
 	}
@@ -277,56 +295,24 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	select {
 	case req.ch <- result:
 	case <-ctx.Done():
+		logger.Warning("request timed out")
 	}
-}
-
-type epochAtxRes struct {
-	err    error
-	atxIDs []types.ATXID
 }
 
 // GetEpochATXs fetches all ATXs in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
-	resCh := make(chan epochAtxRes, 1)
 	peers := d.fetcher.GetPeers()
 	if len(peers) == 0 {
 		return errNoPeers
 	}
 	peer := peers[rand.Intn(len(peers))]
-	okFunc := func(data []byte) {
-		atxIDs, err := codec.DecodeSlice[types.ATXID](data)
-		resCh <- epochAtxRes{
-			err:    err,
-			atxIDs: atxIDs,
-		}
+	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
+	if err != nil {
+		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
-	errFunc := func(err error) {
-		resCh <- epochAtxRes{
-			err: err,
-		}
-	}
-	if err := d.fetcher.GetEpochATXIDs(ctx, peer, epoch, okFunc, errFunc); err != nil {
-		return fmt.Errorf("get ATXIDs (peer %v): %w", peer, err)
-	}
-	var res epochAtxRes
-	select {
-	case res = <-resCh:
-		break
-	case <-ctx.Done():
-		return errTimeout
-	}
-	if res.err != nil {
-		return res.err
-	}
-
-	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(res.atxIDs))
-	if err := d.fetcher.GetAtxs(ctx, res.atxIDs); err != nil {
+	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
+	if err := d.fetcher.GetAtxs(ctx, ed.AtxIDs); err != nil {
 		return fmt.Errorf("get ATXs: %w", err)
 	}
 	return nil
-}
-
-// GetBlocks fetches all blocks specified in the list of BlockID.
-func (d *DataFetch) GetBlocks(ctx context.Context, bids []types.BlockID) error {
-	return d.fetcher.GetBlocks(ctx, bids)
 }

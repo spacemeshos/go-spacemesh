@@ -136,7 +136,7 @@ func (m *MocknipostValidator) EXPECT() *MocknipostValidatorMockRecorder {
 }
 
 // Validate mocks base method.
-func (m *MocknipostValidator) Validate(commitment []byte, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) (uint64, error) {
+func (m *MocknipostValidator) Validate(commitment []byte, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validate", commitment, NIPost, expectedChallenge, numUnits)
 	ret0, _ := ret[0].(uint64)
@@ -151,7 +151,7 @@ func (mr *MocknipostValidatorMockRecorder) Validate(commitment, NIPost, expected
 }
 
 // ValidatePost mocks base method.
-func (m *MocknipostValidator) ValidatePost(commitment []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+func (m *MocknipostValidator) ValidatePost(commitment []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidatePost", commitment, Post, PostMetadata, numUnits)
 	ret0, _ := ret[0].(error)

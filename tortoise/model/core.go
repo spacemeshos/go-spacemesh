@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -90,7 +91,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		ballot := &types.Ballot{}
 		ballot.LayerIndex = ev.LayerID
-		ballot.Votes = *votes
+		ballot.Votes = votes.Votes
+		ballot.OpinionHash = votes.Hash
 		ballot.AtxID = c.atx
 		for i := uint32(0); i < c.eligibilities; i++ {
 			ballot.EligibilityProofs = append(ballot.EligibilityProofs, types.VotingEligibilityProof{J: i})
@@ -113,7 +115,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				Beacon:    beacon,
 			}
 		}
-		ballot.Signature = c.signer.Sign(ballot.Bytes())
+		ballot.Signature = c.signer.Sign(ballot.SignedBytes())
 		ballot.Initialize()
 		if c.refBallot == nil {
 			id := ballot.ID()
@@ -134,7 +136,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, nil, uint(c.units), nil)
+		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil)
 		if err := activation.SignAtx(c.signer, atx); err != nil {
 			panic(err)
 		}
@@ -151,7 +153,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
-			layers.SetHareOutput(c.cdb, ev.Block.LayerIndex, ev.Block.ID())
+			certificates.SetHareOutput(c.cdb, ev.Block.LayerIndex, ev.Block.ID())
 		}
 		blocks.Add(c.cdb, ev.Block)
 	case MessageBallot:

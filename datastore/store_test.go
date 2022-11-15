@@ -63,7 +63,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	bs := NewBlobStore(db)
 
 	blt := types.RandomBallot()
-	blt.Signature = signing.NewEdSigner().Sign(blt.Bytes())
+	blt.Signature = signing.NewEdSigner().Sign(blt.SignedBytes())
 	require.NoError(t, blt.Initialize())
 
 	_, err := bs.Get(BallotDB, blt.ID().Bytes())
@@ -131,7 +131,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	blt := types.RandomBallot()
-	blt.Signature = signer.Sign(blt.Bytes())
+	blt.Signature = signer.Sign(blt.SignedBytes())
 	p := types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *blt,

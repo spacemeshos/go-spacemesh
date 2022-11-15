@@ -16,10 +16,9 @@ var conv = LayerConv{
 }
 
 type mockConv struct {
-	next         types.LayerID
-	countToLayer int
-	t            time.Time
-	countToTime  int
+	next        types.LayerID
+	t           time.Time
+	countToTime int
 }
 
 func newMockConv(l types.LayerID, t time.Time) *mockConv {
@@ -32,7 +31,6 @@ func newMockConv(l types.LayerID, t time.Time) *mockConv {
 func (m *mockConv) TimeToLayer(time.Time) types.LayerID {
 	defer func() {
 		m.next = m.next.Add(1)
-		m.countToLayer++
 	}()
 	return m.next
 }
@@ -71,13 +69,11 @@ func TestTicker_StartNotifying(t *testing.T) {
 	mc := newMockConv(types.NewLayerID(1), cl.Now())
 	tr := NewTicker(cl, mc)
 	_, e := tr.Notify()
-	r.Equal(1, mc.countToLayer)
 	r.Equal(errNotStarted, e)
 	tr.StartNotifying()
 	r.True(tr.started)
 	_, e = tr.Notify()
 	r.NoError(e)
-	r.Equal(3, mc.countToLayer)
 }
 
 func TestTicker_Notify(t *testing.T) {

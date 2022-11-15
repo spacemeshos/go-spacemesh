@@ -2,7 +2,6 @@ package activation
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/spacemeshos/merkle-tree"
 	phash "github.com/spacemeshos/poet/hash"
@@ -11,25 +10,20 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
 
-type poetProofKey [hash.Size]byte
-
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB                     *sql.Database
-	poetProofRefSubscriptions map[poetProofKey][]chan types.PoetProofRef
-	log                       log.Log
-	mu                        sync.Mutex
+	sqlDB *sql.Database
+	log   log.Log
 }
 
 // NewPoetDb returns a new PoET handler.
 func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
-	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan types.PoetProofRef), log: log}
+	return &PoetDb{sqlDB: db, log: log}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -108,57 +102,15 @@ func (db *PoetDb) StoreProof(ref types.PoetProofRef, proofMessage *types.PoetPro
 		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),
 	)
 
-	key := makeKey(proofMessage.PoetServiceID, proofMessage.RoundID)
-	db.publishProofRef(key, ref)
-
 	return nil
 }
 
-// SubscribeToProofRef returns a channel that PoET proof ref for the requested PoET ID and round ID will be sent. If the
-// proof is already available it will be sent immediately, otherwise it will be sent when available.
-func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan types.PoetProofRef {
-	key := makeKey(poetID, roundID)
-	ch := make(chan types.PoetProofRef, 1)
-	db.addSubscription(key, ch)
-
-	if poetProofRef, err := db.getProofRef(poetID, roundID); err == nil {
-		db.publishProofRef(key, poetProofRef)
-	}
-
-	return ch
-}
-
-func (db *PoetDb) addSubscription(key poetProofKey, ch chan types.PoetProofRef) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
-}
-
-// UnsubscribeFromProofRef removes all subscriptions from a given poetID and roundID. This method should be used with
-// caution since any subscribers still waiting will now hang forever. TODO: only cancel specific subscription.
-func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
-}
-
-func (db *PoetDb) getProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
+func (db *PoetDb) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef, error) {
 	proofRef, err := poets.GetRef(db.sqlDB, poetID, roundID)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %w", poetID[:5], roundID, err)
 	}
 	return proofRef, nil
-}
-
-func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef types.PoetProofRef) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, ch := range db.poetProofRefSubscriptions[key] {
-		ch <- poetProofRef
-		close(ch)
-	}
-	delete(db.poetProofRefSubscriptions, key)
 }
 
 // GetProofMessage returns the originally received PoET proof message.
@@ -188,18 +140,13 @@ func (db *PoetDb) GetMembershipMap(proofRef types.PoetProofRef) (map[types.Hash3
 func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef[:5], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef[:5], err)
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
 	return &proofMessage.PoetProof, nil
-}
-
-func makeKey(poetID []byte, roundID string) poetProofKey {
-	sum := hash.Sum(append(poetID[:], []byte(roundID)...))
-	return sum
 }
 
 func membershipSliceToMap(membership [][]byte) map[types.Hash32]bool {

@@ -7,17 +7,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
-	sigBytes := make([]byte, sig.Len())
-	if _, err := sig.Read(sigBytes); err != nil {
-		if err != io.EOF {
-			return nil, fmt.Errorf("copy sig: %w", err)
-		}
-		sigBytes = nil
-	}
+func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
 	pubkeyBytes := make([]byte, pubkey.Len())
 	if _, err := pubkey.Read(pubkeyBytes); err != nil {
 		if err != io.EOF {
@@ -25,13 +19,14 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious 
 		}
 		pubkeyBytes = nil
 	}
-	inner := types.InnerBallot{}
-	if _, err := codec.DecodeFrom(body, &inner); err != nil {
+	ballot := types.Ballot{}
+	if _, err := codec.DecodeFrom(body, &ballot); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("decode body of the %s: %w", id, err)
 		}
 	}
-	ballot := types.NewExistingBallot(id, sigBytes, pubkeyBytes, inner)
+	ballot.SetID(id)
+	ballot.SetSmesherID(signing.NewPublicKey(pubkeyBytes))
 	if malicious {
 		ballot.SetMalicious()
 	}
@@ -40,17 +35,16 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious 
 
 // Add ballot to the database.
 func Add(db sql.Executor, ballot *types.Ballot) error {
-	bytes, err := codec.Encode(&ballot.InnerBallot)
+	bytes, err := codec.Encode(ballot)
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
 	if _, err := db.Exec(`insert into ballots 
-		(id, layer, signature, pubkey, ballot) 
-		values (?1, ?2, ?3, ?4, ?5);`,
+		(id, layer, pubkey, ballot) 
+		values (?1, ?2, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
 			stmt.BindInt64(2, int64(ballot.LayerIndex.Value))
-			stmt.BindBytes(3, ballot.Signature)
 			stmt.BindBytes(4, ballot.SmesherID().Bytes())
 			stmt.BindBytes(5, bytes)
 		}, nil); err != nil {
@@ -74,7 +68,7 @@ func Has(db sql.Executor, id types.BallotID) (bool, error) {
 
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if rows, err := db.Exec(`select signature, pubkey, ballot, identities.malicious 
+	if rows, err := db.Exec(`select pubkey, ballot, identities.malicious 
 	from ballots left join identities using(pubkey)
 	where id = ?1;`,
 		func(stmt *sql.Statement) {
@@ -83,8 +77,7 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 			rst, err = decodeBallot(id,
 				stmt.ColumnReader(0),
 				stmt.ColumnReader(1),
-				stmt.ColumnReader(2),
-				stmt.ColumnInt(3) > 0,
+				stmt.ColumnInt(2) > 0,
 			)
 			return true
 		}); err != nil {
@@ -97,7 +90,7 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 
 // Layer returns full body ballot for layer.
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if _, err = db.Exec(`select id, signature, pubkey, ballot, identities.malicious
+	if _, err = db.Exec(`select id, pubkey, ballot, identities.malicious
 		from ballots left join identities using(pubkey)
 		where layer = ?1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Value))
@@ -108,8 +101,7 @@ func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) 
 		ballot, err = decodeBallot(id,
 			stmt.ColumnReader(1),
 			stmt.ColumnReader(2),
-			stmt.ColumnReader(3),
-			stmt.ColumnInt(4) > 0,
+			stmt.ColumnInt(3) > 0,
 		)
 		if err != nil {
 			return false
