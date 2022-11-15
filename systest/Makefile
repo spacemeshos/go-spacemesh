@@ -46,7 +46,7 @@ config:
 	@kubectl create configmap $(configname) \
 		--from-file=smesher=$(smesher_config) --from-file=poet=$(poet_config) \
 		--from-literal=cluster-size=$(size) \
-		--from-literal=bootsrap-duration=$(bootstrap) \
+		--from-literal=bootstrap-duration=$(bootstrap) \
 		--from-literal=namespace=$(namespace) \
 		--from-literal=storage=$(storage) \
 		--from-literal=node-selector=$(node_selector) \
