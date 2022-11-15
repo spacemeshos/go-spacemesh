@@ -248,7 +248,6 @@ func nodeLabels(name string, id string) map[string]string {
 		// app identifies resource kind (Node, Poet).
 		// It can be used to select all Pods of given kind.
 		"app": name,
-		name:  "true",
 		// id uniquely identifies a resource (i.e. poet-0).
 		"id": id,
 	}
@@ -276,6 +275,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
 			labels[fmt.Sprintf("bucket-%d", i%buckets)] = "true"
+			labels["spacemesh"] = "true"
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}

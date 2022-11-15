@@ -19,8 +19,7 @@ spec:
       mode: all
       selector:
         labelSelectors:
-          "boot": "true"
-          "smesher": "true"
+          "spacemesh": "true"
 ---
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Schedule
@@ -44,5 +43,4 @@ spec:
       mode: all
       selector:
         labelSelectors:
-          "boot": "true"
-          "smesher": "true"
+          "spacemesh": "true"
