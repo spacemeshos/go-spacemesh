@@ -8,12 +8,12 @@ type Closer struct {
 }
 
 // NewCloser creates a new (not closed) closer.
+// DEPRECATED: use context.WithCancel.
 func NewCloser() Closer {
 	return Closer{make(chan struct{})}
 }
 
 // Close signals all listening instances to close.
-// Note: should be called only once.
 func (closer *Closer) Close() {
 	select {
 	case <-closer.channel:
