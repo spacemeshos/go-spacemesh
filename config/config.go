@@ -92,8 +92,6 @@ type BaseConfig struct {
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
-	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
-
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
 
 	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
