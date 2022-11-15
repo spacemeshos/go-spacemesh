@@ -1,34 +1,17 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Schedule
 metadata:
-  name: short-failure-every-20m
+  name: short-failure-every-30m
 spec:
-  schedule: "*/20 * * * *"
+  schedule: "*/30 * * * *"
   historyLimit: 2
   type: "PodChaos"
   podChaos:
     action: pod-failure
-    mode: fixed
-    value: "3"
+    mode: all
     selector:
-      labelSelectors:
-        "bucket-2": "true"
+      expressionSelectors:
+        - key: bucket
+          operator: In
+          values: ["2"]
     duration: "60s"
----
-apiVersion: chaos-mesh.org/v1alpha1
-kind: Schedule
-metadata:
-  name: long-failure-every-2h
-spec:
-  schedule: "0 */2 * * *"
-  historyLimit: 2
-  concurrencyPolicy: "Allow"
-  type: "PodChaos"
-  podChaos:
-    action: pod-failure
-    mode: fixed
-    value: "2"
-    selector:
-      labelSelectors:
-        "bucket-3": "true"
-    duration: "2h"

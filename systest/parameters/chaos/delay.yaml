@@ -6,8 +6,10 @@ spec:
   action: delay
   mode: all
   selector:
-    labelSelectors:
-      "spacemesh": "true"
+    expressionSelectors:
+      - key: app
+        operator: In
+        values: ["boot", "smesher"]
   direction: to
   delay:
     latency: "50ms"

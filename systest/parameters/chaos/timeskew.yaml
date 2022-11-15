@@ -5,8 +5,10 @@ metadata:
 spec:
   mode: all
   selector:
-    labelSelectors:
-      "bucket-4": "true"
+    expressionSelectors:
+      - key: bucket
+        operator: In
+        values: ["4"]
   timeOffset: '400ms'
 ---
 apiVersion: chaos-mesh.org/v1alpha1
@@ -16,6 +18,8 @@ metadata:
 spec:
   mode: all
   selector:
-    labelSelectors:
-      "bucket-5": "true"
+    expressionSelectors:
+      - key: bucket
+        operator: In
+        values: ["5"]
   timeOffset: '-400ms'

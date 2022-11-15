@@ -6,8 +6,10 @@ spec:
   action: bandwidth
   mode: all
   selector:
-    labelSelectors:
-      "spacemesh": "true"
+    expressionSelectors:
+      - key: app
+        operator: In
+        values: ["boot", "smesher"]
   direction: to
   bandwidth:
     rate: "10mbps"

@@ -12,14 +12,18 @@ spec:
     mode: fixed
     value: "5"
     selector:
-      labelSelectors:
-        "bucket-0": "true"
+      expressionSelectors:
+        - key: bucket
+          operator: In
+          values: ["0"]
     direction: to
     target:
       mode: all
       selector:
-        labelSelectors:
-          "spacemesh": "true"
+        expressionSelectors:
+          - key: app
+            operator: In
+            values: ["boot", "smesher"]
 ---
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Schedule
@@ -36,11 +40,15 @@ spec:
     mode: fixed
     value: "2"
     selector:
-      labelSelectors:
-        "bucket-1": "true"
+      expressionSelectors:
+        - key: bucket
+          operator: In
+          values: ["1"]
     direction: to
     target:
       mode: all
       selector:
-        labelSelectors:
-          "spacemesh": "true"
+        expressionSelectors:
+          - key: app
+            operator: In
+            values: ["boot", "smesher"]
