@@ -2632,6 +2632,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		encoded, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(last))
 		require.NoError(t, err)
 		ballot, err := ballots.Get(s.GetState(0).DB, encoded.Base)
+		require.NoError(t, err)
 		require.NotEqual(t, last, ballot.LayerIndex)
 	})
 	t.Run("decode", func(t *testing.T) {
