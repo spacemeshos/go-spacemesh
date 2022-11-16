@@ -666,10 +666,12 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 	msh.setLatestLayer(logger, block.LayerIndex)
 	logger.Debug("associated txs to block")
 
+	// add block to the tortoise before storing it
+	// otherwise fetcher will not wait until data is stored in the tortoise
+	msh.trtl.OnBlock(block)
 	if err := blocks.Add(msh.cdb, block); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		return err
 	}
-	msh.trtl.OnBlock(block)
 	return nil
 }
 
