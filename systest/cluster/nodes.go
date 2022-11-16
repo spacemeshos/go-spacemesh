@@ -398,7 +398,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							).
 							WithLimits(
 								v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("0.2"),
+									v1.ResourceCPU:    resource.MustParse("1"),
 									v1.ResourceMemory: resource.MustParse("400Mi"),
 								},
 							),
