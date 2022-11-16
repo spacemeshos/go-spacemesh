@@ -142,7 +142,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 		current = *conf.current
 	}
 
-	for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
+	for lid := t.evicted.Add(1); lid.Before(current); lid = lid.Add(1) {
 		for _, ballot := range t.layer(lid).ballots {
 			if ballot.weight.IsNil() {
 				continue
@@ -705,6 +705,10 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 			)
 			return nil, nil
 		}
+	}
+	if !base.layer.Before(ballot.LayerIndex) {
+		return nil, fmt.Errorf("votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
+			ballot.LayerIndex, ballot.ID(), base.layer, base.id)
 	}
 
 	if ballot.EpochData != nil {
