@@ -3,7 +3,6 @@ package activation
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/spacemeshos/poet/integration"
 	"github.com/spacemeshos/poet/release/proto/go/rpc/api"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -107,8 +108,8 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) ([]byte, error) {
 	return resBody.ServicePubKey, nil
 }
 
-func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, reqBody interface{}, resBody interface{}) error {
-	jsonReqBody, err := json.Marshal(reqBody)
+func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, reqBody proto.Message, resBody proto.Message) error {
+	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("request json marshal failure: %v", err)
 	}
@@ -131,13 +132,16 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	}
 	defer res.Body.Close()
 
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body (%w)", err)
+	}
 	if res.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("response status code: %d, body: %s", res.StatusCode, string(data))
 	}
 
 	if resBody != nil {
-		if err := json.NewDecoder(res.Body).Decode(resBody); err != nil {
+		if err := protojson.Unmarshal(data, resBody); err != nil {
 			return fmt.Errorf("response json decode failure: %v", err)
 		}
 	}

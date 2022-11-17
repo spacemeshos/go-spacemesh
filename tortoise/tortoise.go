@@ -321,7 +321,10 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
 	}
-	decoded := t.decodeExceptions(current, base, &conditions{}, votes)
+	decoded, err := t.decodeExceptions(current, base, &conditions{}, votes)
+	if err != nil {
+		return nil, err
+	}
 	return &types.Opinion{
 		Hash:  decoded.opinion(),
 		Votes: votes,
@@ -706,6 +709,10 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 			return nil, nil
 		}
 	}
+	if !base.layer.Before(ballot.LayerIndex) {
+		return nil, fmt.Errorf("votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
+			ballot.LayerIndex, ballot.ID(), base.layer, base.id)
+	}
 
 	if ballot.EpochData != nil {
 		beacon := ballot.EpochData.Beacon
@@ -759,7 +766,11 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		layer:     ballot.LayerIndex,
 		weight:    weight,
 	}
-	binfo.votes = t.decodeExceptions(binfo.layer, base, &binfo.conditions, ballot.Votes)
+	var err error
+	binfo.votes, err = t.decodeExceptions(binfo.layer, base, &binfo.conditions, ballot.Votes)
+	if err != nil {
+		return nil, err
+	}
 	t.logger.With().Debug("decoded exceptions",
 		binfo.id, binfo.layer,
 		log.Stringer("opinion", binfo.opinion()),
@@ -801,13 +812,13 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 	return false, nil
 }
 
-func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) votes {
+func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) (votes, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
 	for _, svote := range exceptions.Support {
 		block, exist := t.blockRefs[svote.ID]
 		if !exist {
-			continue
+			return votes{}, fmt.Errorf("block %s not in state", svote.ID)
 		}
 		if block.layer.Before(from) {
 			from = block.layer
@@ -822,7 +833,7 @@ func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *co
 	for _, avote := range exceptions.Against {
 		block, exist := t.blockRefs[avote.ID]
 		if !exist {
-			continue
+			return votes{}, fmt.Errorf("block %s not in state", avote.ID)
 		}
 		if block.layer.Before(from) {
 			from = block.layer
@@ -866,7 +877,7 @@ func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *co
 		}
 		decoded.append(&lvote)
 	}
-	return decoded
+	return decoded, nil
 }
 
 func withinDistance(dist uint32, lid, last types.LayerID) bool {

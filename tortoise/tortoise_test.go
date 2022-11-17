@@ -832,6 +832,26 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 	})
 }
 
+func TestDecodeVotes(t *testing.T) {
+	t.Run("without block in state", func(t *testing.T) {
+		s := sim.New()
+		s.Setup()
+		cfg := defaultTestConfig()
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		last := s.Next()
+		tortoise.TallyVotes(context.TODO(), last)
+		ballots, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		ballot := types.NewExistingBallot(
+			types.BallotID{3, 3, 3}, nil, nil,
+			ballots[0].InnerBallot,
+		)
+		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
+		_, err = tortoise.DecodeBallot(&ballot)
+		require.ErrorContains(t, err, "not in state")
+	})
+}
+
 // gapVote will skip one layer in voting.
 func gapVote(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 	return skipLayers(1)(rng, layers, i)
@@ -2611,6 +2631,52 @@ func TestEncodeVotes(t *testing.T) {
 		hasher.WritePrevious(rst)
 		hasher.WriteAbstain()
 		require.Equal(t, hasher.Sum(nil), rewritten.Hash[:])
+	})
+}
+
+func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
+	t.Run("encode", func(t *testing.T) {
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+		s.Setup()
+		tortoise := tortoiseFromSimState(
+			s.GetState(0),
+			WithConfig(cfg),
+			WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i < 4; i++ {
+			last = s.Next()
+		}
+		tortoise.TallyVotes(ctx, last)
+		encoded, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(last))
+		require.NoError(t, err)
+		ballot, err := ballots.Get(s.GetState(0).DB, encoded.Base)
+		require.NoError(t, err)
+		require.NotEqual(t, last, ballot.LayerIndex)
+	})
+	t.Run("decode", func(t *testing.T) {
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+		s.Setup()
+		tortoise := tortoiseFromSimState(
+			s.GetState(0),
+			WithConfig(cfg),
+			WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i < 4; i++ {
+			last = s.Next()
+		}
+		tortoise.TallyVotes(ctx, last)
+		ballots, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		ballot := types.NewExistingBallot(types.BallotID{1}, nil, nil, ballots[0].InnerBallot)
+		ballot.Votes.Base = ballots[1].ID()
+		_, err = tortoise.DecodeBallot(&ballot)
+		require.ErrorContains(t, err, "votes for ballot")
 	})
 }
 
