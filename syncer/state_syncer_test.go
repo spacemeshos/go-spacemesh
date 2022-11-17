@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -64,7 +65,7 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ types.LayerID, gotC *types.Certificate) error {
 				require.Equal(t, adopted[lid], gotC.BlockID)
-				require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, lid, gotC))
+				require.NoError(t, certificates.Add(ts.cdb, lid, gotC))
 				return nil
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
@@ -142,7 +143,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			// saves opinions
 			if tc.localCert != types.EmptyBlockID {
 				require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(tc.localCert, types.InnerBlock{LayerIndex: lid})))
-				require.NoError(t, layers.SetHareOutputWithCert(ts.cdb, lid, &types.Certificate{BlockID: tc.localCert}))
+				require.NoError(t, certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: tc.localCert}))
 				require.NoError(t, blocks.SetValid(ts.cdb, tc.localCert))
 				ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got *types.Block) error {
@@ -170,16 +171,6 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			require.False(t, ts.syncer.stateSynced())
 			require.NoError(t, ts.syncer.processLayers(context.TODO()))
 			require.True(t, ts.syncer.stateSynced())
-
-			if hasCert && tc.fetchErr == nil && tc.certErr == nil {
-				certified, err := layers.GetCert(ts.cdb, lid)
-				require.NoError(t, err)
-				if tc.localCert != types.EmptyBlockID {
-					require.Equal(t, tc.localCert, certified.BlockID)
-				} else {
-					require.Equal(t, tc.opns[1].Cert, certified)
-				}
-			}
 		})
 	}
 }

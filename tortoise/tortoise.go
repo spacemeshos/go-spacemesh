@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
@@ -513,7 +514,7 @@ func (t *turtle) loadBlocksData(lid types.LayerID) error {
 }
 
 func (t *turtle) loadHare(lid types.LayerID) error {
-	output, err := layers.GetHareOutput(t.cdb, lid)
+	output, err := certificates.GetHareOutput(t.cdb, lid)
 	if err == nil {
 		t.onHareOutput(lid, output)
 		return nil

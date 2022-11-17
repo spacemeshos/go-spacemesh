@@ -26,8 +26,6 @@ CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,
     weak_coin       SMALL INT,
-    hare_output     VARCHAR,
-    cert            BLOB,
     processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
@@ -35,6 +33,15 @@ CREATE TABLE layers
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
 CREATE INDEX layers_by_processed ON layers (processed);
+
+CREATE TABLE certificates
+(
+    layer INT NOT NULL,
+    block VARCHAR NOT NULL,
+    cert  BLOB,
+    valid bool NOT NULL,
+    PRIMARY KEY (layer, block)
+) WITHOUT ROWID;
 
 CREATE TABLE rewards
 (

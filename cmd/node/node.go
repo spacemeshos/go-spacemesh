@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -267,6 +268,7 @@ type App struct {
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
+	atxProvider      api.AtxProvider
 	clock            TickProvider
 	hare             HareService
 	blockGen         *blocks.Generator
@@ -611,6 +613,7 @@ func (app *App) initServices(ctx context.Context,
 		miner.WithTxsPerProposal(app.Config.TxsPerProposal),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
@@ -682,6 +685,7 @@ func (app *App) initServices(ctx context.Context,
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
 	app.mesh = msh
+	app.atxProvider = cdb
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
@@ -829,6 +833,9 @@ func (app *App) startAPIServices(ctx context.Context) {
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
+	}
+	if apiConf.StartActivationService {
+		registerService(grpcserver.NewActivationService(app.atxProvider))
 	}
 
 	// Now that the services are registered, start the server.

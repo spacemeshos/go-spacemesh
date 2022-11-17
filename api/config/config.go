@@ -19,6 +19,7 @@ const (
 	defaultStartNodeService        = false
 	defaultStartSmesherService     = false
 	defaultStartTransactionService = false
+	defaultStartActivationService  = false
 
 	defaultSmesherStreamInterval = 1 * time.Second
 )
@@ -38,6 +39,7 @@ type Config struct {
 	StartNodeService        bool
 	StartSmesherService     bool
 	StartTransactionService bool
+	StartActivationService  bool
 
 	SmesherStreamInterval time.Duration
 }
@@ -62,6 +64,7 @@ func DefaultConfig() Config {
 		StartNodeService:        defaultStartNodeService,
 		StartSmesherService:     defaultStartSmesherService,
 		StartTransactionService: defaultStartTransactionService,
+		StartActivationService:  defaultStartActivationService,
 
 		SmesherStreamInterval: defaultSmesherStreamInterval,
 	}
@@ -95,6 +98,8 @@ func (s *Config) ParseServicesList() error {
 			s.StartSmesherService = true
 		case "transaction":
 			s.StartTransactionService = true
+		case "activation":
+			s.StartActivationService = true
 		default:
 			return fmt.Errorf("unrecognized GRPC service requested: %s", svc)
 		}
@@ -110,6 +115,7 @@ func (s *Config) ParseServicesList() error {
 		!s.StartNodeService &&
 		!s.StartSmesherService &&
 		!s.StartTransactionService &&
+		!s.StartActivationService &&
 		// 'true' keeps the above clean
 		true {
 		return errors.New("must enable at least one GRPC service along with JSON gateway service")

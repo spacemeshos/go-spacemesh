@@ -17,17 +17,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const numEarlyLayers = uint32(1)
 
 var (
+	errMultipleCerts      = errors.New("multiple valid certificates")
 	errInvalidCert        = errors.New("invalid certificate")
 	errInvalidCertMsg     = errors.New("invalid cert msg")
 	errUnexpectedMsg      = errors.New("unexpected lid/bid")
-	errInternal           = errors.New("internal")
 	errBeaconNotAvailable = errors.New("beacon not available")
 )
 
@@ -201,7 +201,7 @@ func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid 
 	defer c.mu.Unlock()
 	c.createIfNeeded(lid, bid)
 	c.certifyMsgs[lid][bid].registered = true
-	return c.tryGenCert(logger, lid, bid)
+	return c.tryGenCert(ctx, logger, lid, bid)
 }
 
 // CertifyIfEligible signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
@@ -276,6 +276,19 @@ func (c *Certifier) NumCached() int {
 func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, cert.BlockID)
 	logger.Debug("processing synced certificate")
+	if err := c.validateCert(ctx, logger, cert); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.checkAndSave(ctx, logger, lid, cert); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *types.Certificate) error {
 	eligibilityCnt := uint16(0)
 	for _, msg := range cert.Signatures {
 		if err := validate(ctx, logger, c.oracle, c.cfg.CommitteeSize, msg); err != nil {
@@ -289,9 +302,6 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 			log.Int("threshold", c.cfg.CertifyThreshold),
 			log.Uint16("eligibility_count", eligibilityCnt))
 		return errInvalidCert
-	}
-	if err := c.save(logger, lid, cert); err != nil {
-		return err
 	}
 	return nil
 }
@@ -346,8 +356,8 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 		return err
 	}
 
-	if err := c.saveMessage(logger, msg); err != nil {
-		return errInternal
+	if err := c.saveMessage(ctx, logger, msg); err != nil {
+		return err
 	}
 	return nil
 }
@@ -362,7 +372,7 @@ func validate(ctx context.Context, logger log.Log, oracle hare.Rolacle, committe
 	valid, err := oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, committeeSize, nid, msg.Proof, msg.EligibilityCnt)
 	if err != nil {
 		logger.With().Warning("failed to validate cert msg", log.Err(err))
-		return errInternal
+		return err
 	}
 	if !valid {
 		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", nid))
@@ -371,7 +381,7 @@ func validate(ctx context.Context, logger log.Log, oracle hare.Rolacle, committe
 	return nil
 }
 
-func (c *Certifier) saveMessage(logger log.Log, msg types.CertifyMessage) error {
+func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -386,12 +396,12 @@ func (c *Certifier) saveMessage(logger log.Log, msg types.CertifyMessage) error 
 		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)))
 
 	if c.certifyMsgs[lid][bid].registered {
-		return c.tryGenCert(logger, lid, bid)
+		return c.tryGenCert(ctx, logger, lid, bid)
 	}
 	return nil
 }
 
-func (c *Certifier) tryGenCert(logger log.Log, lid types.LayerID, bid types.BlockID) error {
+func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
 	if _, ok := c.certifyMsgs[lid]; !ok {
 		logger.Fatal("missing layer in cache")
 	}
@@ -417,18 +427,76 @@ func (c *Certifier) tryGenCert(logger log.Log, lid types.LayerID, bid types.Bloc
 		BlockID:    bid,
 		Signatures: c.certifyMsgs[lid][bid].signatures,
 	}
-	if err := c.save(logger, lid, cert); err != nil {
+	if err := c.checkAndSave(ctx, logger, lid, cert); err != nil {
 		return err
 	}
 	c.certifyMsgs[lid][bid].done = true
 	return nil
 }
 
-func (c *Certifier) save(logger log.Log, lid types.LayerID, cert *types.Certificate) error {
-	if err := layers.SetHareOutputWithCert(c.db, lid, cert); err != nil {
-		logger.Error("failed to save block cert", log.Err(err))
+func (c *Certifier) checkAndSave(ctx context.Context, logger log.Log, lid types.LayerID, cert *types.Certificate) error {
+	oldCerts, err := certificates.Get(c.db, lid)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return err
+	}
+
+	logger.With().Debug("found old certs", log.Int("num_cert", len(oldCerts)))
+	var valid, invalid []types.BlockID
+	for _, old := range oldCerts {
+		if old.Block == cert.BlockID {
+			// just verified
+			continue
+		}
+		if old.Cert == nil {
+			// the original live hare output should be trumped by a valid certificate
+			logger.With().Warning("original hare output trumped", log.Stringer("hare_output", old.Block))
+			invalid = append(invalid, old.Block)
+			continue
+		}
+		if err = c.validateCert(ctx, logger, old.Cert); err == nil {
+			logger.With().Warning("old cert still valid", log.Stringer("old_cert", old.Block))
+			valid = append(valid, old.Block)
+		} else {
+			logger.With().Debug("old cert not valid", log.Stringer("old_cert", old.Block))
+			invalid = append(invalid, old.Block)
+		}
+	}
+	if err = c.save(ctx, lid, cert, valid, invalid); err != nil {
+		return err
+	}
+	if len(valid) > 0 {
+		logger.Warning("multiple valid certificates found")
+		// stop processing certify message for this block
+		if _, ok := c.certifyMsgs[lid]; ok {
+			if _, ok = c.certifyMsgs[lid][cert.BlockID]; ok {
+				c.certifyMsgs[lid][cert.BlockID].done = true
+			}
+		}
+		c.tortoise.OnHareOutput(lid, types.EmptyBlockID)
+		return errMultipleCerts
 	}
 	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
+}
+
+func (c *Certifier) save(ctx context.Context, lid types.LayerID, cert *types.Certificate, valid, invalid []types.BlockID) error {
+	if len(valid)+len(invalid) == 0 {
+		return certificates.Add(c.db, lid, cert)
+	}
+	return c.db.WithTx(ctx, func(dbtx *sql.Tx) error {
+		if err := certificates.Add(dbtx, lid, cert); err != nil {
+			return err
+		}
+		for _, bid := range valid {
+			if err := certificates.SetValid(dbtx, lid, bid); err != nil {
+				return err
+			}
+		}
+		for _, bid := range invalid {
+			if err := certificates.SetInvalid(dbtx, lid, bid); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

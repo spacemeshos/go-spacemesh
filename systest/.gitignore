@@ -2,3 +2,4 @@ systest
 *.test
 build/
 properties.env
+systest_job.yml

@@ -1,0 +1,23 @@
+# Template for Systest Job
+# Uses gomplate syntax (see https://gomplate.ca)
+# Usage:
+# testid=<> job_name=<> image=<> command=<> gomplate --file systest_job.yml.tmpl -o systest_job.yml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Env.job_name}}
+  labels:
+    testid: {{ .Env.testid }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        testid: {{ .Env.testid }}
+    spec:
+      containers:
+      - command: [ "sh", "-c", "{{ .Env.command }}"]
+        image: {{ .Env.image}}
+        imagePullPolicy: IfNotPresent
+        name: {{ .Env.job_name}}
+      restartPolicy: Never

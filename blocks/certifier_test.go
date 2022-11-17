@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -95,20 +95,37 @@ func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.No
 	return nid, msg, data
 }
 
-func verifyNotSaved(t *testing.T, db *sql.Database, lid types.LayerID) {
+func verifyCerts(t *testing.T, db *sql.Database, lid types.LayerID, expected map[types.BlockID]bool) {
 	t.Helper()
-	cert, err := layers.GetCert(db, lid)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, cert)
-}
-
-func verifySaved(t *testing.T, db *sql.Database, lid types.LayerID, bid types.BlockID, expectedSigs int) {
-	t.Helper()
-	cert, err := layers.GetCert(db, lid)
-	require.NoError(t, err)
-	require.NotNil(t, cert)
-	require.Equal(t, bid, cert.BlockID)
-	require.Len(t, cert.Signatures, expectedSigs)
+	var allValids []types.BlockID
+	certs, err := certificates.Get(db, lid)
+	if len(expected) == 0 {
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	} else {
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(certs))
+		for _, cert := range certs {
+			ev, ok := expected[cert.Block]
+			require.True(t, ok)
+			require.Equal(t, ev, cert.Valid)
+			delete(expected, cert.Block)
+			if ev {
+				allValids = append(allValids, cert.Block)
+			}
+		}
+		require.Empty(t, expected)
+	}
+	// check hare output
+	ho, err := certificates.GetHareOutput(db, lid)
+	if len(allValids) == 0 {
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	} else if len(allValids) == 1 {
+		require.NoError(t, err)
+		require.Equal(t, allValids[0], ho)
+	} else {
+		require.NoError(t, err)
+		require.Equal(t, types.EmptyBlockID, ho)
+	}
 }
 
 func TestStartStop(t *testing.T) {
@@ -130,7 +147,6 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 	tc := newTestCertifier(t)
 	numMsgs := tc.cfg.CertifyThreshold / int(defaultCnt)
 	b := generateBlock(t, tc.db)
-	require.NoError(t, tc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
 	sigs := make([]types.CertifyMessage, numMsgs)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -144,7 +160,105 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 	}
 	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert))
-	verifySaved(t, tc.db, b.LayerIndex, b.ID(), numMsgs)
+	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true})
+}
+
+func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
+	tc := newTestCertifier(t)
+	numMsgs := tc.cfg.CertifyThreshold / int(defaultCnt)
+	b := generateBlock(t, tc.db)
+	sigs := make([]types.CertifyMessage, numMsgs)
+	for i := 0; i < numMsgs; i++ {
+		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
+		tc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+			Return(true, nil)
+		sigs[i] = *msg
+	}
+	cert := &types.Certificate{
+		BlockID:    b.ID(),
+		Signatures: sigs,
+	}
+	ho := types.RandomBlockID()
+	require.NoError(t, certificates.SetHareOutput(tc.db, b.LayerIndex, ho))
+	tc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+	require.NoError(t, tc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert))
+	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
+}
+
+func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
+	tt := []struct {
+		name           string
+		sameBid, valid bool
+		err            error
+	}{
+		{
+			name:    "old cert has same block ID",
+			sameBid: true,
+		},
+		{
+			name: "old cert no longer valid",
+		},
+		{
+			name:  "old cert still valid",
+			valid: true,
+			err:   errMultipleCerts,
+		},
+	}
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tcc := newTestCertifier(t)
+			numMsgs := tcc.cfg.CertifyThreshold / int(defaultCnt)
+			b := generateBlock(t, tcc.db)
+			bid := types.RandomBlockID()
+			if tc.sameBid {
+				bid = b.ID()
+			}
+			oldCert := &types.Certificate{
+				BlockID: bid,
+			}
+			for i := 0; i < numMsgs; i++ {
+				nid, msg, _ := genEncodedMsg(t, b.LayerIndex, bid)
+				oldCert.Signatures = append(oldCert.Signatures, *msg)
+				if !tc.sameBid {
+					tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+						Return(tc.valid, nil)
+				}
+			}
+			require.NoError(t, certificates.Add(tcc.db, b.LayerIndex, oldCert))
+
+			sigs := make([]types.CertifyMessage, numMsgs)
+			for i := 0; i < numMsgs; i++ {
+				nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
+				tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+					Return(true, nil)
+				sigs[i] = *msg
+			}
+			cert := &types.Certificate{
+				BlockID:    b.ID(),
+				Signatures: sigs,
+			}
+			if tc.err != nil {
+				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
+			} else {
+				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+			}
+			require.ErrorIs(t, tcc.HandleSyncedCertificate(context.TODO(), b.LayerIndex, cert), tc.err)
+			expected := map[types.BlockID]bool{}
+			if tc.err == nil {
+				if tc.sameBid {
+					expected[b.ID()] = true
+				} else {
+					expected[b.ID()] = true
+					expected[bid] = false
+				}
+			} else {
+				expected[b.ID()] = true
+				expected[bid] = true
+			}
+			verifyCerts(t, tcc.db, b.LayerIndex, expected)
+		})
+	}
 }
 
 func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
@@ -250,6 +364,8 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 			numMsgs := tcc.cfg.CommitteeSize
 			cutoff := tcc.cfg.CertifyThreshold / int(defaultCnt)
 			b := generateBlock(t, tcc.db)
+			ho := types.RandomBlockID()
+			require.NoError(t, certificates.SetHareOutput(tcc.db, b.LayerIndex, ho))
 			tcc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
 			tcc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
 			require.NoError(t, tcc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
@@ -278,7 +394,83 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 				}
 			}
 			wg.Wait()
-			verifySaved(t, tcc.db, b.LayerIndex, b.ID(), cutoff)
+			verifyCerts(t, tcc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
+		})
+	}
+}
+
+func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
+	tt := []struct {
+		name           string
+		sameBid, valid bool
+		err            error
+	}{
+		{
+			name:    "old cert has same block ID",
+			sameBid: true,
+		},
+		{
+			name: "old cert no longer valid",
+		},
+		{
+			name:  "old cert still valid",
+			valid: true,
+			err:   errMultipleCerts,
+		},
+	}
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tcc := newTestCertifier(t)
+			numMsgs := tcc.cfg.CommitteeSize
+			cutoff := tcc.cfg.CertifyThreshold / int(defaultCnt)
+			b := generateBlock(t, tcc.db)
+			bid := types.RandomBlockID()
+			if tc.sameBid {
+				bid = b.ID()
+			}
+			oldCert := &types.Certificate{
+				BlockID: bid,
+			}
+			for i := 0; i < cutoff; i++ {
+				nid, msg, _ := genEncodedMsg(t, b.LayerIndex, bid)
+				oldCert.Signatures = append(oldCert.Signatures, *msg)
+				if !tc.sameBid {
+					tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+						Return(tc.valid, nil)
+				}
+			}
+			require.NoError(t, certificates.Add(tcc.db, b.LayerIndex, oldCert))
+
+			tcc.mClk.EXPECT().GetCurrentLayer().Return(b.LayerIndex).AnyTimes()
+			tcc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
+			require.NoError(t, tcc.RegisterForCert(context.TODO(), b.LayerIndex, b.ID()))
+			if tc.err != nil {
+				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
+			} else {
+				tcc.mtortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
+			}
+			for i := 0; i < numMsgs; i++ {
+				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
+				if i < cutoff { // we know exactly which msgs will be validated
+					tcc.mOracle.EXPECT().Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+						Return(true, nil)
+				}
+				tcc.HandleCertifyMessage(context.TODO(), "peer", encoded)
+			}
+			expected := map[types.BlockID]bool{}
+			if tc.err == nil {
+				if tc.sameBid {
+					expected[b.ID()] = true
+				} else {
+					expected[b.ID()] = true
+					expected[bid] = false
+				}
+			} else {
+				expected[b.ID()] = true
+				expected[bid] = true
+			}
+			verifyCerts(t, tcc.db, b.LayerIndex, expected)
 		})
 	}
 }
@@ -297,7 +489,7 @@ func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 		res := tc.HandleCertifyMessage(context.TODO(), "peer", encoded)
 		require.Equal(t, pubsub.ValidationAccept, res)
 	}
-	verifyNotSaved(t, tc.db, b.LayerIndex)
+	verifyCerts(t, tc.db, b.LayerIndex, nil)
 }
 
 func Test_HandleCertifyMessage_Stopped(t *testing.T) {

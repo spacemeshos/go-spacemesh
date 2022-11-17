@@ -133,6 +133,20 @@ func (mr *MockvotesEncoderMockRecorder) EncodeVotes(arg0 interface{}, arg1 ...in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeVotes", reflect.TypeOf((*MockvotesEncoder)(nil).EncodeVotes), varargs...)
 }
 
+// LatestComplete mocks base method.
+func (m *MockvotesEncoder) LatestComplete() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LatestComplete")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// LatestComplete indicates an expected call of LatestComplete.
+func (mr *MockvotesEncoderMockRecorder) LatestComplete() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockvotesEncoder)(nil).LatestComplete))
+}
+
 // TallyVotes mocks base method.
 func (m *MockvotesEncoder) TallyVotes(arg0 context.Context, arg1 types.LayerID) {
 	m.ctrl.T.Helper()
