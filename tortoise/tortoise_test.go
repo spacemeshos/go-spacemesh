@@ -832,6 +832,26 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 	})
 }
 
+func TestDecodeVotes(t *testing.T) {
+	t.Run("without block in state", func(t *testing.T) {
+		s := sim.New()
+		s.Setup()
+		cfg := defaultTestConfig()
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		last := s.Next()
+		tortoise.TallyVotes(context.TODO(), last)
+		ballots, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		ballot := types.NewExistingBallot(
+			types.BallotID{3, 3, 3}, nil, nil,
+			ballots[0].InnerBallot,
+		)
+		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
+		_, err = tortoise.DecodeBallot(&ballot)
+		require.ErrorContains(t, err, "not in state")
+	})
+}
+
 // gapVote will skip one layer in voting.
 func gapVote(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 	return skipLayers(1)(rng, layers, i)
