@@ -112,20 +112,13 @@ func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Prop
 
 // GetBlob loads proposal as an encoded blob, ready to be sent over the wire.
 func GetBlob(db sql.Executor, id []byte) (proposal []byte, err error) {
-	if rows, err := db.Exec(`select proposal from proposals where id = ?1;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id)
-		}, func(stmt *sql.Statement) bool {
-			proposal = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, proposal)
-			return true
-		}); err != nil {
-		return nil, fmt.Errorf("exec %s: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("%w proposal ID %s", sql.ErrNotFound, types.BytesToHash(id))
+	pid := types.ProposalID{}
+	copy(pid[:], id)
+	object, err := Get(db, pid)
+	if err != nil {
+		return nil, err
 	}
-
-	return proposal, err
+	return codec.Encode(object)
 }
 
 // Add adds a proposal for a given ID.
@@ -133,10 +126,6 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 	txIDsBytes, err := codec.EncodeSlice(proposal.TxIDs)
 	if err != nil {
 		return fmt.Errorf("encode TX IDs: %w", err)
-	}
-	encodedProposal, err := codec.Encode(proposal)
-	if err != nil {
-		return fmt.Errorf("encode proposal: %w", err)
 	}
 
 	enc := func(stmt *sql.Statement) {
@@ -146,12 +135,11 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindBytes(4, txIDsBytes)
 		stmt.BindBytes(5, proposal.MeshHash.Bytes())
 		stmt.BindBytes(6, proposal.Signature)
-		stmt.BindBytes(7, encodedProposal)
 	}
 
 	_, err = db.Exec(`
-		insert into proposals (id, ballot_id, layer, tx_ids, mesh_hash, signature, proposal)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, enc, nil)
+		insert into proposals (id, ballot_id, layer, tx_ids, mesh_hash, signature)
+		values (?1, ?2, ?3, ?4, ?5, ?6);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert proposal ID %v: %w", proposal.ID(), err)
 	}
