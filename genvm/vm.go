@@ -197,21 +197,23 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		)
 	}
 	t1 := time.Now()
-	tx, err := v.db.TxImmediate(context.Background())
-	if err != nil {
-		return nil, nil, err
-	}
-	defer tx.Release()
+
 	t2 := time.Now()
 	blockDurationWait.Observe(float64(time.Since(t1)))
 
-	ss := core.NewStagedCache(tx)
+	ss := core.NewStagedCache(v.db)
 	results, skipped, fees, err := v.execute(lctx, ss, txs)
 	if err != nil {
 		return nil, nil, err
 	}
 	t3 := time.Now()
 	blockDurationTxs.Observe(float64(time.Since(t2)))
+
+	tx, err := v.db.TxImmediate(context.Background())
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Release()
 
 	if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
 		return nil, nil, err
@@ -223,6 +225,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
 	total := 0
+
 	ss.IterateChanged(func(account *core.Account) bool {
 		total++
 		account.Layer = lctx.Layer
