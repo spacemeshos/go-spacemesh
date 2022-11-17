@@ -122,7 +122,8 @@ CREATE TABLE proposals
     layer      INT NOT NULL,
     tx_ids     BLOB,
     mesh_hash  CHAR(32),
-    signature  VARCHAR
+    signature  VARCHAR,
+    proposal   BLOB
 
 ) WITHOUT ROWID;
 CREATE INDEX proposals_by_layer ON proposals (layer);
