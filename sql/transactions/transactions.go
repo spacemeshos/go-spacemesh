@@ -225,7 +225,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 	var txs []*types.MeshTransaction
 	if _, err := db.Exec(`
 		select tx, header, layer, block, timestamp, id from transactions
-		where principal = ?1 and layer between ?2 and ?3 `,
+		where principal = ?1 and layer between ?2 and ?3`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
 			stmt.BindInt64(2, int64(from.Value))
@@ -249,6 +249,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 }
 
 // AddressesWithPendingTransactions returns list of addresses with pending transactions.
+// Query is expensive, meant to be used only on startup.
 func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, error) {
 	var rst []types.AddressNonce
 	if _, err := db.Exec(`select principal as current, min(nonce) from transactions
@@ -272,7 +273,7 @@ func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, er
 	return rst, nil
 }
 
-// GetAcctPendingFromNonce get all pending transactions with nonce <= `from` for the given address.
+// GetAcctPendingFromNonce get all pending transactions with nonce after `from` for the given address.
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
 		select tx, header, layer, block, timestamp, id from transactions
@@ -342,18 +343,18 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 }
 
 // TransactionInProposal returns lowest layer of the proposal where tx is included.
-func TransactionInProposal(db sql.Executor, id types.TransactionID, lid types.LayerID) (types.LayerID, error) {
+func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.LayerID) (types.LayerID, error) {
 	var rst types.LayerID
 	rows, err := db.Exec("select layer from proposal_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
-			stmt.BindInt64(2, int64(lid.Value))
+			stmt.BindInt64(2, int64(after.Value))
 		}, func(s *sql.Statement) bool {
 			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
 			return false
 		})
 	if rows == 0 {
-		return rst, fmt.Errorf("%w no proposal after %s with tx %s", sql.ErrNotFound, lid, id)
+		return rst, fmt.Errorf("%w no proposal after %s with tx %s", sql.ErrNotFound, after, id)
 	}
 	if err != nil {
 		return rst, fmt.Errorf("tx in proposal %s: %w", id, err)
@@ -362,7 +363,7 @@ func TransactionInProposal(db sql.Executor, id types.TransactionID, lid types.La
 }
 
 // TransactionInBlock returns lowest layer and id of the block where tx is included.
-func TransactionInBlock(db sql.Executor, id types.TransactionID, lid types.LayerID) (types.BlockID, types.LayerID, error) {
+func TransactionInBlock(db sql.Executor, id types.TransactionID, after types.LayerID) (types.BlockID, types.LayerID, error) {
 	var (
 		rst types.LayerID
 		bid types.BlockID
@@ -370,7 +371,7 @@ func TransactionInBlock(db sql.Executor, id types.TransactionID, lid types.Layer
 	rows, err := db.Exec("select layer, bid from block_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
-			stmt.BindInt64(2, int64(lid.Value))
+			stmt.BindInt64(2, int64(after.Value))
 		}, func(s *sql.Statement) bool {
 			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
 			s.ColumnBytes(1, bid[:])
@@ -380,7 +381,7 @@ func TransactionInBlock(db sql.Executor, id types.TransactionID, lid types.Layer
 		return bid, rst, fmt.Errorf("tx in block %s: %w", id, err)
 	}
 	if rows == 0 {
-		return bid, rst, fmt.Errorf("%w no block after %s with tx %s", sql.ErrNotFound, lid, id)
+		return bid, rst, fmt.Errorf("%w no block after %s with tx %s", sql.ErrNotFound, after, id)
 	}
 	return bid, rst, nil
 }
