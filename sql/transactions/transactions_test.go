@@ -253,11 +253,6 @@ func TestApplyAndUndoLayers(t *testing.T) {
 			return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
 		}))
 		applied = append(applied, tx.ID)
-
-		sameNonce := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 1)
-		require.NoError(t, Add(db, sameNonce, time.Now()))
-		require.NoError(t, DiscardByAcctNonce(db, tx.ID, lid, tx.Principal, tx.Nonce.Counter))
-		discarded = append(discarded, sameNonce.ID)
 	}
 
 	for _, tid := range applied {
@@ -300,108 +295,6 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	}
 }
 
-func TestDiscardNonceBelow(t *testing.T) {
-	db := sql.InMemory()
-
-	rng := rand.New(rand.NewSource(1001))
-	signer := signing.NewEdSignerFromRand(rng)
-	principal := types.GenerateAddress(signer.PublicKey().Bytes())
-	numTXs := 10
-	received := time.Now()
-	txs := make([]*types.Transaction, 0, numTXs*2)
-
-	tx := createTX(t, signer, types.Address{1}, 0, 191, 1)
-	require.NoError(t, Add(db, tx, received))
-	txs = append(txs, tx)
-
-	// start nonce from math.MaxInt64+1 to validate sqlite comparison in DiscardNonceBelow
-	for nonce := uint64(math.MaxInt64 + 1); nonce < uint64(math.MaxInt64+numTXs); nonce++ {
-		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1)
-		require.NoError(t, Add(db, tx, received))
-		txs = append(txs, tx)
-	}
-
-	// create tx for different accounts
-	for i := 0; i < numTXs; i++ {
-		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
-		require.NoError(t, Add(db, tx, received))
-		txs = append(txs, tx)
-	}
-
-	// apply nonce 0
-	lid := types.NewLayerID(71)
-	bid := types.RandomBlockID()
-
-	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
-		return AddResult(dtx, txs[0].ID, &types.TransactionResult{Layer: lid, Block: bid})
-	}))
-	cutoff := math.MaxInt64 + uint64(numTXs)/2
-	require.NoError(t, DiscardNonceBelow(db, principal, cutoff))
-	expDiscarded := numTXs/2 - 1
-	numDiscarded := 0
-	for _, tx := range txs {
-		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
-		if tx.Principal == principal {
-			if tx.Nonce.Counter == 0 {
-				expected = makeMeshTX(tx, lid, bid, received, types.APPLIED)
-			} else if tx.Nonce.Counter < cutoff {
-				expected.State = types.DISCARDED
-				numDiscarded++
-			}
-		}
-		getAndCheckMeshTX(t, db, tx.ID, expected)
-	}
-	require.Equal(t, expDiscarded, numDiscarded)
-}
-
-func TestDiscardByAcctNonce(t *testing.T) {
-	db := sql.InMemory()
-
-	rng := rand.New(rand.NewSource(1001))
-	signer := signing.NewEdSignerFromRand(rng)
-	numTXs := 100
-	sameNonceTXs := 10
-	txs := make([]*types.Transaction, 0, 2*numTXs+sameNonceTXs)
-	nonce := uint64(10000)
-	received := time.Now()
-	for i := 0; i < sameNonceTXs; i++ {
-		tx := createTX(t, signer, types.Address{1}, nonce, 191, 1+uint64(i))
-		require.NoError(t, Add(db, tx, received))
-		txs = append(txs, tx)
-	}
-	for i := 1; i <= numTXs/2; i++ {
-		tx := createTX(t, signer, types.Address{1}, nonce-uint64(i), 191, 1)
-		require.NoError(t, Add(db, tx, received))
-		txs = append(txs, tx)
-		tx = createTX(t, signer, types.Address{1}, nonce+uint64(i), 191, 1)
-		require.NoError(t, Add(db, tx, received))
-		txs = append(txs, tx)
-	}
-
-	// create tx for different accounts
-	for i := 0; i < numTXs; i++ {
-		s := signing.NewEdSignerFromRand(rng)
-		tx := createTX(t, s, types.Address{1}, 1, 191, 1)
-		require.NoError(t, Add(db, tx, received))
-		txs = append(txs, tx)
-	}
-
-	principal := types.GenerateAddress(signer.PublicKey().Bytes())
-	applied := txs[0].ID
-	lid := types.NewLayerID(99)
-	require.NoError(t, DiscardByAcctNonce(db, applied, lid, principal, nonce))
-	for _, tx := range txs {
-		mtx, err := Get(db, tx.ID)
-		require.NoError(t, err)
-		if tx.Principal == principal && tx.Nonce.Counter == nonce && tx.ID != applied {
-			require.Equal(t, types.DISCARDED, mtx.State)
-		} else {
-			require.Equal(t, types.MEMPOOL, mtx.State)
-		}
-	}
-}
-
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
 
@@ -418,27 +311,6 @@ func TestGetBlob(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, tx.Raw, buf)
 	}
-}
-
-func TestGetAllPendingHeaders(t *testing.T) {
-	db := sql.InMemory()
-	txs := []*types.Transaction{
-		{
-			RawTx:    types.NewRawTx([]byte{1, 2, 3}),
-			TxHeader: &types.TxHeader{Principal: types.Address{1}},
-		},
-		{
-			RawTx: types.NewRawTx([]byte{4, 5, 6}),
-		},
-	}
-	for _, tx := range txs {
-		require.NoError(t, Add(db, tx, time.Time{}))
-	}
-
-	pending, err := GetAllPending(db)
-	require.NoError(t, err)
-	require.Len(t, pending, 1)
-	require.Equal(t, &pending[0].Transaction, txs[0])
 }
 
 func TestGetByAddress(t *testing.T) {
@@ -474,55 +346,6 @@ func TestGetByAddress(t *testing.T) {
 	require.Len(t, got, 1)
 	expected1 := makeMeshTX(txs[1], lid, types.EmptyBlockID, received, types.PROPOSAL)
 	checkMeshTXEqual(t, *expected1, *got[0])
-}
-
-func TestGetAllPending(t *testing.T) {
-	db := sql.InMemory()
-
-	rng := rand.New(rand.NewSource(1001))
-	numAccts := 100
-	numTXs := 13
-	received := time.Now()
-	totalApplied := 0
-	lid := types.NewLayerID(99)
-	bid := types.BlockID{1, 2, 3}
-	inBlock := make(map[types.TransactionID]*types.Transaction)
-	inMempool := make(map[types.TransactionID]*types.Transaction)
-	for i := 0; i < numAccts; i++ {
-		signer := signing.NewEdSignerFromRand(rng)
-		numApplied := rand.Intn(numTXs)
-		for j := 0; j < numTXs; j++ {
-			tx := createTX(t, signer, types.Address{1}, uint64(j), 191, 1)
-			require.NoError(t, Add(db, tx, received.Add(time.Duration(i+j))))
-			// causing some txs to be applied, some packed in a block, and some in mempool
-			if j < numApplied {
-				require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
-					return AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
-				}))
-			} else if j < numTXs-1 {
-				inBlock[tx.ID] = tx
-			} else {
-				inMempool[tx.ID] = tx
-			}
-		}
-		totalApplied += numApplied
-	}
-
-	got, err := GetAllPending(db)
-	require.NoError(t, err)
-	require.Len(t, got, numTXs*numAccts-totalApplied)
-	inB := 0
-	inM := 0
-	for _, mtx := range got {
-		if _, ok := inBlock[mtx.ID]; ok {
-			require.Equal(t, types.BLOCK, mtx.State)
-			inB++
-		} else if _, ok = inMempool[mtx.ID]; ok {
-			require.Equal(t, types.MEMPOOL, mtx.State)
-			inM++
-		}
-	}
-	require.Equal(t, len(got), inB+inM)
 }
 
 func TestGetAcctPendingFromNonce(t *testing.T) {

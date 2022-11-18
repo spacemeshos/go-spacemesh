@@ -169,3 +169,9 @@ type RawTx struct {
 	ID  TransactionID
 	Raw []byte
 }
+
+// AddressNonce is an (address, nonce) named tuple.
+type AddressNonce struct {
+	Address Address
+	Nonce   Nonce
+}

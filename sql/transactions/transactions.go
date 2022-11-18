@@ -1,6 +1,7 @@
 package transactions
 
 import (
+	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -113,9 +114,8 @@ func HasBlockTX(db sql.Executor, bid types.BlockID, tid types.TransactionID) (bo
 // GetAppliedLayer returns layer when transaction was applied.
 func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, error) {
 	var rst types.LayerID
-	rows, err := db.Exec("select layer from transactions where id = ?1 and applied = ?2", func(stmt *sql.Statement) {
+	rows, err := db.Exec("select layer from transactions where id = ?1 and result != null", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, tid[:])
-		stmt.BindInt64(2, stateApplied)
 	}, func(stmt *sql.Statement) bool {
 		rst = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
 		return false
@@ -141,12 +141,11 @@ func UndoLayers(db *sql.Tx, from types.LayerID) ([]types.TransactionID, error) {
 	}
 	var updated []types.TransactionID
 	_, err = db.Exec(`
-			update transactions set applied = ?2, layer = ?3, block = ?4, result = null where layer >= ?1 returning id`,
+			update transactions set layer = ?2, block = ?3, result = null where layer >= ?1 returning id`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Value))
-			stmt.BindInt64(2, statePending)
-			stmt.BindInt64(3, int64(types.LayerID{}.Value))
-			stmt.BindBytes(4, types.EmptyBlockID.Bytes())
+			stmt.BindInt64(2, int64(types.LayerID{}.Value))
+			stmt.BindBytes(3, types.EmptyBlockID.Bytes())
 		}, func(stmt *sql.Statement) bool {
 			var tid types.TransactionID
 			stmt.ColumnBytes(0, tid[:])
@@ -159,45 +158,10 @@ func UndoLayers(db *sql.Tx, from types.LayerID) ([]types.TransactionID, error) {
 	return updated, nil
 }
 
-// DiscardNonceBelow sets the applied field to `stateDiscarded` for transactions with nonce lower than specified.
-func DiscardNonceBelow(db sql.Executor, address types.Address, nonce uint64) error {
-	_, err := db.Exec(`update transactions set applied = ?3, layer = ?4, block = ?5 where principal = ?1 and nonce < ?2 and applied != ?6`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, address.Bytes())
-			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(nonce))
-			stmt.BindInt64(3, stateDiscarded)
-			stmt.BindInt64(4, int64(types.LayerID{}.Value))
-			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
-			stmt.BindInt64(6, stateApplied)
-		}, nil)
-	if err != nil {
-		return fmt.Errorf("discard nonce below %s/%d: %w", address, nonce, err)
-	}
-	return nil
-}
-
-// DiscardByAcctNonce sets the applied field to `stateDiscarded` and layer to `lid` for transactions with addr and nonce.
-func DiscardByAcctNonce(db sql.Executor, applied types.TransactionID, lid types.LayerID, addr types.Address, nonce uint64) error {
-	_, err := db.Exec(`update transactions set applied = ?4, layer = ?5, block = ?6 where principal = ?1 and nonce = ?2 and id != ?3`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, addr.Bytes())
-			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(nonce))
-			stmt.BindBytes(3, applied.Bytes())
-			stmt.BindInt64(4, stateDiscarded)
-			stmt.BindInt64(5, int64(lid.Value))
-			stmt.BindBytes(6, types.EmptyBlockID.Bytes())
-		}, nil)
-	if err != nil {
-		return fmt.Errorf("discard %s/%d: %w", addr, nonce, err)
-	}
-	return nil
-}
-
-// tx, header, layer, block, timestamp.
-func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement) (*types.MeshTransaction, error) {
+// tx, header, layer, timestamp.
+func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.MeshTransaction, error) {
 	var (
 		parsed types.Transaction
-		bid    types.BlockID
 	)
 	parsed.Raw = make([]byte, stmt.ColumnLen(0))
 	stmt.ColumnBytes(0, parsed.Raw)
@@ -207,29 +171,15 @@ func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement)
 			return nil, fmt.Errorf("decode %w", err)
 		}
 	}
-
-	lid := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
-	stmt.ColumnBytes(3, bid[:])
 	parsed.ID = id
 
-	state := types.APPLIED
-	switch applied {
-	case stateApplied:
-	case statePending:
-		if lid == (types.LayerID{}) {
-			state = types.MEMPOOL
-		} else if bid == types.EmptyBlockID {
-			state = types.PROPOSAL
-		} else {
-			state = types.BLOCK
-		}
-	case stateDiscarded:
-		state = types.DISCARDED
+	state := types.PENDING
+	if stmt.ColumnInt64(2) != 0 {
+		state = types.APPLIED
 	}
+
 	return &types.MeshTransaction{
 		Transaction: parsed,
-		LayerID:     lid,
-		BlockID:     bid,
 		Received:    time.Unix(0, stmt.ColumnInt64(4)),
 		State:       state,
 	}, nil
@@ -238,12 +188,11 @@ func decodeTransaction(id types.TransactionID, applied int, stmt *sql.Statement)
 // Get gets a transaction from database.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
 	var rows int
-	rows, err = db.Exec("select tx, header, layer, block, timestamp, applied from transactions where id = ?1",
+	rows, err = db.Exec("select tx, header, layer, timestamp from transactions where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
-			applied := stmt.ColumnInt(5)
-			tx, err = decodeTransaction(id, applied, stmt)
+			tx, err = decodeTransaction(id, stmt)
 			return err == nil
 		})
 	if err != nil {
@@ -287,22 +236,19 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
 	if _, err := db.Exec(`
-		select tx, header, layer, block, timestamp, applied, id from transactions
-		where principal = ?1 and layer between ?2 and ?3 and applied != ?4`,
+		select tx, header, layer, block, timestamp, id from transactions
+		where principal = ?1 and layer between ?2 and ?3 `,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
 			stmt.BindInt64(2, int64(from.Value))
 			stmt.BindInt64(3, int64(to.Value))
-			stmt.BindInt64(4, stateDiscarded)
 		}, func(stmt *sql.Statement) bool {
 			var (
-				tx      *types.MeshTransaction
-				id      types.TransactionID
-				applied int
+				tx *types.MeshTransaction
+				id types.TransactionID
 			)
-			applied = stmt.ColumnInt(5)
-			stmt.ColumnBytes(6, id[:])
-			tx, err := decodeTransaction(id, applied, stmt)
+			stmt.ColumnBytes(5, id[:])
+			tx, err := decodeTransaction(id, stmt)
 			if err != nil {
 				return false
 			}
@@ -314,21 +260,40 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 	return txs, nil
 }
 
-// GetAllPending get all transactions that are not yet applied.
-func GetAllPending(db sql.Executor) ([]*types.MeshTransaction, error) {
-	return queryPending(db, `
-		select tx, header, layer, block, timestamp, id from transactions
-		where applied = ?1 and header is not null order by timestamp asc`,
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, statePending)
-		}, "get all pending")
+// AddressesWithPendingTransactions returns list of addresses with pending transactions.
+func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, error) {
+	var rst []types.AddressNonce
+	if _, err := db.Exec(`
+	select principal, max(nonce) as current from transactions 
+	where nonce >=
+		(
+			select top 1 nonce from transactions 
+			where principal = current and result != null
+			order by nonce desc;
+		)
+	group_by principal;
+	;
+	`, nil, func(stmt *sql.Statement) bool {
+		addr := types.Address{}
+		stmt.BindBytes(0, addr[:])
+		buf := [8]byte{}
+		stmt.BindBytes(1, buf[:])
+		rst = append(rst, types.AddressNonce{
+			Address: addr,
+			Nonce:   types.Nonce{Counter: binary.BigEndian.Uint64(buf[:])},
+		})
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("addresses with pending txs %w", err)
+	}
+	return rst, nil
 }
 
 // GetAcctPendingFromNonce get all pending transactions with nonce <= `from` for the given address.
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `
 		select tx, header, layer, block, timestamp, id from transactions
-		where applied = ?1 and principal = ?2 and nonce >= ?3 order by nonce asc`,
+		where principal = ?2 and nonce >= ?3 order by nonce asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, statePending)
 			stmt.BindBytes(2, address.Bytes())
@@ -344,7 +309,7 @@ func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), e
 			id types.TransactionID
 		)
 		stmt.ColumnBytes(5, id[:])
-		tx, err = decodeTransaction(id, statePending, stmt)
+		tx, err = decodeTransaction(id, stmt)
 		if err != nil {
 			return false
 		}
@@ -364,14 +329,13 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 	}
 
 	if rows, err := db.Exec(`update transactions
-		set result = ?2, applied = ?3, layer = ?4, block = ?5 
-		where id = ?1 and applied != ?3 returning id;`,
+		set result = ?2, layer = ?3, block = ?4 
+		where id = ?1 and result == null returning id;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
 			stmt.BindBytes(2, buf)
-			stmt.BindInt64(3, stateApplied)
-			stmt.BindInt64(4, int64(rst.Layer.Value))
-			stmt.BindBytes(5, rst.Block[:])
+			stmt.BindInt64(3, int64(rst.Layer.Value))
+			stmt.BindBytes(4, rst.Block[:])
 		},
 		func(stmt *sql.Statement) bool {
 			return false
@@ -397,7 +361,7 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 
 func TransactionInProposal(db sql.Executor, id types.TransactionID, lid types.LayerID) (types.LayerID, error) {
 	var rst types.LayerID
-	rows, err := db.Exec("select min(layer) from proposal_transactions where tid = ?1 and layer > ?2",
+	rows, err := db.Exec("select layer from proposal_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(lid.Value))
@@ -419,7 +383,7 @@ func TransactionInBlock(db sql.Executor, id types.TransactionID, lid types.Layer
 		rst types.LayerID
 		bid types.BlockID
 	)
-	rows, err := db.Exec("select min(layer), bid from block_transactions where tid = ?1 and layer > ?2",
+	rows, err := db.Exec("select layer, bid from block_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(lid.Value))
