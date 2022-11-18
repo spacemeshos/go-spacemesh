@@ -110,27 +110,6 @@ func HasBlockTX(db sql.Executor, bid types.BlockID, tid types.TransactionID) (bo
 	return rows > 0, nil
 }
 
-// UpdateIfBetter updates the layer of this tx if it's lower.
-func UpdateIfBetter(db sql.Executor, tid types.TransactionID, lid types.LayerID, bid types.BlockID) (int, error) {
-	rows, err := db.Exec(`
-		update transactions set layer = ?5, block = ?6
-		where id = ?1 and applied = ?2 and
-		(layer is null or layer = ?3 or layer > ?5 or (layer = ?5 and (block = ?4 or block is null)))
-		returning id`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, tid.Bytes())
-			stmt.BindInt64(2, statePending)
-			stmt.BindInt64(3, int64(types.LayerID{}.Value))
-			stmt.BindBytes(4, types.EmptyBlockID.Bytes())
-			stmt.BindInt64(5, int64(lid.Value))
-			stmt.BindBytes(6, bid.Bytes())
-		}, nil)
-	if err != nil {
-		return 0, fmt.Errorf("updateIfBetter %s/%s: %w", tid, lid, err)
-	}
-	return rows, nil
-}
-
 // GetAppliedLayer returns layer when transaction was applied.
 func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, error) {
 	var rst types.LayerID
@@ -212,40 +191,6 @@ func DiscardByAcctNonce(db sql.Executor, applied types.TransactionID, lid types.
 		return fmt.Errorf("discard %s/%d: %w", addr, nonce, err)
 	}
 	return nil
-}
-
-// SetNextLayer gets the layer a transaction appears in after the given layer.
-func SetNextLayer(db sql.Executor, id types.TransactionID, lid types.LayerID) (types.LayerID, types.BlockID, error) {
-	var (
-		next types.LayerID
-		bid  types.BlockID
-	)
-	if rows, err := db.Exec(`
-		update transactions set (layer, block) =
-		(select coalesce(min(layer), ?3) as layer, coalesce(bid, ?4) as block from
-		 (select tid, bid, null, layer from block_transactions where tid = ?1 and layer > ?2
-          union all
-		  select tid, null, pid, layer from proposal_transactions where tid = ?1 and layer > ?2
-          order by bid desc
-         )
-		 group by tid
-        )
-		where id = ?1 returning layer, block`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id.Bytes())
-			stmt.BindInt64(2, int64(lid.Value))
-			stmt.BindInt64(3, int64(types.LayerID{}.Value))
-			stmt.BindBytes(4, types.EmptyBlockID.Bytes())
-		}, func(stmt *sql.Statement) bool {
-			next = types.NewLayerID(uint32(stmt.ColumnInt64(0)))
-			stmt.ColumnBytes(1, bid[:])
-			return true
-		}); err != nil {
-		return types.LayerID{}, types.EmptyBlockID, fmt.Errorf("get next layer %s/%s: %w", id, lid, err)
-	} else if rows == 0 {
-		return types.LayerID{}, types.EmptyBlockID, fmt.Errorf("%w: tx %s/%s", sql.ErrNotFound, id, lid)
-	}
-	return next, bid, nil
 }
 
 // tx, header, layer, block, timestamp.
@@ -448,4 +393,46 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 		}
 	}
 	return nil
+}
+
+func TransactionInProposal(db sql.Executor, id types.TransactionID, lid types.LayerID) (types.LayerID, error) {
+	var rst types.LayerID
+	rows, err := db.Exec("select min(layer) from proposal_transactions where tid = ?1 and layer > ?2",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+			stmt.BindInt64(2, int64(lid.Value))
+		}, func(s *sql.Statement) bool {
+			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
+			return false
+		})
+	if rows == 0 {
+		return rst, fmt.Errorf("%w no proposal after %s with tx %s", sql.ErrNotFound, lid, id)
+	}
+	if err != nil {
+		return rst, fmt.Errorf("tx in proposal %s: %w", id, err)
+	}
+	return rst, nil
+}
+
+func TransactionInBlock(db sql.Executor, id types.TransactionID, lid types.LayerID) (types.BlockID, types.LayerID, error) {
+	var (
+		rst types.LayerID
+		bid types.BlockID
+	)
+	rows, err := db.Exec("select min(layer), bid from block_transactions where tid = ?1 and layer > ?2",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+			stmt.BindInt64(2, int64(lid.Value))
+		}, func(s *sql.Statement) bool {
+			rst = types.NewLayerID(uint32(s.ColumnInt64(0)))
+			s.ColumnBytes(1, bid[:])
+			return false
+		})
+	if err != nil {
+		return bid, rst, fmt.Errorf("tx in block %s: %w", id, err)
+	}
+	if rows == 0 {
+		return bid, rst, fmt.Errorf("%w no block after %s with tx %s", sql.ErrNotFound, lid, id)
+	}
+	return bid, rst, nil
 }

@@ -330,17 +330,13 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, no
 
 	if applied != (types.LayerID{}) {
 		// we just applied a layer, need to update layer/block for the pending txs
-		for i, mtx := range mtxs {
-			nextLayer, nextBlock, err := transactions.SetNextLayer(db, mtx.ID, applied)
+		for _, mtx := range mtxs {
+			nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 			if err != nil {
-				logger.With().Error("failed to reset layer",
-					mtx.ID,
-					log.Uint64("nonce", nonce),
-					log.Stringer("applied", applied))
 				return err
 			}
-			mtxs[i].LayerID = nextLayer
-			mtxs[i].BlockID = nextBlock
+			mtx.LayerID = nextLayer
+			mtx.BlockID = nextBlock
 			if nextLayer != (types.LayerID{}) {
 				logger.With().Debug("next layer found", mtx.ID, nextLayer)
 			}
@@ -490,10 +486,21 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 
 // buildFromScratch builds the cache from database.
 func (c *cache) buildFromScratch(db *sql.Database) error {
+	applied, err := layers.GetLastApplied(db)
+	if err != nil {
+		return fmt.Errorf("cache: get pending %w", err)
+	}
 	mtxs, err := transactions.GetAllPending(db)
 	if err != nil {
-		c.logger.Error("failed to get all pending txs", log.Err(err))
-		return err
+		return fmt.Errorf("cache: get all pending %w", err)
+	}
+	for _, mtx := range mtxs {
+		nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
+		if err != nil {
+			return err
+		}
+		mtx.LayerID = nextLayer
+		mtx.BlockID = nextBlock
 	}
 	return c.BuildFromTXs(mtxs, nil)
 }
@@ -817,10 +824,6 @@ func addToProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, ti
 			if err := transactions.AddToProposal(dbtx, tid, lid, pid); err != nil {
 				return fmt.Errorf("add2prop %w", err)
 			}
-			_, err := transactions.UpdateIfBetter(dbtx, tid, lid, types.EmptyBlockID)
-			if err != nil {
-				return fmt.Errorf("add2prop update %w", err)
-			}
 		}
 		return nil
 	})
@@ -832,10 +835,6 @@ func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []t
 			if err := transactions.AddToBlock(dbtx, tid, lid, bid); err != nil {
 				return fmt.Errorf("add2block %w", err)
 			}
-			_, err := transactions.UpdateIfBetter(dbtx, tid, lid, bid)
-			if err != nil {
-				return fmt.Errorf("add2block update %w", err)
-			}
 		}
 		return nil
 	})
@@ -843,15 +842,23 @@ func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []t
 
 func undoLayers(db *sql.Database, from types.LayerID) error {
 	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
-		tids, err := transactions.UndoLayers(dbtx, from)
+		_, err := transactions.UndoLayers(dbtx, from)
 		if err != nil {
 			return fmt.Errorf("undo %w", err)
 		}
-		for _, tid := range tids {
-			if _, _, err = transactions.SetNextLayer(dbtx, tid, from.Sub(1)); err != nil {
-				return fmt.Errorf("reset for undo %w", err)
-			}
-		}
 		return nil
 	})
+}
+
+func getNextIncluded(db sql.Executor, id types.TransactionID, from types.LayerID) (types.LayerID, types.BlockID, error) {
+	bid, lid, err := transactions.TransactionInBlock(db, id, from)
+	if err != nil && errors.Is(err, sql.ErrNotFound) {
+		lid, err = transactions.TransactionInProposal(db, id, from)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return lid, bid, fmt.Errorf("get tx in next proposals %w", err)
+		}
+	} else if err != nil {
+		return lid, bid, fmt.Errorf("get tx in next blocks %w", err)
+	}
+	return lid, bid, nil
 }
