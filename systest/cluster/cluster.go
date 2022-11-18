@@ -449,6 +449,18 @@ func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
 }
 
+// CloseClients closes connections to clients.
+func (c *Cluster) CloseClients() error {
+	var eg errgroup.Group
+	for _, client := range c.clients {
+		eg.Go(client.Close)
+	}
+	for _, client := range c.poets {
+		eg.Go(client.Close)
+	}
+	return eg.Wait()
+}
+
 // Wait for i-th client to be up.
 func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 	nc, err := waitNode(tctx, c.Client(i).Name, Smesher)

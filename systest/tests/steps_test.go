@@ -108,6 +108,9 @@ func TestStepTransactions(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		cl.CloseClients()
+	})
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
 
 	clients := make([]*txClient, cl.Accounts())
