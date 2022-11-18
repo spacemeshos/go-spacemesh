@@ -455,9 +455,6 @@ func (c *Cluster) CloseClients() error {
 	for _, client := range c.clients {
 		eg.Go(client.Close)
 	}
-	for _, client := range c.poets {
-		eg.Go(client.Close)
-	}
 	return eg.Wait()
 }
 
