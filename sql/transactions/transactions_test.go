@@ -229,9 +229,7 @@ func TestUndoLayers_Empty(t *testing.T) {
 	db := sql.InMemory()
 
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
-		undone, err := UndoLayers(dtx, types.NewLayerID(199))
-		require.Len(t, undone, 0)
-		return err
+		return UndoLayers(dtx, types.NewLayerID(199))
 	}))
 }
 
@@ -267,12 +265,8 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	}
 
 	// revert to firstLayer
-	numTXsUndone := int(numLayers-1) * 2
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
-		undone, err := UndoLayers(dtx, firstLayer.Add(1))
-		require.Len(t, undone, numTXsUndone)
-		require.ElementsMatch(t, append(applied[1:], discarded[1:]...), undone)
-		return err
+		return UndoLayers(dtx, firstLayer.Add(1))
 	}))
 
 	for i, tid := range applied {
@@ -406,11 +400,12 @@ func TestAppliedLayer(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
-		undone, err := UndoLayers(dtx, lid)
-		require.Len(t, undone, 1)
-		require.Equal(t, txs[0].ID, undone[0])
-		return err
+		return UndoLayers(dtx, lid)
 	}))
 	_, err = GetAppliedLayer(db, txs[0].ID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func TestAddressesWithPending(t *testing.T) {
+
 }

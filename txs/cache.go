@@ -816,7 +816,7 @@ func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []t
 
 func undoLayers(db *sql.Database, from types.LayerID) error {
 	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
-		_, err := transactions.UndoLayers(dbtx, from)
+		err := transactions.UndoLayers(dbtx, from)
 		if err != nil {
 			return fmt.Errorf("undo %w", err)
 		}
