@@ -329,7 +329,6 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, no
 	}
 
 	if applied != (types.LayerID{}) {
-		// we just applied a layer, need to update layer/block for the pending txs
 		for _, mtx := range mtxs {
 			nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 			if err != nil {
@@ -653,6 +652,7 @@ func (c *cache) ApplyLayer(
 	byPrincipal := make(map[types.Address]struct{})
 
 	// commmit results before reporting them
+	// TODO(dshulyak) move them to vm
 	if err := db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		for _, rst := range results {
 			err := transactions.AddResult(dbtx, rst.ID, &rst.TransactionResult)
