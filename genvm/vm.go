@@ -209,13 +209,8 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	t3 := time.Now()
 	blockDurationTxs.Observe(float64(time.Since(t2)))
 
-	tx, err := v.db.TxImmediate(context.Background())
+	rewardsResult, err := v.addRewards(lctx, ss, fees, blockRewards)
 	if err != nil {
-		return nil, nil, err
-	}
-	defer tx.Release()
-
-	if err := v.addRewards(lctx, ss, tx, fees, blockRewards); err != nil {
 		return nil, nil, err
 	}
 
@@ -225,6 +220,18 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	hasher := hash.New()
 	encoder := scale.NewEncoder(hasher)
 	total := 0
+
+	tx, err := v.db.TxImmediate(context.Background())
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Release()
+
+	for _, reward := range rewardsResult {
+		if err := rewards.Add(tx, &reward); err != nil {
+			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		}
+	}
 
 	ss.IterateChanged(func(account *core.Account) bool {
 		total++
