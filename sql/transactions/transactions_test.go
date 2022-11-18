@@ -407,5 +407,64 @@ func TestAppliedLayer(t *testing.T) {
 }
 
 func TestAddressesWithPending(t *testing.T) {
-
+	principals := []types.Address{
+		{1},
+		{2},
+		{3},
+	}
+	txs := []types.Transaction{
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{1}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 10}}},
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{2}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 11}},
+		},
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{3}},
+			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: types.Nonce{Counter: 13}},
+		},
+	}
+	db := sql.InMemory()
+	for _, tx := range txs {
+		require.NoError(t, Add(db, &tx, time.Time{}))
+	}
+	rst, err := AddressesWithPendingTransactions(db)
+	require.NoError(t, err)
+	require.Equal(t, []types.AddressNonce{
+		{Address: principals[0], Nonce: txs[0].Nonce},
+		{Address: principals[1], Nonce: txs[2].Nonce},
+	}, rst)
+	require.NoError(t, db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		return AddResult(dbtx, txs[0].ID, &types.TransactionResult{Message: "hey"})
+	}))
+	rst, err = AddressesWithPendingTransactions(db)
+	require.NoError(t, err)
+	require.Equal(t, []types.AddressNonce{
+		{Address: principals[0], Nonce: txs[1].Nonce},
+		{Address: principals[1], Nonce: txs[2].Nonce},
+	}, rst)
+	require.NoError(t, db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+		return AddResult(dbtx, txs[2].ID, &types.TransactionResult{Message: "hey"})
+	}))
+	rst, err = AddressesWithPendingTransactions(db)
+	require.NoError(t, err)
+	require.Equal(t, []types.AddressNonce{
+		{Address: principals[0], Nonce: txs[1].Nonce},
+	}, rst)
+	more := []types.Transaction{
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{4}},
+			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: types.Nonce{Counter: 17}},
+		},
+	}
+	for _, tx := range more {
+		require.NoError(t, Add(db, &tx, time.Time{}))
+	}
+	rst, err = AddressesWithPendingTransactions(db)
+	require.NoError(t, err)
+	require.Equal(t, []types.AddressNonce{
+		{Address: principals[0], Nonce: txs[1].Nonce},
+		{Address: principals[2], Nonce: more[0].Nonce},
+	}, rst)
 }

@@ -251,27 +251,22 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 // AddressesWithPendingTransactions returns list of addresses with pending transactions.
 func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, error) {
 	var rst []types.AddressNonce
-	if _, err := db.Exec(`
-	select principal as current, max(nonce) from transactions 
-	where nonce >=
-		(
-			select top 1 nonce from transactions 
-			where principal = current and result is not null
-			order by nonce desc;
-		)
-	group_by principal;
-	;
-	`, nil, func(stmt *sql.Statement) bool {
-		addr := types.Address{}
-		stmt.BindBytes(0, addr[:])
-		buf := [8]byte{}
-		stmt.BindBytes(1, buf[:])
-		rst = append(rst, types.AddressNonce{
-			Address: addr,
-			Nonce:   types.Nonce{Counter: binary.BigEndian.Uint64(buf[:])},
-		})
-		return true
-	}); err != nil {
+	if _, err := db.Exec(`select principal as current, min(nonce) from transactions
+	where result is null and nonce >= (select coalesce(max(nonce), 0) from transactions where result is not null and principal = current)
+	group by principal
+	;`,
+		nil,
+		func(stmt *sql.Statement) bool {
+			addr := types.Address{}
+			stmt.ColumnBytes(0, addr[:])
+			buf := [8]byte{}
+			stmt.ColumnBytes(1, buf[:])
+			rst = append(rst, types.AddressNonce{
+				Address: addr,
+				Nonce:   types.Nonce{Counter: binary.BigEndian.Uint64(buf[:])},
+			})
+			return true
+		}); err != nil {
 		return nil, fmt.Errorf("addresses with pending txs %w", err)
 	}
 	return rst, nil
