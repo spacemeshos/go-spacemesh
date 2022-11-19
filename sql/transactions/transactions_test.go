@@ -406,7 +406,7 @@ func TestAppliedLayer(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestAddressesWithPending(t *testing.T) {
+func TestAddressesWithPendingTransactions(t *testing.T) {
 	principals := []types.Address{
 		{1},
 		{2},
@@ -415,14 +415,14 @@ func TestAddressesWithPending(t *testing.T) {
 	txs := []types.Transaction{
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{1}},
-			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 10}}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 0}}},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{2}},
-			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 11}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 1}},
 		},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{3}},
-			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: types.Nonce{Counter: 13}},
+			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: types.Nonce{Counter: 0}},
 		},
 	}
 	db := sql.InMemory()
@@ -455,7 +455,15 @@ func TestAddressesWithPending(t *testing.T) {
 	more := []types.Transaction{
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{4}},
-			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: types.Nonce{Counter: 17}},
+			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: types.Nonce{Counter: 0}},
+		},
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{5}},
+			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: types.Nonce{Counter: 1}},
+		},
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{6}},
+			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: types.Nonce{Counter: 1}},
 		},
 	}
 	for _, tx := range more {
@@ -465,6 +473,7 @@ func TestAddressesWithPending(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []types.AddressNonce{
 		{Address: principals[0], Nonce: txs[1].Nonce},
+		{Address: principals[1], Nonce: more[2].Nonce},
 		{Address: principals[2], Nonce: more[0].Nonce},
 	}, rst)
 }

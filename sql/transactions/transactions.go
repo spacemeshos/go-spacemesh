@@ -253,7 +253,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, error) {
 	var rst []types.AddressNonce
 	if _, err := db.Exec(`select principal as current, min(nonce) from transactions
-	where result is null and nonce >= (select coalesce(max(nonce), 0) from transactions where result is not null and principal = current)
+	where result is null and nonce > (select coalesce(max(nonce), 0) from transactions where result is not null and principal = current)
 	group by principal
 	;`,
 		nil,
