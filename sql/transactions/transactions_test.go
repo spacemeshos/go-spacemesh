@@ -84,7 +84,7 @@ func TestAddGetHas(t *testing.T) {
 	for _, tx := range txs {
 		got, err := Get(db, tx.ID)
 		require.NoError(t, err)
-		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.PENDING)
+		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
 		checkMeshTXEqual(t, *expected, *got)
 
 		has, err := Has(db, tx.ID)
@@ -248,7 +248,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		if i == 0 {
 			require.Equal(t, types.APPLIED, mtx.State)
 		} else {
-			require.Equal(t, types.PENDING, mtx.State)
+			require.Equal(t, types.MEMPOOL, mtx.State)
 		}
 	}
 }

@@ -652,7 +652,7 @@ func (c *cache) ApplyLayer(
 	byPrincipal := make(map[types.Address]struct{})
 
 	// commmit results before reporting them
-	// TODO(dshulyak) move them to vm
+	// TODO(dshulyak) save results in vm
 	if err := db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		for _, rst := range results {
 			err := transactions.AddResult(dbtx, rst.ID, &rst.TransactionResult)
@@ -666,6 +666,7 @@ func (c *cache) ApplyLayer(
 	}
 
 	for _, rst := range results {
+		byPrincipal[rst.Principal] = struct{}{}
 		toCleanup[rst.Principal] = struct{}{}
 		if !c.has(rst.ID) {
 			rawTxCount.WithLabelValues(updated).Inc()

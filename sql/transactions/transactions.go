@@ -158,6 +158,8 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 	state := types.PENDING
 	if stmt.ColumnInt64(2) != 0 {
 		state = types.APPLIED
+	} else if parsed.TxHeader != nil {
+		state = types.MEMPOOL
 	}
 
 	return &types.MeshTransaction{
@@ -269,7 +271,7 @@ func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, er
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `select tx, header, layer, timestamp, id from transactions
 		where principal = ?1 and nonce >= ?2 and result is null 
-		order by nonce asc`,
+		order by nonce asc, timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(from))
