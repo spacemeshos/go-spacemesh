@@ -89,7 +89,7 @@ type VM struct {
 func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
 		vm:      v,
-		cache:   core.NewStagedCache(v.db),
+		cache:   core.NewStagedCache(core.DBLoader{Executor: v.db}),
 		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
 		raw:     raw,
 	}
@@ -201,7 +201,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	t2 := time.Now()
 	blockDurationWait.Observe(float64(time.Since(t1)))
 
-	ss := core.NewStagedCache(v.db)
+	ss := core.NewStagedCache(core.DBLoader{Executor: v.db})
 	results, skipped, fees, err := v.execute(lctx, ss, txs)
 	if err != nil {
 		return nil, nil, err
