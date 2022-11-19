@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
@@ -455,25 +454,22 @@ func (c *cache) buildFromScratch(db *sql.Database) error {
 	if err != nil {
 		return fmt.Errorf("cache: get pending %w", err)
 	}
-	accs, err := accounts.All(db)
-	if err != nil {
-		return fmt.Errorf("cache: all accouts %w", err)
-	}
+	addresses, err := transactions.AddressesWithPendingTransactions(db)
 	var rst []*types.MeshTransaction
-	for _, account := range accs {
-		txs, err := transactions.GetAcctPendingFromNonce(db, account.Address, account.NextNonce)
+	for _, addr := range addresses {
+		txs, err := transactions.GetAcctPendingFromNonce(db, addr.Address, addr.Nonce.Counter)
 		if err != nil {
-			return fmt.Errorf("get pending addr=%s nonce=%d %w", account.Address, account.NextNonce, err)
+			return fmt.Errorf("get pending addr=%s nonce=%d %w", addr.Address, addr.Nonce.Counter, err)
 		}
-		for _, mtx := range txs {
-			nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
-			if err != nil {
-				return err
-			}
-			mtx.LayerID = nextLayer
-			mtx.BlockID = nextBlock
-			rst = append(rst, mtx)
+		rst = append(rst, txs...)
+	}
+	for _, mtx := range rst {
+		nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
+		if err != nil {
+			return err
 		}
+		mtx.LayerID = nextLayer
+		mtx.BlockID = nextBlock
 	}
 	return c.BuildFromTXs(rst, nil)
 }
