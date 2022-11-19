@@ -1,7 +1,6 @@
 package transactions
 
 import (
-	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -246,31 +245,6 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 		return nil, fmt.Errorf("get by addr %s: %w", address, err)
 	}
 	return txs, nil
-}
-
-// AddressesWithPendingTransactions returns list of addresses with pending transactions.
-// Query is expensive, meant to be used only on startup.
-func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, error) {
-	var rst []types.AddressNonce
-	if _, err := db.Exec(`select principal as current, min(nonce) from transactions
-	where result is null and nonce > (select coalesce(max(nonce), 0) from transactions where result is not null and principal = current)
-	group by principal
-	;`,
-		nil,
-		func(stmt *sql.Statement) bool {
-			addr := types.Address{}
-			stmt.ColumnBytes(0, addr[:])
-			buf := [8]byte{}
-			stmt.ColumnBytes(1, buf[:])
-			rst = append(rst, types.AddressNonce{
-				Address: addr,
-				Nonce:   types.Nonce{Counter: binary.BigEndian.Uint64(buf[:])},
-			})
-			return true
-		}); err != nil {
-		return nil, fmt.Errorf("addresses with pending txs %w", err)
-	}
-	return rst, nil
 }
 
 // GetAcctPendingFromNonce get all pending transactions with nonce after `from` for the given address.
