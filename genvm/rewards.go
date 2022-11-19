@@ -10,8 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
 // ValidateRewards syntactically validates rewards.
@@ -32,7 +30,7 @@ func ValidateRewards(rewards []types.AnyReward) error {
 	return nil
 }
 
-func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fees uint64, blockRewards []types.AnyReward) error {
+func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.AnyReward) ([]types.Reward, error) {
 	var (
 		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.GetEffectiveGenesis())
 		subsidy                     = erewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
@@ -43,6 +41,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	for _, blockReward := range blockRewards {
 		totalWeight.Add(util.WeightFromNumDenom(blockReward.Weight.Num, blockReward.Weight.Denom))
 	}
+	result := make([]types.Reward, 0, len(blockRewards))
 	for _, blockReward := range blockRewards {
 		relative := util.WeightFromNumDenom(blockReward.Weight.Num, blockReward.Weight.Denom).Div(totalWeight)
 
@@ -51,7 +50,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 			Mul(totalReward, relative.Num()).
 			Quo(totalReward, relative.Denom())
 		if !totalReward.IsUint64() {
-			return fmt.Errorf("%w: total reward %v for %v overflows uint64",
+			return nil, fmt.Errorf("%w: total reward %v for %v overflows uint64",
 				core.ErrInternal, totalReward, blockReward.Coinbase)
 		}
 
@@ -60,7 +59,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 			Mul(subsidyReward, relative.Num()).
 			Quo(subsidyReward, relative.Denom())
 		if !subsidyReward.IsUint64() {
-			return fmt.Errorf("%w: subsidy reward %v for %v overflows uint64",
+			return nil, fmt.Errorf("%w: subsidy reward %v for %v overflows uint64",
 				core.ErrInternal, subsidyReward, blockReward.Coinbase)
 		}
 
@@ -72,22 +71,20 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 			log.Uint64("total", totalReward.Uint64()),
 		)
 
-		reward := &types.Reward{
+		reward := types.Reward{
 			Layer:       lctx.Layer,
 			Coinbase:    blockReward.Coinbase,
 			TotalReward: totalReward.Uint64(),
 			LayerReward: subsidyReward.Uint64(),
 		}
-		if err := rewards.Add(tx, reward); err != nil {
-			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
-		}
+		result = append(result, reward)
 		account, err := ss.Get(blockReward.Coinbase)
 		if err != nil {
-			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		account.Balance += reward.TotalReward
 		if err := ss.Update(account); err != nil {
-			return fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
 		}
 		transferred += totalReward.Uint64()
 	}
@@ -104,5 +101,5 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, tx *sql.Tx, fee
 	subsidyCount.Add(float64(subsidy))
 	rewardsCount.Add(float64(transferred))
 	burntCount.Add(float64(total - transferred))
-	return nil
+	return result, nil
 }

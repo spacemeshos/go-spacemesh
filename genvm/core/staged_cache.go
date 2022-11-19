@@ -6,14 +6,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
 
+type DBLoader struct {
+	sql.Executor
+}
+
+func (db DBLoader) Get(address types.Address) (types.Account, error) {
+	return accounts.Latest(db.Executor, address)
+}
+
 // NewStagedCache returns instance of the staged cache.
-func NewStagedCache(db sql.Executor) *StagedCache {
-	return &StagedCache{db: db, cache: map[Address]stagedAccount{}}
+func NewStagedCache(loader AccountLoader) *StagedCache {
+	return &StagedCache{loader: loader, cache: map[Address]stagedAccount{}}
 }
 
 // StagedCache is a passthrough cache for accounts state and enforces order for updated accounts.
 type StagedCache struct {
-	db sql.Executor
+	loader AccountLoader
 	// list of changed accounts. preserving order
 	touched []Address
 	cache   map[Address]stagedAccount
@@ -25,7 +33,7 @@ func (ss *StagedCache) Get(address Address) (Account, error) {
 	if exist {
 		return sacc.Account, nil
 	}
-	account, err := accounts.Latest(ss.db, types.Address(address))
+	account, err := ss.loader.Get(address)
 	if err != nil {
 		return Account{}, err
 	}
