@@ -23,24 +23,20 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 		}
 	}
 	if _, err = db.Exec(`
-		insert into transactions (id, tx, header, layer, block, principal, nonce, timestamp)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+		insert into transactions (id, tx, header, principal, nonce, timestamp)
+		values (?1, ?2, ?3, ?4, ?5, ?6)
 		on conflict(id) do update set 
-		header=?3, principal=?6, nonce=?7 
+		header=?3, principal=?4, nonce=?5 
 		where header is null;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, tx.ID.Bytes())
 			stmt.BindBytes(2, tx.Raw)
-			stmt.BindInt64(4, int64(types.LayerID{}.Value))
-			stmt.BindBytes(5, types.EmptyBlockID.Bytes())
-
 			if header != nil {
 				stmt.BindBytes(3, header)
-				stmt.BindBytes(6, tx.Principal[:])
-				stmt.BindBytes(7, util.Uint64ToBytesBigEndian(tx.Nonce.Counter))
+				stmt.BindBytes(4, tx.Principal[:])
+				stmt.BindBytes(5, util.Uint64ToBytesBigEndian(tx.Nonce.Counter))
 			}
-
-			stmt.BindInt64(8, received.UnixNano())
+			stmt.BindInt64(6, received.UnixNano())
 		}, nil); err != nil {
 		return fmt.Errorf("insert %s: %w", tx.ID, err)
 	}
@@ -131,13 +127,11 @@ func UndoLayers(db *sql.Tx, from types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("delete addresses mapping %w", err)
 	}
-	_, err = db.Exec(`
-			update transactions set layer = ?2, block = ?3, result =
-			 null where layer >= ?1 returning id`,
+	_, err = db.Exec(`update transactions 
+		set layer = null, block = null, result = null 
+		where layer >= ?1`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Value))
-			stmt.BindInt64(2, int64(types.LayerID{}.Value))
-			stmt.BindBytes(3, types.EmptyBlockID.Bytes())
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("undo layer %s: %w", from, err)
@@ -167,7 +161,8 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 
 	return &types.MeshTransaction{
 		Transaction: parsed,
-		Received:    time.Unix(0, stmt.ColumnInt64(4)),
+		LayerID:     types.NewLayerID(uint32(stmt.ColumnInt64(2))),
+		Received:    time.Unix(0, stmt.ColumnInt64(3)),
 		State:       state,
 	}, nil
 }
@@ -223,18 +218,15 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
 	if _, err := db.Exec(`
-		select tx, header, layer, block, timestamp, id from transactions
-		where principal = ?1 and layer between ?2 and ?3`,
+		select tx, header, layer, timestamp, id from transactions
+		where principal = ?1 and (layer is null or layer between ?2 and ?3)`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
 			stmt.BindInt64(2, int64(from.Value))
 			stmt.BindInt64(3, int64(to.Value))
 		}, func(stmt *sql.Statement) bool {
-			var (
-				tx *types.MeshTransaction
-				id types.TransactionID
-			)
-			stmt.ColumnBytes(5, id[:])
+			var id types.TransactionID
+			stmt.ColumnBytes(4, id[:])
 			tx, err := decodeTransaction(id, stmt)
 			if err != nil {
 				return false
@@ -249,9 +241,9 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 
 // GetAcctPendingFromNonce get all pending transactions with nonce after `from` for the given address.
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
-	return queryPending(db, `
-		select tx, header, layer, block, timestamp, id from transactions
-		where principal = ?1 and nonce >= ?2 order by nonce asc`,
+	return queryPending(db, `select tx, header, layer, timestamp, id from transactions
+		where principal = ?1 and nonce >= ?2 and result is null 
+		order by nonce asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(from))
@@ -265,7 +257,7 @@ func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), e
 			tx *types.MeshTransaction
 			id types.TransactionID
 		)
-		stmt.ColumnBytes(5, id[:])
+		stmt.ColumnBytes(4, id[:])
 		tx, err = decodeTransaction(id, stmt)
 		if err != nil {
 			return false

@@ -39,26 +39,6 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 	return &parsed
 }
 
-func packedInProposal(t *testing.T, db *sql.Database, tid types.TransactionID, lid types.LayerID, pid types.ProposalID, expectUpdated int) {
-	t.Helper()
-	dbtx, err := db.Tx(context.Background())
-	require.NoError(t, err)
-	defer dbtx.Release()
-
-	require.NoError(t, AddToProposal(dbtx, tid, lid, pid))
-	require.NoError(t, dbtx.Commit())
-}
-
-func packedInBlock(t *testing.T, db *sql.Database, tid types.TransactionID, lid types.LayerID, bid types.BlockID, expectUpdated int) {
-	t.Helper()
-	dbtx, err := db.Tx(context.Background())
-	require.NoError(t, err)
-	defer dbtx.Release()
-
-	require.NoError(t, AddToBlock(dbtx, tid, lid, bid))
-	require.NoError(t, dbtx.Commit())
-}
-
 func makeMeshTX(tx *types.Transaction, lid types.LayerID, bid types.BlockID, received time.Time, state types.TXState) *types.MeshTransaction {
 	return &types.MeshTransaction{
 		Transaction: *tx,
@@ -104,7 +84,7 @@ func TestAddGetHas(t *testing.T) {
 	for _, tx := range txs {
 		got, err := Get(db, tx.ID)
 		require.NoError(t, err)
-		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.MEMPOOL)
+		expected := makeMeshTX(tx, types.LayerID{}, types.EmptyBlockID, received, types.PENDING)
 		checkMeshTXEqual(t, *expected, *got)
 
 		has, err := Has(db, tx.ID)
@@ -240,7 +220,6 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	firstLayer := types.NewLayerID(10)
 	numLayers := uint32(5)
 	applied := make([]types.TransactionID, 0, numLayers)
-	discarded := make([]types.TransactionID, 0, numLayers)
 	for lid := firstLayer; lid.Before(firstLayer.Add(numLayers)); lid = lid.Add(1) {
 		signer := signing.NewEdSignerFromRand(rng)
 		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 2)
@@ -258,12 +237,6 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
 	}
-	for _, tid := range discarded {
-		mtx, err := Get(db, tid)
-		require.NoError(t, err)
-		require.Equal(t, types.DISCARDED, mtx.State)
-	}
-
 	// revert to firstLayer
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
 		return UndoLayers(dtx, firstLayer.Add(1))
@@ -275,16 +248,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		if i == 0 {
 			require.Equal(t, types.APPLIED, mtx.State)
 		} else {
-			require.Equal(t, types.MEMPOOL, mtx.State)
-		}
-	}
-	for i, tid := range discarded {
-		mtx, err := Get(db, tid)
-		require.NoError(t, err)
-		if i == 0 {
-			require.Equal(t, types.DISCARDED, mtx.State)
-		} else {
-			require.Equal(t, types.MEMPOOL, mtx.State)
+			require.Equal(t, types.PENDING, mtx.State)
 		}
 	}
 }
@@ -315,20 +279,19 @@ func TestGetByAddress(t *testing.T) {
 	signer2 := signing.NewEdSignerFromRand(rng)
 	signer2Address := types.GenerateAddress(signer2.PublicKey().Bytes())
 	lid := types.NewLayerID(10)
-	pid := types.ProposalID{1, 1}
-	bid := types.BlockID{2, 2}
-
 	txs := []*types.Transaction{
 		createTX(t, signer1, types.Address{1}, 1, 191, 1),
 		createTX(t, signer2, types.Address{2}, 1, 191, 1),
 		createTX(t, signer1, signer2Address, 1, 191, 1),
 	}
 	received := time.Now()
-	for _, tx := range txs {
-		require.NoError(t, Add(db, tx, received))
-		packedInProposal(t, db, tx.ID, lid, pid, 1)
-	}
-	packedInBlock(t, db, txs[2].ID, lid, bid, 1)
+	require.NoError(t, db.WithTx(context.TODO(), func(dbtx *sql.Tx) error {
+		for _, tx := range txs {
+			require.NoError(t, Add(dbtx, tx, received))
+			require.NoError(t, AddResult(dbtx, tx.ID, &types.TransactionResult{Layer: lid}))
+		}
+		return nil
+	}))
 
 	// should be nothing before lid
 	got, err := GetByAddress(db, types.NewLayerID(1), lid.Sub(1), signer2Address)
@@ -338,7 +301,7 @@ func TestGetByAddress(t *testing.T) {
 	got, err = GetByAddress(db, types.LayerID{}, lid, signer2Address)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
-	expected1 := makeMeshTX(txs[1], lid, types.EmptyBlockID, received, types.PROPOSAL)
+	expected1 := makeMeshTX(txs[1], lid, types.EmptyBlockID, received, types.APPLIED)
 	checkMeshTXEqual(t, *expected1, *got[0])
 }
 
