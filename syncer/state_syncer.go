@@ -241,7 +241,7 @@ func (s *Syncer) ensureMeshAgreement(
 		}
 
 		peer := opn.Peer()
-		logger = logger.WithFields(
+		logger := logger.WithFields(
 			log.Stringer("peer", peer),
 			log.Stringer("disagreed", prevLid),
 			log.Stringer("peer_hash", opn.PrevAggHash))
