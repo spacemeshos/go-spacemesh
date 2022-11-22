@@ -42,7 +42,6 @@ type Broker struct {
 	layersPerEpoch uint16
 	queue          priorityq.PriorityQueue
 	queueChannel   chan struct{} // used to synchronize the message queues
-	syncState      map[uint32]bool
 	outbox         map[uint32]chan *Msg
 	pending        map[uint32][]*Msg // the buffer of pending early messages for the next layer
 	tasks          chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
@@ -65,7 +64,6 @@ func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, s
 		stateQuerier:   stateQuerier,
 		nodeSyncState:  syncState,
 		layersPerEpoch: layersPerEpoch,
-		syncState:      make(map[uint32]bool),
 		outbox:         make(map[uint32]chan *Msg),
 		pending:        make(map[uint32][]*Msg),
 		tasks:          make(chan func()),
@@ -97,14 +95,14 @@ func (b *Broker) Start(ctx context.Context) error {
 var (
 	errUnregistered      = errors.New("layer is unregistered")
 	errNotSynced         = errors.New("layer is not synced")
+	errBadMsg            = errors.New("bad message")
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
 	errInstanceNotSynced = errors.New("instance not synchronized")
 	errClosed            = errors.New("closed")
 )
 
-// validate the message is contextually valid and that the target layer is synced.
-// note: it is important to check synchronicity after contextual to avoid memory leak in syncState.
+// validate the message is contextually valid and that the node is synced for processing the message.
 func (b *Broker) validate(ctx context.Context, m *Message) error {
 	msgInstID := m.InnerMsg.InstanceID
 
@@ -112,35 +110,30 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	_, exist := b.outbox[msgInstID.Uint32()]
 	b.mu.RUnlock()
 
-	if !exist {
-		// prev layer, must be unregistered
-		latestLayer := b.getLatestLayer()
-
-		if msgInstID.Before(latestLayer) {
-			return errUnregistered
-		}
-
-		// current layer
-		if msgInstID == latestLayer {
-			return errRegistration
-		}
-
-		// early msg
-		if msgInstID == latestLayer.Add(1) {
-			return errEarlyMsg
-		}
-
-		// future msg
-		return errFutureMsg
+	if exist {
+		b.Log.WithContext(ctx).With().Debug("instance exists", msgInstID)
+		return nil
 	}
 
-	// exist, check synchronicity
-	if !b.isSynced(ctx, msgInstID) {
-		return errNotSynced
+	// prev layer, must be unregistered
+	latestLayer := b.getLatestLayer()
+
+	if msgInstID.Before(latestLayer) {
+		return fmt.Errorf("%w: msg %v, latest %v", errUnregistered, msgInstID.Uint32(), latestLayer)
 	}
 
-	// synced and has instance
-	return nil
+	// current layer
+	if msgInstID == latestLayer {
+		return fmt.Errorf("%w: latest %v", errRegistration, latestLayer)
+	}
+
+	// early msg
+	if msgInstID == latestLayer.Add(1) {
+		return fmt.Errorf("%w: latest %v", errEarlyMsg, latestLayer)
+	}
+
+	// future msg
+	return fmt.Errorf("%w: msg %v, latest %v", errFutureMsg, msgInstID, latestLayer)
 }
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
@@ -158,7 +151,6 @@ func (b *Broker) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) p
 		return pubsub.ValidationIgnore
 	case err := <-m.Error:
 		if err != nil {
-			b.Log.With().Warning("hare validation failed", log.Err(err))
 			return pubsub.ValidationIgnore
 		}
 	}
@@ -169,7 +161,7 @@ func (b *Broker) queueMessage(ctx context.Context, peer p2p.Peer, msg []byte) (*
 	b.queueMessageWg.Add(1)
 	defer b.queueMessageWg.Done()
 
-	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
+	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()))
 	logger.Debug("hare broker received inbound gossip message")
 
 	// prioritize based on signature: outbound messages (self-generated) get priority
@@ -210,7 +202,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			b.queue.Close()
 			return
 		case <-b.queueChannel:
-			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
+			logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()))
 			rawMsg, err := b.queue.Read()
 			if err != nil {
 				logger.With().Info("priority queue was closed, exiting", log.Err(err))
@@ -218,7 +210,9 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 			msg, ok := rawMsg.(*msgRPC)
 			if !ok {
-				logger.Panic("could not convert priority queue message, ignoring")
+				logger.Error("could not convert priority queue message, ignoring")
+				msg.Error <- errBadMsg
+				continue
 			}
 
 			// create an inner context object to handle this message
@@ -235,15 +229,21 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger = msgLogger.WithFields(&hareMsg)
 
 			if hareMsg.InnerMsg == nil {
-				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
+				msgLogger.With().Error("hare msg missing inner msg", log.Err(errNilInner))
 				msg.Error <- errNilInner
 				continue
 			}
-			msgLogger.With().Debug("broker received hare message")
+			msgLogger.Debug("broker received hare message")
 
 			msgInstID := hareMsg.InnerMsg.InstanceID
 
-			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
+			msgLogger = msgLogger.WithFields(log.Stringer("msg_layer_id", msgInstID))
+
+			if !b.Synced(ctx, msgInstID) {
+				msg.Error <- errNotSynced
+				continue
+			}
+
 			isEarly := false
 			if err := b.validate(messageCtx, &hareMsg); err != nil {
 				if !errors.Is(err, errEarlyMsg) {
@@ -317,10 +317,10 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			latestLayer := b.getLatestLayer()
 
 			b.WithContext(ctx).With().Debug("broker received task, executing",
-				log.FieldNamed("latest_layer", latestLayer))
+				log.Stringer("latest_layer", latestLayer))
 			task()
 			b.WithContext(ctx).With().Debug("broker finished executing task",
-				log.FieldNamed("latest_layer", latestLayer))
+				log.Stringer("latest_layer", latestLayer))
 		}
 	}
 }
@@ -333,44 +333,11 @@ func (b *Broker) cleanOldLayers() {
 		_, exist := b.outbox[i.Uint32()]
 
 		if !exist { // unregistered
-			delete(b.syncState, i.Uint32()) // clean sync state
 			b.minDeleted = b.minDeleted.Add(1)
 		} else { // encountered first still running layer
 			break
 		}
 	}
-}
-
-func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if _, ok := b.syncState[id.Uint32()]; ok { // already has result
-		return
-	}
-
-	// not exist means unknown, check & set
-
-	if !b.nodeSyncState.IsSynced(ctx) {
-		b.WithContext(ctx).With().Debug("node is not synced, marking layer as not synced", types.LayerID(id))
-		b.syncState[id.Uint32()] = false // mark not synced
-		return
-	}
-
-	b.syncState[id.Uint32()] = true // mark valid
-}
-
-func (b *Broker) isSynced(ctx context.Context, id types.LayerID) bool {
-	b.updateSynchronicity(ctx, id)
-
-	b.mu.RLock()
-	synced, ok := b.syncState[id.Uint32()]
-	b.mu.RUnlock()
-	if !ok { // not exist means unknown
-		b.WithContext(ctx).Panic("syncState doesn't contain a value after call to updateSynchronicity")
-	}
-
-	return synced
 }
 
 // Register a layer to receive messages
@@ -382,8 +349,8 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 		ctx := log.WithNewSessionID(ctx)
 		b.setLatestLayer(ctx, id)
 
-		// first performing a check to see whether we are synced for this layer
-		if b.isSynced(ctx, id) {
+		// check to see if the node is still synced
+		if b.Synced(ctx, id) {
 			// This section of code does not need to be protected against possible race conditions
 			// because this function will be added to a queue of tasks that will all be
 			// executed sequentially and synchronously. There is still the concern that two or more
@@ -429,13 +396,13 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 		resCh <- nil
 	}
 
-	b.WithContext(ctx).With().Debug("queueing register task", types.LayerID(id))
+	b.WithContext(ctx).With().Debug("queueing register task", id)
 	b.tasks <- regRequest // send synced task
 
 	// wait for result
 	err := <-resErr
 	result := <-resCh
-	b.WithContext(ctx).With().Debug("register task result received", types.LayerID(id), log.Err(err))
+	b.WithContext(ctx).With().Debug("register task result received", id, log.Err(err))
 	if err != nil { // reg failed
 		return nil, err
 	}
@@ -471,12 +438,7 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 
 // Synced returns true if the given layer is synced, false otherwise.
 func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
-	res := make(chan bool)
-	b.tasks <- func() {
-		res <- b.isSynced(ctx, id)
-	}
-
-	return <-res
+	return b.nodeSyncState.IsSynced(ctx) && b.nodeSyncState.IsBeaconSynced(id.GetEpoch())
 }
 
 // Close closes broker.
@@ -514,8 +476,8 @@ func (b *Broker) setLatestLayer(ctx context.Context, layer types.LayerID) {
 
 	if !layer.After(b.latestLayer) { // should expect to update only newer layers
 		b.WithContext(ctx).With().Error("tried to update a previous layer",
-			log.FieldNamed("this_layer", layer),
-			log.FieldNamed("prev_layer", b.latestLayer))
+			log.Stringer("this_layer", layer),
+			log.Stringer("prev_layer", b.latestLayer))
 		return
 	}
 

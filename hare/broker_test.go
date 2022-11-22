@@ -66,6 +66,7 @@ func TestBroker_Start(t *testing.T) {
 func TestBroker_Received(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 
@@ -97,6 +98,7 @@ func TestBroker_Priority(t *testing.T) {
 		return true
 	}}
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 
 	require.NoError(t, broker.Start(context.TODO()))
@@ -187,6 +189,7 @@ func TestBroker_Priority(t *testing.T) {
 func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker := buildBrokerWithLimit(t, t.Name(), 4)
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 
@@ -231,6 +234,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 func TestBroker_Abort(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 
 	timer := time.NewTimer(3 * time.Second)
@@ -278,6 +282,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 
@@ -320,6 +325,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 func TestBroker_RegisterUnregister(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	broker.Register(context.TODO(), instanceID1)
 
@@ -345,6 +351,7 @@ func TestBroker_Send(t *testing.T) {
 	mev := &mockEligibilityValidator{valid: 0}
 	broker.eValidator = mev
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(ctx))
 
@@ -367,6 +374,7 @@ func TestBroker_Send(t *testing.T) {
 func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
 
@@ -387,6 +395,7 @@ func TestBroker_Register(t *testing.T) {
 func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	broker.Register(context.TODO(), instanceID1)
@@ -406,6 +415,7 @@ func TestBroker_Register2(t *testing.T) {
 func TestBroker_Register3(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
 
@@ -431,6 +441,7 @@ func TestBroker_Register3(t *testing.T) {
 func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	inbox, _ := broker.Register(context.TODO(), instanceID1)
@@ -482,35 +493,19 @@ func TestBroker_updateInstance(t *testing.T) {
 	closeBrokerAndWait(t, b.Broker)
 }
 
-func TestBroker_updateSynchronicity(t *testing.T) {
-	r := require.New(t)
-
-	b := buildBroker(t, t.Name())
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	b.updateSynchronicity(context.TODO(), instanceID1)
-	r.True(b.isSynced(context.TODO(), instanceID1))
-
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	b.updateSynchronicity(context.TODO(), instanceID1)
-	r.True(b.isSynced(context.TODO(), instanceID1))
-
-	b.updateSynchronicity(context.TODO(), instanceID2)
-	r.False(b.isSynced(context.TODO(), instanceID2))
-
-	closeBrokerAndWait(t, b.Broker)
-}
-
-func TestBroker_isSynced(t *testing.T) {
+func TestBroker_Synced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	r.True(b.isSynced(context.TODO(), instanceID1))
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
+	r.True(b.Synced(context.TODO(), instanceID1))
 
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	r.True(b.isSynced(context.TODO(), instanceID1))
-	r.False(b.isSynced(context.TODO(), instanceID2))
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
+	r.False(b.Synced(context.TODO(), instanceID1))
 
-	r.False(b.isSynced(context.TODO(), instanceID2))
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(false)
+	r.False(b.Synced(context.TODO(), instanceID1))
 
 	closeBrokerAndWait(t, b.Broker)
 }
@@ -518,7 +513,8 @@ func TestBroker_isSynced(t *testing.T) {
 func TestBroker_Register4(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true)
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true)
 	b.Start(context.TODO())
 	c, e := b.Register(context.TODO(), instanceID1)
 	r.NoError(e)
@@ -527,7 +523,7 @@ func TestBroker_Register4(t *testing.T) {
 	r.Equal(b.outbox[instanceID1.Value], c)
 	b.mu.RUnlock()
 
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	_, e = b.Register(context.TODO(), instanceID2)
 	r.NotNil(e)
 
@@ -540,72 +536,42 @@ func TestBroker_eventLoop(t *testing.T) {
 	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, b.Start(context.TODO()))
 
-	// unknown-->invalid, ignore
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
+
+	// not synced
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m).Message
-	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
+	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
 
-	b.mu.RLock()
-	_, ok := b.outbox[instanceID1.Uint32()]
-	b.mu.RUnlock()
-	r.False(ok)
-
-	// register to invalid should error
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
+	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false)
 	_, e := b.Register(context.TODO(), instanceID1)
 	r.NotNil(e)
 
-	// register to unknown->valid
+	// synced
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	c, e := b.Register(context.TODO(), instanceID2)
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
+	c, e := b.Register(context.TODO(), instanceID1)
 	r.Nil(e)
-
-	m.InnerMsg.InstanceID = instanceID2
-
-	msg = newMockGossipMsg(m).Message
-	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
 	recM := <-c
 	r.Equal(msg, recM.Message)
 
-	// unknown->valid early
+	// early message
+	m.InnerMsg.InstanceID = instanceID2
+	msg = newMockGossipMsg(m).Message
+	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
+
+	// future message
 	m.InnerMsg.InstanceID = instanceID3
 	msg = newMockGossipMsg(m).Message
-	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+	r.Equal(pubsub.ValidationIgnore, b.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
+
 	c, e = b.Register(context.TODO(), instanceID3)
 	r.Nil(e)
-	<-c
-
-	closeBrokerAndWait(t, b.Broker)
-}
-
-func TestBroker_eventLoop2(t *testing.T) {
-	r := require.New(t)
-	b := buildBroker(t, t.Name())
-	require.NoError(t, b.Start(context.TODO()))
-
-	// invalid instance
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	_, e := b.Register(context.TODO(), instanceID4)
-	r.NotNil(e)
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
-	m.InnerMsg.InstanceID = instanceID4
-	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
-	b.mu.RLock()
-	v, ok := b.syncState[instanceID4.Uint32()]
-	b.mu.RUnlock()
-
-	r.True(ok)
-	r.False(v)
-
-	// valid but not early
-	m.InnerMsg.InstanceID = instanceID6
-
-	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
-	b.mu.RLock()
-	_, ok = b.outbox[instanceID6.Uint32()]
-	b.mu.RUnlock()
-	r.False(ok)
+	r.Equal(pubsub.ValidationAccept, b.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
+	recM = <-c
+	r.Equal(msg, recM.Message)
 
 	closeBrokerAndWait(t, b.Broker)
 }
@@ -618,32 +584,19 @@ func Test_validate(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID1
 	b.setLatestLayer(context.TODO(), instanceID2)
 	e := b.validate(context.TODO(), &m.Message)
-	r.EqualError(e, errUnregistered.Error())
+	r.ErrorIs(e, errUnregistered)
 
 	m.InnerMsg.InstanceID = instanceID2
 	e = b.validate(context.TODO(), &m.Message)
-	r.EqualError(e, errRegistration.Error())
+	r.ErrorIs(e, errRegistration)
 
 	m.InnerMsg.InstanceID = instanceID3
 	e = b.validate(context.TODO(), &m.Message)
-	r.EqualError(e, errEarlyMsg.Error())
+	r.ErrorIs(e, errEarlyMsg)
 
-	m.InnerMsg.InstanceID = instanceID2
-
-	b.mu.Lock()
-	b.outbox[instanceID2.Value] = make(chan *Msg)
-	b.syncState[instanceID2.Value] = false
-	b.mu.Unlock()
-
+	m.InnerMsg.InstanceID = instanceID4
 	e = b.validate(context.TODO(), &m.Message)
-	r.EqualError(e, errNotSynced.Error())
-
-	b.mu.Lock()
-	b.syncState[instanceID2.Value] = true
-	b.mu.Unlock()
-
-	e = b.validate(context.TODO(), &m.Message)
-	r.Nil(e)
+	r.ErrorIs(e, errFutureMsg)
 
 	closeBrokerAndWait(t, b.Broker)
 }
@@ -653,12 +606,6 @@ func TestBroker_clean(t *testing.T) {
 	b := buildBroker(t, t.Name())
 
 	ten := instanceID0.Add(10)
-	for i := instanceID1; i.Before(ten); i = i.Add(1) {
-		b.mu.Lock()
-		b.syncState[i.Uint32()] = true
-		b.mu.Unlock()
-	}
-
 	b.setLatestLayer(context.TODO(), ten.Sub(1))
 
 	b.mu.Lock()
@@ -667,19 +614,12 @@ func TestBroker_clean(t *testing.T) {
 
 	b.cleanOldLayers()
 	r.Equal(ten.Sub(2), b.minDeleted)
-	b.mu.RLock()
-	r.Equal(1, len(b.syncState))
-	b.mu.RUnlock()
 
 	b.mu.Lock()
 	delete(b.outbox, 5)
 	b.mu.Unlock()
 
 	b.cleanOldLayers()
-	b.mu.RLock()
-	r.Equal(1, len(b.syncState))
-	b.mu.RUnlock()
-
 	closeBrokerAndWait(t, b.Broker)
 }
 
@@ -689,6 +629,7 @@ func TestBroker_Flow(t *testing.T) {
 
 	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, b.Start(context.TODO()))
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
@@ -723,24 +664,6 @@ func TestBroker_Flow(t *testing.T) {
 	b.Unregister(context.TODO(), instanceID1)
 	r.Equal(instanceID2, b.minDeleted)
 
-	closeBrokerAndWait(t, b.Broker)
-}
-
-func TestBroker_Synced(t *testing.T) {
-	r := require.New(t)
-	b := buildBroker(t, t.Name())
-	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	require.NoError(t, b.Start(context.TODO()))
-	wg := sync.WaitGroup{}
-	for i := uint32(0); i < 1000; i++ {
-		wg.Add(1)
-		go func(j uint32) {
-			r.True(b.Synced(context.TODO(), types.NewLayerID(j)))
-			wg.Done()
-		}(i)
-	}
-
-	wg.Wait()
 	closeBrokerAndWait(t, b.Broker)
 }
 
