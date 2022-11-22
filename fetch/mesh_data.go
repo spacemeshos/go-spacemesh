@@ -32,8 +32,8 @@ type dataReceiver func(context.Context, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) []error {
 	errs := make([]error, 0, len(hashes))
-	results := f.GetHashes(hashes, hint, false)
-	for hash, resC := range results {
+	for _, hash := range hashes {
+		resC := f.getHash(hash, hint)
 		select {
 		case <-ctx.Done():
 			f.logger.WithContext(ctx).With().Warning("request timed out",
@@ -134,7 +134,7 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.String("hash", id.ShortString()))
-	res := <-f.GetHash(id, datastore.POETDB, false)
+	res := <-f.getHash(id, datastore.POETDB)
 	if res.Err != nil {
 		return res.Err
 	}

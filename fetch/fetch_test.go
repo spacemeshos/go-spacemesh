@@ -94,11 +94,11 @@ func TestFetch_GetHash(t *testing.T) {
 	hint2 := datastore.BallotDB
 
 	// test hash aggregation
-	f.GetHash(h1, hint, false)
-	f.GetHash(h1, hint, false)
+	f.getHash(h1, hint)
+	f.getHash(h1, hint)
 
 	h2 := types.RandomHash()
-	f.GetHash(h2, hint2, false)
+	f.getHash(h2, hint2)
 
 	// test aggregation by hint
 	f.activeReqM.RLock()
@@ -108,17 +108,11 @@ func TestFetch_GetHash(t *testing.T) {
 
 func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 	tt := []struct {
-		name     string
-		validate bool
-		err      error
+		name string
+		err  error
 	}{
 		{
-			name:     "request batch hash aggregated",
-			validate: false,
-		},
-		{
-			name:     "request batch hash aggregated and validated",
-			validate: true,
+			name: "request batch hash aggregated",
 		},
 		{
 			name: "request batch hash aggregated network failure",
@@ -161,10 +155,9 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 				})
 
 			req := request{
-				hash:                 hsh,
-				validateResponseHash: tc.validate,
-				hint:                 datastore.POETDB,
-				returnChan:           make(chan HashDataPromiseResult, 3),
+				hash:       hsh,
+				hint:       datastore.POETDB,
+				returnChan: make(chan HashDataPromiseResult, 3),
 			}
 
 			f.activeReqM.Lock()
@@ -175,8 +168,6 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			for x := range req.returnChan {
 				if tc.err != nil {
 					require.ErrorIs(t, x.Err, tc.err)
-				} else if tc.validate {
-					require.ErrorIs(t, x.Err, errWrongHash)
 				} else {
 					require.NoError(t, x.Err)
 				}
@@ -230,9 +221,9 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.mh.EXPECT().Close()
 	defer f.Stop()
 	f.Start()
-	r1 := f.GetHash(h1, hint, false)
-	r2 := f.GetHash(h2, hint, false)
-	r3 := f.GetHash(h3, hint, false)
+	r1 := f.getHash(h1, hint)
+	r2 := f.getHash(h2, hint)
+	r3 := f.getHash(h3, hint)
 	for _, ch := range []chan HashDataPromiseResult{r1, r2, r3} {
 		res := <-ch
 		require.NoError(t, res.Err)

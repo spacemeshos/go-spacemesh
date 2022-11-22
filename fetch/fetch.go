@@ -31,21 +31,15 @@ const (
 	cacheSize    = 1000
 )
 
-var (
-	// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
-	errExceedMaxRetries = errors.New("fetch failed after max retries for request")
-
-	// errWrongHash is returned when the data in the peer's response does not hash to the same value as requested.
-	errWrongHash = errors.New("wrong hash from response")
-)
+// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
+var errExceedMaxRetries = errors.New("fetch failed after max retries for request")
 
 // request contains all relevant Data for a single request for a specified hash.
 type request struct {
-	hash                 types.Hash32               // hash is the hash of the Data requested
-	validateResponseHash bool                       // if true perform hash validation on received Data
-	hint                 datastore.Hint             // the hint from which database to fetch this hash
-	returnChan           chan HashDataPromiseResult // channel that will signal if the call succeeded or not
-	retries              int
+	hash       types.Hash32               // hash is the hash of the Data requested
+	hint       datastore.Hint             // the hint from which database to fetch this hash
+	returnChan chan HashDataPromiseResult // channel that will signal if the call succeeded or not
+	retries    int
 }
 
 // HashDataPromiseResult is the result strict when requesting Data corresponding to the Hash.
@@ -371,24 +365,12 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Lock()
 		// for each hash, send Data on waiting channel
 		reqs := f.pendingRequests[resID.Hash]
-		actualHash := types.Hash32{}
 		for _, req := range reqs {
-			var err error
-			if req.validateResponseHash {
-				if actualHash == (types.Hash32{}) {
-					actualHash = types.CalcHash32(data)
-				}
-				if actualHash != resID.Hash {
-					err = fmt.Errorf("%w: %v, actual %v", errWrongHash, resID.Hash.ShortString(), actualHash.ShortString())
-				}
-			}
 			req.returnChan <- HashDataPromiseResult{
-				Err:     err,
 				Hash:    resID.Hash,
 				Data:    resID.Data,
 				IsLocal: false,
 			}
-			// todo: mark peer as malicious
 		}
 		// remove from map
 		delete(batchMap, resID.Hash)
@@ -606,20 +588,9 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.activeBatchM.Unlock()
 }
 
-// GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels.
-func (f *Fetch) GetHashes(hashes []types.Hash32, hint datastore.Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
-	hashWaiting := make(map[types.Hash32]chan HashDataPromiseResult)
-	for _, id := range hashes {
-		resChan := f.GetHash(id, hint, validateHash)
-		hashWaiting[id] = resChan
-	}
-
-	return hashWaiting
-}
-
-// GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
+// getHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
 // know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error.
-func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) chan HashDataPromiseResult {
+func (f *Fetch) getHash(hash types.Hash32, h datastore.Hint) chan HashDataPromiseResult {
 	resChan := make(chan HashDataPromiseResult, 1)
 
 	if f.stopped() {
@@ -641,7 +612,6 @@ func (f *Fetch) GetHash(hash types.Hash32, h datastore.Hint, validateHash bool) 
 	// if not present in db, call fetching of the item
 	req := request{
 		hash,
-		validateHash,
 		h,
 		resChan,
 		0,
