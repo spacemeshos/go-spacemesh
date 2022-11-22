@@ -93,6 +93,7 @@ func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
 func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
+		layersNumber.Inc()
 		layer = &layerInfo{lid: lid, empty: util.WeightFromUint64(0)}
 		s.layers[lid] = layer
 	}
@@ -102,6 +103,7 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 func (s *state) epoch(eid types.EpochID) *epochInfo {
 	epoch, exist := s.epochs[eid]
 	if !exist {
+		epochsNumber.Inc()
 		epoch = &epochInfo{atxs: map[types.ATXID]uint64{}}
 		s.epochs[eid] = epoch
 	}
@@ -109,12 +111,16 @@ func (s *state) epoch(eid types.EpochID) *epochInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
+	ballotsNumber.Inc()
+
 	layer := s.layer(ballot.layer)
 	layer.ballots = append(layer.ballots, ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
 func (s *state) addBlock(block *blockInfo) {
+	blocksNumber.Inc()
+
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)

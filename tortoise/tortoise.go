@@ -110,13 +110,17 @@ func (t *turtle) evict(ctx context.Context) {
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.layer(lid).ballots {
+			ballotsNumber.Dec()
 			delete(t.ballotRefs, ballot.id)
 		}
 		for _, block := range t.layers[lid].blocks {
+			blocksNumber.Dec()
 			delete(t.blockRefs, block.id)
 		}
+		layersNumber.Dec()
 		delete(t.layers, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
+			layersNumber.Dec()
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
@@ -779,6 +783,9 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 }
 
 func (t *turtle) storeBallot(ballot *ballotInfo) error {
+	if !ballot.layer.After(t.evicted) {
+		return nil
+	}
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(t.logger, ballot); err != nil {
 			return err
