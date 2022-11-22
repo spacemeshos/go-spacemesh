@@ -474,11 +474,10 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	}
 	select {
 	case b.tasks <- f:
-	case <-b.CloseChannel():
-		wg.Done()
+		wg.Wait()
+	case <-b.Closer.CloseChannel():
+		// waiting on b.Closer.CloseChannel waits until termination is initiated
 	}
-
-	wg.Wait()
 }
 
 // Synced returns true if the given layer is synced, false otherwise.
