@@ -325,17 +325,6 @@ func (b *Broker) eventLoop(ctx context.Context) {
 	}
 }
 
-func (b *Broker) updateLatestLayer(ctx context.Context, id types.LayerID) {
-	if !id.After(b.getLatestLayer()) { // should expect to update only newer layers
-		b.WithContext(ctx).With().Panic("tried to update a previous layer",
-			log.FieldNamed("this_layer", id),
-			log.FieldNamed("prev_layer", b.getLatestLayer()))
-		return
-	}
-
-	b.setLatestLayer(id)
-}
-
 func (b *Broker) cleanOldLayers() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -391,7 +380,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
 		ctx := log.WithNewSessionID(ctx)
-		b.updateLatestLayer(ctx, id)
+		b.setLatestLayer(ctx, id)
 
 		// first performing a check to see whether we are synced for this layer
 		if b.isSynced(ctx, id) {
@@ -519,9 +508,16 @@ func (b *Broker) getLatestLayer() types.LayerID {
 	return b.latestLayer
 }
 
-func (b *Broker) setLatestLayer(layer types.LayerID) {
+func (b *Broker) setLatestLayer(ctx context.Context, layer types.LayerID) {
 	b.latestLayerMu.Lock()
 	defer b.latestLayerMu.Unlock()
+
+	if !layer.After(b.latestLayer) { // should expect to update only newer layers
+		b.WithContext(ctx).With().Error("tried to update a previous layer",
+			log.FieldNamed("this_layer", layer),
+			log.FieldNamed("prev_layer", b.latestLayer))
+		return
+	}
 
 	b.latestLayer = layer
 }

@@ -473,10 +473,10 @@ func TestBroker_updateInstance(t *testing.T) {
 
 	b := buildBroker(t, t.Name())
 	r.Equal(instanceID0, b.getLatestLayer())
-	b.updateLatestLayer(context.TODO(), instanceID1)
+	b.setLatestLayer(context.TODO(), instanceID1)
 	r.Equal(instanceID1, b.getLatestLayer())
 
-	b.updateLatestLayer(context.TODO(), instanceID2)
+	b.setLatestLayer(context.TODO(), instanceID2)
 	r.Equal(instanceID2, b.getLatestLayer())
 
 	closeBrokerAndWait(t, b.Broker)
@@ -616,7 +616,7 @@ func Test_validate(t *testing.T) {
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = instanceID1
-	b.setLatestLayer(instanceID2)
+	b.setLatestLayer(context.TODO(), instanceID2)
 	e := b.validate(context.TODO(), &m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
@@ -659,7 +659,7 @@ func TestBroker_clean(t *testing.T) {
 		b.mu.Unlock()
 	}
 
-	b.setLatestLayer(ten.Sub(1))
+	b.setLatestLayer(context.TODO(), ten.Sub(1))
 
 	b.mu.Lock()
 	b.outbox[5] = make(chan *Msg)
