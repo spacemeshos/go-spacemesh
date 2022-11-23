@@ -140,7 +140,7 @@ func UndoLayers(db *sql.Tx, from types.LayerID) error {
 	return nil
 }
 
-// tx, header, layer, timestamp.
+// tx, header, layer, block, timestamp.
 func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.MeshTransaction, error) {
 	var (
 		parsed types.Transaction
@@ -161,19 +161,24 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 	} else if parsed.TxHeader != nil {
 		state = types.MEMPOOL
 	}
+	var bid types.BlockID
+	stmt.ColumnBytes(3, bid[:])
 
 	return &types.MeshTransaction{
 		Transaction: parsed,
 		LayerID:     types.NewLayerID(uint32(stmt.ColumnInt64(2))),
-		Received:    time.Unix(0, stmt.ColumnInt64(3)),
+		BlockID:     bid,
+		Received:    time.Unix(0, stmt.ColumnInt64(4)),
 		State:       state,
 	}, nil
 }
 
 // Get gets a transaction from database.
+// Layer and Block fields are if transaction was applied.
+// If transaction is included, but not applied check references in proposals and blocks.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
 	var rows int
-	rows, err = db.Exec("select tx, header, layer, timestamp from transactions where id = ?1",
+	rows, err = db.Exec("select tx, header, layer, block, timestamp from transactions where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
@@ -221,7 +226,7 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
 	if _, err := db.Exec(`
-		select tx, header, layer, timestamp, id from transactions
+		select tx, header, layer, block, timestamp, id from transactions
 		where principal = ?1 and (layer is null or layer between ?2 and ?3)`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
@@ -229,7 +234,7 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 			stmt.BindInt64(3, int64(to.Value))
 		}, func(stmt *sql.Statement) bool {
 			var id types.TransactionID
-			stmt.ColumnBytes(4, id[:])
+			stmt.ColumnBytes(5, id[:])
 			tx, err := decodeTransaction(id, stmt)
 			if err != nil {
 				return false
@@ -269,7 +274,7 @@ func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, er
 
 // GetAcctPendingFromNonce get all pending transactions with nonce after `from` for the given address.
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
-	return queryPending(db, `select tx, header, layer, timestamp, id from transactions
+	return queryPending(db, `select tx, header, layer, block, timestamp, id from transactions
 		where principal = ?1 and nonce >= ?2 and result is null 
 		order by nonce asc, timestamp asc`,
 		func(stmt *sql.Statement) {
@@ -278,14 +283,14 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		}, "get acct pending from nonce")
 }
 
-// query MUST ensure that this order of fields tx, layer, block, principal, timestamp, id.
+// query MUST ensure that this order of fields tx, header, layer, block, timestamp, id.
 func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), errStr string) (rst []*types.MeshTransaction, err error) {
 	if _, err = db.Exec(query, encoder, func(stmt *sql.Statement) bool {
 		var (
 			tx *types.MeshTransaction
 			id types.TransactionID
 		)
-		stmt.ColumnBytes(4, id[:])
+		stmt.ColumnBytes(5, id[:])
 		tx, err = decodeTransaction(id, stmt)
 		if err != nil {
 			return false

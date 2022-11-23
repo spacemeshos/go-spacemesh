@@ -825,10 +825,10 @@ func undoLayers(db *sql.Database, from types.LayerID) error {
 	})
 }
 
-func getNextIncluded(db sql.Executor, id types.TransactionID, from types.LayerID) (types.LayerID, types.BlockID, error) {
-	bid, lid, err := transactions.TransactionInBlock(db, id, from)
+func getNextIncluded(db sql.Executor, id types.TransactionID, after types.LayerID) (types.LayerID, types.BlockID, error) {
+	bid, lid, err := transactions.TransactionInBlock(db, id, after)
 	if err != nil && errors.Is(err, sql.ErrNotFound) {
-		lid, err = transactions.TransactionInProposal(db, id, from)
+		lid, err = transactions.TransactionInProposal(db, id, after)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return lid, bid, fmt.Errorf("get tx in next proposals %w", err)
 		}

@@ -490,7 +490,7 @@ func TestTransactionInBlock(t *testing.T) {
 	bid, lid, err = TransactionInBlock(db, tid, lids[1])
 	require.NoError(t, err)
 	require.Equal(t, lids[2], lid)
-	require.Equal(t, lids[2], bid)
+	require.Equal(t, bids[2], bid)
 	_, _, err = TransactionInBlock(db, tid, lids[2])
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
