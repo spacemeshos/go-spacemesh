@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	goldenATXID = types.RandomATXID()
-	atxNotFound = errors.New("unavailable")
+	goldenATXID    = types.RandomATXID()
+	errAtxNotFound = errors.New("unavailable")
 )
 
 func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
@@ -293,7 +293,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, atxNotFound)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, errAtxNotFound)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrCouldntVerify)
@@ -316,7 +316,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).Return(&types.ActivationTxHeader{}, nil)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).Return(nil, atxNotFound)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).Return(nil, errAtxNotFound)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrCouldntVerify)
