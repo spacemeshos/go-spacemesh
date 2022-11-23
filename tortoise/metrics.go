@@ -42,6 +42,33 @@ var (
 )
 
 var (
+	stateLayers = metrics.NewGauge(
+		"state_layers",
+		namespace,
+		"Layers in the state (evicted, verified, latest, processed)",
+		[]string{"kind"},
+	)
+	evictedLayer   = stateLayers.WithLabelValues("evicted")
+	verifiedLayer  = stateLayers.WithLabelValues("verified")
+	processedLayer = stateLayers.WithLabelValues("processed")
+	lastLayer      = stateLayers.WithLabelValues("last")
+)
+
+var modeGauge = metrics.NewGauge(
+	"mode",
+	namespace,
+	"0 for verifying, 1 for full",
+	[]string{},
+).WithLabelValues()
+
+var errorsCounter = metrics.NewCounter(
+	"errors",
+	namespace,
+	"Counter for all errors",
+	[]string{},
+).WithLabelValues()
+
+var (
 	onBallotHist = metrics.NewHistogramWithBuckets(
 		"tortoise_on_ballot_ns",
 		namespace,
@@ -77,4 +104,41 @@ var (
 		prometheus.ExponentialBuckets(100_000, 2, 10),
 	)
 	waitHareOutputDuration = onHareOutputHist.WithLabelValues("wait")
+	addHareOutput          = onHareOutputHist.WithLabelValues("add")
+)
+
+var (
+	onAtxHist = metrics.NewHistogramWithBuckets(
+		"tortoise_on_atx_ns",
+		namespace,
+		"Time to add atx in ns.",
+		[]string{"step"},
+		prometheus.ExponentialBuckets(100_000, 2, 10),
+	)
+	waitAtxDuration = onAtxHist.WithLabelValues("wait")
+	addAtxDuration  = onAtxHist.WithLabelValues("add")
+)
+
+var (
+	tallyVotesHist = metrics.NewHistogramWithBuckets(
+		"tortoise_tally_votes_ns",
+		namespace,
+		"Time for tally votes to complete in ns.",
+		[]string{"step"},
+		prometheus.ExponentialBuckets(100_000, 2, 10),
+	)
+	waitTallyVotes    = tallyVotesHist.WithLabelValues("wait")
+	executeTallyVotes = tallyVotesHist.WithLabelValues("execute")
+)
+
+var (
+	encodeVotesHist = metrics.NewHistogramWithBuckets(
+		"tortoise_encode_votes_ns",
+		namespace,
+		"Time for encode votes to complete in ns.",
+		[]string{"step"},
+		prometheus.ExponentialBuckets(100_000, 2, 10),
+	)
+	waitEncodeVotes    = encodeVotesHist.WithLabelValues("wait")
+	executeEncodeVotes = encodeVotesHist.WithLabelValues("execute")
 )

@@ -129,6 +129,7 @@ func (t *turtle) evict(ctx context.Context) {
 		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
+	evictedLayer.Set(float64(t.evicted.Value))
 }
 
 // EncodeVotes by choosing base ballot and explicit votes.
@@ -364,6 +365,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 	defer t.evict(ctx)
 	if last.After(t.last) {
 		t.last = last
+		lastLayer.Set(float64(t.last.Value))
 	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
@@ -387,6 +389,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			t.full.counted = process
 		}
 		t.processed = process
+		processedLayer.Set(float64(t.processed.Value))
 
 		if err := t.loadBlocksData(process); err != nil {
 			return err
@@ -415,6 +418,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 
 func (t *turtle) switchModes(logger log.Log) {
 	t.isFull = !t.isFull
+	if t.isFull {
+		modeGauge.Set(1)
+	} else {
+		modeGauge.Set(0)
+	}
 	logger.With().Debug("switching tortoise mode",
 		log.Uint32("hdist", t.Hdist),
 		log.Stringer("processed_layer", t.processed),
@@ -503,6 +511,7 @@ func (t *turtle) verifyLayers() error {
 		}
 	}
 	t.verified = verified
+	verifiedLayer.Set(float64(t.verified.Value))
 	return nil
 }
 
@@ -619,6 +628,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 }
 
 func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
+	start := time.Now()
 	if !lid.After(t.evicted) {
 		return
 	}
@@ -653,6 +663,7 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 		)
 		t.onOpinionChange(lid)
 	}
+	addHareOutput.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func (t *turtle) onOpinionChange(lid types.LayerID) {
@@ -670,6 +681,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID) {
 }
 
 func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
+	start := time.Now()
 	epoch := t.epoch(atx.TargetEpoch())
 	if _, exist := epoch.atxs[atx.ID]; !exist {
 		t.logger.With().Debug("on atx",
@@ -685,6 +697,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 			Fraction(localThresholdFraction).
 			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
 	}
+	addAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
