@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -195,8 +196,10 @@ func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
 
 // OnBlock should be called every time new block is received.
 func (t *Tortoise) OnBlock(block *types.Block) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
 		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
 	}
@@ -204,6 +207,7 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 
 // OnBallot should be called every time new ballot is received.
 // BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
+// DEPRECATED: use DecodeBallot. OnBallot is used in the tests.
 func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -220,8 +224,10 @@ type DecodedBallot struct {
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	info, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		return nil, err
@@ -240,8 +246,10 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 
 // StoreBallot stores previously decoded ballot.
 func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	if decoded.IsMalicious() {
 		decoded.info.weight = weight{}
 	}

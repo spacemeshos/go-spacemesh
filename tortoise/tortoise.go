@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -588,6 +589,7 @@ func (t *turtle) loadBallots(lid types.LayerID) error {
 }
 
 func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
+	start := time.Now()
 	if !lid.After(t.evicted) {
 		return nil
 	}
@@ -606,6 +608,7 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 		binfo.hare = against
 	}
 	t.addBlock(binfo)
+	addBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.full.countForLateBlock(binfo)
 	if !binfo.layer.After(t.processed) {
 		if err := t.updateRefHeight(t.layer(binfo.layer), binfo); err != nil {
@@ -685,12 +688,15 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 }
 
 func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
+	start := time.Now()
+
 	if !ballot.LayerIndex.After(t.evicted) {
 		return nil, nil
 	}
 	if _, exist := t.state.ballotRefs[ballot.ID()]; exist {
 		return nil, nil
 	}
+
 	t.logger.With().Debug("on ballot",
 		log.Inline(ballot),
 		log.Uint32("processed", t.processed.Value),
@@ -779,6 +785,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		binfo.id, binfo.layer,
 		log.Stringer("opinion", binfo.opinion()),
 	)
+	decodeBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	return binfo, nil
 }
 
