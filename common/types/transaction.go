@@ -129,14 +129,8 @@ const (
 	PENDING TXState = iota
 	// MEMPOOL represents the state when a transaction is in mempool.
 	MEMPOOL
-	// PROPOSAL represents the state when a transaction is in a proposal.
-	PROPOSAL
-	// BLOCK represents the state when a transaction is in a not-applied block.
-	BLOCK
 	// APPLIED represents the state when a transaction is applied to the state.
 	APPLIED
-	// DISCARDED represents the state when a transaction is rejected due to bad nonce or insufficient balance.
-	DISCARDED
 )
 
 // MeshTransaction is stored in the mesh and included in the block.

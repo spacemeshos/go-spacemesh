@@ -336,7 +336,7 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 	return nil
 }
 
-// TransactionInProposal returns lowest layer of the proposal where tx is included.
+// TransactionInProposal returns lowest layer of the proposal where tx is included after the specified layer.
 func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.LayerID) (types.LayerID, error) {
 	var rst types.LayerID
 	rows, err := db.Exec("select layer from proposal_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
@@ -356,7 +356,7 @@ func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.
 	return rst, nil
 }
 
-// TransactionInBlock returns lowest layer and id of the block where tx is included.
+// TransactionInBlock returns lowest layer and id of the block where tx is included after the specified layer.
 func TransactionInBlock(db sql.Executor, id types.TransactionID, after types.LayerID) (types.BlockID, types.LayerID, error) {
 	var (
 		rst types.LayerID

@@ -93,12 +93,8 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*
 	switch tx.State {
 	case types.MEMPOOL:
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
-	case types.PROPOSAL, types.BLOCK:
-		state = pb.TransactionState_TRANSACTION_STATE_MESH
 	case types.APPLIED:
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
-	case types.DISCARDED:
-		state = pb.TransactionState_TRANSACTION_STATE_REJECTED
 	default:
 		state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 	}

@@ -440,3 +440,57 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 		{Address: principals[2], Nonce: more[0].Nonce},
 	}, rst)
 }
+
+func TestTransactionInProposal(t *testing.T) {
+	tid := types.TransactionID{1}
+	lids := []types.LayerID{
+		types.NewLayerID(1),
+		types.NewLayerID(2),
+		types.NewLayerID(3),
+	}
+	pids := []types.ProposalID{
+		{1},
+		{2},
+		{3},
+	}
+	db := sql.InMemory()
+	for i := range lids {
+		require.NoError(t, AddToProposal(db, tid, lids[i], pids[i]))
+	}
+	lid, err := TransactionInProposal(db, tid, types.LayerID{})
+	require.NoError(t, err)
+	require.Equal(t, lids[0], lid)
+	lid, err = TransactionInProposal(db, tid, lids[1])
+	require.NoError(t, err)
+	require.Equal(t, lids[2], lid)
+	_, err = TransactionInProposal(db, tid, lids[2])
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func TestTransactionInBlock(t *testing.T) {
+	tid := types.TransactionID{1}
+	lids := []types.LayerID{
+		types.NewLayerID(1),
+		types.NewLayerID(2),
+		types.NewLayerID(3),
+	}
+	bids := []types.BlockID{
+		{1},
+		{2},
+		{3},
+	}
+	db := sql.InMemory()
+	for i := range lids {
+		require.NoError(t, AddToBlock(db, tid, lids[i], bids[i]))
+	}
+	bid, lid, err := TransactionInBlock(db, tid, types.LayerID{})
+	require.NoError(t, err)
+	require.Equal(t, lids[0], lid)
+	require.Equal(t, bids[0], bid)
+	bid, lid, err = TransactionInBlock(db, tid, lids[1])
+	require.NoError(t, err)
+	require.Equal(t, lids[2], lid)
+	require.Equal(t, lids[2], bid)
+	_, _, err = TransactionInBlock(db, tid, lids[2])
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
