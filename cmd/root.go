@@ -210,8 +210,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.SMESHING.Opts.NumUnits, "")
 	cmd.PersistentFlags().Uint32Var(&config.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
 		config.SMESHING.Opts.NumFiles, "")
-	cmd.PersistentFlags().IntVar(&config.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
-		config.SMESHING.Opts.ComputeProviderID, "")
+	cmd.PersistentFlags().UintVar(config.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
+		0, "")
 	cmd.PersistentFlags().BoolVar(&config.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		config.SMESHING.Opts.Throttle, "")
 
@@ -233,5 +233,10 @@ func AddCommands(cmd *cobra.Command) {
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
 		fmt.Println("an error has occurred while binding flags:", err)
+	}
+
+	if !cmd.PersistentFlags().Changed("smeshing-opts-provider") {
+		// if not set, set to default
+		config.SMESHING.Opts.ComputeProviderID = nil
 	}
 }

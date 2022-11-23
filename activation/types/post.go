@@ -21,7 +21,7 @@ type PostSetupOpts struct {
 	DataDir           string `mapstructure:"smeshing-opts-datadir"`
 	NumUnits          uint32 `mapstructure:"smeshing-opts-numunits"`
 	NumFiles          uint32 `mapstructure:"smeshing-opts-numfiles"`
-	ComputeProviderID int    `mapstructure:"smeshing-opts-provider"`
+	ComputeProviderID *uint  `mapstructure:"smeshing-opts-provider"`
 	Throttle          bool   `mapstructure:"smeshing-opts-throttle"`
 }
 
