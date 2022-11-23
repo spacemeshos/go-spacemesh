@@ -623,7 +623,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg), sgn)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
