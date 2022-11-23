@@ -73,7 +73,7 @@ func (f *full) countForLateBlock(block *blockInfo) {
 	// we could store all negative weight in a single variable and avoid
 	// this computation if there would be no height
 	for lid := block.layer.Add(1); !lid.After(f.counted); lid = lid.Add(1) {
-		for _, ballot := range f.layer(lid).ballots {
+		for _, ballot := range f.ballots[lid] {
 			if block.height > ballot.reference.height {
 				continue
 			}
@@ -95,7 +95,7 @@ func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 
 func (f *full) countVotes(logger log.Log) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
-		for _, ballot := range f.layer(lid).ballots {
+		for _, ballot := range f.ballots[lid] {
 			f.countBallot(logger, ballot)
 		}
 	}

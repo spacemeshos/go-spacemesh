@@ -62,8 +62,9 @@ type (
 			min, max types.LayerID
 		}
 
-		epochs map[types.EpochID]*epochInfo
-		layers map[types.LayerID]*layerInfo
+		epochs  map[types.EpochID]*epochInfo
+		layers  map[types.LayerID]*layerInfo
+		ballots map[types.LayerID][]*ballotInfo
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
@@ -77,6 +78,7 @@ func newState() *state {
 		localThreshold: util.WeightFromUint64(0),
 		epochs:         map[types.EpochID]*epochInfo{},
 		layers:         map[types.LayerID]*layerInfo{},
+		ballots:        map[types.LayerID][]*ballotInfo{},
 		ballotRefs:     map[types.BallotID]*ballotInfo{},
 		blockRefs:      map[types.BlockID]*blockInfo{},
 	}
@@ -109,8 +111,7 @@ func (s *state) epoch(eid types.EpochID) *epochInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
-	layer := s.layer(ballot.layer)
-	layer.ballots = append(layer.ballots, ballot)
+	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
@@ -154,7 +155,6 @@ type layerInfo struct {
 	empty          weight
 	hareTerminated bool
 	blocks         []*blockInfo
-	ballots        []*ballotInfo
 	verifying      verifyingInfo
 
 	opinion types.Hash32
