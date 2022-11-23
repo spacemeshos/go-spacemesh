@@ -286,11 +286,16 @@ type updater struct {
 	cdb *datastore.CachedDB
 }
 
-func (u *updater) UpdateBlockValidity(bid types.BlockID, _ types.LayerID, valid bool) error {
+func (u *updater) UpdateBlockValidity(bid types.BlockID, _ types.LayerID, valid bool) {
+	var err error
 	if valid {
-		return blocks.SetValid(u.cdb, bid)
+		err = blocks.SetValid(u.cdb, bid)
+	} else {
+		err = blocks.SetInvalid(u.cdb, bid)
 	}
-	return blocks.SetInvalid(u.cdb, bid)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func defaultTurtle(tb testing.TB) *turtle {

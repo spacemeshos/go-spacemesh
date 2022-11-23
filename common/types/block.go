@@ -175,6 +175,7 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 // BlockContextualValidity tuple with block id and contextual validity.
 type BlockContextualValidity struct {
 	ID       BlockID
+	Layer    LayerID
 	Validity bool
 }
 

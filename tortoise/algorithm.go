@@ -147,6 +147,15 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 	return t.trtl.verified
 }
 
+func (t *Tortoise) Updates() []types.BlockContextualValidity {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	res := t.trtl.updated
+	t.trtl.updated = nil
+	return res
+}
+
 type encodeConf struct {
 	current *types.LayerID
 }

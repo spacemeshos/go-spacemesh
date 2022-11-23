@@ -84,3 +84,17 @@ func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.C
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockTortoise)(nil).TallyVotes), arg0, arg1)
 }
+
+// Updates mocks base method.
+func (m *MockTortoise) Updates() []types.BlockContextualValidity {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Updates")
+	ret0, _ := ret[0].([]types.BlockContextualValidity)
+	return ret0
+}
+
+// Updates indicates an expected call of Updates.
+func (mr *MockTortoiseMockRecorder) Updates() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Updates", reflect.TypeOf((*MockTortoise)(nil).Updates))
+}

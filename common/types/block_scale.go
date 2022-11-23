@@ -179,6 +179,13 @@ func (t *BlockContextualValidity) EncodeScale(enc *scale.Encoder) (total int, er
 		total += n
 	}
 	{
+		n, err := t.Layer.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeBool(enc, t.Validity)
 		if err != nil {
 			return total, err
@@ -191,6 +198,13 @@ func (t *BlockContextualValidity) EncodeScale(enc *scale.Encoder) (total int, er
 func (t *BlockContextualValidity) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := scale.DecodeByteArray(dec, t.ID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.Layer.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}

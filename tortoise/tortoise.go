@@ -24,6 +24,10 @@ var (
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
 )
 
+type blockValidityUpdater interface {
+	UpdateBlockValidity(types.BlockID, types.LayerID, bool)
+}
+
 type turtle struct {
 	Config
 	logger log.Log
@@ -31,6 +35,7 @@ type turtle struct {
 
 	beacons system.BeaconGetter
 	updater blockValidityUpdater
+	updated []types.BlockContextualValidity
 
 	*state
 
@@ -55,6 +60,9 @@ func newTurtle(
 		cdb:     cdb,
 		beacons: beacons,
 		updater: updater,
+	}
+	if updater == nil {
+		t.updater = t
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -490,15 +498,23 @@ func (t *turtle) verifyLayers() error {
 				log.Stringer("hare", block.hare),
 				log.Stringer("persisted", block.persisted),
 			)
-			err := t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
-			if err != nil {
-				return fmt.Errorf("saving validity for %s: %w", block.id, err)
-			}
+			t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
 			block.persisted = block.validity
 		}
 	}
 	t.verified = verified
 	return nil
+}
+
+func (t *turtle) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, valid bool) {
+	if t.updated == nil {
+		t.updated = []types.BlockContextualValidity{}
+	}
+	t.updated = append(t.updated, types.BlockContextualValidity{
+		ID:       bid,
+		Layer:    lid,
+		Validity: valid,
+	})
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.

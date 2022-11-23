@@ -204,12 +204,14 @@ type updater struct {
 	*datastore.CachedDB
 }
 
-func (u updater) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
+func (u updater) UpdateBlockValidity(bid types.BlockID, _ types.LayerID, valid bool) {
 	var err error
 	if valid {
 		err = blocks.SetValid(u, bid)
 	} else {
 		err = blocks.SetInvalid(u, bid)
 	}
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
