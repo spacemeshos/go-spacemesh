@@ -240,6 +240,11 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return res
 }
 
+func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
+	_, err := s.beacon.GetBeacon(epoch)
+	return err == nil
+}
+
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {

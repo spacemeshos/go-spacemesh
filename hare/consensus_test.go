@@ -150,6 +150,7 @@ func (test *ConsensusTest) Start() {
 func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublishSubsciber, initialSet *Set, layer types.LayerID, name string) (*consensusProcess, *Broker) {
 	broker := buildBroker(tb, name)
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
