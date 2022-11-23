@@ -70,10 +70,9 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          in.Opts.NumUnits,
 		NumFiles:          in.Opts.NumFiles,
-		ComputeProviderID: new(uint),
+		ComputeProviderID: int(in.Opts.ComputeProviderId),
 		Throttle:          in.Opts.Throttle,
 	}
-	*opts.ComputeProviderID = uint(in.Opts.ComputeProviderId)
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
 	if err != nil {
@@ -256,7 +255,7 @@ func statusToPbStatus(status *atypes.PostSetupStatus) *pb.PostSetupStatus {
 			DataDir:           status.LastOpts.DataDir,
 			NumUnits:          uint32(status.LastOpts.NumUnits),
 			NumFiles:          uint32(status.LastOpts.NumFiles),
-			ComputeProviderId: uint32(*status.LastOpts.ComputeProviderID),
+			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
 			Throttle:          status.LastOpts.Throttle,
 		}
 	}

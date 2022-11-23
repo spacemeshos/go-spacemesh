@@ -33,7 +33,7 @@ func init() {
 	postSetupOpts = DefaultPostSetupOpts()
 	postSetupOpts.DataDir, _ = os.MkdirTemp("", "post-test")
 	postSetupOpts.NumUnits = postCfg.MinNumUnits
-	postSetupOpts.ComputeProviderID = initialization.CPUProviderID()
+	postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
 }
 
 type postSetupProviderMock struct {

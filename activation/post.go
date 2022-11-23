@@ -167,7 +167,7 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 		}
 	}
 
-	if opts.ComputeProviderID == nil {
+	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			mgr.mu.Unlock()
@@ -175,8 +175,7 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 		}
 
 		mgr.logger.Info("found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
-		opts.ComputeProviderID = new(uint)
-		*opts.ComputeProviderID = p.ID
+		opts.ComputeProviderID = int(p.ID)
 	}
 
 	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
