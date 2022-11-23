@@ -330,6 +330,9 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, no
 
 	if applied != (types.LayerID{}) {
 		for _, mtx := range mtxs {
+			if mtx.State == types.APPLIED {
+				continue
+			}
 			nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 			if err != nil {
 				return err
@@ -464,6 +467,9 @@ func (c *cache) buildFromScratch(db *sql.Database) error {
 		rst = append(rst, txs...)
 	}
 	for _, mtx := range rst {
+		if mtx.State == types.APPLIED {
+			continue
+		}
 		nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 		if err != nil {
 			return err
