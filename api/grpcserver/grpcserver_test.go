@@ -2673,8 +2673,9 @@ func TestGatewayService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	verifier := mocks.NewMockChallengeVerifier(ctrl)
 
-	svc := NewGatewayService(publisher)
+	svc := NewGatewayService(publisher, verifier)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 

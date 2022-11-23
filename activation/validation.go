@@ -32,28 +32,12 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
 
-	if nipost.PostMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
-		return 0, fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel)
+	if err := validateNumUnits(&v.cfg, numUnits); err != nil {
+		return 0, err
 	}
 
-	if nipost.PostMetadata.LabelsPerUnit < uint64(v.cfg.LabelsPerUnit) {
-		return 0, fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.cfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit)
-	}
-
-	if numUnits < v.cfg.MinNumUnits {
-		return 0, fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", v.cfg.MinNumUnits, numUnits)
-	}
-
-	if numUnits > v.cfg.MaxNumUnits {
-		return 0, fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", v.cfg.MaxNumUnits, numUnits)
-	}
-
-	if nipost.PostMetadata.K1 > v.cfg.K1 {
-		return 0, fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.cfg.K1, nipost.PostMetadata.K1)
-	}
-
-	if nipost.PostMetadata.K2 < v.cfg.K2 {
-		return 0, fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.cfg.K2, nipost.PostMetadata.K2)
+	if err := validatePostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
+		return 0, err
 	}
 
 	proof, err := v.poetDb.GetProof(nipost.PostMetadata.Challenge)
@@ -64,11 +48,17 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
-	if err := v.ValidatePost(commitment, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := validatePost(commitment, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
 	return proof.LeafCount, nil
+}
+
+// ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
+// validation failed.
+func (*Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	return validatePost(commitment, PoST, PostMetadata, numUnits)
 }
 
 func isIncluded(proof *types.PoetProof, member []byte) bool {
@@ -80,9 +70,37 @@ func isIncluded(proof *types.PoetProof, member []byte) bool {
 	return false
 }
 
-// ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
-// validation failed.
-func (v *Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func validateNumUnits(cfg *atypes.PostConfig, numUnits uint32) error {
+	if numUnits < cfg.MinNumUnits {
+		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
+	}
+
+	if numUnits > cfg.MaxNumUnits {
+		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", cfg.MaxNumUnits, numUnits)
+	}
+	return nil
+}
+
+func validatePostMetadata(cfg *atypes.PostConfig, metadata *types.PostMetadata) error {
+	if metadata.BitsPerLabel < cfg.BitsPerLabel {
+		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", cfg.BitsPerLabel, metadata.BitsPerLabel)
+	}
+
+	if metadata.LabelsPerUnit < uint64(cfg.LabelsPerUnit) {
+		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
+	}
+
+	if metadata.K1 > cfg.K1 {
+		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", cfg.K1, metadata.K1)
+	}
+
+	if metadata.K2 < cfg.K2 {
+		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", cfg.K2, metadata.K2)
+	}
+	return nil
+}
+
+func validatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
 	m := new(proving.ProofMetadata)
