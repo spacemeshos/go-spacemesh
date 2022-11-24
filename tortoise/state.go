@@ -62,8 +62,12 @@ type (
 			min, max types.LayerID
 		}
 
-		epochs  map[types.EpochID]*epochInfo
-		layers  map[types.LayerID]*layerInfo
+		epochs map[types.EpochID]*epochInfo
+		layers map[types.LayerID]*layerInfo
+		// ballots should not be referenced by other ballots
+		// each ballot stores references (votes) for X previous layers
+		// those X layers may reference another set of ballots that will
+		// reference recursively more layers with another set of ballots
 		ballots map[types.LayerID][]*ballotInfo
 
 		// to efficiently find base and reference ballots
