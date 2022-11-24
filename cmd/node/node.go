@@ -501,7 +501,7 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtl := tortoise.New(cdb, beaconProtocol, nil,
+	trtl := tortoise.New(cdb, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),

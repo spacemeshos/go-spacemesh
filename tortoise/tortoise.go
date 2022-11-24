@@ -24,17 +24,12 @@ var (
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
 )
 
-type blockValidityUpdater interface {
-	UpdateBlockValidity(types.BlockID, types.LayerID, bool)
-}
-
 type turtle struct {
 	Config
 	logger log.Log
 	cdb    *datastore.CachedDB
 
 	beacons system.BeaconGetter
-	updater blockValidityUpdater
 	updated []types.BlockContextualValidity
 
 	*state
@@ -50,7 +45,6 @@ func newTurtle(
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	beacons system.BeaconGetter,
-	updater blockValidityUpdater,
 	config Config,
 ) *turtle {
 	t := &turtle{
@@ -59,10 +53,7 @@ func newTurtle(
 		logger:  logger,
 		cdb:     cdb,
 		beacons: beacons,
-		updater: updater,
-	}
-	if updater == nil {
-		t.updater = t
+		updated: make([]types.BlockContextualValidity, 0),
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -498,23 +489,37 @@ func (t *turtle) verifyLayers() error {
 				log.Stringer("hare", block.hare),
 				log.Stringer("persisted", block.persisted),
 			)
-			t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
-			block.persisted = block.validity
+			t.updated = append(t.updated, types.BlockContextualValidity{
+				ID:       block.id,
+				Layer:    target,
+				Validity: block.validity == support,
+			})
 		}
 	}
 	t.verified = verified
 	return nil
 }
 
-func (t *turtle) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, valid bool) {
-	if t.updated == nil {
-		t.updated = []types.BlockContextualValidity{}
+func (t *turtle) updatesPersisted(persisted []types.BlockContextualValidity) {
+	notPersisted := make([]types.BlockContextualValidity, 0, len(t.updated))
+	for _, u := range t.updated {
+		found := false
+		for _, p := range persisted {
+			if p.ID == u.ID {
+				if p.Validity == u.Validity {
+					found = true
+				}
+			}
+		}
+		if found {
+			if block, ok := t.blockRefs[u.ID]; ok {
+				block.persisted = block.validity
+			}
+		} else {
+			notPersisted = append(notPersisted, u)
+		}
 	}
-	t.updated = append(t.updated, types.BlockContextualValidity{
-		ID:       bid,
-		Layer:    lid,
-		Validity: valid,
-	})
+	t.updated = notPersisted
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.

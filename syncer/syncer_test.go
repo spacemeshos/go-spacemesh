@@ -532,8 +532,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(nil)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
-		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
 		if lid == failed {
 			errMissingTXs := errors.New("missing TXs")
 			ts.mConState.EXPECT().ApplyLayer(gomock.Any(), block).DoAndReturn(
@@ -557,11 +556,10 @@ func TestSyncMissingLayer(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), failed).Return(nil)
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 
-	ts.mTortoise.EXPECT().LatestComplete().Return(failed).Times(2)
 	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().Updates().Return(nil)
+		ts.mTortoise.EXPECT().Updates().Return(failed, nil)
 		if lid == failed {
 			ts.mConState.EXPECT().ApplyLayer(gomock.Any(), block).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
@@ -585,8 +583,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().Updates().Return(nil)
-	ts.mTortoise.EXPECT().LatestComplete().Return(lyr.Sub(1))
+	ts.mTortoise.EXPECT().Updates().Return(lyr.Sub(1), nil)
 	ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
 	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))

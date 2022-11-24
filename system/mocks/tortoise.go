@@ -86,15 +86,28 @@ func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 interface{}) *gomock.C
 }
 
 // Updates mocks base method.
-func (m *MockTortoise) Updates() []types.BlockContextualValidity {
+func (m *MockTortoise) Updates() (types.LayerID, []types.BlockContextualValidity) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Updates")
-	ret0, _ := ret[0].([]types.BlockContextualValidity)
-	return ret0
+	ret0, _ := ret[0].(types.LayerID)
+	ret1, _ := ret[1].([]types.BlockContextualValidity)
+	return ret0, ret1
 }
 
 // Updates indicates an expected call of Updates.
 func (mr *MockTortoiseMockRecorder) Updates() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Updates", reflect.TypeOf((*MockTortoise)(nil).Updates))
+}
+
+// UpdatesPersisted mocks base method.
+func (m *MockTortoise) UpdatesPersisted(arg0 []types.BlockContextualValidity) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdatesPersisted", arg0)
+}
+
+// UpdatesPersisted indicates an expected call of UpdatesPersisted.
+func (mr *MockTortoiseMockRecorder) UpdatesPersisted(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatesPersisted", reflect.TypeOf((*MockTortoise)(nil).UpdatesPersisted), arg0)
 }
