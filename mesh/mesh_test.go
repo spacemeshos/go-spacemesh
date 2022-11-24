@@ -477,10 +477,11 @@ func TestMesh_Revert(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, types.EmptyLayerHash, oldHash)
 
-	// for layer gPlus2, all other block turns out to be valid
+	// for layer gPlus2 and gPlus3, all other block turns out to be valid
 	layerBlocks[gPlus2] = sortBlocks(blocks2[1:])[0]
+	layerBlocks[gPlus3] = sortBlocks(blocks3[1:])[0]
 	newUpdates := makeValidityUpdates(gPlus2, blocks2[1:], blocks2[0:1])
-	newUpdates = append(newUpdates, lyrUpdates[gPlus3]...)
+	newUpdates = append(newUpdates, makeValidityUpdates(gPlus3, blocks3[1:], blocks3[0:1])...)
 	tm.mockTortoise.EXPECT().OnHareOutput(gPlus4, blocks4[0].ID())
 	tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gPlus4)
 	tm.mockTortoise.EXPECT().Updates().Return(newUpdates)

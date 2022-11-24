@@ -299,7 +299,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log) err
 			logger.With().Info("incorrect block applied",
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied))
-			if minChanged == (types.LayerID{}) || minChanged.Before(lid) {
+			if minChanged == (types.LayerID{}) || lid.Before(minChanged) {
 				minChanged = lid
 			}
 		}
