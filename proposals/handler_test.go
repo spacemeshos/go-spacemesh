@@ -384,7 +384,7 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.mm.EXPECT().AddBallot(context.TODO(), b).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
 }
 
@@ -649,7 +649,7 @@ func TestBallot_Success(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.mm.EXPECT().AddBallot(context.TODO(), b).Return(nil)
 	decoded := &tortoise.DecodedBallot{Ballot: b}
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
@@ -683,7 +683,7 @@ func TestBallot_RefBallot(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.mm.EXPECT().AddBallot(context.TODO(), b).Return(nil)
 	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
 }
 
@@ -722,7 +722,7 @@ func TestBallot_DecodedStoreFailure(t *testing.T) {
 
 	decoded := &tortoise.DecodedBallot{Ballot: b}
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
-	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.mm.EXPECT().AddBallot(context.TODO(), b).Return(nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(expected)
 	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), expected)
 }
@@ -783,8 +783,8 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
@@ -817,8 +817,8 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
@@ -852,8 +852,8 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
@@ -890,8 +890,8 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		}).MinTimes(1).MaxTimes(2)
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			_ = ballots.Add(th.cdb, got)
 			return nil
 		}).MinTimes(1).MaxTimes(2)
@@ -967,7 +967,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 					}
 					return true, nil
 				})
-			th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Return(nil)
+			th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).Return(nil)
 			th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
 			if tc.propFetched {
 				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
@@ -1003,8 +1003,8 @@ func TestProposal_ValidProposal(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
@@ -1038,8 +1038,8 @@ func TestMetrics(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.TODO(), &p.Ballot).Return(nil).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
