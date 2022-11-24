@@ -110,7 +110,7 @@ func (t *turtle) evict(ctx context.Context) {
 	)
 
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
-		for _, ballot := range t.layer(lid).ballots {
+		for _, ballot := range t.ballots[lid] {
 			ballotsNumber.Dec()
 			delete(t.ballotRefs, ballot.id)
 		}
@@ -120,12 +120,13 @@ func (t *turtle) evict(ctx context.Context) {
 		}
 		layersNumber.Dec()
 		delete(t.layers, lid)
+		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
 			layersNumber.Dec()
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
-	for _, ballot := range t.layer(windowStart).ballots {
+	for _, ballot := range t.ballots[windowStart] {
 		ballot.votes.cutBefore(windowStart)
 	}
 	t.evicted = windowStart.Sub(1)
@@ -149,7 +150,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 	}
 
 	for lid := t.evicted.Add(1); lid.Before(current); lid = lid.Add(1) {
-		for _, ballot := range t.layer(lid).ballots {
+		for _, ballot := range t.ballots[lid] {
 			if ballot.weight.IsNil() {
 				continue
 			}
@@ -381,7 +382,7 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		}
 		prev := t.layer(process.Sub(1))
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
-		for _, ballot := range t.layer(process).ballots {
+		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
 		}
 		if t.isFull {
@@ -468,7 +469,7 @@ func (t *turtle) verifyLayers() error {
 			if !t.isFull {
 				t.switchModes(logger)
 				for counted := maxLayer(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
-					for _, ballot := range t.layer(counted).ballots {
+					for _, ballot := range t.ballots[counted] {
 						t.full.countBallot(logger, ballot)
 					}
 					t.full.countDelayed(logger, counted)
@@ -676,7 +677,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID) {
 	}
 	t.verifying.resetWeights(lid)
 	for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
-		t.verifying.countVotes(t.logger, t.layer(target).ballots)
+		t.verifying.countVotes(t.logger, t.ballots[target])
 	}
 }
 
