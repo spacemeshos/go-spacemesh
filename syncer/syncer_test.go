@@ -533,9 +533,7 @@ func TestSyncMissingLayer(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(nil)
-		if lid.Before(failed) {
-			ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
-		}
+		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
 		if lid == failed {
 			errMissingTXs := errors.New("missing TXs")
 			ts.mConState.EXPECT().ApplyLayer(gomock.Any(), block).DoAndReturn(
@@ -559,6 +557,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), failed).Return(nil)
 	require.True(t, ts.syncer.synchronize(context.TODO()))
 
+	ts.mTortoise.EXPECT().LatestComplete().Return(failed).Times(2)
 	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
@@ -571,7 +570,6 @@ func TestSyncMissingLayer(t *testing.T) {
 				})
 		}
 	}
-	ts.mTortoise.EXPECT().LatestComplete().Return(failed)
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
 	require.Equal(t, types.LayerID{}, ts.msh.MissingLayer())
 	require.Equal(t, last.Sub(1), ts.msh.ProcessedLayer())

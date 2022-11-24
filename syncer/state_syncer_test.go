@@ -167,9 +167,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				}
 			}
 			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-			if tc.localCert == types.EmptyBlockID {
-				ts.mTortoise.EXPECT().LatestComplete().Return(gLid)
-			}
+			ts.mTortoise.EXPECT().LatestComplete().Return(gLid)
 			ts.mTortoise.EXPECT().Updates().Return(nil)
 
 			require.False(t, ts.syncer.stateSynced())

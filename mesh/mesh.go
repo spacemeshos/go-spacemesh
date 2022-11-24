@@ -433,7 +433,30 @@ func (msh *Mesh) layerValidBlocks(logger log.Log, layerID types.LayerID, updates
 		logger.With().Error("failed to get layer blocks", log.Err(err))
 		return nil, fmt.Errorf("failed to get layer blocks %s: %w", layerID, err)
 	}
+
 	var validBlocks []*types.Block
+	latestVerified := msh.trtl.LatestComplete()
+	logger.With().Debug("getting layer valid blocks", log.Stringer("verified", latestVerified))
+	if layerID.After(latestVerified) {
+		// tortoise has not verified this layer yet, simply apply the block that hare certified
+		bid, err := certificates.GetHareOutput(msh.cdb, layerID)
+		if err != nil {
+			logger.With().Warning("failed to get hare output", layerID, log.Err(err))
+			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
+		}
+		// hare output an empty layer, or the network have multiple valid certificates
+		if bid == types.EmptyBlockID {
+			return nil, nil
+		}
+		for _, b := range lyrBlocks {
+			if b.ID() == bid {
+				validBlocks = append(validBlocks, b)
+				break
+			}
+		}
+		return validBlocks, nil
+	}
+
 	for _, b := range lyrBlocks {
 		var valid, found bool
 		for _, u := range updates {
@@ -456,34 +479,6 @@ func (msh *Mesh) layerValidBlocks(logger log.Log, layerID types.LayerID, updates
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
-		}
-	}
-
-	if len(validBlocks) > 0 {
-		return validBlocks, nil
-	} else {
-		verified := msh.trtl.LatestComplete()
-		if !layerID.After(verified) {
-			// tortoise has verified this layer to be empty
-			logger.With().Info("verified layer is empty", log.Stringer("verified", verified))
-			return nil, nil
-		}
-	}
-
-	// tortoise has not verified this layer yet, simply apply the block that hare certified
-	bid, err := certificates.GetHareOutput(msh.cdb, layerID)
-	if err != nil {
-		logger.With().Warning("failed to get hare output", log.Err(err))
-		return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
-	}
-	// hare output an empty layer, or the network have multiple valid certificates
-	if bid == types.EmptyBlockID {
-		return nil, nil
-	}
-	for _, b := range lyrBlocks {
-		if b.ID() == bid {
-			validBlocks = append(validBlocks, b)
-			break
 		}
 	}
 	return validBlocks, nil
