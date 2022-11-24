@@ -306,7 +306,7 @@ func (app *App) Initialize() (err error) {
 	if err != nil {
 		return fmt.Errorf("flock %s: %w", lockName, err)
 	} else if !locked {
-		return fmt.Errorf("Only one spacemesh instance should be running (locking file %s).", app.fileLock.Path())
+		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", app.fileLock.Path())
 	}
 
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)

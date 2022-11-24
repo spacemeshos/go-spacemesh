@@ -974,7 +974,7 @@ func TestFlock(t *testing.T) {
 
 	require.NoError(t, app.Initialize())
 	app1 := *app
-	require.ErrorContains(t, app1.Initialize(), "Only one")
+	require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
 	app.Cleanup()
 	require.NoError(t, app.Initialize())
 	require.NoError(t, os.Remove(filepath.Join(app.Config.DataDir(), lockFile)))
