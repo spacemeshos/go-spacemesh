@@ -85,14 +85,15 @@ func isIncluded(proof *types.PoetProof, member []byte) bool {
 func (v *Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
-	m := new(proving.ProofMetadata)
-	m.Commitment = commitment
-	m.NumUnits = numUnits
-	m.Challenge = PostMetadata.Challenge
-	m.BitsPerLabel = PostMetadata.BitsPerLabel
-	m.LabelsPerUnit = PostMetadata.LabelsPerUnit
-	m.K1 = PostMetadata.K1
-	m.K2 = PostMetadata.K2
+	m := &proving.ProofMetadata{
+		Commitment:    commitment,
+		NumUnits:      numUnits,
+		Challenge:     PostMetadata.Challenge,
+		BitsPerLabel:  PostMetadata.BitsPerLabel,
+		LabelsPerUnit: PostMetadata.LabelsPerUnit,
+		K1:            PostMetadata.K1,
+		K2:            PostMetadata.K2,
+	}
 
 	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
