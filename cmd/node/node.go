@@ -55,7 +55,6 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
@@ -156,12 +155,6 @@ func init() {
 type Service interface {
 	Start(ctx context.Context) error
 	Close()
-}
-
-// HareService is basic definition of hare algorithm service, providing consensus results for a layer.
-type HareService interface {
-	Service
-	GetHareMsgHandler() pubsub.GossipHandler
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -270,7 +263,7 @@ type App struct {
 	mesh             *mesh.Mesh
 	atxProvider      api.AtxProvider
 	clock            TickProvider
-	hare             HareService
+	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
 	postSetupMgr     *activation.PostSetupManager
@@ -596,7 +589,22 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(sqlDB, sgn, hareOutputCh, nodeID, patrol, newSyncer, beaconProtocol, hOracle, clock, lg)
+	app.hare = hare.New(
+		sqlDB,
+		app.Config.HARE,
+		app.host.ID(),
+		app.host,
+		sgn,
+		nodeID,
+		hareOutputCh,
+		newSyncer,
+		beaconProtocol,
+		hOracle,
+		patrol,
+		uint16(app.Config.LayersPerEpoch),
+		hOracle,
+		clock,
+		app.addLogger(HareLogger, lg))
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -675,11 +683,7 @@ func (app *App) initServices(ctx context.Context,
 		atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.PoetProofProtocol, poetListener.HandlePoetProofMessage)
-	hareGossipHandler := rabbit.GetHareMsgHandler()
-	if hareGossipHandler == nil {
-		app.log.Panic("hare message handler missing")
-	}
-	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
+	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 
 	app.proposalBuilder = proposalBuilder
@@ -689,7 +693,6 @@ func (app *App) initServices(ctx context.Context,
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
-	app.hare = rabbit
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
@@ -707,43 +710,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	return nil
-}
-
-// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
-func (app *App) HareFactory(
-	sqlDB *sql.Database,
-	sgn hare.Signer,
-	ch chan hare.LayerOutput,
-	nodeID types.NodeID,
-	patrol *layerpatrol.LayerPatrol,
-	syncer system.SyncStateProvider,
-	beacons system.BeaconGetter,
-	hOracle hare.Rolacle,
-	clock TickProvider,
-	lg log.Log,
-) HareService {
-	if app.Config.HARE.SuperHare {
-		hr := turbohare.New(sqlDB, app.Config.HARE, ch, clock.Subscribe(), app.addLogger(HareLogger, lg))
-		return hr
-	}
-
-	ha := hare.New(
-		sqlDB,
-		app.Config.HARE,
-		app.host.ID(),
-		app.host,
-		sgn,
-		nodeID,
-		ch,
-		syncer,
-		beacons,
-		hOracle,
-		patrol,
-		uint16(app.Config.LayersPerEpoch),
-		hOracle,
-		clock,
-		app.addLogger(HareLogger, lg))
-	return ha
 }
 
 func (app *App) startServices(ctx context.Context) error {

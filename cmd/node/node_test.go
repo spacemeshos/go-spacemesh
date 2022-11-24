@@ -993,7 +993,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
 	cfg.HARE.ExpectedLeaders = 5
-	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerProposal = 100
