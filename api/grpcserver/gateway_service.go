@@ -57,9 +57,9 @@ func (s *GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoet
 // VerifyChallenge implements v1.GatewayServiceServer.
 func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	log.Info("GRPC GatewayService.VerifyChallenge")
-	hash, err := s.verifier.Verify(ctx, in.Challenge, in.Signature)
+	result, err := s.verifier.Verify(ctx, in.Challenge, in.Signature)
 	if err == nil {
-		return &pb.VerifyChallengeResponse{Hash: hash}, nil
+		return &pb.VerifyChallengeResponse{Hash: result.Hash.Bytes(), NodeId: result.NodeID.ToBytes()}, nil
 	}
 
 	if errors.Is(err, activation.ErrCouldntVerify) {

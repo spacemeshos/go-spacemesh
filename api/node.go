@@ -88,6 +88,4 @@ type AtxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 }
 
-type ChallengeVerifier interface {
-	Verify(ctx context.Context, challenge, signature []byte) ([]byte, error)
-}
+type ChallengeVerifier = activation.ChallengeVerifier
