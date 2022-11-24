@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -126,7 +127,7 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Poe
 	}
 	hash, err := challenge.Hash()
 	if err != nil {
-		panic(fmt.Sprintf("failed to hash challenge (%v)", err))
+		log.Fatalf("failed to hash challenge (%v)", err)
 	}
 
 	return newNIPostWithChallenge(hash, np.poetRef), 0, nil
