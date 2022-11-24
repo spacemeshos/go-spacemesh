@@ -21,8 +21,13 @@ var (
 
 //go:generate mockgen -package=mocks -destination=./mocks/challenge_verifier.go . AtxProvider
 
-type ChallengeVerifierInterface interface {
-	Verify(ctx context.Context, challenge, signature []byte) (hash []byte, err error)
+type ChallengeVerificationResult struct {
+	Hash   types.Hash32
+	NodeID types.NodeID
+}
+
+type ChallengeVerifier interface {
+	Verify(ctx context.Context, challenge, signature []byte) (*ChallengeVerificationResult, error)
 }
 
 type AtxProvider interface {
@@ -36,7 +41,7 @@ type challengeVerifier struct {
 	goldenATXID       types.ATXID
 }
 
-func NewChallengeVerifier(cdb AtxProvider, signatureVerifier signing.VerifyExtractor, cfg atypes.PostConfig, goldenATX types.ATXID) ChallengeVerifierInterface {
+func NewChallengeVerifier(cdb AtxProvider, signatureVerifier signing.VerifyExtractor, cfg atypes.PostConfig, goldenATX types.ATXID) ChallengeVerifier {
 	return &challengeVerifier{
 		atxDB:             cdb,
 		signatureVerifier: signatureVerifier,
@@ -45,8 +50,9 @@ func NewChallengeVerifier(cdb AtxProvider, signatureVerifier signing.VerifyExtra
 	}
 }
 
-func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signature []byte) ([]byte, error) {
-	nodeID, err := v.signatureVerifier.Extract(challengeBytes, signature)
+func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signature []byte) (*ChallengeVerificationResult, error) {
+	pubkey, err := v.signatureVerifier.Extract(challengeBytes, signature)
+	nodeID := types.BytesToNodeID(pubkey.Bytes())
 	if err != nil {
 		return nil, ErrSignatureInvalid
 	}
@@ -56,12 +62,18 @@ func (v *challengeVerifier) Verify(ctx context.Context, challengeBytes, signatur
 		return nil, err
 	}
 
-	if err := v.verifyChallenge(ctx, &challenge, types.BytesToNodeID(nodeID.Bytes())); err != nil {
+	if err := v.verifyChallenge(ctx, &challenge, nodeID); err != nil {
 		return nil, err
 	}
 
 	hash, err := challenge.Hash()
-	return hash[:], err
+	if err != nil {
+		return nil, err
+	}
+	return &ChallengeVerificationResult{
+		Hash:   *hash,
+		NodeID: nodeID,
+	}, nil
 }
 
 func (v *challengeVerifier) verifyChallenge(ctx context.Context, challenge *types.PoetChallenge, nodeID types.NodeID) error {

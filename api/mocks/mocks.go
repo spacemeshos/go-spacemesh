@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	peer "github.com/libp2p/go-libp2p/core/peer"
+	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/activation/types"
 	types0 "github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -193,10 +194,10 @@ func (m *MockChallengeVerifier) EXPECT() *MockChallengeVerifierMockRecorder {
 }
 
 // Verify mocks base method.
-func (m *MockChallengeVerifier) Verify(arg0 context.Context, arg1, arg2 []byte) ([]byte, error) {
+func (m *MockChallengeVerifier) Verify(arg0 context.Context, arg1, arg2 []byte) (*activation.ChallengeVerificationResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(*activation.ChallengeVerificationResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
