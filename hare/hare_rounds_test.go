@@ -60,7 +60,7 @@ type (
 	}
 )
 
-func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, createProposal bool, oracle funcOracle, validate funcValidate) *TestHareWrapper {
+func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, limitIterations int, createProposal bool, oracle funcOracle, validate funcValidate) *TestHareWrapper {
 	r := require.New(t)
 	w := newTestHareWrapper(maxLayers)
 	cfg := config.Config{
@@ -91,7 +91,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, c
 
 	for i := 0; i < nodes; i++ {
 		host := mesh.Hosts()[i]
-		ps, err := pubsub.New(context.TODO(), logtest.New(t), host, pubsub.DefaultConfig())
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 
@@ -109,7 +109,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations int, c
 			}
 		}()
 		w.hare = append(w.hare, th.Hare)
-		e := th.Start(context.TODO())
+		e := th.Start(ctx)
 		r.NoError(e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
@@ -124,7 +124,9 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	var mu sync.RWMutex
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 2, false,
+	ctx, cancel := context.WithCancel(context.Background())
+
+	w := runNodesFor(t, ctx, nodes, 2, layers, 2, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round/4 > 1 && round != preRound {
 				t.Fatalf("out of round %d limit", round)
@@ -142,9 +144,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
 
-	for _, h := range w.hare {
-		close(h.blockGenCh)
-	}
+	cancel()
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -167,7 +167,10 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, false,
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := runNodesFor(t, ctx, nodes, 2, layers, 1, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == statusRound && hare.N >= committee/2-1 {
 				return 0, nil
@@ -199,7 +202,9 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, false,
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := runNodesFor(t, ctx, nodes, 2, layers, 1, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == proposalRound {
 				return 0, nil
@@ -231,7 +236,10 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, true,
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := runNodesFor(t, ctx, nodes, 2, layers, 1, true,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == commitRound && hare.N >= committee/2-1 {
 				return 0, nil
@@ -263,7 +271,10 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, true,
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := runNodesFor(t, ctx, nodes, 2, layers, 1, true,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == notifyRound && hare.N >= committee/2-1 {
 				return 0, nil
@@ -295,7 +306,10 @@ func Test_HareComplete(t *testing.T) {
 	const layers = 2
 	m := [layers][nodes]int{}
 
-	w := runNodesFor(t, nodes, 2, layers, 1, true,
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := runNodesFor(t, ctx, nodes, 2, layers, 1, true,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			return 1, nil
 		},

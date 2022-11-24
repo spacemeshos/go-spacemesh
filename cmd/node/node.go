@@ -147,7 +147,13 @@ var VersionCmd = &cobra.Command{
 	},
 }
 
+var appLog log.Log
+var grpcLog *zap.Logger
+
 func init() {
+	appLog = log.NewNop()
+	grpcLog = appLog.WithName(GRPCLogger).WithFields(log.String("module", GRPCLogger)).Zap()
+	grpczap.ReplaceGrpcLoggerV2(grpcLog)
 	cmdp.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
@@ -243,7 +249,7 @@ func New(opts ...Option) *App {
 	defaultConfig := config.DefaultConfig()
 	app := &App{
 		Config:  &defaultConfig,
-		log:     log.NewNop(),
+		log:     appLog,
 		loggers: make(map[string]*zap.AtomicLevel),
 		term:    make(chan struct{}),
 		started: make(chan struct{}),
@@ -292,6 +298,10 @@ type App struct {
 	loggers map[string]*zap.AtomicLevel
 	term    chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started chan struct{} // this channel is closed once the app has finished starting
+}
+
+func (app *App) Started() chan struct{} {
+	return app.started
 }
 
 func (app *App) introduction() {
@@ -795,15 +805,14 @@ func (app *App) startAPIServices(ctx context.Context) {
 	var services []grpcserver.ServiceAPI
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			logger := app.addLogger(GRPCLogger, app.log).Zap()
-			grpczap.ReplaceGrpcLoggerV2(logger)
+			app.addLogger(GRPCLogger, app.log)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpcmiddleware.WithStreamServerChain(
 					grpcctxtags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(logger)),
+					grpczap.StreamServerInterceptor(grpcLog)),
 				grpcmiddleware.WithUnaryServerChain(
 					grpcctxtags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(logger)),
+					grpczap.UnaryServerInterceptor(grpcLog)),
 			)
 		}
 		services = append(services, svc)

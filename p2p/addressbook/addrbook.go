@@ -318,7 +318,7 @@ func (a *AddrBook) getAddressFromBuckets(buckets []map[peer.ID]*knownAddress) *k
 	}
 }
 
-func (a *AddrBook) GetKnownAddressesCache() []*knownAddress {
+func (a *AddrBook) GetKnownAddressesCache() []knownAddress {
 	allAddr := a.GetAddresses()
 
 	numAddresses := len(allAddr) * a.cfg.GetAddrPercent / 100
@@ -328,7 +328,7 @@ func (a *AddrBook) GetKnownAddressesCache() []*knownAddress {
 		numAddresses = len(allAddr)
 	}
 
-	result := make([]*knownAddress, 0, numAddresses)
+	result := make([]knownAddress, 0, numAddresses)
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	for i := 0; i < numAddresses; i++ {
@@ -340,7 +340,7 @@ func (a *AddrBook) GetKnownAddressesCache() []*knownAddress {
 			ka = a.getAddressFromBuckets(a.addrNew)
 		}
 		if ka != nil {
-			result = append(result, ka)
+			result = append(result, *ka)
 		}
 	}
 	return result
