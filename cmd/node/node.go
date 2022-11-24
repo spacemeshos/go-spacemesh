@@ -147,8 +147,10 @@ var VersionCmd = &cobra.Command{
 	},
 }
 
-var appLog log.Log
-var grpcLog *zap.Logger
+var (
+	appLog  log.Log
+	grpcLog *zap.Logger
+)
 
 func init() {
 	appLog = log.NewNop()
