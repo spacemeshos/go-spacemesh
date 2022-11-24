@@ -808,6 +808,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
+	app.Cleanup()
 
 	tconf := getTestDefaultConfig()
 	tconf.DataDirParent = t.TempDir()
