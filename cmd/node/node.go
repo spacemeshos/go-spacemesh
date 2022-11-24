@@ -301,13 +301,14 @@ func (app *App) Initialize() (err error) {
 		return fmt.Errorf("ensure folders exist: %w", err)
 	}
 	lockName := filepath.Join(app.Config.DataDir(), lockFile)
-	app.fileLock = flock.New(lockName)
-	locked, err := app.fileLock.TryLock()
+	fl := flock.New(lockName)
+	locked, err := fl.TryLock()
 	if err != nil {
 		return fmt.Errorf("flock %s: %w", lockName, err)
 	} else if !locked {
-		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", app.fileLock.Path())
+		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
 	}
+	app.fileLock = fl
 
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
