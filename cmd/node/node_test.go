@@ -168,7 +168,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
 }
 
-func testArgs(ctx context.Context, root cobra.Command, args ...string) (string, error) {
+func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string, error) {
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
 	root.SetErr(buf)
@@ -181,11 +181,9 @@ func testArgs(ctx context.Context, root cobra.Command, args ...string) (string, 
 	return buf.String(), err
 }
 
-func cmdWithRun(run func(*cobra.Command, []string)) cobra.Command {
-	cmd := *Cmd
+func cmdWithRun(run func(*cobra.Command, []string)) *cobra.Command {
+	cmd := GetCommand()
 	cmd.Run = run
-	cmd.ResetFlags()
-	cmdp.AddCommands(&cmd)
 	return cmd
 }
 

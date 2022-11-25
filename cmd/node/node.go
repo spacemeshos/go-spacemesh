@@ -94,57 +94,63 @@ const (
 	ConStateLogger         = "conState"
 )
 
-// Cmd is the cobra wrapper for the node, that allows adding parameters to it.
-var Cmd = &cobra.Command{
-	Use:   "node",
-	Short: "start node",
-	Run: func(cmd *cobra.Command, args []string) {
-		conf, err := loadConfig(cmd)
-		if err != nil {
-			log.With().Fatal("failed to initialize config", log.Err(err))
-		}
-
-		if conf.LOGGING.Encoder == config.JSONLogEncoder {
-			log.JSONLog(true)
-		}
-		app := New(
-			WithConfig(conf),
-			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
-			// otherwise it will fail later when child logger will try to increase level.
-			WithLog(log.RegisterHooks(
-				log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-				events.EventHook())),
-		)
-		starter := func() error {
-			if err := app.Initialize(); err != nil {
-				return err
-			}
-			// This blocks until the context is finished or until an error is produced
-			if err := app.Start(); err != nil {
-				return err
+func GetCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "node",
+		Short: "start node",
+		Run: func(cmd *cobra.Command, args []string) {
+			conf, err := loadConfig(cmd)
+			if err != nil {
+				log.With().Fatal("failed to initialize config", log.Err(err))
 			}
 
-			return nil
-		}
-		err = starter()
-		app.Cleanup()
-		if err != nil {
-			log.With().Fatal(err.Error())
-		}
-	},
-}
+			if conf.LOGGING.Encoder == config.JSONLogEncoder {
+				log.JSONLog(true)
+			}
+			app := New(
+				WithConfig(conf),
+				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
+				// otherwise it will fail later when child logger will try to increase level.
+				WithLog(log.RegisterHooks(
+					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
+					events.EventHook())),
+			)
+			starter := func() error {
+				if err := app.Initialize(); err != nil {
+					return err
+				}
+				// This blocks until the context is finished or until an error is produced
+				if err := app.Start(); err != nil {
+					return err
+				}
 
-// VersionCmd returns the current version of spacemesh.
-var VersionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show version info",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Print(cmdp.Version)
-		if cmdp.Commit != "" {
-			fmt.Printf("+%s", cmdp.Commit)
-		}
-		fmt.Println()
-	},
+				return nil
+			}
+			err = starter()
+			app.Cleanup()
+			if err != nil {
+				log.With().Fatal(err.Error())
+			}
+		},
+	}
+
+	cmdp.AddCommands(cmd)
+
+	// versionCmd returns the current version of spacemesh.
+	versionCmd := cobra.Command{
+		Use:   "version",
+		Short: "Show version info",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Print(cmdp.Version)
+			if cmdp.Commit != "" {
+				fmt.Printf("+%s", cmdp.Commit)
+			}
+			fmt.Println()
+		},
+	}
+	cmd.AddCommand(&versionCmd)
+
+	return cmd
 }
 
 var (
@@ -156,8 +162,6 @@ func init() {
 	appLog = log.NewNop()
 	grpcLog = appLog.WithName(GRPCLogger).WithFields(log.String("module", GRPCLogger)).Zap()
 	grpczap.ReplaceGrpcLoggerV2(grpcLog)
-	cmdp.AddCommands(Cmd)
-	Cmd.AddCommand(VersionCmd)
 }
 
 // Service is a general service interface that specifies the basic start/stop functionality.
