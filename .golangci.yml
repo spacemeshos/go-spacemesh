@@ -159,6 +159,65 @@ linters-settings:
       - standard
       - default
       - prefix(github.com/spacemeshos/go-spacemesh)
+  importas:
+    # Do not allow unaliased imports of aliased packages.
+    # Default: false
+    no-unaliased: false
+    # Do not allow non-required aliases.
+    # Default: false
+    no-extra-aliases: false
+    # List of aliases
+    # Default: []
+    alias:
+      - pkg: "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+        alias: chaos
+      - pkg: "github.com/hashicorp/golang-lru"
+        alias: lru
+      - pkg: "github.com/grpc-ecosystem/go-grpc-middleware"
+        alias: grpcmw
+      - pkg: "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+        alias: grpczap
+      - pkg: "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+        alias: grpctags
+      - pkg: "github.com/libp2p/go-libp2p-pubsub"
+        alias: pubsub
+      - pkg: "github.com/libp2p/go-libp2p-pubsub/pb"
+        alias: pb
+      - pkg: "github.com/libp2p/go-libp2p/p2p/net/mock"
+        alias: mocknet
+      - pkg: "github.com/libp2p/go-libp2p-testing/netutil"
+        alias: p2putil
+      - pkg: "github.com/multiformats/go-multiaddr"
+        alias: ma
+      - pkg: "github.com/multiformats/go-multiaddr/net"
+        alias: manet
+      - pkg: "github.com/spacemeshos/api/release/go/spacemesh/v1"
+        alias: pb
+      - pkg: "github.com/spacemeshos/go-spacemesh/genvm"
+        alias: vm
+      - pkg: "github.com/spacemeshos/go-spacemesh/p2p/metrics"
+        alias: p2pmetrics
+      - pkg: "github.com/spacemeshos/go-spacemesh/sql/proposals"
+        alias: dbproposals
+      - pkg: "github.com/spacemeshos/go-spacemesh/sql/metrics"
+        alias: dbmetrics
+      - pkg: "github.com/spacemeshos/go-spacemesh/txs/types"
+        alias: txtypes
+      - pkg: "google.golang.org/genproto/googleapis/rpc/status"
+        alias: rpcstatus
+      - pkg: "k8s.io/apimachinery/pkg/apis/meta/v1"
+        alias: apimetav1
+      - pkg: "k8s.io/api/apps/v1"
+        alias: apiappsv1
+      - pkg: "k8s.io/api/core/v1"
+        alias: apiv1
+      - pkg: "k8s.io/client-go/applyconfigurations/apps/v1"
+        alias: appsv1
+      - pkg: "k8s.io/client-go/applyconfigurations/core/v1"
+        alias: corev1
+      - pkg: "k8s.io/client-go/applyconfigurations/meta/v1"
+        alias: metav1
+
   godot:
     # comments to be checked: `declarations`, `toplevel`, or `all`
     scope: declarations
@@ -199,9 +258,10 @@ linters-settings:
       - github.com/pkg/*
 
 linters:
-  # TODO(nkryuchkov): enable needed linters
   enable:
+    - goimports
     - gci
+    - importas
     - godot
     - gofmt
     - gofumpt

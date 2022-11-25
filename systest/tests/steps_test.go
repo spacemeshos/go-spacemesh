@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -234,7 +234,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 		"hash", prettyHex(reference.Hash),
 		"state hash", prettyHex(reference.RootStateHash),
 	)
-	layers := make([]*spacemeshv1.Layer, len(synced))
+	layers := make([]*pb.Layer, len(synced))
 
 	// eventually because we don't want to fail whole test
 	// if one of the nodes are slightly behind
