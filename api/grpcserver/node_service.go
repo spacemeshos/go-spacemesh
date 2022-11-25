@@ -149,7 +149,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	log.Info("GRPC NodeService.StatusStream")
 
 	var (
-		statusCh      <-chan interface{}
+		statusCh      <-chan any
 		statusBufFull <-chan struct{}
 	)
 
@@ -198,7 +198,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	log.Info("GRPC NodeService.ErrorStream")
 
 	var (
-		errorsCh      <-chan interface{}
+		errorsCh      <-chan any
 		errorsBufFull <-chan struct{}
 	)
 

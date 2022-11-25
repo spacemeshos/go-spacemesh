@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	atomicfile "github.com/natefinch/atomic"
-	"github.com/pkg/errors"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -68,10 +68,10 @@ func (a *AddrBook) persistPeers() error {
 
 	data, err := json.Marshal(sam)
 	if err != nil {
-		return errors.Wrap(err, "failed to encode data")
+		return fmt.Errorf("failed to encode data: %w", err)
 	}
 	if err = a.atomicallySaveToFile(data); err != nil {
-		return errors.Wrap(err, "failed to save file")
+		return fmt.Errorf("failed to save file: %w", err)
 	}
 	return nil
 }
@@ -83,7 +83,7 @@ func (a *AddrBook) atomicallySaveToFile(data []byte) error {
 	resultData := append(checkSumBytes, data...)
 
 	if err := atomicfile.WriteFile(a.path, bytes.NewReader(resultData)); err != nil {
-		return errors.Wrap(err, "failed to write addresses to file")
+		return fmt.Errorf("failed to write addresses to file: %w", err)
 	}
 	return nil
 }
@@ -122,7 +122,7 @@ func (a *AddrBook) decodeFrom(path string) error {
 
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return errors.Wrap(err, "error reading file")
+		return fmt.Errorf("error reading file: %w", err)
 	}
 
 	if len(data) < 4 {

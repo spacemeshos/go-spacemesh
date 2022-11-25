@@ -154,7 +154,7 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
 			if p.Field(i).Tag.Get("mapstructure") == name {
-				var val interface{}
+				var val any
 				switch p.Field(i).Type.String() {
 				case "bool":
 					val = viper.GetBool(name)

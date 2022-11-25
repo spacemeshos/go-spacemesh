@@ -55,8 +55,8 @@ var (
 )
 
 type cache interface {
-	Add(key, value interface{}) (evicted bool)
-	Get(key interface{}) (value interface{}, ok bool)
+	Add(key, value any) (evicted bool)
+	Get(key any) (value any, ok bool)
 }
 
 // a function to verify the message with the signature and its public key.
@@ -79,12 +79,7 @@ type Oracle struct {
 // Returns a range of safe layers that should be used to construct the Hare active set for a given target layer
 // Safe layer is a layer prior to the input layer on which w.h.p. we have agreement (i.e., on its contextually valid
 // blocks), defined to be confidence param number of layers prior to the input layer.
-func safeLayerRange(
-	targetLayer types.LayerID,
-	safetyParam,
-	layersPerEpoch,
-	epochOffset uint32,
-) (safeLayerStart, safeLayerEnd types.LayerID) {
+func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epochOffset uint32) (safeLayerStart, safeLayerEnd types.LayerID) {
 	// prevent overflow
 	if targetLayer.Uint32() <= safetyParam {
 		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()

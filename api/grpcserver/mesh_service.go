@@ -116,8 +116,7 @@ func (s MeshService) getFilteredTransactions(from types.LayerID, address types.A
 }
 
 func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
-	// We have no way to look up activations by coinbase so we have no choice
-	// but to read all of them.
+	// We have no way to look up activations by coinbase so we have no choice but to read all of them.
 	// TODO: index activations by layer (and maybe by coinbase)
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
 	var atxids []types.ATXID
@@ -126,7 +125,6 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 		if layer == nil || err != nil {
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
-
 		for _, b := range layer.Ballots() {
 			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
 				atxids = append(atxids, b.EpochData.ActiveSet...)
@@ -445,7 +443,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Subscribe to the stream of transactions and activations
 	var (
-		txCh, activationsCh           <-chan interface{}
+		txCh, activationsCh           <-chan any
 		txBufFull, activationsBufFull <-chan struct{}
 	)
 
@@ -515,7 +513,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 	log.Info("GRPC MeshService.LayerStream")
 
 	var (
-		layerCh       <-chan interface{}
+		layerCh       <-chan any
 		layersBufFull <-chan struct{}
 	)
 

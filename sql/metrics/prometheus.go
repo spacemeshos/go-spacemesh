@@ -2,9 +2,9 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
@@ -99,7 +99,7 @@ func (d *DBMetricsCollector) collect() error {
 		return true
 	})
 	if err != nil {
-		return errors.Wrap(err, "error execute stat metrics")
+		return fmt.Errorf("error execute stat metrics: %w", err)
 	}
 	var totalSize int64
 	for name, size := range sizes {
@@ -122,7 +122,7 @@ func (d *DBMetricsCollector) checkCompiledWithDBStat() (bool, error) {
 		return true
 	})
 	if err != nil {
-		return false, errors.Wrap(err, "error check db compiler options")
+		return false, fmt.Errorf("error check db compiler options: %w", err)
 	}
 	for _, option := range options {
 		if option == enabledDBStat {
@@ -141,7 +141,7 @@ func (d *DBMetricsCollector) getListOfTables() (map[string]struct{}, error) {
 		return true
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "error get list of tables")
+		return nil, fmt.Errorf("error get list of tables: %w", err)
 	}
 	return tables, nil
 }

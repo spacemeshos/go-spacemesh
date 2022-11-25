@@ -429,7 +429,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	conn, err := grpc.Dial(
+	_, err = grpc.Dial(
 		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -448,7 +448,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.Equal(port, app.Config.API.GrpcServerPort)
 	r.True(app.Config.API.StartNodeService)
 
-	conn, err = grpc.Dial(
+	conn, err := grpc.Dial(
 		fmt.Sprintf("localhost:%d", port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
