@@ -714,13 +714,11 @@ func (c *cache) ApplyLayer(
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", balance))
 		t0 := time.Now()
-		acctApplyDuration.Observe(float64(time.Since(t0)))
-		t1 := time.Now()
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
 			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
 			return err
 		}
-		acctResetDuration.Observe(float64(time.Since(t1)))
+		acctResetDuration.Observe(float64(time.Since(t0)))
 	}
 
 	for principal, accCache := range c.pending {

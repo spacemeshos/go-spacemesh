@@ -156,7 +156,8 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 	parsed.ID = id
 
 	state := types.PENDING
-	if stmt.ColumnInt64(2) != 0 {
+	layer := types.NewLayerID(uint32(stmt.ColumnInt64(2)))
+	if layer.Value != 0 {
 		state = types.APPLIED
 	} else if parsed.TxHeader != nil {
 		state = types.MEMPOOL
@@ -166,7 +167,7 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 
 	return &types.MeshTransaction{
 		Transaction: parsed,
-		LayerID:     types.NewLayerID(uint32(stmt.ColumnInt64(2))),
+		LayerID:     layer,
 		BlockID:     bid,
 		Received:    time.Unix(0, stmt.ColumnInt64(4)),
 		State:       state,
@@ -174,7 +175,7 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 }
 
 // Get gets a transaction from database.
-// Layer and Block fields are if transaction was applied.
+// Layer and Block fields are set if transaction was applied.
 // If transaction is included, but not applied check references in proposals and blocks.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
 	var rows int

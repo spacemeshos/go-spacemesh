@@ -666,6 +666,7 @@ func TestApplyLayer(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
 		require.Equal(t, lid, mtx.LayerID)
+		require.Equal(t, block.ID(), mtx.BlockID)
 	}
 }
 
@@ -724,6 +725,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 		} else {
 			require.Equal(t, types.APPLIED, mtx.State)
 			require.Equal(t, lid, mtx.LayerID)
+			require.Equal(t, block.ID(), mtx.BlockID)
 		}
 	}
 }
