@@ -108,11 +108,13 @@ func TestStepTransactions(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		cl.CloseClients()
+	})
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
 
 	clients := make([]*txClient, cl.Accounts())
 	synced := syncedNodes(tctx, cl)
-	require.GreaterOrEqual(t, len(synced), tctx.ClusterSize/2)
 
 	for i := range clients {
 		clients[i] = &txClient{
@@ -129,7 +131,9 @@ func TestStepTransactions(t *testing.T) {
 			rng := rand.New(rand.NewSource(time.Now().Unix() + int64(i)))
 			n := rng.Intn(batch) + batch
 			nonce, err := client.nonce(tctx)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			if nonce == 0 {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
@@ -182,7 +186,9 @@ func TestStepTransactions(t *testing.T) {
 			return nil
 		})
 	}
-	require.NoError(t, eg.Wait())
+	if err := eg.Wait(); err != nil {
+		tctx.Log.Errorw("failed to submit transactions", "error", err)
+	}
 }
 
 func TestStepReplaceNodes(t *testing.T) {
@@ -372,6 +378,15 @@ func TestScheduleBasic(t *testing.T) {
 	})
 	rn.one(60*time.Minute, func() bool {
 		return t.Run("replace nodes", TestStepReplaceNodes)
+	})
+	rn.wait()
+}
+
+func TestScheduleTransactions(t *testing.T) {
+	TestStepCreate(t)
+	rn := newRunner()
+	rn.concurrent(10*time.Second, func() bool {
+		return t.Run("txs", TestStepTransactions)
 	})
 	rn.wait()
 }

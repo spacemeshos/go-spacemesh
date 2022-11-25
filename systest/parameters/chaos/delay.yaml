@@ -1,0 +1,17 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: delay-smesher
+spec:
+  action: delay
+  mode: all
+  selector:
+    expressionSelectors:
+      - key: app
+        operator: In
+        values: ["boot", "smesher"]
+  direction: to
+  delay:
+    latency: "50ms"
+    correlation: "0"
+    jitter: "50ms"

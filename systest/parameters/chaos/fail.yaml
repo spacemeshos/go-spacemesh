@@ -1,0 +1,17 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: short-failure-every-30m
+spec:
+  schedule: "*/30 * * * *"
+  historyLimit: 2
+  type: "PodChaos"
+  podChaos:
+    action: pod-failure
+    mode: all
+    selector:
+      expressionSelectors:
+        - key: bucket
+          operator: In
+          values: ["2"]
+    duration: "60s"

@@ -1,13 +1,17 @@
 package cluster
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
 	"time"
 
+	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/types/known/emptypb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
@@ -346,19 +350,23 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 }
 
 // AddSmeshers ...
-func (c *Cluster) AddSmeshers(cctx *testcontext.Context, n int) error {
-	if err := c.resourceControl(cctx, n); err != nil {
+func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
+	if err := c.resourceControl(tctx, n); err != nil {
 		return err
 	}
-	if err := c.persist(cctx); err != nil {
+	if err := c.persist(tctx); err != nil {
 		return err
 	}
 	flags := []DeploymentFlag{}
 	for _, flag := range c.smesherFlags {
 		flags = append(flags, flag)
 	}
-	flags = append(flags, Bootnodes(extractP2PEndpoints(c.clients[:c.bootnodes])...))
-	clients, err := deployNodes(cctx, smesherPrefix, c.nextSmesher(), c.nextSmesher()+n, flags)
+	endpoints, err := extractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	if err != nil {
+		return fmt.Errorf("extracing p2p endpoints %w", err)
+	}
+	flags = append(flags, Bootnodes(endpoints...))
+	clients, err := deployNodes(tctx, smesherPrefix, c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
 	}
@@ -439,6 +447,15 @@ func (c *Cluster) Poet(i int) *NodeClient {
 // Client returns client for i-th node, either bootnode or smesher.
 func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
+}
+
+// CloseClients closes connections to clients.
+func (c *Cluster) CloseClients() error {
+	var eg errgroup.Group
+	for _, client := range c.clients {
+		eg.Go(client.Close)
+	}
+	return eg.Wait()
 }
 
 // Wait for i-th client to be up.
@@ -552,12 +569,30 @@ func genSigner() *signer {
 	return &signer{Pub: pub, PK: pk}
 }
 
-func extractP2PEndpoints(nodes []*NodeClient) []string {
-	var rst []string
-	for _, n := range nodes {
-		rst = append(rst, n.P2PEndpoint())
+func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
+	var (
+		rst          = make([]string, len(nodes))
+		rctx, cancel = context.WithTimeout(tctx, 10*time.Second)
+		eg, ctx      = errgroup.WithContext(rctx)
+	)
+	defer cancel()
+	for i := range nodes {
+		i := i
+		n := nodes[i]
+		eg.Go(func() error {
+			dbg := spacemeshv1.NewDebugServiceClient(n)
+			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
+			if err != nil {
+				return err
+			}
+			rst[i] = p2pEndpoint(n.Node, info.Id)
+			return nil
+		})
 	}
-	return rst
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	return rst, nil
 }
 
 func defaultTargetOutbound(size int) int {
