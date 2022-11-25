@@ -458,6 +458,9 @@ func (c *cache) buildFromScratch(db *sql.Database) error {
 		return fmt.Errorf("cache: get pending %w", err)
 	}
 	addresses, err := transactions.AddressesWithPendingTransactions(db)
+	if err != nil {
+		return fmt.Errorf("pending transactions %w", err)
+	}
 	var rst []*types.MeshTransaction
 	for _, addr := range addresses {
 		txs, err := transactions.GetAcctPendingFromNonce(db, addr.Address, addr.Nonce.Counter)

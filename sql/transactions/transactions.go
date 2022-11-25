@@ -142,9 +142,7 @@ func UndoLayers(db *sql.Tx, from types.LayerID) error {
 
 // tx, header, layer, block, timestamp.
 func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.MeshTransaction, error) {
-	var (
-		parsed types.Transaction
-	)
+	var parsed types.Transaction
 	parsed.Raw = make([]byte, stmt.ColumnLen(0))
 	stmt.ColumnBytes(0, parsed.Raw)
 	if stmt.ColumnLen(1) > 0 {

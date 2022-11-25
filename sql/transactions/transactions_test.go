@@ -378,7 +378,8 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 	txs := []types.Transaction{
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{1}},
-			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 0}}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 0}},
+		},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{2}},
 			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 1}},
