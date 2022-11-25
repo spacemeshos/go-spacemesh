@@ -2429,6 +2429,39 @@ func TestCountOnBallot(t *testing.T) {
 	tortoise.TallyVotes(ctx, last)
 }
 
+func TestOnBallotBeforeTallyVotes(t *testing.T) {
+	const (
+		size         = 4
+		testDistance = 4
+	)
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.Hdist = testDistance + 1
+	cfg.Zdist = cfg.Hdist
+	cfg.LayerSize = size
+
+	s := sim.New(
+		sim.WithLayerSize(cfg.LayerSize),
+	)
+	s.Setup(
+		sim.WithSetupMinerRange(size, size),
+	)
+	tortoise := tortoiseFromSimState(
+		s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+	)
+	var last types.LayerID
+	for i := 0; i < testDistance; i++ {
+		last = s.Next(sim.WithNumBlocks(1))
+		blts, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		for _, ballot := range blts {
+			tortoise.OnBallot(ballot)
+		}
+		tortoise.TallyVotes(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
+}
+
 func TestNonTerminatedLayers(t *testing.T) {
 	const size = 10
 	ctx := context.Background()
