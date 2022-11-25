@@ -314,8 +314,9 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 2
+          poet_image: us-east4-docker.pkg.dev/spacemesh-infra-core/docker-dev/spacemeshos/poet:poet-challenge-with-verifying-svc
         run: make -C systest run test_name=.
 
       - name: Run tests II
@@ -327,8 +328,9 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m
-          level: info
+          level: debug
           clusters: 2
+          poet_image: us-east4-docker.pkg.dev/spacemesh-infra-core/docker-dev/spacemeshos/poet:poet-challenge-with-verifying-svc
         run: make -C systest run test_name=.
 
       - name: Delete pod
