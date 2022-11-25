@@ -143,11 +143,11 @@ func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, type
 // TODO(mafa): use gomock instead of this; see handler_test.go for examples.
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate([]byte, *types.NIPost, types.Hash32, uint32) (uint64, error) {
+func (*ValidatorMock) Validate(types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32) (uint64, error) {
 	return 1, nil
 }
 
-func (*ValidatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint32) error {
+func (*ValidatorMock) ValidatePost(types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32) error {
 	return nil
 }
 

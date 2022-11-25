@@ -188,12 +188,12 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	commitment, err := h.getCommitmentFromAtx(atx)
+	commitmentATX, err := h.getCommitmentAtx(atx)
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
 	}
 
-	leaves, err := h.nipostValidator.Validate(commitment, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.Validate(atx.NodeID(), *commitmentATX, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -287,9 +287,9 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 	return nil
 }
 
-func (h *Handler) getCommitmentFromAtx(atx *types.ActivationTx) ([]byte, error) {
+func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error) {
 	if atx.CommitmentATX != nil {
-		return GetCommitmentBytes(atx.NodeID(), *atx.CommitmentATX), nil
+		return atx.CommitmentATX, nil
 	}
 
 	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.NodeID())
@@ -300,7 +300,7 @@ func (h *Handler) getCommitmentFromAtx(atx *types.ActivationTx) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	return GetCommitmentBytes(atx.NodeID(), *initialATX.CommitmentATX), nil
+	return initialATX.CommitmentATX, nil
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.

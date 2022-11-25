@@ -142,8 +142,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	validator := amocks.NewMocknipostValidator(gomock.NewController(t))
-	validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
+	validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
 
 	otherSig := NewMockSigner()
@@ -278,7 +278,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 	t.Run("prevAtx not declared but validation of initial post fails", func(t *testing.T) {
 		validator := amocks.NewMocknipostValidator(gomock.NewController(t))
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed validation")).Times(1)
+		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed validation")).Times(1)
 		atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
 
 		cATX := prevAtx.ID()
@@ -483,7 +483,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	log := logtest.New(b)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	validator := amocks.NewMocknipostValidator(gomock.NewController(b))
-	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
+	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
 	receiver := amocks.NewMockatxReceiver(gomock.NewController(b))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
@@ -838,8 +838,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.NoError(t, err)
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
 
@@ -873,7 +873,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.TODO(), buf))
 
