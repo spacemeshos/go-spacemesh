@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 var errBadRequest = errors.New("invalid request")
@@ -32,38 +31,27 @@ type dataReceiver func(context.Context, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) []error {
 	errs := make([]error, 0, len(hashes))
-	results := f.GetHashes(hashes, hint, false)
-	for hash, resC := range results {
-		select {
-		case <-ctx.Done():
+	promises := make([]*promise, 0, len(hashes))
+	for _, hash := range hashes {
+		promises = append(promises, f.validator.requestHash(hash, hint, receiver))
+	}
+	for i, p := range promises {
+		err := p.wait(ctx)
+		if errors.Is(err, context.Canceled) {
 			f.logger.WithContext(ctx).With().Warning("request timed out",
 				log.String("hint", string(hint)),
-				log.String("hash", hash.ShortString()))
+				log.String("hash", hashes[i].ShortString()))
 			return []error{ctx.Err()}
-		case res, open := <-resC:
-			if !open {
-				f.logger.WithContext(ctx).With().Info("res channel closed",
-					log.String("hint", string(hint)),
-					log.String("hash", hash.ShortString()))
-				continue
-			}
-			if res.Err != nil {
-				f.logger.WithContext(ctx).With().Warning("cannot find hash",
-					log.String("hint", string(hint)),
-					log.String("hash", hash.String()),
-					log.Err(res.Err))
-				errs = append(errs, res.Err)
-				continue
-			}
-			if !res.IsLocal {
-				if err := receiver(ctx, res.Data); err != nil {
-					f.logger.WithContext(ctx).With().Warning("failed to handle data",
-						log.String("hint", string(hint)),
-						log.String("hash", hash.String()),
-						log.Err(err))
-					errs = append(errs, err)
-				}
-			}
+		} else if errors.Is(err, errStopped) {
+			return nil
+		}
+		if err != nil {
+			f.logger.WithContext(ctx).With().Warning("failed to fetch hash",
+				log.String("hint", string(hint)),
+				log.String("hash", hashes[i].ShortString()),
+				log.Err(err),
+			)
+			errs = append(errs, err)
 		}
 	}
 	return errs
@@ -134,21 +122,10 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.String("hash", id.ShortString()))
-	res := <-f.GetHash(id, datastore.POETDB, false)
-	if res.Err != nil {
-		return res.Err
-	}
-	// if result is local we don't need to process it again
-	if !res.IsLocal {
-		f.logger.WithContext(ctx).Debug("got poet ref",
-			log.String("hash", id.ShortString()),
-			log.Int("dataSize", len(res.Data)))
-
-		if err := f.poetHandler.ValidateAndStoreMsg(res.Data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("validate and store message: %w", err)
-		}
-	}
-	return nil
+	p := f.validator.requestHash(id, datastore.POETDB, func(ctx context.Context, data []byte) error {
+		return f.poetHandler.ValidateAndStoreMsg(data)
+	})
+	return p.wait(ctx)
 }
 
 // GetLayerData get layer data from peers.

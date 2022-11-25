@@ -216,6 +216,8 @@ type Fetch struct {
 	shutdownCtx context.Context
 	cancel      context.CancelFunc
 	eg          errgroup.Group
+
+	validator *validator
 }
 
 // NewFetch creates a new Fetch struct.
@@ -233,6 +235,7 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		hashToPeers:     NewHashPeersCache(cacheSize),
 	}
+	f.validator = newValidator(f)
 	for _, opt := range opts {
 		opt(f)
 	}
@@ -266,6 +269,7 @@ func (f *Fetch) Start() {
 // Stop stops handling fetch requests.
 func (f *Fetch) Stop() {
 	f.logger.Info("stopping fetch")
+	f.validator.Stop()
 	f.batchTimeout.Stop()
 	f.cancel()
 	if err := f.host.Close(); err != nil {
@@ -604,17 +608,6 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.activeBatchM.Lock()
 	delete(f.activeBatches, batchHash)
 	f.activeBatchM.Unlock()
-}
-
-// GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels.
-func (f *Fetch) GetHashes(hashes []types.Hash32, hint datastore.Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
-	hashWaiting := make(map[types.Hash32]chan HashDataPromiseResult)
-	for _, id := range hashes {
-		resChan := f.GetHash(id, hint, validateHash)
-		hashWaiting[id] = resChan
-	}
-
-	return hashWaiting
 }
 
 // GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
