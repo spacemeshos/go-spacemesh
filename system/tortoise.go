@@ -15,5 +15,4 @@ type Tortoise interface {
 	TallyVotes(context.Context, types.LayerID)
 	LatestComplete() types.LayerID
 	Updates() (types.LayerID, []types.BlockContextualValidity)
-	UpdatesPersisted([]types.BlockContextualValidity)
 }

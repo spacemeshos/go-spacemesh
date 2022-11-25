@@ -47,6 +47,7 @@ type Mesh struct {
 	missingLayer        atomic.Value
 	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
+	validityUpdates     map[types.LayerID]map[types.BlockID]bool
 }
 
 // NewMesh creates a new instant of a mesh.
@@ -230,30 +231,37 @@ func (msh *Mesh) setProcessedLayer(logger log.Log, layerID types.LayerID) error 
 }
 
 func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, newVerified types.LayerID, updated []types.BlockContextualValidity) error {
-	logger.With().Debug("got validity update",
-		log.Int("num_updates", len(updated)),
-		log.Array("updates", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for _, bv := range updated {
-				encoder.AppendString(bv.ID.String())
-				encoder.AppendBool(bv.Validity)
+	if len(updated) == 0 && msh.validityUpdates == nil {
+		return nil
+	}
+	for _, bv := range updated {
+		if msh.validityUpdates == nil {
+			msh.validityUpdates = make(map[types.LayerID]map[types.BlockID]bool)
+		}
+		if _, ok := msh.validityUpdates[bv.Layer]; !ok {
+			msh.validityUpdates[bv.Layer] = make(map[types.BlockID]bool)
+		}
+		msh.validityUpdates[bv.Layer][bv.ID] = bv.Validity
+	}
+	logger.With().Debug("processing validity update",
+		log.Int("num_updates", len(msh.validityUpdates)),
+		log.Object("updates", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+			for lid, bvs := range msh.validityUpdates {
+				encoder.AddUint32("layer_id", lid.Uint32())
+				for bid, valid := range bvs {
+					encoder.AddString("block_id", bid.String())
+					encoder.AddBool("valid", valid)
+				}
 			}
 			return nil
 		})))
 
+	var minChanged types.LayerID
 	inState := msh.LatestLayerInState()
-	byLayer := make(map[types.LayerID][]types.BlockContextualValidity)
-	for _, bv := range updated {
-		if bv.Layer.After(inState) {
+	for lid, bvs := range msh.validityUpdates {
+		if lid.After(inState) {
 			continue
 		}
-		if _, ok := byLayer[bv.Layer]; !ok {
-			byLayer[bv.Layer] = []types.BlockContextualValidity{}
-		}
-		byLayer[bv.Layer] = append(byLayer[bv.Layer], bv)
-	}
-
-	var minChanged types.LayerID
-	for lid, bvs := range byLayer {
 		logger := logger.WithFields(lid)
 		valids, err := layerValidBlocks(logger, msh.cdb, lid, newVerified, bvs)
 		if err != nil {
@@ -290,17 +298,17 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 	}
 
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		for _, update := range updated {
-			logger.With().Info("save block contextual validity",
-				update.ID,
-				update.Layer,
-				log.Bool("validity", update.Validity))
-			if update.Validity {
-				if err := blocks.SetValid(dbtx, update.ID); err != nil {
+		for lid, updates := range msh.validityUpdates {
+			for bid, valid := range updates {
+				logger.With().Info("save block contextual validity",
+					bid, lid, log.Bool("validity", valid))
+				if valid {
+					if err := blocks.SetValid(dbtx, bid); err != nil {
+						return err
+					}
+				} else if err := blocks.SetInvalid(dbtx, bid); err != nil {
 					return err
 				}
-			} else if err := blocks.SetInvalid(dbtx, update.ID); err != nil {
-				return err
 			}
 		}
 		return nil
@@ -308,6 +316,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 		logger.With().Error("failed to save block validity", log.Err(err))
 		return err
 	}
+	msh.validityUpdates = nil
 	return nil
 }
 
@@ -333,11 +342,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	newVerified, updated := msh.trtl.Updates()
-	if len(updated) > 0 {
-		if err := msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
-			return err
-		}
-		msh.trtl.UpdatesPersisted(updated)
+	if err := msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
+		return err
 	}
 
 	// mesh can't skip layer that failed to complete
@@ -427,7 +433,7 @@ func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 	return sorted[0]
 }
 
-func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVerified types.LayerID, updates []types.BlockContextualValidity) ([]*types.Block, error) {
+func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVerified types.LayerID, updates map[types.BlockID]bool) ([]*types.Block, error) {
 	lyrBlocks, err := blocks.Layer(cdb, layerID)
 	if err != nil {
 		logger.With().Error("failed to get layer blocks", log.Err(err))
@@ -458,11 +464,10 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVe
 
 	for _, b := range lyrBlocks {
 		var valid, found bool
-		for _, u := range updates {
-			if u.ID == b.ID() {
-				valid = u.Validity
+		if updates != nil {
+			if v, ok := updates[b.ID()]; ok {
+				valid = v
 				found = true
-				break
 			}
 		}
 		if !found {

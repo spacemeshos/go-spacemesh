@@ -511,7 +511,6 @@ func processBlockUpdates(tb testing.TB, tt *Tortoise, db sql.Executor) {
 			require.NoError(tb, blocks.SetInvalid(db, u.ID))
 		}
 	}
-	tt.UpdatesPersisted(updated)
 }
 
 func TestLongTermination(t *testing.T) {

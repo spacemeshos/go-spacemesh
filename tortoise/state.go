@@ -38,8 +38,8 @@ type (
 		margin weight
 
 		validity sign
-		// persisted validity
-		persisted sign
+		// emitted validity
+		emitted sign
 	}
 
 	state struct {

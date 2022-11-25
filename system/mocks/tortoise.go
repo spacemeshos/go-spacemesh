@@ -99,15 +99,3 @@ func (mr *MockTortoiseMockRecorder) Updates() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Updates", reflect.TypeOf((*MockTortoise)(nil).Updates))
 }
-
-// UpdatesPersisted mocks base method.
-func (m *MockTortoise) UpdatesPersisted(arg0 []types.BlockContextualValidity) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UpdatesPersisted", arg0)
-}
-
-// UpdatesPersisted indicates an expected call of UpdatesPersisted.
-func (mr *MockTortoiseMockRecorder) UpdatesPersisted(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatesPersisted", reflect.TypeOf((*MockTortoise)(nil).UpdatesPersisted), arg0)
-}

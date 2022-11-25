@@ -53,7 +53,6 @@ func newTurtle(
 		logger:  logger,
 		cdb:     cdb,
 		beacons: beacons,
-		updated: make([]types.BlockContextualValidity, 0),
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -468,12 +467,12 @@ func (t *turtle) verifyLayers() error {
 		}
 		verified = target
 		for _, block := range t.layers[target].blocks {
-			if block.persisted == block.validity {
+			if block.emitted == block.validity {
 				continue
 			}
 			// record range of layers where opinion has changed.
 			// once those layers fall out of hdist window - opinion can be recomputed
-			if block.validity != block.hare || (block.persisted != block.validity && block.persisted != abstain) {
+			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
@@ -487,39 +486,21 @@ func (t *turtle) verifyLayers() error {
 			logger.With().Debug("update validity", block.layer, block.id,
 				log.Stringer("validity", block.validity),
 				log.Stringer("hare", block.hare),
-				log.Stringer("persisted", block.persisted),
+				log.Stringer("emitted", block.emitted),
 			)
+			if t.updated == nil {
+				t.updated = []types.BlockContextualValidity{}
+			}
 			t.updated = append(t.updated, types.BlockContextualValidity{
 				ID:       block.id,
 				Layer:    target,
 				Validity: block.validity == support,
 			})
+			block.emitted = block.validity
 		}
 	}
 	t.verified = verified
 	return nil
-}
-
-func (t *turtle) updatesPersisted(persisted []types.BlockContextualValidity) {
-	notPersisted := make([]types.BlockContextualValidity, 0, len(t.updated))
-	for _, u := range t.updated {
-		found := false
-		for _, p := range persisted {
-			if p.ID == u.ID {
-				if p.Validity == u.Validity {
-					found = true
-				}
-			}
-		}
-		if found {
-			if block, ok := t.blockRefs[u.ID]; ok {
-				block.persisted = block.validity
-			}
-		} else {
-			notPersisted = append(notPersisted, u)
-		}
-	}
-	t.updated = notPersisted
 }
 
 // loadBlocksData loads blocks, hare output and contextual validity.
