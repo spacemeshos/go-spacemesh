@@ -16,12 +16,14 @@ import (
 func TestShortTimeskew(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("sanity"))
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	var (
-		enableSkew = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
+		enableSkew = maxLayer(currentLayer(ctx, t, cl.Client(0))+2, 9)
 		stopSkew   = enableSkew + 2
 		stopTest   = stopSkew + 10
 		skewOffset = "-3s" // hare round is 2s
@@ -33,14 +35,14 @@ func TestShortTimeskew(t *testing.T) {
 	)
 
 	failed := int(0.2 * float64(tctx.ClusterSize))
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	client := cl.Client(0)
 	scheduleChaos(ctx, eg, client, enableSkew, stopSkew, func(ctx context.Context) (chaos.Teardown, error) {
 		names := []string{}
 		for i := 1; i <= failed; i++ {
 			names = append(names, cl.Client(cl.Total()-i).Name)
 		}
-		return chaos.Timeskew(tctx, "skew", skewOffset, names...)
+		return chaos.Timeskew(ctx, tctx, "skew", skewOffset, names...)
 	})
 
 	// hare round is 2s, including time when nodes wait for proposals

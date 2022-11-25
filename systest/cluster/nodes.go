@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -89,7 +90,7 @@ type NodeClient struct {
 	*grpc.ClientConn
 }
 
-func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployPoetPod(ctx context.Context, tctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
 	args := []string{
 		"-c=" + configDir + attachedPoetConfig,
 	}
@@ -97,21 +98,21 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 		args = append(args, flag.Flag())
 	}
 
-	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
+	tctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", tctx.PoetImage)
 
 	labels := nodeLabels("poet", id)
-	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
+	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), tctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
 			corev1.PodSpec().
-				WithNodeSelector(ctx.NodeSelector).
+				WithNodeSelector(tctx.NodeSelector).
 				WithVolumes(corev1.Volume().
 					WithName("config").
 					WithConfigMap(corev1.ConfigMapVolumeSource().WithName(poetConfigMapName)),
 				).
 				WithContainers(corev1.Container().
 					WithName("poet").
-					WithImage(ctx.PoetImage).
+					WithImage(tctx.PoetImage).
 					WithArgs(args...).
 					WithPorts(corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort)).
 					WithVolumeMounts(
@@ -126,21 +127,21 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 				),
 		)
 
-	_, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := tctx.Client.CoreV1().Pods(tctx.Namespace).Apply(ctx, pod, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
-	ppod, err := waitNode(ctx, *pod.Name, Poet)
+	ppod, err := waitNode(ctx, tctx, *pod.Name, Poet)
 	if err != nil {
 		return nil, err
 	}
 	return ppod, nil
 }
 
-func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
-	ctx.Log.Debugw("deploying poet service", "id", id)
+func deployPoetSvc(ctx context.Context, tctx *testcontext.Context, id string) (*v1.Service, error) {
+	tctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels("poet", id)
-	svc := corev1.Service(id, ctx.Namespace).
+	svc := corev1.Service(id, tctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
@@ -149,7 +150,7 @@ func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
 			),
 		)
 
-	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+	return tctx.Client.CoreV1().Services(tctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 }
 
 func createPoetIdentifier(id int) string {
@@ -170,12 +171,12 @@ func decodePoetIdentifier(id string) int {
 
 // deployPoet creates a poet Pod and exposes it via a Service.
 // Flags are passed to the poet Pod as arguments.
-func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
-	if _, err := deployPoetSvc(ctx, id); err != nil {
+func deployPoet(ctx context.Context, tctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
+	if _, err := deployPoetSvc(ctx, tctx, id); err != nil {
 		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
 
-	node, err := deployPoetPod(ctx, id, flags...)
+	node, err := deployPoetPod(ctx, tctx, id, flags...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,13 +184,13 @@ func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*
 	return node, nil
 }
 
-func deletePoet(ctx *testcontext.Context, id string) error {
-	errCfg := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{})
-	errPod := ctx.Client.CoreV1().Pods(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
+func deletePoet(ctx context.Context, tctx *testcontext.Context, id string) error {
+	errCfg := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{})
+	errPod := tctx.Client.CoreV1().Pods(tctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
-	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
+	if svcs, err := tctx.Client.CoreV1().Services(tctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
 		for _, svc := range svcs.Items {
-			err = ctx.Client.CoreV1().Services(ctx.Namespace).Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
+			err = tctx.Client.CoreV1().Services(tctx.Namespace).Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
 			if errSvc == nil {
 				errSvc = err
 			}
@@ -204,16 +205,16 @@ func deletePoet(ctx *testcontext.Context, id string) error {
 	return errSvc
 }
 
-func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
-	set, err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
+func getStatefulSet(ctx context.Context, tctx *testcontext.Context, name string) (*apiappsv1.StatefulSet, error) {
+	set, err := tctx.Client.AppsV1().StatefulSets(tctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return set, nil
 }
 
-func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
-	watcher, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
+func waitPod(ctx context.Context, tctx *testcontext.Context, name string) (*v1.Pod, error) {
+	watcher, err := tctx.Client.CoreV1().Pods(tctx.Namespace).Watch(ctx, apimetav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", name),
 	})
 	if err != nil {
@@ -257,16 +258,16 @@ func labelSelector(id string) string {
 	return fmt.Sprintf("id=%s", id)
 }
 
-func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
+func deployNodes(ctx context.Context, tctx *testcontext.Context, name string, from, to int, flags []DeploymentFlag) ([]*NodeClient, error) {
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
 	)
 	for i := from; i < to; i++ {
 		i := i
-		finalFlags := make([]DeploymentFlag, len(flags), len(flags)+ctx.PoetSize)
+		finalFlags := make([]DeploymentFlag, len(flags), len(flags)+tctx.PoetSize)
 		copy(finalFlags, flags)
-		for idx := 0; idx < ctx.PoetSize; idx++ {
+		for idx := 0; idx < tctx.PoetSize; idx++ {
 			finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
 		}
 
@@ -275,10 +276,10 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, tctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
-			node, err := waitNode(ctx, podname, Smesher)
+			node, err := waitNode(ctx, tctx, podname, Smesher)
 			if err != nil {
 				return err
 			}
@@ -300,25 +301,25 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 	return rst, nil
 }
 
-func deleteNode(ctx *testcontext.Context, podname string) error {
+func deleteNode(ctx context.Context, tctx *testcontext.Context, podname string) error {
 	setname := setName(podname)
-	if err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("deleting configmap %s/%s: %w", ctx.Namespace, setname, err)
+	if err := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("deleting configmap %s/%s: %w", tctx.Namespace, setname, err)
 	}
-	if err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
+	if err := tctx.Client.AppsV1().StatefulSets(tctx.Namespace).
 		Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
 		return err
 	}
 	pvcname := persistentVolumeClaim(podname)
-	if err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).Delete(ctx,
+	if err := tctx.Client.CoreV1().PersistentVolumeClaims(tctx.Namespace).Delete(ctx,
 		pvcname, apimetav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed deleting pvc %s: %w", pvcname, err)
 	}
 	return nil
 }
 
-func deployNode(ctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag) error {
-	svc := corev1.Service(headlessSvc(name), ctx.Namespace).
+func deployNode(ctx context.Context, tctx *testcontext.Context, name string, labels map[string]string, flags []DeploymentFlag) error {
+	svc := corev1.Service(headlessSvc(name), tctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
@@ -328,7 +329,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 			WithClusterIP("None"),
 		)
 
-	_, err := ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := tctx.Client.CoreV1().Services(tctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("apply headless service: %w", err)
 	}
@@ -347,19 +348,19 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
-	sset := appsv1.StatefulSet(name, ctx.Namespace).
+	sset := appsv1.StatefulSet(name, tctx.Namespace).
 		WithSpec(appsv1.StatefulSetSpec().
 			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).
 			WithPodManagementPolicy(apiappsv1.ParallelPodManagement).
 			WithReplicas(1).
 			WithServiceName(*svc.Name).
 			WithVolumeClaimTemplates(
-				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
+				corev1.PersistentVolumeClaim(persistentVolumeName, tctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
 						WithAccessModes(v1.ReadWriteOnce).
-						WithStorageClassName(ctx.Storage.Class).
+						WithStorageClassName(tctx.Storage.Class).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
+							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse(tctx.Storage.Size)}))),
 			).
 			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
 			WithTemplate(corev1.PodTemplateSpec().
@@ -371,14 +372,14 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 				).
 				WithLabels(labels).
 				WithSpec(corev1.PodSpec().
-					WithNodeSelector(ctx.NodeSelector).
+					WithNodeSelector(tctx.NodeSelector).
 					WithVolumes(corev1.Volume().
 						WithName("config").
 						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
 					).
 					WithContainers(corev1.Container().
 						WithName("smesher").
-						WithImage(ctx.Image).
+						WithImage(tctx.Image).
 						WithImagePullPolicy(v1.PullIfNotPresent).
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
@@ -416,7 +417,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 			),
 		)
 
-	_, err = ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
+	_, err = tctx.Client.AppsV1().StatefulSets(tctx.Namespace).
 		Apply(ctx, sset, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("apply statefulset: %w", err)
@@ -434,9 +435,9 @@ const (
 	Poet
 )
 
-func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClient, error) {
+func waitNode(ctx context.Context, tctx *testcontext.Context, podname string, pt PodType) (*NodeClient, error) {
 	attempt := func() (*NodeClient, error) {
-		pod, err := waitPod(tctx, podname)
+		pod, err := waitPod(ctx, tctx, podname)
 		if err != nil {
 			return nil, err
 		}
@@ -451,7 +452,7 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 				},
 			}, nil
 		}
-		set, err := getStatefulSet(tctx, setName(podname))
+		set, err := getStatefulSet(ctx, tctx, setName(podname))
 		if err != nil {
 			return nil, err
 		}
@@ -465,7 +466,7 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 			Restarted:  pod.CreationTimestamp.Time,
 		}
 		// don't block connection, it is expected that some nodes are unavailable during test
-		conn, err := grpc.DialContext(tctx, node.GRPCEndpoint(),
+		conn, err := grpc.DialContext(ctx, node.GRPCEndpoint(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
@@ -486,8 +487,8 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 			return nc, nil
 		}
 		select {
-		case <-tctx.Done():
-			return nil, tctx.Err()
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-ticker.C:
 		}
 	}

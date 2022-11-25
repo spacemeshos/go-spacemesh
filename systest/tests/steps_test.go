@@ -24,28 +24,34 @@ import (
 )
 
 func TestStepCreate(t *testing.T) {
-	ctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	_, err := cluster.Reuse(ctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	_, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 }
 
 func TestStepDeletePoets(t *testing.T) {
-	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	tctx.Log.Debugw("deleting poet servers", "poets", cl.Poets())
-	require.NoError(t, cl.DeletePoets(tctx))
+	require.NoError(t, cl.DeletePoets(ctx, tctx))
 }
 
 func TestStepRedeployPoets(t *testing.T) {
-	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	require.Zero(t, cl.Poets())
 	tctx.Log.Debug("adding poet servers")
-	require.NoError(t, cl.AddPoets(tctx))
+	require.NoError(t, cl.AddPoets(ctx, tctx))
 
 	poetEndpoints := make([]string, 0, tctx.PoetSize)
 	for i := 0; i < tctx.PoetSize; i++ {
@@ -55,26 +61,28 @@ func TestStepRedeployPoets(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		node := cl.Client(i)
 		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poets", poetEndpoints)
-		updated, err := updatePoetServers(tctx, node, poetEndpoints)
+		updated, err := updatePoetServers(ctx, node, poetEndpoints)
 		require.NoError(t, err)
 		require.True(t, updated)
 	}
 }
 
 func TestStepShortDisconnect(t *testing.T) {
-	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	require.Greater(t, cl.Bootnodes(), 1)
 
 	var (
-		enable = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
+		enable = maxLayer(currentLayer(ctx, t, cl.Client(0))+2, 9)
 		stop   = enable + 2
 	)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := int(0.9*float64(cl.Total())) + 1
 
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	client := cl.Client(0)
 	scheduleChaos(ctx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
 		var (
@@ -94,7 +102,7 @@ func TestStepShortDisconnect(t *testing.T) {
 			"left", left,
 			"right", right,
 		)
-		return chaos.Partition2(tctx, "split", left, right)
+		return chaos.Partition2(ctx, tctx, "split", left, right)
 	})
 	require.NoError(t, eg.Wait())
 }
@@ -105,16 +113,18 @@ func TestStepTransactions(t *testing.T) {
 		amountLimit = 100_000
 	)
 
-	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cl.CloseClients()
 	})
-	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
+	require.NoError(t, waitGenesis(ctx, tctx, cl.Client(0)))
 
 	clients := make([]*txClient, cl.Accounts())
-	synced := syncedNodes(tctx, cl)
+	synced := syncedNodes(ctx, cl)
 
 	for i := range clients {
 		clients[i] = &txClient{
@@ -130,13 +140,13 @@ func TestStepTransactions(t *testing.T) {
 		eg.Go(func() error {
 			rng := rand.New(rand.NewSource(time.Now().Unix() + int64(i)))
 			n := rng.Intn(batch) + batch
-			nonce, err := client.nonce(tctx)
+			nonce, err := client.nonce(ctx)
 			if err != nil {
 				return err
 			}
 			if nonce == 0 {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
-				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
+				ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 				defer cancel()
 				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, types.Nonce{}, sdk.WithGenesisID(cl.GenesisID())))
 				if err != nil {
@@ -171,7 +181,7 @@ func TestStepTransactions(t *testing.T) {
 					types.Nonce{Counter: nonce},
 					sdk.WithGenesisID(cl.GenesisID()),
 				)
-				_, err := client.submit(tctx, raw)
+				_, err := client.submit(ctx, raw)
 				if err != nil {
 					return fmt.Errorf("failed to submit 0x%x from %s with nonce %d: %w",
 						hash.Sum(raw), client.account, nonce, err,
@@ -192,43 +202,47 @@ func TestStepTransactions(t *testing.T) {
 }
 
 func TestStepReplaceNodes(t *testing.T) {
-	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	var (
-		max      = cctx.ClusterSize * 2 / 10
+		max      = tctx.ClusterSize * 2 / 10
 		delete   = rand.New(rand.NewSource(time.Now().Unix())).Intn(max) + 1
 		deleting []*cluster.NodeClient
 	)
 	for i := cl.Bootnodes(); i < cl.Total() && len(deleting) < delete; i++ {
 		node := cl.Client(i)
 		// don't replace non-synced nodes
-		if !isSynced(cctx, node) {
+		if !isSynced(ctx, node) {
 			continue
 		}
 		deleting = append(deleting, node)
 	}
 	for _, node := range deleting {
-		cctx.Log.Debugw("deleting smesher", "name", node.Name)
-		require.NoError(t, cl.DeleteSmesher(cctx, node))
+		tctx.Log.Debugw("deleting smesher", "name", node.Name)
+		require.NoError(t, cl.DeleteSmesher(ctx, tctx, node))
 	}
 	if len(deleting) > 0 {
-		require.NoError(t, cl.AddSmeshers(cctx, len(deleting)))
+		require.NoError(t, cl.AddSmeshers(ctx, tctx, len(deleting)))
 	}
 }
 
 func TestStepVerifyConsistency(t *testing.T) {
-	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
-	synced := syncedNodes(cctx, cl)
-	require.GreaterOrEqual(t, len(synced), cctx.ClusterSize/2)
+	synced := syncedNodes(ctx, cl)
+	require.GreaterOrEqual(t, len(synced), tctx.ClusterSize/2)
 
-	reference, err := getVerifiedLayer(cctx, synced[0])
+	reference, err := getVerifiedLayer(ctx, synced[0])
 	require.NoError(t, err)
-	cctx.Log.Debugw("using verified layer as a reference",
+	tctx.Log.Debugw("using verified layer as a reference",
 		"node", synced[0].Name,
 		"layer", reference.Number.Number,
 		"hash", prettyHex(reference.Hash),
@@ -247,7 +261,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 			i := i
 			node := node
 			eg.Go(func() error {
-				layer, err := getLayer(cctx, node, reference.Number.Number)
+				layer, err := getLayer(ctx, node, reference.Number.Number)
 				if err != nil {
 					return err
 				}
@@ -264,7 +278,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 			})
 		}
 		if err := eg.Wait(); err != nil {
-			cctx.Log.Warnw("inconsistent cluster state", "error", err)
+			tctx.Log.Warnw("inconsistent cluster state", "error", err)
 			return false
 		}
 		return true
@@ -283,14 +297,16 @@ func TestStepVerifyConsistency(t *testing.T) {
 }
 
 func TestStepVerifySynced(t *testing.T) {
-	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.SkipClusterLimits())
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		for i := 0; i < cl.Total(); i++ {
 			node := cl.Client(i)
-			if isSynced(cctx, node) {
+			if isSynced(ctx, node) {
 				continue
 			}
 			if time.Since(node.Restarted) < 30*time.Minute {
@@ -299,7 +315,7 @@ func TestStepVerifySynced(t *testing.T) {
 			if time.Since(node.Created) < 120*time.Minute {
 				continue
 			}
-			cctx.Log.Warnw("node is not synced",
+			tctx.Log.Warnw("node is not synced",
 				"node", node.Name,
 				"created", node.Created,
 				"restarted", node.Restarted,

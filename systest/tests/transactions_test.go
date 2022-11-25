@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
 
@@ -13,10 +14,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+func testTransactions(ctx context.Context, t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first              = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 8)
+		first              = maxLayer(currentLayer(ctx, t, cl.Client(0))+2, 8)
 		sendFor     uint32 = 8
 		stopSending        = first + sendFor
 		stopWaiting        = stopSending + 4
@@ -35,18 +36,18 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	state := spacemeshv1.NewGlobalStateServiceClient(cl.Client(0))
-	response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
+	response, err := state.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
 	require.NoError(t, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending)
 	txs := make([][]*spacemeshv1.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchTransactionResults(tctx.Context, eg, client, func(rst *spacemeshv1.TransactionResult) (bool, error) {
+		watchTransactionResults(ctx, eg, client, func(rst *spacemeshv1.TransactionResult) (bool, error) {
 			txs[i] = append(txs[i], rst.Tx)
 			count := len(txs[i])
 			tctx.Log.Debugw("received transaction client",
@@ -72,7 +73,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		state := spacemeshv1.NewGlobalStateServiceClient(client)
-		response, err := state.Account(tctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
+		response, err := state.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
 		require.NoError(t, err)
 		after := response.AccountWrapper.StateCurrent.Balance
 		tctx.Log.Debugw("receiver state",

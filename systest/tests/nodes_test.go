@@ -24,7 +24,9 @@ func init() {
 func TestAddNodes(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("sanity"))
 
 	const (
 		epochBeforeJoin = 5
@@ -38,19 +40,19 @@ func TestAddNodes(t *testing.T) {
 	cl := cluster.New(tctx)
 	total := min(tctx.ClusterSize, 30)
 
-	require.NoError(t, cl.AddBootnodes(tctx, 2))
-	require.NoError(t, cl.AddPoets(tctx))
-	require.NoError(t, cl.AddSmeshers(tctx, total-2-addedLater))
+	require.NoError(t, cl.AddBootnodes(ctx, tctx, 2))
+	require.NoError(t, cl.AddPoets(ctx, tctx))
+	require.NoError(t, cl.AddSmeshers(ctx, tctx, total-2-addedLater))
 
 	var eg errgroup.Group
 	{
-		watchLayers(tctx, &eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, &eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= beforeAdding {
 				tctx.Log.Debugw("adding new smeshers",
 					"n", addedLater,
 					"layer", layer.Layer.Number,
 				)
-				return false, cl.AddSmeshers(tctx, addedLater)
+				return false, cl.AddSmeshers(ctx, tctx, addedLater)
 			}
 			return true, nil
 		})
@@ -61,7 +63,7 @@ func TestAddNodes(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchProposals(tctx, &eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
+		watchProposals(ctx, &eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
 			if proposal.Epoch.Value > lastEpoch {
 				return false, nil
 			}
@@ -111,26 +113,28 @@ func TestAddNodes(t *testing.T) {
 func TestFailedNodes(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("sanity"))
 
 	const (
 		failAt    = 15
 		lastLayer = failAt + 8
 	)
 
-	cl, err := cluster.Default(tctx)
+	cl, err := cluster.Default(ctx, tctx)
 	require.NoError(t, err)
 
 	failed := int(0.6 * float64(tctx.ClusterSize))
 
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	scheduleChaos(ctx, eg, cl.Client(0), failAt, lastLayer, func(ctx context.Context) (chaos.Teardown, error) {
 		names := []string{}
 		for i := 1; i <= failed; i++ {
 			names = append(names, cl.Client(cl.Total()-i).Name)
 		}
 		tctx.Log.Debugw("failing nodes", "names", strings.Join(names, ","))
-		return chaos.Fail(tctx, "fail60percent", names...)
+		return chaos.Fail(ctx, tctx, "fail60percent", names...)
 	})
 
 	hashes := make([]map[uint32]string, cl.Total())
@@ -160,5 +164,5 @@ func TestFailedNodes(t *testing.T) {
 	for i, tested := range hashes[1 : cl.Total()-failed] {
 		assert.Equal(t, reference, tested, "client=%d", i)
 	}
-	require.NoError(t, waitAll(tctx, cl))
+	require.NoError(t, waitAll(ctx, tctx, cl))
 }

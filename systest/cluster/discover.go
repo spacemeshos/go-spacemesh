@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,8 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func discoverNodes(ctx *testcontext.Context, kind string, pt PodType) ([]*NodeClient, error) {
-	pods, err := ctx.Client.CoreV1().Pods(ctx.Namespace).List(ctx,
+func discoverNodes(ctx context.Context, tctx *testcontext.Context, kind string, pt PodType) ([]*NodeClient, error) {
+	pods, err := tctx.Client.CoreV1().Pods(tctx.Namespace).List(ctx,
 		apimetav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", kind)})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods app=%s: %w", kind, err)
@@ -26,7 +27,7 @@ func discoverNodes(ctx *testcontext.Context, kind string, pt PodType) ([]*NodeCl
 	for _, pod := range pods.Items {
 		pod := pod
 		eg.Go(func() error {
-			client, err := waitNode(ctx, pod.Name, pt)
+			client, err := waitNode(ctx, tctx, pod.Name, pt)
 			if err != nil {
 				return err
 			}

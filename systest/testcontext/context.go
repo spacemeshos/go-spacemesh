@@ -33,7 +33,7 @@ var (
 	configname  = flag.String("configname", "", "config map name. if not empty parameters will be loaded from specified configmap")
 	clusters    = flag.Int("clusters", 1, "controls tests parallelization by creating multiple spacemesh clusters at the same time")
 	logLevel    = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
-	testTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
+	TestTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	labels      = stringSet{}
 
 	tokens     chan struct{}
@@ -115,7 +115,6 @@ func rngName() string {
 
 // Context must be created for every test that needs isolated cluster.
 type Context struct {
-	context.Context
 	Client            *kubernetes.Clientset
 	Parameters        *parameters.Parameters
 	BootstrapDuration time.Duration
@@ -146,25 +145,25 @@ func cleanup(tb testing.TB, f func()) {
 	}()
 }
 
-func deleteNamespace(ctx *Context) error {
-	err := ctx.Client.CoreV1().Namespaces().Delete(ctx, ctx.Namespace, apimetav1.DeleteOptions{})
+func deleteNamespace(ctx context.Context, tctx *Context) error {
+	err := tctx.Client.CoreV1().Namespaces().Delete(ctx, tctx.Namespace, apimetav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("delete namespace %s: %w", ctx.Namespace, err)
+		return fmt.Errorf("delete namespace %s: %w", tctx.Namespace, err)
 	}
 	return nil
 }
 
-func deployNamespace(ctx *Context) error {
-	_, err := ctx.Client.CoreV1().Namespaces().Apply(ctx,
-		corev1.Namespace(ctx.Namespace).WithLabels(map[string]string{
-			"testid":         ctx.TestID,
-			keepLabel:        strconv.FormatBool(ctx.Keep),
-			clusterSizeLabel: strconv.Itoa(ctx.ClusterSize),
-			poetSizeLabel:    strconv.Itoa(ctx.PoetSize),
+func deployNamespace(ctx context.Context, tctx *Context) error {
+	_, err := tctx.Client.CoreV1().Namespaces().Apply(ctx,
+		corev1.Namespace(tctx.Namespace).WithLabels(map[string]string{
+			"testid":         tctx.TestID,
+			keepLabel:        strconv.FormatBool(tctx.Keep),
+			clusterSizeLabel: strconv.Itoa(tctx.ClusterSize),
+			poetSizeLabel:    strconv.Itoa(tctx.PoetSize),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
-		return fmt.Errorf("create namespace %s: %w", ctx.Namespace, err)
+		return fmt.Errorf("create namespace %s: %w", tctx.Namespace, err)
 	}
 	return nil
 }
@@ -178,8 +177,8 @@ func getStorage(p *parameters.Parameters) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-func updateContext(ctx *Context) error {
-	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
+func updateContext(ctx context.Context, tctx *Context) error {
+	ns, err := tctx.Client.CoreV1().Namespaces().Get(ctx, tctx.Namespace,
 		apimetav1.GetOptions{})
 	if err != nil || ns == nil {
 		if kerrors.IsNotFound(err) {
@@ -189,36 +188,36 @@ func updateContext(ctx *Context) error {
 	}
 	keepval, exists := ns.Labels[keepLabel]
 	if !exists {
-		ctx.Log.Panic("invalid state. keep label should exist")
+		tctx.Log.Panic("invalid state. keep label should exist")
 	}
 	keep, err := strconv.ParseBool(keepval)
 	if err != nil {
-		ctx.Log.Panicw("invalid state. keep label should be parsable as a boolean",
+		tctx.Log.Panicw("invalid state. keep label should be parsable as a boolean",
 			"keepval", keepval)
 	}
-	ctx.Keep = ctx.Keep || keep
+	tctx.Keep = tctx.Keep || keep
 
 	sizeval := ns.Labels[clusterSizeLabel]
 	if err != nil {
-		ctx.Log.Panic("invalid state. cluster size label should exist")
+		tctx.Log.Panic("invalid state. cluster size label should exist")
 	}
 	size, err := strconv.Atoi(sizeval)
 	if err != nil {
-		ctx.Log.Panicw("invalid state. size label should be parsable as an integer",
+		tctx.Log.Panicw("invalid state. size label should be parsable as an integer",
 			"sizeval", sizeval)
 	}
-	ctx.ClusterSize = size
+	tctx.ClusterSize = size
 
 	psizeval := ns.Labels[poetSizeLabel]
 	if err != nil {
-		ctx.Log.Panic("invalid state. poet size label should exist")
+		tctx.Log.Panic("invalid state. poet size label should exist")
 	}
 	psize, err := strconv.Atoi(psizeval)
 	if err != nil {
-		ctx.Log.Panicw("invalid state. poet size label should be parsable as an integer",
+		tctx.Log.Panicw("invalid state. poet size label should be parsable as an integer",
 			"psizeval", psizeval)
 	}
-	ctx.PoetSize = psize
+	tctx.PoetSize = psize
 	return nil
 }
 
@@ -253,7 +252,7 @@ type cfg struct {
 }
 
 // New creates context for the test.
-func New(t *testing.T, opts ...Opt) *Context {
+func New(ctx context.Context, t *testing.T, opts ...Opt) *Context {
 	initTokens.Do(func() {
 		tokens = make(chan struct{}, *clusters)
 	})
@@ -283,9 +282,6 @@ func New(t *testing.T, opts ...Opt) *Context {
 	generic, err := client.New(config, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
-	t.Cleanup(cancel)
-
 	podns, err := os.ReadFile(nsfile)
 	require.NoError(t, err, "reading nsfile at %s", nsfile)
 	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
@@ -300,8 +296,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	if len(ns) == 0 {
 		ns = "test-" + rngName()
 	}
-	cctx := &Context{
-		Context:           ctx,
+	tctx := &Context{
 		Parameters:        p,
 		Namespace:         ns,
 		BootstrapDuration: bootstrapDuration.Get(p),
@@ -316,20 +311,20 @@ func New(t *testing.T, opts ...Opt) *Context {
 		NodeSelector:      nodeSelector.Get(p),
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
 	}
-	cctx.Storage.Class = class
-	cctx.Storage.Size = size
-	err = updateContext(cctx)
+	tctx.Storage.Class = class
+	tctx.Storage.Size = size
+	err = updateContext(ctx, tctx)
 	require.NoError(t, err)
-	if !cctx.Keep {
+	if !tctx.Keep {
 		cleanup(t, func() {
-			if err := deleteNamespace(cctx); err != nil {
-				cctx.Log.Errorw("cleanup failed", "error", err)
+			if err := deleteNamespace(ctx, tctx); err != nil {
+				tctx.Log.Errorw("cleanup failed", "error", err)
 				return
 			}
-			cctx.Log.Infow("namespace was deleted", "namespace", cctx.Namespace)
+			tctx.Log.Infow("namespace was deleted", "namespace", tctx.Namespace)
 		})
 	}
-	require.NoError(t, deployNamespace(cctx))
-	cctx.Log.Infow("using", "namespace", cctx.Namespace)
-	return cctx
+	require.NoError(t, deployNamespace(ctx, tctx))
+	tctx.Log.Infow("using", "namespace", tctx.Namespace)
+	return tctx
 }

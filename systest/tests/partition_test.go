@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
+func testPartition(t *testing.T, ctx context.Context, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
 	require.Greater(t, cl.Bootnodes(), 1)
 
 	var (
@@ -27,7 +27,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	)
 
 	tctx.Log.Debug("scheduling chaos...")
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := pct*cl.Total()/100 + 1
 	scheduleChaos(ctx, eg, cl.Client(0), startSplit, rejoin, func(ctx context.Context) (chaos.Teardown, error) {
@@ -49,12 +49,12 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 			"left", left,
 			"right", right,
 		)
-		return chaos.Partition2(tctx, fmt.Sprintf("split-%v-%v", pct, 100-pct), left, right)
+		return chaos.Partition2(ctx, tctx, fmt.Sprintf("split-%v-%v", pct, 100-pct), left, right)
 	})
 
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
-	eg2, ctx2 := errgroup.WithContext(tctx)
+	eg2, ctx2 := errgroup.WithContext(ctx)
 	sendTransactions(ctx2, eg2, nil, cl, first, stop)
 
 	type stateUpdate struct {
@@ -166,17 +166,20 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("destructive"))
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("destructive"))
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 30, 2)
+	testPartition(t, ctx, tctx, cl, 30, 2)
 }
 
 func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
-
-	tctx := testcontext.New(t, testcontext.Labels("destructive"))
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("destructive"))
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 50, 3)
+	testPartition(t, ctx, tctx, cl, 50, 3)
 }

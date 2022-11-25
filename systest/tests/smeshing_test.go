@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"testing"
 
@@ -17,24 +18,26 @@ import (
 func TestSmeshing(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("sanity"))
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	t.Run("Proposals", func(t *testing.T) {
 		t.Parallel()
-		testSmeshing(t, tctx, cl)
+		testSmeshing(ctx, t, tctx, cl)
 	})
 	t.Run("Transactions", func(t *testing.T) {
 		t.Parallel()
-		testTransactions(t, tctx, cl)
+		testTransactions(ctx, t, tctx, cl)
 	})
 }
 
-func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	const limit = 15
 
-	first := currentLayer(tctx, t, cl.Client(0))
+	first := currentLayer(ctx, t, cl.Client(0))
 	// TODO fetch epoch size from API
 	first = nextFirstLayer(first, layersPerEpoch)
 	last := first + limit
@@ -46,7 +49,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		includedAll[i] = map[uint32][]*spacemeshv1.Proposal{}
 	}
 
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)

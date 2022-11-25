@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"testing"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -21,26 +22,28 @@ var layersToCheck = parameters.Int(
 
 func TestPoetsFailures(t *testing.T) {
 	t.Parallel()
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	ctx, cancel := context.WithTimeout(context.Background(), *testcontext.TestTimeout)
+	t.Cleanup(cancel)
+	tctx := testcontext.New(ctx, t, testcontext.Labels("sanity"))
 	tctx.Log.Debug("TestPoetsFailures start")
 
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(ctx, tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 	tctx.Log.Debug("Obtained cluster")
 
-	testPoetDies(t, tctx, cl)
+	testPoetDies(ctx, t, tctx, cl)
 	tctx.Log.Debug("TestPoetsFailures is done")
 }
 
-func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
+func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
-	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
+	first := nextFirstLayer(currentLayer(ctx, t, cl.Client(0)), layersPerEpoch)
 	last := first + layersCount - 1
 	tctx.Log.Debugw("watching layers between", "first", first, "last", last)
 
 	createdch := make(chan *spacemeshv1.Proposal, cl.Total()*(int(layersCount)))
 
-	eg, ctx := errgroup.WithContext(tctx)
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < cl.Total(); i++ {
 		clientId := i
 		client := cl.Client(clientId)
@@ -82,8 +85,8 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 		poetToDelete := cl.Poet(0)
 		tctx.Log.Debugw("deleting poet pod", "poet", poetToDelete.Name, "layer", layer.Layer.GetNumber().GetNumber())
-		require.NoError(t, cl.DeletePoet(tctx, 0))
-		require.NoError(t, cl.AddPoet(tctx))
+		require.NoError(t, cl.DeletePoet(ctx, tctx, 0))
+		require.NoError(t, cl.AddPoet(ctx, tctx))
 
 		return true, nil
 	})

@@ -67,11 +67,11 @@ func WithKeys(n int) Opt {
 
 // Reuse will try to recover cluster from the given namespace, if not found
 // it will create a new one.
-func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
-	cl := New(cctx, opts...)
-	if err := cl.reuse(cctx); err != nil {
+func Reuse(ctx context.Context, tctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
+	cl := New(tctx, opts...)
+	if err := cl.reuse(ctx, tctx); err != nil {
 		if errors.Is(err, errNotInitialized) {
-			return Default(cctx, opts...)
+			return Default(ctx, tctx, opts...)
 		}
 		return nil, err
 	}
@@ -79,30 +79,30 @@ func Reuse(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 }
 
 // Default deployes bootnodes, one poet and the smeshers according to the cluster size.
-func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
-	cl := New(cctx, opts...)
-	if err := cl.AddBootnodes(cctx, defaultBootnodes); err != nil {
+func Default(ctx context.Context, tctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
+	cl := New(tctx, opts...)
+	if err := cl.AddBootnodes(ctx, tctx, defaultBootnodes); err != nil {
 		return nil, err
 	}
-	if err := cl.AddPoets(cctx); err != nil {
+	if err := cl.AddPoets(ctx, tctx); err != nil {
 		return nil, err
 	}
-	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-defaultBootnodes); err != nil {
+	if err := cl.AddSmeshers(ctx, tctx, tctx.ClusterSize-defaultBootnodes); err != nil {
 		return nil, err
 	}
 	return cl, nil
 }
 
 // New initializes Cluster with options.
-func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
+func New(tctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster := &Cluster{
 		smesherFlags: map[string]DeploymentFlag{},
 		poetFlags:    map[string]DeploymentFlag{},
 	}
-	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
+	genesis := GenesisTime(time.Now().Add(tctx.BootstrapDuration))
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
-	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
+	cluster.addFlag(TargetOutbound(defaultTargetOutbound(tctx.ClusterSize)))
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
@@ -146,60 +146,60 @@ func (c *Cluster) nextSmesher() int {
 	return decodeOrdinal(c.clients[len(c.clients)-1].Name) + 1
 }
 
-func (c *Cluster) persist(ctx *testcontext.Context) error {
+func (c *Cluster) persist(ctx context.Context, tctx *testcontext.Context) error {
 	if c.persisted {
 		return nil
 	}
-	if err := c.accounts.Persist(ctx); err != nil {
+	if err := c.accounts.Persist(ctx, tctx); err != nil {
 		return err
 	}
-	if err := c.persistFlags(ctx); err != nil {
+	if err := c.persistFlags(ctx, tctx); err != nil {
 		return err
 	}
-	if err := c.persistConfigs(ctx); err != nil {
+	if err := c.persistConfigs(ctx, tctx); err != nil {
 		return err
 	}
 	c.persisted = true
 	return nil
 }
 
-func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+func (c *Cluster) persistConfigs(ctx context.Context, tctx *testcontext.Context) error {
+	_, err := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Apply(
 		ctx,
-		corev1.ConfigMap(spacemeshConfigMapName, ctx.Namespace).WithData(map[string]string{
-			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
+		corev1.ConfigMap(spacemeshConfigMapName, tctx.Namespace).WithData(map[string]string{
+			attachedSmesherConfig: smesherConfig.Get(tctx.Parameters),
 		}),
 		metav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
-		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+		return fmt.Errorf("apply cfgmap %v/%v: %w", tctx.Namespace, spacemeshConfigMapName, err)
 	}
-	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+	_, err = tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Apply(
 		ctx,
-		corev1.ConfigMap(poetConfigMapName, ctx.Namespace).WithData(map[string]string{
-			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
+		corev1.ConfigMap(poetConfigMapName, tctx.Namespace).WithData(map[string]string{
+			attachedPoetConfig: poetConfig.Get(tctx.Parameters),
 		}),
 		metav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
-		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
+		return fmt.Errorf("apply cfgmap %v/%v: %w", tctx.Namespace, poetConfigMapName, err)
 	}
 	return nil
 }
 
-func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
-	ctx.Log.Debugf("persisting flags %+v", c.smesherFlags)
-	if err := persistFlags(ctx, smesherFlags, c.smesherFlags); err != nil {
+func (c *Cluster) persistFlags(ctx context.Context, tctx *testcontext.Context) error {
+	tctx.Log.Debugf("persisting flags %+v", c.smesherFlags)
+	if err := persistFlags(ctx, tctx, smesherFlags, c.smesherFlags); err != nil {
 		return err
 	}
-	if err := persistFlags(ctx, poetFlags, c.poetFlags); err != nil {
+	if err := persistFlags(ctx, tctx, poetFlags, c.poetFlags); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
-	sflags, err := recoverFlags(ctx, smesherFlags)
+func (c *Cluster) recoverFlags(ctx context.Context, tctx *testcontext.Context) error {
+	sflags, err := recoverFlags(ctx, tctx, smesherFlags)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if !reflect.DeepEqual(c.smesherFlags, sflags) {
 		return fmt.Errorf("sm configuration doesn't match %+v != %+v", c.smesherFlags, sflags)
 	}
-	pflags, err := recoverFlags(ctx, poetFlags)
+	pflags, err := recoverFlags(ctx, tctx, poetFlags)
 	if err != nil {
 		return err
 	}
@@ -228,8 +228,8 @@ func (c *Cluster) addPoetFlag(flag DeploymentFlag) {
 	c.poetFlags[flag.Name] = flag
 }
 
-func (c *Cluster) reuse(cctx *testcontext.Context) error {
-	clients, err := discoverNodes(cctx, bootnodesPrefix, Smesher)
+func (c *Cluster) reuse(ctx context.Context, tctx *testcontext.Context) error {
+	clients, err := discoverNodes(ctx, tctx, bootnodesPrefix, Smesher)
 	if err != nil {
 		return err
 	}
@@ -237,43 +237,43 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		return errNotInitialized
 	}
 	for _, node := range clients {
-		cctx.Log.Debugw("discovered existing bootnode", "name", node.Name)
+		tctx.Log.Debugw("discovered existing bootnode", "name", node.Name)
 	}
 	c.clients = append(c.clients, clients...)
 	c.bootnodes = len(clients)
 
-	clients, err = discoverNodes(cctx, smesherPrefix, Smesher)
+	clients, err = discoverNodes(ctx, tctx, smesherPrefix, Smesher)
 	if err != nil {
 		return err
 	}
 	for _, node := range clients {
-		cctx.Log.Debugw("discovered existing smesher", "name", node.Name)
+		tctx.Log.Debugw("discovered existing smesher", "name", node.Name)
 	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
 
-	c.poets, err = discoverNodes(cctx, poetSvc, Poet)
+	c.poets, err = discoverNodes(ctx, tctx, poetSvc, Poet)
 	if err != nil {
 		return err
 	}
 	for _, poet := range c.poets {
-		cctx.Log.Debugw("discovered existing poets", "name", poet.Name)
+		tctx.Log.Debugw("discovered existing poets", "name", poet.Name)
 	}
 
-	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets))
-	if err := c.accounts.Recover(cctx); err != nil {
+	tctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets))
+	if err := c.accounts.Recover(ctx, tctx); err != nil {
 		return err
 	}
-	if err := c.recoverFlags(cctx); err != nil {
+	if err := c.recoverFlags(ctx, tctx); err != nil {
 		return err
 	}
 	return nil
 }
 
 // AddPoets spawns poets up to configured number of poets.
-func (c *Cluster) AddPoets(cctx *testcontext.Context) error {
-	for i := 0; i < cctx.PoetSize; i++ {
-		c.AddPoet(cctx)
+func (c *Cluster) AddPoets(ctx context.Context, tctx *testcontext.Context) error {
+	for i := 0; i < tctx.PoetSize; i++ {
+		c.AddPoet(ctx, tctx)
 	}
 	return nil
 }
@@ -292,11 +292,11 @@ func (c *Cluster) firstFreePoetId() int {
 
 // AddPoet spawns a single poet with the first available id.
 // Id is of form "poet-N", where N ∈ [0, ∞).
-func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
+func (c *Cluster) AddPoet(ctx context.Context, tctx *testcontext.Context) error {
 	if c.bootnodes == 0 {
 		return fmt.Errorf("bootnodes are used as a gateways. create atleast one before adding a poet server")
 	}
-	if err := c.persist(cctx); err != nil {
+	if err := c.persist(ctx, tctx); err != nil {
 		return err
 	}
 	var flags []DeploymentFlag
@@ -308,8 +308,8 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 
 	id := createPoetIdentifier(c.firstFreePoetId())
-	cctx.Log.Debugw("deploying poet", "id", id)
-	pod, err := deployPoet(cctx, id, flags...)
+	tctx.Log.Debugw("deploying poet", "id", id)
+	pod, err := deployPoet(ctx, tctx, id, flags...)
 	if err != nil {
 		return err
 	}
@@ -317,27 +317,27 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	return nil
 }
 
-func (c *Cluster) resourceControl(cctx *testcontext.Context, n int) error {
-	if len(c.clients)+n > cctx.ClusterSize {
+func (c *Cluster) resourceControl(tctx *testcontext.Context, n int) error {
+	if len(c.clients)+n > tctx.ClusterSize {
 		// maybe account for poet as well?
-		return fmt.Errorf("max cluster size is %v", cctx.ClusterSize)
+		return fmt.Errorf("max cluster size is %v", tctx.ClusterSize)
 	}
 	return nil
 }
 
 // AddBootnodes ...
-func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
-	if err := c.resourceControl(cctx, n); err != nil {
+func (c *Cluster) AddBootnodes(ctx context.Context, tctx *testcontext.Context, n int) error {
+	if err := c.resourceControl(tctx, n); err != nil {
 		return err
 	}
-	if err := c.persist(cctx); err != nil {
+	if err := c.persist(ctx, tctx); err != nil {
 		return err
 	}
 	flags := []DeploymentFlag{}
 	for _, flag := range c.smesherFlags {
 		flags = append(flags, flag)
 	}
-	clients, err := deployNodes(cctx, bootnodesPrefix, c.bootnodes, c.bootnodes+n, flags)
+	clients, err := deployNodes(ctx, tctx, bootnodesPrefix, c.bootnodes, c.bootnodes+n, flags)
 	if err != nil {
 		return err
 	}
@@ -350,23 +350,23 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 }
 
 // AddSmeshers ...
-func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
+func (c *Cluster) AddSmeshers(ctx context.Context, tctx *testcontext.Context, n int) error {
 	if err := c.resourceControl(tctx, n); err != nil {
 		return err
 	}
-	if err := c.persist(tctx); err != nil {
+	if err := c.persist(ctx, tctx); err != nil {
 		return err
 	}
 	flags := []DeploymentFlag{}
 	for _, flag := range c.smesherFlags {
 		flags = append(flags, flag)
 	}
-	endpoints, err := extractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	endpoints, err := extractP2PEndpoints(ctx, tctx, c.clients[:c.bootnodes])
 	if err != nil {
 		return fmt.Errorf("extracing p2p endpoints %w", err)
 	}
 	flags = append(flags, Bootnodes(endpoints...))
-	clients, err := deployNodes(tctx, smesherPrefix, c.nextSmesher(), c.nextSmesher()+n, flags)
+	clients, err := deployNodes(ctx, tctx, smesherPrefix, c.nextSmesher(), c.nextSmesher()+n, flags)
 	if err != nil {
 		return err
 	}
@@ -381,23 +381,23 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int) error {
 }
 
 // DeletePoets delete all poet servers.
-func (c *Cluster) DeletePoets(cctx *testcontext.Context) error {
+func (c *Cluster) DeletePoets(ctx context.Context, tctx *testcontext.Context) error {
 	for {
 		if c.Poets() == 0 {
 			return nil
 		}
-		if err := c.DeletePoet(cctx, c.Poets()-1); err != nil {
+		if err := c.DeletePoet(ctx, tctx, c.Poets()-1); err != nil {
 			return err
 		}
 	}
 }
 
-func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
+func (c *Cluster) DeletePoet(ctx context.Context, tctx *testcontext.Context, i int) error {
 	poet := c.Poet(i)
 	if poet == nil {
 		return nil
 	}
-	if err := deletePoet(cctx, poet.Identifier); err != nil {
+	if err := deletePoet(ctx, tctx, poet.Identifier); err != nil {
 		return err
 	}
 	c.poets = append(c.poets[0:i], c.poets[i+1:]...)
@@ -406,8 +406,8 @@ func (c *Cluster) DeletePoet(cctx *testcontext.Context, i int) error {
 }
 
 // DeleteSmesher will smesher i from the cluster.
-func (c *Cluster) DeleteSmesher(cctx *testcontext.Context, node *NodeClient) error {
-	err := deleteNode(cctx, node.Name)
+func (c *Cluster) DeleteSmesher(ctx context.Context, tctx *testcontext.Context, node *NodeClient) error {
+	err := deleteNode(ctx, tctx, node.Name)
 	if err != nil {
 		return err
 	}
@@ -459,8 +459,8 @@ func (c *Cluster) CloseClients() error {
 }
 
 // Wait for i-th client to be up.
-func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
-	nc, err := waitNode(tctx, c.Client(i).Name, Smesher)
+func (c *Cluster) Wait(ctx context.Context, tctx *testcontext.Context, i int) error {
+	nc, err := waitNode(ctx, tctx, c.Client(i).Name, Smesher)
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (a *accounts) Address(i int) types.Address {
 	return a.keys[i].Address()
 }
 
-func (a *accounts) Persist(ctx *testcontext.Context) error {
+func (a *accounts) Persist(ctx context.Context, tctx *testcontext.Context) error {
 	if a.persisted {
 		return nil
 	}
@@ -510,9 +510,9 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 	for _, key := range a.keys {
 		data[hex.EncodeToString(key.Pub)] = key.PK
 	}
-	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).
+	cfgmap := corev1.ConfigMap("accounts", tctx.Namespace).
 		WithBinaryData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
+	_, err := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}
@@ -520,9 +520,9 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 	return nil
 }
 
-func (a *accounts) Recover(ctx *testcontext.Context) error {
+func (a *accounts) Recover(ctx context.Context, tctx *testcontext.Context) error {
 	a.keys = nil
-	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "accounts", metav1.GetOptions{})
+	cfgmap, err := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Get(ctx, "accounts", metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to fetch accounts %w", err)
 	}
@@ -569,12 +569,10 @@ func genSigner() *signer {
 	return &signer{Pub: pub, PK: pk}
 }
 
-func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
-	var (
-		rst          = make([]string, len(nodes))
-		rctx, cancel = context.WithTimeout(tctx, 10*time.Second)
-		eg, ctx      = errgroup.WithContext(rctx)
-	)
+func extractP2PEndpoints(ctx context.Context, tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
+	rst := make([]string, len(nodes))
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	eg, ctx := errgroup.WithContext(ctx)
 	defer cancel()
 	for i := range nodes {
 		i := i
@@ -602,23 +600,23 @@ func defaultTargetOutbound(size int) int {
 	return int(0.3 * float64(size))
 }
 
-func persistFlags(ctx *testcontext.Context, name string, config map[string]DeploymentFlag) error {
+func persistFlags(ctx context.Context, tctx *testcontext.Context, name string, config map[string]DeploymentFlag) error {
 	data := map[string]string{}
 	for _, flag := range config {
 		data[flag.Name] = flag.Value
 	}
-	cfgmap := corev1.ConfigMap(name, ctx.Namespace).
+	cfgmap := corev1.ConfigMap(name, tctx.Namespace).
 		WithData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
+	_, err := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}
 	return nil
 }
 
-func recoverFlags(ctx *testcontext.Context, name string) (map[string]DeploymentFlag, error) {
+func recoverFlags(ctx context.Context, tctx *testcontext.Context, name string) (map[string]DeploymentFlag, error) {
 	flags := map[string]DeploymentFlag{}
-	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, name, metav1.GetOptions{})
+	cfgmap, err := tctx.Client.CoreV1().ConfigMaps(tctx.Namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch flags %w", err)
 	}

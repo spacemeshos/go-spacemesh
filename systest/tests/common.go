@@ -157,7 +157,7 @@ func layersStream(ctx context.Context,
 	}
 }
 
-func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
+func waitGenesis(ctx context.Context, tctx *testcontext.Context, node *cluster.NodeClient) error {
 	svc := spacemeshv1.NewMeshServiceClient(node)
 	resp, err := svc.GenesisTime(ctx, &spacemeshv1.GenesisTimeRequest{})
 	if err != nil {
@@ -168,7 +168,7 @@ func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
 	if !genesis.After(now) {
 		return nil
 	}
-	ctx.Log.Debugw("waiting for genesis", "now", now, "genesis", genesis)
+	tctx.Log.Debugw("waiting for genesis", "now", now, "genesis", genesis)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -250,12 +250,12 @@ func currentLayer(ctx context.Context, tb testing.TB, client *cluster.NodeClient
 	return response.Layernum.Number
 }
 
-func waitAll(tctx *testcontext.Context, cl *cluster.Cluster) error {
+func waitAll(ctx context.Context, tctx *testcontext.Context, cl *cluster.Cluster) error {
 	var eg errgroup.Group
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		eg.Go(func() error {
-			return cl.Wait(tctx, i)
+			return cl.Wait(ctx, tctx, i)
 		})
 	}
 	return eg.Wait()
