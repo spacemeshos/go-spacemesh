@@ -807,6 +807,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
+	app.Cleanup()
 
 	tconf := getTestDefaultConfig()
 	tconf.DataDirParent = t.TempDir()
@@ -934,6 +935,7 @@ func TestGenesisConfig(t *testing.T) {
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
+		app.Cleanup()
 		require.NoError(t, app.Initialize())
 	})
 	t.Run("fatal error on a diff", func(t *testing.T) {
@@ -943,6 +945,7 @@ func TestGenesisConfig(t *testing.T) {
 
 		require.NoError(t, app.Initialize())
 		app.Config.Genesis.ExtraData = "changed"
+		app.Cleanup()
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
@@ -962,6 +965,20 @@ func TestGenesisConfig(t *testing.T) {
 
 		require.ErrorContains(t, app.Initialize(), "extra-data")
 	})
+}
+
+func TestFlock(t *testing.T) {
+	app := New()
+	app.Config = getTestDefaultConfig()
+	app.Config.DataDirParent = t.TempDir()
+
+	require.NoError(t, app.Initialize())
+	app1 := *app
+	require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
+	app.Cleanup()
+	require.NoError(t, app.Initialize())
+	require.NoError(t, os.Remove(filepath.Join(app.Config.DataDir(), lockFile)))
+	require.NoError(t, app.Initialize())
 }
 
 func getTestDefaultConfig() *config.Config {
@@ -992,7 +1009,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
 	cfg.HARE.ExpectedLeaders = 5
-	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerProposal = 100

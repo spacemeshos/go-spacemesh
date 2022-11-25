@@ -99,17 +99,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(TargetOutbound(defaultTargetOutbound(cctx.ClusterSize)))
-	cluster.addFlag(CycleGap(10 * time.Second))
-	cluster.addFlag(PhaseShift(20 * time.Second))
-	cluster.addFlag(GracePeriod(3 * time.Second))
 
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
-	// NOTE(dshulyak) epoch duration needs to be in sync with go-spacemesh
-	// configuration. consider to move epoch configuration from preset to systest
-	cluster.addPoetFlag(EpochDuration(60 * time.Second))
-	cluster.addPoetFlag(CycleGap(10 * time.Second))
-	cluster.addPoetFlag(PhaseShift(20 * time.Second))
 
 	for _, opt := range opts {
 		opt(cluster)
@@ -123,9 +115,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 
 // Cluster for managing state of the spacemesh cluster.
 type Cluster struct {
-	persistedFlags bool
-	smesherFlags   map[string]DeploymentFlag
-	poetFlags      map[string]DeploymentFlag
+	persisted    bool
+	smesherFlags map[string]DeploymentFlag
+	poetFlags    map[string]DeploymentFlag
 
 	accounts
 
@@ -151,16 +143,47 @@ func (c *Cluster) nextSmesher() int {
 }
 
 func (c *Cluster) persist(ctx *testcontext.Context) error {
+	if c.persisted {
+		return nil
+	}
 	if err := c.accounts.Persist(ctx); err != nil {
 		return err
 	}
-	return c.persistFlags(ctx)
+	if err := c.persistFlags(ctx); err != nil {
+		return err
+	}
+	if err := c.persistConfigs(ctx); err != nil {
+		return err
+	}
+	c.persisted = true
+	return nil
+}
+
+func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
+	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(spacemeshConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
+		}),
+		metav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+	}
+	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(poetConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
+		}),
+		metav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
+	}
+	return nil
 }
 
 func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
-	if c.persistedFlags {
-		return nil
-	}
 	ctx.Log.Debugf("persisting flags %+v", c.smesherFlags)
 	if err := persistFlags(ctx, smesherFlags, c.smesherFlags); err != nil {
 		return err
@@ -168,7 +191,6 @@ func (c *Cluster) persistFlags(ctx *testcontext.Context) error {
 	if err := persistFlags(ctx, poetFlags, c.poetFlags); err != nil {
 		return err
 	}
-	c.persistedFlags = true
 	return nil
 }
 
@@ -190,7 +212,7 @@ func (c *Cluster) recoverFlags(ctx *testcontext.Context) error {
 	if !reflect.DeepEqual(c.poetFlags, pflags) {
 		return fmt.Errorf("poet configuration doesn't match %+v != %+v", c.poetFlags, sflags)
 	}
-	c.persistedFlags = true
+	c.persisted = true
 	return nil
 }
 
@@ -282,7 +304,7 @@ func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
 	}
 
 	id := createPoetIdentifier(c.firstFreePoetId())
-	cctx.Log.Debugw("Deploying Poet", "id", id)
+	cctx.Log.Debugw("deploying poet", "id", id)
 	pod, err := deployPoet(cctx, id, flags...)
 	if err != nil {
 		return err

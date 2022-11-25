@@ -23,10 +23,34 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 
+	"github.com/spacemeshos/go-spacemesh/systest/parameters"
+	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-const persistentVolumeName = "data"
+var (
+	poetConfig = parameters.String(
+		"poet",
+		"configuration for poet service",
+		fastnet.PoetConfig,
+	)
+	smesherConfig = parameters.String(
+		"smesher",
+		"configuration for smesher service",
+		fastnet.SmesherConfig,
+	)
+)
+
+const (
+	configDir = "/etc/config/"
+
+	persistentVolumeName  = "data"
+	attachedPoetConfig    = "poet.conf"
+	attachedSmesherConfig = "smesher.json"
+
+	poetConfigMapName      = "poet"
+	spacemeshConfigMapName = "spacemesh"
+)
 
 func persistentVolumeClaim(podname string) string {
 	return fmt.Sprintf("%s-%s", persistentVolumeName, podname)
@@ -65,23 +89,33 @@ type NodeClient struct {
 }
 
 func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
-	var args []string
+	args := []string{
+		"-c=" + configDir + attachedPoetConfig,
+	}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
 	}
 
 	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
+
 	labels := nodeLabels("poet", id)
 	pod := corev1.Pod(fmt.Sprintf("poet-%d", rand.Int()), ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(
 			corev1.PodSpec().
 				WithNodeSelector(ctx.NodeSelector).
+				WithVolumes(corev1.Volume().
+					WithName("config").
+					WithConfigMap(corev1.ConfigMapVolumeSource().WithName(poetConfigMapName)),
+				).
 				WithContainers(corev1.Container().
 					WithName("poet").
 					WithImage(ctx.PoetImage).
 					WithArgs(args...).
 					WithPorts(corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort)).
+					WithVolumeMounts(
+						corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+					).
 					WithResources(corev1.ResourceRequirements().WithRequests(
 						v1.ResourceList{
 							v1.ResourceCPU:    resource.MustParse("0.5"),
@@ -103,7 +137,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 }
 
 func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
-	ctx.Log.Debugw("Deploying Poet Service", "id", id)
+	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels("poet", id)
 	svc := corev1.Service(id, ctx.Namespace).
 		WithLabels(labels).
@@ -149,6 +183,7 @@ func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*
 }
 
 func deletePoet(ctx *testcontext.Context, id string) error {
+	errCfg := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{})
 	errPod := ctx.Client.CoreV1().Pods(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
 	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
@@ -159,7 +194,9 @@ func deletePoet(ctx *testcontext.Context, id string) error {
 			}
 		}
 	}
-
+	if errCfg != nil {
+		return errSvc
+	}
 	if errPod != nil {
 		return errPod
 	}
@@ -264,6 +301,9 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 
 func deleteNode(ctx *testcontext.Context, podname string) error {
 	setname := setName(podname)
+	if err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("deleting configmap %s/%s: %w", ctx.Namespace, setname, err)
+	}
 	if err := ctx.Client.AppsV1().StatefulSets(ctx.Namespace).
 		Delete(ctx, setname, apimetav1.DeleteOptions{}); err != nil {
 		return err
@@ -291,10 +331,11 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	if err != nil {
 		return fmt.Errorf("apply headless service: %w", err)
 	}
+
 	cmd := []string{
 		"/bin/go-spacemesh",
+		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
-		"--preset=fastnet",
 		"--smeshing-start=true",
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data/state",
@@ -305,7 +346,6 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
-
 	sset := appsv1.StatefulSet(name, ctx.Namespace).
 		WithSpec(appsv1.StatefulSetSpec().
 			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).
@@ -331,6 +371,10 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 				WithLabels(labels).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
+					WithVolumes(corev1.Volume().
+						WithName("config").
+						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
+					).
 					WithContainers(corev1.Container().
 						WithName("smesher").
 						WithImage(ctx.Image).
@@ -342,6 +386,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
 						WithResources(corev1.ResourceRequirements().WithRequests(
 							v1.ResourceList{
@@ -453,11 +498,6 @@ func (d DeploymentFlag) Flag() string {
 	return d.Name + "=" + d.Value
 }
 
-// RerunInterval flag.
-func RerunInterval(duration time.Duration) DeploymentFlag {
-	return DeploymentFlag{Name: "--tortoise-rerun-interval", Value: duration.String()}
-}
-
 // PoetEndpoint flag.
 func PoetEndpoint(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
@@ -510,24 +550,4 @@ func DurationFlag(flag string, d time.Duration) DeploymentFlag {
 // PoetRestListen socket pair with http api.
 func PoetRestListen(port int) DeploymentFlag {
 	return DeploymentFlag{Name: "--restlisten", Value: fmt.Sprintf("0.0.0.0:%d", port)}
-}
-
-// EpochDuration ...
-func EpochDuration(d time.Duration) DeploymentFlag {
-	return DurationFlag("--epoch-duration", d)
-}
-
-// CycleGap ...
-func CycleGap(d time.Duration) DeploymentFlag {
-	return DurationFlag("--cycle-gap", d)
-}
-
-// PhaseShift ...
-func PhaseShift(d time.Duration) DeploymentFlag {
-	return DurationFlag("--phase-shift", d)
-}
-
-// GracePeriod ...
-func GracePeriod(d time.Duration) DeploymentFlag {
-	return DurationFlag("--grace-period", d)
 }

@@ -832,6 +832,26 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 	})
 }
 
+func TestDecodeVotes(t *testing.T) {
+	t.Run("without block in state", func(t *testing.T) {
+		s := sim.New()
+		s.Setup()
+		cfg := defaultTestConfig()
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		last := s.Next()
+		tortoise.TallyVotes(context.TODO(), last)
+		ballots, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		ballot := types.NewExistingBallot(
+			types.BallotID{3, 3, 3}, nil, nil,
+			ballots[0].InnerBallot,
+		)
+		ballot.Votes.Support = []types.Vote{{ID: types.BlockID{2, 2, 2}}}
+		_, err = tortoise.DecodeBallot(&ballot)
+		require.ErrorContains(t, err, "not in state")
+	})
+}
+
 // gapVote will skip one layer in voting.
 func gapVote(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 	return skipLayers(1)(rng, layers, i)
@@ -1868,7 +1888,7 @@ func TestStateManagement(t *testing.T) {
 		for _, block := range tortoise.trtl.layers[lid].blocks {
 			require.Contains(t, tortoise.trtl.blockRefs, block.id, "layer %s", lid)
 		}
-		for _, ballot := range tortoise.trtl.layer(lid).ballots {
+		for _, ballot := range tortoise.trtl.ballots[lid] {
 			require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
 			for current := ballot.votes.tail; current != nil; current = current.prev {
 				require.True(t, !current.lid.Before(evicted), "no votes for layers before evicted (evicted %s, in state %s, ballot %s)", evicted, current.lid, ballot.layer)
@@ -2338,7 +2358,7 @@ func TestDecodeExceptions(t *testing.T) {
 		sim.WithNumBlocks(1),
 	)
 	tortoise.TallyVotes(ctx, last)
-	ballots1 := tortoise.trtl.layer(last).ballots
+	ballots1 := tortoise.trtl.ballots[last]
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
@@ -2349,7 +2369,7 @@ func TestDecodeExceptions(t *testing.T) {
 		})),
 	)
 	tortoise.TallyVotes(ctx, last)
-	ballots2 := tortoise.trtl.layer(last).ballots
+	ballots2 := tortoise.trtl.ballots[last]
 
 	last = s.Next(
 		sim.WithNumBlocks(1),
@@ -2360,7 +2380,7 @@ func TestDecodeExceptions(t *testing.T) {
 		})),
 	)
 	tortoise.TallyVotes(ctx, last)
-	ballots3 := tortoise.trtl.layer(last).ballots
+	ballots3 := tortoise.trtl.ballots[last]
 
 	for _, ballot := range ballots1 {
 		require.Equal(t, against, ballot.votes.find(layer.lid, block.id), "base ballot votes against")
@@ -2614,6 +2634,52 @@ func TestEncodeVotes(t *testing.T) {
 	})
 }
 
+func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
+	t.Run("encode", func(t *testing.T) {
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+		s.Setup()
+		tortoise := tortoiseFromSimState(
+			s.GetState(0),
+			WithConfig(cfg),
+			WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i < 4; i++ {
+			last = s.Next()
+		}
+		tortoise.TallyVotes(ctx, last)
+		encoded, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(last))
+		require.NoError(t, err)
+		ballot, err := ballots.Get(s.GetState(0).DB, encoded.Base)
+		require.NoError(t, err)
+		require.NotEqual(t, last, ballot.LayerIndex)
+	})
+	t.Run("decode", func(t *testing.T) {
+		ctx := context.Background()
+		cfg := defaultTestConfig()
+		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+		s.Setup()
+		tortoise := tortoiseFromSimState(
+			s.GetState(0),
+			WithConfig(cfg),
+			WithLogger(logtest.New(t)),
+		)
+		var last types.LayerID
+		for i := 0; i < 4; i++ {
+			last = s.Next()
+		}
+		tortoise.TallyVotes(ctx, last)
+		ballots, err := ballots.Layer(s.GetState(0).DB, last)
+		require.NoError(t, err)
+		ballot := types.NewExistingBallot(types.BallotID{1}, nil, nil, ballots[0].InnerBallot)
+		ballot.Votes.Base = ballots[1].ID()
+		_, err = tortoise.DecodeBallot(&ballot)
+		require.ErrorContains(t, err, "votes for ballot")
+	})
+}
+
 func BenchmarkOnBallot(b *testing.B) {
 	const (
 		layerSize = 50
@@ -2659,8 +2725,7 @@ func BenchmarkOnBallot(b *testing.B) {
 
 			b.StopTimer()
 			delete(tortoise.trtl.ballotRefs, ballot.ID())
-			layer := tortoise.trtl.layer(ballot.LayerIndex)
-			layer.ballots = nil
+			tortoise.trtl.ballots[ballot.LayerIndex] = nil
 			b.StartTimer()
 		}
 	}
