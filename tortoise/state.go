@@ -64,6 +64,11 @@ type (
 
 		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
+		// ballots should not be referenced by other ballots
+		// each ballot stores references (votes) for X previous layers
+		// those X layers may reference another set of ballots that will
+		// reference recursively more layers with another set of ballots
+		ballots map[types.LayerID][]*ballotInfo
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
@@ -77,6 +82,7 @@ func newState() *state {
 		localThreshold: util.WeightFromUint64(0),
 		epochs:         map[types.EpochID]*epochInfo{},
 		layers:         map[types.LayerID]*layerInfo{},
+		ballots:        map[types.LayerID][]*ballotInfo{},
 		ballotRefs:     map[types.BallotID]*ballotInfo{},
 		blockRefs:      map[types.BlockID]*blockInfo{},
 	}
@@ -93,6 +99,7 @@ func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
 func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
+		layersNumber.Inc()
 		layer = &layerInfo{lid: lid, empty: util.WeightFromUint64(0)}
 		s.layers[lid] = layer
 	}
@@ -102,6 +109,7 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 func (s *state) epoch(eid types.EpochID) *epochInfo {
 	epoch, exist := s.epochs[eid]
 	if !exist {
+		epochsNumber.Inc()
 		epoch = &epochInfo{atxs: map[types.ATXID]uint64{}}
 		s.epochs[eid] = epoch
 	}
@@ -109,12 +117,14 @@ func (s *state) epoch(eid types.EpochID) *epochInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
-	layer := s.layer(ballot.layer)
-	layer.ballots = append(layer.ballots, ballot)
+	ballotsNumber.Inc()
+	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
 func (s *state) addBlock(block *blockInfo) {
+	blocksNumber.Inc()
+
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)
@@ -154,7 +164,6 @@ type layerInfo struct {
 	empty          weight
 	hareTerminated bool
 	blocks         []*blockInfo
-	ballots        []*ballotInfo
 	verifying      verifyingInfo
 
 	opinion types.Hash32

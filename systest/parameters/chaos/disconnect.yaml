@@ -1,0 +1,54 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: short-disconnect-every-20m
+spec:
+  schedule: "*/20 * * * *"
+  historyLimit: 2
+  type: "NetworkChaos"
+  networkChaos:
+    action: partition
+    duration: "60s"
+    mode: fixed
+    value: "5"
+    selector:
+      expressionSelectors:
+        - key: bucket
+          operator: In
+          values: ["0"]
+    direction: to
+    target:
+      mode: all
+      selector:
+        expressionSelectors:
+          - key: app
+            operator: In
+            values: ["boot", "smesher"]
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: long-disconnect-every-2h
+spec:
+  schedule: "0 */2 * * *"
+  historyLimit: 2
+  type: "NetworkChaos"
+  concurrencyPolicy: "Allow"
+  networkChaos:
+    action: partition
+    duration: "2h"
+    mode: fixed
+    value: "2"
+    selector:
+      expressionSelectors:
+        - key: bucket
+          operator: In
+          values: ["1"]
+    direction: to
+    target:
+      mode: all
+      selector:
+        expressionSelectors:
+          - key: app
+            operator: In
+            values: ["boot", "smesher"]
