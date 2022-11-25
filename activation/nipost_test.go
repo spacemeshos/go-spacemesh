@@ -495,8 +495,7 @@ func TestValidator_Validate(t *testing.T) {
 
 func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg atypes.PostConfig, numUnits uint32) error {
 	v := &Validator{poetDb, postCfg}
-	commitment := GetCommitmentBytes(minerID, commitmentAtx)
-	_, err := v.Validate(commitment[:], nipost, challenge, numUnits)
+	_, err := v.Validate(minerID, commitmentAtx, nipost, challenge, numUnits)
 	return err
 }
 

@@ -14,7 +14,6 @@ import (
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -178,9 +177,9 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
 	newInit, err := initialization.NewInitializer(
-		initialization.WithCommitment(commitment),
+		initialization.WithNodeId(mgr.id.ToBytes()),
+		initialization.WithAtxId(commitmentAtx.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
 		initialization.WithLogger(mgr.logger),
@@ -289,8 +288,7 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types
 	}
 	mgr.mu.Unlock()
 
-	commitment := GetCommitmentBytes(mgr.id, commitmentAtx)
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, commitment)
+	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.ToBytes(), commitmentAtx.Bytes())
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
@@ -332,9 +330,4 @@ func (mgr *PostSetupManager) LastOpts() *atypes.PostSetupOpts {
 // Config returns the Post protocol config.
 func (mgr *PostSetupManager) Config() atypes.PostConfig {
 	return mgr.cfg
-}
-
-func GetCommitmentBytes(id types.NodeID, commitmentAtx types.ATXID) []byte {
-	h := hash.Sum(append(id.ToBytes(), commitmentAtx.Bytes()...))
-	return h[:]
 }

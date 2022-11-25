@@ -241,8 +241,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	commitment := GetCommitmentBytes(atx.NodeID(), *atx.CommitmentATX)
-	if err := h.nipostValidator.ValidatePost(commitment, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.ValidatePost(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
