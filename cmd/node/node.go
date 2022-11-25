@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/gofrs/flock"
 	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpcctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
@@ -61,6 +62,7 @@ import (
 const (
 	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
+	lockFile        = "LOCK"
 )
 
 // Logger names.
@@ -252,6 +254,7 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
+	fileLock         *flock.Flock
 	nodeID           types.NodeID
 	Config           *config.Config
 	db               *sql.Database
@@ -297,6 +300,15 @@ func (app *App) Initialize() (err error) {
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("ensure folders exist: %w", err)
 	}
+	lockName := filepath.Join(app.Config.DataDir(), lockFile)
+	fl := flock.New(lockName)
+	locked, err := fl.TryLock()
+	if err != nil {
+		return fmt.Errorf("flock %s: %w", lockName, err)
+	} else if !locked {
+		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
+	}
+	app.fileLock = fl
 
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
@@ -373,6 +385,14 @@ func (app *App) getAppInfo() string {
 // Cleanup stops all app services.
 func (app *App) Cleanup() {
 	log.Info("app cleanup starting...")
+	if app.fileLock != nil {
+		if err := app.fileLock.Unlock(); err != nil {
+			log.With().Error("failed to unlock file",
+				log.String("path", app.fileLock.Path()),
+				log.Err(err),
+			)
+		}
+	}
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")

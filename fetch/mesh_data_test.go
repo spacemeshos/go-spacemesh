@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -527,9 +526,6 @@ func TestGetPoetProof(t *testing.T) {
 	})
 
 	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(nil).Times(1)
-	require.NoError(t, f.GetPoetProof(context.TODO(), h))
-
-	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(sql.ErrObjectExists).Times(1)
 	require.NoError(t, f.GetPoetProof(context.TODO(), h))
 
 	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(errors.New("unknown")).Times(1)
