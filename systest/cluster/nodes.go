@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	apiappsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
+	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -118,9 +118,9 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 						corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 					).
 					WithResources(corev1.ResourceRequirements().WithRequests(
-						v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("0.5"),
-							v1.ResourceMemory: resource.MustParse("1Gi"),
+						apiv1.ResourceList{
+							apiv1.ResourceCPU:    resource.MustParse("0.5"),
+							apiv1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					)),
 				),
@@ -137,7 +137,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 	return ppod, nil
 }
 
-func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
+func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
 	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels("poet", id)
 	svc := corev1.Service(id, ctx.Namespace).
@@ -212,7 +212,7 @@ func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulS
 	return set, nil
 }
 
-func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
+func waitPod(ctx *testcontext.Context, name string) (*apiv1.Pod, error) {
 	watcher, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", name),
 	})
@@ -221,7 +221,7 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 	}
 	defer watcher.Stop()
 	for {
-		var pod *v1.Pod
+		var pod *apiv1.Pod
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -232,12 +232,12 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 			if ev.Type == watch.Deleted {
 				return nil, nil
 			}
-			pod = ev.Object.(*v1.Pod)
+			pod = ev.Object.(*apiv1.Pod)
 		}
 		switch pod.Status.Phase {
-		case v1.PodFailed:
+		case apiv1.PodFailed:
 			return nil, fmt.Errorf("pod failed %s", name)
-		case v1.PodRunning:
+		case apiv1.PodRunning:
 			return pod, nil
 		}
 	}
@@ -356,10 +356,10 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 			WithVolumeClaimTemplates(
 				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
-						WithAccessModes(v1.ReadWriteOnce).
+						WithAccessModes(apiv1.ReadWriteOnce).
 						WithStorageClassName(ctx.Storage.Class).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
+							WithRequests(apiv1.ResourceList{apiv1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
 			).
 			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
 			WithTemplate(corev1.PodTemplateSpec().
@@ -379,7 +379,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 					WithContainers(corev1.Container().
 						WithName("smesher").
 						WithImage(ctx.Image).
-						WithImagePullPolicy(v1.PullIfNotPresent).
+						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
@@ -391,15 +391,15 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 						).
 						WithResources(corev1.ResourceRequirements().
 							WithRequests(
-								v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("0.5"),
-									v1.ResourceMemory: resource.MustParse("200Mi"),
+								apiv1.ResourceList{
+									apiv1.ResourceCPU:    resource.MustParse("0.5"),
+									apiv1.ResourceMemory: resource.MustParse("200Mi"),
 								},
 							).
 							WithLimits(
-								v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("2"),
-									v1.ResourceMemory: resource.MustParse("1Gi"),
+								apiv1.ResourceList{
+									apiv1.ResourceCPU:    resource.MustParse("2"),
+									apiv1.ResourceMemory: resource.MustParse("1Gi"),
 								},
 							),
 						).

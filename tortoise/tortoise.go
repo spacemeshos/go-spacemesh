@@ -380,6 +380,9 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		}
 		prev := t.layer(process.Sub(1))
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+		t.processed = process
+		processedLayer.Set(float64(t.processed.Value))
+
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
 		}
@@ -387,8 +390,6 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			t.full.countDelayed(t.logger, process)
 			t.full.counted = process
 		}
-		t.processed = process
-		processedLayer.Set(float64(t.processed.Value))
 
 		if err := t.loadBlocksData(process); err != nil {
 			return err

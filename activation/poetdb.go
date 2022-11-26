@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/merkle-tree"
-	phash "github.com/spacemeshos/poet/hash"
+	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 
@@ -172,8 +172,8 @@ func calcRoot(leaves [][]byte) ([]byte, error) {
 }
 
 func validatePoet(membershipRoot []byte, merkleProof shared.MerkleProof, leafCount uint64) error {
-	labelHashFunc := phash.GenLabelHashFunc(membershipRoot)
-	merkleHashFunc := phash.GenMerkleHashFunc(membershipRoot)
+	labelHashFunc := hash.GenLabelHashFunc(membershipRoot)
+	merkleHashFunc := hash.GenMerkleHashFunc(membershipRoot)
 	if err := verifier.Validate(merkleProof, labelHashFunc, merkleHashFunc, leafCount, shared.T); err != nil {
 		return fmt.Errorf("validate PoET: %w", err)
 	}

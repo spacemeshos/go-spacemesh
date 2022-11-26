@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
-	grpcctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -28,7 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
-	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -99,8 +99,8 @@ const (
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
-	Run: func(cmd *cobra.Command, args []string) {
-		conf, err := loadConfig(cmd)
+	Run: func(c *cobra.Command, args []string) {
+		conf, err := loadConfig(c)
 		if err != nil {
 			log.With().Fatal("failed to initialize config", log.Err(err))
 		}
@@ -139,17 +139,17 @@ var Cmd = &cobra.Command{
 var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version info",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Print(cmdp.Version)
-		if cmdp.Commit != "" {
-			fmt.Printf("+%s", cmdp.Commit)
+	Run: func(c *cobra.Command, args []string) {
+		fmt.Print(cmd.Version)
+		if cmd.Commit != "" {
+			fmt.Printf("+%s", cmd.Commit)
 		}
 		fmt.Println()
 	},
 }
 
 func init() {
-	cmdp.AddCommands(Cmd)
+	cmd.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
 
@@ -171,12 +171,12 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
-func loadConfig(cmd *cobra.Command) (*config.Config, error) {
+func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
 		return nil, fmt.Errorf("loading config from file: %w", err)
 	}
-	if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
+	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
 		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
 	}
 	return conf, nil
@@ -360,7 +360,7 @@ func (app *App) Initialize() (err error) {
 		for range signalChan {
 			app.log.Info("Received an interrupt, stopping services...\n")
 
-			cmdp.Cancel()()
+			cmd.Cancel()()
 		}
 	}()
 
@@ -379,7 +379,7 @@ func (app *App) setupLogging() {
 
 func (app *App) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 // Cleanup stops all app services.
@@ -782,11 +782,11 @@ func (app *App) startAPIServices(ctx context.Context) {
 			logger := app.addLogger(GRPCLogger, app.log).Zap()
 			grpczap.ReplaceGrpcLoggerV2(logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
-				grpcmiddleware.WithStreamServerChain(
-					grpcctxtags.StreamServerInterceptor(),
+				grpcmw.WithStreamServerChain(
+					grpctags.StreamServerInterceptor(),
 					grpczap.StreamServerInterceptor(logger)),
-				grpcmiddleware.WithUnaryServerChain(
-					grpcctxtags.UnaryServerInterceptor(),
+				grpcmw.WithUnaryServerChain(
+					grpctags.UnaryServerInterceptor(),
 					grpczap.UnaryServerInterceptor(logger)),
 			)
 		}
@@ -985,7 +985,7 @@ func (app *App) startSyncer(ctx context.Context) {
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start() error {
 	// we use the main app context
-	ctx := cmdp.Ctx()
+	ctx := cmd.Ctx()
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1118,7 +1118,7 @@ func (app *App) Start() error {
 			syncErr <- app.ptimesync.Wait()
 			// if nil node was already stopped
 			if syncErr != nil {
-				cmdp.Cancel()()
+				cmd.Cancel()()
 			}
 		}()
 	}

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -182,7 +182,7 @@ func updateContext(ctx *Context) error {
 	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
 		apimetav1.GetOptions{})
 	if err != nil || ns == nil {
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		return err

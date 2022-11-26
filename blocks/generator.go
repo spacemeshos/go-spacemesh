@@ -17,7 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
-	pdb "github.com/spacemeshos/go-spacemesh/sql/proposals"
+	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -147,7 +147,7 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 		err error
 	)
 	for _, pid := range pids {
-		if p, err = pdb.Get(g.cdb, pid); err != nil {
+		if p, err = dbproposals.Get(g.cdb, pid); err != nil {
 			return nil, err
 		}
 		result = append(result, p)
