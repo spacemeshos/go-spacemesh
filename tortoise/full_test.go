@@ -1,7 +1,7 @@
 package tortoise
 
 import (
-	mrand "math/rand"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -84,7 +84,7 @@ func TestFullCountVotes(t *testing.T) {
 		BaseHeight, TickCount uint64
 	}
 	const localHeight = 100
-	rng := mrand.New(mrand.NewSource(0))
+	rng := rand.New(rand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
 	getDiff := func(layers [][]types.Block, choices [][2]int) []types.BlockID {

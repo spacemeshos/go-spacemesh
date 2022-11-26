@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
-	erewards "github.com/spacemeshos/economics/rewards"
+	"github.com/spacemeshos/economics/rewards"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -33,7 +33,7 @@ func ValidateRewards(rewards []types.AnyReward) error {
 func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.AnyReward) ([]types.Reward, error) {
 	var (
 		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.GetEffectiveGenesis())
-		subsidy                     = erewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
+		subsidy                     = rewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
 		total                       = subsidy + fees
 		transferred                 uint64
 		totalWeight                 = util.WeightFromUint64(0)

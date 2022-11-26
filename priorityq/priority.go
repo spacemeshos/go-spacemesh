@@ -17,8 +17,8 @@ var (
 
 // PriorityQueue is the interface used to interact with the queue.
 type PriorityQueue interface {
-	Write(priority Priority, value interface{}) error
-	Read() (interface{}, error)
+	Write(priority Priority, value any) error
+	Read() (any, error)
 	Close()
 	Length() int
 }
@@ -40,7 +40,7 @@ const (
 // An HeapQueueItem is something we manage in a priority queue.
 type HeapQueueItem struct {
 	index    int
-	value    interface{}
+	value    any
 	priority Priority
 }
 
@@ -75,7 +75,7 @@ func (pq *HeapQueue) Length() int {
 }
 
 // Read reads a value from the priority queue. It's a wrapper for Pop.
-func (pq *HeapQueue) Read() (interface{}, error) {
+func (pq *HeapQueue) Read() (any, error) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
@@ -92,7 +92,7 @@ func (pq *HeapQueue) Read() (interface{}, error) {
 }
 
 // Write pushes a value in the priority queue. It's a wrapper for Push.
-func (pq *HeapQueue) Write(priority Priority, value interface{}) error {
+func (pq *HeapQueue) Write(priority Priority, value any) error {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
@@ -126,7 +126,7 @@ func (pq *HeapQueue) Swap(i, j int) {
 }
 
 // Push implements heap.Interface.
-func (pq *HeapQueue) Push(x interface{}) {
+func (pq *HeapQueue) Push(x any) {
 	n := len(pq.queue)
 	item := x.(*HeapQueueItem)
 	item.index = n
@@ -134,7 +134,7 @@ func (pq *HeapQueue) Push(x interface{}) {
 }
 
 // Pop implements heap.Interface.
-func (pq *HeapQueue) Pop() interface{} {
+func (pq *HeapQueue) Pop() any {
 	old := pq.queue
 	n := len(old)
 	item := old[n-1]

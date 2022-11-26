@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	bc "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -72,12 +72,12 @@ func SetCancel(cancelFunc func()) {
 
 // BaseApp is the base application command, provides basic init and flags for all executables and applications.
 type BaseApp struct {
-	Config *bc.Config
+	Config *config.Config
 }
 
 // NewBaseApp returns new basic application.
 func NewBaseApp() *BaseApp {
-	dc := bc.DefaultConfig()
+	dc := config.DefaultConfig()
 	return &BaseApp{Config: &dc}
 }
 
@@ -110,28 +110,28 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	setupLogging(app.Config)
 }
 
-func setupLogging(config *bc.Config) {
-	if config.LOGGING.Encoder == bc.JSONLogEncoder {
+func setupLogging(cfg *config.Config) {
+	if cfg.LOGGING.Encoder == config.JSONLogEncoder {
 		log.JSONLog(true)
 	}
 
 	// setup logging early
-	if err := os.MkdirAll(config.DataDir(), 0o700); err != nil {
+	if err := os.MkdirAll(cfg.DataDir(), 0o700); err != nil {
 		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 }
 
-func parseConfig() (*bc.Config, error) {
+func parseConfig() (*config.Config, error) {
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
 	// read in default config if passed as param using viper
-	if err := bc.LoadConfig(fileLocation, vip); err != nil {
+	if err := config.LoadConfig(fileLocation, vip); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
 	}
 
-	conf := bc.DefaultConfig()
+	conf := config.DefaultConfig()
 	// load config if it was loaded to our viper
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
@@ -150,11 +150,11 @@ func parseConfig() (*bc.Config, error) {
 }
 
 // EnsureCLIFlags checks flag types and converts them.
-func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
+func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
 			if p.Field(i).Tag.Get("mapstructure") == name {
-				var val interface{}
+				var val any
 				switch p.Field(i).Type.String() {
 				case "bool":
 					val = viper.GetBool(name)
