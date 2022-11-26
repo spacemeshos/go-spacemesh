@@ -49,6 +49,18 @@ var (
 		"Total amount of received messages",
 		[]string{"protocol"},
 	)
+	dropedMessagesCount = metrics.NewCounter(
+		"dropped_messages_count",
+		subsystem,
+		"Total number of dropped messages",
+		[]string{"protocol"},
+	)
+	rejectedMessagesCount = metrics.NewCounter(
+		"rejected_messages_count",
+		subsystem,
+		"Total number of rejected messages",
+		[]string{"protocol", "reason"},
+	)
 )
 
 // GossipCollector pubsub.RawTracer implementation
@@ -126,7 +138,12 @@ func (g *GossipCollector) DeliverMessage(msg *pubsub.Message) {
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
 // The reason argument can be one of the named strings Reject*.
-func (g *GossipCollector) RejectMessage(*pubsub.Message, string) {}
+func (g *GossipCollector) RejectMessage(msg *pubsub.Message, reason string) {
+	if msg.Topic == nil {
+		return
+	}
+	rejectedMessagesCount.WithLabelValues(*msg.Topic, reason).Inc()
+}
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
 func (g *GossipCollector) DuplicateMessage(msg *pubsub.Message) {
@@ -147,7 +164,14 @@ func (g *GossipCollector) RecvRPC(*pubsub.RPC) {}
 func (g *GossipCollector) SendRPC(*pubsub.RPC, peer.ID) {}
 
 // DropRPC is invoked when an outbound RPC is dropped, typically because of a queue full.
-func (g *GossipCollector) DropRPC(*pubsub.RPC, peer.ID) {}
+func (g *GossipCollector) DropRPC(rpc *pubsub.RPC, _ peer.ID) {
+	for _, msg := range rpc.Publish {
+		if msg.Topic == nil {
+			continue
+		}
+		dropedMessagesCount.WithLabelValues(*msg.Topic).Inc()
+	}
+}
 
 // UndeliverableMessage is invoked when the consumer of Subscribe is not reading messages fast enough and
 // the pressure release mechanism trigger, dropping messages.
