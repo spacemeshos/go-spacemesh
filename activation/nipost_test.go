@@ -374,7 +374,7 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	}
 	ref, err := proofMsg.Ref()
 	require.NoError(err)
-	poetDb.StoreProof(ref, &proofMsg)
+	poetDb.StoreProof(context.TODO(), ref, &proofMsg)
 
 	time.Sleep(time.Until(deadline))
 
@@ -418,7 +418,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	}
 	ref, err := proofMsg.Ref()
 	assert.NoError(err)
-	poetDb.StoreProof(ref, &proofMsg)
+	poetDb.StoreProof(context.TODO(), ref, &proofMsg)
 
 	proofMsg = types.PoetProofMessage{
 		PoetServiceID: []byte("poet1"),
@@ -429,7 +429,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	}
 	ref, err = proofMsg.Ref()
 	assert.NoError(err)
-	poetDb.StoreProof(ref, &proofMsg)
+	poetDb.StoreProof(context.TODO(), ref, &proofMsg)
 
 	// Verify
 	result := <-resultChan
