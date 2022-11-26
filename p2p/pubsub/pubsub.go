@@ -17,17 +17,15 @@ import (
 
 func init() {
 	// configure larger overlay parameters
-	// these params are copied from FIL https://github.com/filecoin-project/lotus
-	// TODO: reevaluate these params for spacemesh network
-	pubsub.GossipSubD = 8
-	pubsub.GossipSubDscore = 6
-	pubsub.GossipSubDout = 3
-	pubsub.GossipSubDlo = 6
-	pubsub.GossipSubDhi = 12
+	pubsub.GossipSubD = 4
+	pubsub.GossipSubDscore = 2
+	pubsub.GossipSubDout = 2
+	pubsub.GossipSubDlo = 2
+	pubsub.GossipSubDhi = 8
 	pubsub.GossipSubDlazy = 12
 	pubsub.GossipSubDirectConnectInitialDelay = 30 * time.Second
 	pubsub.GossipSubIWantFollowupTime = 5 * time.Second
-	pubsub.GossipSubHistoryLength = 10
+	pubsub.GossipSubHistoryLength = 20
 	pubsub.GossipSubGossipFactor = 0.1
 }
 
@@ -166,7 +164,7 @@ func getOptions(cfg Config) []pubsub.Option {
 		pubsub.WithMessageIdFn(msgID),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
-		pubsub.WithPeerOutboundQueueSize(8192),
+		pubsub.WithPeerOutboundQueueSize(16 << 10),
 		pubsub.WithValidateQueueSize(8192),
 		pubsub.WithRawTracer(p2pmetrics.NewGoSIPCollector()),
 		pubsub.WithPeerScore(
