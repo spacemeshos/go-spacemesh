@@ -58,6 +58,7 @@ func createFetch(tb testing.TB) *testFetch {
 		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
 		3,
 		3,
+		1000,
 		time.Second * time.Duration(3),
 		3,
 	}
@@ -84,6 +85,14 @@ func createFetch(tb testing.TB) *testFetch {
 	return tf
 }
 
+func goodReceiver(context.Context, []byte) error {
+	return nil
+}
+
+func badReceiver(context.Context, []byte) error {
+	return errors.New("bad receiver")
+}
+
 func TestFetch_GetHash(t *testing.T) {
 	f := createFetch(t)
 	f.mh.EXPECT().Close()
@@ -94,29 +103,30 @@ func TestFetch_GetHash(t *testing.T) {
 	hint2 := datastore.BallotDB
 
 	// test hash aggregation
-	f.getHash(h1, hint)
-	f.getHash(h1, hint)
+	p0 := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	p1 := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	require.Equal(t, p0.completed, p1.completed)
 
 	h2 := types.RandomHash()
-	f.getHash(h2, hint2)
-
-	// test aggregation by hint
-	f.activeReqM.RLock()
-	assert.Equal(t, 2, len(f.activeRequests[h1]))
-	f.activeReqM.RUnlock()
+	p2 := f.getHash(context.TODO(), h2, hint2, goodReceiver)
+	require.NotEqual(t, p1.completed, p2.completed)
 }
 
 func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 	tt := []struct {
-		name string
-		err  error
+		name       string
+		nErr, vErr error
 	}{
 		{
-			name: "request batch hash aggregated",
+			name: "request batch",
 		},
 		{
-			name: "request batch hash aggregated network failure",
-			err:  errors.New("network failure"),
+			name: "request batch network failure",
+			nErr: errors.New("network failure"),
+		},
+		{
+			name: "request batch validation failure",
+			vErr: errors.New("validation failure"),
 		},
 	}
 
@@ -131,22 +141,27 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			peer := p2p.Peer("buddy")
 			f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
 
-			hsh := types.RandomHash()
-			res := ResponseMessage{
-				Hash: hsh,
+			hsh0 := types.RandomHash()
+			res0 := ResponseMessage{
+				Hash: hsh0,
 				Data: []byte("a"),
+			}
+			hsh1 := types.RandomHash()
+			res1 := ResponseMessage{
+				Hash: hsh1,
+				Data: []byte("b"),
 			}
 			f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-					if tc.err != nil {
-						return tc.err
+					if tc.nErr != nil {
+						return tc.nErr
 					}
 					var rb RequestBatch
 					err := codec.Decode(req, &rb)
 					require.NoError(t, err)
 					resBatch := ResponseBatch{
 						ID:        rb.ID,
-						Responses: []ResponseMessage{res},
+						Responses: []ResponseMessage{res0, res1},
 					}
 					bts, err := codec.Encode(&resBatch)
 					require.NoError(t, err)
@@ -154,22 +169,29 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 					return nil
 				})
 
-			req := request{
-				hash:       hsh,
-				hint:       datastore.POETDB,
-				returnChan: make(chan HashDataPromiseResult, 3),
+			var p0, p1 []*promise
+			// query each hash twice
+			receiver := goodReceiver
+			if tc.vErr != nil {
+				receiver = badReceiver
 			}
+			for i := 0; i < 2; i++ {
+				p := f.getHash(context.TODO(), hsh0, datastore.ProposalDB, receiver)
+				p0 = append(p0, p)
+				p = f.getHash(context.TODO(), hsh1, datastore.BlockDB, receiver)
+				p1 = append(p1, p)
+			}
+			require.Equal(t, p0[0], p0[1])
+			require.Equal(t, p1[0], p1[1])
 
-			f.activeReqM.Lock()
-			f.activeRequests[hsh] = []*request{&req, &req, &req}
-			f.activeReqM.Unlock()
 			f.requestHashBatchFromPeers()
-			close(req.returnChan)
-			for x := range req.returnChan {
-				if tc.err != nil {
-					require.ErrorIs(t, x.Err, tc.err)
+
+			for _, p := range append(p0, p1...) {
+				<-p.completed
+				if tc.nErr != nil || tc.vErr != nil {
+					require.Error(t, p.err)
 				} else {
-					require.NoError(t, x.Err)
+					require.NoError(t, p.err)
 				}
 			}
 		})
@@ -221,14 +243,12 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.mh.EXPECT().Close()
 	defer f.Stop()
 	f.Start()
-	r1 := f.getHash(h1, hint)
-	r2 := f.getHash(h2, hint)
-	r3 := f.getHash(h3, hint)
-	for _, ch := range []chan HashDataPromiseResult{r1, r2, r3} {
-		res := <-ch
-		require.NoError(t, res.Err)
-		require.NotEmpty(t, res.Data)
-		require.False(t, res.IsLocal)
+	p1 := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	p2 := f.getHash(context.TODO(), h2, hint, goodReceiver)
+	p3 := f.getHash(context.TODO(), h3, hint, goodReceiver)
+	for _, p := range []*promise{p1, p2, p3} {
+		<-p.completed
+		require.NoError(t, p.err)
 	}
 }
 

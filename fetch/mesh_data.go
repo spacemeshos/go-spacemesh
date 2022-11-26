@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 var errBadRequest = errors.New("invalid request")
@@ -32,37 +31,25 @@ type dataReceiver func(context.Context, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) []error {
 	errs := make([]error, 0, len(hashes))
+	promises := make([]*promise, 0, len(hashes))
 	for _, hash := range hashes {
-		resC := f.getHash(hash, hint)
+		promises = append(promises, f.getHash(ctx, hash, hint, receiver))
+	}
+	for i, p := range promises {
+		hash := hashes[i]
 		select {
 		case <-ctx.Done():
 			f.logger.WithContext(ctx).With().Warning("request timed out",
 				log.String("hint", string(hint)),
-				log.String("hash", hash.ShortString()))
+				log.Stringer("hash", hash))
 			return []error{ctx.Err()}
-		case res, open := <-resC:
-			if !open {
-				f.logger.WithContext(ctx).With().Info("res channel closed",
+		case <-p.completed:
+			if p.err != nil {
+				f.logger.WithContext(ctx).With().Warning("failed to get hash",
 					log.String("hint", string(hint)),
-					log.String("hash", hash.ShortString()))
-				continue
-			}
-			if res.Err != nil {
-				f.logger.WithContext(ctx).With().Warning("cannot find hash",
-					log.String("hint", string(hint)),
-					log.String("hash", hash.String()),
-					log.Err(res.Err))
-				errs = append(errs, res.Err)
-				continue
-			}
-			if !res.IsLocal {
-				if err := receiver(ctx, res.Data); err != nil {
-					f.logger.WithContext(ctx).With().Warning("failed to handle data",
-						log.String("hint", string(hint)),
-						log.String("hash", hash.String()),
-						log.Err(err))
-					errs = append(errs, err)
-				}
+					log.Stringer("hash", hash),
+					log.Err(p.err))
+				errs = append(errs, p.err)
 			}
 		}
 	}
@@ -133,22 +120,23 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
-	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.String("hash", id.ShortString()))
-	res := <-f.getHash(id, datastore.POETDB)
-	if res.Err != nil {
-		return res.Err
-	}
-	// if result is local we don't need to process it again
-	if !res.IsLocal {
-		f.logger.WithContext(ctx).Debug("got poet ref",
-			log.String("hash", id.ShortString()),
-			log.Int("dataSize", len(res.Data)))
-
-		if err := f.poetHandler.ValidateAndStoreMsg(res.Data); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("validate and store message: %w", err)
+	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.Stringer("hash", id))
+	pm := f.getHash(ctx, id, datastore.POETDB, f.poetHandler.ValidateAndStoreMsg)
+	select {
+	case <-ctx.Done():
+		f.logger.WithContext(ctx).With().Warning("request timed out",
+			log.String("hint", string(datastore.POETDB)),
+			log.Stringer("hash", id))
+		return ctx.Err()
+	case <-pm.completed:
+		if pm.err != nil {
+			f.logger.WithContext(ctx).With().Warning("failed to get hash",
+				log.String("hint", string(datastore.POETDB)),
+				log.Stringer("hash", id),
+				log.Err(pm.err))
 		}
 	}
-	return nil
+	return pm.err
 }
 
 // GetLayerData get layer data from peers.
@@ -184,29 +172,30 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 		log.Stringer("epoch", epoch))
 
 	var (
-		done = make(chan struct{}, 1)
-		ed   EpochData
-		err  error
+		done  = make(chan struct{}, 1)
+		ed    EpochData
+		cbErr error
 	)
 	okCB := func(data []byte) {
 		defer close(done)
-		err = codec.Decode(data, &ed)
+		cbErr = codec.Decode(data, &ed)
 	}
 	errCB := func(perr error) {
 		defer close(done)
-		err = perr
+		cbErr = perr
 	}
-	if err = f.servers[atxProtocol].Request(ctx, peer, epoch.ToBytes(), okCB, errCB); err != nil {
+	if err := f.servers[atxProtocol].Request(ctx, peer, epoch.ToBytes(), okCB, errCB); err != nil {
 		return nil, err
 	}
 	select {
 	case <-done:
-		if err != nil {
-			return nil, err
+		if cbErr != nil {
+			return nil, cbErr
 		}
 		f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
 		return &ed, nil
 	case <-ctx.Done():
+		f.logger.WithContext(ctx).With().Debug("context done")
 		return nil, ctx.Err()
 	}
 }
@@ -239,9 +228,9 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 		done    = make(chan struct{}, 1)
 		hashes  []types.Hash32
 		reqData []byte
-		err     error
+		cbErr   error
 	)
-	reqData, err = codec.Encode(req)
+	reqData, err := codec.Encode(req)
 	if err != nil {
 		f.logger.Fatal("failed to encode mesh hash request", log.Err(err))
 	}
@@ -252,19 +241,19 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 
 	okCB := func(data []byte) {
 		defer close(done)
-		hashes, err = codec.DecodeSlice[types.Hash32](data)
+		hashes, cbErr = codec.DecodeSlice[types.Hash32](data)
 	}
 	errCB := func(perr error) {
 		defer close(done)
-		err = perr
+		cbErr = perr
 	}
 	if err = f.servers[meshHashProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
 		return nil, err
 	}
 	select {
 	case <-done:
-		if err != nil {
-			return nil, err
+		if cbErr != nil {
+			return nil, cbErr
 		}
 		return &MeshHashes{
 			Layers: lids,
