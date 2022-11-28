@@ -82,18 +82,18 @@ func isIncluded(proof *types.PoetProof, member []byte) bool {
 
 // ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) ValidatePost(nodeId types.NodeID, atxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (v *Validator) ValidatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
 	m := &proving.ProofMetadata{
-		NodeId:        nodeId.ToBytes(),
-		AtxId:         atxId.Bytes(),
-		NumUnits:      numUnits,
-		Challenge:     PostMetadata.Challenge,
-		BitsPerLabel:  PostMetadata.BitsPerLabel,
-		LabelsPerUnit: PostMetadata.LabelsPerUnit,
-		K1:            PostMetadata.K1,
-		K2:            PostMetadata.K2,
+		NodeId:          nodeId.ToBytes(),
+		CommitmentAtxId: commitmentAtxId.Bytes(),
+		NumUnits:        numUnits,
+		Challenge:       PostMetadata.Challenge,
+		BitsPerLabel:    PostMetadata.BitsPerLabel,
+		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
+		K1:              PostMetadata.K1,
+		K2:              PostMetadata.K2,
 	}
 
 	if err := verifying.Verify(p, m); err != nil {

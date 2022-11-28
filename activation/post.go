@@ -179,7 +179,7 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.ToBytes()),
-		initialization.WithAtxId(commitmentAtx.Bytes()),
+		initialization.WithCommitmentAtxId(commitmentAtx.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
 		initialization.WithLogger(mgr.logger),
