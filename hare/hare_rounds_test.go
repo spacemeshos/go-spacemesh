@@ -125,7 +125,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
+	defer cancel()
 	w := runNodesFor(t, ctx, nodes, 2, layers, 2, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round/4 > 1 && round != preRound {
