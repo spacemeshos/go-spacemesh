@@ -178,5 +178,5 @@ func TestPartition_50_50(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 50, 4)
+	testPartition(t, tctx, cl, 50, 3)
 }
