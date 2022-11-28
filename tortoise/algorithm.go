@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -168,36 +169,54 @@ func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
 
 // EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
 func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Opinion, error) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitEncodeVotes.Observe(float64(time.Since(start).Nanoseconds()))
+	start = time.Now()
 	conf := &encodeConf{}
 	for _, opt := range opts {
 		opt(conf)
 	}
-	return t.trtl.EncodeVotes(ctx, conf)
+	opinion, err := t.trtl.EncodeVotes(ctx, conf)
+	executeEncodeVotes.Observe(float64(time.Since(start).Nanoseconds()))
+	if err != nil {
+		errorsCounter.Inc()
+	}
+	return opinion, err
 }
 
 // TallyVotes up to the specified layer.
 func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
+	start = time.Now()
 	if err := t.trtl.onLayer(ctx, lid); err != nil {
+		errorsCounter.Inc()
 		t.logger.With().Error("failed on layer", lid, log.Err(err))
 	}
+	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
 func (t *Tortoise) OnAtx(atx *types.ActivationTxHeader) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onAtx(atx)
 }
 
 // OnBlock should be called every time new block is received.
 func (t *Tortoise) OnBlock(block *types.Block) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	if err := t.trtl.onBlock(block.LayerIndex, block); err != nil {
+		errorsCounter.Inc()
 		t.logger.With().Error("failed to add block to the state", block.ID(), log.Err(err))
 	}
 }
@@ -208,6 +227,7 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
+		errorsCounter.Inc()
 		t.logger.With().Error("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
 }
@@ -220,16 +240,21 @@ type DecodedBallot struct {
 
 // DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	info, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
+		errorsCounter.Inc()
 		return nil, err
 	}
 	if info == nil {
+		errorsCounter.Inc()
 		return nil, fmt.Errorf("can't decode ballot %s", ballot.ID())
 	}
 	if info.opinion() != ballot.OpinionHash {
+		errorsCounter.Inc()
 		return nil, fmt.Errorf(
 			"computed opinion hash %s doesn't match signed %s for ballot %s",
 			info.opinion().ShortString(), ballot.OpinionHash.ShortString(), ballot.ID(),
@@ -240,12 +265,18 @@ func (t *Tortoise) DecodeBallot(ballot *types.Ballot) (*DecodedBallot, error) {
 
 // StoreBallot stores previously decoded ballot.
 func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	if decoded.IsMalicious() {
 		decoded.info.weight = weight{}
 	}
-	return t.trtl.storeBallot(decoded.info)
+	if err := t.trtl.storeBallot(decoded.info); err != nil {
+		errorsCounter.Inc()
+		return err
+	}
+	return nil
 }
 
 // OnHareOutput should be called when hare terminated or certificate for a block
@@ -255,8 +286,10 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 // This method should be called with EmptyBlockID if node received proof of malicious behavior,
 // such as signing same block id by members of the same committee.
 func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
+	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	waitHareOutputDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	t.trtl.onHareOutput(lid, bid)
 }
 

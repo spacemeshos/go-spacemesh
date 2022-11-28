@@ -16,13 +16,39 @@ var (
 	peersPerProtocol = metrics.NewGauge("peers_per_protocol", subsystem, "Number of peers per protocol", []string{"protocol"})
 )
 
-// ProcessedMessagesDuration in nanoseconds to process a message. Labeled by protocol and result.
-var ProcessedMessagesDuration = metrics.NewHistogramWithBuckets(
-	"processed_messages_duration",
-	subsystem,
-	"Duration in nanoseconds to process a message",
-	[]string{"protocol", "result"},
-	prometheus.ExponentialBuckets(1_000_000, 4, 10),
+var (
+	// ProcessedMessagesDuration in nanoseconds to process a message. Labeled by protocol and result.
+	ProcessedMessagesDuration = metrics.NewHistogramWithBuckets(
+		"processed_messages_duration",
+		subsystem,
+		"Duration in nanoseconds to process a message",
+		[]string{"protocol", "result"},
+		prometheus.ExponentialBuckets(1_000_000, 4, 10),
+	)
+	deliveredMessagesBytes = metrics.NewCounter(
+		"delivered_messages_bytes",
+		subsystem,
+		"Total amount of delivered payloads (doesn't count gossipsub metadata)",
+		[]string{"protocol"},
+	)
+	receivedMessagesBytes = metrics.NewCounter(
+		"received_messages_bytes",
+		subsystem,
+		"Total amount of received payloads (doesn't count gossipsub metadata)",
+		[]string{"protocol"},
+	)
+	deliveredMessagesCount = metrics.NewCounter(
+		"delivered_messages_count",
+		subsystem,
+		"Total number of delivered messages",
+		[]string{"protocol"},
+	)
+	receivedMessagesCount = metrics.NewCounter(
+		"received_messages_count",
+		subsystem,
+		"Total amount of received messages",
+		[]string{"protocol"},
+	)
 )
 
 // GossipCollector pubsub.RawTracer implementation
@@ -81,17 +107,35 @@ func (g *GossipCollector) Graft(peer.ID, string) {}
 func (g *GossipCollector) Prune(peer.ID, string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
-func (g *GossipCollector) ValidateMessage(*pubsub.Message) {}
+func (g *GossipCollector) ValidateMessage(msg *pubsub.Message) {
+	if msg.Topic == nil {
+		return
+	}
+	receivedMessagesBytes.WithLabelValues(*msg.Topic).Add(float64(len(msg.Data)))
+	receivedMessagesCount.WithLabelValues(*msg.Topic).Inc()
+}
 
 // DeliverMessage is invoked when a message is delivered.
-func (g *GossipCollector) DeliverMessage(*pubsub.Message) {}
+func (g *GossipCollector) DeliverMessage(msg *pubsub.Message) {
+	if msg.Topic == nil {
+		return
+	}
+	deliveredMessagesBytes.WithLabelValues(*msg.Topic).Add(float64(len(msg.Data)))
+	deliveredMessagesCount.WithLabelValues(*msg.Topic).Inc()
+}
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
 // The reason argument can be one of the named strings Reject*.
 func (g *GossipCollector) RejectMessage(*pubsub.Message, string) {}
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
-func (g *GossipCollector) DuplicateMessage(*pubsub.Message) {}
+func (g *GossipCollector) DuplicateMessage(msg *pubsub.Message) {
+	if msg.Topic == nil {
+		return
+	}
+	receivedMessagesBytes.WithLabelValues(*msg.Topic).Add(float64(len(msg.Data)))
+	receivedMessagesCount.WithLabelValues(*msg.Topic).Inc()
+}
 
 // ThrottlePeer is invoked when a peer is throttled by the peer gater.
 func (g *GossipCollector) ThrottlePeer(peer.ID) {}

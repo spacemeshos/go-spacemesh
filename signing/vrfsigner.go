@@ -1,7 +1,7 @@
 package signing
 
 import (
-	oed25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
 )
 
@@ -15,7 +15,7 @@ type VRFSigner struct {
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) []byte {
-	return ecvrf.Prove(oed25519.PrivateKey(s.privateKey), msg)
+	return ecvrf.Prove(ed25519.PrivateKey(s.privateKey), msg)
 }
 
 // PublicKey of the signer.
@@ -30,7 +30,7 @@ func (s VRFSigner) LittleEndian() bool {
 
 // VRFVerify verifies a message and signature, given a public key.
 func VRFVerify(pub, msg, sig []byte) bool {
-	valid, _ := ecvrf.Verify(oed25519.PublicKey(pub), sig, msg)
+	valid, _ := ecvrf.Verify(ed25519.PublicKey(pub), sig, msg)
 	return valid
 }
 

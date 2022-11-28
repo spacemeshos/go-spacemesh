@@ -30,7 +30,7 @@ func DecodeFrom(r io.Reader, value Decodable) (int, error) {
 // - use buffer with allocations that can be adjusted using stats
 // - use multiple buffers that increase in size (e.g. 16, 32, 64, 128 bytes).
 var encoderPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		b := new(bytes.Buffer)
 		b.Grow(64)
 		return b

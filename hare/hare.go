@@ -441,9 +441,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				h.With().Warning("missed hare window, skipping layer", layer)
 				continue
 			}
-			go func(l types.LayerID) {
-				_, _ = h.onTick(ctx, l) // error logged in `onTick`
-			}(layer)
+			_, _ = h.onTick(ctx, layer)
 		case <-h.CloseChannel():
 			return
 		}

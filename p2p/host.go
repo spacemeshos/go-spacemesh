@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
@@ -71,10 +70,6 @@ func New(_ context.Context, logger log.Log, cfg Config, genesisID types.Hash20, 
 	if err != nil {
 		return nil, err
 	}
-	// what we set in cfg.LogLevel will not be used
-	// unless level of the Core is atleast as high
-	lp2plog.SetPrimaryCore(logger.Core())
-	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
 
 	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
 	if err != nil {

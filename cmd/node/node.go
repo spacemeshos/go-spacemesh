@@ -12,9 +12,10 @@ import (
 	"runtime"
 	"time"
 
-	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/gofrs/flock"
+	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
-	grpcctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -26,7 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
-	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -54,13 +55,13 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const (
 	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
+	lockFile        = "LOCK"
 )
 
 // Logger names.
@@ -97,8 +98,8 @@ const (
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
-	Run: func(cmd *cobra.Command, args []string) {
-		conf, err := loadConfig(cmd)
+	Run: func(c *cobra.Command, args []string) {
+		conf, err := loadConfig(c)
 		if err != nil {
 			log.With().Fatal("failed to initialize config", log.Err(err))
 		}
@@ -137,17 +138,17 @@ var Cmd = &cobra.Command{
 var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version info",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Print(cmdp.Version)
-		if cmdp.Commit != "" {
-			fmt.Printf("+%s", cmdp.Commit)
+	Run: func(c *cobra.Command, args []string) {
+		fmt.Print(cmd.Version)
+		if cmd.Commit != "" {
+			fmt.Printf("+%s", cmd.Commit)
 		}
 		fmt.Println()
 	},
 }
 
 func init() {
-	cmdp.AddCommands(Cmd)
+	cmd.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
 
@@ -155,12 +156,6 @@ func init() {
 type Service interface {
 	Start(ctx context.Context) error
 	Close()
-}
-
-// HareService is basic definition of hare algorithm service, providing consensus results for a layer.
-type HareService interface {
-	Service
-	GetHareMsgHandler() pubsub.GossipHandler
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -175,12 +170,12 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
-func loadConfig(cmd *cobra.Command) (*config.Config, error) {
+func loadConfig(c *cobra.Command) (*config.Config, error) {
 	conf, err := LoadConfigFromFile()
 	if err != nil {
 		return nil, fmt.Errorf("loading config from file: %w", err)
 	}
-	if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
+	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
 		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
 	}
 	return conf, nil
@@ -258,6 +253,7 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
+	fileLock         *flock.Flock
 	nodeID           types.NodeID
 	Config           *config.Config
 	db               *sql.Database
@@ -269,7 +265,7 @@ type App struct {
 	mesh             *mesh.Mesh
 	atxDB            datastore.CachedDB
 	clock            TickProvider
-	hare             HareService
+	hare             *hare.Hare
 	blockGen         *blocks.Generator
 	certifier        *blocks.Certifier
 	postSetupMgr     *activation.PostSetupManager
@@ -303,6 +299,15 @@ func (app *App) Initialize() (err error) {
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf("ensure folders exist: %w", err)
 	}
+	lockName := filepath.Join(app.Config.DataDir(), lockFile)
+	fl := flock.New(lockName)
+	locked, err := fl.TryLock()
+	if err != nil {
+		return fmt.Errorf("flock %s: %w", lockName, err)
+	} else if !locked {
+		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
+	}
+	app.fileLock = fl
 
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
@@ -354,7 +359,7 @@ func (app *App) Initialize() (err error) {
 		for range signalChan {
 			app.log.Info("Received an interrupt, stopping services...\n")
 
-			cmdp.Cancel()()
+			cmd.Cancel()()
 		}
 	}()
 
@@ -373,12 +378,20 @@ func (app *App) setupLogging() {
 
 func (app *App) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 // Cleanup stops all app services.
 func (app *App) Cleanup() {
 	log.Info("app cleanup starting...")
+	if app.fileLock != nil {
+		if err := app.fileLock.Unlock(); err != nil {
+			log.With().Error("failed to unlock file",
+				log.String("path", app.fileLock.Path()),
+				log.Err(err),
+			)
+		}
+	}
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
@@ -596,7 +609,22 @@ func (app *App) initServices(ctx context.Context,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(sqlDB, sgn, hareOutputCh, nodeID, patrol, newSyncer, beaconProtocol, hOracle, clock, lg)
+	app.hare = hare.New(
+		sqlDB,
+		app.Config.HARE,
+		app.host.ID(),
+		app.host,
+		sgn,
+		nodeID,
+		hareOutputCh,
+		newSyncer,
+		beaconProtocol,
+		hOracle,
+		patrol,
+		uint16(app.Config.LayersPerEpoch),
+		hOracle,
+		clock,
+		app.addLogger(HareLogger, lg))
 
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -675,11 +703,7 @@ func (app *App) initServices(ctx context.Context,
 		atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(pubsub.PoetProofProtocol, poetListener.HandlePoetProofMessage)
-	hareGossipHandler := rabbit.GetHareMsgHandler()
-	if hareGossipHandler == nil {
-		app.log.Panic("hare message handler missing")
-	}
-	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
+	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
 	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
 
 	app.proposalBuilder = proposalBuilder
@@ -688,7 +712,6 @@ func (app *App) initServices(ctx context.Context,
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
-	app.hare = rabbit
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
@@ -706,43 +729,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	return nil
-}
-
-// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
-func (app *App) HareFactory(
-	sqlDB *sql.Database,
-	sgn hare.Signer,
-	ch chan hare.LayerOutput,
-	nodeID types.NodeID,
-	patrol *layerpatrol.LayerPatrol,
-	syncer system.SyncStateProvider,
-	beacons system.BeaconGetter,
-	hOracle hare.Rolacle,
-	clock TickProvider,
-	lg log.Log,
-) HareService {
-	if app.Config.HARE.SuperHare {
-		hr := turbohare.New(sqlDB, app.Config.HARE, ch, clock.Subscribe(), app.addLogger(HareLogger, lg))
-		return hr
-	}
-
-	ha := hare.New(
-		sqlDB,
-		app.Config.HARE,
-		app.host.ID(),
-		app.host,
-		sgn,
-		nodeID,
-		ch,
-		syncer,
-		beacons,
-		hOracle,
-		patrol,
-		uint16(app.Config.LayersPerEpoch),
-		hOracle,
-		clock,
-		app.addLogger(HareLogger, lg))
-	return ha
 }
 
 func (app *App) startServices(ctx context.Context) error {
@@ -797,11 +783,11 @@ func (app *App) startAPIServices(ctx context.Context) {
 			logger := app.addLogger(GRPCLogger, app.log).Zap()
 			grpczap.ReplaceGrpcLoggerV2(logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
-				grpcmiddleware.WithStreamServerChain(
-					grpcctxtags.StreamServerInterceptor(),
+				grpcmw.WithStreamServerChain(
+					grpctags.StreamServerInterceptor(),
 					grpczap.StreamServerInterceptor(logger)),
-				grpcmiddleware.WithUnaryServerChain(
-					grpcctxtags.UnaryServerInterceptor(),
+				grpcmw.WithUnaryServerChain(
+					grpctags.UnaryServerInterceptor(),
 					grpczap.UnaryServerInterceptor(logger)),
 			)
 		}
@@ -1001,7 +987,7 @@ func (app *App) startSyncer(ctx context.Context) {
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start() error {
 	// we use the main app context
-	ctx := cmdp.Ctx()
+	ctx := cmd.Ctx()
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1134,7 +1120,7 @@ func (app *App) Start() error {
 			syncErr <- app.ptimesync.Wait()
 			// if nil node was already stopped
 			if syncErr != nil {
-				cmdp.Cancel()()
+				cmd.Cancel()()
 			}
 		}()
 	}

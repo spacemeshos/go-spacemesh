@@ -23,10 +23,10 @@ func TestBootstrapEmitEvents(t *testing.T) {
 
 	emitter, err := h.EventBus().Emitter(new(handshake.EventHandshakeComplete))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = emitter.Close() })
+	t.Cleanup(func() { emitter.Close() })
 	sub, err := h.EventBus().Subscribe(new(EventSpacemeshPeer))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = sub.Close() })
+	t.Cleanup(func() { sub.Close() })
 
 	ctrl := gomock.NewController(t)
 	discovery := mocks.NewMockDiscovery(ctrl)

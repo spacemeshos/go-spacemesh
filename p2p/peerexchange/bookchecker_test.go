@@ -3,6 +3,7 @@ package peerexchange
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -17,7 +18,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"

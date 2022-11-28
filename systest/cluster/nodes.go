@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -9,15 +8,14 @@ import (
 	"strings"
 	"time"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/emptypb"
 	apiappsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
+	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	appsv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -50,6 +48,10 @@ const (
 
 	poetConfigMapName      = "poet"
 	spacemeshConfigMapName = "spacemesh"
+
+	// smeshers are splitted in 10 approximately equal buckets
+	// to enable running chaos mesh tasks on the different parts of the cluster.
+	buckets = 10
 )
 
 func persistentVolumeClaim(podname string) string {
@@ -63,7 +65,6 @@ type Node struct {
 	Name      string
 	IP        string
 	P2P, GRPC uint16
-	ID        string
 
 	// Identifier let's uniquely select the k8s resource
 	Identifier string
@@ -78,8 +79,8 @@ func (n Node) GRPCEndpoint() string {
 }
 
 // P2PEndpoint returns full p2p endpoint, including identity.
-func (n Node) P2PEndpoint() string {
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", n.IP, n.P2P, n.ID)
+func p2pEndpoint(n Node, id string) string {
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", n.IP, n.P2P, id)
 }
 
 // NodeClient is a Node with attached grpc connection.
@@ -117,9 +118,9 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 						corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 					).
 					WithResources(corev1.ResourceRequirements().WithRequests(
-						v1.ResourceList{
-							v1.ResourceCPU:    resource.MustParse("0.5"),
-							v1.ResourceMemory: resource.MustParse("1Gi"),
+						apiv1.ResourceList{
+							apiv1.ResourceCPU:    resource.MustParse("0.5"),
+							apiv1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					)),
 				),
@@ -136,7 +137,7 @@ func deployPoetPod(ctx *testcontext.Context, id string, flags ...DeploymentFlag)
 	return ppod, nil
 }
 
-func deployPoetSvc(ctx *testcontext.Context, id string) (*v1.Service, error) {
+func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
 	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels("poet", id)
 	svc := corev1.Service(id, ctx.Namespace).
@@ -211,7 +212,7 @@ func getStatefulSet(ctx *testcontext.Context, name string) (*apiappsv1.StatefulS
 	return set, nil
 }
 
-func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
+func waitPod(ctx *testcontext.Context, name string) (*apiv1.Pod, error) {
 	watcher, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", name),
 	})
@@ -220,7 +221,7 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 	}
 	defer watcher.Stop()
 	for {
-		var pod *v1.Pod
+		var pod *apiv1.Pod
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -231,12 +232,12 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 			if ev.Type == watch.Deleted {
 				return nil, nil
 			}
-			pod = ev.Object.(*v1.Pod)
+			pod = ev.Object.(*apiv1.Pod)
 		}
 		switch pod.Status.Phase {
-		case v1.PodFailed:
+		case apiv1.PodFailed:
 			return nil, fmt.Errorf("pod failed %s", name)
-		case v1.PodRunning:
+		case apiv1.PodRunning:
 			return pod, nil
 		}
 	}
@@ -273,7 +274,7 @@ func deployNodes(ctx *testcontext.Context, name string, from, to int, flags []De
 			setname := fmt.Sprintf("%s-%d", name, i)
 			podname := fmt.Sprintf("%s-0", setname)
 			labels := nodeLabels(name, podname)
-
+			labels["bucket"] = strconv.Itoa(i % buckets)
 			if err := deployNode(ctx, setname, labels, finalFlags); err != nil {
 				return err
 			}
@@ -355,10 +356,10 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 			WithVolumeClaimTemplates(
 				corev1.PersistentVolumeClaim(persistentVolumeName, ctx.Namespace).
 					WithSpec(corev1.PersistentVolumeClaimSpec().
-						WithAccessModes(v1.ReadWriteOnce).
+						WithAccessModes(apiv1.ReadWriteOnce).
 						WithStorageClassName(ctx.Storage.Class).
 						WithResources(corev1.ResourceRequirements().
-							WithRequests(v1.ResourceList{v1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
+							WithRequests(apiv1.ResourceList{apiv1.ResourceStorage: resource.MustParse(ctx.Storage.Size)}))),
 			).
 			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
 			WithTemplate(corev1.PodTemplateSpec().
@@ -378,7 +379,7 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 					WithContainers(corev1.Container().
 						WithName("smesher").
 						WithImage(ctx.Image).
-						WithImagePullPolicy(v1.PullIfNotPresent).
+						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
@@ -388,12 +389,25 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 						).
-						WithResources(corev1.ResourceRequirements().WithRequests(
-							v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("0.5"),
-								v1.ResourceMemory: resource.MustParse("200Mi"),
-							},
-						)).
+						WithResources(corev1.ResourceRequirements().
+							WithRequests(
+								apiv1.ResourceList{
+									apiv1.ResourceCPU:    resource.MustParse("0.5"),
+									apiv1.ResourceMemory: resource.MustParse("200Mi"),
+								},
+							).
+							WithLimits(
+								apiv1.ResourceList{
+									apiv1.ResourceCPU:    resource.MustParse("2"),
+									apiv1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							),
+						).
+						WithStartupProbe(
+							corev1.Probe().WithTCPSocket(
+								corev1.TCPSocketAction().WithPort(intstr.FromInt(9092)),
+							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
+						).
 						WithEnv(
 							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2"),
 						).
@@ -450,21 +464,13 @@ func waitNode(tctx *testcontext.Context, podname string, pt PodType) (*NodeClien
 			Created:    set.CreationTimestamp.Time,
 			Restarted:  pod.CreationTimestamp.Time,
 		}
-		rctx, cancel := context.WithTimeout(tctx, 2*time.Second)
-		defer cancel()
-		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
+		// don't block connection, it is expected that some nodes are unavailable during test
+		conn, err := grpc.DialContext(tctx, node.GRPCEndpoint(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			return nil, err
 		}
-		dbg := spacemeshv1.NewDebugServiceClient(conn)
-		info, err := dbg.NetworkInfo(rctx, &emptypb.Empty{})
-		if err != nil {
-			return nil, err
-		}
-		node.ID = info.Id
 		return &NodeClient{
 			Node:       node,
 			ClientConn: conn,

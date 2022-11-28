@@ -492,6 +492,23 @@ func TestBuilder_HandleLayer_MeshHashErrorOK(t *testing.T) {
 	b.Close()
 }
 
+func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
+	b := createBuilder(t)
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	beacon := types.RandomBeacon()
+
+	ballot := types.NewExistingBallot(
+		types.BallotID{1},
+		nil,
+		b.signer.PublicKey().Bytes(),
+		types.InnerBallot{LayerIndex: layerID},
+	)
+	require.NoError(t, ballots.Add(b.cdb, &ballot))
+	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
+	require.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errDuplicateLayer)
+}
+
 func TestBuilder_UniqueBlockID(t *testing.T) {
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,7 +22,7 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 	atxProvider := mocks.NewMockAtxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider)
 
-	_, err := activationService.Get(context.Background(), &v1.GetRequest{})
+	_, err := activationService.Get(context.Background(), &pb.GetRequest{})
 	require.Error(t, err)
 	require.Equal(t, status.Code(err), codes.InvalidArgument)
 }
@@ -35,7 +35,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetFullAtx(id).Return(nil, nil)
 
-	_, err := activationService.Get(context.Background(), &v1.GetRequest{Id: id.Bytes()})
+	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
 	require.Equal(t, status.Code(err), codes.NotFound)
 }
@@ -48,7 +48,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetFullAtx(id).Return(&types.VerifiedActivationTx{}, errors.New(""))
 
-	_, err := activationService.Get(context.Background(), &v1.GetRequest{Id: id.Bytes()})
+	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
 	require.Equal(t, status.Code(err), codes.NotFound)
 }
@@ -79,7 +79,7 @@ func TestGet_HappyPath(t *testing.T) {
 	atx.SetNodeID(&nodeId)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 
-	response, err := activationService.Get(context.Background(), &v1.GetRequest{Id: id.Bytes()})
+	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
