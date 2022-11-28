@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"math/big"
@@ -533,7 +533,7 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
@@ -2430,7 +2430,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	wg.Wait()
 }
 
-func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
+func checkAccountDataQueryItemAccount(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.AccountData_AccountWrapper)
@@ -2447,7 +2447,7 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 		"inner account has bad projected balance")
 }
 
-func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
+func checkAccountDataQueryItemReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
@@ -2458,7 +2458,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 	require.Nil(t, x.Reward.Smesher)
 }
 
-func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
+func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountMeshData_MeshTransaction{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_MeshTransaction)
@@ -2466,7 +2466,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 }
 
-func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
+func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_Activation)
@@ -2478,7 +2478,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 }
 
-func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
+func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
@@ -2488,7 +2488,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
-func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
+func checkAccountDataItemAccount(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.AccountData_AccountWrapper)
@@ -2499,7 +2499,7 @@ func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
-func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
+func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_Reward{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_Reward)
@@ -2509,7 +2509,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
-func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
+func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_AccountWrapper)
@@ -2520,7 +2520,7 @@ func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
 	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
-func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
+func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_GlobalState{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_GlobalState)

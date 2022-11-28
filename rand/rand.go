@@ -137,8 +137,8 @@ func Perm(n int) []int {
 }
 
 // Shuffle pseudo-randomizes the order of elements using the default Source.
-// n is the number of elements. Shuffle panics if n < 0.
-// swap swaps the elements with indexes i and j.
+// Parameter n is the number of elements. Shuffle panics if n < 0.
+// Parameter swap swaps the elements with indexes i and j.
 func Shuffle(n int, swap func(i, j int)) {
 	randMu.Lock()
 	defer randMu.Unlock()

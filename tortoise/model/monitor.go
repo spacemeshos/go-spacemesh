@@ -15,7 +15,7 @@ type Monitor interface {
 }
 
 // Event is received by monitors, and used for validation.
-type Event interface{}
+type Event any
 
 // EventVerified is raised when tortoise outputs verified layer.
 type EventVerified struct {

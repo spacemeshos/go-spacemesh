@@ -778,7 +778,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	mc := mocks.NewMockcache(gomock.NewController(t))
 	firstCall := true
 	mc.EXPECT().Get(start.GetEpoch()).DoAndReturn(
-		func(key interface{}) (interface{}, bool) {
+		func(key any) (any, bool) {
 			if firstCall {
 				firstCall = false
 				return nil, false
