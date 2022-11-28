@@ -239,7 +239,8 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 
 	okCB := func(data []byte) {
 		defer close(done)
-		hashes, err := codec.DecodeSlice[types.Hash32](data)
+		h, err := codec.DecodeSlice[types.Hash32](data)
+		hashes = h
 		done <- err
 	}
 	errCB := func(perr error) {
