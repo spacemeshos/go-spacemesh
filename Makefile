@@ -150,7 +150,6 @@ test-fmt:
 .PHONY: test-fmt
 
 lint: get-libs
-	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
@@ -160,7 +159,6 @@ lint-fix: get-libs
 .PHONY: lint-fix
 
 lint-github-action: get-libs
-	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: lint-github-action
 

@@ -37,7 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
-	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -196,22 +196,22 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.ConsoleLogEncoder, app.Config.LOGGING.Encoder)
 
 	// Test an illegal flag
-	cmd := cmdWithRun(func(*cobra.Command, []string) {
+	c := cmdWithRun(func(*cobra.Command, []string) {
 		// We don't expect this to be called at all
 		r.Fail("Command.Run not expected to run")
 	})
 
-	str, err := testArgs(context.Background(), cmd, "illegal")
+	str, err := testArgs(context.Background(), c, "illegal")
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
 
 	// Test a legal flag
-	cmd = cmdWithRun(func(cmd *cobra.Command, args []string) {
-		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
+	c = cmdWithRun(func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 	})
 
-	str, err = testArgs(context.Background(), cmd, "--log-encoder", "json")
+	str, err = testArgs(context.Background(), c, "--log-encoder", "json")
 
 	r.NoError(err)
 	r.Empty(str)
@@ -223,8 +223,8 @@ func setup() {
 	// oof, globals make testing really difficult
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cmdp.SetCtx(ctx)
-	cmdp.SetCancel(cancel)
+	cmd.SetCtx(ctx)
+	cmd.SetCancel(cancel)
 
 	events.CloseEventReporter()
 }
@@ -241,8 +241,8 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling an illegal service
-	run := func(cmd *cobra.Command, args []string) {
-		err := cmdp.EnsureCLIFlags(cmd, app.Config)
+	run := func(c *cobra.Command, args []string) {
+		err := cmd.EnsureCLIFlags(c, app.Config)
 		r.Error(err)
 		r.Equal("parse services list: unrecognized GRPC service requested: illegal", err.Error())
 	}
@@ -286,8 +286,8 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	events.CloseEventReporter()
 
 	// This should work
-	run = func(cmd *cobra.Command, args []string) {
-		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
+	run = func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 	}
 	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node")
 	r.Empty(str)
@@ -336,8 +336,8 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling just the JSON service (without the GRPC service)
-	run := func(cmd *cobra.Command, args []string) {
-		err := cmdp.EnsureCLIFlags(cmd, app.Config)
+	run := func(c *cobra.Command, args []string) {
+		err := cmd.EnsureCLIFlags(c, app.Config)
 		r.Error(err)
 		r.Equal("parse services list: must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
@@ -350,8 +350,8 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	events.CloseEventReporter()
 
 	// Try enabling both the JSON and the GRPC services
-	run = func(cmd *cobra.Command, args []string) {
-		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
+	run = func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 	}
 	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc", "node", "--json-server")
 	r.NoError(err)
@@ -402,8 +402,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	path := t.TempDir()
 
-	run := func(cmd *cobra.Command, args []string) {
-		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
+	run := func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO())
@@ -459,8 +459,8 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	app := New(WithLog(logtest.New(t)))
 
 	// Make sure the service is not running by default
-	run := func(cmd *cobra.Command, args []string) {
-		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
+	run := func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
 		app.startAPIServices(context.TODO())
 	}
@@ -498,8 +498,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 
 	// Make sure the service is not running by default
-	run := func(cmd *cobra.Command, args []string) {
-		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
+	run := func(c *cobra.Command, args []string) {
+		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
 		app.startAPIServices(context.TODO())
 	}
@@ -566,9 +566,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
 
-	run := func(cmd *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) {
 		defer app.Cleanup()
-		require.NoError(t, cmdp.EnsureCLIFlags(cmd, app.Config))
+		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
@@ -670,7 +670,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmdp.Cancel()() // stop the app
+	cmd.Cancel()() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
@@ -692,7 +692,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer := signing.NewEdSigner()
 	address := wallet.Address(signer.PublicKey().Bytes())
 
-	run := func(cmd *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) {
 		defer app.Cleanup()
 		r.NoError(app.Initialize())
 
@@ -791,7 +791,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.Cancel()()
+	cmd.Cancel()()
 
 	// Wait for it to stop
 	wg.Wait()
@@ -827,12 +827,12 @@ func TestConfig_Preset(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		cmd := &cobra.Command{}
-		cmdp.AddCommands(cmd)
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
-		conf, err := loadConfig(cmd)
+		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		require.Equal(t, preset, *conf)
 	})
@@ -841,14 +841,14 @@ func TestConfig_Preset(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		cmd := &cobra.Command{}
-		cmdp.AddCommands(cmd)
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
 		const lowPeers = 1234
-		require.NoError(t, cmd.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
+		require.NoError(t, c.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
-		conf, err := loadConfig(cmd)
+		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, *conf)
@@ -858,18 +858,18 @@ func TestConfig_Preset(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		cmd := &cobra.Command{}
-		cmdp.AddCommands(cmd)
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
 		const lowPeers = 1234
 
 		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
+		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
 		viper.Set("preset", name)
 		t.Cleanup(viper.Reset)
-		conf, err := loadConfig(cmd)
+		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.P2P.LowPeers = lowPeers
 		preset.ConfigFile = path
@@ -880,17 +880,17 @@ func TestConfig_Preset(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		cmd := &cobra.Command{}
-		cmdp.AddCommands(cmd)
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
 
 		content := fmt.Sprintf(`{"preset": "%s"}`, name)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
+		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
 		t.Cleanup(viper.Reset)
 
-		conf, err := loadConfig(cmd)
+		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		preset.ConfigFile = path
 		require.Equal(t, preset, *conf)
@@ -899,8 +899,8 @@ func TestConfig_Preset(t *testing.T) {
 
 func TestConfig_GenesisAccounts(t *testing.T) {
 	t.Run("OverwriteDefaults", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		cmdp.AddCommands(cmd)
+		c := &cobra.Command{}
+		cmd.AddCommands(c)
 
 		const value = 100
 		keys := []string{"0x03", "0x04"}
@@ -908,9 +908,9 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		for _, key := range keys {
 			args = append(args, fmt.Sprintf("-a %s=%d", key, value))
 		}
-		require.NoError(t, cmd.ParseFlags(args))
+		require.NoError(t, c.ParseFlags(args))
 
-		conf, err := loadConfig(cmd)
+		conf, err := loadConfig(c)
 		require.NoError(t, err)
 		for _, key := range keys {
 			require.EqualValues(t, conf.Genesis.Accounts[key], value)
