@@ -184,23 +184,23 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 		log.Stringer("epoch", epoch))
 
 	var (
-		done = make(chan struct{}, 1)
+		done = make(chan error, 1)
 		ed   EpochData
 		err  error
 	)
 	okCB := func(data []byte) {
 		defer close(done)
-		err = codec.Decode(data, &ed)
+		done <- codec.Decode(data, &ed)
 	}
 	errCB := func(perr error) {
 		defer close(done)
-		err = perr
+		done <- perr
 	}
 	if err = f.servers[atxProtocol].Request(ctx, peer, epoch.ToBytes(), okCB, errCB); err != nil {
 		return nil, err
 	}
 	select {
-	case <-done:
+	case err := <-done:
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 		log.Object("req", req))
 
 	var (
-		done    = make(chan struct{}, 1)
+		done    = make(chan error, 1)
 		hashes  []types.Hash32
 		reqData []byte
 		err     error
@@ -252,17 +252,19 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 
 	okCB := func(data []byte) {
 		defer close(done)
-		hashes, err = codec.DecodeSlice[types.Hash32](data)
+		h, err := codec.DecodeSlice[types.Hash32](data)
+		hashes = h
+		done <- err
 	}
 	errCB := func(perr error) {
 		defer close(done)
-		err = perr
+		done <- perr
 	}
 	if err = f.servers[meshHashProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
 		return nil, err
 	}
 	select {
-	case <-done:
+	case err := <-done:
 		if err != nil {
 			return nil, err
 		}
