@@ -11,6 +11,29 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+type AtxProvider interface {
+	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+}
+
+type AtxNotFoundError struct {
+	Id types.ATXID
+	// the source (if any) that caused the error
+	source error
+}
+
+func (e *AtxNotFoundError) Error() string {
+	return fmt.Sprintf("ATX ID (%v) not found (%v)", e.Id.String(), e.source)
+}
+
+func (e *AtxNotFoundError) Unwrap() error { return e.source }
+
+func (e *AtxNotFoundError) Is(target error) bool {
+	if err, ok := target.(*AtxNotFoundError); ok {
+		return err.Id == e.Id
+	}
+	return false
+}
+
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
 	poetDb poetDbAPI
@@ -114,6 +137,100 @@ func validatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostM
 
 	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
+	}
+
+	return nil
+}
+
+func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, goldenATXID types.ATXID, expectedPostIndicies []byte) error {
+	if challenge.Sequence != 0 {
+		return fmt.Errorf("no prevATX declared, but sequence number not zero")
+	}
+
+	if challenge.InitialPostIndices == nil {
+		return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
+	}
+
+	if !bytes.Equal(expectedPostIndicies, challenge.InitialPostIndices) {
+		return fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
+	}
+
+	if challenge.CommitmentATX == nil {
+		return fmt.Errorf("no prevATX declared, but commitmentATX is missing")
+	}
+
+	if *challenge.CommitmentATX != goldenATXID {
+		commitmentAtx, err := atxs.GetAtxHeader(*challenge.CommitmentATX)
+		if err != nil {
+			return &AtxNotFoundError{Id: *challenge.CommitmentATX, source: err}
+		}
+		if !challenge.PubLayerID.After(commitmentAtx.PubLayerID) {
+			return fmt.Errorf("challenge publayer (%v) must be after commitment atx publayer (%v)", challenge.PubLayerID, commitmentAtx.PubLayerID)
+		}
+	}
+
+	if *challenge.CommitmentATX == goldenATXID && !challenge.PublishEpoch().IsGenesis() {
+		return fmt.Errorf("golden atx used for commitment atx in epoch %d, but is only valid in epoch 1", challenge.PublishEpoch())
+	}
+
+	return nil
+}
+
+func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, nodeID types.NodeID) error {
+	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
+	if err != nil {
+		return &AtxNotFoundError{Id: challenge.PrevATXID, source: err}
+	}
+
+	if prevATX.NodeID != nodeID {
+		return fmt.Errorf(
+			"previous atx belongs to different miner. nodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
+			nodeID, prevATX.ID.ShortString(), prevATX.NodeID,
+		)
+	}
+
+	if prevATX.PublishEpoch() >= challenge.PublishEpoch() {
+		return fmt.Errorf(
+			"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
+			prevATX.PublishEpoch(), prevATX.PubLayerID, challenge.PublishEpoch(), challenge.PubLayerID,
+		)
+	}
+
+	if prevATX.Sequence+1 != challenge.Sequence {
+		return fmt.Errorf("sequence number is not one more than prev sequence number")
+	}
+
+	if challenge.InitialPostIndices != nil {
+		return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
+	}
+
+	if challenge.CommitmentATX != nil {
+		return fmt.Errorf("prevATX declared, but commitmentATX is included")
+	}
+
+	return nil
+}
+
+func validatePositioningAtx(id *types.ATXID, atxs AtxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
+	if *id == *types.EmptyATXID {
+		return fmt.Errorf("empty positioning atx")
+	}
+
+	if *id == goldenATXID && !publayer.GetEpoch().IsGenesis() {
+		return fmt.Errorf("golden atx used for positioning atx in epoch %d, but is only valid in epoch 1", publayer.GetEpoch())
+	}
+
+	if *id != goldenATXID {
+		posAtx, err := atxs.GetAtxHeader(*id)
+		if err != nil {
+			return &AtxNotFoundError{Id: *id, source: err}
+		}
+		if !posAtx.PubLayerID.Before(publayer) {
+			return fmt.Errorf("positioning atx layer (%v) must be before %v", posAtx.PubLayerID, publayer)
+		}
+		if d := publayer.Difference(posAtx.PubLayerID); d > layersPerEpoch {
+			return fmt.Errorf("expected distance of one epoch (%v layers) from positioning atx but found %v", layersPerEpoch, d)
+		}
 	}
 
 	return nil
