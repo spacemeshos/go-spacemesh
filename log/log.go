@@ -34,10 +34,10 @@ func DefaultLevel() Level {
 
 // Logger is an interface for our logging API.
 type Logger interface {
-	Info(format string, args ...interface{})
-	Debug(format string, args ...interface{})
-	Error(format string, args ...interface{})
-	Warning(format string, args ...interface{})
+	Info(format string, args ...any)
+	Debug(format string, args ...any)
+	Error(format string, args ...any)
+	Warning(format string, args ...any)
 	With() FieldLogger
 	WithContext(context.Context) Log
 	WithName(string) Log
@@ -129,27 +129,27 @@ func NewFromLog(l *zap.Logger) Log {
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.
-func Info(msg string, args ...interface{}) {
+func Info(msg string, args ...any) {
 	GetLogger().Info(msg, args...)
 }
 
 // Debug prints formatted debug level log message.
-func Debug(msg string, args ...interface{}) {
+func Debug(msg string, args ...any) {
 	GetLogger().Debug(msg, args...)
 }
 
 // Error prints formatted error level log message.
-func Error(msg string, args ...interface{}) {
+func Error(msg string, args ...any) {
 	GetLogger().Error(msg, args...)
 }
 
 // Warning prints formatted warning level log message.
-func Warning(msg string, args ...interface{}) {
+func Warning(msg string, args ...any) {
 	GetLogger().Warning(msg, args...)
 }
 
 // Fatal prints formatted error level log message.
-func Fatal(msg string, args ...interface{}) {
+func Fatal(msg string, args ...any) {
 	GetLogger().Fatal(msg, args...)
 }
 
@@ -164,7 +164,7 @@ func Event() FieldLogger {
 }
 
 // Panic writes the log message and then panics.
-func Panic(msg string, args ...interface{}) {
+func Panic(msg string, args ...any) {
 	GetLogger().Panic(msg, args...)
 }
 

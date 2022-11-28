@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -41,14 +41,14 @@ func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 	last := first + layersCount - 1
 	tctx.Log.Debugw("watching layers between", "first", first, "last", last)
 
-	createdch := make(chan *spacemeshv1.Proposal, cl.Total()*(int(layersCount)))
+	createdch := make(chan *pb.Proposal, cl.Total()*(int(layersCount)))
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < cl.Total(); i++ {
 		clientId := i
 		client := cl.Client(clientId)
 		tctx.Log.Debugw("watching", "client", client.Name, "clientId", clientId)
-		watchProposals(ctx, eg, client, func(proposal *spacemeshv1.Proposal) (bool, error) {
+		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
@@ -57,7 +57,7 @@ func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 				return false, nil
 			}
 
-			if proposal.Status == spacemeshv1.Proposal_Created {
+			if proposal.Status == pb.Proposal_Created {
 				tctx.Log.Debugw("received proposal event",
 					"client", client.Name,
 					"layer", proposal.Layer.Number,
@@ -69,13 +69,13 @@ func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 		})
 	}
 
-	watchLayers(ctx, eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
 		// Will kill a poet from time to time
 		if layer.Layer.Number.Number > last {
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil
 		}
-		if layer.Layer.GetStatus() != spacemeshv1.Layer_LAYER_STATUS_APPLIED {
+		if layer.Layer.GetStatus() != pb.Layer_LAYER_STATUS_APPLIED {
 			return true, nil
 		}
 		// don't kill a poet if this is not ~middle of epoch
@@ -94,7 +94,7 @@ func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 	require.NoError(t, eg.Wait())
 	close(createdch)
 
-	created := map[uint32][]*spacemeshv1.Proposal{}
+	created := map[uint32][]*pb.Proposal{}
 	beacons := map[uint64]map[string]struct{}{}
 	for proposal := range createdch {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)

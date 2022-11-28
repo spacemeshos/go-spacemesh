@@ -220,9 +220,9 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		accountCh      <-chan interface{}
-		rewardsCh      <-chan interface{}
-		receiptsCh     <-chan interface{}
+		accountCh      <-chan any
+		rewardsCh      <-chan any
+		receiptsCh     <-chan any
 		accountBufFull <-chan struct{}
 		rewardsBufFull <-chan struct{}
 	)
@@ -348,9 +348,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		accountCh      <-chan interface{}
-		rewardsCh      <-chan interface{}
-		layersCh       <-chan interface{}
+		accountCh      <-chan any
+		rewardsCh      <-chan any
+		layersCh       <-chan any
 		accountBufFull <-chan struct{}
 		rewardsBufFull <-chan struct{}
 		layersBufFull  <-chan struct{}

@@ -1,10 +1,10 @@
 package grpcserver
 
 import (
-	context "context"
+	"context"
 	"fmt"
 
-	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -26,11 +26,11 @@ func NewActivationService(atxProvider api.AtxProvider) *activationService {
 // RegisterService implements ServiceAPI.
 func (s *activationService) RegisterService(server *Server) {
 	log.Info("registering GRPC Activation Service")
-	v1.RegisterActivationServiceServer(server.GrpcServer, s)
+	pb.RegisterActivationServiceServer(server.GrpcServer, s)
 }
 
 // Get implements v1.ActivationServiceServer.
-func (s *activationService) Get(ctx context.Context, request *v1.GetRequest) (*v1.GetResponse, error) {
+func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*pb.GetResponse, error) {
 	if l := len(request.Id); l != types.ATXIDSize {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid ATX ID length (%d), expected (%d)", l, types.ATXIDSize))
 	}
@@ -50,7 +50,7 @@ func (s *activationService) Get(ctx context.Context, request *v1.GetRequest) (*v
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
-	return &v1.GetResponse{
+	return &pb.GetResponse{
 		Atx: convertActivation(atx),
 	}, nil
 }

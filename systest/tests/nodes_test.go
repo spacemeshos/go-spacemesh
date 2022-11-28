@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -46,7 +46,7 @@ func TestAddNodes(t *testing.T) {
 
 	var eg errgroup.Group
 	{
-		watchLayers(ctx, &eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, &eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= beforeAdding {
 				tctx.Log.Debugw("adding new smeshers",
 					"n", addedLater,
@@ -59,22 +59,22 @@ func TestAddNodes(t *testing.T) {
 	}
 	require.NoError(t, eg.Wait())
 
-	created := make([][]*spacemeshv1.Proposal, cl.Total())
+	created := make([][]*pb.Proposal, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchProposals(ctx, &eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
+		watchProposals(ctx, &eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Epoch.Value > lastEpoch {
 				return false, nil
 			}
-			if proposal.Status == spacemeshv1.Proposal_Created {
+			if proposal.Status == pb.Proposal_Created {
 				tctx.Log.Debugw("received proposal event",
 					"client", client.Name,
 					"layer", proposal.Layer.Number,
 					"epoch", proposal.Epoch.Value,
 					"smesher", prettyHex(proposal.Smesher.Id),
 					"eligibilities", len(proposal.Eligibilities),
-					"status", spacemeshv1.Proposal_Status_name[int32(proposal.Status)],
+					"status", pb.Proposal_Status_name[int32(proposal.Status)],
 				)
 				created[i] = append(created[i], proposal)
 			}
@@ -144,8 +144,8 @@ func TestFailedNodes(t *testing.T) {
 	for i := 0; i < cl.Total()-failed; i++ {
 		i := i
 		client := cl.Client(i)
-		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_APPLIED {
+		watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
+			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
 				tctx.Log.Debugw("layer applied",
 					"client", client.Name,
 					"layer", layer.Layer.Number.Number,

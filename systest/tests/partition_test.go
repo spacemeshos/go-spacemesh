@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -69,11 +69,11 @@ func testPartition(t *testing.T, ctx context.Context, tctx *testcontext.Context,
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchStateHashes(ctx, eg, client, func(state *spacemeshv1.GlobalStateStreamResponse) (bool, error) {
+		watchStateHashes(ctx, eg, client, func(state *pb.GlobalStateStreamResponse) (bool, error) {
 			data := state.Datum.Datum
-			require.IsType(t, &spacemeshv1.GlobalStateData_GlobalState{}, data)
+			require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
-			resp := data.(*spacemeshv1.GlobalStateData_GlobalState)
+			resp := data.(*pb.GlobalStateData_GlobalState)
 			layer := resp.GlobalState.Layer.Number
 			if layer > stop {
 				return false, nil

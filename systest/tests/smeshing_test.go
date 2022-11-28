@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -43,10 +43,10 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
-	createdch := make(chan *spacemeshv1.Proposal, cl.Total()*(limit+1))
-	includedAll := make([]map[uint32][]*spacemeshv1.Proposal, cl.Total())
+	createdch := make(chan *pb.Proposal, cl.Total()*(limit+1))
+	includedAll := make([]map[uint32][]*pb.Proposal, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
-		includedAll[i] = map[uint32][]*spacemeshv1.Proposal{}
+		includedAll[i] = map[uint32][]*pb.Proposal{}
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -54,7 +54,7 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 		i := i
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
-		watchProposals(ctx, eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
+		watchProposals(ctx, eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
@@ -63,12 +63,12 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 				"layer", proposal.Layer.Number,
 				"smesher", prettyHex(proposal.Smesher.Id),
 				"eligibilities", len(proposal.Eligibilities),
-				"status", spacemeshv1.Proposal_Status_name[int32(proposal.Status)],
+				"status", pb.Proposal_Status_name[int32(proposal.Status)],
 			)
 			if proposal.Layer.Number > last {
 				return false, nil
 			}
-			if proposal.Status == spacemeshv1.Proposal_Created {
+			if proposal.Status == pb.Proposal_Created {
 				createdch <- proposal
 			} else {
 				includedAll[i][proposal.Layer.Number] = append(includedAll[i][proposal.Layer.Number], proposal)
@@ -80,7 +80,7 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 	require.NoError(t, eg.Wait())
 	close(createdch)
 
-	created := map[uint32][]*spacemeshv1.Proposal{}
+	created := map[uint32][]*pb.Proposal{}
 	beacons := map[uint64]map[string]struct{}{}
 	for proposal := range createdch {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
@@ -98,7 +98,7 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 	}
 }
 
-func requireEqualProposals(tb testing.TB, reference map[uint32][]*spacemeshv1.Proposal, received []map[uint32][]*spacemeshv1.Proposal) {
+func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal) {
 	tb.Helper()
 	for layer := range reference {
 		sort.Slice(reference[layer], func(i, j int) bool {
@@ -120,7 +120,7 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*spacemeshv1.Pr
 	}
 }
 
-func requireEqualEligibilities(tb testing.TB, proposals map[uint32][]*spacemeshv1.Proposal) {
+func requireEqualEligibilities(tb testing.TB, proposals map[uint32][]*pb.Proposal) {
 	tb.Helper()
 
 	aggregated := map[string]int{}

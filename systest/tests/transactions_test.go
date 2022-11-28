@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -35,19 +35,19 @@ func testTransactions(ctx context.Context, t *testing.T, tctx *testcontext.Conte
 		"expected transactions", expectedCount,
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	state := spacemeshv1.NewGlobalStateServiceClient(cl.Client(0))
-	response, err := state.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
+	state := pb.NewGlobalStateServiceClient(cl.Client(0))
+	response, err := state.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}})
 	require.NoError(t, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(ctx)
 	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending)
-	txs := make([][]*spacemeshv1.Transaction, cl.Total())
+	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchTransactionResults(ctx, eg, client, func(rst *spacemeshv1.TransactionResult) (bool, error) {
+		watchTransactionResults(ctx, eg, client, func(rst *pb.TransactionResult) (bool, error) {
 			txs[i] = append(txs[i], rst.Tx)
 			count := len(txs[i])
 			tctx.Log.Debugw("received transaction client",
@@ -72,8 +72,8 @@ func testTransactions(ctx context.Context, t *testing.T, tctx *testcontext.Conte
 	diff := batch * amount * int(sendFor-1) * cl.Accounts()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		state := spacemeshv1.NewGlobalStateServiceClient(client)
-		response, err := state.Account(ctx, &spacemeshv1.AccountRequest{AccountId: &spacemeshv1.AccountId{Address: receiver.String()}})
+		state := pb.NewGlobalStateServiceClient(client)
+		response, err := state.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}})
 		require.NoError(t, err)
 		after := response.AccountWrapper.StateCurrent.Balance
 		tctx.Log.Debugw("receiver state",
