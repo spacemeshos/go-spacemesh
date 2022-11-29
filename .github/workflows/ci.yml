@@ -316,7 +316,6 @@ jobs:
           bootstrap: 10m
           level: debug
           clusters: 2
-          poet_image: us-east4-docker.pkg.dev/spacemesh-infra-core/docker-dev/spacemeshos/poet:poet-challenge-with-verifying-svc
         run: make -C systest run test_name=.
 
       - name: Run tests II
@@ -330,7 +329,6 @@ jobs:
           bootstrap: 10m
           level: debug
           clusters: 2
-          poet_image: us-east4-docker.pkg.dev/spacemesh-infra-core/docker-dev/spacemeshos/poet:poet-challenge-with-verifying-svc
         run: make -C systest run test_name=.
 
       - name: Delete pod
