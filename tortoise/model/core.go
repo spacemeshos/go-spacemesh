@@ -38,7 +38,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise = tortoise.New(c.cdb, c.beacons, updater{c.cdb},
+	c.tortoise = tortoise.New(c.cdb, c.beacons,
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
@@ -198,18 +198,4 @@ func max(i, j uint32) uint32 {
 		return i
 	}
 	return j
-}
-
-type updater struct {
-	*datastore.CachedDB
-}
-
-func (u updater) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
-	var err error
-	if valid {
-		err = blocks.SetValid(u, bid)
-	} else {
-		err = blocks.SetInvalid(u, bid)
-	}
-	return err
 }
