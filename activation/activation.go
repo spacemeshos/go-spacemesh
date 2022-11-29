@@ -758,7 +758,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, error) {
 	id, err := b.atxHandler.GetPosAtxID()
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
-			b.log.With().Info("using golden atx as positioning atx", id)
+			b.log.With().Info("using golden atx as positioning atx", b.goldenATXID)
 			return b.goldenATXID, types.LayerID{}, nil
 		}
 		return types.ATXID{}, types.LayerID{}, fmt.Errorf("cannot find pos atx: %w", err)
