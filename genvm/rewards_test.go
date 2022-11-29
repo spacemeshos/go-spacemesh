@@ -3,7 +3,7 @@ package vm
 import (
 	"testing"
 
-	erewards "github.com/spacemeshos/economics/rewards"
+	"github.com/spacemeshos/economics/rewards"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -118,7 +118,7 @@ func TestRewards(t *testing.T) {
 		477617992047,
 	}
 	for i := 0; i < 5; i++ {
-		require.Equal(t, expected[i], int(erewards.TotalSubsidyAtLayer(uint32(i))))
+		require.Equal(t, expected[i], int(rewards.TotalSubsidyAtLayer(uint32(i))))
 	}
 	tcs := []templateTestCase{
 		{

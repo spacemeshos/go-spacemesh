@@ -1,6 +1,8 @@
 package tortoise
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -32,6 +34,8 @@ func (v *verifying) resetWeights(voted types.LayerID) {
 }
 
 func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
+	start := time.Now()
+
 	prev := v.layer(ballot.layer.Sub(1))
 	counted := !(ballot.conditions.badBeacon ||
 		prev.opinion != ballot.opinion() ||
@@ -56,6 +60,7 @@ func (v *verifying) countBallot(logger log.Log, ballot *ballotInfo) {
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(ballot.weight)
 	}
 	v.totalGoodWeight = v.totalGoodWeight.Add(ballot.weight)
+	vcountBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func (v *verifying) countVotes(logger log.Log, ballots []*ballotInfo) {

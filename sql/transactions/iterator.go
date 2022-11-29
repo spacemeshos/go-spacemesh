@@ -44,7 +44,6 @@ func (f *ResultsFilter) query() string {
 	if f.TID != nil {
 		q.WriteString(" and id = ?")
 		q.WriteString(strconv.Itoa(i))
-		i++
 	}
 	q.WriteString("order by layer, id;")
 	return q.String()

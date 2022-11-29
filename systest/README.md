@@ -246,3 +246,15 @@ On gke for the network with a moderate load `premium-rwo` storage class with 10G
 ```bash
 export storage=premium-rwo=10Gi
 ```
+
+### Schedule chaos tasks for longevity network.
+
+Chaos-mesh tasks are scheduled using native chaos-mesh api for flexibility.
+After cluster was created and all pods of the cluter have spawned it is possible to apply
+a predefined set of tasks using kubectl
+
+```bash
+kubectl apply -n <namespace> -f ./parameters/chaos
+```
+
+Or use chaos mesh dashboard for custom chaos tasks.

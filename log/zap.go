@@ -22,33 +22,33 @@ type Log struct {
 // Exported from Log basic logging options.
 
 // Info prints formatted info level log message.
-func (l Log) Info(format string, args ...interface{}) {
+func (l Log) Info(format string, args ...any) {
 	l.logger.Sugar().Infof(format, args...)
 }
 
 // Debug prints formatted debug level log message.
-func (l Log) Debug(format string, args ...interface{}) {
+func (l Log) Debug(format string, args ...any) {
 	l.logger.Sugar().Debugf(format, args...)
 }
 
 // Error prints formatted error level log message.
-func (l Log) Error(format string, args ...interface{}) {
+func (l Log) Error(format string, args ...any) {
 	l.logger.Sugar().Errorf(format, args...)
 }
 
 // Warning prints formatted warning level log message.
-func (l Log) Warning(format string, args ...interface{}) {
+func (l Log) Warning(format string, args ...any) {
 	l.logger.Sugar().Warnf(format, args...)
 }
 
 // Panic prints the log message and then panics.
-func (l Log) Panic(format string, args ...interface{}) {
+func (l Log) Panic(format string, args ...any) {
 	l.logger.Sugar().Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
 	l.logger.Sugar().Panicf(format, args...)
 }
 
 // Fatal prints formatted fatal level log message.
-func (l Log) Fatal(format string, args ...interface{}) {
+func (l Log) Fatal(format string, args ...any) {
 	l.logger.Sugar().Fatalf(format, args...)
 }
 

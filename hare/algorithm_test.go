@@ -182,6 +182,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	inbox, err := broker.Register(context.TODO(), proc.ID())
@@ -216,6 +217,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	c := cfg
 	c.F = 2
@@ -251,6 +253,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	r.NoError(broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.publisher = net
@@ -290,6 +293,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 func TestConsensusProcess_nextRound(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())

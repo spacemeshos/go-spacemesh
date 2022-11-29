@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -54,11 +54,11 @@ func TestShortTimeskew(t *testing.T) {
 	// abstain on one or two layers. in such case longer delay might be necessary to confirm that layer
 
 	var confirmed uint32
-	watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
 		if layer.Layer.Number.Number == stopTest {
 			return false, nil
 		}
-		if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_APPLIED {
+		if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
 			tctx.Log.Debugw("layer applied",
 				"layer", layer.Layer.Number.Number,
 				"hash", prettyHex(layer.Layer.Hash),

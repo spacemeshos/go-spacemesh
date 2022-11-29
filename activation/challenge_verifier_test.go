@@ -22,6 +22,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+const layersPerEpoch = 10
+
 var (
 	goldenATXID    = types.RandomATXID()
 	errAtxNotFound = errors.New("unavailable")
@@ -74,7 +76,7 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(mocks.NewMockAtxProvider(gomock.NewController(t)), &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+	verifier := activation.NewChallengeVerifier(mocks.NewMockAtxProvider(gomock.NewController(t)), &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
@@ -104,7 +106,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge, goldenATXID)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(mocks.NewMockAtxProvider(gomock.NewController(t)), &sigVerifier, postConfig, goldenATXID)
+	verifier := activation.NewChallengeVerifier(mocks.NewMockAtxProvider(gomock.NewController(t)), &sigVerifier, postConfig, goldenATXID, layersPerEpoch)
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
@@ -128,7 +130,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "initial challenge sequence number is not zero")
+		req.ErrorContains(err, "no prevATX declared, but sequence number not zero")
 	})
 	t.Run("InitialPost not provided", func(t *testing.T) {
 		t.Parallel()
@@ -150,7 +152,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 
 		_, err = verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "initial challenge is missing commitmentATX")
+		req.ErrorContains(err, "no prevATX declared, but commitmentATX is missing")
 	})
 	t.Run("InitialPostIndices not provided", func(t *testing.T) {
 		t.Parallel()
@@ -285,7 +287,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 				ID:     goldenATXID,
 				NodeID: nodeID,
 			}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
 		req.Equal(*challengeHash, result.Hash)
@@ -296,65 +298,65 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, errAtxNotFound)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrCouldntVerify)
-		req.ErrorContains(err, "positioning ATX not found")
+		req.ErrorIs(err, &activation.CouldntVerifyError{})
+		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PositioningATX})
 	})
 
 	t.Run("NodeID doesn't match previous ATX NodeID", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).Return(&types.ActivationTxHeader{}, nil)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).Return(&types.ActivationTxHeader{}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
+		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "NodeID mismatch")
+		req.ErrorContains(err, "previous atx belongs to different miner")
 	})
 	t.Run("previous ATX unavailable", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).Return(&types.ActivationTxHeader{}, nil)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).Return(nil, errAtxNotFound)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(nil, errAtxNotFound)
+		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, activation.ErrCouldntVerify)
-		req.ErrorContains(err, "previous ATX not found")
+		req.ErrorIs(err, &activation.CouldntVerifyError{})
+		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PrevATXID})
 	})
 	t.Run("publayerID is not after previousATX.publayerID ", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).Return(&types.ActivationTxHeader{}, nil)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).Return(&types.ActivationTxHeader{
+		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
+		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
 				Sequence:   0,
 				PubLayerID: challenge.PubLayerID,
 			},
 			NodeID: nodeID,
 		}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "challenge publication layer")
+		req.ErrorContains(err, "prevAtx epoch (1, layer 10) isn't older than current atx epoch (1, layer 10)")
 	})
 	t.Run("publayerID is not after positioningATX.publayerID", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		atxProvider := mocks.NewMockAtxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).Return(&types.ActivationTxHeader{
+		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
 				Sequence:   0,
 				PubLayerID: challenge.PubLayerID,
 			},
 			NodeID: nodeID,
 		}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID)
+		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
-		req.ErrorContains(err, "challenge publication layer")
+		req.ErrorContains(err, "positioning atx layer (10) must be before 10")
 	})
 }

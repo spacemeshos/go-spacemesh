@@ -62,7 +62,7 @@ func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChall
 		return &pb.VerifyChallengeResponse{Hash: result.Hash.Bytes(), NodeId: result.NodeID.ToBytes()}, nil
 	}
 
-	if errors.Is(err, activation.ErrCouldntVerify) {
+	if errors.Is(err, &activation.CouldntVerifyError{}) {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 
