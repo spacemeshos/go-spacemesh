@@ -20,15 +20,6 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-// NIPostChallengeToBytes serializes a NIPostChallenge.
-func NIPostChallengeToBytes(challenge *NIPostChallenge) ([]byte, error) {
-	buf, err := codec.Encode(challenge)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling NIPost Challenge: %v", err)
-	}
-	return buf, nil
-}
-
 // BytesToTransaction deserializes a Transaction.
 func BytesToTransaction(buf []byte) (*Transaction, error) {
 	b := Transaction{}
