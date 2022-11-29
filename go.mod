@@ -5,7 +5,7 @@ go 1.19
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20220921122704-e172c06eed66
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20221124075359-ea99efa65bf2
 	github.com/cosmos/btcutil v1.0.4
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
@@ -26,7 +26,7 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.37.0
-	github.com/pyroscope-io/pyroscope v0.34.1
+	github.com/pyroscope-io/pyroscope v0.35.0
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.5.2
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
@@ -35,7 +35,7 @@ require (
 	github.com/spacemeshos/go-scale v1.1.1
 	github.com/spacemeshos/merkle-tree v0.1.0
 	github.com/spacemeshos/poet v0.2.1
-	github.com/spacemeshos/post v0.2.2-0.20221128203339-cc6ade49316c
+	github.com/spacemeshos/post v0.2.2-0.20221129083747-ab7fd3f1a828
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
