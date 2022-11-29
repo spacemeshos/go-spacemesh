@@ -24,7 +24,6 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -276,7 +275,7 @@ type App struct {
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
-	atxProvider      api.AtxProvider
+	atxDB            datastore.CachedDB
 	clock            TickProvider
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
@@ -490,6 +489,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	cdb := datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
+	app.atxDB = *cdb
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 
@@ -723,7 +723,6 @@ func (app *App) initServices(ctx context.Context,
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
 	app.mesh = msh
-	app.atxProvider = cdb
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
@@ -814,7 +813,8 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		registerService(grpcserver.NewGatewayService(app.host))
+		verifier := activation.NewChallengeVerifier(&app.atxDB, signing.DefaultVerifier, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		registerService(grpcserver.NewGatewayService(app.host, verifier))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
@@ -834,7 +834,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 	if apiConf.StartActivationService {
-		registerService(grpcserver.NewActivationService(app.atxProvider))
+		registerService(grpcserver.NewActivationService(&app.atxDB))
 	}
 
 	// Now that the services are registered, start the server.
