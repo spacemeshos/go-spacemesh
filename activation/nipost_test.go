@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
@@ -189,7 +189,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig, nipostChallenge types.PoetChallenge, poetDb poetDbAPI) *types.NIPost {
 	gtw := util.NewMockGrpcServer(tb)
-	v1.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
+	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
 	eg.Go(gtw.Serve)
 	tb.Cleanup(func() { r.NoError(eg.Wait()) })
@@ -224,7 +224,7 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig
 }
 
 type gatewayService struct {
-	v1.UnimplementedGatewayServiceServer
+	pb.UnimplementedGatewayServiceServer
 }
 
 func getSerializedChallengeHash(challenge []byte) *types.Hash32 {
@@ -236,8 +236,8 @@ func getSerializedChallengeHash(challenge []byte) *types.Hash32 {
 	return hash
 }
 
-func (*gatewayService) VerifyChallenge(ctx context.Context, req *v1.VerifyChallengeRequest) (*v1.VerifyChallengeResponse, error) {
-	return &v1.VerifyChallengeResponse{
+func (*gatewayService) VerifyChallenge(ctx context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
+	return &pb.VerifyChallengeResponse{
 		Hash: getSerializedChallengeHash(req.Challenge).Bytes(),
 	}, nil
 }
@@ -264,7 +264,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	})
 
 	gtw := util.NewMockGrpcServer(t)
-	v1.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
+	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
 	eg.Go(gtw.Serve)
 	t.Cleanup(func() { require.NoError(t, eg.Wait()) })

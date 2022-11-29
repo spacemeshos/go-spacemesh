@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	v1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -16,11 +16,11 @@ import (
 )
 
 type gatewayService struct {
-	v1.UnimplementedGatewayServiceServer
+	pb.UnimplementedGatewayServiceServer
 }
 
-func (*gatewayService) VerifyChallenge(ctx context.Context, req *v1.VerifyChallengeRequest) (*v1.VerifyChallengeResponse, error) {
-	return &v1.VerifyChallengeResponse{
+func (*gatewayService) VerifyChallenge(ctx context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
+	return &pb.VerifyChallengeResponse{
 		Hash: []byte("hash"),
 	}, nil
 }
@@ -32,7 +32,7 @@ func TestHTTPPoet(t *testing.T) {
 	r := require.New(t)
 
 	gtw := util.NewMockGrpcServer(t)
-	v1.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
+	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
 	eg.Go(gtw.Serve)
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
