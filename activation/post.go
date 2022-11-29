@@ -100,7 +100,7 @@ func (mgr *PostSetupManager) Status() *atypes.PostSetupStatus {
 
 	return &atypes.PostSetupStatus{
 		State:            mgr.state,
-		NumLabelsWritten: mgr.init.SessionNumLabelsWritten(),
+		NumLabelsWritten: mgr.init.NumLabelsWritten(),
 		LastOpts:         mgr.lastOpts,
 		LastError:        mgr.lastErr,
 	}
@@ -223,10 +223,11 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 			mgr.mu.Lock()
 			defer mgr.mu.Unlock()
 
-			if errors.Is(err, context.Canceled) {
+			switch {
+			case errors.Is(err, context.Canceled):
 				mgr.logger.Info("post setup session was stopped")
 				mgr.state = atypes.PostSetupStateNotStarted
-			} else {
+			default:
 				mgr.state = atypes.PostSetupStateError
 				mgr.lastErr = err
 			}
@@ -254,11 +255,12 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 	mgr.mu.Lock()
 	state := mgr.state
 	init := mgr.init
+	cancel := mgr.cancel
 	doneChan := mgr.doneChan
 	mgr.mu.Unlock()
 
 	if state == atypes.PostSetupStateInProgress {
-		mgr.cancel()
+		cancel()
 
 		// Block until the current data creation session will be finished.
 		<-doneChan
@@ -309,6 +311,18 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types
 	p := (*types.Post)(proof)
 
 	return p, m, nil
+}
+
+// GetPowNonce returns the PoW nonce found during initialization.
+func (mgr *PostSetupManager) GetPowNonce() (uint64, error) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	if mgr.state != atypes.PostSetupStateComplete {
+		return 0, errNotComplete
+	}
+
+	return *mgr.init.Nonce(), nil
 }
 
 // LastError returns the Post setup last error.

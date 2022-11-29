@@ -155,6 +155,37 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 }
 
+func TestPostSetupManager_GetPow(t *testing.T) {
+	req := require.New(t)
+
+	cdb := newCachedDB(t)
+	cfg, opts := getTestConfig(t)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
+	req.NoError(err)
+
+	// Attempt to get nonce.
+	_, err = mgr.GetPowNonce()
+	req.EqualError(err, errNotComplete.Error())
+
+	// Create data.
+	doneChan, err := mgr.StartSession(opts, goldenATXID)
+	req.NoError(err)
+	<-doneChan
+
+	// Get nonce.
+	nonce, err := mgr.GetPowNonce()
+	req.NoError(err)
+	req.NotZero(nonce)
+
+	// Re-instantiate `PostSetupManager`.
+	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
+	req.NoError(err)
+
+	// Attempt to get nonce.
+	_, err = mgr.GetPowNonce()
+	req.ErrorIs(err, errNotComplete)
+}
+
 func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
