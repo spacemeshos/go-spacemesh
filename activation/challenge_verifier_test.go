@@ -35,7 +35,7 @@ func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.NumUnits = cfg.MinNumUnits
-	opts.ComputeProviderID = initialization.CPUProviderID()
+	opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	return cfg, opts
 }
@@ -300,7 +300,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, errAtxNotFound)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, &activation.CouldntVerifyError{})
+		req.ErrorIs(err, &activation.VerifyError{})
 		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PositioningATX})
 	})
 
@@ -323,7 +323,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(nil, errAtxNotFound)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
-		req.ErrorIs(err, &activation.CouldntVerifyError{})
+		req.ErrorIs(err, &activation.VerifyError{})
 		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PrevATXID})
 	})
 	t.Run("publayerID is not after previousATX.publayerID ", func(t *testing.T) {

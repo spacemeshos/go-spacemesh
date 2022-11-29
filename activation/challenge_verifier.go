@@ -17,19 +17,19 @@ var (
 	ErrChallengeInvalid = errors.New("challenge is invalid")
 )
 
-type CouldntVerifyError struct {
+type VerifyError struct {
 	// the source (if any) that caused the error
 	source error
 }
 
-func (e *CouldntVerifyError) Error() string {
-	return fmt.Sprintf("couldn't verify challenge (%v)", e.source)
+func (e *VerifyError) Error() string {
+	return fmt.Sprintf("couldn't verify challenge: %v", e.source)
 }
 
-func (e *CouldntVerifyError) Unwrap() error { return e.source }
+func (e *VerifyError) Unwrap() error { return e.source }
 
-func (e *CouldntVerifyError) Is(target error) bool {
-	_, ok := target.(*CouldntVerifyError)
+func (e *VerifyError) Is(target error) bool {
+	_, ok := target.(*VerifyError)
 	return ok
 }
 
@@ -98,7 +98,7 @@ func (v *challengeVerifier) verifyChallenge(ctx context.Context, challenge *type
 	if err := validatePositioningAtx(&challenge.PositioningATX, v.atxDB, v.goldenATXID, challenge.PubLayerID, v.layersPerEpoch); err != nil {
 		switch err.(type) {
 		case *AtxNotFoundError:
-			return &CouldntVerifyError{source: err}
+			return &VerifyError{source: err}
 		default:
 			return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
 		}
@@ -119,7 +119,7 @@ func (v *challengeVerifier) verifyInitialChallenge(ctx context.Context, challeng
 	if err := validateInitialNIPostChallenge(challenge.NIPostChallenge, v.atxDB, v.goldenATXID, challenge.InitialPost.Indices); err != nil {
 		switch err.(type) {
 		case *AtxNotFoundError:
-			return &CouldntVerifyError{source: err}
+			return &VerifyError{source: err}
 		default:
 			return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
 		}
@@ -129,8 +129,7 @@ func (v *challengeVerifier) verifyInitialChallenge(ctx context.Context, challeng
 		return fmt.Errorf("%w: invalid initial Post Metadata: %v", ErrChallengeInvalid, err)
 	}
 
-	commitment := GetCommitmentBytes(nodeID, *challenge.CommitmentATX)
-	if err := validatePost(commitment, challenge.InitialPost, challenge.InitialPostMetadata, challenge.NumUnits); err != nil {
+	if err := validatePost(nodeID, *challenge.CommitmentATX, challenge.InitialPost, challenge.InitialPostMetadata, challenge.NumUnits); err != nil {
 		return fmt.Errorf("%w: invalid initial Post: %v", ErrChallengeInvalid, err)
 	}
 
@@ -141,7 +140,7 @@ func (v *challengeVerifier) verifyNonInitialChallenge(ctx context.Context, chall
 	if err := validateNonInitialNIPostChallenge(challenge.NIPostChallenge, v.atxDB, nodeID); err != nil {
 		switch err.(type) {
 		case *AtxNotFoundError:
-			return &CouldntVerifyError{source: err}
+			return &VerifyError{source: err}
 		default:
 			return fmt.Errorf("%w: %v", ErrChallengeInvalid, err)
 		}

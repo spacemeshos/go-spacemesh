@@ -67,7 +67,8 @@ func (v *Validator) Validate(nodeId types.NodeID, atxId types.ATXID, nipost *typ
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
-	if !isIncluded(proof, nipost.Challenge.Bytes()) {
+
+	if !contains(proof, nipost.Challenge.Bytes()) {
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
@@ -84,7 +85,7 @@ func (*Validator) ValidatePost(nodeId types.NodeID, commitmentAtxId types.ATXID,
 	return validatePost(nodeId, commitmentAtxId, PoST, PostMetadata, numUnits)
 }
 
-func isIncluded(proof *types.PoetProof, member []byte) bool {
+func contains(proof *types.PoetProof, member []byte) bool {
 	for _, part := range proof.Members {
 		if bytes.Equal(part, member) {
 			return true
@@ -122,6 +123,7 @@ func validatePostMetadata(cfg *atypes.PostConfig, metadata *types.PostMetadata) 
 	}
 	return nil
 }
+
 func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
