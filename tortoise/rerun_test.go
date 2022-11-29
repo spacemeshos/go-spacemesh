@@ -120,6 +120,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 	blks, err := blocks.IDsInLayer(s.GetState(0).DB, misverified)
 	require.NoError(tb, err)
 
+	processBlockUpdates(tb, tortoise, s.GetState(0).DB)
 	for _, blk := range blks {
 		validity, err := blocks.IsValid(s.GetState(0).DB, blk)
 		require.NoError(tb, err, "layer %s", misverified)

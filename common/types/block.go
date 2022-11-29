@@ -18,7 +18,7 @@ const (
 	BlockIDSize = Hash32Length
 )
 
-//go:generate scalegen
+//go:generate scalegen -types Block,InnerBlock,RatNum,AnyReward,Certificate,CertifyMessage,CertifyContent
 
 // BlockID is a 20-byte sha256 sum of the serialized block used to identify a Block.
 type BlockID Hash20
@@ -172,9 +172,10 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// BlockContextualValidity tuple with block id and contextual validity.
+// BlockContextualValidity represents the contextual validity of a block.
 type BlockContextualValidity struct {
 	ID       BlockID
+	Layer    LayerID
 	Validity bool
 }
 
