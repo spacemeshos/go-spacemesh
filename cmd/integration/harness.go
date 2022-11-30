@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -85,7 +86,8 @@ func main() {
 	log.With().Info("integration: harness is listening on a blocking dummy channel")
 
 	interruptChannel := make(chan os.Signal, 1)
-	signal.Notify(interruptChannel, os.Interrupt)
+	// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
+	signal.Notify(interruptChannel, os.Interrupt, syscall.SIGTERM)
 
 	func() {
 		for {

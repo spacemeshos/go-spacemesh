@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"reflect"
 	"sync"
+	"syscall"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
@@ -85,7 +86,8 @@ func NewBaseApp() *BaseApp {
 func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
+	// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	// Goroutine that listens for Ctrl ^ C command
 	// and triggers the quit app

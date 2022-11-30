@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -367,8 +368,8 @@ func (app *App) Initialize() (err error) {
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
+	// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 	// Goroutine that listens for Ctrl ^ C command
 	// and triggers the quit app
 	go func() {
