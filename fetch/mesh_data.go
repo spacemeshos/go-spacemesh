@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -30,28 +31,42 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 type dataReceiver func(context.Context, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) []error {
-	errs := make([]error, 0, len(hashes))
-	promises := make([]*promise, 0, len(hashes))
+	done := make(chan error, len(hashes))
+	var wg sync.WaitGroup
 	for _, hash := range hashes {
-		promises = append(promises, f.getHash(ctx, hash, hint, receiver))
-	}
-	for i, p := range promises {
-		hash := hashes[i]
-		select {
-		case <-ctx.Done():
-			f.logger.WithContext(ctx).With().Warning("request timed out",
-				log.String("hint", string(hint)),
-				log.Stringer("hash", hash))
-			return []error{ctx.Err()}
-		case <-p.completed:
-			if p.err != nil {
-				f.logger.WithContext(ctx).With().Warning("failed to get hash",
-					log.String("hint", string(hint)),
-					log.Stringer("hash", hash),
-					log.Err(p.err))
-				errs = append(errs, p.err)
-			}
+		p, err := f.getHash(ctx, hash, hint, receiver)
+		if err != nil {
+			return []error{err}
 		}
+		if p == nil {
+			// data is available locally
+			continue
+		}
+		wg.Add(1)
+		h := hash
+		f.eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				done <- ctx.Err()
+			case <-p.completed:
+				if p.err != nil {
+					f.logger.WithContext(ctx).With().Warning("failed to get hash",
+						log.String("hint", string(hint)),
+						log.Stringer("hash", h),
+						log.Err(p.err))
+					done <- p.err
+				}
+			}
+			wg.Done()
+			return nil
+		})
+	}
+
+	wg.Wait()
+	close(done)
+	errs := make([]error, 0, len(done))
+	for err := range done {
+		errs = append(errs, err)
 	}
 	return errs
 }
@@ -121,12 +136,16 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.Stringer("hash", id))
-	pm := f.getHash(ctx, id, datastore.POETDB, f.poetHandler.ValidateAndStoreMsg)
+	pm, err := f.getHash(ctx, id, datastore.POETDB, f.poetHandler.ValidateAndStoreMsg)
+	if err != nil {
+		return err
+	}
+	if pm == nil {
+		// data is available locally
+		return nil
+	}
 	select {
 	case <-ctx.Done():
-		f.logger.WithContext(ctx).With().Warning("request timed out",
-			log.String("hint", string(datastore.POETDB)),
-			log.Stringer("hash", id))
 		return ctx.Err()
 	case <-pm.completed:
 		if pm.err != nil {

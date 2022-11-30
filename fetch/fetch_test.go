@@ -103,12 +103,15 @@ func TestFetch_GetHash(t *testing.T) {
 	hint2 := datastore.BallotDB
 
 	// test hash aggregation
-	p0 := f.getHash(context.TODO(), h1, hint, goodReceiver)
-	p1 := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	p0, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	require.NoError(t, err)
+	p1, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	require.NoError(t, err)
 	require.Equal(t, p0.completed, p1.completed)
 
 	h2 := types.RandomHash()
-	p2 := f.getHash(context.TODO(), h2, hint2, goodReceiver)
+	p2, err := f.getHash(context.TODO(), h2, hint2, goodReceiver)
+	require.NoError(t, err)
 	require.NotEqual(t, p1.completed, p2.completed)
 }
 
@@ -176,9 +179,11 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 				receiver = badReceiver
 			}
 			for i := 0; i < 2; i++ {
-				p := f.getHash(context.TODO(), hsh0, datastore.ProposalDB, receiver)
+				p, err := f.getHash(context.TODO(), hsh0, datastore.ProposalDB, receiver)
+				require.NoError(t, err)
 				p0 = append(p0, p)
-				p = f.getHash(context.TODO(), hsh1, datastore.BlockDB, receiver)
+				p, err = f.getHash(context.TODO(), hsh1, datastore.BlockDB, receiver)
+				require.NoError(t, err)
 				p1 = append(p1, p)
 			}
 			require.Equal(t, p0[0], p0[1])
@@ -243,9 +248,12 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.mh.EXPECT().Close()
 	defer f.Stop()
 	f.Start()
-	p1 := f.getHash(context.TODO(), h1, hint, goodReceiver)
-	p2 := f.getHash(context.TODO(), h2, hint, goodReceiver)
-	p3 := f.getHash(context.TODO(), h3, hint, goodReceiver)
+	p1, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	require.NoError(t, err)
+	p2, err := f.getHash(context.TODO(), h2, hint, goodReceiver)
+	require.NoError(t, err)
+	p3, err := f.getHash(context.TODO(), h3, hint, goodReceiver)
+	require.NoError(t, err)
 	for _, p := range []*promise{p1, p2, p3} {
 		<-p.completed
 		require.NoError(t, p.err)

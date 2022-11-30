@@ -30,15 +30,8 @@ const (
 	cacheSize = 1000
 )
 
-var (
-	// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
-	errExceedMaxRetries = errors.New("fetch failed after max retries for request")
-	closedCh            = make(chan struct{}, 1)
-)
-
-func init() {
-	close(closedCh)
-}
+// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
+var errExceedMaxRetries = errors.New("fetch failed after max retries for request")
 
 // request contains all relevant Data for a single request for a specified hash.
 type request struct {
@@ -347,7 +340,12 @@ func (f *Fetch) receiveResponse(data []byte) {
 			continue
 		}
 
-		f.hashValidationDone(resp.Hash, req.validator(req.ctx, resp.Data))
+		rsp := resp
+		f.eg.Go(func() error {
+			// validation fetch data recursively. offload to another goroutine
+			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Data))
+			return nil
+		})
 		delete(batchMap, resp.Hash)
 	}
 
@@ -372,10 +370,10 @@ func (f *Fetch) hashValidationDone(hash types.Hash32, err error) {
 		return
 	}
 	if err != nil {
-		f.logger.With().Debug("failed to validate hash data",
-			log.Stringer("hash", hash),
-			log.Err(err))
 		req.promise.err = err
+	} else {
+		f.logger.WithContext(req.ctx).With().Debug("hash request done",
+			log.Stringer("hash", hash))
 	}
 	close(req.promise.completed)
 	delete(f.ongoing, hash)
@@ -387,16 +385,18 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 
 	req, ok := f.ongoing[hash]
 	if !ok {
-		f.logger.With().Warning("hash missing from ongoing requests", log.Stringer("hash", hash))
+		f.logger.With().Error("hash missing from ongoing requests", log.Stringer("hash", hash))
 		return
 	}
 	req.retries++
 	if req.retries > f.cfg.MaxRetriesForRequest {
-		f.logger.With().Debug("gave up on hash after max retries", log.Stringer("hash", req.hash))
+		f.logger.WithContext(req.ctx).With().Warning("gave up on hash after max retries",
+			log.Stringer("hash", req.hash),
+			log.Int("retries", req.retries))
 		req.promise.err = errExceedMaxRetries
 		close(req.promise.completed)
 	} else {
-		// put the request back to the active list
+		// put the request back to the unprocessed list
 		f.unprocessed[req.hash] = req
 	}
 	delete(f.ongoing, hash)
@@ -414,7 +414,7 @@ func (f *Fetch) getUnprocessed() []RequestMessage {
 	var requestList []RequestMessage
 	// only send one request per hash
 	for hash, req := range f.unprocessed {
-		f.logger.With().Debug("processing hash request", log.Stringer("hash", hash))
+		f.logger.WithContext(req.ctx).With().Debug("processing hash request", log.Stringer("hash", hash))
 		requestList = append(requestList, RequestMessage{Hash: hash, Hint: req.hint})
 		// move the processed requests to pending
 		f.ongoing[hash] = req
@@ -556,7 +556,9 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 			f.logger.With().Warning("hash missing from ongoing requests", log.Stringer("hash", br.Hash))
 			continue
 		}
-		f.logger.With().Debug("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
+		f.logger.WithContext(req.ctx).With().Warning("hash request failed",
+			log.Stringer("hash", req.hash),
+			log.Err(err))
 		req.promise.err = err
 		close(req.promise.completed)
 		delete(f.ongoing, req.hash)
@@ -566,26 +568,22 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 
 // getHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
 // know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error.
-func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint, receiver dataReceiver) *promise {
+func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint, receiver dataReceiver) (*promise, error) {
 	if f.stopped() {
-		return &promise{
-			completed: closedCh,
-		}
+		return nil, f.shutdownCtx.Err()
 	}
 
 	// check if we already have this hash locally
 	if _, err := f.bs.Get(h, hash.Bytes()); err == nil {
-		return &promise{
-			completed: closedCh,
-		}
+		return nil, nil
 	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if _, ok := f.ongoing[hash]; ok {
-		f.logger.With().Debug("request ongoing", log.Stringer("hash", hash))
-		return f.ongoing[hash].promise
+		f.logger.WithContext(ctx).With().Debug("request ongoing", log.Stringer("hash", hash))
+		return f.ongoing[hash].promise, nil
 	}
 
 	if _, ok := f.unprocessed[hash]; !ok {
@@ -598,17 +596,22 @@ func (f *Fetch) getHash(ctx context.Context, hash types.Hash32, h datastore.Hint
 				completed: make(chan struct{}, 1),
 			},
 		}
+		f.logger.WithContext(ctx).With().Debug("hash request added to queue",
+			log.Stringer("hash", hash),
+			log.Int("queued", len(f.unprocessed)))
+	} else {
+		f.logger.WithContext(ctx).With().Debug("hash request already in queue",
+			log.Stringer("hash", hash),
+			log.Int("retries", f.unprocessed[hash].retries),
+			log.Int("queued", len(f.unprocessed)))
 	}
-	f.logger.With().Debug("request added to queue",
-		log.Stringer("hash", hash),
-		log.Int("queued", len(f.unprocessed)))
 	if len(f.unprocessed) >= f.cfg.QueueSize {
 		f.eg.Go(func() error {
 			f.requestHashBatchFromPeers() // Process the batch.
 			return nil
 		})
 	}
-	return f.unprocessed[hash].promise
+	return f.unprocessed[hash].promise, nil
 }
 
 // RegisterPeerHashes registers provided peer for a list of hashes.
