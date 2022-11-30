@@ -40,7 +40,7 @@ const defaultPoetRetryInterval = 5 * time.Second
 
 type nipostBuilder interface {
 	updatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.Hash32, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
+	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 
 type atxHandler interface {
@@ -96,6 +96,7 @@ type Builder struct {
 	postSetupProvider PostSetupProvider
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
+	initialPostMeta   *types.PostMetadata
 
 	// commitmentAtx caches the ATX ID used for the PoST commitment by this node. It is set / fetched
 	// from the DB by calling `getCommitmentAtx()` and cAtxMutex protects its access.
@@ -319,7 +320,7 @@ func (b *Builder) generateProof(ctx context.Context) error {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
-		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *commitmentAtx)
+		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *commitmentAtx)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
@@ -641,11 +642,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	b.log.With().Info("challenge ready")
 
-	hash, err := b.challenge.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("getting challenge hash failed: %w", err)
-	}
-
 	// Calculate deadline for waiting for poet proofs.
 	// Deadline must fit between:
 	// - the end of the current poet round + grace period
@@ -683,7 +679,15 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
 	}
 
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, hash, *commitmentAtx, poetProofDeadline)
+	challenge := types.PoetChallenge{
+		NIPostChallenge: b.challenge,
+		NumUnits:        b.postSetupProvider.LastOpts().NumUnits,
+	}
+	if b.challenge.PrevATXID == *types.EmptyATXID {
+		challenge.InitialPost = b.initialPost
+		challenge.InitialPostMetadata = b.initialPostMeta
+	}
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &challenge, *commitmentAtx, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
