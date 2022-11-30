@@ -415,6 +415,13 @@ func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.ChallengeHash)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -426,6 +433,14 @@ func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.ID = string(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ChallengeHash = field
 	}
 	return total, nil
 }
