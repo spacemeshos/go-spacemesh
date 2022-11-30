@@ -375,15 +375,11 @@ func NewMockSigner() *MockSigning {
 
 // TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
 type MockSigning struct {
-	signer *signing.EdSigner
+	*signing.EdSigner
 }
 
 func (ms *MockSigning) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.signer.PublicKey().Bytes())
-}
-
-func (ms *MockSigning) Sign(m []byte) []byte {
-	return ms.signer.Sign(m)
+	return types.BytesToNodeID(ms.PublicKey().Bytes())
 }
 
 // PostAPIMock is a mock for Post API.
