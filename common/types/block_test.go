@@ -178,14 +178,6 @@ func FuzzBlockSafety(f *testing.F) {
 	tester.FuzzSafety[Block](f)
 }
 
-func FuzzBlockContextualValidityConsistency(f *testing.F) {
-	tester.FuzzConsistency[BlockContextualValidity](f)
-}
-
-func FuzzBlockContextualValiditySafety(f *testing.F) {
-	tester.FuzzSafety[BlockContextualValidity](f)
-}
-
 func FuzzInnerBlockConsistency(f *testing.F) {
 	tester.FuzzConsistency[InnerBlock](f)
 }

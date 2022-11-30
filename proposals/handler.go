@@ -277,7 +277,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	}
 
 	t1 := time.Now()
-	if err := h.mesh.AddBallot(b); err != nil {
+	if err := h.mesh.AddBallot(ctx, b); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 		}
