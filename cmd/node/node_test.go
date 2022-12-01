@@ -218,20 +218,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
-func setup() {
-	// Reset the shutdown context
-	// oof, globals make testing really difficult
-	ctx, cancel := context.WithCancel(context.Background())
-
-	cmd.SetCtx(ctx)
-	cmd.SetCancel(cancel)
-
-	events.CloseEventReporter()
-}
-
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
-	setup()
-
 	// Use a unique port
 	port := 1244
 
@@ -327,8 +314,6 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
-	setup()
-
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 	r.Equal(9093, app.Config.API.JSONServerPort)
@@ -392,8 +377,6 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
-	setup()
-
 	// Use a unique port
 	port := 1242
 
@@ -454,7 +437,6 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
-	setup()
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 
@@ -491,7 +473,6 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
-	setup()
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 	const message = "nihao shijie"
@@ -539,7 +520,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
 	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
-	setup()
 
 	// Use a unique port
 	port := 1240
@@ -566,6 +546,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
 
+	appCtx, appCancel := context.WithTimeout(context.Background(), 10*time.Second)
+
 	run := func(c *cobra.Command, args []string) {
 		defer app.Cleanup()
 		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
@@ -583,7 +565,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start())
+		require.NoError(t, app.Start(appCtx))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -670,7 +652,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmd.Cancel()() // stop the app
+	appCancel() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
@@ -678,7 +660,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
-	setup()
 	r := require.New(t)
 
 	// Use a unique port
@@ -692,6 +673,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer := signing.NewEdSigner()
 	address := wallet.Address(signer.PublicKey().Bytes())
 
+	appCtx, appCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	run := func(c *cobra.Command, args []string) {
 		defer app.Cleanup()
 		r.NoError(app.Initialize())
@@ -722,7 +704,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start())
+		require.NoError(t, app.Start(appCtx))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -791,7 +773,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmd.Cancel()()
+	appCancel()
 
 	// Wait for it to stop
 	wg.Wait()

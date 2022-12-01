@@ -9,21 +9,21 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
+	ctx    context.Context
 	mu     sync.RWMutex
 	port   int
 	server *http.Server
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(port int) *JSONHTTPServer {
-	return &JSONHTTPServer{port: port}
+func NewJSONHTTPServer(ctx context.Context, port int) *JSONHTTPServer {
+	return &JSONHTTPServer{ctx: ctx, port: port}
 }
 
 // Close stops the server.
@@ -31,9 +31,7 @@ func (s *JSONHTTPServer) Close() error {
 	log.Debug("stopping new json-http service...")
 	server := s.getServer()
 	if server != nil {
-		ctx := cmd.Ctx()
-
-		if err := server.Shutdown(ctx); err != nil {
+		if err := server.Shutdown(s.ctx); err != nil {
 			return fmt.Errorf("shutdown: %w", err)
 		}
 	}

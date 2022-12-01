@@ -495,7 +495,7 @@ func (a *ActivationAPIMock) UpdatePoETServers(context.Context, []string) error {
 
 func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
+	jsonService := NewJSONHTTPServer(context.Background(), cfg.JSONServerPort)
 
 	// attach services
 	for _, svc := range services {
@@ -557,7 +557,7 @@ func TestNewServersConfig(t *testing.T) {
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
-	jsonService := NewJSONHTTPServer(port2)
+	jsonService := NewJSONHTTPServer(context.Background(), port2)
 
 	require.Equal(t, port2, jsonService.port, "Expected same port")
 	require.Equal(t, port1, grpcService.Port, "Expected same port")
@@ -655,16 +655,10 @@ func TestNodeService(t *testing.T) {
 		}},
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			called := false
-
-			cmd.SetCancel(func() { called = true })
-
-			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
 			res, err := c.Shutdown(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, true, called, "cmd.Shutdown() was called")
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
 		}},
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
