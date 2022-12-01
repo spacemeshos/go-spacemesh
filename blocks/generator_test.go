@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -35,8 +37,9 @@ const (
 
 func testConfig() Config {
 	return Config{
-		LayerSize:      10,
-		LayersPerEpoch: 3,
+		LayerSize:        10,
+		LayersPerEpoch:   3,
+		GenBlockInterval: 10 * time.Millisecond,
 	}
 }
 
@@ -59,7 +62,10 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	}
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	tg.Generator = NewGenerator(cdb, tg.mockCState, tg.mockMesh, tg.mockFetch, tg.mockCert, WithGeneratorLogger(lg), WithConfig(testConfig()))
+	tg.Generator = NewGenerator(cdb, tg.mockCState, tg.mockMesh, tg.mockFetch, tg.mockCert,
+		WithGeneratorLogger(lg),
+		WithHareOutputChan(make(chan hare.LayerOutput, 100)),
+		WithConfig(testConfig()))
 	return tg
 }
 
@@ -187,6 +193,46 @@ func Test_StartStop(t *testing.T) {
 	tg.Start()
 	tg.Start() // start for the second time is ok.
 	tg.Stop()
+}
+
+func Test_SerialProcessing(t *testing.T) {
+	tg := createTestGenerator(t)
+	tg.Start()
+	defer tg.Stop()
+
+	numLayers := 4
+	var wg sync.WaitGroup
+	wg.Add(numLayers)
+	for i := uint32(1); i <= uint32(numLayers); i++ {
+		lid := types.NewLayerID(i)
+		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, types.EmptyBlockID).Return(nil)
+		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, types.EmptyBlockID).Return(nil)
+		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, types.EmptyBlockID).Do(
+			func(_ context.Context, gotL types.LayerID, gotB types.BlockID, _ bool) error {
+				require.NoError(t, layers.SetApplied(tg.cdb, gotL, gotB))
+				wg.Done()
+				return nil
+			})
+	}
+
+	tg.hareCh <- hare.LayerOutput{
+		Ctx:   context.TODO(),
+		Layer: types.NewLayerID(3),
+	}
+	tg.hareCh <- hare.LayerOutput{
+		Ctx:   context.TODO(),
+		Layer: types.NewLayerID(4),
+	}
+	tg.hareCh <- hare.LayerOutput{
+		Ctx:   context.TODO(),
+		Layer: types.NewLayerID(2),
+	}
+	tg.hareCh <- hare.LayerOutput{
+		Ctx:   context.TODO(),
+		Layer: types.NewLayerID(1),
+	}
+
+	wg.Wait()
 }
 
 func Test_processHareOutput(t *testing.T) {

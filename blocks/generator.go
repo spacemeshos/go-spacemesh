@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -32,24 +34,28 @@ type Generator struct {
 	ctx    context.Context
 	cancel func()
 
-	hareCh   chan hare.LayerOutput
 	cdb      *datastore.CachedDB
 	msh      meshProvider
 	conState conservativeState
 	fetcher  system.ProposalFetcher
 	cert     certifier
+
+	hareCh      chan hare.LayerOutput
+	hareOutputs map[types.LayerID]hare.LayerOutput
 }
 
 // Config is the config for Generator.
 type Config struct {
-	LayerSize      uint32
-	LayersPerEpoch uint32
+	LayerSize        uint32
+	LayersPerEpoch   uint32
+	GenBlockInterval time.Duration
 }
 
 func defaultConfig() Config {
 	return Config{
-		LayerSize:      50,
-		LayersPerEpoch: 3,
+		LayerSize:        50,
+		LayersPerEpoch:   3,
+		GenBlockInterval: time.Second,
 	}
 }
 
@@ -90,14 +96,15 @@ func NewGenerator(
 	opts ...GeneratorOpt,
 ) *Generator {
 	g := &Generator{
-		logger:   log.NewNop(),
-		cfg:      defaultConfig(),
-		ctx:      context.Background(),
-		cdb:      cdb,
-		msh:      m,
-		conState: cState,
-		fetcher:  f,
-		cert:     c,
+		logger:      log.NewNop(),
+		cfg:         defaultConfig(),
+		ctx:         context.Background(),
+		cdb:         cdb,
+		msh:         m,
+		conState:    cState,
+		fetcher:     f,
+		cert:        c,
+		hareOutputs: map[types.LayerID]hare.LayerOutput{},
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -130,12 +137,34 @@ func (g *Generator) run() error {
 		case <-g.ctx.Done():
 			return fmt.Errorf("context done: %w", g.ctx.Err())
 		case out := <-g.hareCh:
-			// TODO: change this to sequential block processing
-			// https://github.com/spacemeshos/go-spacemesh/issues/3297
-			g.eg.Go(func() error {
-				_ = g.processHareOutput(out)
-				return nil
-			})
+			g.logger.WithContext(out.Ctx).With().Info("received hare output",
+				out.Layer,
+				log.Int("num_proposals", len(out.Proposals)))
+			g.hareOutputs[out.Layer] = out
+			g.tryGenBlock()
+		case <-time.After(g.cfg.GenBlockInterval):
+			if len(g.hareOutputs) > 0 {
+				g.tryGenBlock()
+			}
+		}
+	}
+}
+
+func (g *Generator) tryGenBlock() {
+	lastApplied, err := layers.GetLastApplied(g.cdb)
+	if err != nil {
+		g.logger.Error("failed to get latest applied layer", log.Err(err))
+		return
+	}
+	next := lastApplied.Add(1)
+	for {
+		if out, ok := g.hareOutputs[next]; !ok {
+			break
+		} else {
+			g.logger.WithContext(out.Ctx).With().Info("ready to process hare output", next)
+			_ = g.processHareOutput(out)
+			delete(g.hareOutputs, next)
+			next = next.Add(1)
 		}
 	}
 }
