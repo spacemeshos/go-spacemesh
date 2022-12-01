@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -33,7 +34,7 @@ func (db *PoetDb) HasProof(proofRef types.PoetProofRef) bool {
 }
 
 // ValidateAndStore validates and stores a new PoET proof.
-func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
+func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error {
 	ref, err := proofMessage.Ref()
 	if err != nil {
 		return err
@@ -48,16 +49,16 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 		return err
 	}
 
-	return db.StoreProof(ref, proofMessage)
+	return db.StoreProof(ctx, ref, proofMessage)
 }
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
-func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
+func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, data []byte) error {
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(data, &proofMessage); err != nil {
 		return fmt.Errorf("parse message: %w", err)
 	}
-	return db.ValidateAndStore(&proofMessage)
+	return db.ValidateAndStore(ctx, &proofMessage)
 }
 
 // Validate validates a new PoET proof.
@@ -85,7 +86,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 }
 
 // StoreProof saves the poet proof in local db.
-func (db *PoetDb) StoreProof(ref types.PoetProofRef, proofMessage *types.PoetProofMessage) error {
+func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofMessage *types.PoetProofMessage) error {
 	messageBytes, err := codec.Encode(proofMessage)
 	if err != nil {
 		return fmt.Errorf("could not marshal proof message: %w", err)
@@ -96,7 +97,7 @@ func (db *PoetDb) StoreProof(ref types.PoetProofRef, proofMessage *types.PoetPro
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 
-	db.log.With().Info("stored poet proof",
+	db.log.WithContext(ctx).With().Info("stored poet proof",
 		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
 		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),

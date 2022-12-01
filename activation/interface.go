@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,7 +16,7 @@ type atxReceiver interface {
 type poetValidatorPersister interface {
 	HasProof(types.PoetProofRef) bool
 	Validate(types.PoetProof, []byte, string, []byte) error
-	StoreProof(types.PoetProofRef, *types.PoetProofMessage) error
+	StoreProof(context.Context, types.PoetProofRef, *types.PoetProofMessage) error
 }
 
 type nipostValidator interface {
