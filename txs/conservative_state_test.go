@@ -564,13 +564,13 @@ func TestGetMeshTransaction(t *testing.T) {
 	require.NoError(t, tcs.LinkTXsWithProposal(lid, pid, []types.TransactionID{tx.ID}))
 	mtx, err = tcs.GetMeshTransaction(tx.ID)
 	require.NoError(t, err)
-	require.Equal(t, types.PROPOSAL, mtx.State)
+	require.Equal(t, types.MEMPOOL, mtx.State)
 
 	bid := types.BlockID{2, 3, 4}
 	require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID}))
 	mtx, err = tcs.GetMeshTransaction(tx.ID)
 	require.NoError(t, err)
-	require.Equal(t, types.BLOCK, mtx.State)
+	require.Equal(t, types.MEMPOOL, mtx.State)
 }
 
 func Test_ApplyLayer_UpdateHeader(t *testing.T) {
@@ -665,8 +665,8 @@ func TestApplyLayer(t *testing.T) {
 		mtx, err := transactions.Get(tcs.db, id)
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
-		require.Equal(t, block.ID(), mtx.BlockID)
 		require.Equal(t, lid, mtx.LayerID)
+		require.Equal(t, block.ID(), mtx.BlockID)
 	}
 }
 
@@ -724,8 +724,8 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			require.Equal(t, types.LayerID{}, mtx.LayerID)
 		} else {
 			require.Equal(t, types.APPLIED, mtx.State)
-			require.Equal(t, block.ID(), mtx.BlockID)
 			require.Equal(t, lid, mtx.LayerID)
+			require.Equal(t, block.ID(), mtx.BlockID)
 		}
 	}
 }
