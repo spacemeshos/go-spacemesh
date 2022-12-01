@@ -59,7 +59,7 @@ func (s *GatewayService) VerifyChallenge(ctx context.Context, in *pb.VerifyChall
 	log.Info("GRPC GatewayService.VerifyChallenge")
 	result, err := s.verifier.Verify(ctx, in.Challenge, in.Signature)
 	if err == nil {
-		return &pb.VerifyChallengeResponse{Hash: result.Hash.Bytes(), NodeId: result.NodeID.ToBytes()}, nil
+		return &pb.VerifyChallengeResponse{Hash: result.Hash.Bytes(), NodeId: result.NodeID.Bytes()}, nil
 	}
 
 	if errors.Is(err, &activation.VerifyError{}) {

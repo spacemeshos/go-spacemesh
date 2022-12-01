@@ -130,7 +130,7 @@ func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.
 	p := (*proving.Proof)(PoST)
 
 	m := &proving.ProofMetadata{
-		NodeId:          nodeId.ToBytes(),
+		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
 		Challenge:       PostMetadata.Challenge,
@@ -153,7 +153,7 @@ func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.AT
 	}
 
 	meta := &shared.PostMetadata{
-		NodeId:          nodeId.ToBytes(),
+		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
 		BitsPerLabel:    PostMetadata.BitsPerLabel,

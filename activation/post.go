@@ -178,7 +178,7 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 	}
 
 	newInit, err := initialization.NewInitializer(
-		initialization.WithNodeId(mgr.id.ToBytes()),
+		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(commitmentAtx.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
@@ -219,7 +219,7 @@ func (mgr *PostSetupManager) StartSession(opts atypes.PostSetupOpts, commitmentA
 			log.String("provider", fmt.Sprintf("%d", opts.ComputeProviderID)),
 		)
 
-		if err := newInit.Initialize(ctx); err != nil {
+		if err := mgr.init.Initialize(ctx); err != nil {
 			mgr.mu.Lock()
 			defer mgr.mu.Unlock()
 
@@ -290,7 +290,7 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types
 	}
 	mgr.mu.Unlock()
 
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.ToBytes(), commitmentAtx.Bytes())
+	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.Bytes(), commitmentAtx.Bytes())
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
