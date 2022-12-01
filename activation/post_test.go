@@ -47,12 +47,11 @@ func TestPostSetupManager(t *testing.T) {
 		for {
 			select {
 			case <-ctx.Done():
-				return nil
+				return ctx.Err()
 			case <-timer.C:
 				status := mgr.Status()
 				req.GreaterOrEqual(status.NumLabelsWritten, lastStatus.NumLabelsWritten)
 				req.Equal(opts, *status.LastOpts)
-				req.Nil(status.LastError)
 
 				if status.NumLabelsWritten < uint64(opts.NumUnits)*cfg.LabelsPerUnit {
 					req.Equal(atypes.PostSetupStateInProgress, status.State)
@@ -62,32 +61,23 @@ func TestPostSetupManager(t *testing.T) {
 	})
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	cancel()
 	eg.Wait()
 
 	req.Equal(opts, *mgr.LastOpts())
-	req.NoError(mgr.LastError())
 	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).
-	doneChan, err = mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	req.Equal(opts, *mgr.LastOpts())
-	req.NoError(mgr.LastError())
 
 	// Cleanup.
-	req.NoError(mgr.StopSession(true))
+	req.NoError(mgr.Reset())
 
 	// Create data (same opts, after deletion).
-	doneChan, err = mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	req.Equal(opts, *mgr.LastOpts())
-	req.NoError(mgr.LastError())
 	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -104,12 +94,9 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
-	req.Nil(status.LastError)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
 
 	// Re-instantiate `PostSetupManager`.
@@ -121,7 +108,6 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Equal(atypes.PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
-	req.Nil(status.LastError)
 }
 
 func TestPostSetupManager_GenerateProof(t *testing.T) {
@@ -138,9 +124,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Generate proof.
 	_, _, err = mgr.GenerateProof(ch, goldenATXID)
@@ -168,9 +152,7 @@ func TestPostSetupManager_GetPow(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Get nonce.
 	nonce, err := mgr.GetPowNonce()
@@ -201,29 +183,19 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Nil(status.LastOpts)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify state.
 	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
 
-	// Stop without file deletion.
-	req.NoError(mgr.StopSession(false))
-
-	// Verify state.
-	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
-
-	// Stop with file deletion.
-	req.NoError(mgr.StopSession(true))
+	// Reset.
+	req.NoError(mgr.Reset())
 
 	// Verify state.
 	req.Equal(atypes.PostSetupStateNotStarted, mgr.Status().State)
 
 	// Create data again.
-	doneChan, err = mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify state.
 	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
@@ -234,30 +206,28 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	cdb := newCachedDB(t)
 	cfg, opts := getTestConfig(t)
-	opts.NumUnits *= 10
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
+	ctx, cancel := context.WithCancel(context.Background())
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return mgr.StartSession(ctx, opts, goldenATXID)
+	})
 
 	// Wait a bit for the setup to proceed.
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Verify the intermediate status.
 	status := mgr.Status()
 	req.Equal(&opts, status.LastOpts)
 	req.Equal(atypes.PostSetupStateInProgress, status.State)
 
-	// Stop without files deletion.
-	req.NoError(mgr.StopSession(false))
+	// Stop initialization.
+	cancel()
 
-	select {
-	case <-doneChan:
-	default:
-		req.Fail("`StopSession` is expected to block until `StartSession` is done")
-	}
+	req.ErrorIs(eg.Wait(), context.Canceled)
 
 	// Verify status.
 	status = mgr.Status()
@@ -266,9 +236,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Continue to create data.
-	doneChan, err = mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify status.
 	status = mgr.Status()

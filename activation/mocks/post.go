@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -122,19 +123,32 @@ func (mr *MockPostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastOpts", reflect.TypeOf((*MockPostSetupProvider)(nil).LastOpts))
 }
 
-// StartSession mocks base method.
-func (m *MockPostSetupProvider) StartSession(opts types.PostSetupOpts, commitmentAtx types0.ATXID) (chan struct{}, error) {
+// Reset mocks base method.
+func (m *MockPostSetupProvider) Reset() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", opts, commitmentAtx)
-	ret0, _ := ret[0].(chan struct{})
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Reset")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Reset indicates an expected call of Reset.
+func (mr *MockPostSetupProviderMockRecorder) Reset() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockPostSetupProvider)(nil).Reset))
+}
+
+// StartSession mocks base method.
+func (m *MockPostSetupProvider) StartSession(context context.Context, opts types.PostSetupOpts, commitmentAtx types0.ATXID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartSession", context, opts, commitmentAtx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockPostSetupProviderMockRecorder) StartSession(opts, commitmentAtx interface{}) *gomock.Call {
+func (mr *MockPostSetupProviderMockRecorder) StartSession(context, opts, commitmentAtx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockPostSetupProvider)(nil).StartSession), opts, commitmentAtx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockPostSetupProvider)(nil).StartSession), context, opts, commitmentAtx)
 }
 
 // Status mocks base method.
@@ -149,18 +163,4 @@ func (m *MockPostSetupProvider) Status() *types.PostSetupStatus {
 func (mr *MockPostSetupProviderMockRecorder) Status() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockPostSetupProvider)(nil).Status))
-}
-
-// StopSession mocks base method.
-func (m *MockPostSetupProvider) StopSession(deleteFiles bool) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StopSession", deleteFiles)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// StopSession indicates an expected call of StopSession.
-func (mr *MockPostSetupProviderMockRecorder) StopSession(deleteFiles interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopSession", reflect.TypeOf((*MockPostSetupProvider)(nil).StopSession), deleteFiles)
 }

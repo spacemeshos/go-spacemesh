@@ -246,10 +246,6 @@ func statusToPbStatus(status *atypes.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.
 	pbStatus.NumLabelsWritten = status.NumLabelsWritten
 
-	if status.LastError != nil {
-		pbStatus.ErrorMessage = status.LastError.Error()
-	}
-
 	if status.LastOpts != nil {
 		pbStatus.Opts = &pb.PostSetupOpts{
 			DataDir:           status.LastOpts.DataDir,

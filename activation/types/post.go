@@ -30,7 +30,6 @@ type PostSetupStatus struct {
 	State            PostSetupState
 	NumLabelsWritten uint64
 	LastOpts         *PostSetupOpts
-	LastError        error
 }
 
 type PostSetupState int32

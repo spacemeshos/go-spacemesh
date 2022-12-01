@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
@@ -82,6 +83,8 @@ type Config struct {
 type Builder struct {
 	pendingPoetClients atomic.Pointer[[]PoetProvingServiceClient]
 	started            *atomic.Bool
+
+	eg errgroup.Group
 
 	signer
 	accountLock       sync.RWMutex
@@ -211,27 +214,16 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpt
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 
-	doneChan, err := b.postSetupProvider.StartSession(opts, *commitmentAtx)
-	if err != nil {
-		b.started.Store(false)
-		return fmt.Errorf("failed to start post setup session: %w", err)
-	}
-	go func() {
-		// Signal that smeshing is finished. StartSmeshing will refuse to restart until this
-		// goroutine finished.
+	b.eg.Go(func() error {
 		defer b.started.Store(false)
-		select {
-		case <-ctx.Done():
-			return
-		case <-doneChan:
+
+		if err := b.postSetupProvider.StartSession(ctx, opts, *commitmentAtx); err != nil {
+			return err
 		}
 
-		if s := b.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
-			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
-			return
-		}
 		b.run(ctx)
-	}()
+		return nil
+	})
 
 	return nil
 }
@@ -261,12 +253,22 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		return errors.New("not started")
 	}
 
-	if err := b.postSetupProvider.StopSession(deleteFiles); err != nil {
+	b.stop()
+	err := b.eg.Wait()
+	switch {
+	case err == nil || errors.Is(err, context.Canceled):
+		if !deleteFiles {
+			return nil
+		}
+
+		if err := b.postSetupProvider.Reset(); err != nil {
+			b.log.With().Error("failed to delete post files", log.Err(err))
+			return err
+		}
+		return nil
+	default:
 		return fmt.Errorf("failed to stop post data creation session: %w", err)
 	}
-
-	b.stop()
-	return nil
 }
 
 // SmesherID returns the ID of the smesher that created this activation.
