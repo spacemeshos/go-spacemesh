@@ -2,9 +2,11 @@ package activation
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/post/proving"
+	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
@@ -146,9 +148,19 @@ func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.
 }
 
 func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	bitsPerLabel := PostMetadata.BitsPerLabel
+	if vrfNonce == nil {
+		return errors.New("vrfNonce is nil")
+	}
 
-	if err := verifying.VerifyPow(uint64(*vrfNonce), numUnits, bitsPerLabel, nodeId.ToBytes(), commitmentAtxId.Bytes()); err != nil {
+	meta := &shared.PostMetadata{
+		NodeId:          nodeId.ToBytes(),
+		CommitmentAtxId: commitmentAtxId.Bytes(),
+		NumUnits:        numUnits,
+		BitsPerLabel:    PostMetadata.BitsPerLabel,
+		Nonce:           (*uint64)(vrfNonce),
+	}
+
+	if err := verifying.VerifyPow(meta); err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil

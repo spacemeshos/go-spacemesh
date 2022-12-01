@@ -874,6 +874,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	handler := NewHandler(cdb, mfetch, layersPerEpoch, tickSize, goldenATXID, mvalidator, receiver, log)
 
+	nonce := types.VRFPostIndex(1)
 	atx1 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -889,6 +890,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 				PostMetadata: &types.PostMetadata{},
 			},
 			InitialPost: &types.Post{Indices: []byte{1}},
+			VRFNonce:    &nonce,
 		},
 	}
 	require.NoError(t, SignAtx(sig, atx1))
@@ -898,6 +900,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.NoError(t, err)
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
