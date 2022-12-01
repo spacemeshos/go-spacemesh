@@ -29,7 +29,7 @@ func DefaultConfig() Config {
 		HighPeers:            100,
 		GracePeersShutdown:   30 * time.Second,
 		BootstrapTimeout:     10 * time.Second,
-		MaxMessageSize:       200 << 10,
+		MaxMessageSize:       2 << 20,
 		CheckInterval:        3 * time.Minute,
 		CheckTimeout:         30 * time.Second,
 		CheckPeersNumber:     10,
