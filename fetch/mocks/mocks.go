@@ -273,17 +273,17 @@ func (m *MockpoetHandler) EXPECT() *MockpoetHandlerMockRecorder {
 }
 
 // ValidateAndStoreMsg mocks base method.
-func (m *MockpoetHandler) ValidateAndStoreMsg(data []byte) error {
+func (m *MockpoetHandler) ValidateAndStoreMsg(arg0 context.Context, arg1 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", data)
+	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAndStoreMsg indicates an expected call of ValidateAndStoreMsg.
-func (mr *MockpoetHandlerMockRecorder) ValidateAndStoreMsg(data interface{}) *gomock.Call {
+func (mr *MockpoetHandlerMockRecorder) ValidateAndStoreMsg(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockpoetHandler)(nil).ValidateAndStoreMsg), data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockpoetHandler)(nil).ValidateAndStoreMsg), arg0, arg1)
 }
 
 // MockmeshProvider is a mock of meshProvider interface.

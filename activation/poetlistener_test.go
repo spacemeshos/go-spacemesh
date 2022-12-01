@@ -30,17 +30,17 @@ func TestNewPoetListener(t *testing.T) {
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	poetDb.EXPECT().StoreProof(ref, gomock.Any()).Return(nil)
+	poetDb.EXPECT().StoreProof(gomock.Any(), ref, gomock.Any()).Return(nil)
 	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	poetDb.EXPECT().StoreProof(ref, gomock.Any()).Return(errors.New("unknown"))
+	poetDb.EXPECT().StoreProof(gomock.Any(), ref, gomock.Any()).Return(errors.New("unknown"))
 	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	poetDb.EXPECT().StoreProof(ref, gomock.Any()).Return(sql.ErrObjectExists)
+	poetDb.EXPECT().StoreProof(gomock.Any(), ref, gomock.Any()).Return(sql.ErrObjectExists)
 	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
