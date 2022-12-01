@@ -342,6 +342,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	newVerified, updated := msh.trtl.Updates()
+	logger = logger.WithFields(log.Stringer("verified", newVerified))
 	if err := msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
 		return err
 	}
@@ -397,8 +398,7 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids 
 func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to, latestVerified types.LayerID) error {
 	logger = logger.WithFields(
 		log.Stringer("from", from),
-		log.Stringer("to", to),
-		log.Stringer("latest_verified", latestVerified))
+		log.Stringer("to", to))
 	logger.Info("pushing layers to state")
 	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Fatal("tried to push genesis layers")

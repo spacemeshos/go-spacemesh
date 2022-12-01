@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 	time "time"
 
@@ -85,17 +86,17 @@ func (mr *MockpoetValidatorPersisterMockRecorder) HasProof(arg0 interface{}) *go
 }
 
 // StoreProof mocks base method.
-func (m *MockpoetValidatorPersister) StoreProof(arg0 types.PoetProofRef, arg1 *types.PoetProofMessage) error {
+func (m *MockpoetValidatorPersister) StoreProof(arg0 context.Context, arg1 types.PoetProofRef, arg2 *types.PoetProofMessage) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StoreProof", arg0, arg1)
+	ret := m.ctrl.Call(m, "StoreProof", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StoreProof indicates an expected call of StoreProof.
-func (mr *MockpoetValidatorPersisterMockRecorder) StoreProof(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockpoetValidatorPersisterMockRecorder) StoreProof(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreProof", reflect.TypeOf((*MockpoetValidatorPersister)(nil).StoreProof), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreProof", reflect.TypeOf((*MockpoetValidatorPersister)(nil).StoreProof), arg0, arg1, arg2)
 }
 
 // Validate mocks base method.
