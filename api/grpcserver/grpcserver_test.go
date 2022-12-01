@@ -1750,7 +1750,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 0, len(res.Transactions))
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 		}},
 		{"TransactionsState_All", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1764,7 +1764,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 1, len(res.Transactions))
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 
 			checkTransaction(t, res.Transactions[0])
 		}},
@@ -1817,7 +1817,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				require.Nil(t, res.Transaction)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 			}()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
@@ -1846,7 +1846,7 @@ func TestTransactionService(t *testing.T) {
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 				checkTransaction(t, res.Transaction)
 			}()
 
@@ -1949,7 +1949,7 @@ func TestTransactionService(t *testing.T) {
 					res, err := stream.Recv()
 					require.NoError(t, err)
 					require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 					checkTransaction(t, res.Transaction)
 				}
 			}()
