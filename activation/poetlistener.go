@@ -47,7 +47,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 		return pubsub.ValidationIgnore
 	}
 
-	if err := l.poetDb.StoreProof(ref, &proofMessage); err != nil {
+	if err := l.poetDb.StoreProof(ctx, ref, &proofMessage); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			// don't spam the network
 			return pubsub.ValidationIgnore
