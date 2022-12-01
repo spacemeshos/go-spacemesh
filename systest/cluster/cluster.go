@@ -580,11 +580,7 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		i := i
 		n := nodes[i]
 		eg.Go(func() error {
-<<<<<<< HEAD
-			dbg := spacemeshv1.NewDebugServiceClient(n)
-=======
 			dbg := pb.NewDebugServiceClient(n)
->>>>>>> develop
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err

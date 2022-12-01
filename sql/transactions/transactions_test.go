@@ -49,13 +49,6 @@ func makeMeshTX(tx *types.Transaction, lid types.LayerID, bid types.BlockID, rec
 	}
 }
 
-func getAndCheckMeshTX(t *testing.T, db sql.Executor, tid types.TransactionID, expected *types.MeshTransaction) {
-	t.Helper()
-	got, err := Get(db, tid)
-	require.NoError(t, err)
-	checkMeshTXEqual(t, *expected, *got)
-}
-
 func checkMeshTXEqual(t *testing.T, expected, got types.MeshTransaction) {
 	t.Helper()
 	require.EqualValues(t, expected.Received.UnixNano(), got.Received.UnixNano())
