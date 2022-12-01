@@ -145,6 +145,15 @@ func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.
 	return nil
 }
 
+func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	bitsPerLabel := PostMetadata.BitsPerLabel
+
+	if err := verifying.VerifyPow(uint64(*vrfNonce), numUnits, bitsPerLabel, nodeId.ToBytes(), commitmentAtxId.Bytes()); err != nil {
+		return fmt.Errorf("verify VRF nonce: %w", err)
+	}
+	return nil
+}
+
 func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, goldenATXID types.ATXID, expectedPostIndicies []byte) error {
 	if challenge.Sequence != 0 {
 		return fmt.Errorf("no prevATX declared, but sequence number not zero")

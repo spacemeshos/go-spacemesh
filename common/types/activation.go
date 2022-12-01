@@ -190,6 +190,7 @@ type InnerActivationTx struct {
 
 	NIPost      *NIPost
 	InitialPost *Post
+	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
 	id *ATXID // non-exported cache of the ATXID
@@ -390,6 +391,33 @@ type NIPost struct {
 	// The proof should be verified upon the metadata during the syntactic validation,
 	// while the metadata should be verified during the contextual validation.
 	PostMetadata *PostMetadata
+}
+
+// VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
+// grinding of identities for VRF eligibility.
+type VRFPostIndex uint64
+
+func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(*v))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		value, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		*v = VRFPostIndex(value)
+	}
+	return total, nil
 }
 
 // Post is an alias to postShared.Proof.

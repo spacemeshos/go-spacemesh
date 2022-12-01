@@ -153,6 +153,10 @@ func (*ValidatorMock) ValidatePost(types.NodeID, types.ATXID, *types.Post, *type
 	return nil
 }
 
+func (*ValidatorMock) ValidateVRFNonce(types.NodeID, types.ATXID, *types.VRFPostIndex, *types.PostMetadata, uint32) error {
+	return nil
+}
+
 // TODO(mafa): use gomock instead of this.
 type FaultyNetMock struct {
 	bt     []byte
