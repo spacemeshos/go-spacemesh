@@ -2767,7 +2767,7 @@ func TestEventsReceived(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, txRes.Transaction)
 		require.Equal(t, globalTx.ID.Bytes(), txRes.TransactionState.Id.Id)
-		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, txRes.TransactionState.State)
 
 		acc1Res, err := principalStream.Recv()
 		require.NoError(t, err)
