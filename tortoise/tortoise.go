@@ -31,7 +31,7 @@ type turtle struct {
 	cdb    *datastore.CachedDB
 
 	beacons system.BeaconGetter
-	updater blockValidityUpdater
+	updated []types.BlockContextualValidity
 
 	*state
 
@@ -46,7 +46,6 @@ func newTurtle(
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	beacons system.BeaconGetter,
-	updater blockValidityUpdater,
 	config Config,
 ) *turtle {
 	t := &turtle{
@@ -55,7 +54,6 @@ func newTurtle(
 		logger:  logger,
 		cdb:     cdb,
 		beacons: beacons,
-		updater: updater,
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -382,6 +380,9 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		}
 		prev := t.layer(process.Sub(1))
 		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+		t.processed = process
+		processedLayer.Set(float64(t.processed.Value))
+
 		for _, ballot := range t.ballots[process] {
 			t.countBallot(t.logger, ballot)
 		}
@@ -389,8 +390,6 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 			t.full.countDelayed(t.logger, process)
 			t.full.counted = process
 		}
-		t.processed = process
-		processedLayer.Set(float64(t.processed.Value))
 
 		if err := t.loadBlocksData(process); err != nil {
 			return err
@@ -483,12 +482,12 @@ func (t *turtle) verifyLayers() error {
 		}
 		verified = target
 		for _, block := range t.layers[target].blocks {
-			if block.persisted == block.validity {
+			if block.emitted == block.validity {
 				continue
 			}
 			// record range of layers where opinion has changed.
 			// once those layers fall out of hdist window - opinion can be recomputed
-			if block.validity != block.hare || (block.persisted != block.validity && block.persisted != abstain) {
+			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
@@ -502,13 +501,17 @@ func (t *turtle) verifyLayers() error {
 			logger.With().Debug("update validity", block.layer, block.id,
 				log.Stringer("validity", block.validity),
 				log.Stringer("hare", block.hare),
-				log.Stringer("persisted", block.persisted),
+				log.Stringer("emitted", block.emitted),
 			)
-			err := t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
-			if err != nil {
-				return fmt.Errorf("saving validity for %s: %w", block.id, err)
+			if t.updated == nil {
+				t.updated = []types.BlockContextualValidity{}
 			}
-			block.persisted = block.validity
+			t.updated = append(t.updated, types.BlockContextualValidity{
+				ID:       block.id,
+				Layer:    target,
+				Validity: block.validity == support,
+			})
+			block.emitted = block.validity
 		}
 	}
 	t.verified = verified

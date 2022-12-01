@@ -111,7 +111,7 @@ func (h *Handshake) start(ctx context.Context, sub event.Subscription) {
 						logger.With().Warning("failed to complete handshake with peer",
 							log.Err(err),
 						)
-						_ = h.h.Network().ClosePeer(id.Peer)
+						h.h.Network().ClosePeer(id.Peer)
 						return nil
 					}
 					logger.Debug("handshake completed")

@@ -226,8 +226,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.ErrorContains(t, err, "previous atx belongs to different miner")
-		require.ErrorContains(t, err, fmt.Sprintf("atx.ID: %v", atx.ShortString()))
-		require.ErrorContains(t, err, fmt.Sprintf("atx.NodeID: %v", atx.NodeID()))
+		require.ErrorContains(t, err, fmt.Sprintf("nodeID: %v", atx.NodeID()))
 		require.ErrorContains(t, err, fmt.Sprintf("prevAtx.ID: %v", atxList[0].ID()))
 		require.ErrorContains(t, err, fmt.Sprintf("prevAtx.NodeID: %v", atxList[0].NodeID()))
 	})
@@ -238,7 +237,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		challenge := newChallenge(1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, npst, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "atx layer (1012) must be after positioning atx layer (1020)")
+		require.EqualError(t, err, "positioning atx layer (1020) must be before 1012")
 	})
 
 	t.Run("wrong layer for commitment atx", func(t *testing.T) {
@@ -251,12 +250,13 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "atx layer (1012) must be after commitment atx layer (1020)")
+		require.EqualError(t, err, "challenge publayer (1012) must be after commitment atx publayer (1020)")
 	})
 
 	t.Run("prevAtx not declared but sequence number not zero", func(t *testing.T) {
 		challenge := newChallenge(1, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		atx.InitialPost = initialPost
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "no prevATX declared, but sequence number not zero")
 	})
@@ -264,6 +264,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	t.Run("prevAtx not declared but initial Post not included", func(t *testing.T) {
 		challenge := newChallenge(0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
+		atx.InitialPostIndices = []byte{}
+		atx.CommitmentATX = &goldenATXID
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "no prevATX declared, but initial Post is not included")
 	})
@@ -296,6 +298,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = append([]byte{}, initialPost.Indices...)
 		atx.InitialPostIndices[0]++
+		atx.CommitmentATX = &goldenATXID
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
 		require.EqualError(t, err, "initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 	})
@@ -316,21 +319,21 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "commitment atx not found")
+		require.ErrorIs(t, err, &AtxNotFoundError{Id: cATX})
 	})
 
 	t.Run("prevAtx declared but not found", func(t *testing.T) {
 		challenge := newChallenge(1, types.RandomATXID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.ErrorContains(t, err, "prevATX not found")
+		require.ErrorIs(t, err, &AtxNotFoundError{Id: challenge.PrevATXID})
 	})
 
 	t.Run("posAtx declared but not found", func(t *testing.T) {
 		challenge := newChallenge(1, prevAtx.ID(), types.RandomATXID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.TODO(), atx)
-		require.EqualError(t, err, "positioning atx not found")
+		require.ErrorIs(t, err, &AtxNotFoundError{Id: challenge.PositioningATX})
 	})
 
 	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {

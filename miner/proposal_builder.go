@@ -32,9 +32,10 @@ const (
 )
 
 var (
-	errGenesis   = errors.New("not building proposals: genesis")
-	errNotSynced = errors.New("not building proposals: node not synced")
-	errNoBeacon  = errors.New("not building proposals: missing beacon")
+	errGenesis        = errors.New("not building proposals: genesis")
+	errNotSynced      = errors.New("not building proposals: node not synced")
+	errNoBeacon       = errors.New("not building proposals: missing beacon")
+	errDuplicateLayer = errors.New("not building proposals: duplicate layer event")
 )
 
 // ProposalBuilder builds Proposals for a miner.
@@ -325,6 +326,17 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	logger.With().Info("miner got beacon to build proposals", beacon)
 
 	started := time.Now()
+
+	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.PublicKey().Bytes())
+	if err != nil {
+		logger.With().Error("count ballots in a layer for public key", log.Err(err))
+		return err
+	} else if count != 0 {
+		logger.With().Error("smesher already created a proposal in this layer",
+			log.Int("count", count),
+		)
+		return errDuplicateLayer
+	}
 
 	atxID, activeSet, proofs, err := pb.proposalOracle.GetProposalEligibility(layerID, beacon)
 	if err != nil {

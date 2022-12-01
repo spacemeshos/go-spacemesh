@@ -38,7 +38,7 @@ func (pq priorityQueue) Swap(i, j int) {
 }
 
 // Push implements head.Interface.
-func (pq *priorityQueue) Push(i interface{}) {
+func (pq *priorityQueue) Push(i any) {
 	n := len(*pq)
 	it := i.(*item)
 	it.index = n
@@ -46,7 +46,7 @@ func (pq *priorityQueue) Push(i interface{}) {
 }
 
 // Pop implements head.Interface.
-func (pq *priorityQueue) Pop() interface{} {
+func (pq *priorityQueue) Pop() any {
 	old := *pq
 	n := len(old)
 	it := old[n-1]

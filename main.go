@@ -21,7 +21,7 @@ func main() { // run the app
 	cmd.Version = version
 	cmd.Commit = commit
 	cmd.Branch = branch
-	if err := node.Cmd.Execute(); err != nil {
+	if err := node.GetCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

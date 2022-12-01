@@ -123,7 +123,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 5m -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
@@ -150,7 +150,6 @@ test-fmt:
 .PHONY: test-fmt
 
 lint: get-libs
-	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
@@ -160,7 +159,6 @@ lint-fix: get-libs
 .PHONY: lint-fix
 
 lint-github-action: get-libs
-	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: lint-github-action
 

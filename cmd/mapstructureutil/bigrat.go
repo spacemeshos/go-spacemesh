@@ -10,7 +10,7 @@ import (
 
 // BigRatDecodeFunc mapstructure decode func for big.Rat.
 func BigRatDecodeFunc() mapstructure.DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if t != reflect.TypeOf(big.Rat{}) {
 			return data, nil
 		}

@@ -197,7 +197,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, blockSeed []
 	return nil
 }
 
-func nonceMarshaller(any interface{}) log.ArrayMarshaler {
+func nonceMarshaller(any any) log.ArrayMarshaler {
 	return log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		var allNonce []uint64
 		noncesList, ok := any.([]uint64)

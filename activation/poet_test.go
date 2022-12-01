@@ -1,23 +1,28 @@
-package activation
+package activation_test
 
 import (
 	"context"
-	"crypto/rand"
 	"testing"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-type rpcPoetTestCase struct {
-	name string
-	test func(c *HTTPPoetHarness, assert *require.Assertions)
+type gatewayService struct {
+	pb.UnimplementedGatewayServiceServer
 }
 
-var httpPoetTestCases = []*rpcPoetTestCase{
-	{name: "HTTP poet client", test: testHTTPPoetClient},
+func (*gatewayService) VerifyChallenge(ctx context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
+	return &pb.VerifyChallengeResponse{
+		Hash: []byte("hash"),
+	}, nil
 }
 
 func TestHTTPPoet(t *testing.T) {
@@ -26,7 +31,14 @@ func TestHTTPPoet(t *testing.T) {
 	}
 	r := require.New(t)
 
-	c, err := NewHTTPPoetHarness(true)
+	gtw := util.NewMockGrpcServer(t)
+	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
+	var eg errgroup.Group
+	eg.Go(gtw.Serve)
+	t.Cleanup(func() { r.NoError(eg.Wait()) })
+	t.Cleanup(gtw.Stop)
+
+	c, err := activation.NewHTTPPoetHarness(true, activation.WithGateway(gtw.Target()))
 	r.NoError(err)
 	r.NotNil(c)
 
@@ -37,23 +49,9 @@ func TestHTTPPoet(t *testing.T) {
 		}
 	})
 
-	for _, testCase := range httpPoetTestCases {
-		success := t.Run(testCase.name, func(t1 *testing.T) {
-			testCase.test(c, r)
-		})
-
-		if !success {
-			break
-		}
-	}
-}
-
-func testHTTPPoetClient(c *HTTPPoetHarness, assert *require.Assertions) {
-	var ch types.Hash32
-	_, err := rand.Read(ch[:])
-	assert.NoError(err)
-
-	poetRound, err := c.Submit(context.TODO(), ch)
-	assert.NoError(err)
-	assert.NotNil(poetRound)
+	ch := types.RandomHash()
+	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signing.NewEdSigner().Sign(ch.Bytes()))
+	r.NoError(err)
+	r.NotNil(poetRound)
+	r.Equal([]byte("hash"), poetRound.ChallengeHash)
 }

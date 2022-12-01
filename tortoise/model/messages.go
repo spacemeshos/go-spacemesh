@@ -7,7 +7,7 @@ import (
 )
 
 // Message is an alias to interface.
-type Message interface{}
+type Message any
 
 type (
 	// Layer clock events. Reordering them means that node has issue with local clock,

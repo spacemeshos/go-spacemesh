@@ -521,6 +521,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	})
 	require.NoError(t, blocks.Add(ts.cdb, block))
 	require.NoError(t, certificates.SetHareOutput(ts.cdb, failed, block.ID()))
+	require.NoError(t, blocks.SetValid(ts.cdb, block.ID()))
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		if lid != failed {
 			require.NoError(t, certificates.SetHareOutput(ts.cdb, lid, types.EmptyBlockID))
@@ -531,17 +532,16 @@ func TestSyncMissingLayer(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid).Return(nil)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
-		if lid.Before(failed) {
-			ts.msh.SetZeroBlockLayer(context.TODO(), lid)
-		}
+		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
 		if lid == failed {
 			errMissingTXs := errors.New("missing TXs")
 			ts.mConState.EXPECT().ApplyLayer(gomock.Any(), block).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
 					require.Equal(t, block.ID(), got.ID())
 					return errMissingTXs
-				})
+				}).Times(2)
+		} else {
+			ts.msh.SetZeroBlockLayer(context.TODO(), lid)
 		}
 	}
 
@@ -559,15 +559,13 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := failed.Sub(1); lid.Before(last); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().LatestComplete().Return(lid.Sub(1))
+		ts.mTortoise.EXPECT().Updates().Return(failed, nil)
 		if lid == failed {
 			ts.mConState.EXPECT().ApplyLayer(gomock.Any(), block).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
 					require.Equal(t, block.ID(), got.ID())
 					return nil
 				})
-		} else {
-			ts.msh.SetZeroBlockLayer(context.TODO(), lid)
 		}
 	}
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
@@ -585,7 +583,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
-	ts.mTortoise.EXPECT().LatestComplete().Return(lyr.Sub(1))
+	ts.mTortoise.EXPECT().Updates().Return(lyr.Sub(1), nil)
 	ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
 	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))

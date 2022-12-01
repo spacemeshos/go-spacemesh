@@ -165,32 +165,17 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 // ContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.
 func ContextualValidity(db sql.Executor, lid types.LayerID) ([]types.BlockContextualValidity, error) {
 	var rst []types.BlockContextualValidity
-	if _, err := db.Exec("select id, validity from blocks where layer = ?1;", func(stmt *sql.Statement) {
+	if _, err := db.Exec("select id, layer, validity from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
 	}, func(stmt *sql.Statement) bool {
 		validity := types.BlockContextualValidity{}
 		stmt.ColumnBytes(0, validity.ID[:])
-		validity.Validity = stmt.ColumnInt(1) == valid
+		validity.Layer = types.NewLayerID(uint32(stmt.ColumnInt64(1)))
+		validity.Validity = stmt.ColumnInt(2) == valid
 		rst = append(rst, validity)
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("contextual validity in layer %s: %w", lid, err)
 	}
 	return rst, nil
-}
-
-// CountContextualValidity counts the number of blocks with contextual validity set in the layer.
-func CountContextualValidity(db sql.Executor, lid types.LayerID) (int, error) {
-	var count int
-	if _, err := db.Exec("select count(id) from blocks where layer = ?1 and validity in (?2, ?3);", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Uint32()))
-		stmt.BindInt64(2, valid)
-		stmt.BindInt64(3, invalid)
-	}, func(stmt *sql.Statement) bool {
-		count = stmt.ColumnInt(0)
-		return true
-	}); err != nil {
-		return 0, fmt.Errorf("count contextual validity in layer %s: %w", lid, err)
-	}
-	return count, nil
 }

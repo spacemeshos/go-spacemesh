@@ -25,7 +25,7 @@ poet_config ?= parameters/fastnet/poet.conf
 properties ?=
 ifneq ($(properties),)
 	optional_properties = --from-env-file=$(properties)
-endif 
+endif
 ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
@@ -57,7 +57,7 @@ config:
 		--from-literal=testid=$(test_id) \
 		$(optional_properties)
 	@kubectl label configmap $(configname) testid=$(test_id)
-	
+
 .PHONY: gomplate
 gomplate:
 	@go install github.com/hairyhenderson/gomplate/v3/cmd/gomplate@latest

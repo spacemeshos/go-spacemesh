@@ -8,11 +8,11 @@ import (
 	"reflect"
 	"time"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-var errNotInitialized = errors.New("cluster: not initilized")
+var errNotInitialized = errors.New("cluster: not initialized")
 
 const (
 	defaultExtraData = "systest"
@@ -169,7 +169,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 		corev1.ConfigMap(spacemeshConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
 		}),
-		metav1.ApplyOptions{FieldManager: "test"},
+		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
 		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
@@ -179,7 +179,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 		corev1.ConfigMap(poetConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedPoetConfig: poetConfig.Get(ctx.Parameters),
 		}),
-		metav1.ApplyOptions{FieldManager: "test"},
+		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
 		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
@@ -512,7 +512,7 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 	}
 	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).
 		WithBinaryData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}
@@ -522,7 +522,7 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 
 func (a *accounts) Recover(ctx *testcontext.Context) error {
 	a.keys = nil
-	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "accounts", metav1.GetOptions{})
+	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, "accounts", apimetav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to fetch accounts %w", err)
 	}
@@ -580,7 +580,11 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		i := i
 		n := nodes[i]
 		eg.Go(func() error {
+<<<<<<< HEAD
 			dbg := spacemeshv1.NewDebugServiceClient(n)
+=======
+			dbg := pb.NewDebugServiceClient(n)
+>>>>>>> develop
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
@@ -609,7 +613,7 @@ func persistFlags(ctx *testcontext.Context, name string, config map[string]Deplo
 	}
 	cfgmap := corev1.ConfigMap(name, ctx.Namespace).
 		WithData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, metav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}
@@ -618,7 +622,7 @@ func persistFlags(ctx *testcontext.Context, name string, config map[string]Deplo
 
 func recoverFlags(ctx *testcontext.Context, name string) (map[string]DeploymentFlag, error) {
 	flags := map[string]DeploymentFlag{}
-	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, name, metav1.GetOptions{})
+	cfgmap, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch flags %w", err)
 	}

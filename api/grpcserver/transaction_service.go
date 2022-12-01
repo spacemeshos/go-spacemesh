@@ -149,7 +149,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
 	var (
-		txCh, layerCh           <-chan interface{}
+		txCh, layerCh           <-chan any
 		txBufFull, layerBufFull <-chan struct{}
 	)
 
