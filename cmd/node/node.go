@@ -613,8 +613,9 @@ func (app *App) initServices(ctx context.Context,
 	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
-			LayerSize:      layerSize,
-			LayersPerEpoch: layersPerEpoch,
+			LayerSize:        layerSize,
+			LayersPerEpoch:   layersPerEpoch,
+			GenBlockInterval: 500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
