@@ -608,8 +608,8 @@ github.com/spacemeshos/bitstream v0.1.0 h1:p49/dC7dH2Istgas9TJPQ02ky6UU8GtQwSx+P
 github.com/spacemeshos/bitstream v0.1.0/go.mod h1:iXo4HfT712ox6fxwoqVeGRKD+GeU1igYZqrU2OW+XcY=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d h1:ivLphqrvVa4Spg1PdjOALDJc4q+gtivJ9JwRk5LUcPI=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d/go.mod h1:bMv7iXffBCPAHFivV6XM2l2SWXIfDoXkw4ND9yhgyfI=
-github.com/spacemeshos/ed25519 v0.1.0 h1:T8LtULSB7TuXUCijh5IWhOUPCpb/+Oxkwc3L3C2XOsI=
-github.com/spacemeshos/ed25519 v0.1.0/go.mod h1:oWL/Kdho35wShqBCKmw9oC9LyQ7fYsQK6UuYaRVuPZQ=
+github.com/spacemeshos/ed25519 v0.1.1 h1:MQdxbFWnaPQyqp3CpJsN6j+AmSsGn47PHOrlK5lfw9A=
+github.com/spacemeshos/ed25519 v0.1.1/go.mod h1:g9ezAbHJwSpNryRrISJFTyRY7CjNRgY+DjrAEpFG5Go=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a h1:p/BRpvEHGqd4oYBp+B/vG3Z3RWdb7vAZCz8xsecS92M=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a/go.mod h1:3SkkvXHU4Vm7yjpfgPu97PcZVvWweBmx0FOLRW7ek+g=
 github.com/spacemeshos/go-scale v1.1.1 h1:uAit0EFokdmRKswHv+e1AltefvEarhqqQEwKYRs9f68=
