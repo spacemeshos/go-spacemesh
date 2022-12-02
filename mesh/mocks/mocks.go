@@ -36,17 +36,17 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // ApplyLayer mocks base method.
-func (m *MockconservativeState) ApplyLayer(arg0 context.Context, arg1 *types.Block) error {
+func (m *MockconservativeState) ApplyLayer(arg0 context.Context, arg1 types.LayerID, arg2 *types.Block) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1)
+	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ApplyLayer indicates an expected call of ApplyLayer.
-func (mr *MockconservativeStateMockRecorder) ApplyLayer(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) ApplyLayer(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MockconservativeState)(nil).ApplyLayer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MockconservativeState)(nil).ApplyLayer), arg0, arg1, arg2)
 }
 
 // GetStateRoot mocks base method.

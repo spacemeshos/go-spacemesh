@@ -154,7 +154,11 @@ func (cs *ConservativeState) RevertState(revertTo types.LayerID) error {
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
-func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block) error {
+func (cs *ConservativeState) ApplyLayer(ctx context.Context, lid types.LayerID, block *types.Block) error {
+	if block == nil {
+		return cs.applyEmptyLayer(ctx, lid)
+	}
+
 	logger := cs.logger.WithFields(block.LayerIndex, block.ID())
 	logger.Debug("applying layer to conservative state")
 
@@ -181,6 +185,17 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 		return err
 	}
 	cacheApplyDuration.Observe(float64(time.Since(t0)))
+	return nil
+}
+
+func (cs *ConservativeState) applyEmptyLayer(ctx context.Context, lid types.LayerID) error {
+	_, _, err := cs.vmState.Apply(vm.ApplyContext{Layer: lid}, nil, nil)
+	if err != nil {
+		return fmt.Errorf("apply empty layer: %w", err)
+	}
+	if err = cs.cache.ApplyLayer(ctx, cs.db, lid, types.EmptyBlockID, nil, nil); err != nil {
+		return err
+	}
 	return nil
 }
 

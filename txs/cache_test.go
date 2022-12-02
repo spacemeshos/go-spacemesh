@@ -360,7 +360,6 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	mtxs[1].LayerID = lid
 	mtxs[1].BlockID = bid1
 	pid := types.ProposalID{3, 3, 3}
-	// tc.mockTP.EXPECT().AddToProposal(lid.Add(1), pid, addedToBlock1).Return(nil)
 	require.NoError(t, tc.LinkTXsWithBlock(tc.db, lid, bid0, addedToBlock0))
 	require.NoError(t, tc.LinkTXsWithBlock(tc.db, lid, bid1, addedToBlock1))
 	require.NoError(t, tc.LinkTXsWithProposal(tc.db, lid.Add(1), pid, addedToBlock1))
@@ -394,6 +393,97 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	checkTXStateFromDB(t, tc.db, mtxs[:1], types.APPLIED)
 	checkTXStateFromDB(t, tc.db, mtxs[1:2], types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, mtxs[2:], types.MEMPOOL)
+}
+
+func TestCache_Account_EmptyLayerApplied_LowerNonceBackToMempool(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	mtxs := genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+1, time.Now())
+	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
+
+	lid := types.NewLayerID(97)
+	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
+	// tx0 got packed into block0 at lid
+	// tx1 got packed into block1 at lid and a proposal at lid+1
+	bid0 := types.BlockID{1, 2, 3}
+	bid1 := types.BlockID{3, 2, 1}
+	pid := types.ProposalID{3, 3, 3}
+	require.NoError(t, tc.LinkTXsWithBlock(tc.db, lid, bid0, []types.TransactionID{mtxs[0].ID}))
+	mtxs[0].LayerID = lid
+	mtxs[0].BlockID = bid0
+	require.NoError(t, tc.LinkTXsWithBlock(tc.db, lid, bid1, []types.TransactionID{mtxs[1].ID}))
+	mtxs[1].LayerID = lid
+	mtxs[1].BlockID = bid1
+	require.NoError(t, tc.LinkTXsWithProposal(tc.db, lid.Add(1), pid, []types.TransactionID{mtxs[1].ID}))
+	for _, mtx := range mtxs {
+		checkTX(t, tc.cache, mtx)
+	}
+	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
+
+	// mempool will only include transactions that are not in proposals/blocks
+	checkMempool(t, tc.cache, nil)
+	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
+
+	// empty layer is applied.
+	// there is also an incoming fund of `income` to the principal's account
+	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, types.EmptyBlockID, nil, nil))
+	mtxs[0].BlockID = types.EmptyBlockID
+	mtxs[0].LayerID = types.LayerID{}
+	mtxs[1].BlockID = types.EmptyBlockID
+	mtxs[1].LayerID = lid.Add(1)
+	for _, mtx := range mtxs {
+		checkTX(t, tc.cache, mtx)
+	}
+	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
+	// tx0 is back to mempool, and mtxs[1] will be too, because mempool starts from the
+	// first nonce without an empty layer
+	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	checkMempool(t, tc.cache, expectedMempool)
+	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
+}
+
+func TestCache_Account_EmptyLayerApplied_HigherNonceBackToMempool(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	mtxs := genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+1, time.Now())
+	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
+
+	lid := types.NewLayerID(97)
+	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
+	// tx0 got packed into block0 at lid
+	// tx1 got packed into block1 at lid and a proposal at lid+1
+	bid0 := types.BlockID{1, 2, 3}
+	bid1 := types.BlockID{3, 2, 1}
+	pid := types.ProposalID{3, 3, 3}
+	require.NoError(t, tc.LinkTXsWithBlock(tc.db, lid, bid0, []types.TransactionID{mtxs[0].ID}))
+	mtxs[0].LayerID = lid
+	mtxs[0].BlockID = bid0
+	require.NoError(t, tc.LinkTXsWithBlock(tc.db, lid, bid1, []types.TransactionID{mtxs[1].ID}))
+	mtxs[1].LayerID = lid
+	mtxs[1].BlockID = bid1
+	require.NoError(t, tc.LinkTXsWithProposal(tc.db, lid.Add(1), pid, []types.TransactionID{mtxs[0].ID}))
+	for _, mtx := range mtxs {
+		checkTX(t, tc.cache, mtx)
+	}
+	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
+
+	// mempool will only include transactions that are not in proposals/blocks
+	checkMempool(t, tc.cache, nil)
+	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
+
+	// empty layer is applied.
+	// there is also an incoming fund of `income` to the principal's account
+	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, types.EmptyBlockID, nil, nil))
+	mtxs[0].BlockID = types.EmptyBlockID
+	mtxs[0].LayerID = lid.Add(1)
+	mtxs[1].BlockID = types.EmptyBlockID
+	mtxs[1].LayerID = types.LayerID{}
+	for _, mtx := range mtxs {
+		checkTX(t, tc.cache, mtx)
+	}
+	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
+	// tx1 is back to mempool
+	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[1:])}
+	checkMempool(t, tc.cache, expectedMempool)
+	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
 }
 
 func TestCache_Account_TooManyNonce(t *testing.T) {

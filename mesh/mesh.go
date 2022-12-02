@@ -518,12 +518,13 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 	block := msh.getBlockToApply(valids)
 	if block != nil {
 		applied = block.ID()
-		err := msh.conState.ApplyLayer(ctx, block)
-		if err != nil {
-			logger.With().Error("failed to apply transactions", log.Err(err))
-			return fmt.Errorf("apply layer: %w", err)
-		}
 	}
+
+	if err := msh.conState.ApplyLayer(ctx, lid, block); err != nil {
+		logger.With().Error("failed to apply transactions", log.Err(err))
+		return fmt.Errorf("apply layer: %w", err)
+	}
+
 	logger = logger.WithFields(log.Stringer("applied", applied))
 	logger.With().Info("applying block for layer")
 
