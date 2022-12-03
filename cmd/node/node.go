@@ -133,7 +133,7 @@ func GetCommand() *cobra.Command {
 				}()
 				select {
 				case <-done:
-				case <-ctx.Done():
+				case <-ctx2.Done():
 					log.With().Error("app failed to clean up in time")
 				}
 				return err
