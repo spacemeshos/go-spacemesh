@@ -495,7 +495,7 @@ func (a *ActivationAPIMock) UpdatePoETServers(context.Context, []string) error {
 
 func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(context.Background(), cfg.JSONServerPort)
+	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 
 	// attach services
 	for _, svc := range services {
@@ -519,7 +519,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	}
 
 	return func() {
-		require.NoError(tb, jsonService.Close())
+		require.NoError(tb, jsonService.Shutdown(context.Background()))
 		_ = grpcService.Close()
 	}
 }
@@ -557,7 +557,7 @@ func TestNewServersConfig(t *testing.T) {
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
-	jsonService := NewJSONHTTPServer(context.Background(), port2)
+	jsonService := NewJSONHTTPServer(port2)
 
 	require.Equal(t, port2, jsonService.port, "Expected same port")
 	require.Equal(t, port1, grpcService.Port, "Expected same port")

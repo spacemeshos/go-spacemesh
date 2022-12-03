@@ -389,9 +389,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(context.TODO())
+		app.startAPIServices(context.Background())
 	}
-	defer app.stopServices()
+	defer app.stopServices(context.Background())
 
 	// Make sure the service is not running by default
 	str, err := testArgs(context.Background(), cmdWithRun(run)) // no args
@@ -444,13 +444,13 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	run := func(c *cobra.Command, args []string) {
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.TODO())
+		app.startAPIServices(context.Background())
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
-	defer app.stopServices()
+	defer app.stopServices(context.Background())
 	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
@@ -482,7 +482,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	run := func(c *cobra.Command, args []string) {
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.TODO())
+		app.startAPIServices(context.Background())
 	}
 
 	// Test starting the JSON server from the commandline
@@ -490,7 +490,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	str, err := testArgs(context.Background(), cmdWithRun(run), "--json-server", "--grpc", "node", "--json-port", "1234")
 	r.Empty(str)
 	r.NoError(err)
-	defer app.stopServices()
+	defer app.stopServices(context.Background())
 	r.Equal(1234, app.Config.API.JSONServerPort)
 	r.Equal(true, app.Config.API.StartJSONServer)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -546,10 +546,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
 
-	appCtx, appCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	appCtx, appCancel := context.WithCancel(context.Background())
 
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup()
+		defer app.Cleanup(context.Background())
 		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
 
 		// Give the error channel a buffer
@@ -673,9 +673,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer := signing.NewEdSigner()
 	address := wallet.Address(signer.PublicKey().Bytes())
 
-	appCtx, appCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	appCtx, appCancel := context.WithCancel(context.Background())
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup()
+		defer app.Cleanup(context.Background())
 		r.NoError(app.Initialize())
 
 		// GRPC configuration
@@ -789,7 +789,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
-	app.Cleanup()
+	app.Cleanup(context.Background())
 
 	tconf := getTestDefaultConfig()
 	tconf.DataDirParent = t.TempDir()
@@ -917,7 +917,7 @@ func TestGenesisConfig(t *testing.T) {
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
-		app.Cleanup()
+		app.Cleanup(context.Background())
 		require.NoError(t, app.Initialize())
 	})
 	t.Run("fatal error on a diff", func(t *testing.T) {
@@ -927,7 +927,7 @@ func TestGenesisConfig(t *testing.T) {
 
 		require.NoError(t, app.Initialize())
 		app.Config.Genesis.ExtraData = "changed"
-		app.Cleanup()
+		app.Cleanup(context.Background())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
@@ -957,7 +957,7 @@ func TestFlock(t *testing.T) {
 	require.NoError(t, app.Initialize())
 	app1 := *app
 	require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
-	app.Cleanup()
+	app.Cleanup(context.Background())
 	require.NoError(t, app.Initialize())
 	require.NoError(t, os.Remove(filepath.Join(app.Config.DataDir(), lockFile)))
 	require.NoError(t, app.Initialize())
@@ -1039,7 +1039,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	nodeID := types.BytesToNodeID(pub.Bytes())
 
-	err := smApp.initServices(context.TODO(), nodeID, storePath, edSgn,
+	err := smApp.initServices(context.Background(), nodeID, storePath, edSgn,
 		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err

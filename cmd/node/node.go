@@ -118,12 +118,24 @@ func GetCommand() *cobra.Command {
 			)
 
 			run := func(ctx context.Context) error {
-				if err := app.Initialize(); err != nil {
+				if err = app.Initialize(); err != nil {
 					return err
 				}
 				// This blocks until the context is finished or until an error is produced
-				err := app.Start(ctx)
-				app.Cleanup()
+				err = app.Start(ctx)
+
+				ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel2()
+				done := make(chan struct{}, 1)
+				go func() {
+					app.Cleanup(ctx2)
+					close(done)
+				}()
+				select {
+				case <-done:
+				case <-ctx.Done():
+					log.With().Error("app failed to clean up in time")
+				}
 				return err
 			}
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
@@ -383,7 +395,7 @@ func (app *App) getAppInfo() string {
 }
 
 // Cleanup stops all app services.
-func (app *App) Cleanup() {
+func (app *App) Cleanup(ctx context.Context) {
 	log.Info("app cleanup starting...")
 	if app.fileLock != nil {
 		if err := app.fileLock.Unlock(); err != nil {
@@ -393,7 +405,7 @@ func (app *App) Cleanup() {
 			)
 		}
 	}
-	app.stopServices()
+	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
 }
@@ -829,15 +841,15 @@ func (app *App) startAPIServices(ctx context.Context) {
 			// It should be caught inside apiConf.
 			log.Fatal("one or more new grpc services must be enabled with new json gateway server")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(ctx, apiConf.JSONServerPort)
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
 		app.jsonAPIService.StartService(ctx, services...)
 	}
 }
 
-func (app *App) stopServices() {
+func (app *App) stopServices(ctx context.Context) {
 	if app.jsonAPIService != nil {
 		log.Info("stopping json gateway service")
-		if err := app.jsonAPIService.Close(); err != nil {
+		if err := app.jsonAPIService.Shutdown(ctx); err != nil {
 			log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
