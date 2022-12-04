@@ -379,8 +379,8 @@ github.com/libp2p/go-libp2p v0.23.0 h1:P3gFkqPevkWRKMiaI+tR5lNKyDbBllxUXYmD65JYT
 github.com/libp2p/go-libp2p v0.23.0/go.mod h1:7/xgogSbnOaGRlRbu4L0P1mVxC7xtLgk4suFhpag6cM=
 github.com/libp2p/go-libp2p-asn-util v0.2.0 h1:rg3+Os8jbnO5DxkC7K/Utdi+DkY3q/d1/1q+8WeNAsw=
 github.com/libp2p/go-libp2p-asn-util v0.2.0/go.mod h1:WoaWxbHKBymSN41hWSq/lGKJEca7TNm58+gGJi2WsLI=
-github.com/libp2p/go-libp2p-pubsub v0.8.1 h1:hSw09NauFUaA0FLgQPBJp6QOy0a2n+HSkb8IeOx8OnY=
-github.com/libp2p/go-libp2p-pubsub v0.8.1/go.mod h1:e4kT+DYjzPUYGZeWk4I+oxCSYTXizzXii5LDRRhjKSw=
+github.com/libp2p/go-libp2p-pubsub v0.8.2 h1:QLGUmkgKmwEVxVDYGsqc5t9CykOMY2Y21cXQHjR462I=
+github.com/libp2p/go-libp2p-pubsub v0.8.2/go.mod h1:e4kT+DYjzPUYGZeWk4I+oxCSYTXizzXii5LDRRhjKSw=
 github.com/libp2p/go-libp2p-testing v0.12.0 h1:EPvBb4kKMWO29qP4mZGyhVzUyR25dvfUIK5WDu6iPUA=
 github.com/libp2p/go-libp2p-testing v0.12.0/go.mod h1:KcGDRXyN7sQCllucn1cOOS+Dmm7ujhfEyXQL5lvkcPg=
 github.com/libp2p/go-msgio v0.2.0 h1:W6shmB+FeynDrUVl2dgFQvzfBZcXiyqY4VmpQLu9FqU=
@@ -555,8 +555,8 @@ github.com/prometheus/procfs v0.8.0 h1:ODq8ZFEaYeCaZOJlZZdJA2AbQR98dSHSM1KW/You5
 github.com/prometheus/procfs v0.8.0/go.mod h1:z7EfXMXOkbkqb9IINtpCn86r/to3BnA0uaxHdg830/4=
 github.com/pyroscope-io/dotnetdiag v1.2.1 h1:3XEMrfFJnZ87BiEhozyQKmCUAuMd/Spq7KChPuD2Cf0=
 github.com/pyroscope-io/dotnetdiag v1.2.1/go.mod h1:eFUEHCp4eD1TgcXMlJihC+R4MrqGf7nTRdWxNADbDHA=
-github.com/pyroscope-io/pyroscope v0.35.0 h1:mDz1NiFHteYHrvFVHNpFaW5x2eVPLaaltRDmrX4FpPU=
-github.com/pyroscope-io/pyroscope v0.35.0/go.mod h1:VhUxChLTPH19q9V+5/4Yan4vY0XvtXQSySVf2luMx+w=
+github.com/pyroscope-io/pyroscope v0.35.1 h1:h4LTZmT7fk5wfNx9033NnRKDr90/MSRCpTD5yBXkWjM=
+github.com/pyroscope-io/pyroscope v0.35.1/go.mod h1:VhUxChLTPH19q9V+5/4Yan4vY0XvtXQSySVf2luMx+w=
 github.com/raulk/go-watchdog v1.3.0 h1:oUmdlHxdkXRJlwfG0O9omj8ukerm8MEQavSiDTEtBsk=
 github.com/raulk/go-watchdog v1.3.0/go.mod h1:fIvOnLbF0b0ZwkB9YU4mOW9Did//4vPZtDqv66NfsMU=
 github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
@@ -608,8 +608,8 @@ github.com/spacemeshos/bitstream v0.1.0 h1:p49/dC7dH2Istgas9TJPQ02ky6UU8GtQwSx+P
 github.com/spacemeshos/bitstream v0.1.0/go.mod h1:iXo4HfT712ox6fxwoqVeGRKD+GeU1igYZqrU2OW+XcY=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d h1:ivLphqrvVa4Spg1PdjOALDJc4q+gtivJ9JwRk5LUcPI=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d/go.mod h1:bMv7iXffBCPAHFivV6XM2l2SWXIfDoXkw4ND9yhgyfI=
-github.com/spacemeshos/ed25519 v0.1.0 h1:T8LtULSB7TuXUCijh5IWhOUPCpb/+Oxkwc3L3C2XOsI=
-github.com/spacemeshos/ed25519 v0.1.0/go.mod h1:oWL/Kdho35wShqBCKmw9oC9LyQ7fYsQK6UuYaRVuPZQ=
+github.com/spacemeshos/ed25519 v0.1.1 h1:MQdxbFWnaPQyqp3CpJsN6j+AmSsGn47PHOrlK5lfw9A=
+github.com/spacemeshos/ed25519 v0.1.1/go.mod h1:g9ezAbHJwSpNryRrISJFTyRY7CjNRgY+DjrAEpFG5Go=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a h1:p/BRpvEHGqd4oYBp+B/vG3Z3RWdb7vAZCz8xsecS92M=
 github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a/go.mod h1:3SkkvXHU4Vm7yjpfgPu97PcZVvWweBmx0FOLRW7ek+g=
 github.com/spacemeshos/go-scale v1.1.1 h1:uAit0EFokdmRKswHv+e1AltefvEarhqqQEwKYRs9f68=
