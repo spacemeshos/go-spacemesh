@@ -187,6 +187,40 @@ func TestAbstainsInMiddle(t *testing.T) {
 	require.Equal(t, expected, tortoise.LatestComplete())
 }
 
+func TestAbstainLateBlock(t *testing.T) {
+	const size = 4
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup(sim.WithSetupMinerRange(size, size))
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 1
+	cfg.Zdist = 1
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+	last := s.Next(sim.WithNumBlocks(1))
+	last = s.Next(sim.WithNumBlocks(0))
+	last = s.Next(sim.WithNumBlocks(1), sim.WithoutHareOutput(), sim.WithVoteGenerator(abstainVoting))
+	tortoise.TallyVotes(ctx, last)
+
+	_, events := tortoise.Updates()
+	require.Len(t, events, 1)
+	require.Equal(t, events[0].Layer, last.Sub(2))
+
+	block := types.Block{}
+	block.LayerIndex = last.Sub(1)
+	block.Initialize()
+	tortoise.OnBlock(&block)
+	tortoise.OnHareOutput(block.LayerIndex, block.ID())
+	tortoise.TallyVotes(ctx, last)
+
+	_, events = tortoise.Updates()
+	require.Empty(t, events)
+}
+
 func TestEncodeAbstainVotesForZdist(t *testing.T) {
 	const (
 		size  = 4
@@ -2397,14 +2431,28 @@ func TestDecodeExceptions(t *testing.T) {
 	ballots3 := tortoise.trtl.ballots[last]
 
 	for _, ballot := range ballots1 {
-		require.Equal(t, against, ballot.votes.find(layer.lid, block.id), "base ballot votes against")
+		require.Equal(t, against, findVote(ballot.votes, layer.lid, block.id), "base ballot votes against")
 	}
 	for _, ballot := range ballots2 {
-		require.Equal(t, support, ballot.votes.find(layer.lid, block.id), "new ballot overwrites vote")
+		require.Equal(t, support, findVote(ballot.votes, layer.lid, block.id), "new ballot overwrites vote")
 	}
 	for _, ballot := range ballots3 {
-		require.Equal(t, against, ballot.votes.find(layer.lid, block.id), "latest ballot overwrites back to against")
+		require.Equal(t, against, findVote(ballot.votes, layer.lid, block.id), "latest ballot overwrites back to against")
 	}
+}
+
+func findVote(v votes, lid types.LayerID, bid types.BlockID) sign {
+	for current := v.tail; current != nil; current = current.prev {
+		if current.lid == lid {
+			for _, block := range current.supported {
+				if block.id == bid {
+					return support
+				}
+			}
+			return against
+		}
+	}
+	return abstain
 }
 
 func TestCountOnBallot(t *testing.T) {

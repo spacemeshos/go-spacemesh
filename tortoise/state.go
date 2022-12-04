@@ -267,20 +267,6 @@ func (v *votes) cutBefore(lid types.LayerID) {
 	}
 }
 
-func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
-	for current := v.tail; current != nil; current = current.prev {
-		if current.lid == lid {
-			for _, block := range current.supported {
-				if block.id == bid {
-					return support
-				}
-			}
-			return against
-		}
-	}
-	return abstain
-}
-
 func (v *votes) opinion() types.Hash32 {
 	if v.tail == nil {
 		return types.Hash32{}

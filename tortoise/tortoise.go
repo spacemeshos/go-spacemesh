@@ -326,7 +326,7 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
 	}
-	decoded, err := t.decodeExceptions(current, base, &conditions{}, votes)
+	decoded, err := t.decodeExceptions(current, base, votes)
 	if err != nil {
 		return nil, err
 	}
@@ -794,7 +794,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		weight:    weight,
 	}
 	var err error
-	binfo.votes, err = t.decodeExceptions(binfo.layer, base, &binfo.conditions, ballot.Votes)
+	binfo.votes, err = t.decodeExceptions(binfo.layer, base, ballot.Votes)
 	if err != nil {
 		return nil, err
 	}
@@ -843,7 +843,7 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 	return false, nil
 }
 
-func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) (votes, error) {
+func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
 	for _, svote := range exceptions.Support {
