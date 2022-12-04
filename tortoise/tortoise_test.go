@@ -201,9 +201,9 @@ func TestAbstainLateBlock(t *testing.T) {
 	cfg.Zdist = 1
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
-	last := s.Next(sim.WithNumBlocks(1))
-	last = s.Next(sim.WithNumBlocks(0))
-	last = s.Next(sim.WithNumBlocks(1), sim.WithoutHareOutput(), sim.WithVoteGenerator(abstainVoting))
+	s.Next(sim.WithNumBlocks(1))
+	s.Next(sim.WithNumBlocks(0))
+	last := s.Next(sim.WithNumBlocks(1), sim.WithoutHareOutput(), sim.WithVoteGenerator(abstainVoting))
 	tortoise.TallyVotes(ctx, last)
 
 	_, events := tortoise.Updates()
