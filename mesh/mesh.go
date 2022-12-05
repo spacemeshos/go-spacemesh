@@ -291,8 +291,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
 		logger.Info("reverting state")
 		if err := msh.revertState(logger, revertTo); err != nil {
-			logger.With().Error("failed to revert state", log.Err(err))
-			return err
+			return fmt.Errorf("revert state to %v: %w", revertTo, err)
 		}
 		msh.setLatestLayerInState(revertTo)
 	}
@@ -313,8 +312,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 		}
 		return nil
 	}); err != nil {
-		logger.With().Error("failed to save block validity", log.Err(err))
-		return err
+		return fmt.Errorf("save block validity: %w", err)
 	}
 	msh.validityUpdates = nil
 	return nil
@@ -356,7 +354,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 
 	if !to.Before(from) {
 		if err := msh.pushLayersToState(ctx, logger, from, to, newVerified); err != nil {
-			logger.With().Error("failed to push layers to state", log.Err(err))
 			return err
 		}
 	}
@@ -374,8 +371,7 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids 
 	if lid.After(types.GetEffectiveGenesis()) {
 		prev, err := layers.GetAggregatedHash(dbtx, lid.Sub(1))
 		if err != nil {
-			logger.With().Error("failed to get previous aggregated hash", lid, log.Err(err))
-			return err
+			return fmt.Errorf("get previous aggregated hash %v: %w", lid, err)
 		}
 		logger.With().Debug("got previous aggregatedHash", log.String("prevAggHash", prev.ShortString()))
 		hasher.WritePrevious(prev)
@@ -385,8 +381,7 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids 
 	}
 	newAggHash := hasher.Hash()
 	if err = layers.SetHashes(dbtx, lid, hash, hasher.Hash()); err != nil {
-		logger.With().Error("failed to set layer hashes", log.Err(err))
-		return err
+		return fmt.Errorf("persist hashes %v: %w", lid, err)
 	}
 	logger.With().Info("layer hashes updated",
 		log.String("hash", hash.ShortString()),
@@ -436,7 +431,6 @@ func (msh *Mesh) getBlockToApply(validBlocks []*types.Block) *types.Block {
 func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVerified types.LayerID, updates map[types.BlockID]bool) ([]*types.Block, error) {
 	lyrBlocks, err := blocks.Layer(cdb, layerID)
 	if err != nil {
-		logger.With().Error("failed to get layer blocks", log.Err(err))
 		return nil, fmt.Errorf("failed to get layer blocks %s: %w", layerID, err)
 	}
 
@@ -446,7 +440,6 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVe
 		// tortoise has not verified this layer yet, simply apply the block that hare certified
 		bid, err := certificates.GetHareOutput(cdb, layerID)
 		if err != nil {
-			logger.With().Warning("failed to get hare output", layerID, log.Err(err))
 			return nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
 		}
 		// hare output an empty layer, or the network have multiple valid certificates
@@ -504,7 +497,7 @@ func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid, verified ty
 
 	root, err := msh.conState.GetStateRoot()
 	if err != nil {
-		return fmt.Errorf("failed to oad state root after update: %w", err)
+		return fmt.Errorf("failed to load state root after update: %w", err)
 	}
 	logger.Event().Info("end of layer state root", log.Stringer("state_root", root))
 	return nil
@@ -521,8 +514,7 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 	}
 
 	if err := msh.conState.ApplyLayer(ctx, lid, block); err != nil {
-		logger.With().Error("failed to apply transactions", log.Err(err))
-		return fmt.Errorf("apply layer: %w", err)
+		return fmt.Errorf("apply layer %v/%v: %w", lid, applied, err)
 	}
 
 	logger = logger.WithFields(log.Stringer("applied", applied))
@@ -533,7 +525,6 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
 		}
 		if err := persistLayerHashes(logger, dbtx, lid, valids); err != nil {
-			logger.With().Error("failed to persist layer hashes", log.Err(err))
 			return err
 		}
 		return nil
@@ -574,8 +565,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		// double-check we have this block in the mesh
 		_, err := blocks.Get(msh.cdb, blockID)
 		if err != nil {
-			logger.With().Error("hare terminated with block that is not present in mesh", log.Err(err))
-			return err
+			return fmt.Errorf("failed to lookup hare output %v: %w", blockID, err)
 		}
 	}
 	// report that hare "approved" this layer
@@ -586,8 +576,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 
 	logger.Info("saving hare output for layer")
 	if err := certificates.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
-		logger.With().Error("failed to save hare output", log.Err(err))
-		return err
+		return fmt.Errorf("save hare output %v: %w", blockID, err)
 	}
 	msh.trtl.OnHareOutput(layerID, blockID)
 	return msh.ProcessLayer(ctx, layerID)
@@ -607,8 +596,7 @@ func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) {
 func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, proposalID types.ProposalID, txIDs []types.TransactionID) error {
 	logger := msh.logger.WithContext(ctx).WithFields(layerID, proposalID, log.Int("num_txs", len(txIDs)))
 	if err := msh.conState.LinkTXsWithProposal(layerID, proposalID, txIDs); err != nil {
-		logger.With().Error("failed to link proposal txs", log.Err(err))
-		return err
+		return fmt.Errorf("link proposal txs: %v/%v: %w", layerID, proposalID, err)
 	}
 	msh.setLatestLayer(logger, layerID)
 	logger.Debug("associated txs to proposal")
@@ -654,8 +642,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) error {
 func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error {
 	logger := msh.logger.WithContext(ctx).WithFields(block.LayerIndex, block.ID(), log.Int("num_txs", len(block.TxIDs)))
 	if err := msh.conState.LinkTXsWithBlock(block.LayerIndex, block.ID(), block.TxIDs); err != nil {
-		logger.With().Error("failed to link block txs", log.Err(err))
-		return err
+		return fmt.Errorf("link block txs: %v/%v: %w", block.LayerIndex, block.ID(), err)
 	}
 	msh.setLatestLayer(logger, block.LayerIndex)
 	logger.Debug("associated txs to block")
