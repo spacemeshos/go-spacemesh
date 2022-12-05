@@ -673,8 +673,15 @@ func TestApplyLayer(t *testing.T) {
 func TestApplyEmptyLayer(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
+	ids, _ := addBatch(t, tcs, numTXs)
+	require.NoError(t, tcs.LinkTXsWithBlock(lid, types.BlockID{1, 2, 3}, ids))
+	mempoolTxs := tcs.SelectProposalTXs(lid, 2)
+	require.Empty(t, mempoolTxs)
+
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: types.EmptyBlockID}, nil, nil).Return(nil, nil, nil)
 	require.NoError(t, tcs.ApplyLayer(context.TODO(), lid, nil))
+	mempoolTxs = tcs.SelectProposalTXs(lid, 2)
+	require.Len(t, mempoolTxs, len(ids))
 }
 
 func TestApplyLayer_TXsFailedVM(t *testing.T) {

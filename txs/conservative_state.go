@@ -193,10 +193,7 @@ func (cs *ConservativeState) applyEmptyLayer(ctx context.Context, lid types.Laye
 	if err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
 	}
-	if err = cs.cache.ApplyLayer(ctx, cs.db, lid, types.EmptyBlockID, nil, nil); err != nil {
-		return err
-	}
-	return nil
+	return cs.cache.ApplyLayer(ctx, cs.db, lid, types.EmptyBlockID, nil, nil)
 }
 
 // GetProjection returns the projected nonce and balance for an account, including
