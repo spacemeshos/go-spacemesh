@@ -39,26 +39,26 @@ func DefaultPoetConfig() PoetConfig {
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-type nipostBuilder interface {
+type NipostBuilder interface {
 	updatePoETProvers([]PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 
-type atxHandler interface {
+type AtxHandler interface {
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }
 
-type signer interface {
+type Signer interface {
 	Sign(m []byte) []byte
 }
 
-type syncer interface {
+type Syncer interface {
 	RegisterForATXSynced() chan struct{}
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/activation.go . SmeshingProvider
+//go:generate mockgen -package=activation -destination=./activation_mocks.go . SmeshingProvider,AtxHandler,NipostBuilder,Syncer
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
@@ -86,16 +86,16 @@ type Builder struct {
 
 	eg errgroup.Group
 
-	signer
+	Signer
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 	cdb               *datastore.CachedDB
-	atxHandler        atxHandler
+	atxHandler        AtxHandler
 	publisher         pubsub.Publisher
-	nipostBuilder     nipostBuilder
+	nipostBuilder     NipostBuilder
 	postSetupProvider PostSetupProvider
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
@@ -112,7 +112,7 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	syncer                syncer
+	syncer                Syncer
 	log                   log.Log
 	parentCtx             context.Context
 	stop                  context.CancelFunc
@@ -157,13 +157,13 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
-	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
-	syncer syncer, log log.Log, opts ...BuilderOption,
+func NewBuilder(conf Config, nodeID types.NodeID, signer Signer, cdb *datastore.CachedDB, hdlr AtxHandler, publisher pubsub.Publisher,
+	nipostBuilder NipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+	syncer Syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:             context.Background(),
-		signer:                signer,
+		Signer:                signer,
 		nodeID:                nodeID,
 		coinbaseAccount:       conf.CoinbaseAccount,
 		goldenATXID:           conf.GoldenATXID,
@@ -790,7 +790,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 
 // SignAtx signs the atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
-func SignAtx(signer signer, atx *types.ActivationTx) error {
+func SignAtx(signer Signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
 	if err != nil {
 		return fmt.Errorf("inner bytes of ATX: %w", err)

@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -95,7 +94,7 @@ func (p *postSetupProviderMock) Config() atypes.PostConfig {
 	return postCfg
 }
 
-func defaultPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *gomock.Controller) {
+func defaultPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
 	poetClient, controller := newPoetServiceMock(tb)
 	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(_ context.Context, challenge, _ []byte) (*types.PoetRound, error) {
@@ -107,17 +106,17 @@ func defaultPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient,
 	return poetClient, controller
 }
 
-func newPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *gomock.Controller) {
+func newPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
 	tb.Helper()
 	controller := gomock.NewController(tb)
-	poetClient := mocks.NewMockPoetProvingServiceClient(controller)
+	poetClient := NewMockPoetProvingServiceClient(controller)
 	return poetClient, controller
 }
 
-func defaultPoetDbMockForChallenge(t *testing.T, challenge types.PoetChallenge) *mocks.MockpoetDbAPI {
+func defaultPoetDbMockForChallenge(t *testing.T, challenge types.PoetChallenge) *MockpoetDbAPI {
 	hash, err := challenge.Hash()
 	require.NoError(t, err)
-	poetDb := mocks.NewMockpoetDbAPI(gomock.NewController(t))
+	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetProofRef(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte("ref"), nil)
 	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{hash.Bytes()}}, nil)
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).AnyTimes().Return(map[types.Hash32]bool{*hash: true}, nil)
@@ -260,7 +259,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		assert.NoError(t, poetProver.Teardown(true), "failed to tear down harness")
 	})
 
-	poetDb := mocks.NewMockpoetDbAPI(gomock.NewController(t))
+	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).AnyTimes().Return(map[types.Hash32]bool{*challengeHash: true}, nil)
 	poetDb.EXPECT().GetProofRef(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte("ref"), nil)
 	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes()}}, nil)
@@ -300,7 +299,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		})
 
 	ctrl := gomock.NewController(t)
-	poetDb := mocks.NewMockpoetDbAPI(ctrl)
+	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).AnyTimes().Return(map[types.Hash32]bool{*challengeHash: true}, nil)
 	poetDb.EXPECT().GetProofRef(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte("ref"), nil)
 	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes()}}, nil)
@@ -315,7 +314,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.Equal(types.NIPostBuilderState{NIPost: &types.NIPost{}}, *nb.state)
 
 	// fail after getting proof ref
-	poetDb = mocks.NewMockpoetDbAPI(ctrl)
+	poetDb = NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().GetProofRef(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte("ref"), nil)
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).AnyTimes().Return(map[types.Hash32]bool{}, nil)
 
@@ -330,7 +329,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.Nil(nipost)
 	assert.Error(err)
 
-	poetDb = mocks.NewMockpoetDbAPI(ctrl)
+	poetDb = NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).Return(map[types.Hash32]bool{*challengeHash: true}, nil)
 	poetDb.EXPECT().GetProofRef(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte("ref"), nil)
 	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes()}}, nil)
@@ -348,7 +347,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	challenge2Hash, err := challenge2.Hash()
 	assert.NoError(err)
 
-	poetDb = mocks.NewMockpoetDbAPI(ctrl)
+	poetDb = NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).AnyTimes().Return(map[types.Hash32]bool{*challengeHash: true, *challenge2Hash: true}, nil)
 	poetDb.EXPECT().GetProofRef(gomock.Any(), gomock.Any()).AnyTimes().Return([]byte("ref"), nil)
 	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{Members: [][]byte{challengeHash.Bytes(), challenge2Hash.Bytes()}}, nil)
@@ -370,7 +369,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 func createMockPoetService(t *testing.T, id []byte) PoetProvingServiceClient {
 	t.Helper()
-	poet := mocks.NewMockPoetProvingServiceClient(gomock.NewController(t))
+	poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
 	poet.EXPECT().PoetServiceID(gomock.Any()).Times(1).Return(id, nil)
 	poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(_ context.Context, challenge, _ []byte) (*types.PoetRound, error) {

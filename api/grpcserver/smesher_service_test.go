@@ -10,15 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/spacemeshos/go-spacemesh/activation/mocks"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 )
 
 func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	postSetupProvider := mocks.NewMockPostSetupProvider(ctrl)
-	smeshingProvider := mocks.NewMockSmeshingProvider(ctrl)
+	postSetupProvider := activation.NewMockPostSetupProvider(ctrl)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
 
 	postConfig := types.PostConfig{

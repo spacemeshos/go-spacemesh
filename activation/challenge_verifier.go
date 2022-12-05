@@ -33,7 +33,7 @@ func (e *VerifyError) Is(target error) bool {
 	return ok
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/challenge_verifier.go . AtxProvider
+//go:generate mockgen -package=activation -destination=./challenge_verifier_mocks.go . AtxProvider
 
 type ChallengeVerificationResult struct {
 	Hash   types.Hash32

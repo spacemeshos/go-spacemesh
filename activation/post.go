@@ -17,7 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/post.go -source=./post.go
+//go:generate mockgen -package=activation -destination=./post_mocks.go -source=./post.go . PostSetupProvider
 
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() atypes.PostConfig {

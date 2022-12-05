@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -18,7 +17,7 @@ import (
 
 func TestNewPoetListener(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	poetDb := mocks.NewMockpoetValidatorPersister(ctrl)
+	poetDb := NewMockpoetValidatorPersister(ctrl)
 	lg := logtest.New(t)
 	listener := NewPoetListener(poetDb, lg)
 
