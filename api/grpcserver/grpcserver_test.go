@@ -504,8 +504,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(
-		context.TODO(), services...)
+	jsonStarted := jsonService.StartService(context.Background(), services...)
 
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
@@ -663,7 +662,7 @@ func TestNodeService(t *testing.T) {
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 			require.NoError(t, err)
 			require.EqualValues(t, res.Status.Code, code.Code_OK)
 		}},
@@ -671,7 +670,7 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
 			urls := []string{"test"}
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: urls})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
 			require.Nil(t, res)
 			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
@@ -1018,7 +1017,7 @@ func TestSmesherService(t *testing.T) {
 		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
-		nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
+		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
 		resAddr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
 		require.Equal(t, nodeAddr.String(), resAddr.String())
@@ -2033,7 +2032,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().ToBytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().Bytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2462,7 +2461,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.NodeID().Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
@@ -2629,7 +2628,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.TODO(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2777,7 +2776,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(context.TODO(), globalTx)
+	conState.AddToCache(context.Background(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
