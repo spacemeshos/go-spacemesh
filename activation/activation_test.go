@@ -836,7 +836,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	r.NoError(err)
-	atxs.Add(cdb, vPosAtx, time.Now())
+	r.NoError(atxs.Add(cdb, vPosAtx, time.Now()))
 
 	builderCfg := Config{
 		CoinbaseAccount: coinbase,
