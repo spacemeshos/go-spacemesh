@@ -504,8 +504,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(
-		context.TODO(), services...)
+	jsonStarted := jsonService.StartService(context.Background(), services...)
 
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
@@ -669,7 +668,7 @@ func TestNodeService(t *testing.T) {
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 			require.NoError(t, err)
 			require.EqualValues(t, res.Status.Code, code.Code_OK)
 		}},
@@ -677,7 +676,7 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
 			urls := []string{"test"}
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: urls})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
 			require.Nil(t, res)
 			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
@@ -2635,7 +2634,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.TODO(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2783,7 +2782,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(context.TODO(), globalTx)
+	conState.AddToCache(context.Background(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
