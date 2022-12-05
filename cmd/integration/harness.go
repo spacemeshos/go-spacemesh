@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -85,9 +86,9 @@ func main() {
 	}
 	log.With().Info("integration: harness is listening on a blocking dummy channel")
 
-	interruptChannel := make(chan os.Signal, 1)
 	// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
-	signal.Notify(interruptChannel, os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	func() {
 		for {
@@ -95,7 +96,7 @@ func main() {
 			case errMsg := <-h.server.errChan:
 				log.With().Error("harness: received an err from subprocess: ", log.Err(errMsg), log.String("harness-error", h.server.buff.String()))
 				return
-			case <-interruptChannel:
+			case <-ctx.Done():
 				log.With().Info("harness: got a quit signal from subprocess")
 				return
 			}

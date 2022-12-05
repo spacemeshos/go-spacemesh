@@ -124,16 +124,17 @@ func GetCommand() *cobra.Command {
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
 
-				ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel2()
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cleanupCancel()
 				done := make(chan struct{}, 1)
+				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 				go func() {
-					app.Cleanup(ctx2)
+					app.Cleanup(cleanupCtx)
 					close(done)
 				}()
 				select {
 				case <-done:
-				case <-ctx2.Done():
+				case <-cleanupCtx.Done():
 					log.With().Error("app failed to clean up in time")
 				}
 				return err

@@ -547,6 +547,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 
 	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
 	run := func(c *cobra.Command, args []string) {
 		defer app.Cleanup(context.Background())
@@ -674,6 +675,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	address := wallet.Address(signer.PublicKey().Bytes())
 
 	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	run := func(c *cobra.Command, args []string) {
 		defer app.Cleanup(context.Background())
 		r.NoError(app.Initialize())
