@@ -291,8 +291,8 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	// mempool will only include transactions that are not in proposals/blocks
 	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[3:])}
 	checkMempool(t, tc.cache, expectedMempool)
-	checkTXStateFromDB(t, tc.db, mtxs[:2], types.BLOCK)
-	checkTXStateFromDB(t, tc.db, mtxs[2:2], types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, mtxs[:2], types.MEMPOOL)
+	checkTXStateFromDB(t, tc.db, mtxs[2:2], types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, mtxs[3:], types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, oldNonces, types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, sameNonces, types.MEMPOOL)
@@ -320,7 +320,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	for _, mtx := range append(oldNonces, sameNonces...) {
 		got, err := transactions.Get(tc.db, mtx.ID)
 		require.NoError(t, err)
-		require.Equal(t, types.DISCARDED, got.State)
+		require.Equal(t, types.MEMPOOL, got.State)
 	}
 
 	// revert to one layer before lid
@@ -335,10 +335,10 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 		checkNoTX(t, tc.cache, mtx.ID)
 	}
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
-	checkTXStateFromDB(t, tc.db, mtxs[:2], types.BLOCK)
-	checkTXStateFromDB(t, tc.db, mtxs[2:2], types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, mtxs[:2], types.MEMPOOL)
+	checkTXStateFromDB(t, tc.db, mtxs[2:2], types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, mtxs[3:], types.MEMPOOL)
-	checkTXStateFromDB(t, tc.db, oldNonces, types.DISCARDED)
+	checkTXStateFromDB(t, tc.db, oldNonces, types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, sameNonces, types.MEMPOOL)
 }
 
@@ -372,7 +372,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	// mempool will only include transactions that are not in proposals/blocks
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs[2:])}
 	checkMempool(t, tc.cache, expectedMempool)
-	checkTXStateFromDB(t, tc.db, mtxs[:2], types.BLOCK)
+	checkTXStateFromDB(t, tc.db, mtxs[:2], types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, mtxs[2:], types.MEMPOOL)
 
 	// block0 is applied.
@@ -392,7 +392,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	// mempool is unchanged
 	checkMempool(t, tc.cache, expectedMempool)
 	checkTXStateFromDB(t, tc.db, mtxs[:1], types.APPLIED)
-	checkTXStateFromDB(t, tc.db, mtxs[1:2], types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, mtxs[1:2], types.MEMPOOL)
 	checkTXStateFromDB(t, tc.db, mtxs[2:], types.MEMPOOL)
 }
 
@@ -437,11 +437,10 @@ func TestCache_Account_TooManySameNonceTXs(t *testing.T) {
 		mtxs = append(mtxs, mtx)
 		require.NoError(t, transactions.Add(tc.db, &mtx.Transaction, mtx.Received))
 	}
-
 	require.NoError(t, tc.buildFromScratch(tc.db))
 	cutoff := len(mtxs) - 2
-
 	best := mtxs[cutoff]
+
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-best.Spending())
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(best)}}
 	checkMempool(t, tc.cache, expectedMempool)
@@ -1035,7 +1034,7 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 	for _, mtxs := range mtxsByAccount {
 		checkTX(t, tc.cache, mtxs[0])
 	}
-	checkTXStateFromDB(t, tc.db, txs0, types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 
 	lid1 := lid0.Add(1)
 	pid1 := types.ProposalID{2, 3, 4}
@@ -1055,7 +1054,7 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 			checkTX(t, tc.cache, mtxs[1])
 		}
 	}
-	checkTXStateFromDB(t, tc.db, txs1, types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, txs1, types.MEMPOOL)
 	checkMempoolSize(t, tc.cache, totalNumTXs-len(txs0)-len(tids1))
 }
 
@@ -1078,7 +1077,7 @@ func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 	for _, mtxs := range mtxsByAccount {
 		checkTX(t, tc.cache, mtxs[0])
 	}
-	checkTXStateFromDB(t, tc.db, txs0, types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 
 	lid1 := lid0.Add(1)
 	pid1 := types.ProposalID{2, 3, 4}
@@ -1089,7 +1088,7 @@ func TestCache_LinkTXsWithProposal_MultipleLayers(t *testing.T) {
 		checkTX(t, tc.cache, mtxs[0])
 	}
 	checkMempoolSize(t, tc.cache, totalNumTXs-len(tids0))
-	checkTXStateFromDB(t, tc.db, txs0, types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 }
 
 func TestCache_LinkTXsWithBlock(t *testing.T) {
@@ -1112,7 +1111,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 	for _, mtxs := range mtxsByAccount {
 		checkTX(t, tc.cache, mtxs[0])
 	}
-	checkTXStateFromDB(t, tc.db, txs0, types.BLOCK)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 
 	lid1 := lid0.Add(1)
 	bid1 := types.BlockID{2, 3, 4}
@@ -1133,7 +1132,7 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 			checkTX(t, tc.cache, mtxs[1])
 		}
 	}
-	checkTXStateFromDB(t, tc.db, txs1, types.BLOCK)
+	checkTXStateFromDB(t, tc.db, txs1, types.MEMPOOL)
 	checkMempoolSize(t, tc.cache, totalNumTXs-len(tids0)-len(tids1))
 }
 
@@ -1157,7 +1156,7 @@ func TestCache_LinkTXsWithBlock_MultipleLayers(t *testing.T) {
 	for _, mtxs := range mtxsByAccount {
 		checkTX(t, tc.cache, mtxs[0])
 	}
-	checkTXStateFromDB(t, tc.db, txs0, types.BLOCK)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 
 	lid1 := lid0.Add(1)
 	bid1 := types.BlockID{2, 3, 4}
@@ -1167,7 +1166,7 @@ func TestCache_LinkTXsWithBlock_MultipleLayers(t *testing.T) {
 		// all txs should still be at lid0
 		checkTX(t, tc.cache, mtxs[0])
 	}
-	checkTXStateFromDB(t, tc.db, txs0, types.BLOCK)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 	checkMempoolSize(t, tc.cache, totalNumTXs-len(tids0))
 }
 
@@ -1301,7 +1300,7 @@ func TestCache_GetMempool(t *testing.T) {
 	for _, mtxs := range mtxsByAccount {
 		checkTX(t, tc.cache, mtxs[0])
 	}
-	checkTXStateFromDB(t, tc.db, txs0, types.BLOCK)
+	checkTXStateFromDB(t, tc.db, txs0, types.MEMPOOL)
 
 	// mark some txs with layer after the first empty layer
 	lid1 := lid0.Add(1)
@@ -1321,7 +1320,7 @@ func TestCache_GetMempool(t *testing.T) {
 			checkTX(t, tc.cache, mtxs[2])
 		}
 	}
-	checkTXStateFromDB(t, tc.db, txs1, types.PROPOSAL)
+	checkTXStateFromDB(t, tc.db, txs1, types.MEMPOOL)
 	expectedMempool := make(map[types.Address][]*txtypes.NanoTX)
 	for principal, mtxs := range mtxsByAccount {
 		if len(mtxs) > 1 {

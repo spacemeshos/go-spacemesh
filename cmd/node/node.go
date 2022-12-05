@@ -24,7 +24,6 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -95,62 +94,74 @@ const (
 	ConStateLogger         = "conState"
 )
 
-// Cmd is the cobra wrapper for the node, that allows adding parameters to it.
-var Cmd = &cobra.Command{
-	Use:   "node",
-	Short: "start node",
-	Run: func(c *cobra.Command, args []string) {
-		conf, err := loadConfig(c)
-		if err != nil {
-			log.With().Fatal("failed to initialize config", log.Err(err))
-		}
-
-		if conf.LOGGING.Encoder == config.JSONLogEncoder {
-			log.JSONLog(true)
-		}
-		app := New(
-			WithConfig(conf),
-			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
-			// otherwise it will fail later when child logger will try to increase level.
-			WithLog(log.RegisterHooks(
-				log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-				events.EventHook())),
-		)
-		starter := func() error {
-			if err := app.Initialize(); err != nil {
-				return err
-			}
-			// This blocks until the context is finished or until an error is produced
-			if err := app.Start(); err != nil {
-				return err
+func GetCommand() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "node",
+		Short: "start node",
+		Run: func(c *cobra.Command, args []string) {
+			conf, err := loadConfig(c)
+			if err != nil {
+				log.With().Fatal("failed to initialize config", log.Err(err))
 			}
 
-			return nil
-		}
-		err = starter()
-		app.Cleanup()
-		if err != nil {
-			log.With().Fatal(err.Error())
-		}
-	},
+			if conf.LOGGING.Encoder == config.JSONLogEncoder {
+				log.JSONLog(true)
+			}
+			app := New(
+				WithConfig(conf),
+				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
+				// otherwise it will fail later when child logger will try to increase level.
+				WithLog(log.RegisterHooks(
+					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
+					events.EventHook())),
+			)
+			starter := func() error {
+				if err := app.Initialize(); err != nil {
+					return err
+				}
+				// This blocks until the context is finished or until an error is produced
+				if err := app.Start(); err != nil {
+					return err
+				}
+
+				return nil
+			}
+			err = starter()
+			app.Cleanup()
+			if err != nil {
+				log.With().Fatal(err.Error())
+			}
+		},
+	}
+
+	cmd.AddCommands(c)
+
+	// versionCmd returns the current version of spacemesh.
+	versionCmd := cobra.Command{
+		Use:   "version",
+		Short: "Show version info",
+		Run: func(c *cobra.Command, args []string) {
+			fmt.Print(cmd.Version)
+			if cmd.Commit != "" {
+				fmt.Printf("+%s", cmd.Commit)
+			}
+			fmt.Println()
+		},
+	}
+	c.AddCommand(&versionCmd)
+
+	return c
 }
 
-// VersionCmd returns the current version of spacemesh.
-var VersionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show version info",
-	Run: func(c *cobra.Command, args []string) {
-		fmt.Print(cmd.Version)
-		if cmd.Commit != "" {
-			fmt.Printf("+%s", cmd.Commit)
-		}
-		fmt.Println()
-	},
-}
+var (
+	appLog  log.Log
+	grpcLog *zap.Logger
+)
 
 func init() {
-	cmd.AddCommands(Cmd)
-	Cmd.AddCommand(VersionCmd)
+	appLog = log.NewNop()
+	grpcLog = appLog.WithName(GRPCLogger).WithFields(log.String("module", GRPCLogger)).Zap()
+	grpczap.ReplaceGrpcLoggerV2(grpcLog)
 }
 
 // Service is a general service interface that specifies the basic start/stop functionality.
@@ -238,7 +249,7 @@ func New(opts ...Option) *App {
 	defaultConfig := config.DefaultConfig()
 	app := &App{
 		Config:  &defaultConfig,
-		log:     log.NewNop(),
+		log:     appLog,
 		loggers: make(map[string]*zap.AtomicLevel),
 		term:    make(chan struct{}),
 		started: make(chan struct{}),
@@ -264,7 +275,7 @@ type App struct {
 	proposalListener *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
 	mesh             *mesh.Mesh
-	atxProvider      api.AtxProvider
+	atxDB            datastore.CachedDB
 	clock            TickProvider
 	hare             *hare.Hare
 	blockGen         *blocks.Generator
@@ -288,6 +299,10 @@ type App struct {
 	loggers map[string]*zap.AtomicLevel
 	term    chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started chan struct{} // this channel is closed once the app has finished starting
+}
+
+func (app *App) Started() chan struct{} {
+	return app.started
 }
 
 func (app *App) introduction() {
@@ -474,6 +489,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	cdb := datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
+	app.atxDB = *cdb
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 
@@ -518,21 +534,19 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	var verifier blockValidityVerifier
-	msh, err := mesh.NewMesh(cdb, &verifier, app.conState, app.addLogger(MeshLogger, lg))
-	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtl := tortoise.New(cdb, beaconProtocol, msh,
+	trtl := tortoise.New(cdb, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
-	verifier.Tortoise = trtl
+
+	msh, err := mesh.NewMesh(cdb, trtl, app.conState, app.addLogger(MeshLogger, lg))
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
 
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(cdb, fetcherWrapped, layersPerEpoch, app.Config.TickSize, goldenATXID, validator, trtl, app.addLogger(ATXHandlerLogger, lg))
@@ -651,7 +665,7 @@ func (app *App) initServices(ctx context.Context,
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(nodeID, postSetupMgr, poetClients, poetDb, sqlDB, app.addLogger(NipostBuilderLogger, lg), sgn)
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -709,7 +723,6 @@ func (app *App) initServices(ctx context.Context,
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
 	app.mesh = msh
-	app.atxProvider = cdb
 	app.syncer = newSyncer
 	app.clock = clock
 	app.svm = state
@@ -781,15 +794,14 @@ func (app *App) startAPIServices(ctx context.Context) {
 	var services []grpcserver.ServiceAPI
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			logger := app.addLogger(GRPCLogger, app.log).Zap()
-			grpczap.ReplaceGrpcLoggerV2(logger)
+			app.addLogger(GRPCLogger, app.log)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpcmw.WithStreamServerChain(
 					grpctags.StreamServerInterceptor(),
-					grpczap.StreamServerInterceptor(logger)),
+					grpczap.StreamServerInterceptor(grpcLog)),
 				grpcmw.WithUnaryServerChain(
 					grpctags.UnaryServerInterceptor(),
-					grpczap.UnaryServerInterceptor(logger)),
+					grpczap.UnaryServerInterceptor(grpcLog)),
 			)
 		}
 		services = append(services, svc)
@@ -801,7 +813,8 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		registerService(grpcserver.NewGatewayService(app.host))
+		verifier := activation.NewChallengeVerifier(&app.atxDB, signing.DefaultVerifier, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		registerService(grpcserver.NewGatewayService(app.host, verifier))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
@@ -821,7 +834,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer))
 	}
 	if apiConf.StartActivationService {
-		registerService(grpcserver.NewActivationService(app.atxProvider))
+		registerService(grpcserver.NewActivationService(&app.atxDB))
 	}
 
 	// Now that the services are registered, start the server.
@@ -1138,10 +1151,6 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
-}
-
-type blockValidityVerifier struct {
-	*tortoise.Tortoise
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {

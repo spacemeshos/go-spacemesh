@@ -31,7 +31,7 @@ type turtle struct {
 	cdb    *datastore.CachedDB
 
 	beacons system.BeaconGetter
-	updater blockValidityUpdater
+	updated []types.BlockContextualValidity
 
 	*state
 
@@ -46,7 +46,6 @@ func newTurtle(
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	beacons system.BeaconGetter,
-	updater blockValidityUpdater,
 	config Config,
 ) *turtle {
 	t := &turtle{
@@ -55,7 +54,6 @@ func newTurtle(
 		logger:  logger,
 		cdb:     cdb,
 		beacons: beacons,
-		updater: updater,
 	}
 	genesis := types.GetEffectiveGenesis()
 
@@ -328,7 +326,7 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
 	}
-	decoded, err := t.decodeExceptions(current, base, &conditions{}, votes)
+	decoded, err := t.decodeExceptions(current, base, votes)
 	if err != nil {
 		return nil, err
 	}
@@ -484,12 +482,12 @@ func (t *turtle) verifyLayers() error {
 		}
 		verified = target
 		for _, block := range t.layers[target].blocks {
-			if block.persisted == block.validity {
+			if block.emitted == block.validity {
 				continue
 			}
 			// record range of layers where opinion has changed.
 			// once those layers fall out of hdist window - opinion can be recomputed
-			if block.validity != block.hare || (block.persisted != block.validity && block.persisted != abstain) {
+			if block.validity != block.hare || (block.emitted != block.validity && block.emitted != abstain) {
 				if target.After(t.changedOpinion.max) {
 					t.changedOpinion.max = target
 				}
@@ -503,13 +501,17 @@ func (t *turtle) verifyLayers() error {
 			logger.With().Debug("update validity", block.layer, block.id,
 				log.Stringer("validity", block.validity),
 				log.Stringer("hare", block.hare),
-				log.Stringer("persisted", block.persisted),
+				log.Stringer("emitted", block.emitted),
 			)
-			err := t.updater.UpdateBlockValidity(block.id, target, block.validity == support)
-			if err != nil {
-				return fmt.Errorf("saving validity for %s: %w", block.id, err)
+			if t.updated == nil {
+				t.updated = []types.BlockContextualValidity{}
 			}
-			block.persisted = block.validity
+			t.updated = append(t.updated, types.BlockContextualValidity{
+				ID:       block.id,
+				Layer:    target,
+				Validity: block.validity == support,
+			})
+			block.emitted = block.validity
 		}
 	}
 	t.verified = verified
@@ -792,7 +794,7 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		weight:    weight,
 	}
 	var err error
-	binfo.votes, err = t.decodeExceptions(binfo.layer, base, &binfo.conditions, ballot.Votes)
+	binfo.votes, err = t.decodeExceptions(binfo.layer, base, ballot.Votes)
 	if err != nil {
 		return nil, err
 	}
@@ -841,7 +843,7 @@ func (t *turtle) compareBeacons(logger log.Log, bid types.BallotID, layerID type
 	return false, nil
 }
 
-func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, cond *conditions, exceptions types.Votes) (votes, error) {
+func (t *turtle) decodeExceptions(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]sign{}
 	for _, svote := range exceptions.Support {

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/integration"
-	"github.com/spacemeshos/poet/release/proto/go/rpc/api"
+	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -27,8 +27,16 @@ type HTTPPoetHarness struct {
 	h        *integration.Harness
 }
 
+type HTTPPoetOpt func(*integration.ServerConfig)
+
+func WithGateway(endpoint string) HTTPPoetOpt {
+	return func(cfg *integration.ServerConfig) {
+		cfg.GatewayAddresses = []string{endpoint}
+	}
+}
+
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
+func NewHTTPPoetHarness(disableBroadcast bool, opts ...HTTPPoetOpt) (*HTTPPoetHarness, error) {
 	cfg, err := integration.DefaultConfig()
 	if err != nil {
 		return nil, fmt.Errorf("default integration config: %w", err)
@@ -38,6 +46,9 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	cfg.Reset = true
 	cfg.Genesis = time.Now().Add(5 * time.Second)
 	cfg.EpochDuration = 4 * time.Second
+	for _, opt := range opts {
+		opt(cfg)
+	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), cfg.Genesis)
 	defer cancel()
@@ -79,7 +90,7 @@ func NewHTTPPoetClient(target string) *HTTPPoetClient {
 // Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
 // since it requires administrative permissions to the proving service.
 func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) error {
-	reqBody := api.StartRequest{GatewayAddresses: gatewayAddresses}
+	reqBody := rpcapi.StartRequest{GatewayAddresses: gatewayAddresses}
 	if err := c.req(ctx, "POST", "/start", &reqBody, nil); err != nil {
 		return fmt.Errorf("request: %w", err)
 	}
@@ -88,19 +99,23 @@ func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) e
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, challenge types.Hash32) (*types.PoetRound, error) {
-	reqBody := api.SubmitRequest{Challenge: challenge[:]}
-	resBody := api.SubmitResponse{}
-	if err := c.req(ctx, "POST", "/submit", &reqBody, &resBody); err != nil {
+func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature []byte) (*types.PoetRound, error) {
+	request := rpcapi.SubmitRequest{
+		Challenge: challenge,
+		Signature: signature,
+	}
+	resBody := rpcapi.SubmitResponse{}
+	if err := c.req(ctx, "POST", "/submit", &request, &resBody); err != nil {
 		return nil, err
 	}
 
-	return &types.PoetRound{ID: resBody.RoundId}, nil
+	return &types.PoetRound{ID: resBody.RoundId, ChallengeHash: resBody.Hash}, nil
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
 func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) ([]byte, error) {
-	resBody := api.GetInfoResponse{}
+	resBody := rpcapi.GetInfoResponse{}
+
 	if err := c.req(ctx, "GET", "/info", nil, &resBody); err != nil {
 		return nil, err
 	}

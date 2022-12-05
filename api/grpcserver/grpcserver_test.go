@@ -293,7 +293,7 @@ func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) (types.Layer
 func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if ok {
-		return &types.MeshTransaction{Transaction: *tx, State: types.BLOCK}, nil
+		return &types.MeshTransaction{Transaction: *tx, State: types.APPLIED}, nil
 	}
 	tx, ok = t.poolByTxid[id]
 	if ok {
@@ -375,15 +375,11 @@ func NewMockSigner() *MockSigning {
 
 // TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
 type MockSigning struct {
-	signer *signing.EdSigner
+	*signing.EdSigner
 }
 
 func (ms *MockSigning) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.signer.PublicKey().Bytes())
-}
-
-func (ms *MockSigning) Sign(m []byte) []byte {
-	return ms.signer.Sign(m)
+	return types.BytesToNodeID(ms.PublicKey().Bytes())
 }
 
 // PostAPIMock is a mock for Post API.
@@ -1754,7 +1750,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 0, len(res.Transactions))
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 		}},
 		{"TransactionsState_All", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1768,7 +1764,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 1, len(res.Transactions))
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 
 			checkTransaction(t, res.Transactions[0])
 		}},
@@ -1821,7 +1817,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				require.Nil(t, res.Transaction)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 			}()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
@@ -1850,7 +1846,7 @@ func TestTransactionService(t *testing.T) {
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 				checkTransaction(t, res.Transaction)
 			}()
 
@@ -1953,7 +1949,7 @@ func TestTransactionService(t *testing.T) {
 					res, err := stream.Recv()
 					require.NoError(t, err)
 					require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 					checkTransaction(t, res.Transaction)
 				}
 			}()
@@ -2673,8 +2669,9 @@ func TestGatewayService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	verifier := mocks.NewMockChallengeVerifier(ctrl)
 
-	svc := NewGatewayService(publisher)
+	svc := NewGatewayService(publisher, verifier)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2770,7 +2767,7 @@ func TestEventsReceived(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, txRes.Transaction)
 		require.Equal(t, globalTx.ID.Bytes(), txRes.TransactionState.Id.Id)
-		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, txRes.TransactionState.State)
 
 		acc1Res, err := principalStream.Recv()
 		require.NoError(t, err)
