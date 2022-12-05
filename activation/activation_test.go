@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -114,14 +115,19 @@ func (ms *MockSigning) NodeID() types.NodeID {
 }
 
 type NIPostBuilderMock struct {
-	poetRef         []byte
+	poetRef   []byte
+	SleepTime int
+
+	mu              sync.Mutex
 	buildNIPostFunc func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error)
-	SleepTime       int
 }
 
-func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
+func (np *NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
 func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, _ time.Time) (*types.NIPost, time.Duration, error) {
+	np.mu.Lock()
+	defer np.mu.Unlock()
+
 	if np.buildNIPostFunc != nil {
 		return np.buildNIPostFunc(challenge, commitmentAtx)
 	}
@@ -208,6 +214,7 @@ func newActivationTx(
 }
 
 type LayerClockMock struct {
+	mu           sync.Mutex
 	currentLayer types.LayerID
 }
 
@@ -216,6 +223,8 @@ func (l *LayerClockMock) LayerToTime(types.LayerID) time.Time {
 }
 
 func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.currentLayer
 }
 
@@ -285,16 +294,29 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 func publishAtx(t *testing.T, b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration uint32) (published, builtNIPost bool, err error) {
 	t.Helper()
 	net.lastTransmission = nil
+
+	nipostBuilderMock.mu.Lock()
 	nipostBuilderMock.buildNIPostFunc = func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
 		builtNIPost = true
+		layerClockMock.mu.Lock()
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
+		layerClockMock.mu.Unlock()
 		hash, err := challenge.Hash()
 		require.NoError(t, err)
 		return newNIPostWithChallenge(hash, poetBytes), 0, nil
 	}
+	nipostBuilderMock.mu.Unlock()
+
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = clockEpoch.FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
+
 	err = b.PublishActivationTx(context.Background())
+
+	nipostBuilderMock.mu.Lock()
 	nipostBuilderMock.buildNIPostFunc = nil
+	nipostBuilderMock.mu.Unlock()
+
 	return net.lastTransmission != nil, builtNIPost, err
 }
 
@@ -772,8 +794,14 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	cdb := newCachedDB(t)
-	atxHdlr := newAtxHandler(t, cdb)
+	log := logtest.New(t)
+	ctrl := gomock.NewController(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
+
+	receiver := mocks.NewMockatxReceiver(ctrl)
+	validator := mocks.NewMocknipostValidator(ctrl)
+	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, log.WithName("atxHandler"))
+
 	b := newBuilder(t, cdb, atxHdlr)
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Sub(layersPerEpoch), nil)
@@ -1048,7 +1076,9 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	net.lastTransmission = nil
 	tries := 0
 	builderConfirmation := make(chan struct{})
+
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
+	nipostBuilder.mu.Lock()
 	nipostBuilder.buildNIPostFunc = func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
 		tries++
 		if tries == expectedTries {
@@ -1060,7 +1090,12 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		r.NoError(err)
 		return newNIPostWithChallenge(hash, poetBytes), 0, nil
 	}
+	nipostBuilder.mu.Unlock()
+
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	runnerExit := make(chan struct{})
 	go func() {
