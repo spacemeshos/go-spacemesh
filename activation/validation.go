@@ -50,7 +50,7 @@ func NewValidator(poetDb poetDbAPI, cfg atypes.PostConfig) *Validator {
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+func (v *Validator) Validate(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
@@ -67,11 +67,11 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
-	if !isIncluded(proof, nipost.Challenge.Bytes()) {
+	if !contains(proof, nipost.Challenge.Bytes()) {
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
-	if err := validatePost(commitment, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := validatePost(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
@@ -80,11 +80,11 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 
 // ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (*Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	return validatePost(commitment, PoST, PostMetadata, numUnits)
+func (*Validator) ValidatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	return validatePost(nodeId, commitmentAtxId, PoST, PostMetadata, numUnits)
 }
 
-func isIncluded(proof *types.PoetProof, member []byte) bool {
+func contains(proof *types.PoetProof, member []byte) bool {
 	for _, part := range proof.Members {
 		if bytes.Equal(part, member) {
 			return true
@@ -123,17 +123,19 @@ func validatePostMetadata(cfg *atypes.PostConfig, metadata *types.PostMetadata) 
 	return nil
 }
 
-func validatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
-	m := new(proving.ProofMetadata)
-	m.Commitment = commitment
-	m.NumUnits = numUnits
-	m.Challenge = PostMetadata.Challenge
-	m.BitsPerLabel = PostMetadata.BitsPerLabel
-	m.LabelsPerUnit = PostMetadata.LabelsPerUnit
-	m.K1 = PostMetadata.K1
-	m.K2 = PostMetadata.K2
+	m := &proving.ProofMetadata{
+		NodeId:          nodeId.Bytes(),
+		CommitmentAtxId: commitmentAtxId.Bytes(),
+		NumUnits:        numUnits,
+		Challenge:       PostMetadata.Challenge,
+		BitsPerLabel:    PostMetadata.BitsPerLabel,
+		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
+		K1:              PostMetadata.K1,
+		K2:              PostMetadata.K2,
+	}
 
 	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
