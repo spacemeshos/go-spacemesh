@@ -121,7 +121,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !signing.VRFVerify(atx.NodeID.ToBytes(), message, vrfSig) {
+		if !signing.VRFVerify(atx.NodeID.Bytes(), message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}
@@ -158,7 +158,7 @@ func (v *Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*ty
 		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
 			errTargetEpochMismatch, targetEpoch, epoch)
 	}
-	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID.ToBytes(), pub.Bytes()) {
+	if pub := ballot.SmesherID(); !bytes.Equal(atx.NodeID.Bytes(), pub.Bytes()) {
 		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, pub.String(), atx.NodeID)
 	}
 	return atx, nil

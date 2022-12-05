@@ -80,7 +80,7 @@ func NewNIPostBuilder(
 	signer signing.Signer,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
-		minerID:           minerID.ToBytes(),
+		minerID:           minerID.Bytes(),
 		postSetupProvider: postSetupProvider,
 		poetProvers:       poetProvers,
 		poetDB:            poetDB,
