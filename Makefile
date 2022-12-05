@@ -80,13 +80,13 @@ get-libs: get-gpu-setup #get-svm
 .PHONY: get-libs
 
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
 hare p2p: get-libs
-	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
+	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 harness: get-libs
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: hare p2p harness go-spacemesh gen-p2p-identity
 
 tidy:
