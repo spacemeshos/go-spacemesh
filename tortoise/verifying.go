@@ -88,12 +88,12 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	threshold := v.globalThreshold(v.Config, lid)
 	logger = logger.WithFields(
 		log.String("verifier", "verifying"),
-		log.Stringer("candidate layer", lid),
+		log.Stringer("candidate_layer", lid),
 		log.Stringer("margin", margin),
 		log.Stringer("uncounted", uncounted),
-		log.Stringer("total good weight", v.totalGoodWeight),
-		log.Stringer("good uncounted", layer.verifying.goodUncounted),
-		log.Stringer("global threshold", threshold),
+		log.Stringer("total_good_weight", v.totalGoodWeight),
+		log.Stringer("good_uncounted", layer.verifying.goodUncounted),
+		log.Stringer("global_threshold", threshold),
 	)
 	if sign(margin.Cmp(threshold)) != support {
 		logger.With().Debug("doesn't cross global threshold")

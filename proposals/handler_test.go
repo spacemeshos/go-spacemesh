@@ -221,7 +221,7 @@ func TestBallot_MalformedData(t *testing.T) {
 	b := createBallot(t)
 	data, err := codec.Encode(&b.InnerBallot)
 	require.NoError(t, err)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errMalformedData)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errMalformedData)
 }
 
 func TestBallot_BadSignature(t *testing.T) {
@@ -229,7 +229,7 @@ func TestBallot_BadSignature(t *testing.T) {
 	b := createBallot(t)
 	b.Signature = b.Signature[1:]
 	data := encodeBallot(t, b)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInitialize)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errInitialize)
 }
 
 func TestBallot_KnownBallot(t *testing.T) {
@@ -238,7 +238,7 @@ func TestBallot_KnownBallot(t *testing.T) {
 	require.NoError(t, ballots.Add(th.cdb, b))
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
+	require.NoError(t, th.HandleSyncedBallot(context.Background(), data))
 }
 
 func TestBallot_EmptyATXID(t *testing.T) {
@@ -248,7 +248,7 @@ func TestBallot_EmptyATXID(t *testing.T) {
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidATXID)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errInvalidATXID)
 }
 
 func TestBallot_GoldenATXID(t *testing.T) {
@@ -258,7 +258,7 @@ func TestBallot_GoldenATXID(t *testing.T) {
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidATXID)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errInvalidATXID)
 }
 
 func TestBallot_RefBallotMissingEpochData(t *testing.T) {
@@ -268,7 +268,7 @@ func TestBallot_RefBallotMissingEpochData(t *testing.T) {
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errMissingEpochData)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errMissingEpochData)
 }
 
 func TestBallot_RefBallotMissingBeacon(t *testing.T) {
@@ -278,7 +278,7 @@ func TestBallot_RefBallotMissingBeacon(t *testing.T) {
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errMissingBeacon)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errMissingBeacon)
 }
 
 func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
@@ -288,7 +288,7 @@ func TestBallot_RefBallotEmptyActiveSet(t *testing.T) {
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errEmptyActiveSet)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errEmptyActiveSet)
 }
 
 func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
@@ -298,7 +298,7 @@ func TestBallot_RefBallotDuplicateInActiveSet(t *testing.T) {
 	signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errDuplicateATX)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errDuplicateATX)
 }
 
 func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
@@ -308,7 +308,7 @@ func TestBallot_NotRefBallotButHasEpochData(t *testing.T) {
 	b = signAndInit(t, b)
 	data := encodeBallot(t, b)
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnexpectedEpochData)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errUnexpectedEpochData)
 }
 
 func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
@@ -331,7 +331,7 @@ func TestBallot_BallotDoubleVotedWithinHdist(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errDoubleVoting)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errDoubleVoting)
 }
 
 func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
@@ -355,7 +355,7 @@ func TestBallot_BallotDoubleVotedWithinHdist_LyrBfrHdist(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errDoubleVoting)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errDoubleVoting)
 }
 
 func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
@@ -384,8 +384,8 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(b).Return(nil)
-	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil)
+	require.NoError(t, th.HandleSyncedBallot(context.Background(), data))
 }
 
 func TestBallot_ConflictingForAndAgainst(t *testing.T) {
@@ -408,7 +408,7 @@ func TestBallot_ConflictingForAndAgainst(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(append(supported, supported...))).Return(nil).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errConflictingExceptions)
 }
 
 func TestBallot_ConflictingForAndAbstain(t *testing.T) {
@@ -431,7 +431,7 @@ func TestBallot_ConflictingForAndAbstain(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errConflictingExceptions)
 }
 
 func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
@@ -455,7 +455,7 @@ func TestBallot_ConflictingAgainstAndAbstain(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(against)).Return(nil).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errConflictingExceptions)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errConflictingExceptions)
 }
 
 func TestBallot_ExceedMaxExceptions(t *testing.T) {
@@ -479,7 +479,7 @@ func TestBallot_ExceedMaxExceptions(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(nil).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errExceptionsOverflow)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errExceptionsOverflow)
 }
 
 func TestBallot_BallotsNotAvailable(t *testing.T) {
@@ -490,7 +490,7 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().AddPeersFromHash(b.ID().AsHash32(), collectHashes(*b))
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(errUnknown).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnknown)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errUnknown)
 }
 
 func TestBallot_ATXsNotAvailable(t *testing.T) {
@@ -501,7 +501,7 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(errUnknown).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnknown)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errUnknown)
 }
 
 func TestBallot_BlocksNotAvailable(t *testing.T) {
@@ -523,7 +523,7 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetBlocks(gomock.Any(), types.ToBlockIDs(supported)).Return(errUnknown).Times(1)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errUnknown)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errUnknown)
 }
 
 func TestBallot_ErrorCheckingEligible(t *testing.T) {
@@ -550,7 +550,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return false, errors.New("unknown")
 		})
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errNotEligible)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errNotEligible)
 }
 
 func TestBallot_NotEligible(t *testing.T) {
@@ -577,7 +577,7 @@ func TestBallot_NotEligible(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return false, nil
 		})
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errNotEligible)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errNotEligible)
 }
 
 func TestBallot_InvalidVote(t *testing.T) {
@@ -620,7 +620,7 @@ func TestBallot_InvalidVote(t *testing.T) {
 			th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			th.mf.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-			require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), errInvalidVote)
+			require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), errInvalidVote)
 		})
 	}
 }
@@ -649,11 +649,11 @@ func TestBallot_Success(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil)
 	decoded := &tortoise.DecodedBallot{Ballot: b}
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
-	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
+	require.NoError(t, th.HandleSyncedBallot(context.Background(), data))
 }
 
 func TestBallot_RefBallot(t *testing.T) {
@@ -683,8 +683,8 @@ func TestBallot_RefBallot(t *testing.T) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(b).Return(nil)
-	require.NoError(t, th.HandleSyncedBallot(context.TODO(), data))
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil)
+	require.NoError(t, th.HandleSyncedBallot(context.Background(), data))
 }
 
 func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
@@ -705,7 +705,7 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 
 	decoded := &tortoise.DecodedBallot{Ballot: b}
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, expected)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), expected)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), expected)
 }
 
 func TestBallot_DecodedStoreFailure(t *testing.T) {
@@ -722,9 +722,9 @@ func TestBallot_DecodedStoreFailure(t *testing.T) {
 
 	decoded := &tortoise.DecodedBallot{Ballot: b}
 	th.md.EXPECT().DecodeBallot(b).Return(decoded, nil)
-	th.mm.EXPECT().AddBallot(b).Return(nil)
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(expected)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.TODO(), data), expected)
+	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), data), expected)
 }
 
 func TestProposal_MalformedData(t *testing.T) {
@@ -732,8 +732,8 @@ func TestProposal_MalformedData(t *testing.T) {
 	p := createProposal(t)
 	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
-	require.ErrorIs(t, th.HandleSyncedProposal(context.TODO(), data), errMalformedData)
-	require.Equal(t, pubsub.ValidationReject, th.HandleProposal(context.TODO(), "", data))
+	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), data), errMalformedData)
+	require.Equal(t, pubsub.ValidationReject, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -742,8 +742,8 @@ func TestProposal_BadSignature(t *testing.T) {
 	p := createProposal(t)
 	p.Signature = p.Signature[1:]
 	data := encodeProposal(t, p)
-	require.ErrorIs(t, th.HandleSyncedProposal(context.TODO(), data), errInitialize)
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), "", data))
+	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), data), errInitialize)
+	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -753,8 +753,8 @@ func TestProposal_KnownProposal(t *testing.T) {
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
 	require.NoError(t, proposals.Add(th.cdb, p))
 	data := encodeProposal(t, p)
-	require.NoError(t, th.HandleSyncedProposal(context.TODO(), data))
-	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), "", data))
+	require.NoError(t, th.HandleSyncedProposal(context.Background(), data))
+	require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, true)
 }
 
@@ -783,13 +783,13 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
-	require.ErrorIs(t, th.HandleSyncedProposal(context.TODO(), data), errDuplicateTX)
+	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), data), errDuplicateTX)
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -817,15 +817,15 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
 
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
-	require.ErrorIs(t, th.HandleSyncedProposal(context.TODO(), data), errUnknown)
+	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), data), errUnknown)
 	checkProposal(t, th.cdb, p, false)
 }
 
@@ -852,8 +852,8 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
@@ -861,7 +861,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
 	errUnknown := errors.New("unknown")
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
-	require.ErrorIs(t, th.HandleSyncedProposal(context.TODO(), data), errUnknown)
+	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), data), errUnknown)
 	checkProposal(t, th.cdb, p, true)
 }
 
@@ -890,8 +890,8 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		}).MinTimes(1).MaxTimes(2)
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			_ = ballots.Add(th.cdb, got)
 			return nil
 		}).MinTimes(1).MaxTimes(2)
@@ -903,11 +903,11 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	var res1, res2 pubsub.ValidationResult
 	go func() {
 		defer wg.Done()
-		res1 = th.HandleProposal(context.TODO(), p2p.NoPeer, data)
+		res1 = th.HandleProposal(context.Background(), p2p.NoPeer, data)
 	}()
 	go func() {
 		defer wg.Done()
-		res2 = th.HandleProposal(context.TODO(), p2p.NoPeer, data)
+		res2 = th.HandleProposal(context.Background(), p2p.NoPeer, data)
 	}()
 	wg.Wait()
 	if res1 == pubsub.ValidationAccept {
@@ -967,13 +967,13 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 					}
 					return true, nil
 				})
-			th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Return(nil)
+			th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).Return(nil).Return(nil)
 			th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil)
 			if tc.propFetched {
-				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
+				require.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.Background(), p2p.NoPeer, data))
 			} else {
 				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
-				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.TODO(), p2p.NoPeer, data))
+				require.Equal(t, pubsub.ValidationAccept, th.HandleProposal(context.Background(), p2p.NoPeer, data))
 			}
 			checkProposal(t, th.cdb, p, true)
 		})
@@ -1003,15 +1003,15 @@ func TestProposal_ValidProposal(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
-	require.NoError(t, th.HandleSyncedProposal(context.TODO(), data))
+	require.NoError(t, th.HandleSyncedProposal(context.Background(), data))
 	checkProposal(t, th.cdb, p, true)
 }
 
@@ -1038,15 +1038,15 @@ func TestMetrics(t *testing.T) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).DoAndReturn(
-		func(got *types.Ballot) error {
+	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
+		func(_ context.Context, got *types.Ballot) error {
 			require.NoError(t, ballots.Add(th.cdb, got))
 			return nil
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().RegisterPeerHashes(p2p.NoPeer, collectHashes(*p))
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
-	require.NoError(t, th.HandleSyncedProposal(context.TODO(), data))
+	require.NoError(t, th.HandleSyncedProposal(context.Background(), data))
 	checkProposal(t, th.cdb, p, true)
 	counts, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_proposals_proposal_size")
 	require.NoError(t, err)

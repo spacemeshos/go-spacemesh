@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	expectedRef := hash.Sum(proofBytes)
 	require.Equal(t, types.PoetProofRef(types.CalcHash32(expectedRef[:]).Bytes()), ref)
 
-	require.NoError(t, poetDb.StoreProof(ref, msg))
+	require.NoError(t, poetDb.StoreProof(context.TODO(), ref, msg))
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
 	require.NoError(t, err)
 	assert.Equal(t, ref, got)

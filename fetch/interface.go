@@ -35,7 +35,7 @@ type txHandler interface {
 }
 
 type poetHandler interface {
-	ValidateAndStoreMsg(data []byte) error
+	ValidateAndStoreMsg(context.Context, []byte) error
 }
 
 type meshProvider interface {

@@ -282,17 +282,6 @@ func mockedBeacons(tb testing.TB) system.BeaconGetter {
 	return mockBeacons
 }
 
-type updater struct {
-	cdb *datastore.CachedDB
-}
-
-func (u *updater) UpdateBlockValidity(bid types.BlockID, _ types.LayerID, valid bool) error {
-	if valid {
-		return blocks.SetValid(u.cdb, bid)
-	}
-	return blocks.SetInvalid(u.cdb, bid)
-}
-
 func defaultTurtle(tb testing.TB) *turtle {
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
@@ -300,7 +289,6 @@ func defaultTurtle(tb testing.TB) *turtle {
 		lg,
 		cdb,
 		mockedBeacons(tb),
-		&updater{cdb},
 		defaultTestConfig(),
 	)
 }
@@ -317,12 +305,12 @@ func defaultTestConfig() Config {
 }
 
 func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
-	return New(state.DB, state.Beacons, &updater{state.DB}, opts...)
+	return New(state.DB, state.Beacons, opts...)
 }
 
 func defaultAlgorithm(tb testing.TB, cdb *datastore.CachedDB) *Tortoise {
 	tb.Helper()
-	return New(cdb, mockedBeacons(tb), &updater{cdb},
+	return New(cdb, mockedBeacons(tb),
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
@@ -514,6 +502,17 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
+func processBlockUpdates(tb testing.TB, tt *Tortoise, db sql.Executor) {
+	_, updated := tt.Updates()
+	for _, u := range updated {
+		if u.Validity {
+			require.NoError(tb, blocks.SetValid(db, u.ID))
+		} else {
+			require.NoError(tb, blocks.SetInvalid(db, u.ID))
+		}
+	}
+}
+
 func TestLongTermination(t *testing.T) {
 	t.Run("hare output exists", func(t *testing.T) {
 		// note that test should pass without switching into full mode
@@ -548,6 +547,7 @@ func TestLongTermination(t *testing.T) {
 			verified = tortoise.LatestComplete()
 		}
 		require.Equal(t, last.Sub(1), verified)
+		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		for lid := types.GetEffectiveGenesis().Add(1); lid.Before(last); lid = lid.Add(1) {
 			validities, err := blocks.ContextualValidity(s.GetState(0).DB, lid)
 			require.NoError(t, err)
@@ -599,6 +599,7 @@ func TestLongTermination(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		verified = tortoise.LatestComplete()
 		require.Equal(t, last.Sub(1), verified)
+		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		for lid := types.GetEffectiveGenesis().Add(1); lid.Before(last); lid = lid.Add(1) {
 			validities, err := blocks.ContextualValidity(s.GetState(0).DB, lid)
 			require.NoError(t, err)
@@ -645,6 +646,7 @@ func TestLongTermination(t *testing.T) {
 			verified = tortoise.LatestComplete()
 		}
 		require.Equal(t, last.Sub(1), verified)
+		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		for lid := types.GetEffectiveGenesis().Add(1); lid.Before(last); lid = lid.Add(1) {
 			validities, err := blocks.ContextualValidity(s.GetState(0).DB, lid)
 			require.NoError(t, err)
@@ -1475,7 +1477,7 @@ func TestComputeBallotWeight(t *testing.T) {
 			cdb := newCachedDB(t, logtest.New(t))
 			cfg := DefaultConfig()
 			cfg.LayerSize = tc.layerSize
-			trtl := New(cdb, nil, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
+			trtl := New(cdb, nil, WithLogger(logtest.New(t)), WithConfig(cfg))
 
 			lid := types.NewLayerID(111)
 			atxLid := lid.GetEpoch().FirstLayer().Sub(1)
@@ -1557,6 +1559,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 		last = s1.Next(sim.WithNumBlocks(1))
 		tortoise1.TallyVotes(ctx, last)
 		tortoise2.TallyVotes(ctx, last)
+		processBlockUpdates(t, tortoise1, s1.GetState(0).DB)
+		processBlockUpdates(t, tortoise2, s1.GetState(1).DB)
 	}
 	require.Equal(t, last.Sub(1), tortoise1.LatestComplete())
 	require.Equal(t, last.Sub(1), tortoise2.LatestComplete())
@@ -1570,6 +1574,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 		last = s1.Next(sim.WithNumBlocks(1))
 		tortoise1.TallyVotes(ctx, last)
 		tortoise2.TallyVotes(ctx, s2.Next(sim.WithNumBlocks(1)))
+		processBlockUpdates(t, tortoise1, s1.GetState(0).DB)
+		processBlockUpdates(t, tortoise2, s2.GetState(0).DB)
 	}
 
 	// sync missing state and rerun immediately, both instances won't make progress
@@ -1600,6 +1606,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 
 	tortoise1.TallyVotes(ctx, last)
 	tortoise2.TallyVotes(ctx, last)
+	processBlockUpdates(t, tortoise1, s1.GetState(0).DB)
+	processBlockUpdates(t, tortoise2, s1.GetState(0).DB)
 
 	// make enough progress to cross global threshold with new votes
 	for i := 0; i < int(types.GetLayersPerEpoch())*4; i++ {
@@ -1611,6 +1619,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 		}))
 		tortoise1.TallyVotes(ctx, last)
 		tortoise2.TallyVotes(ctx, last)
+		processBlockUpdates(t, tortoise1, s1.GetState(0).DB)
+		processBlockUpdates(t, tortoise2, s1.GetState(0).DB)
 	}
 
 	require.Equal(t, last.Sub(1), tortoise1.LatestComplete())
@@ -1816,6 +1826,7 @@ func TestLateBlock(t *testing.T) {
 
 	require.Equal(t, last.Sub(1), tortoise.LatestComplete())
 
+	processBlockUpdates(t, tortoise, s.GetState(0).DB)
 	valid, err := blocks.IsValid(s.GetState(0).DB, block.ID())
 	require.NoError(t, err)
 	require.True(t, valid)
@@ -2161,6 +2172,7 @@ func TestSwitchMode(t *testing.T) {
 			last = s.Next(sim.WithNumBlocks(1))
 		}
 		tortoise.TallyVotes(ctx, last)
+		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		layer := tortoise.trtl.layer(types.GetEffectiveGenesis().Add(1))
 		require.Len(t, layer.blocks, 1)
 		require.Equal(t, layer.blocks[0].validity, against)
@@ -2172,11 +2184,13 @@ func TestSwitchMode(t *testing.T) {
 			Height:  block.height,
 		})))
 		tortoise.TallyVotes(ctx, last)
+		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		for i := 0; i < 10; i++ {
 			last = s.Next(sim.WithNumBlocks(1))
 			tortoise.TallyVotes(ctx, last)
 		}
 		tortoise.TallyVotes(ctx, last)
+		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		require.False(t, tortoise.trtl.isFull)
 	})
 }
@@ -2558,7 +2572,7 @@ func TestEncodeVotes(t *testing.T) {
 		cfg := defaultTestConfig()
 		cfg.Hdist = 1
 		cfg.Zdist = 1
-		tortoise := New(cdb, mockedBeacons(t), &updater{cdb},
+		tortoise := New(cdb, mockedBeacons(t),
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
 		)
@@ -2596,7 +2610,7 @@ func TestEncodeVotes(t *testing.T) {
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
 		cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-		tortoise := New(cdb, mockedBeacons(t), &updater{cdb},
+		tortoise := New(cdb, mockedBeacons(t),
 			WithConfig(defaultTestConfig()),
 			WithLogger(logtest.New(t)),
 		)
