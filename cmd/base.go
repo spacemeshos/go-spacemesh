@@ -2,24 +2,17 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"math/big"
-	"os"
-	"os/signal"
 	"reflect"
-	"sync"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/cmd/flags"
-	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -32,122 +25,6 @@ var (
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
 )
-
-var (
-	mu                      sync.RWMutex
-	globalCtx, globalCancel = context.WithCancel(context.Background())
-)
-
-// Ctx returns global context.
-func Ctx() context.Context {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	return globalCtx
-}
-
-// SetCtx sets global context.
-func SetCtx(ctx context.Context) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	globalCtx = ctx
-}
-
-// Cancel returns global cancellation function.
-func Cancel() func() {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	return globalCancel
-}
-
-// SetCancel sets global cancellation function.
-func SetCancel(cancelFunc func()) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	globalCancel = cancelFunc
-}
-
-// BaseApp is the base application command, provides basic init and flags for all executables and applications.
-type BaseApp struct {
-	Config *config.Config
-}
-
-// NewBaseApp returns new basic application.
-func NewBaseApp() *BaseApp {
-	dc := config.DefaultConfig()
-	return &BaseApp{Config: &dc}
-}
-
-// Initialize loads config, sets logger  and listens to Ctrl ^C.
-func (app *BaseApp) Initialize(cmd *cobra.Command) {
-	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	// Goroutine that listens for Ctrl ^ C command
-	// and triggers the quit app
-	go func() {
-		for range signalChan {
-			log.Info("Received an interrupt, stopping services...\n")
-
-			Cancel()()
-		}
-	}()
-
-	// parse the config file based on flags et al
-	conf, err := parseConfig()
-	if err != nil {
-		log.Panic("Panic: ", err.Error())
-	}
-
-	app.Config = conf
-	if err := EnsureCLIFlags(cmd, app.Config); err != nil {
-		log.Panic(err.Error())
-	}
-	setupLogging(app.Config)
-}
-
-func setupLogging(cfg *config.Config) {
-	if cfg.LOGGING.Encoder == config.JSONLogEncoder {
-		log.JSONLog(true)
-	}
-
-	// setup logging early
-	if err := os.MkdirAll(cfg.DataDir(), 0o700); err != nil {
-		log.Panic("Failed to setup spacemesh data dir", err)
-	}
-}
-
-func parseConfig() (*config.Config, error) {
-	fileLocation := viper.GetString("config")
-	vip := viper.New()
-	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, vip); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
-			fileLocation, err))
-		// return err
-	}
-
-	conf := config.DefaultConfig()
-	// load config if it was loaded to our viper
-	hook := mapstructure.ComposeDecodeHookFunc(
-		mapstructure.StringToTimeDurationHookFunc(),
-		mapstructure.StringToSliceHookFunc(","),
-		mapstructureutil.BigRatDecodeFunc(),
-	)
-
-	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
-	if err != nil {
-		log.Error("Failed to parse config\n")
-		return nil, fmt.Errorf("parse config: %w", err)
-	}
-
-	return &conf, nil
-}
 
 // EnsureCLIFlags checks flag types and converts them.
 func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
