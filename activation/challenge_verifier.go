@@ -129,8 +129,7 @@ func (v *challengeVerifier) verifyInitialChallenge(ctx context.Context, challeng
 		return fmt.Errorf("%w: invalid initial Post Metadata: %v", ErrChallengeInvalid, err)
 	}
 
-	commitment := GetCommitmentBytes(nodeID, *challenge.CommitmentATX)
-	if err := validatePost(commitment, challenge.InitialPost, challenge.InitialPostMetadata, challenge.NumUnits); err != nil {
+	if err := validatePost(nodeID, *challenge.CommitmentATX, challenge.InitialPost, challenge.InitialPostMetadata, challenge.NumUnits); err != nil {
 		return fmt.Errorf("%w: invalid initial Post: %v", ErrChallengeInvalid, err)
 	}
 
