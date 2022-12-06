@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -28,7 +27,7 @@ var (
 	errAtxNotFound = errors.New("unavailable")
 )
 
-func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
+func getTestConfig(t *testing.T) (activation.PostConfig, activation.PostSetupOpts) {
 	cfg := activation.DefaultPostConfig()
 
 	opts := activation.DefaultPostSetupOpts()
@@ -75,7 +74,7 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(activation.NewMockAtxProvider(gomock.NewController(t)), &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
@@ -105,7 +104,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge, goldenATXID)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(activation.NewMockAtxProvider(gomock.NewController(t)), &sigVerifier, postConfig, goldenATXID, layersPerEpoch)
+	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), &sigVerifier, postConfig, goldenATXID, layersPerEpoch)
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
@@ -277,7 +276,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockAtxProvider(ctrl)
+		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(gomock.Any()).AnyTimes().Return(
 			&types.ActivationTxHeader{
 				NIPostChallenge: types.NIPostChallenge{
@@ -295,7 +294,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Run("positioning ATX unavailable", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockAtxProvider(ctrl)
+		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, errAtxNotFound)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
@@ -306,7 +305,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Run("NodeID doesn't match previous ATX NodeID", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockAtxProvider(ctrl)
+		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
@@ -317,7 +316,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Run("previous ATX unavailable", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockAtxProvider(ctrl)
+		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(nil, errAtxNotFound)
 		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
@@ -328,7 +327,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Run("publayerID is not after previousATX.publayerID ", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockAtxProvider(ctrl)
+		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
@@ -345,7 +344,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	t.Run("publayerID is not after positioningATX.publayerID", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
-		atxProvider := activation.NewMockAtxProvider(ctrl)
+		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
 				Sequence:   0,

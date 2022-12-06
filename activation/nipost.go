@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -55,7 +54,7 @@ func (nb *NIPostBuilder) persist() {
 type NIPostBuilder struct {
 	minerID           []byte
 	db                *sql.Database
-	postSetupProvider PostSetupProvider
+	postSetupProvider postSetupProvider
 	poetProvers       []PoetProvingServiceClient
 	poetDB            poetDbAPI
 	state             *types.NIPostBuilderState
@@ -72,7 +71,7 @@ type poetDbAPI interface {
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	minerID types.NodeID,
-	postSetupProvider PostSetupProvider,
+	postSetupProvider postSetupProvider,
 	poetProvers []PoetProvingServiceClient,
 	poetDB poetDbAPI,
 	db *sql.Database,
@@ -111,7 +110,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 	}
 	nb.load(*challengeHash)
 
-	if s := nb.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
+	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
 		return nil, 0, errors.New("post setup not complete")
 	}
 

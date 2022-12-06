@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -33,8 +32,6 @@ func (e *VerifyError) Is(target error) bool {
 	return ok
 }
 
-//go:generate mockgen -package=activation -destination=./challenge_verifier_mocks.go . AtxProvider
-
 type ChallengeVerificationResult struct {
 	Hash   types.Hash32
 	NodeID types.NodeID
@@ -45,14 +42,14 @@ type ChallengeVerifier interface {
 }
 
 type challengeVerifier struct {
-	atxDB             AtxProvider
+	atxDB             atxProvider
 	signatureVerifier signing.VerifyExtractor
-	cfg               atypes.PostConfig
+	cfg               PostConfig
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 }
 
-func NewChallengeVerifier(cdb AtxProvider, signatureVerifier signing.VerifyExtractor, cfg atypes.PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
+func NewChallengeVerifier(cdb atxProvider, signatureVerifier signing.VerifyExtractor, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
 	return &challengeVerifier{
 		atxDB:             cdb,
 		signatureVerifier: signatureVerifier,

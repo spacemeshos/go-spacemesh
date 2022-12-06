@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -67,7 +66,7 @@ var (
 
 type NetMock struct {
 	lastTransmission []byte
-	atxHdlr          AtxHandler
+	atxHdlr          atxHandler
 }
 
 func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
@@ -218,7 +217,7 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	return ch
 }
 
-func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr AtxHandler, opts ...BuilderOption) *Builder {
+func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr atxHandler, opts ...BuilderOption) *Builder {
 	net.atxHdlr = hdlr
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -226,7 +225,7 @@ func newBuilder(tb testing.TB, cdb *datastore.CachedDB, hdlr AtxHandler, opts ..
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	mockSyncer := NewMockSyncer(gomock.NewController(tb))
+	mockSyncer := NewMocksyncer(gomock.NewController(tb))
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -325,7 +324,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mClock := NewMocklayerClock(ctrl)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
 		mClock, mockSyncer, logtest.New(t).WithName("atxBuilder"),
@@ -358,7 +357,7 @@ func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mClock := NewMocklayerClock(ctrl)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
 		mClock, mockSyncer, logtest.New(t).WithName("atxBuilder"),
@@ -408,7 +407,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
@@ -419,8 +418,8 @@ func TestBuilder_StartSmeshingTwiceError(t *testing.T) {
 	builder := newBuilder(t, cdb, atxHdlr)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
-	require.ErrorContains(t, builder.StartSmeshing(coinbase, atypes.PostSetupOpts{}), "already started")
+	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.ErrorContains(t, builder.StartSmeshing(coinbase, PostSetupOpts{}), "already started")
 }
 
 func TestBuilder_StartSmeshingAfterError(t *testing.T) {
@@ -428,7 +427,7 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
-	postSetupMock := NewMockPostSetupProvider(ctrl)
+	postSetupMock := NewMockpostSetupProvider(ctrl)
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Times(1).Return(nil, errors.New("couldn't start session"))
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
 
@@ -439,7 +438,7 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -451,8 +450,8 @@ func TestBuilder_StartSmeshingAfterError(t *testing.T) {
 	b.initialPost = initialPost
 
 	coinbase := types.Address{1, 1, 1}
-	require.ErrorContains(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}), "couldn't start session")
-	require.NoError(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
+	require.ErrorContains(t, b.StartSmeshing(coinbase, PostSetupOpts{}), "couldn't start session")
+	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
@@ -469,7 +468,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		close(sessionChan)
 
 		ctrl := gomock.NewController(t)
-		mockSyncer := NewMockSyncer(ctrl)
+		mockSyncer := NewMocksyncer(ctrl)
 		mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 			ch := make(chan struct{})
 			close(ch)
@@ -486,7 +485,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	t.Run("Single threaded", func(t *testing.T) {
 		builder := getBuilder(t)
 		for i := 0; i < 100; i++ {
-			require.NoError(t, builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{}))
+			require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
 			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
 			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
@@ -503,7 +502,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
 				for i := 0; i < 100; i++ {
-					builder.StartSmeshing(types.Address{}, atypes.PostSetupOpts{})
+					builder.StartSmeshing(types.Address{}, PostSetupOpts{})
 					builder.StopSmeshing(true)
 				}
 				return nil
@@ -526,7 +525,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
-	postSetupMock := NewMockPostSetupProvider(ctrl)
+	postSetupMock := NewMockpostSetupProvider(ctrl)
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
 	postSetupMock.EXPECT().StopSession(gomock.Any()).Return(errors.New("couldn't stop session"))
 
@@ -537,7 +536,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -549,7 +548,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	b.initialPost = initialPost
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, b.StartSmeshing(coinbase, atypes.PostSetupOpts{}))
+	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
 	require.Error(t, b.StopSmeshing(true))
 	require.True(t, b.Smeshing())
 }
@@ -689,7 +688,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -746,7 +745,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	}
 
 	ctrl := gomock.NewController(t)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -901,12 +900,12 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	atxHdlr := newAtxHandler(t, cdb)
 
 	ctrl := gomock.NewController(t)
-	nipostBuilder := NewMockNipostBuilder(ctrl)
+	nipostBuilder := NewMocknipostBuilder(ctrl)
 	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, *types.PoetChallenge, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
 		return nil, 0, fmt.Errorf("NIPost builder error")
 	})
 
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -999,7 +998,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
 	receiver := NewMockatxReceiver(ctrl)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 
 	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, mockSyncer, logtest.New(t).WithName("atxBuilder"))
@@ -1036,7 +1035,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -1118,7 +1117,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	nipostBuilder := &NIPostBuilderMock{}
 
 	ctrl := gomock.NewController(t)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -1187,7 +1186,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	postSetupProvider := &postSetupProviderMock{}
 
 	ctrl := gomock.NewController(t)
-	mockSyncer := NewMockSyncer(ctrl)
+	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
