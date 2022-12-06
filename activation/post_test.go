@@ -206,6 +206,8 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	cdb := newCachedDB(t)
 	cfg, opts := getTestConfig(t)
+	cfg.LabelsPerUnit = cfg.LabelsPerUnit * 12
+
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
@@ -217,7 +219,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	})
 
 	// Wait a bit for the setup to proceed.
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// Verify the intermediate status.
 	status := mgr.Status()

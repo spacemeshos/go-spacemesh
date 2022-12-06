@@ -111,7 +111,7 @@ type Builder struct {
 
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
-	layerClock            layerClock
+	layerClock            LayerClock
 	syncer                Syncer
 	log                   log.Log
 	parentCtx             context.Context
@@ -158,7 +158,7 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer Signer, cdb *datastore.CachedDB, hdlr AtxHandler, publisher pubsub.Publisher,
-	nipostBuilder NipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+	nipostBuilder NipostBuilder, postSetupProvider PostSetupProvider, layerClock LayerClock,
 	syncer Syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
