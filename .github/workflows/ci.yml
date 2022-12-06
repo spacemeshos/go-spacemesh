@@ -310,7 +310,7 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
-          storage=premium-rwo: 10Gi
+          storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
@@ -323,7 +323,7 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: destructive
-          storage=premium-rwo: 10Gi
+          storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m

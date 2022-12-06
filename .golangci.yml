@@ -1,5 +1,3 @@
-# This file contains all available configuration options
-
 # Options for analysis running.
 run:
   # The default concurrency value is the number of available CPU.
@@ -77,13 +75,9 @@ output:
   # print linter name in the end of issue text, default is true
   print-linter-name: true
 
-# all available settings of specific linters
+# All available settings of specific linters.
 linters-settings:
   staticcheck:
-    # Select the Go version to target.
-    # Default: "1.13"
-    # Deprecated: use the global `run.go` instead.
-    # go: "1.15"
     # SAxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
     # Default: ["*"]
     checks: ["all"]
@@ -110,42 +104,6 @@ linters-settings:
     # Run `go tool vet help` to see all analyzers.
     # Default: []
     # enable:
-    #   - asmdecl
-    #   - assign
-    #   - atomic
-    #   - atomicalign
-    #   - bools
-    #   - buildtag
-    #   - cgocall
-    #   - composites
-    #   - copylocks
-    #   - deepequalerrors
-    #   - errorsas
-    #   - fieldalignment
-    #   - findcall
-    #   - framepointer
-    #   - httpresponse
-    #   - ifaceassert
-    #   - loopclosure
-    #   - lostcancel
-    #   - nilfunc
-    #   - nilness
-    #   - printf
-    #   - reflectvaluecompare
-    #   - shadow
-    #   - shift
-    #   - sigchanyzer
-    #   - sortslice
-    #   - stdmethods
-    #   - stringintconv
-    #   - structtag
-    #   - testinggoroutine
-    #   - tests
-    #   - unmarshal
-    #   - unreachable
-    #   - unsafeptr
-    #   - unusedresult
-    #   - unusedwrite
     # Enable all analyzers.
     # Default: false
     enable-all: false
@@ -153,42 +111,6 @@ linters-settings:
     # Run `go tool vet help` to see all analyzers.
     # Default: []
     # disable:
-    #   - asmdecl
-    #   - assign
-    #   - atomic
-    #   - atomicalign
-    #   - bools
-    #   - buildtag
-    #   - cgocall
-    #   - composites
-    #   - copylocks
-    #   - deepequalerrors
-    #   - errorsas
-    #   - fieldalignment
-    #   - findcall
-    #   - framepointer
-    #   - httpresponse
-    #   - ifaceassert
-    #   - loopclosure
-    #   - lostcancel
-    #   - nilfunc
-    #   - nilness
-    #   - printf
-    #   - reflectvaluecompare
-    #   - shadow
-    #   - shift
-    #   - sigchanyzer
-    #   - sortslice
-    #   - stdmethods
-    #   - stringintconv
-    #   - structtag
-    #   - testinggoroutine
-    #   - tests
-    #   - unmarshal
-    #   - unreachable
-    #   - unsafeptr
-    #   - unusedresult
-    #   - unusedwrite
 
   revive:
     # Sets the default failure confidence.
@@ -242,6 +164,7 @@ linters-settings:
       - "github.com/pkg/errors"
       - "golang.org/x/xerrors"
       - "golang.org/x/net/context"
+      - "golang.org/x/crypto/ed25519"
 
   misspell:
     # Correct spellings using locale preferences for US or UK.
@@ -374,78 +297,10 @@ linters-settings:
     # Available rules: https://github.com/securego/gosec#available-rules
     # Default: [] - means include all rules
     # includes:
-    #   - G101 # Look for hard coded credentials
-    #   - G102 # Bind to all interfaces
-    #   - G103 # Audit the use of unsafe block
-    #   - G104 # Audit errors not checked
-    #   - G106 # Audit the use of ssh.InsecureIgnoreHostKey
-    #   - G107 # Url provided to HTTP request as taint input
-    #   - G108 # Profiling endpoint automatically exposed on /debug/pprof
-    #   - G109 # Potential Integer overflow made by strconv.Atoi result conversion to int16/32
-    #   - G110 # Potential DoS vulnerability via decompression bomb
-    #   - G111 # Potential directory traversal
-    #   - G112 # Potential slowloris attack
-    #   - G113 # Usage of Rat.SetString in math/big with an overflow (CVE-2022-23772)
-    #   - G114 # Use of net/http serve function that has no support for setting timeouts
-    #   - G201 # SQL query construction using format string
-    #   - G202 # SQL query construction using string concatenation
-    #   - G203 # Use of unescaped data in HTML templates
-    #   - G204 # Audit use of command execution
-    #   - G301 # Poor file permissions used when creating a directory
-    #   - G302 # Poor file permissions used with chmod
-    #   - G303 # Creating tempfile using a predictable path
-    #   - G304 # File path provided as taint input
-    #   - G305 # File traversal when extracting zip/tar archive
-    #   - G306 # Poor file permissions used when writing to a new file
-    #   - G307 # Deferring a method which returns an error
-    #   - G401 # Detect the usage of DES, RC4, MD5 or SHA1
-    #   - G402 # Look for bad TLS connection settings
-    #   - G403 # Ensure minimum RSA key length of 2048 bits
-    #   - G404 # Insecure random number source (rand)
-    #   - G501 # Import blocklist: crypto/md5
-    #   - G502 # Import blocklist: crypto/des
-    #   - G503 # Import blocklist: crypto/rc4
-    #   - G504 # Import blocklist: net/http/cgi
-    #   - G505 # Import blocklist: crypto/sha1
-    #   - G601 # Implicit memory aliasing of items from a range statement
     # To specify a set of rules to explicitly exclude.
     # Available rules: https://github.com/securego/gosec#available-rules
     # Default: []
     # excludes:
-    #   - G101 # Look for hard coded credentials
-    #   - G102 # Bind to all interfaces
-    #   - G103 # Audit the use of unsafe block
-    #   - G104 # Audit errors not checked
-    #   - G106 # Audit the use of ssh.InsecureIgnoreHostKey
-    #   - G107 # Url provided to HTTP request as taint input
-    #   - G108 # Profiling endpoint automatically exposed on /debug/pprof
-    #   - G109 # Potential Integer overflow made by strconv.Atoi result conversion to int16/32
-    #   - G110 # Potential DoS vulnerability via decompression bomb
-    #   - G111 # Potential directory traversal
-    #   - G112 # Potential slowloris attack
-    #   - G113 # Usage of Rat.SetString in math/big with an overflow (CVE-2022-23772)
-    #   - G114 # Use of net/http serve function that has no support for setting timeouts
-    #   - G201 # SQL query construction using format string
-    #   - G202 # SQL query construction using string concatenation
-    #   - G203 # Use of unescaped data in HTML templates
-    #   - G204 # Audit use of command execution
-    #   - G301 # Poor file permissions used when creating a directory
-    #   - G302 # Poor file permissions used with chmod
-    #   - G303 # Creating tempfile using a predictable path
-    #   - G304 # File path provided as taint input
-    #   - G305 # File traversal when extracting zip/tar archive
-    #   - G306 # Poor file permissions used when writing to a new file
-    #   - G307 # Deferring a method which returns an error
-    #   - G401 # Detect the usage of DES, RC4, MD5 or SHA1
-    #   - G402 # Look for bad TLS connection settings
-    #   - G403 # Ensure minimum RSA key length of 2048 bits
-    #   - G404 # Insecure random number source (rand)
-    #   - G501 # Import blocklist: crypto/md5
-    #   - G502 # Import blocklist: crypto/des
-    #   - G503 # Import blocklist: crypto/rc4
-    #   - G504 # Import blocklist: net/http/cgi
-    #   - G505 # Import blocklist: crypto/sha1
-    #   - G601 # Implicit memory aliasing of items from a range statement
     # Exclude generated files
     # Default: false
     exclude-generated: false

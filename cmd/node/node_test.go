@@ -218,20 +218,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
-func setup() {
-	// Reset the shutdown context
-	// oof, globals make testing really difficult
-	ctx, cancel := context.WithCancel(context.Background())
-
-	cmd.SetCtx(ctx)
-	cmd.SetCancel(cancel)
-
-	events.CloseEventReporter()
-}
-
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
-	setup()
-
 	// Use a unique port
 	port := 1244
 
@@ -327,8 +314,6 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
-	setup()
-
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 	r.Equal(9093, app.Config.API.JSONServerPort)
@@ -392,8 +377,6 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
-	setup()
-
 	// Use a unique port
 	port := 1242
 
@@ -406,9 +389,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(context.TODO())
+		app.startAPIServices(context.Background())
 	}
-	defer app.stopServices()
+	defer app.stopServices(context.Background())
 
 	// Make sure the service is not running by default
 	str, err := testArgs(context.Background(), cmdWithRun(run)) // no args
@@ -454,7 +437,6 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
-	setup()
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 
@@ -462,13 +444,13 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	run := func(c *cobra.Command, args []string) {
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.TODO())
+		app.startAPIServices(context.Background())
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
-	defer app.stopServices()
+	defer app.stopServices(context.Background())
 	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
@@ -491,7 +473,6 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
-	setup()
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 	const message = "nihao shijie"
@@ -501,7 +482,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	run := func(c *cobra.Command, args []string) {
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.TODO())
+		app.startAPIServices(context.Background())
 	}
 
 	// Test starting the JSON server from the commandline
@@ -509,7 +490,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	str, err := testArgs(context.Background(), cmdWithRun(run), "--json-server", "--grpc", "node", "--json-port", "1234")
 	r.Empty(str)
 	r.NoError(err)
-	defer app.stopServices()
+	defer app.stopServices(context.Background())
 	r.Equal(1234, app.Config.API.JSONServerPort)
 	r.Equal(true, app.Config.API.StartJSONServer)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -539,7 +520,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
 	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
-	setup()
 
 	// Use a unique port
 	port := 1240
@@ -566,8 +546,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
 
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup()
+		defer app.Cleanup(context.Background())
 		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
 
 		// Give the error channel a buffer
@@ -583,7 +566,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start())
+		require.NoError(t, app.Start(appCtx))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -670,7 +653,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmd.Cancel()() // stop the app
+	appCancel() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
@@ -678,7 +661,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
-	setup()
 	r := require.New(t)
 
 	// Use a unique port
@@ -692,8 +674,11 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer := signing.NewEdSigner()
 	address := wallet.Address(signer.PublicKey().Bytes())
 
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup()
+		defer app.Cleanup(context.Background())
 		r.NoError(app.Initialize())
 
 		// GRPC configuration
@@ -722,7 +707,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start())
+		require.NoError(t, app.Start(appCtx))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -791,7 +776,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmd.Cancel()()
+	appCancel()
 
 	// Wait for it to stop
 	wg.Wait()
@@ -807,7 +792,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.DataDirParent = t.TempDir()
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	require.NoError(t, app.Initialize())
-	app.Cleanup()
+	app.Cleanup(context.Background())
 
 	tconf := getTestDefaultConfig()
 	tconf.DataDirParent = t.TempDir()
@@ -935,7 +920,7 @@ func TestGenesisConfig(t *testing.T) {
 		app.Config.DataDirParent = t.TempDir()
 
 		require.NoError(t, app.Initialize())
-		app.Cleanup()
+		app.Cleanup(context.Background())
 		require.NoError(t, app.Initialize())
 	})
 	t.Run("fatal error on a diff", func(t *testing.T) {
@@ -945,7 +930,7 @@ func TestGenesisConfig(t *testing.T) {
 
 		require.NoError(t, app.Initialize())
 		app.Config.Genesis.ExtraData = "changed"
-		app.Cleanup()
+		app.Cleanup(context.Background())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
@@ -975,7 +960,7 @@ func TestFlock(t *testing.T) {
 	require.NoError(t, app.Initialize())
 	app1 := *app
 	require.ErrorContains(t, app1.Initialize(), "only one spacemesh instance")
-	app.Cleanup()
+	app.Cleanup(context.Background())
 	require.NoError(t, app.Initialize())
 	require.NoError(t, os.Remove(filepath.Join(app.Config.DataDir(), lockFile)))
 	require.NoError(t, app.Initialize())
@@ -1001,7 +986,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.NumFiles = 1
-	cfg.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
+	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2
@@ -1057,7 +1042,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	nodeID := types.BytesToNodeID(pub.Bytes())
 
-	err := smApp.initServices(context.TODO(), nodeID, storePath, edSgn,
+	err := smApp.initServices(context.Background(), nodeID, storePath, edSgn,
 		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
