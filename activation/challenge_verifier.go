@@ -23,7 +23,7 @@ type VerifyError struct {
 }
 
 func (e *VerifyError) Error() string {
-	return fmt.Sprintf("couldn't verify challenge: %v", e.source)
+	return fmt.Sprintf("couldn't verify challenge (%v)", e.source)
 }
 
 func (e *VerifyError) Unwrap() error { return e.source }

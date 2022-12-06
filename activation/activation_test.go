@@ -348,7 +348,7 @@ func TestBuilder_waitForFirstATX(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	mClock := NewMockLayerClock(ctrl)
+	mClock := NewMocklayerClock(ctrl)
 	mockSyncer := NewMockSyncer(ctrl)
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
@@ -381,7 +381,7 @@ func TestBuilder_waitForFirstATX_nextEpoch(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	mClock := NewMockLayerClock(ctrl)
+	mClock := NewMocklayerClock(ctrl)
 	mockSyncer := NewMockSyncer(ctrl)
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, &postSetupProviderMock{},
@@ -405,7 +405,7 @@ func TestBuilder_waitForFirstATX_Genesis(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
-	mClock := NewMockLayerClock(gomock.NewController(t))
+	mClock := NewMocklayerClock(gomock.NewController(t))
 	b.layerClock = mClock
 
 	current := types.NewLayerID(0)
@@ -417,7 +417,7 @@ func TestBuilder_waitForFirstATX_NoWait(t *testing.T) {
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 	b := newBuilder(t, cdb, atxHdlr)
-	mClock := NewMockLayerClock(gomock.NewController(t))
+	mClock := NewMocklayerClock(gomock.NewController(t))
 	b.layerClock = mClock
 
 	current := types.NewLayerID(layersPerEpoch)
@@ -838,7 +838,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	net := mocks.NewMockPublisher(ctrl)
 	nipostBuilderMock := NewMockNipostBuilder(ctrl)
 	postSetupProviderMock := NewMockPostSetupProvider(ctrl)
-	layerClockMock := NewMockLayerClock(ctrl)
+	layerClockMock := NewMocklayerClock(ctrl)
 	syncerMock := NewMockSyncer(ctrl)
 
 	b := NewBuilder(builderCfg, nodeId, signer, cdb, atxHdlr, net, nipostBuilderMock, postSetupProviderMock, layerClockMock, syncerMock, log.WithName("atxBuilder"))
@@ -947,7 +947,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	net := mocks.NewMockPublisher(ctrl)
 	nipostBuilderMock := NewMockNipostBuilder(ctrl)
 	postSetupProviderMock := NewMockPostSetupProvider(ctrl)
-	layerClockMock := NewMockLayerClock(ctrl)
+	layerClockMock := NewMocklayerClock(ctrl)
 	syncerMock := NewMockSyncer(ctrl)
 
 	b := NewBuilder(builderCfg, nodeId, signer, cdb, atxHdlr, net, nipostBuilderMock, postSetupProviderMock, layerClockMock, syncerMock, log.WithName("atxBuilder"))

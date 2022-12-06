@@ -25,7 +25,7 @@ type nipostValidator interface {
 	ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
 }
 
-type LayerClock interface {
+type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
