@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
 var result uint64
