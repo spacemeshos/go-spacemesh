@@ -213,6 +213,16 @@ func getStatefulSet(ctx context.Context, tctx *testcontext.Context, name string)
 	return set, nil
 }
 
+// areContainersReady checks if all containers are ready in pod.
+func areContainersReady(pod *apiv1.Pod) bool {
+	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	return true
+}
+
 func waitPod(ctx context.Context, tctx *testcontext.Context, name string) (*apiv1.Pod, error) {
 	watcher, err := tctx.Client.CoreV1().Pods(tctx.Namespace).Watch(ctx, apimetav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", name),
@@ -239,7 +249,9 @@ func waitPod(ctx context.Context, tctx *testcontext.Context, name string) (*apiv
 		case apiv1.PodFailed:
 			return nil, fmt.Errorf("pod failed %s", name)
 		case apiv1.PodRunning:
-			return pod, nil
+			if areContainersReady(pod) {
+				return pod, nil
+			}
 		}
 	}
 }

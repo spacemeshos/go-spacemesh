@@ -35,7 +35,7 @@ func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.NumUnits = cfg.MinNumUnits
-	opts.ComputeProviderID = initialization.CPUProviderID()
+	opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	return cfg, opts
 }
@@ -119,7 +119,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
 		req.Equal(*challengeHash, result.Hash)
-		req.EqualValues(pubKey, result.NodeID.ToBytes())
+		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
 	t.Run("Sequence != 0", func(t *testing.T) {
 		t.Parallel()
@@ -291,7 +291,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
 		req.Equal(*challengeHash, result.Hash)
-		req.EqualValues(pubKey, result.NodeID.ToBytes())
+		req.EqualValues(pubKey, result.NodeID.Bytes())
 	})
 	t.Run("positioning ATX unavailable", func(t *testing.T) {
 		t.Parallel()
