@@ -22,7 +22,7 @@ func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.NumUnits = cfg.MinNumUnits
-	opts.ComputeProviderID = initialization.CPUProviderID()
+	opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	return cfg, opts
 }
