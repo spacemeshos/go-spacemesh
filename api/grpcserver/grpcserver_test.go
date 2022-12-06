@@ -518,7 +518,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	}
 
 	return func() {
-		require.NoError(tb, jsonService.Close())
+		require.NoError(tb, jsonService.Shutdown(context.Background()))
 		_ = grpcService.Close()
 	}
 }
@@ -654,16 +654,10 @@ func TestNodeService(t *testing.T) {
 		}},
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			called := false
-
-			cmd.SetCancel(func() { called = true })
-
-			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
 			res, err := c.Shutdown(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, true, called, "cmd.Shutdown() was called")
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
 		}},
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)

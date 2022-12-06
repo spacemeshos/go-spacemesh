@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -115,20 +116,33 @@ func GetCommand() *cobra.Command {
 					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
 					events.EventHook())),
 			)
-			starter := func() error {
-				if err := app.Initialize(); err != nil {
+
+			run := func(ctx context.Context) error {
+				if err = app.Initialize(); err != nil {
 					return err
 				}
 				// This blocks until the context is finished or until an error is produced
-				if err := app.Start(); err != nil {
-					return err
-				}
+				err = app.Start(ctx)
 
-				return nil
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cleanupCancel()
+				done := make(chan struct{}, 1)
+				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
+				go func() {
+					app.Cleanup(cleanupCtx)
+					close(done)
+				}()
+				select {
+				case <-done:
+				case <-cleanupCtx.Done():
+					log.With().Error("app failed to clean up in time")
+				}
+				return err
 			}
-			err = starter()
-			app.Cleanup()
-			if err != nil {
+			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer cancel()
+			if err = run(ctx); err != nil {
 				log.With().Fatal(err.Error())
 			}
 		},
@@ -251,7 +265,6 @@ func New(opts ...Option) *App {
 		Config:  &defaultConfig,
 		log:     appLog,
 		loggers: make(map[string]*zap.AtomicLevel),
-		term:    make(chan struct{}),
 		started: make(chan struct{}),
 	}
 	for _, opt := range opts {
@@ -269,6 +282,7 @@ type App struct {
 	nodeID           types.NodeID
 	Config           *config.Config
 	db               *sql.Database
+	dbMetrics        *dbmetrics.DBMetricsCollector
 	grpcAPIService   *grpcserver.Server
 	jsonAPIService   *grpcserver.JSONHTTPServer
 	syncer           *syncer.Syncer
@@ -286,7 +300,6 @@ type App struct {
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	beaconProtocol   *beacon.ProtocolDriver
-	closers          []interface{ Close() }
 	log              log.Log
 	svm              *vm.VM
 	conState         *txs.ConservativeState
@@ -297,7 +310,6 @@ type App struct {
 	host *p2p.Host
 
 	loggers map[string]*zap.AtomicLevel
-	term    chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started chan struct{} // this channel is closed once the app has finished starting
 }
 
@@ -365,20 +377,6 @@ func (app *App) Initialize() (err error) {
 	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
-	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	// Goroutine that listens for Ctrl ^ C command
-	// and triggers the quit app
-	go func() {
-		for range signalChan {
-			app.log.Info("Received an interrupt, stopping services...\n")
-
-			cmd.Cancel()()
-		}
-	}()
-
 	app.setupLogging()
 
 	app.introduction()
@@ -398,7 +396,7 @@ func (app *App) getAppInfo() string {
 }
 
 // Cleanup stops all app services.
-func (app *App) Cleanup() {
+func (app *App) Cleanup(ctx context.Context) {
 	log.Info("app cleanup starting...")
 	if app.fileLock != nil {
 		if err := app.fileLock.Unlock(); err != nil {
@@ -408,7 +406,7 @@ func (app *App) Cleanup() {
 			)
 		}
 	}
-	app.stopServices()
+	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
 }
@@ -482,10 +480,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.db = sqlDB
 	if app.Config.CollectMetrics {
-		dbCollector := dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
-		if dbCollector != nil {
-			app.closers = append(app.closers, dbCollector)
-		}
+		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 	}
 
 	cdb := datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
@@ -825,7 +820,6 @@ func (app *App) startAPIServices(ctx context.Context) {
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
 		registerService(nodeService)
-		app.closers = append(app.closers, nodeService)
 	}
 	if apiConf.StartSmesherService {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, apiConf.SmesherStreamInterval))
@@ -846,21 +840,17 @@ func (app *App) startAPIServices(ctx context.Context) {
 		if app.grpcAPIService == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
-			log.Panic("one or more new grpc services must be enabled with new json gateway server")
+			log.Fatal("one or more new grpc services must be enabled with new json gateway server")
 		}
 		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
 		app.jsonAPIService.StartService(ctx, services...)
 	}
 }
 
-func (app *App) stopServices() {
-	// all go-routines that listen to app.term will close
-	// note: there is no guarantee that a listening go-routine will close before stopServices exits
-	close(app.term)
-
+func (app *App) stopServices(ctx context.Context) {
 	if app.jsonAPIService != nil {
 		log.Info("stopping json gateway service")
-		if err := app.jsonAPIService.Close(); err != nil {
+		if err := app.jsonAPIService.Shutdown(ctx); err != nil {
 			log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
@@ -935,15 +925,11 @@ func (app *App) stopServices() {
 			app.log.With().Warning("db exited with error", log.Err(err))
 		}
 	}
+	if app.dbMetrics != nil {
+		app.dbMetrics.Close()
+	}
 
 	events.CloseEventReporter()
-
-	// Close all databases.
-	for _, closer := range app.closers {
-		if closer != nil {
-			closer.Close()
-		}
-	}
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
@@ -998,9 +984,7 @@ func (app *App) startSyncer(ctx context.Context) {
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *App) Start() error {
-	// we use the main app context
-	ctx := cmd.Ctx()
+func (app *App) Start(ctx context.Context) error {
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1131,10 +1115,6 @@ func (app *App) Start() error {
 	if app.ptimesync != nil {
 		go func() {
 			syncErr <- app.ptimesync.Wait()
-			// if nil node was already stopped
-			if syncErr != nil {
-				cmd.Cancel()()
-			}
 		}()
 	}
 	// app blocks until it receives a signal to exit
