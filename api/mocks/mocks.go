@@ -11,8 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
-	types "github.com/spacemeshos/go-spacemesh/activation/types"
-	types0 "github.com/spacemeshos/go-spacemesh/common/types"
+	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // MockNetworkIdentity is a mock of NetworkIdentity interface.
@@ -76,10 +75,10 @@ func (m *MockAtxProvider) EXPECT() *MockAtxProviderMockRecorder {
 }
 
 // GetFullAtx mocks base method.
-func (m *MockAtxProvider) GetFullAtx(arg0 types0.ATXID) (*types0.VerifiedActivationTx, error) {
+func (m *MockAtxProvider) GetFullAtx(arg0 types.ATXID) (*types.VerifiedActivationTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFullAtx", arg0)
-	ret0, _ := ret[0].(*types0.VerifiedActivationTx)
+	ret0, _ := ret[0].(*types.VerifiedActivationTx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -114,7 +113,7 @@ func (m *MockPostSetupProvider) EXPECT() *MockPostSetupProviderMockRecorder {
 }
 
 // Benchmark mocks base method.
-func (m *MockPostSetupProvider) Benchmark(arg0 types.PostSetupComputeProvider) (int, error) {
+func (m *MockPostSetupProvider) Benchmark(arg0 activation.PostSetupComputeProvider) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Benchmark", arg0)
 	ret0, _ := ret[0].(int)
@@ -129,10 +128,10 @@ func (mr *MockPostSetupProviderMockRecorder) Benchmark(arg0 interface{}) *gomock
 }
 
 // ComputeProviders mocks base method.
-func (m *MockPostSetupProvider) ComputeProviders() []types.PostSetupComputeProvider {
+func (m *MockPostSetupProvider) ComputeProviders() []activation.PostSetupComputeProvider {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ComputeProviders")
-	ret0, _ := ret[0].([]types.PostSetupComputeProvider)
+	ret0, _ := ret[0].([]activation.PostSetupComputeProvider)
 	return ret0
 }
 
@@ -143,10 +142,10 @@ func (mr *MockPostSetupProviderMockRecorder) ComputeProviders() *gomock.Call {
 }
 
 // Config mocks base method.
-func (m *MockPostSetupProvider) Config() types.PostConfig {
+func (m *MockPostSetupProvider) Config() activation.PostConfig {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(types.PostConfig)
+	ret0, _ := ret[0].(activation.PostConfig)
 	return ret0
 }
 
@@ -157,10 +156,10 @@ func (mr *MockPostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // Status mocks base method.
-func (m *MockPostSetupProvider) Status() *types.PostSetupStatus {
+func (m *MockPostSetupProvider) Status() *activation.PostSetupStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Status")
-	ret0, _ := ret[0].(*types.PostSetupStatus)
+	ret0, _ := ret[0].(*activation.PostSetupStatus)
 	return ret0
 }
 
