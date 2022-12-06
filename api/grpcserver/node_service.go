@@ -118,16 +118,11 @@ func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb
 
 // Shutdown requests a graceful shutdown.
 func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
-	log.Info("GRPC NodeService.Shutdown")
-
-	cmd.Cancel()()
-
-	return &pb.ShutdownResponse{
-		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
-	}, nil
+	log.Info("UNIMPLEMENTED GRPC NodeService.Shutdown")
+	return nil, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED")
 }
 
-// UpdatePoetServer update server that is used for generating PoETs.
+// UpdatePoetServers update server that is used for generating PoETs.
 func (s NodeService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoetServersRequest) (*pb.UpdatePoetServersResponse, error) {
 	err := s.atxAPI.UpdatePoETServers(ctx, req.Urls)
 	if err == nil {
@@ -239,9 +234,6 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 		// that the service needs to shut down?
 	}
 }
-
-// Close closes underlying services.
-func (s NodeService) Close() {}
 
 // Convert internal error level into level understood by the API.
 func convertErrorLevel(level zapcore.Level) pb.LogLevel {
