@@ -1084,7 +1084,8 @@ func TestCache_LinkTXsWithProposal(t *testing.T) {
 		cnt := len(mtxs)
 		if cnt > 1 {
 			checkTX(t, tc.cache, mtxs[1].ID, lid1, types.EmptyBlockID)
-		} else if cnt > 2 {
+		}
+		if cnt > 2 {
 			for _, mtx := range mtxs[2:] {
 				checkTX(t, tc.cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 			}
@@ -1152,7 +1153,8 @@ func TestCache_LinkTXsWithBlock(t *testing.T) {
 		cnt := len(mtxs)
 		if cnt > 1 {
 			checkTX(t, tc.cache, mtxs[1].ID, lid1, bid1)
-		} else if cnt > 2 {
+		}
+		if cnt > 2 {
 			for _, mtx := range mtxs[2:] {
 				checkTX(t, tc.cache, mtx.ID, types.LayerID{}, types.EmptyBlockID)
 			}
