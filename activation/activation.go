@@ -13,7 +13,6 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -38,31 +37,12 @@ func DefaultPoetConfig() PoetConfig {
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-type nipostBuilder interface {
-	updatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
-}
-
-type atxHandler interface {
-	GetPosAtxID() (types.ATXID, error)
-	AwaitAtx(id types.ATXID) chan struct{}
-	UnsubscribeAtx(id types.ATXID)
-}
-
-type signer interface {
-	Sign(m []byte) []byte
-}
-
-type syncer interface {
-	RegisterForATXSynced() chan struct{}
-}
-
-//go:generate mockgen -package=mocks -destination=./mocks/activation.go . SmeshingProvider
+//go:generate mockgen -package=activation -destination=./activation_mocks.go . SmeshingProvider
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(types.Address, atypes.PostSetupOpts) error
+	StartSmeshing(types.Address, PostSetupOpts) error
 	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -93,7 +73,7 @@ type Builder struct {
 	atxHandler        atxHandler
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
-	postSetupProvider PostSetupProvider
+	postSetupProvider postSetupProvider
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
 	initialPostMeta   *types.PostMetadata
@@ -155,7 +135,7 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
-	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+	nipostBuilder nipostBuilder, postSetupProvider postSetupProvider, layerClock layerClock,
 	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
@@ -193,7 +173,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
@@ -226,7 +206,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpt
 		case <-doneChan:
 		}
 
-		if s := b.postSetupProvider.Status(); s.State != atypes.PostSetupStateComplete {
+		if s := b.postSetupProvider.Status(); s.State != PostSetupStateComplete {
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
