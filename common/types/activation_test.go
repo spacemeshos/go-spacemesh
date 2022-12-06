@@ -2,6 +2,10 @@ package types
 
 import (
 	"testing"
+
+	fuzz "github.com/google/gofuzz"
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/stretchr/testify/require"
 )
 
 var result uint64
@@ -35,4 +39,23 @@ func BenchmarkMul(b *testing.B) {
 func unsafeMul(x, y uint64) uint64 {
 	result = x // avoid compiler optimizations
 	return x * y
+}
+
+func layerTester(tb testing.TB, encodable codec.Encodable) LayerID {
+	tb.Helper()
+	f := fuzz.NewWithSeed(1001)
+	f.Fuzz(encodable)
+	buf, err := codec.Encode(encodable)
+	require.NoError(tb, err)
+	var lid LayerID
+	require.NoError(tb, codec.Decode(buf, &lid))
+	return lid
+}
+
+func TestActivationEncoding(t *testing.T) {
+	t.Run("layer is first", func(t *testing.T) {
+		atx := ActivationTx{}
+		lid := layerTester(t, &atx)
+		require.Equal(t, atx.PubLayerID, lid)
+	})
 }
