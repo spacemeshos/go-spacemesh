@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	amocks "github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -45,8 +44,8 @@ func TestHandler_StoreAtx(t *testing.T) {
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	ctrl := gomock.NewController(t)
-	validator := amocks.NewMocknipostValidator(ctrl)
-	receiver := amocks.NewMockatxReceiver(ctrl)
+	validator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
 	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, log)
 
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
@@ -77,8 +76,8 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	ctrl := gomock.NewController(t)
-	validator := amocks.NewMocknipostValidator(ctrl)
-	receiver := amocks.NewMockatxReceiver(ctrl)
+	validator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
 	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, log)
 
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
@@ -141,17 +140,17 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(t))
+	validator := NewMocknipostValidator(gomock.NewController(t))
 	validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
 
-	otherSig := NewMockSigner()
+	otherSig := NewTestSigner()
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 
-	sig1 := NewMockSigner()
-	sig2 := NewMockSigner()
-	sig3 := NewMockSigner()
+	sig1 := NewTestSigner()
+	sig2 := NewTestSigner()
+	sig3 := NewTestSigner()
 	atxList := []*types.VerifiedActivationTx{
 		newActivationTx(t, sig1, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 		newActivationTx(t, sig2, 0, *types.EmptyATXID, *types.EmptyATXID, &goldenATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
@@ -279,7 +278,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	})
 
 	t.Run("prevAtx not declared but validation of initial post fails", func(t *testing.T) {
-		validator := amocks.NewMocknipostValidator(gomock.NewController(t))
+		validator := NewMocknipostValidator(gomock.NewController(t))
 		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed validation")).Times(1)
 		atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
 
@@ -376,12 +375,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 
 	log := logtest.New(t).WithName("sigValidation")
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(t))
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(t))
+	validator := NewMocknipostValidator(gomock.NewController(t))
+	receiver := NewMockatxReceiver(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
-	sig1 := NewMockSigner()
-	otherSig := NewMockSigner()
+	sig1 := NewTestSigner()
+	otherSig := NewTestSigner()
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
 	chlng := types.HexToHash32("0x3333")
@@ -465,8 +464,8 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	ctrl := gomock.NewController(t)
-	validator := amocks.NewMocknipostValidator(ctrl)
-	receiver := amocks.NewMockatxReceiver(ctrl)
+	validator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
 	atxHdlr := NewHandler(cdb, nil, layersPerEpoch, testTickSize, goldenATXID, validator, receiver, log)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
@@ -485,9 +484,9 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r := require.New(b)
 	log := logtest.New(b)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(b))
+	validator := NewMocknipostValidator(gomock.NewController(b))
 	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(b))
+	receiver := NewMockatxReceiver(gomock.NewController(b))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	const (
@@ -543,8 +542,8 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	r := require.New(b)
 	log := logtest.New(b)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(b))
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(b))
+	validator := NewMocknipostValidator(gomock.NewController(b))
+	receiver := NewMockatxReceiver(gomock.NewController(b))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	const (
@@ -600,8 +599,8 @@ func TestHandler_GetPosAtx(t *testing.T) {
 
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(t))
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(t))
+	validator := NewMocknipostValidator(gomock.NewController(t))
+	receiver := NewMockatxReceiver(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	// Act & Assert
@@ -637,8 +636,8 @@ func TestHandler_AwaitAtx(t *testing.T) {
 
 	log := logtest.New(t).WithName("sigValidation")
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(t))
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(t))
+	validator := NewMocknipostValidator(gomock.NewController(t))
+	receiver := NewMockatxReceiver(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 	// Act & Assert
 
@@ -686,8 +685,8 @@ func TestHandler_HandleAtxData(t *testing.T) {
 	// Arrange
 	log := logtest.New(t).WithName("sigValidation")
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(t))
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(t))
+	validator := NewMocknipostValidator(gomock.NewController(t))
+	receiver := NewMockatxReceiver(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	// Act & Assert
@@ -714,8 +713,8 @@ func TestHandler_HandleAtxData(t *testing.T) {
 func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	log := logtest.New(b)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
-	validator := amocks.NewMocknipostValidator(gomock.NewController(b))
-	receiver := amocks.NewMockatxReceiver(gomock.NewController(b))
+	validator := NewMocknipostValidator(gomock.NewController(b))
+	receiver := NewMockatxReceiver(gomock.NewController(b))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
 	var (
@@ -755,8 +754,8 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 func TestHandler_FetchAtxReferences(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockFetch := mocks.NewMockFetcher(ctrl)
-	validator := amocks.NewMocknipostValidator(ctrl)
-	receiver := amocks.NewMockatxReceiver(ctrl)
+	validator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
 
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
@@ -804,8 +803,8 @@ func TestHandler_FetchAtxReferences(t *testing.T) {
 func TestHandler_AtxWeight(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mfetch := mocks.NewMockFetcher(ctrl)
-	mvalidator := amocks.NewMocknipostValidator(ctrl)
-	receiver := amocks.NewMockatxReceiver(ctrl)
+	mvalidator := NewMocknipostValidator(ctrl)
+	receiver := NewMockatxReceiver(ctrl)
 
 	const (
 		tickSize = 3
