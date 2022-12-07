@@ -98,11 +98,11 @@ var EmptyATXID = &ATXID{}
 // the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
+	PubLayerID LayerID
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
 	Sequence       uint64
 	PrevATXID      ATXID
-	PubLayerID     LayerID
 	PositioningATX ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.

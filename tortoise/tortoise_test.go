@@ -2173,6 +2173,7 @@ func TestSwitchMode(t *testing.T) {
 		tortoise1 := tortoiseFromSimState(
 			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
 		)
+		require.NoError(t, tortoise1.WaitReady(ctx))
 		for i := 0; i <= int(cfg.Hdist); i++ {
 			last = s.Next(sim.WithNumBlocks(1))
 			tortoise1.TallyVotes(ctx, last)
