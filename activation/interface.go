@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=activation -destination=./interface_mocks.go -source=./interface.go
+//go:generate mockgen -package=activation -destination=./mocks.go -source=./interface.go
 
 type atxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
@@ -29,4 +29,39 @@ type layerClock interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
+}
+
+type nipostBuilder interface {
+	updatePoETProvers([]PoetProvingServiceClient)
+	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
+}
+
+type atxHandler interface {
+	GetPosAtxID() (types.ATXID, error)
+	AwaitAtx(id types.ATXID) chan struct{}
+	UnsubscribeAtx(id types.ATXID)
+}
+
+type signer interface {
+	Sign(m []byte) []byte
+}
+
+type syncer interface {
+	RegisterForATXSynced() chan struct{}
+}
+
+type atxProvider interface {
+	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+}
+
+// PostSetupProvider defines the functionality required for Post setup.
+type postSetupProvider interface {
+	Status() *PostSetupStatus
+	ComputeProviders() []PostSetupComputeProvider
+	Benchmark(p PostSetupComputeProvider) (int, error)
+	StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error
+	Reset() error
+	GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error)
+	LastOpts() *PostSetupOpts
+	Config() PostConfig
 }

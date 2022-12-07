@@ -9,14 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 var id = types.NodeID{}
 
-func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
+func getTestConfig(t *testing.T) (PostConfig, PostSetupOpts) {
 	cfg := DefaultPostConfig()
 
 	opts := DefaultPostSetupOpts()
@@ -39,7 +38,7 @@ func TestPostSetupManager(t *testing.T) {
 	defer cancel()
 
 	var eg errgroup.Group
-	lastStatus := &atypes.PostSetupStatus{}
+	lastStatus := &PostSetupStatus{}
 	eg.Go(func() error {
 		timer := time.NewTicker(50 * time.Millisecond)
 		defer timer.Stop()
@@ -54,7 +53,7 @@ func TestPostSetupManager(t *testing.T) {
 				req.Equal(opts, *status.LastOpts)
 
 				if status.NumLabelsWritten < uint64(opts.NumUnits)*cfg.LabelsPerUnit {
-					req.Equal(atypes.PostSetupStateInProgress, status.State)
+					req.Equal(PostSetupStateInProgress, status.State)
 				}
 			}
 		}
@@ -66,7 +65,7 @@ func TestPostSetupManager(t *testing.T) {
 	eg.Wait()
 
 	req.Equal(opts, *mgr.LastOpts())
-	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
@@ -78,7 +77,7 @@ func TestPostSetupManager(t *testing.T) {
 	// Create data (same opts, after deletion).
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	req.Equal(opts, *mgr.LastOpts())
-	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
 func TestPostSetupManager_InitialStatus(t *testing.T) {
@@ -91,13 +90,13 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status := mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 
 	// Create data.
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
-	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Re-instantiate `PostSetupManager`.
 	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
@@ -105,7 +104,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status = mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 }
@@ -178,7 +177,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status := mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 
@@ -186,19 +185,19 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify state.
-	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Reset.
 	req.NoError(mgr.Reset())
 
 	// Verify state.
-	req.Equal(atypes.PostSetupStateNotStarted, mgr.Status().State)
+	req.Equal(PostSetupStateNotStarted, mgr.Status().State)
 
 	// Create data again.
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify state.
-	req.Equal(atypes.PostSetupStateComplete, mgr.Status().State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
@@ -224,7 +223,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify the intermediate status.
 	status := mgr.Status()
 	req.Equal(&opts, status.LastOpts)
-	req.Equal(atypes.PostSetupStateInProgress, status.State)
+	req.Equal(PostSetupStateInProgress, status.State)
 
 	// Stop initialization.
 	cancel()
@@ -234,7 +233,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Nil(status.LastOpts)
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 
 	// Continue to create data.
@@ -243,6 +242,6 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Equal(&opts, status.LastOpts)
-	req.Equal(atypes.PostSetupStateComplete, status.State)
+	req.Equal(PostSetupStateComplete, status.State)
 	req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, status.NumLabelsWritten)
 }

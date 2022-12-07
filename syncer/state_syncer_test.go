@@ -70,8 +70,8 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
-		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, got *types.Block) error {
+		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ types.LayerID, got *types.Block) error {
 				require.Equal(t, adopted[lid], got.ID())
 				return nil
 			})
@@ -145,8 +145,8 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				require.NoError(t, blocks.Add(ts.cdb, types.NewExistingBlock(tc.localCert, types.InnerBlock{LayerIndex: lid})))
 				require.NoError(t, certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: tc.localCert}))
 				require.NoError(t, blocks.SetValid(ts.cdb, tc.localCert))
-				ts.mConState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got *types.Block) error {
+				ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ types.LayerID, got *types.Block) error {
 						require.Equal(t, tc.localCert, got.ID())
 						return nil
 					})
@@ -230,6 +230,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(lastSynced, nil)
+	ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lastSynced, nil)
 	ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	require.NoError(t, ts.syncer.processLayers(context.TODO()))
 	require.True(t, ts.syncer.stateSynced())
@@ -284,6 +285,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		ts.mTortoise.EXPECT().OnHareOutput(lid, types.EmptyBlockID)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
+		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, nil)
 		ts.mConState.EXPECT().GetStateRoot().Return(types.RandomHash(), nil)
 		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lid, types.EmptyBlockID))
 	}

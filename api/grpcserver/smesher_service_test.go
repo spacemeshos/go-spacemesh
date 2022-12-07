@@ -11,17 +11,16 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 )
 
 func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	postSetupProvider := activation.NewMockPostSetupProvider(ctrl)
+	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second)
 
-	postConfig := types.PostConfig{
+	postConfig := activation.PostConfig{
 		MinNumUnits:   rand.Uint32(),
 		MaxNumUnits:   rand.Uint32(),
 		BitsPerLabel:  uint8(rand.Uint32()),

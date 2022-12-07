@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
@@ -386,27 +385,27 @@ func (ms *MockSigning) NodeID() types.NodeID {
 // TODO(mafa): replace this mock with the generated mock.
 type PostAPIMock struct{}
 
-func (*PostAPIMock) Status() *atypes.PostSetupStatus {
-	return &atypes.PostSetupStatus{}
+func (*PostAPIMock) Status() *activation.PostSetupStatus {
+	return &activation.PostSetupStatus{}
 }
 
-func (p *PostAPIMock) StatusChan() <-chan *atypes.PostSetupStatus {
-	ch := make(chan *atypes.PostSetupStatus, 1)
+func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
+	ch := make(chan *activation.PostSetupStatus, 1)
 	ch <- p.Status()
 	close(ch)
 
 	return ch
 }
 
-func (p *PostAPIMock) ComputeProviders() []atypes.PostSetupComputeProvider {
+func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *PostAPIMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
+func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -422,12 +421,12 @@ func (p *PostAPIMock) LastError() error {
 	return nil
 }
 
-func (p *PostAPIMock) LastOpts() *atypes.PostSetupOpts {
-	return &atypes.PostSetupOpts{}
+func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
+	return &activation.PostSetupOpts{}
 }
 
-func (p *PostAPIMock) Config() atypes.PostConfig {
-	return atypes.PostConfig{}
+func (p *PostAPIMock) Config() activation.PostConfig {
+	return activation.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
@@ -437,7 +436,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, atypes.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
 	return nil
 }
 

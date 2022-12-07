@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -27,8 +26,8 @@ import (
 
 var (
 	minerID       = types.NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	postCfg       atypes.PostConfig
-	postSetupOpts atypes.PostSetupOpts
+	postCfg       PostConfig
+	postSetupOpts PostSetupOpts
 )
 
 func init() {
@@ -45,26 +44,26 @@ type postSetupProviderMock struct {
 	setError bool
 }
 
-func (p *postSetupProviderMock) Status() *atypes.PostSetupStatus {
-	status := new(atypes.PostSetupStatus)
-	status.State = atypes.PostSetupStateComplete
+func (p *postSetupProviderMock) Status() *PostSetupStatus {
+	status := new(PostSetupStatus)
+	status.State = PostSetupStateComplete
 	status.LastOpts = p.LastOpts()
 	return status
 }
 
-func (p *postSetupProviderMock) StatusChan() <-chan *atypes.PostSetupStatus {
+func (p *postSetupProviderMock) StatusChan() <-chan *PostSetupStatus {
 	return nil
 }
 
-func (p *postSetupProviderMock) ComputeProviders() []atypes.PostSetupComputeProvider {
+func (p *postSetupProviderMock) ComputeProviders() []PostSetupComputeProvider {
 	return nil
 }
 
-func (p *postSetupProviderMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
+func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(context context.Context, opts atypes.PostSetupOpts, commitmentAtx types.ATXID) error {
+func (p *postSetupProviderMock) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
 	return nil
 }
 
@@ -86,11 +85,11 @@ func (p *postSetupProviderMock) LastError() error {
 	return nil
 }
 
-func (p *postSetupProviderMock) LastOpts() *atypes.PostSetupOpts {
+func (p *postSetupProviderMock) LastOpts() *PostSetupOpts {
 	return &postSetupOpts
 }
 
-func (p *postSetupProviderMock) Config() atypes.PostConfig {
+func (p *postSetupProviderMock) Config() PostConfig {
 	return postCfg
 }
 
@@ -179,7 +178,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPost(tb testing.TB, r *require.Assertions, postCfg atypes.PostConfig, nipostChallenge types.PoetChallenge, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.PoetChallenge, poetDb poetDbAPI) *types.NIPost {
 	gtw := util.NewMockGrpcServer(tb)
 	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
 	var eg errgroup.Group
@@ -539,7 +538,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 
-func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg atypes.PostConfig, numUnits uint32) error {
+func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32) error {
 	v := &Validator{poetDb, postCfg}
 	_, err := v.Validate(minerID, commitmentAtx, nipost, challenge, numUnits)
 	return err

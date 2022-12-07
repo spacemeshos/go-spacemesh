@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -72,10 +71,10 @@ type PeerCounter interface {
 }
 
 type PostSetupProvider interface {
-	Status() *atypes.PostSetupStatus
-	ComputeProviders() []atypes.PostSetupComputeProvider
-	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
-	Config() atypes.PostConfig
+	Status() *activation.PostSetupStatus
+	ComputeProviders() []activation.PostSetupComputeProvider
+	Benchmark(p activation.PostSetupComputeProvider) (int, error)
+	Config() activation.PostConfig
 }
 
 // ActivationAPI is an API for activation module.

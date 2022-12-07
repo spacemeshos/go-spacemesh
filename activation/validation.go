@@ -9,13 +9,8 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
-
-type AtxProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-}
 
 type AtxNotFoundError struct {
 	Id types.ATXID
@@ -39,11 +34,11 @@ func (e *AtxNotFoundError) Is(target error) bool {
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
 	poetDb poetDbAPI
-	cfg    atypes.PostConfig
+	cfg    PostConfig
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg atypes.PostConfig) *Validator {
+func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 	return &Validator{poetDb, cfg}
 }
 
@@ -96,7 +91,7 @@ func contains(proof *types.PoetProof, member []byte) bool {
 	return false
 }
 
-func validateNumUnits(cfg *atypes.PostConfig, numUnits uint32) error {
+func validateNumUnits(cfg *PostConfig, numUnits uint32) error {
 	if numUnits < cfg.MinNumUnits {
 		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
 	}
@@ -107,7 +102,7 @@ func validateNumUnits(cfg *atypes.PostConfig, numUnits uint32) error {
 	return nil
 }
 
-func validatePostMetadata(cfg *atypes.PostConfig, metadata *types.PostMetadata) error {
+func validatePostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
 	if metadata.BitsPerLabel < cfg.BitsPerLabel {
 		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", cfg.BitsPerLabel, metadata.BitsPerLabel)
 	}
@@ -166,7 +161,7 @@ func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.AT
 	return nil
 }
 
-func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, goldenATXID types.ATXID, expectedPostIndicies []byte) error {
+func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
 	if challenge.Sequence != 0 {
 		return fmt.Errorf("no prevATX declared, but sequence number not zero")
 	}
@@ -175,7 +170,7 @@ func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxPr
 		return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
 	}
 
-	if !bytes.Equal(expectedPostIndicies, challenge.InitialPostIndices) {
+	if !bytes.Equal(expectedPostIndices, challenge.InitialPostIndices) {
 		return fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 	}
 
@@ -200,7 +195,7 @@ func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxPr
 	return nil
 }
 
-func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, nodeID types.NodeID) error {
+func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
 	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
 	if err != nil {
 		return &AtxNotFoundError{Id: challenge.PrevATXID, source: err}
@@ -235,7 +230,7 @@ func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs At
 	return nil
 }
 
-func validatePositioningAtx(id *types.ATXID, atxs AtxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
+func validatePositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
 	if *id == *types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
 	}

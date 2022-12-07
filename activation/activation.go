@@ -14,7 +14,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -39,31 +38,12 @@ func DefaultPoetConfig() PoetConfig {
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-type NipostBuilder interface {
-	updatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
-}
-
-type AtxHandler interface {
-	GetPosAtxID() (types.ATXID, error)
-	AwaitAtx(id types.ATXID) chan struct{}
-	UnsubscribeAtx(id types.ATXID)
-}
-
-type Signer interface {
-	Sign(m []byte) []byte
-}
-
-type Syncer interface {
-	RegisterForATXSynced() chan struct{}
-}
-
-//go:generate mockgen -package=activation -destination=./activation_mocks.go . SmeshingProvider,AtxHandler,NipostBuilder,Syncer
+//go:generate mockgen -package=activation -destination=./activation_mocks.go . SmeshingProvider
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(types.Address, atypes.PostSetupOpts) error
+	StartSmeshing(types.Address, PostSetupOpts) error
 	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -86,17 +66,17 @@ type Builder struct {
 
 	eg errgroup.Group
 
-	Signer
+	signer
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 	cdb               *datastore.CachedDB
-	atxHandler        AtxHandler
+	atxHandler        atxHandler
 	publisher         pubsub.Publisher
-	nipostBuilder     NipostBuilder
-	postSetupProvider PostSetupProvider
+	nipostBuilder     nipostBuilder
+	postSetupProvider postSetupProvider
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
 	initialPostMeta   *types.PostMetadata
@@ -112,7 +92,7 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	syncer                Syncer
+	syncer                syncer
 	log                   log.Log
 	parentCtx             context.Context
 	stop                  context.CancelFunc
@@ -157,13 +137,13 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer Signer, cdb *datastore.CachedDB, hdlr AtxHandler, publisher pubsub.Publisher,
-	nipostBuilder NipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
-	syncer Syncer, log log.Log, opts ...BuilderOption,
+func NewBuilder(conf Config, nodeID types.NodeID, signer signer, cdb *datastore.CachedDB, hdlr atxHandler, publisher pubsub.Publisher,
+	nipostBuilder nipostBuilder, postSetupProvider postSetupProvider, layerClock layerClock,
+	syncer syncer, log log.Log, opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
 		parentCtx:             context.Background(),
-		Signer:                signer,
+		signer:                signer,
 		nodeID:                nodeID,
 		coinbaseAccount:       conf.CoinbaseAccount,
 		goldenATXID:           conf.GoldenATXID,
@@ -196,7 +176,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts atypes.PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
@@ -790,7 +770,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 
 // SignAtx signs the atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes.
-func SignAtx(signer Signer, atx *types.ActivationTx) error {
+func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
 	if err != nil {
 		return fmt.Errorf("inner bytes of ATX: %w", err)
