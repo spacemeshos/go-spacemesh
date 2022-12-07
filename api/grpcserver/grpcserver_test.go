@@ -41,6 +41,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -2774,7 +2775,7 @@ func TestEventsReceived(t *testing.T) {
 	// before streams can subscribe to the internal events.
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
+	conState := txs.NewConservativeState(svm, datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), txs.WithLogger(logtest.New(t)))
 	conState.AddToCache(context.Background(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
@@ -2796,7 +2797,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
-	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, datastore.NewCachedDB(db, logtest.New(t))))))
 
 	keys := make([]ed25519.PrivateKey, 10)
 	accounts := make([]types.Account, len(keys))

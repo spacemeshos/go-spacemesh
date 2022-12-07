@@ -60,7 +60,7 @@ func newMeshTX(t *testing.T, nonce uint64, signer *signing.EdSigner, amt uint64,
 	}
 }
 
-func genAndSaveTXs(t *testing.T, db *sql.Database, signer *signing.EdSigner, from, to uint64, startTime time.Time) []*types.MeshTransaction {
+func genAndSaveTXs(t *testing.T, db sql.Executor, signer *signing.EdSigner, from, to uint64, startTime time.Time) []*types.MeshTransaction {
 	t.Helper()
 	mtxs := genTXs(t, signer, from, to, startTime)
 	saveTXs(t, db, mtxs)
@@ -77,14 +77,14 @@ func genTXs(t *testing.T, signer *signing.EdSigner, from, to uint64, startTime t
 	return mtxs
 }
 
-func saveTXs(t *testing.T, db *sql.Database, mtxs []*types.MeshTransaction) {
+func saveTXs(t *testing.T, db sql.Executor, mtxs []*types.MeshTransaction) {
 	t.Helper()
 	for _, mtx := range mtxs {
 		require.NoError(t, transactions.Add(db, &mtx.Transaction, mtx.Received))
 	}
 }
 
-func checkTXStateFromDB(t *testing.T, db *sql.Database, txs []*types.MeshTransaction, state types.TXState) {
+func checkTXStateFromDB(t *testing.T, db sql.Executor, txs []*types.MeshTransaction, state types.TXState) {
 	for _, mtx := range txs {
 		got, err := transactions.Get(db, mtx.ID)
 		require.NoError(t, err)
@@ -92,7 +92,7 @@ func checkTXStateFromDB(t *testing.T, db *sql.Database, txs []*types.MeshTransac
 	}
 }
 
-func checkTXNotInDB(t *testing.T, db *sql.Database, tid types.TransactionID) {
+func checkTXNotInDB(t *testing.T, db sql.Executor, tid types.TransactionID) {
 	_, err := transactions.Get(db, tid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }

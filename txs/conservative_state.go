@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -18,6 +19,8 @@ import (
 
 // CSConfig is the config for the conservative state/cache.
 type CSConfig struct {
+	LayerSize          uint32
+	LayersPerEpoch     uint32
 	BlockGasLimit      uint64
 	NumTXsPerProposal  int
 	OptFilterThreshold int
@@ -25,6 +28,8 @@ type CSConfig struct {
 
 func defaultCSConfig() CSConfig {
 	return CSConfig{
+		LayerSize:          50,
+		LayersPerEpoch:     3,
 		BlockGasLimit:      math.MaxUint64,
 		NumTXsPerProposal:  100,
 		OptFilterThreshold: 90,
@@ -55,17 +60,18 @@ type ConservativeState struct {
 
 	logger log.Log
 	cfg    CSConfig
-	db     *sql.Database
+	cdb    *datastore.CachedDB
 	cache  *cache
+	mu     sync.Mutex
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeStateOpt) *ConservativeState {
+func NewConservativeState(state vmState, cdb *datastore.CachedDB, opts ...ConservativeStateOpt) *ConservativeState {
 	cs := &ConservativeState{
 		vmState: state,
 		cfg:     defaultCSConfig(),
 		logger:  log.NewNop(),
-		db:      db,
+		cdb:     cdb,
 	}
 	for _, opt := range opts {
 		opt(cs)
@@ -86,8 +92,9 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	return nonce.Counter, balance
 }
 
-// SelectBlockTXs combined the transactions in the proposals and put them in a stable order.
-// the steps are:
+// GenerateBlock combined the transactions in the proposals and put them in a stable order.
+// if optimistic filtering is ON, it also executes the transactions in situ.
+// the selection steps are:
 //  0. do optimistic filtering if the proposals agree on the mesh hash and state root
 //     this mean the following transactions will be filtered out. transactions that
 //     - fail nonce check
@@ -96,26 +103,75 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 //     if the proposals don't agree on the mesh hash and state root, we keep all transactions
 //  1. put the output of step 0 in a stable order
 //  2. pick the transactions in step 1 until the gas limit runs out.
-func (cs *ConservativeState) SelectBlockTXs(lid types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, error) {
+func (cs *ConservativeState) GenerateBlock(ctx context.Context, lid types.LayerID, proposals []*types.Proposal) (*types.Block, bool, error) {
+	logger := cs.logger.WithContext(ctx).WithName("block").WithFields(lid)
 	myHash, err := cs.GetMeshHash(lid.Sub(1))
 	if err != nil {
-		cs.logger.With().Warning("failed to get mesh hash", lid, log.Err(err))
-		// if we don't have hash for that layer, other nodes probably don't either
+		logger.With().Warning("failed to get mesh hash", lid, log.Err(err))
 		myHash = types.EmptyLayerHash
 	}
-
-	md, err := checkStateConsensus(cs.logger, cs.cfg, lid, proposals, myHash, cs)
+	md, err := checkStateConsensus(logger, cs.cfg, lid, proposals, myHash, cs)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	tickHeight, rewards, err := extractCoinbasesAndHeight(logger, cs.cdb, proposals, cs.cfg)
+	if err != nil {
+		return nil, false, err
+	}
+	var (
+		b = &types.Block{
+			InnerBlock: types.InnerBlock{
+				LayerIndex: lid,
+				TickHeight: tickHeight,
+				Rewards:    rewards,
+			},
+		}
+		tids     []types.TransactionID
+		gasLimit = cs.cfg.BlockGasLimit
+	)
+	if md.optFilter {
+		gasLimit = 0
+	}
+	if len(md.mtxs) > 0 {
+		blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(proposals), nil).Bytes()
+		tids, err = getBlockTXs(logger, md, blockSeed, gasLimit)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	if !md.optFilter {
+		b.TxIDs = tids
+		b.Initialize()
+		return b, false, nil
 	}
 
-	if len(md.mtxs) == 0 {
-		return nil, nil
+	logger.With().Info("executing txs in situ", log.Int("num_txs", len(tids)))
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	inState, err := layers.GetLastApplied(cs.cdb)
+	if err != nil {
+		return nil, false, fmt.Errorf("generate block get applied: %w", err)
+	}
+	if lid != inState.Add(1) {
+		return nil, false, fmt.Errorf("%w: applying %v, instate %v", errLayerNotInOrder, lid, inState)
 	}
 
-	logger := cs.logger.WithName("block").WithFields(lid)
-	blockSeed := types.CalcProposalsHash32(types.ToProposalIDs(proposals), nil).Bytes()
-	return getBlockTXs(logger, md, cs.getState, blockSeed, cs.cfg.BlockGasLimit)
+	ineffective, executed, err := cs.vmExecute(lid, types.EmptyBlockID, tids, b.Rewards)
+	if err != nil {
+		return nil, false, fmt.Errorf("execute layer %v txs in vm: %w", lid, err)
+	}
+	// create the block and use the correct block ID to update the cache
+	b.TxIDs = make([]types.TransactionID, 0, len(executed))
+	for _, tx := range executed {
+		b.TxIDs = append(b.TxIDs, tx.ID)
+	}
+	b.Initialize()
+	for _, tx := range executed {
+		tx.Block = b.ID()
+	}
+	err = cs.updateCache(ctx, lid, b.ID(), executed, ineffective)
+	return b, true, err
 }
 
 // SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
@@ -135,7 +191,7 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transaction) error {
 	received := time.Now()
-	if err := cs.cache.Add(ctx, cs.db, tx, received, false); err != nil {
+	if err := cs.cache.Add(ctx, cs.cdb.Database, tx, received, false); err != nil {
 		return err
 	}
 	events.ReportNewTx(types.LayerID{}, tx)
@@ -150,38 +206,60 @@ func (cs *ConservativeState) RevertState(revertTo types.LayerID) error {
 		return fmt.Errorf("vm revert %v: %w", revertTo, err)
 	}
 
-	return cs.cache.RevertToLayer(cs.db, revertTo)
+	return cs.cache.RevertToLayer(cs.cdb.Database, revertTo)
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
 func (cs *ConservativeState) ApplyLayer(ctx context.Context, lid types.LayerID, block *types.Block) error {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	inState, err := layers.GetLastApplied(cs.cdb)
+	if err != nil {
+		return err
+	}
+	if !lid.After(inState) {
+		// this is
+		cs.logger.WithContext(ctx).With().Info("layer already applied", lid)
+		return nil
+	}
 	if block == nil {
 		return cs.applyEmptyLayer(ctx, lid)
 	}
 
-	logger := cs.logger.WithFields(block.LayerIndex, block.ID())
-	logger.Debug("applying layer to conservative state")
-
-	executable, err := cs.GetExecutableTxs(block.TxIDs)
+	ineffective, results, err := cs.vmExecute(lid, block.ID(), block.TxIDs, block.Rewards)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute txs in vm %v/%v: %w", lid, block.ID(), err)
 	}
+	return cs.updateCache(ctx, lid, block.ID(), results, ineffective)
+}
 
-	ineffective, results, err := cs.vmState.Apply(
-		vm.ApplyContext{Layer: block.LayerIndex, Block: block.ID()},
+func (cs *ConservativeState) vmExecute(
+	lid types.LayerID,
+	bid types.BlockID,
+	tids []types.TransactionID,
+	rewards []types.AnyReward,
+) ([]types.Transaction, []types.TransactionWithResult, error) {
+	executable, err := cs.GetExecutableTxs(tids)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cs.vmState.Apply(
+		vm.ApplyContext{Layer: lid, Block: bid},
 		executable,
-		block.Rewards,
+		rewards,
 	)
-	if err != nil {
-		return fmt.Errorf("apply layer: %w", err)
-	}
+}
 
-	logger.With().Debug("applying layer to cache",
-		log.Int("num_txs_skipped", len(ineffective)),
-		log.Int("num_txs_applied", len(results)),
-	)
+func (cs *ConservativeState) updateCache(
+	ctx context.Context,
+	lid types.LayerID,
+	bid types.BlockID,
+	results []types.TransactionWithResult,
+	ineffective []types.Transaction,
+) error {
 	t0 := time.Now()
-	if err = cs.cache.ApplyLayer(ctx, cs.db, block.LayerIndex, block.ID(), results, ineffective); err != nil {
+	if err := cs.cache.ApplyLayer(ctx, cs.cdb.Database, lid, bid, results, ineffective); err != nil {
 		return err
 	}
 	cacheApplyDuration.Observe(float64(time.Since(t0)))
@@ -193,7 +271,7 @@ func (cs *ConservativeState) applyEmptyLayer(ctx context.Context, lid types.Laye
 	if err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
 	}
-	return cs.cache.ApplyLayer(ctx, cs.db, lid, types.EmptyBlockID, nil, nil)
+	return cs.cache.ApplyLayer(ctx, cs.cdb.Database, lid, types.EmptyBlockID, nil, nil)
 }
 
 // GetProjection returns the projected nonce and balance for an account, including
@@ -204,17 +282,17 @@ func (cs *ConservativeState) GetProjection(addr types.Address) (uint64, uint64) 
 
 // LinkTXsWithProposal associates the transactions to a proposal.
 func (cs *ConservativeState) LinkTXsWithProposal(lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
-	return cs.cache.LinkTXsWithProposal(cs.db, lid, pid, tids)
+	return cs.cache.LinkTXsWithProposal(cs.cdb.Database, lid, pid, tids)
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
 func (cs *ConservativeState) LinkTXsWithBlock(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
-	return cs.cache.LinkTXsWithBlock(cs.db, lid, bid, tids)
+	return cs.cache.LinkTXsWithBlock(cs.cdb.Database, lid, bid, tids)
 }
 
 // AddToDB adds a transaction to the database.
 func (cs *ConservativeState) AddToDB(tx *types.Transaction) error {
-	return transactions.Add(cs.db, tx, time.Now())
+	return transactions.Add(cs.cdb, tx, time.Now())
 }
 
 // HasTx returns true if transaction exists in the cache.
@@ -223,7 +301,7 @@ func (cs *ConservativeState) HasTx(tid types.TransactionID) (bool, error) {
 		return true, nil
 	}
 
-	has, err := transactions.Has(cs.db, tid)
+	has, err := transactions.Has(cs.cdb, tid)
 	if err != nil {
 		return false, fmt.Errorf("has tx: %w", err)
 	}
@@ -232,12 +310,12 @@ func (cs *ConservativeState) HasTx(tid types.TransactionID) (bool, error) {
 
 // GetMeshHash gets the aggregated layer hash at the specified layer.
 func (cs *ConservativeState) GetMeshHash(lid types.LayerID) (types.Hash32, error) {
-	return layers.GetAggregatedHash(cs.db, lid)
+	return layers.GetAggregatedHash(cs.cdb, lid)
 }
 
 // GetMeshTransaction retrieves a tx by its id.
 func (cs *ConservativeState) GetMeshTransaction(tid types.TransactionID) (*types.MeshTransaction, error) {
-	return transactions.Get(cs.db, tid)
+	return transactions.Get(cs.cdb, tid)
 }
 
 // GetMeshTransactions retrieves a list of txs by their id's.
@@ -249,7 +327,7 @@ func (cs *ConservativeState) GetMeshTransactions(ids []types.TransactionID) ([]*
 			mtx *types.MeshTransaction
 			err error
 		)
-		if mtx, err = transactions.Get(cs.db, tid); err != nil {
+		if mtx, err = transactions.Get(cs.cdb, tid); err != nil {
 			cs.logger.With().Warning("could not get tx", tid, log.Err(err))
 			missing[tid] = struct{}{}
 		} else {
@@ -263,7 +341,7 @@ func (cs *ConservativeState) GetMeshTransactions(ids []types.TransactionID) ([]*
 func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]types.Transaction, error) {
 	txs := make([]types.Transaction, 0, len(ids))
 	for _, tid := range ids {
-		mtx, err := transactions.Get(cs.db, tid)
+		mtx, err := transactions.Get(cs.cdb, tid)
 		if err != nil {
 			return nil, err
 		}
@@ -281,5 +359,5 @@ func (cs *ConservativeState) GetExecutableTxs(ids []types.TransactionID) ([]type
 // GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
 // Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
 func (cs *ConservativeState) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return transactions.GetByAddress(cs.db, from, to, address)
+	return transactions.GetByAddress(cs.cdb, from, to, address)
 }

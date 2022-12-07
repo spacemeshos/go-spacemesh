@@ -11,11 +11,11 @@ import (
 
 type meshProvider interface {
 	AddBlockWithTXs(context.Context, *types.Block) error
-	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
+	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID, bool) error
 }
 
 type conservativeState interface {
-	SelectBlockTXs(types.LayerID, []*types.Proposal) ([]types.TransactionID, error)
+	GenerateBlock(context.Context, types.LayerID, []*types.Proposal) (*types.Block, bool, error)
 }
 
 type layerClock interface {

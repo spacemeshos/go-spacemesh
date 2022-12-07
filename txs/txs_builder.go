@@ -1,6 +1,7 @@
 package txs
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,14 +14,16 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 var (
 	errNodeHasBadMeshHash = errors.New("node has different mesh hash from majority")
-
-	mempoolLayer = types.LayerID{}
+	errInvalidATXID       = errors.New("proposal ATXID invalid")
 )
 
 type blockMetadata struct {
@@ -141,37 +144,9 @@ func checkStateConsensus(
 // e.g.
 // input:  [(addr-0, nonce-9), (addr-1, nonce-4), (addr-2, nonce-7), (addr-0, nonce-8), (addr-1, nonce-3)]
 // output: [(addr-0, nonce-8), (addr-0, nonce-9), (addr-1, nonce-3), (addr-1, nonce-4), (addr-2, nonce-7)]
-//
-// if optimistic filtering is ON, transactions that fail balance/nonce check will be filtered out, as well
-// as transactions that are already applied.
-func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockSeed []byte) (*blockMetadata, error) {
-	stateF := realState
-	candidates := pmd.mtxs
-	if pmd.optFilter {
-		candidates = make([]*types.MeshTransaction, 0, len(pmd.mtxs))
-		for _, mtx := range pmd.mtxs {
-			if mtx.State != types.APPLIED {
-				mtx.LayerID = mempoolLayer // for cache.GetMempool
-				candidates = append(candidates, mtx)
-			}
-		}
-	} else {
-		minNonceByAddr := make(map[types.Address]uint64)
-		for _, mtx := range pmd.mtxs {
-			mtx.LayerID = mempoolLayer // for cache.GetMempool
-			principal := mtx.Principal
-			if _, ok := minNonceByAddr[principal]; !ok {
-				minNonceByAddr[principal] = mtx.Nonce.Counter
-			} else if minNonceByAddr[principal] > mtx.Nonce.Counter {
-				minNonceByAddr[principal] = mtx.Nonce.Counter
-			}
-		}
-		stateF = func(addr types.Address) (uint64, uint64) {
-			if _, ok := minNonceByAddr[addr]; !ok {
-				logger.With().Fatal("principal not found", addr)
-			}
-			return minNonceByAddr[addr], math.MaxUint64
-		}
+func orderTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte) (*blockMetadata, error) {
+	stateF := func(_ types.Address) (uint64, uint64) {
+		return 0, math.MaxUint64
 	}
 	// this cache is used for building the set of transactions in a block.
 	txCache := &cache{
@@ -180,7 +155,7 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		pending:   make(map[types.Address]*accountCache),
 		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
 	}
-	if err := txCache.BuildFromTXs(candidates, blockSeed); err != nil {
+	if err := txCache.BuildFromTXs(pmd.mtxs, blockSeed); err != nil {
 		return nil, err
 	}
 	byAddrAndNonce := txCache.GetMempool(logger)
@@ -195,8 +170,8 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 	return &blockMetadata{candidates: ntxs, byAddrAndNonce: byAddrAndNonce, byTid: byTid}, nil
 }
 
-func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, blockSeed []byte, gasLimit uint64) ([]types.TransactionID, error) {
-	bmd, err := orderTXs(logger, pmd, getState, blockSeed)
+func getBlockTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte, gasLimit uint64) ([]types.TransactionID, error) {
+	bmd, err := orderTXs(logger, pmd, blockSeed)
 	if err != nil {
 		logger.With().Error("failed to build txs cache for block", log.Err(err))
 		return nil, err
@@ -213,7 +188,10 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, bloc
 	mt.SeedFromSlice(toUint64Slice(blockSeed))
 	rng := rand.New(mt)
 	ordered := shuffleWithNonceOrder(logger, rng, len(bmd.candidates), bmd.candidates, bmd.byAddrAndNonce)
-	return prune(logger, ordered, bmd.byTid, gasLimit), nil
+	if gasLimit > 0 {
+		ordered = prune(logger, ordered, bmd.byTid, gasLimit)
+	}
+	return ordered, nil
 }
 
 func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*txtypes.NanoTX, byAddrAndNonce map[types.Address][]*txtypes.NanoTX) []types.TransactionID {
@@ -267,7 +245,7 @@ func shuffleWithNonceOrder(
 	}
 	logger.With().Debug("packed txs", log.Array("ranges", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 		for addr, nonces := range packed {
-			encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+			_ = encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
 				encoder.AddString("addr", addr.String())
 				encoder.AddUint64("from", nonces[0])
 				encoder.AddUint64("to", nonces[1])
@@ -280,6 +258,9 @@ func shuffleWithNonceOrder(
 }
 
 func prune(logger log.Log, tids []types.TransactionID, byTid map[types.TransactionID]*txtypes.NanoTX, gasLimit uint64) []types.TransactionID {
+	if len(tids) == 0 {
+		return nil
+	}
 	var (
 		gasRemaining = gasLimit
 		idx          int
@@ -311,4 +292,59 @@ func toUint64Slice(b []byte) []uint64 {
 		s = append(s, binary.LittleEndian.Uint64(b[i:util.Min(l, i+numByte)]))
 	}
 	return s
+}
+
+func extractCoinbasesAndHeight(logger log.Log, cdb *datastore.CachedDB, props []*types.Proposal, cfg CSConfig) (uint64, []types.AnyReward, error) {
+	weights := make(map[types.Address]util.Weight)
+	coinbases := make([]types.Address, 0, len(props))
+	max := uint64(0)
+	for _, p := range props {
+		if p.AtxID == *types.EmptyATXID {
+			// this proposal would not have been validated
+			return 0, nil, fmt.Errorf("%w: invalid ATX for proposal %v", errInvalidATXID, p.ID())
+		}
+		atx, err := cdb.GetAtxHeader(p.AtxID)
+		if atx.BaseTickHeight > max {
+			max = atx.BaseTickHeight
+		}
+		if err != nil {
+			return 0, nil, fmt.Errorf("get ATX for proposal %v: %w", p.ID(), err)
+		}
+		ballot := &p.Ballot
+		weightPer, err := proposals.ComputeWeightPerEligibility(cdb, ballot, cfg.LayerSize, cfg.LayersPerEpoch)
+		if err != nil {
+			return 0, nil, fmt.Errorf("compute weight per eligibility %v: %w", p.ID(), err)
+		}
+		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
+		actual := weightPer.Mul(util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
+		if _, ok := weights[atx.Coinbase]; !ok {
+			weights[atx.Coinbase] = actual
+			coinbases = append(coinbases, atx.Coinbase)
+		} else {
+			weights[atx.Coinbase].Add(actual)
+		}
+		events.ReportProposal(events.ProposalIncluded, p)
+	}
+	// make sure we output coinbase in a stable order.
+	sort.Slice(coinbases, func(i, j int) bool {
+		return bytes.Compare(coinbases[i].Bytes(), coinbases[j].Bytes()) < 0
+	})
+	rewards := make([]types.AnyReward, 0, len(weights))
+	for _, coinbase := range coinbases {
+		weight, ok := weights[coinbase]
+		if !ok {
+			logger.With().Fatal("coinbase missing", coinbase)
+		}
+		rewards = append(rewards, types.AnyReward{
+			Coinbase: coinbase,
+			Weight: types.RatNum{
+				Num:   weight.Num().Uint64(),
+				Denom: weight.Denom().Uint64(),
+			},
+		})
+		logger.With().Debug("adding coinbase weight",
+			log.Stringer("coinbase", coinbase),
+			log.Stringer("weight", weight))
+	}
+	return max, rewards, nil
 }

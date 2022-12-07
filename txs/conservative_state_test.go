@@ -1,18 +1,23 @@
 package txs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math"
 	"math/rand"
+	"os"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -21,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -28,7 +34,10 @@ import (
 )
 
 const (
+	layersPerEpoch   = 3
+	numProposals     = 10
 	numTXsInProposal = 17
+	numUnit          = 12
 	defaultGas       = uint64(100)
 	defaultBalance   = uint64(10000000)
 	defaultAmount    = uint64(100)
@@ -36,6 +45,13 @@ const (
 	numTXs           = 29
 	nonce            = uint64(1234)
 )
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	t.Helper()
@@ -61,10 +77,111 @@ func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, f
 	return &tx
 }
 
+func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
+	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+		return atx.Verify(0, 1)
+	})
+}
+
+func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error)) ([]*signing.EdSigner, []*types.ActivationTx) {
+	t.Helper()
+	atxes := make([]*types.ActivationTx, 0, numATXs)
+	signers := make([]*signing.EdSigner, 0, numATXs)
+	for i := 0; i < numATXs; i++ {
+		signer := signing.NewEdSigner()
+		signers = append(signers, signer)
+		address := types.GenerateAddress(signer.PublicKey().Bytes())
+		atx := types.NewActivationTx(
+			types.NIPostChallenge{PubLayerID: lid},
+			address,
+			nil,
+			numUnit,
+			nil,
+		)
+		require.NoError(t, activation.SignAtx(signer, atx))
+		require.NoError(t, atx.CalcAndSetID())
+		require.NoError(t, atx.CalcAndSetNodeID())
+		vAtx, err := onAtx(atx)
+		require.NoError(t, err)
+
+		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		atxes = append(atxes, atx)
+	}
+	return signers, atxes
+}
+
+func createProposalsDupTXs(
+	t *testing.T,
+	lid types.LayerID,
+	signers []*signing.EdSigner,
+	activeSet []types.ATXID,
+	hash types.Hash32,
+	step int,
+	tids []types.TransactionID,
+) []*types.Proposal {
+	t.Helper()
+	require.Equal(t, numProposals, len(signers))
+	require.Equal(t, numProposals, len(activeSet))
+	epochData := &types.EpochData{
+		ActiveSet: activeSet,
+		Beacon:    types.RandomBeacon(),
+	}
+	total := len(tids)
+	proposals := make([]*types.Proposal, 0, numProposals)
+	from := 0
+	for i := 0; i < numProposals; i++ {
+		if from >= total {
+			from = 0
+		}
+		to := from + numTXsInProposal
+		if to >= total {
+			to = total
+		}
+		p := createProposal(t, epochData, lid, activeSet[i], signers[i], tids[from:to], 1)
+		p.MeshHash = hash
+		proposals = append(proposals, p)
+		from += step
+	}
+	return proposals
+}
+
+func createProposal(t *testing.T, epochData *types.EpochData, lid types.LayerID, atxID types.ATXID, signer *signing.EdSigner, txIDs []types.TransactionID, numEligibility int) *types.Proposal {
+	t.Helper()
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					AtxID:             atxID,
+					LayerIndex:        lid,
+					EligibilityProofs: make([]types.VotingEligibilityProof, numEligibility),
+					EpochData:         epochData,
+				},
+			},
+			TxIDs: txIDs,
+		},
+	}
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(p.Bytes())
+	require.NoError(t, p.Initialize())
+	return p
+}
+
+func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer util.Weight, rewards []types.AnyReward) {
+	t.Helper()
+	sort.Slice(atxs, func(i, j int) bool {
+		return bytes.Compare(atxs[i].Coinbase.Bytes(), atxs[j].Coinbase.Bytes()) < 0
+	})
+	for i, r := range rewards {
+		require.Equal(t, atxs[i].Coinbase, r.Coinbase)
+		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
+		require.Equal(t, expWeightPer, got)
+	}
+}
+
 type testConState struct {
 	*ConservativeState
 	logger log.Log
-	db     *sql.Database
+	cdb    *datastore.CachedDB
 	mvm    *mocks.MockvmState
 }
 
@@ -75,19 +192,21 @@ func (t *testConState) handler() *TxHandler {
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
 	mvm := mocks.NewMockvmState(ctrl)
-	db := sql.InMemory()
+	logger := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 	cfg := CSConfig{
+		LayerSize:          10,
+		LayersPerEpoch:     3,
 		BlockGasLimit:      gasLimit,
 		NumTXsPerProposal:  numTXsInProposal,
-		OptFilterThreshold: 90,
+		OptFilterThreshold: 85,
 	}
-	logger := logtest.New(t)
 	return &testConState{
-		ConservativeState: NewConservativeState(mvm, db,
+		ConservativeState: NewConservativeState(mvm, cdb,
 			WithCSConfig(cfg),
 			WithLogger(logger)),
 		logger: logger,
-		db:     db,
+		cdb:    cdb,
 		mvm:    mvm,
 	}
 }
@@ -96,10 +215,10 @@ func createConservativeState(t *testing.T) *testConState {
 	return createTestState(t, math.MaxUint64)
 }
 
-func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
+func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionID, []types.Transaction) {
 	t.Helper()
 	ids := make([]types.TransactionID, 0, numTXs)
-	txs := make([]*types.Transaction, 0, numTXs)
+	txs := make([]types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -108,157 +227,286 @@ func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionI
 		tx := newTx(t, nonce+5, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 		ids = append(ids, tx.ID)
-		txs = append(txs, tx)
+		txs = append(txs, *tx)
 	}
 	return ids, txs
 }
 
-func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
-	total := len(tids)
-	proposals := make([]*types.Proposal, 0, numProposals)
-	for offset := 0; offset < total; offset += step {
-		end := offset + numPer
-		if end >= total {
-			end = total
-		}
-		p := types.GenLayerProposal(lid, tids[offset:end])
-		p.MeshHash = hash
-		proposals = append(proposals, p)
-	}
-	return proposals
-}
-
-func checkIsStable(t *testing.T, expected []types.TransactionID, proposals []*types.Proposal, cs *ConservativeState) {
-	t.Helper()
-	lid := proposals[0].LayerIndex
-	numProposals := len(proposals)
-	// reverse the order of proposals. we should still have exactly the same ordered transactions
-	newProposals := make([]*types.Proposal, 0, numProposals)
-	for i := numProposals - 1; i >= 0; i-- {
-		newProposals = append(newProposals, proposals[i])
-	}
-	got, err := cs.SelectBlockTXs(lid, newProposals)
-	require.NoError(t, err)
-	require.Equal(t, expected, got)
-}
-
-func TestSelectBlockTXs(t *testing.T) {
+func TestGenerateBlock_OptimisticFiltering(t *testing.T) {
 	tcs := createConservativeState(t)
 	totalNumTXs := 100
 	tids, txs := addBatch(t, tcs, totalNumTXs)
-	// optimistic filtering will query the real state again
+	// for updating cache after txs are executed
 	for _, tx := range txs {
 		principal := tx.Principal
-		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
+		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil)
+		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil)
 	}
 	// make sure proposals have overlapping transactions
-	numProposals := 10
-	numPerProposal := 30
 	step := totalNumTXs / numProposals
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
-	got, err := tcs.SelectBlockTXs(lid, proposals)
-	require.NoError(t, err)
-	require.Len(t, got, totalNumTXs)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	proposals := createProposalsDupTXs(t, lid, signers, activeSet, meshHash, step, tids)
+	require.NoError(t, layers.SetHashes(tcs.cdb, lid.Sub(1), types.RandomHash(), meshHash))
 
-	// reverse the order of proposals. we should still have exactly the same ordered transactions
-	checkIsStable(t, got, proposals, tcs.ConservativeState)
+	t.Run("out of order", func(t *testing.T) {
+		require.NoError(t, layers.SetApplied(tcs.cdb, lid.Sub(2), types.RandomBlockID()))
+		got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+		require.ErrorIs(t, err, errLayerNotInOrder)
+		require.False(t, executed)
+		require.Nil(t, got)
+	})
+
+	t.Run("execute in situ", func(t *testing.T) {
+		require.NoError(t, layers.SetApplied(tcs.cdb, lid.Sub(1), types.RandomBlockID()))
+		results := makeResults(lid, types.EmptyBlockID, txs...)
+		tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), gomock.Any()).Return(nil, results, nil)
+		got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+		require.NoError(t, err)
+		require.True(t, executed)
+		require.NotEqual(t, types.EmptyBlockID, got.ID())
+		require.Equal(t, lid, got.LayerIndex)
+		require.Len(t, got.TxIDs, totalNumTXs)
+	})
 }
 
-func TestSelectBlockTxsMissingHeader(t *testing.T) {
+func TestGenerateBlock_NoOptimisticFiltering(t *testing.T) {
+	tcs := createConservativeState(t)
+	totalNumTXs := 100
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	// make sure proposals have overlapping transactions
+	step := totalNumTXs / numProposals
+	lid := types.NewLayerID(1333)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	meshHash := types.RandomHash()
+	require.NoError(t, layers.SetHashes(tcs.cdb, lid.Sub(1), types.RandomHash(), meshHash))
+	proposals := createProposalsDupTXs(t, lid, signers, activeSet, meshHash, step, tids)
+	// change the first two proposals' mesh hash
+	for _, p := range proposals[:2] {
+		p.MeshHash = types.RandomHash()
+	}
+	require.NoError(t, layers.SetApplied(tcs.cdb, lid.Sub(1), types.RandomBlockID()))
+	require.NoError(t, layers.SetHashes(tcs.cdb, lid.Sub(1), types.RandomHash(), meshHash))
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.NoError(t, err)
+	require.False(t, executed)
+	require.NotEqual(t, types.EmptyBlockID, got.ID())
+	require.Equal(t, lid, got.LayerIndex)
+	require.Len(t, got.TxIDs, totalNumTXs)
+
+	// reverse the order of proposals. we should still have exactly the same ordered transactions
+	// reorder the proposals
+	ordered := proposals[numProposals/2 : numProposals]
+	ordered = append(ordered, proposals[0:numProposals/2]...)
+	require.NotEqual(t, proposals, ordered)
+	var got2 *types.Block
+	got2, executed, err = tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.NoError(t, err)
+	require.False(t, executed)
+	require.Equal(t, got, got2)
+	require.Equal(t, got.ID(), got2.ID())
+}
+
+func TestGenerateBlock_UnequalHeight(t *testing.T) {
+	tcs := createConservativeState(t)
+	lid := types.GetEffectiveGenesis().Add(100)
+	rng := rand.New(rand.NewSource(10101))
+	max := uint64(0)
+	signers, atxes := createModifiedATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+		n := rng.Uint64()
+		if n > max {
+			max = n
+		}
+		return atx.Verify(n, 1)
+	})
+	activeSet := types.ToATXIDs(atxes)
+	totalNumTXs := 100
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	// make sure proposals have overlapping transactions
+	step := totalNumTXs / numProposals
+	proposals := createProposalsDupTXs(t, lid, signers, activeSet, types.EmptyLayerHash, step, tids)
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.NoError(t, err)
+	require.False(t, executed)
+	require.NotEqual(t, types.EmptyBlockID, got.ID())
+	require.Equal(t, lid, got.LayerIndex)
+	require.Len(t, got.TxIDs, totalNumTXs)
+	require.Equal(t, max, got.TickHeight)
+}
+
+func TestGenerateBlock_EmptyProposals(t *testing.T) {
+	tcs := createConservativeState(t)
+	lid := types.GetEffectiveGenesis().Add(20)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	epochData := &types.EpochData{
+		ActiveSet: activeSet,
+		Beacon:    types.RandomBeacon(),
+	}
+	proposals := make([]*types.Proposal, 0, numProposals)
+	for i := 0; i < numProposals; i++ {
+		p := createProposal(t, epochData, lid, activeSet[i], signers[i], nil, 1)
+		proposals = append(proposals, p)
+	}
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.NoError(t, err)
+	require.False(t, executed)
+	require.NotEqual(t, types.EmptyBlockID, got.ID())
+	require.Equal(t, lid, got.LayerIndex)
+	require.Empty(t, got.TxIDs)
+	require.Len(t, got.Rewards, numProposals)
+	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
+	// the expected weight for each eligibility is `numUnit` * 1/3
+	expWeight := util.WeightFromInt64(numUnit * 1 / 3)
+	checkRewards(t, atxes, expWeight, got.Rewards)
+}
+
+func TestGenerateBlock_SameCoinbase(t *testing.T) {
+	tcs := createConservativeState(t)
+	lid := types.GetEffectiveGenesis().Add(100)
+	totalNumTXs := 1000
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	epochData := &types.EpochData{
+		ActiveSet: activeSet,
+		Beacon:    types.RandomBeacon(),
+	}
+	atxID := activeSet[0]
+	proposal1 := createProposal(t, epochData, lid, atxID, signers[0], tids[0:500], 1)
+	proposal2 := createProposal(t, epochData, lid, atxID, signers[0], tids[400:], 1)
+	proposals := []*types.Proposal{proposal1, proposal2}
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.NoError(t, err)
+	require.False(t, executed)
+	require.NotEqual(t, types.EmptyBlockID, got.ID())
+	require.Equal(t, lid, got.LayerIndex)
+	require.Len(t, got.TxIDs, totalNumTXs)
+
+	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
+	// the expected weight for each eligibility is `numUnit` * 1/3
+	// since there are two proposals for the same coinbase, the final weight is `numUnit` * 1/3 * 2
+	expWeight := util.WeightFromInt64(numUnit * 1 / 3 * 2)
+	checkRewards(t, atxes[0:1], expWeight, got.Rewards)
+}
+
+func TestGenerateBlock_EmptyATXID(t *testing.T) {
+	tcs := createConservativeState(t)
+	lid := types.GetEffectiveGenesis().Add(100)
+	// create multiple proposals with overlapping TXs
+	totalNumTXs := 1000
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	// make sure proposals have overlapping transactions
+	step := totalNumTXs / numProposals
+	proposals := createProposalsDupTXs(t, lid, signers, activeSet, types.EmptyLayerHash, step, tids)
+	// set the last proposal ID to be empty
+	types.SortProposals(proposals)
+	proposals[numProposals-1].AtxID = *types.EmptyATXID
+
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.ErrorIs(t, err, errInvalidATXID)
+	require.False(t, executed)
+	require.Nil(t, got)
+}
+
+func TestGenerateBlocks_MultipleEligibilities(t *testing.T) {
+	tcs := createConservativeState(t)
+	lid := types.GetEffectiveGenesis().Add(100)
+	tids, _ := addBatch(t, tcs, 1000)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), 10)
+	activeSet := types.ToATXIDs(atxes)
+	epochData := &types.EpochData{
+		ActiveSet: activeSet,
+		Beacon:    types.RandomBeacon(),
+	}
+	proposals := []*types.Proposal{
+		createProposal(t, epochData, lid, atxes[0].ID(), signers[0], tids, 2),
+		createProposal(t, epochData, lid, atxes[1].ID(), signers[1], tids, 1),
+		createProposal(t, epochData, lid, atxes[2].ID(), signers[2], tids, 5),
+	}
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
+	require.NoError(t, err)
+	require.False(t, executed)
+	require.Len(t, got.Rewards, len(proposals))
+	sort.Slice(proposals, func(i, j int) bool {
+		cbi := types.GenerateAddress(proposals[i].SmesherID().Bytes())
+		cbj := types.GenerateAddress(proposals[j].SmesherID().Bytes())
+		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
+	})
+	totalWeight := util.WeightFromUint64(0)
+	for i, r := range got.Rewards {
+		require.Equal(t, types.GenerateAddress(proposals[i].SmesherID().Bytes()), r.Coinbase)
+		weight := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
+		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
+		// the expected weight for each eligibility is `numUnit` * 1/3
+		require.Equal(t, util.WeightFromInt64(numUnit*1/3*int64(len(proposals[i].EligibilityProofs))), weight)
+		totalWeight.Add(weight)
+	}
+	require.Equal(t, util.WeightFromInt64(numUnit*8*1/3), totalWeight)
+}
+
+func TestGenerateBlocks_MissingHeader(t *testing.T) {
 	tcs := createConservativeState(t)
 	tx := types.Transaction{
 		RawTx: types.NewRawTx([]byte{1, 1, 1}),
 	}
 	require.NoError(t, tcs.AddToDB(&tx))
 
-	_, err := tcs.SelectBlockTXs(types.NewLayerID(1), []*types.Proposal{
-		{InnerProposal: types.InnerProposal{TxIDs: []types.TransactionID{tx.ID}}},
-	})
+	_, _, err := tcs.GenerateBlock(
+		context.Background(),
+		types.NewLayerID(1), []*types.Proposal{
+			{
+				InnerProposal: types.InnerProposal{
+					TxIDs: []types.TransactionID{tx.ID},
+				},
+			},
+		})
 	require.Error(t, err)
 }
 
-func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
+func TestGenerateBlock_AllNodesMissingMeshHash(t *testing.T) {
 	tcs := createConservativeState(t)
-	totalNumTXs := 100
-	tids, txs := addBatch(t, tcs, totalNumTXs)
-	// optimistic filtering will query the real state again
-	for _, tx := range txs {
-		principal := tx.Principal
-		tcs.mvm.EXPECT().GetBalance(principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
-	}
-	// make sure proposals have overlapping transactions
-	numProposals := 10
-	numPerProposal := 30
-	step := totalNumTXs / numProposals
 	lid := types.NewLayerID(1333)
-	proposals := createProposalsDupTXs(lid, types.EmptyLayerHash, step, numPerProposal, numProposals, tids)
-	got, err := tcs.SelectBlockTXs(lid, proposals)
+	totalNumTXs := 100
+	tids, _ := addBatch(t, tcs, totalNumTXs)
+	step := totalNumTXs / numProposals
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	proposals := createProposalsDupTXs(t, lid, signers, activeSet, types.EmptyLayerHash, step, tids)
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
 	require.NoError(t, err)
-	require.Len(t, got, totalNumTXs)
-
-	// reverse the order of proposals. we should still have exactly the same ordered transactions
-	checkIsStable(t, got, proposals, tcs.ConservativeState)
+	require.False(t, executed)
+	require.NotEqual(t, types.EmptyBlockID, got.ID())
+	require.Equal(t, lid, got.LayerIndex)
+	require.Len(t, got.TxIDs, totalNumTXs)
 }
 
-func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
+func TestGenerateBlock_PrunedByGasLimit(t *testing.T) {
 	totalNumTXs := 100
 	expSize := totalNumTXs / 3
 	gasLimit := uint64(expSize) * defaultGas
 	tcs := createTestState(t, gasLimit)
-	tids, txs := addBatch(t, tcs, totalNumTXs)
-	// optimistic filtering will query the real state again
-	for _, tx := range txs {
-		tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).AnyTimes()
-		tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce}, nil).AnyTimes()
-	}
-	// make sure proposals have overlapping transactions
-	numProposals := 10
-	numPerProposal := 30
-	step := totalNumTXs / numProposals
-	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
-	got, err := tcs.SelectBlockTXs(lid, proposals)
-	require.NoError(t, err)
-	require.Len(t, got, expSize)
-
-	// reverse the order of proposals. we should still have exactly the same ordered transactions
-	checkIsStable(t, got, proposals, tcs.ConservativeState)
-}
-
-func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
-	tcs := createConservativeState(t)
-	totalNumTXs := 100
 	tids, _ := addBatch(t, tcs, totalNumTXs)
-	// make sure proposals have overlapping transactions
-	numProposals := 10
-	numPerProposal := 30
 	step := totalNumTXs / numProposals
-	meshHash := types.RandomHash()
-	lid := types.NewLayerID(1333)
-	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
-	// change proposal's mesh hash
-	for _, p := range proposals {
-		p.MeshHash = types.RandomHash()
-	}
-	got, err := tcs.SelectBlockTXs(lid, proposals)
+	signers, atxes := createATXs(t, tcs.cdb, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	activeSet := types.ToATXIDs(atxes)
+	proposals := createProposalsDupTXs(t, lid, signers, activeSet, types.EmptyLayerHash, step, tids)
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
 	require.NoError(t, err)
-	require.Len(t, got, totalNumTXs)
-
-	// reverse the order of proposals. we should still have exactly the same ordered transactions
-	checkIsStable(t, got, proposals, tcs.ConservativeState)
+	require.False(t, executed)
+	require.NotEqual(t, types.EmptyBlockID, got.ID())
+	require.Equal(t, lid, got.LayerIndex)
+	require.Len(t, got.TxIDs, expSize)
 }
 
-func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
+func TestGenerateBlock_NodeHasDifferentMesh(t *testing.T) {
 	tcs := createConservativeState(t)
-	numProposals := 10
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
@@ -267,15 +515,15 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
-	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), types.RandomHash()))
-	got, err := tcs.SelectBlockTXs(lid, proposals)
+	require.NoError(t, layers.SetHashes(tcs.cdb, lid.Sub(1), types.RandomHash(), types.RandomHash()))
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
 	require.ErrorIs(t, err, errNodeHasBadMeshHash)
 	require.Nil(t, got)
+	require.False(t, executed)
 }
 
-func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
+func TestGenerateBlock_OwnNodeMissingMeshHash(t *testing.T) {
 	tcs := createConservativeState(t)
-	numProposals := 10
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
@@ -284,17 +532,18 @@ func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
-	got, err := tcs.SelectBlockTXs(lid, proposals)
+	got, executed, err := tcs.GenerateBlock(context.Background(), lid, proposals)
 	require.ErrorIs(t, err, errNodeHasBadMeshHash)
 	require.Nil(t, got)
+	require.False(t, executed)
 }
 
 func TestSelectProposalTXs(t *testing.T) {
 	tcs := createConservativeState(t)
-	numTXs := 2 * numTXsInProposal
+	totalNumTXs := 2 * numTXsInProposal
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
-	for i := 0; i < numTXs; i++ {
+	for i := 0; i < totalNumTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
@@ -319,13 +568,13 @@ func TestSelectProposalTXs(t *testing.T) {
 }
 
 func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
-	numTXs := 2 * numTXsInProposal
+	totalNumTXs := 2 * numTXsInProposal
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
 	expSize := numTXsInProposal / 2
 	gasLimit := defaultGas * uint64(expSize)
 	tcs := createTestState(t, gasLimit)
-	for i := 0; i < numTXs; i++ {
+	for i := 0; i < totalNumTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
@@ -346,11 +595,11 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 		t.Skip("Skipping test in Windows (https://github.com/spacemeshos/go-spacemesh/issues/3624)")
 	}
 	tcs := createConservativeState(t)
-	numTXs := numTXsInProposal - 1
+	totalNumTXs := numTXsInProposal - 1
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
-	expected := make([]types.TransactionID, 0, numTXs)
-	for i := 0; i < numTXs; i++ {
+	expected := make([]types.TransactionID, 0, totalNumTXs)
+	for i := 0; i < totalNumTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
@@ -376,7 +625,7 @@ func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
-	numTXs := numTXsInProposal * 2
+	totalNumTXs := numTXsInProposal * 2
 	numInBlock := numTXsInProposal
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
@@ -388,7 +637,7 @@ func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 		require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID}))
 	}
 	expected := make([]types.TransactionID, 0, numTXsInProposal)
-	for i := 0; i < numTXs; i++ {
+	for i := 0; i < totalNumTXs; i++ {
 		tx := newTx(t, uint64(numInBlock+i), defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 		if i < numTXsInProposal {
@@ -481,7 +730,7 @@ func TestAddToCache(t *testing.T) {
 	require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 	has := tcs.cache.Has(tx.ID)
 	require.True(t, has)
-	got, err := transactions.Get(tcs.db, tx.ID)
+	got, err := transactions.Get(tcs.cdb, tx.ID)
 	require.NoError(t, err)
 	require.Equal(t, *tx, got.Transaction)
 }
@@ -498,7 +747,7 @@ func TestAddToCache_BadNonceNotPersisted(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(tx.Principal).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: tx.Nonce.Counter + 1}, nil).Times(1)
 	require.ErrorIs(t, tcs.AddToCache(context.TODO(), tx), errBadNonce)
-	checkTXNotInDB(t, tcs.db, tx.ID)
+	checkTXNotInDB(t, tcs.cdb, tx.ID)
 }
 
 func TestAddToCache_NonceGap(t *testing.T) {
@@ -515,7 +764,7 @@ func TestAddToCache_NonceGap(t *testing.T) {
 	require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 	require.True(t, tcs.cache.Has(tx.ID))
 	require.False(t, tcs.cache.MoreInDB(tx.Principal))
-	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
+	checkTXStateFromDB(t, tcs.cdb, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
 }
 
 func TestAddToCache_InsufficientBalance(t *testing.T) {
@@ -528,7 +777,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 	checkNoTX(t, tcs.cache, tx.ID)
 	require.True(t, tcs.cache.MoreInDB(addr))
-	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
+	checkTXStateFromDB(t, tcs.cdb, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
 }
 
 func TestAddToCache_TooManyForOneAccount(t *testing.T) {
@@ -544,7 +793,7 @@ func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx))
 	}
 	require.True(t, tcs.cache.MoreInDB(addr))
-	checkTXStateFromDB(t, tcs.db, mtxs, types.MEMPOOL)
+	checkTXStateFromDB(t, tcs.cdb, mtxs, types.MEMPOOL)
 }
 
 func TestGetMeshTransaction(t *testing.T) {
@@ -586,8 +835,8 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	hdrless.TxHeader = nil
 
 	// the hdrless tx is saved via syncing from blocks
-	require.NoError(t, transactions.Add(tcs.db, &hdrless, time.Now()))
-	got, err := transactions.Get(tcs.db, tx.ID)
+	require.NoError(t, transactions.Add(tcs.cdb, &hdrless, time.Now()))
+	got, err := transactions.Get(tcs.cdb, tx.ID)
 	require.NoError(t, err)
 	require.Nil(t, got.TxHeader)
 
@@ -605,7 +854,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	tcs.mvm.EXPECT().GetNonce(tx.Principal).Return(types.Nonce{Counter: nonce + 1}, nil)
 	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: block.ID()}, gomock.Any(), block.Rewards).DoAndReturn(
 		func(ctx vm.ApplyContext, got []types.Transaction, _ []types.AnyReward) ([]types.TransactionID, []types.TransactionWithResult, error) {
-			matchReceived(t, []*types.Transaction{tx}, got)
+			matchReceived(t, []types.Transaction{*tx}, got)
 			rst := []types.TransactionWithResult{
 				{
 					Transaction: *tx,
@@ -620,7 +869,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 
 	require.NoError(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block))
 
-	got, err = transactions.Get(tcs.db, tx.ID)
+	got, err = transactions.Get(tcs.cdb, tx.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got.TxHeader)
 }
@@ -649,7 +898,7 @@ func TestApplyLayer(t *testing.T) {
 			var rst []types.TransactionWithResult
 			for _, tx := range txs {
 				rst = append(rst, types.TransactionWithResult{
-					Transaction: *tx,
+					Transaction: tx,
 					TransactionResult: types.TransactionResult{
 						Layer: ctx.Layer,
 						Block: ctx.Block,
@@ -662,7 +911,7 @@ func TestApplyLayer(t *testing.T) {
 	require.NoError(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block))
 
 	for _, id := range ids {
-		mtx, err := transactions.Get(tcs.db, id)
+		mtx, err := transactions.Get(tcs.cdb, id)
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
 		require.Equal(t, lid, mtx.LayerID)
@@ -713,10 +962,10 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			)
 			for i, tx := range txs {
 				if i < numFailed {
-					inefective = append(inefective, *tx)
+					inefective = append(inefective, tx)
 				} else {
 					rst = append(rst, types.TransactionWithResult{
-						Transaction: *tx,
+						Transaction: tx,
 						TransactionResult: types.TransactionResult{
 							Layer: ctx.Layer,
 							Block: ctx.Block,
@@ -730,7 +979,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 	require.NoError(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block))
 
 	for i, id := range ids {
-		mtx, err := transactions.Get(tcs.db, id)
+		mtx, err := transactions.Get(tcs.cdb, id)
 		require.NoError(t, err)
 		if i < numFailed {
 			require.Equal(t, types.MEMPOOL, mtx.State)
@@ -768,7 +1017,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 	require.ErrorIs(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block), errVM)
 
 	for _, id := range ids {
-		mtx, err := transactions.Get(tcs.db, id)
+		mtx, err := transactions.Get(tcs.cdb, id)
 		require.NoError(t, err)
 		require.Equal(t, types.MEMPOOL, mtx.State)
 		require.Equal(t, types.EmptyBlockID, mtx.BlockID)
@@ -851,12 +1100,12 @@ func TestConsistentHandling(t *testing.T) {
 		}, raw, block.Rewards).Return(nil, results, nil).Times(1)
 		for _, instance := range instances {
 			require.NoError(t, instance.ApplyLayer(context.TODO(), block.LayerIndex, block))
-			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
+			require.NoError(t, layers.SetApplied(instance.cdb, block.LayerIndex, block.ID()))
 		}
 	}
 }
 
-func matchReceived(tb testing.TB, expected []*types.Transaction, got []types.Transaction) {
+func matchReceived(tb testing.TB, expected []types.Transaction, got []types.Transaction) {
 	tb.Helper()
 	require.Len(tb, got, len(expected))
 	for i := range expected {

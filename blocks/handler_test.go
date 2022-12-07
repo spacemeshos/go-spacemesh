@@ -67,7 +67,7 @@ func Test_HandleBlockData_InvalidRewards(t *testing.T) {
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := types.RandomTXSet(max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	require.NoError(t, blocks.Add(th.db, block))
@@ -77,7 +77,7 @@ func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := types.RandomTXSet(max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	errUnknown := errors.New("unknown")
@@ -89,7 +89,7 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := types.RandomTXSet(max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
@@ -102,7 +102,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 func Test_HandleBlockData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
+	txIDs := types.RandomTXSet(max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)

@@ -287,7 +287,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		ts.mTortoise.EXPECT().Updates().Return(lid.Sub(1), nil)
 		ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lid, nil)
 		ts.mConState.EXPECT().GetStateRoot().Return(types.RandomHash(), nil)
-		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lid, types.EmptyBlockID))
+		require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lid, types.EmptyBlockID, false))
 	}
 	instate := ts.syncer.mesh.LatestLayerInState()
 	require.Equal(t, current.Sub(1), instate)

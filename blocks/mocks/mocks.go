@@ -51,17 +51,17 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 }
 
 // ProcessLayerPerHareOutput mocks base method.
-func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
+func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ProcessLayerPerHareOutput indicates an expected call of ProcessLayerPerHareOutput.
-func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2, arg3)
 }
 
 // MockconservativeState is a mock of conservativeState interface.
@@ -87,19 +87,20 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// SelectBlockTXs mocks base method.
-func (m *MockconservativeState) SelectBlockTXs(arg0 types.LayerID, arg1 []*types.Proposal) ([]types.TransactionID, error) {
+// GenerateBlock mocks base method.
+func (m *MockconservativeState) GenerateBlock(arg0 context.Context, arg1 types.LayerID, arg2 []*types.Proposal) (*types.Block, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectBlockTXs", arg0, arg1)
-	ret0, _ := ret[0].([]types.TransactionID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "GenerateBlock", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*types.Block)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
-// SelectBlockTXs indicates an expected call of SelectBlockTXs.
-func (mr *MockconservativeStateMockRecorder) SelectBlockTXs(arg0, arg1 interface{}) *gomock.Call {
+// GenerateBlock indicates an expected call of GenerateBlock.
+func (mr *MockconservativeStateMockRecorder) GenerateBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBlockTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectBlockTXs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateBlock", reflect.TypeOf((*MockconservativeState)(nil).GenerateBlock), arg0, arg1, arg2)
 }
 
 // MocklayerClock is a mock of layerClock interface.

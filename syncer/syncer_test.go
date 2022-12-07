@@ -592,7 +592,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts.mConState.EXPECT().ApplyLayer(gomock.Any(), lyr, nil)
 	ts.mConState.EXPECT().GetStateRoot().Return(types.Hash32{}, nil)
 	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
-	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID))
+	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.TODO(), lyr, types.EmptyBlockID, false))
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 
 	// no data sync should happen

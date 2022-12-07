@@ -1,29 +1,22 @@
 package blocks
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
-
-var errInvalidATXID = errors.New("proposal ATXID invalid")
 
 // Generator generates a block from proposals.
 type Generator struct {
@@ -46,15 +39,11 @@ type Generator struct {
 
 // Config is the config for Generator.
 type Config struct {
-	LayerSize        uint32
-	LayersPerEpoch   uint32
 	GenBlockInterval time.Duration
 }
 
 func defaultConfig() Config {
 	return Config{
-		LayerSize:        50,
-		LayersPerEpoch:   3,
 		GenBlockInterval: time.Second,
 	}
 }
@@ -153,14 +142,19 @@ func (g *Generator) run() error {
 func (g *Generator) tryGenBlock() {
 	lastApplied, err := layers.GetLastApplied(g.cdb)
 	if err != nil {
-		g.logger.Error("failed to get latest applied layer", log.Err(err))
+		g.logger.With().Error("failed to get latest applied layer", log.Err(err))
 		return
 	}
 	next := lastApplied.Add(1)
-	if out, ok := g.hareOutputs[next]; ok {
-		g.logger.With().Info("ready to process hare output", next)
-		_ = g.processHareOutput(out)
-		delete(g.hareOutputs, next)
+	for {
+		if out, ok := g.hareOutputs[next]; !ok {
+			break
+		} else {
+			g.logger.WithContext(out.Ctx).With().Info("ready to process hare output", next)
+			_ = g.processHareOutput(out)
+			delete(g.hareOutputs, next)
+			next = next.Add(1)
+		}
 	}
 }
 
@@ -183,7 +177,13 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 	ctx := out.Ctx
 	logger := g.logger.WithContext(ctx).WithFields(out.Layer)
 	hareOutput := types.EmptyBlockID
-	if len(out.Proposals) > 0 {
+	var (
+		block    *types.Block
+		executed bool
+	)
+	if len(out.Proposals) == 0 {
+		emptyOutputCnt.Inc()
+	} else {
 		// fetch proposals from peers if not locally available
 		if err := g.fetcher.GetProposals(ctx, out.Proposals); err != nil {
 			failFetchCnt.Inc()
@@ -199,18 +199,26 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 			return err
 		}
 
-		if block, err := g.generateBlock(ctx, out.Layer, props); err != nil {
+		block, executed, err = g.conState.GenerateBlock(ctx, out.Layer, props)
+		if err != nil {
 			failGenCnt.Inc()
+			logger.With().Error("failed to generate block", log.Err(err))
 			return err
-		} else if err = g.msh.AddBlockWithTXs(ctx, block); err != nil {
+		}
+
+		logger.With().Info("block generated",
+			log.Bool("executed", executed),
+			log.Int("num_proposals", len(props)),
+			log.Inline(block))
+
+		err = g.msh.AddBlockWithTXs(ctx, block)
+		if err != nil {
 			failErrCnt.Inc()
 			return err
-		} else {
-			blockOkCnt.Inc()
-			hareOutput = block.ID()
 		}
-	} else {
-		emptyOutputCnt.Inc()
+
+		blockOkCnt.Inc()
+		hareOutput = block.ID()
 	}
 
 	if err := g.cert.RegisterForCert(ctx, out.Layer, hareOutput); err != nil {
@@ -221,92 +229,9 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 		logger.With().Warning("failed to certify block", hareOutput, log.Err(err))
 	}
 
-	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput); err != nil {
+	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput, executed); err != nil {
 		logger.With().Error("mesh failed to process layer", log.Err(err))
 		return err
 	}
 	return nil
-}
-
-// generateBlock generates a block from the list of Proposal.
-func (g *Generator) generateBlock(ctx context.Context, layerID types.LayerID, proposals []*types.Proposal) (*types.Block, error) {
-	logger := g.logger.WithContext(ctx).WithFields(layerID, log.Int("num_proposals", len(proposals)))
-	txIDs, err := g.conState.SelectBlockTXs(layerID, proposals)
-	if err != nil {
-		logger.With().Error("failed to select block txs", layerID, log.Err(err))
-		return nil, fmt.Errorf("select block txs: %w", err)
-	}
-	tickHeight, rewards, err := g.extractCoinbasesAndHeight(logger, proposals)
-	if err != nil {
-		return nil, err
-	}
-	b := &types.Block{
-		InnerBlock: types.InnerBlock{
-			LayerIndex: layerID,
-			TickHeight: tickHeight,
-			Rewards:    rewards,
-			TxIDs:      txIDs,
-		},
-	}
-	b.Initialize()
-	logger.With().Info("block generated", log.Inline(b))
-	return b, nil
-}
-
-func (g *Generator) extractCoinbasesAndHeight(logger log.Log, props []*types.Proposal) (uint64, []types.AnyReward, error) {
-	weights := make(map[types.Address]util.Weight)
-	coinbases := make([]types.Address, 0, len(props))
-	max := uint64(0)
-	for _, p := range props {
-		if p.AtxID == *types.EmptyATXID {
-			// this proposal would not have been validated
-			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
-			return 0, nil, errInvalidATXID
-		}
-		atx, err := g.cdb.GetAtxHeader(p.AtxID)
-		if atx.BaseTickHeight > max {
-			max = atx.BaseTickHeight
-		}
-		if err != nil {
-			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
-			return 0, nil, fmt.Errorf("block gen get ATX: %w", err)
-		}
-		ballot := &p.Ballot
-		weightPer, err := proposals.ComputeWeightPerEligibility(g.cdb, ballot, g.cfg.LayerSize, g.cfg.LayersPerEpoch)
-		if err != nil {
-			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
-			return 0, nil, err
-		}
-		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
-		actual := weightPer.Mul(util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
-		if _, ok := weights[atx.Coinbase]; !ok {
-			weights[atx.Coinbase] = actual
-			coinbases = append(coinbases, atx.Coinbase)
-		} else {
-			weights[atx.Coinbase].Add(actual)
-		}
-		events.ReportProposal(events.ProposalIncluded, p)
-	}
-	// make sure we output coinbase in a stable order.
-	sort.Slice(coinbases, func(i, j int) bool {
-		return bytes.Compare(coinbases[i].Bytes(), coinbases[j].Bytes()) < 0
-	})
-	rewards := make([]types.AnyReward, 0, len(weights))
-	for _, coinbase := range coinbases {
-		weight, ok := weights[coinbase]
-		if !ok {
-			g.logger.With().Fatal("coinbase missing", coinbase)
-		}
-		rewards = append(rewards, types.AnyReward{
-			Coinbase: coinbase,
-			Weight: types.RatNum{
-				Num:   weight.Num().Uint64(),
-				Denom: weight.Denom().Uint64(),
-			},
-		})
-		logger.With().Debug("adding coinbase weight",
-			log.Stringer("coinbase", coinbase),
-			log.Stringer("weight", weight))
-	}
-	return max, rewards, nil
 }

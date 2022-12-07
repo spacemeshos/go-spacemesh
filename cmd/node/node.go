@@ -75,6 +75,7 @@ const (
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
 	TrtlLogger             = "trtl"
+	ATXBuilder             = "atxBuilder"
 	ATXHandlerLogger       = "atxHandler"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
@@ -498,8 +499,10 @@ func (app *App) initServices(ctx context.Context,
 	state := vm.New(sqlDB,
 		vm.WithConfig(cfg),
 		vm.WithLogger(app.addLogger(VMLogger, lg)))
-	app.conState = txs.NewConservativeState(state, sqlDB,
+	app.conState = txs.NewConservativeState(state, cdb,
 		txs.WithCSConfig(txs.CSConfig{
+			LayerSize:          layerSize,
+			LayersPerEpoch:     layersPerEpoch,
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			NumTXsPerProposal:  app.Config.TxsPerProposal,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
@@ -613,8 +616,6 @@ func (app *App) initServices(ctx context.Context,
 	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
-			LayerSize:        layerSize,
-			LayersPerEpoch:   layersPerEpoch,
 			GenBlockInterval: 500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
@@ -680,7 +681,7 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, cdb, atxHandler, app.host, nipostBuilder,
-		postSetupMgr, clock, newSyncer, app.addLogger("atxBuilder", lg),
+		postSetupMgr, clock, newSyncer, app.addLogger(ATXBuilder, lg),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(activation.PoetConfig{
 			PhaseShift:  app.Config.POET.PhaseShift,

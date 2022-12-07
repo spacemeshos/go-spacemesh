@@ -109,18 +109,16 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 	}
 	msh.setLatestLayerInState(applied)
 
-	root := types.Hash32{}
 	if applied.After(types.GetEffectiveGenesis()) {
-		err = msh.conState.RevertState(msh.LatestLayerInState())
+		err = msh.conState.RevertState(applied)
 		if err != nil {
-			msh.logger.With().Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+			msh.logger.With().Fatal("failed to load state for layer", applied, log.Err(err))
 		}
 	}
 
 	msh.logger.With().Info("recovered mesh from disk",
 		log.Stringer("latest", msh.LatestLayer()),
-		log.Stringer("processed", msh.ProcessedLayer()),
-		log.Stringer("root_hash", root))
+		log.Stringer("processed", msh.ProcessedLayer()))
 }
 
 // LatestLayerInState returns the latest layer we applied to state.
@@ -321,7 +319,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 // ProcessLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
-func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error {
+func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID, executed ...types.BlockID) error {
 	logger := msh.logger.WithContext(ctx).WithFields(log.Stringer("processing", layerID))
 
 	// pass the layer to tortoise for processing
@@ -341,6 +339,20 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 
 	newVerified, updated := msh.trtl.Updates()
 	logger = logger.WithFields(log.Stringer("verified", newVerified))
+
+	if len(executed) == 1 {
+		applied := executed[0]
+		logger.With().Info("block already applied, persisting state", applied)
+		valids, err := layerValidBlocks(logger, msh.cdb, layerID, newVerified, nil)
+		if err != nil {
+			return err
+		}
+		if err = msh.persistState(ctx, logger, layerID, applied, valids); err != nil {
+			return err
+		}
+		msh.setLatestLayerInState(layerID)
+	}
+
 	if err := msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
 		return err
 	}
@@ -403,12 +415,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, logger log.Log, from, to
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
 		logger := logger.WithFields(layerID)
-		if !layerID.After(msh.LatestLayerInState()) {
-			logger.With().Error("trying to apply layer before currently applied layer",
-				log.Stringer("in_state", msh.LatestLayerInState()))
-			continue
-		}
-		if err := msh.pushLayer(ctx, logger, layerID, latestVerified); err != nil {
+		if err := msh.applyState(ctx, logger, layerID, latestVerified); err != nil {
 			msh.missingLayer.Store(layerID)
 			return err
 		}
@@ -481,45 +488,31 @@ func layerValidBlocks(logger log.Log, cdb *datastore.CachedDB, layerID, latestVe
 	return validBlocks, nil
 }
 
-func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid, verified types.LayerID) error {
-	if latest := msh.LatestLayerInState(); lid != latest.Add(1) {
-		logger.With().Fatal("update state out-of-order", log.Stringer("latest", latest))
-	}
-
+// applyState applies the block to the conservative state / vm and updates mesh's internal state.
+// ideally everything happens here should be atomic.
+// see https://github.com/spacemeshos/go-spacemesh/issues/3333
+func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid, verified types.LayerID) error {
+	applied := types.EmptyBlockID
 	valids, err := layerValidBlocks(logger, msh.cdb, lid, verified, nil)
 	if err != nil {
 		return err
 	}
-	if err = msh.applyState(ctx, logger, lid, valids); err != nil {
-		return err
-	}
-	msh.setLatestLayerInState(lid)
-
-	root, err := msh.conState.GetStateRoot()
-	if err != nil {
-		return fmt.Errorf("failed to load state root after update: %w", err)
-	}
-	logger.Event().Info("end of layer state root", log.Stringer("state_root", root))
-	return nil
-}
-
-// applyState applies the block to the conservative state / vm and updates mesh's internal state.
-// ideally everything happens here should be atomic.
-// see https://github.com/spacemeshos/go-spacemesh/issues/3333
-func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.LayerID, valids []*types.Block) error {
-	applied := types.EmptyBlockID
 	block := msh.getBlockToApply(valids)
 	if block != nil {
 		applied = block.ID()
 	}
-
 	if err := msh.conState.ApplyLayer(ctx, lid, block); err != nil {
 		return fmt.Errorf("apply layer %v/%v: %w", lid, applied, err)
 	}
 
+	msh.setLatestLayerInState(lid)
 	logger = logger.WithFields(log.Stringer("applied", applied))
 	logger.With().Info("applying block for layer")
 
+	return msh.persistState(ctx, logger, lid, applied, valids)
+}
+
+func (msh *Mesh) persistState(ctx context.Context, logger log.Log, lid types.LayerID, applied types.BlockID, valids []*types.Block) error {
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
 			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
@@ -535,6 +528,12 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 		LayerID: lid,
 		Status:  events.LayerStatusTypeApplied,
 	})
+
+	root, err := msh.conState.GetStateRoot()
+	if err != nil {
+		return fmt.Errorf("failed to oad state root after update: %w", err)
+	}
+	logger.Event().Info("end of layer state root", log.Stringer("state_root", root))
 	return nil
 }
 
@@ -557,7 +556,7 @@ func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
 }
 
 // ProcessLayerPerHareOutput receives hare output once it finishes running for a given layer.
-func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID) error {
+func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID, executed bool) error {
 	logger := msh.logger.WithContext(ctx).WithFields(layerID, blockID)
 	if blockID == types.EmptyBlockID {
 		logger.Info("received empty set from hare")
@@ -579,6 +578,9 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		return fmt.Errorf("save hare output %v: %w", blockID, err)
 	}
 	msh.trtl.OnHareOutput(layerID, blockID)
+	if executed {
+		return msh.ProcessLayer(ctx, layerID, blockID)
+	}
 	return msh.ProcessLayer(ctx, layerID)
 }
 
