@@ -115,3 +115,11 @@ func FuzzVotingEligibilityProofConsistency(f *testing.F) {
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
 	tester.FuzzSafety[VotingEligibilityProof](f)
 }
+
+func TestBallotEncoding(t *testing.T) {
+	t.Run("layer is first", func(t *testing.T) {
+		ballot := Ballot{}
+		lid := layerTester(t, &ballot)
+		require.Equal(t, ballot.LayerIndex, lid)
+	})
+}
