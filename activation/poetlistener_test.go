@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -18,7 +17,7 @@ import (
 
 func TestNewPoetListener(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	poetDb := mocks.NewMockpoetValidatorPersister(ctrl)
+	poetDb := NewMockpoetValidatorPersister(ctrl)
 	lg := logtest.New(t)
 	listener := NewPoetListener(poetDb, lg)
 
@@ -31,22 +30,22 @@ func TestNewPoetListener(t *testing.T) {
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	poetDb.EXPECT().StoreProof(gomock.Any(), ref, gomock.Any()).Return(nil)
-	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.Background(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	poetDb.EXPECT().StoreProof(gomock.Any(), ref, gomock.Any()).Return(errors.New("unknown"))
-	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+	require.Equal(t, pubsub.ValidationAccept, listener.HandlePoetProofMessage(context.Background(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	poetDb.EXPECT().StoreProof(gomock.Any(), ref, gomock.Any()).Return(sql.ErrObjectExists)
-	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.Background(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(false)
 	poetDb.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("bad poet message"))
-	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.Background(), "test", data))
 
 	poetDb.EXPECT().HasProof(ref).Return(true)
-	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.TODO(), "test", data))
+	require.Equal(t, pubsub.ValidationIgnore, listener.HandlePoetProofMessage(context.Background(), "test", data))
 }

@@ -639,6 +639,22 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 	return nil
 }
 
+func (c *cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for tid, ntx := range c.cachedTXs {
+		if ntx.Layer == lid {
+			nbid, nlid, err := getNextIncluded(db, tid, lid)
+			if err != nil {
+				return err
+			}
+			ntx.UpdateLayer(nbid, nlid)
+		}
+	}
+	return nil
+}
+
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
 func (c *cache) ApplyLayer(
 	ctx context.Context,
@@ -651,6 +667,10 @@ func (c *cache) ApplyLayer(
 	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
 	if err := checkApplyOrder(logger, db, lid); err != nil {
 		return err
+	}
+
+	if bid == types.EmptyBlockID {
+		return c.applyEmptyLayer(db, lid)
 	}
 
 	c.mu.Lock()
