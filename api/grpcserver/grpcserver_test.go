@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
@@ -386,27 +385,27 @@ func (ms *MockSigning) NodeID() types.NodeID {
 // TODO(mafa): replace this mock with the generated mock.
 type PostAPIMock struct{}
 
-func (*PostAPIMock) Status() *atypes.PostSetupStatus {
-	return &atypes.PostSetupStatus{}
+func (*PostAPIMock) Status() *activation.PostSetupStatus {
+	return &activation.PostSetupStatus{}
 }
 
-func (p *PostAPIMock) StatusChan() <-chan *atypes.PostSetupStatus {
-	ch := make(chan *atypes.PostSetupStatus, 1)
+func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
+	ch := make(chan *activation.PostSetupStatus, 1)
 	ch <- p.Status()
 	close(ch)
 
 	return ch
 }
 
-func (p *PostAPIMock) ComputeProviders() []atypes.PostSetupComputeProvider {
+func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *PostAPIMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
+func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -422,12 +421,12 @@ func (p *PostAPIMock) LastError() error {
 	return nil
 }
 
-func (p *PostAPIMock) LastOpts() *atypes.PostSetupOpts {
-	return &atypes.PostSetupOpts{}
+func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
+	return &activation.PostSetupOpts{}
 }
 
-func (p *PostAPIMock) Config() atypes.PostConfig {
-	return atypes.PostConfig{}
+func (p *PostAPIMock) Config() activation.PostConfig {
+	return activation.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
@@ -437,7 +436,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, atypes.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
 	return nil
 }
 
@@ -504,8 +503,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(
-		context.TODO(), services...)
+	jsonStarted := jsonService.StartService(context.Background(), services...)
 
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
@@ -519,7 +517,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	}
 
 	return func() {
-		require.NoError(tb, jsonService.Close())
+		require.NoError(tb, jsonService.Shutdown(context.Background()))
 		_ = grpcService.Close()
 	}
 }
@@ -655,21 +653,15 @@ func TestNodeService(t *testing.T) {
 		}},
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			called := false
-
-			cmd.SetCancel(func() { called = true })
-
-			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
 			res, err := c.Shutdown(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, true, called, "cmd.Shutdown() was called")
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
 		}},
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 			require.NoError(t, err)
 			require.EqualValues(t, res.Status.Code, code.Code_OK)
 		}},
@@ -677,7 +669,7 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
 			urls := []string{"test"}
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: urls})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
 			require.Nil(t, res)
 			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
@@ -1024,7 +1016,7 @@ func TestSmesherService(t *testing.T) {
 		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
-		nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
+		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
 		resAddr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
 		require.Equal(t, nodeAddr.String(), resAddr.String())
@@ -2039,7 +2031,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().ToBytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().Bytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2468,7 +2460,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.NodeID().Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
@@ -2635,7 +2627,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.TODO(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2783,7 +2775,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(context.TODO(), globalTx)
+	conState.AddToCache(context.Background(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -112,14 +113,6 @@ func (s *Syncer) needCert(logger log.Log, lid types.LayerID) (bool, error) {
 		return false, err
 	}
 	return errors.Is(err, sql.ErrNotFound), nil
-}
-
-func toList[T comparable](set map[T]struct{}) []T {
-	result := make([]T, 0, len(set))
-	for bid := range set {
-		result = append(result, bid)
-	}
-	return result
 }
 
 func (s *Syncer) fetchOpinions(ctx context.Context, logger log.Log, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
@@ -272,7 +265,7 @@ func (s *Syncer) ensureMeshAgreement(
 			}
 		}
 		if len(missing) > 0 {
-			toFetch := toList(missing)
+			toFetch := maps.Keys(missing)
 			logger.With().Info("fetching missing atxs from peer",
 				log.Array("missing_atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 					for _, id := range toFetch {

@@ -69,20 +69,21 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 }
 
 func (f *full) countForLateBlock(block *blockInfo) {
-	// ballots are always added to the state after blocks that are
-	// explicitly referenced in the ballot.
-	// therefore if block is added later - all previous ballots vote
-	// for it negatively.
-	//
-	// we could store all negative weight in a single variable and avoid
-	// this computation if there would be no height
 	start := time.Now()
 	for lid := block.layer.Add(1); !lid.After(f.counted); lid = lid.Add(1) {
 		for _, ballot := range f.ballots[lid] {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			block.margin = block.margin.Sub(ballot.weight)
+			for current := ballot.votes.tail; current != nil && !current.lid.Before(block.layer); current = current.prev {
+				if current.lid != block.layer {
+					continue
+				}
+				if current.vote == abstain {
+					continue
+				}
+				block.margin = block.margin.Sub(ballot.weight)
+			}
 		}
 	}
 	lateBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))

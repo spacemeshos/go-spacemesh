@@ -9,7 +9,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -26,13 +25,11 @@ func NewJSONHTTPServer(port int) *JSONHTTPServer {
 	return &JSONHTTPServer{port: port}
 }
 
-// Close stops the server.
-func (s *JSONHTTPServer) Close() error {
+// Shutdown stops the server.
+func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 	log.Debug("stopping new json-http service...")
 	server := s.getServer()
 	if server != nil {
-		ctx := cmd.Ctx()
-
 		if err := server.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown: %w", err)
 		}

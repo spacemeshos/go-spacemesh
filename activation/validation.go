@@ -7,13 +7,8 @@ import (
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/verifying"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
-
-type AtxProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-}
 
 type AtxNotFoundError struct {
 	Id types.ATXID
@@ -37,11 +32,11 @@ func (e *AtxNotFoundError) Is(target error) bool {
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
 	poetDb poetDbAPI
-	cfg    atypes.PostConfig
+	cfg    PostConfig
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg atypes.PostConfig) *Validator {
+func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 	return &Validator{poetDb, cfg}
 }
 
@@ -50,7 +45,7 @@ func NewValidator(poetDb poetDbAPI, cfg atypes.PostConfig) *Validator {
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+func (v *Validator) Validate(nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return 0, fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
@@ -67,11 +62,11 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
-	if !isIncluded(proof, nipost.Challenge.Bytes()) {
+	if !contains(proof, nipost.Challenge.Bytes()) {
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
 
-	if err := validatePost(commitment, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := validatePost(nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
 		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
@@ -80,11 +75,11 @@ func (v *Validator) Validate(commitment []byte, nipost *types.NIPost, expectedCh
 
 // ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (*Validator) ValidatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
-	return validatePost(commitment, PoST, PostMetadata, numUnits)
+func (*Validator) ValidatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	return validatePost(nodeId, commitmentAtxId, PoST, PostMetadata, numUnits)
 }
 
-func isIncluded(proof *types.PoetProof, member []byte) bool {
+func contains(proof *types.PoetProof, member []byte) bool {
 	for _, part := range proof.Members {
 		if bytes.Equal(part, member) {
 			return true
@@ -93,7 +88,7 @@ func isIncluded(proof *types.PoetProof, member []byte) bool {
 	return false
 }
 
-func validateNumUnits(cfg *atypes.PostConfig, numUnits uint32) error {
+func validateNumUnits(cfg *PostConfig, numUnits uint32) error {
 	if numUnits < cfg.MinNumUnits {
 		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
 	}
@@ -104,7 +99,7 @@ func validateNumUnits(cfg *atypes.PostConfig, numUnits uint32) error {
 	return nil
 }
 
-func validatePostMetadata(cfg *atypes.PostConfig, metadata *types.PostMetadata) error {
+func validatePostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
 	if metadata.BitsPerLabel < cfg.BitsPerLabel {
 		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", cfg.BitsPerLabel, metadata.BitsPerLabel)
 	}
@@ -123,17 +118,19 @@ func validatePostMetadata(cfg *atypes.PostConfig, metadata *types.PostMetadata) 
 	return nil
 }
 
-func validatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	p := (*proving.Proof)(PoST)
 
-	m := new(proving.ProofMetadata)
-	m.Commitment = commitment
-	m.NumUnits = numUnits
-	m.Challenge = PostMetadata.Challenge
-	m.BitsPerLabel = PostMetadata.BitsPerLabel
-	m.LabelsPerUnit = PostMetadata.LabelsPerUnit
-	m.K1 = PostMetadata.K1
-	m.K2 = PostMetadata.K2
+	m := &proving.ProofMetadata{
+		NodeId:          nodeId.Bytes(),
+		CommitmentAtxId: commitmentAtxId.Bytes(),
+		NumUnits:        numUnits,
+		Challenge:       PostMetadata.Challenge,
+		BitsPerLabel:    PostMetadata.BitsPerLabel,
+		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
+		K1:              PostMetadata.K1,
+		K2:              PostMetadata.K2,
+	}
 
 	if err := verifying.Verify(p, m); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
@@ -142,7 +139,7 @@ func validatePost(commitment []byte, PoST *types.Post, PostMetadata *types.PostM
 	return nil
 }
 
-func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, goldenATXID types.ATXID, expectedPostIndicies []byte) error {
+func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndicies []byte) error {
 	if challenge.Sequence != 0 {
 		return fmt.Errorf("no prevATX declared, but sequence number not zero")
 	}
@@ -176,7 +173,7 @@ func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxPr
 	return nil
 }
 
-func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs AtxProvider, nodeID types.NodeID) error {
+func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
 	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
 	if err != nil {
 		return &AtxNotFoundError{Id: challenge.PrevATXID, source: err}
@@ -211,7 +208,7 @@ func validateNonInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs At
 	return nil
 }
 
-func validatePositioningAtx(id *types.ATXID, atxs AtxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
+func validatePositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
 	if *id == *types.EmptyATXID {
 		return fmt.Errorf("empty positioning atx")
 	}
