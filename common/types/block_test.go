@@ -185,3 +185,11 @@ func FuzzInnerBlockConsistency(f *testing.F) {
 func FuzzInnerBlockSafety(f *testing.F) {
 	tester.FuzzSafety[InnerBlock](f)
 }
+
+func TestBlockEncoding(t *testing.T) {
+	t.Run("layer is first", func(t *testing.T) {
+		block := Block{}
+		lid := layerTester(t, &block)
+		require.Equal(t, block.LayerIndex, lid)
+	})
+}

@@ -57,6 +57,8 @@ type Ballot struct {
 // InnerBallot contains all info about a smesher's votes on the mesh history. this structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {
+	// the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
+	LayerIndex LayerID
 	// the smesher's ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
@@ -71,9 +73,6 @@ type InnerBallot struct {
 	// that cannot be changed mid-epoch.
 	RefBallot BallotID
 	EpochData *EpochData
-
-	// the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
-	LayerIndex LayerID
 }
 
 // Votes is for encoding local votes to send over the wire.

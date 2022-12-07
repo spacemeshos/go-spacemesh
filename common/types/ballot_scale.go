@@ -60,6 +60,13 @@ func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := t.LayerIndex.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteArray(enc, t.AtxID[:])
 		if err != nil {
 			return total, err
@@ -94,17 +101,17 @@ func (t *InnerBallot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	return total, nil
+}
+
+func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.LayerIndex.EncodeScale(enc)
+		n, err := t.LayerIndex.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
-	return total, nil
-}
-
-func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := scale.DecodeByteArray(dec, t.AtxID[:])
 		if err != nil {
@@ -141,13 +148,6 @@ func (t *InnerBallot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.EpochData = field
-	}
-	{
-		n, err := t.LayerIndex.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
 	}
 	return total, nil
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -73,4 +74,12 @@ func FuzzInnerProposalConsistency(f *testing.F) {
 
 func FuzzInnerProposalSafety(f *testing.F) {
 	tester.FuzzSafety[InnerProposal](f)
+}
+
+func TestProposalEncoding(t *testing.T) {
+	t.Run("layer is first", func(t *testing.T) {
+		proposal := Proposal{}
+		lid := layerTester(t, &proposal)
+		require.Equal(t, proposal.LayerIndex, lid)
+	})
 }
