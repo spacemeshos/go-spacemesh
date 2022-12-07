@@ -100,6 +100,21 @@ func Test_SerialProcessing(t *testing.T) {
 	tg.Start()
 	defer tg.Stop()
 
+	numLayers := 4
+	var wg sync.WaitGroup
+	wg.Add(numLayers)
+	for i := uint32(1); i <= uint32(numLayers); i++ {
+		lid := types.NewLayerID(i)
+		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, types.EmptyBlockID).Return(nil)
+		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, types.EmptyBlockID).Return(nil)
+		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, types.EmptyBlockID, false).Do(
+			func(_ context.Context, gotL types.LayerID, gotB types.BlockID, _ bool) error {
+				require.NoError(t, layers.SetApplied(tg.cdb, gotL, gotB))
+				wg.Done()
+				return nil
+			})
+	}
+
 	tg.hareCh <- hare.LayerOutput{
 		Ctx:   context.TODO(),
 		Layer: types.NewLayerID(3),
@@ -117,20 +132,6 @@ func Test_SerialProcessing(t *testing.T) {
 		Layer: types.NewLayerID(1),
 	}
 
-	numLayers := 4
-	var wg sync.WaitGroup
-	wg.Add(numLayers)
-	for i := uint32(1); i <= uint32(numLayers); i++ {
-		lid := types.NewLayerID(i)
-		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, types.EmptyBlockID).Return(nil)
-		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, types.EmptyBlockID).Return(nil)
-		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, types.EmptyBlockID, false).Do(
-			func(_ context.Context, gotL types.LayerID, gotB types.BlockID, _ bool) error {
-				require.NoError(t, layers.SetApplied(tg.cdb, gotL, gotB))
-				wg.Done()
-				return nil
-			})
-	}
 	wg.Wait()
 }
 
