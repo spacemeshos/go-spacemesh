@@ -205,7 +205,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 
 	cdb := newCachedDB(t)
 	cfg, opts := getTestConfig(t)
-	cfg.LabelsPerUnit = cfg.LabelsPerUnit * 12
+	opts.NumUnits *= 10
 
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
