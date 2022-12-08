@@ -149,7 +149,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 
 	for lid := t.evicted.Add(1); lid.Before(current); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
-			if ballot.weight.IsNil() {
+			if ballot.malicious {
 				continue
 			}
 			dis, err := t.firstDisagreement(ctx, current, ballot, disagreements)
@@ -721,7 +721,6 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 
 	var (
 		base    *ballotInfo
-		weight  util.Weight
 		refinfo *referenceInfo
 	)
 
@@ -770,19 +769,6 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		refinfo = ref.reference
 	}
 
-	if !ballot.IsMalicious() {
-		weight = refinfo.weight.Copy().Mul(
-			util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
-	} else {
-		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
-	}
-
-	t.logger.With().Debug("computed weight and height for ballot",
-		ballot.ID(),
-		log.Stringer("weight", weight),
-		log.Uint64("height", refinfo.height),
-		log.Uint32("lid", ballot.LayerIndex.Value),
-	)
 	binfo := &ballotInfo{
 		id: ballot.ID(),
 		base: baseInfo{
@@ -791,8 +777,23 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 		},
 		reference: refinfo,
 		layer:     ballot.LayerIndex,
-		weight:    weight,
 	}
+
+	if !ballot.IsMalicious() {
+		binfo.weight = refinfo.weight.Mul(
+			util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
+	} else {
+		binfo.malicious = true
+		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())
+	}
+
+	t.logger.With().Debug("computed weight and height for ballot",
+		ballot.ID(),
+		log.Stringer("weight", binfo.weight),
+		log.Uint64("height", refinfo.height),
+		log.Uint32("lid", ballot.LayerIndex.Value),
+	)
+
 	var err error
 	binfo.votes, err = t.decodeExceptions(binfo.layer, base, &binfo.conditions, ballot.Votes)
 	if err != nil {

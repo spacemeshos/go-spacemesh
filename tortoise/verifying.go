@@ -26,10 +26,10 @@ type verifying struct {
 // reset all weight that can vote on a voted layer.
 func (v *verifying) resetWeights(voted types.LayerID) {
 	vlayer := v.layer(voted)
-	v.totalGoodWeight = vlayer.verifying.goodUncounted.Copy()
+	v.totalGoodWeight = vlayer.verifying.goodUncounted
 	for lid := voted.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
-		layer.verifying.goodUncounted = vlayer.verifying.goodUncounted.Copy()
+		layer.verifying.goodUncounted = vlayer.verifying.goodUncounted
 	}
 }
 
@@ -76,13 +76,12 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		return false
 	}
 
-	margin := util.WeightFromUint64(0).
-		Add(v.totalGoodWeight).
+	margin := v.totalGoodWeight.
 		Sub(layer.verifying.goodUncounted)
 	uncounted := v.expectedWeight(v.Config, lid).
 		Sub(margin)
 	if uncounted.Sign() > 0 {
-		margin.Sub(uncounted)
+		margin = margin.Sub(uncounted)
 	}
 
 	threshold := v.globalThreshold(v.Config, lid)

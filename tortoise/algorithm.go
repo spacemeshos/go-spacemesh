@@ -277,7 +277,7 @@ func (t *Tortoise) StoreBallot(decoded *DecodedBallot) error {
 	defer t.mu.Unlock()
 	waitBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 	if decoded.IsMalicious() {
-		decoded.info.weight = weight{}
+		decoded.info.malicious = true
 	}
 	if err := t.trtl.storeBallot(decoded.info); err != nil {
 		errorsCounter.Inc()

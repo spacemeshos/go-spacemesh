@@ -34,7 +34,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	if f.shouldBeDelayed(logger, ballot) {
 		return
 	}
-	if ballot.weight.IsNil() {
+	if ballot.malicious {
 		return
 	}
 	logger.With().Debug("counted votes from ballot",

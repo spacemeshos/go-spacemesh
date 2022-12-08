@@ -217,6 +217,7 @@ type (
 		id         types.BallotID
 		layer      types.LayerID
 		base       baseInfo
+		malicious  bool
 		weight     weight
 		reference  *referenceInfo
 		votes      votes

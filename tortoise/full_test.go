@@ -165,7 +165,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 		{
 			desc:      "UnequalWeights",
-			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
+			activeset: []testAtx{{TickCount: 90}, {TickCount: 60}, {TickCount: 30}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -191,11 +191,11 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(140),
+			expect: util.WeightFromFloat64(150),
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
-			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
+			activeset: []testAtx{{TickCount: 90}, {TickCount: 60}, {TickCount: 30}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -218,7 +218,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(100),
+			expect: util.WeightFromFloat64(105),
 		},
 		{
 			desc:      "OneLayerSupport",
