@@ -40,14 +40,14 @@ func testTransactions(ctx context.Context, t *testing.T, tctx *testcontext.Conte
 	require.NoError(t, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
-	eg, ctx := errgroup.WithContext(ctx)
-	sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending)
+	eg, egCtx := errgroup.WithContext(ctx)
+	sendTransactions(egCtx, eg, tctx.Log, cl, first, stopSending)
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchTransactionResults(ctx, eg, client, func(rst *pb.TransactionResult) (bool, error) {
+		watchTransactionResults(egCtx, eg, client, func(rst *pb.TransactionResult) (bool, error) {
 			txs[i] = append(txs[i], rst.Tx)
 			count := len(txs[i])
 			tctx.Log.Debugw("received transaction client",

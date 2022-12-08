@@ -43,12 +43,12 @@ func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 
 	createdch := make(chan *pb.Proposal, cl.Total()*(int(layersCount)))
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	for i := 0; i < cl.Total(); i++ {
 		clientId := i
 		client := cl.Client(clientId)
 		tctx.Log.Debugw("watching", "client", client.Name, "clientId", clientId)
-		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(egCtx, eg, client, func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
@@ -69,7 +69,7 @@ func testPoetDies(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 		})
 	}
 
-	watchLayers(ctx, eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
+	watchLayers(egCtx, eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
 		// Will kill a poet from time to time
 		if layer.Layer.Number.Number > last {
 			tctx.Log.Debug("Poet killer is done")

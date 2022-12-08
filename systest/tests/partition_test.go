@@ -27,10 +27,10 @@ func testPartition(t *testing.T, ctx context.Context, tctx *testcontext.Context,
 	)
 
 	tctx.Log.Debug("scheduling chaos...")
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := pct*cl.Total()/100 + 1
-	scheduleChaos(ctx, eg, cl.Client(0), startSplit, rejoin, func(ctx context.Context) (chaos.Teardown, error) {
+	scheduleChaos(egCtx, eg, cl.Client(0), startSplit, rejoin, func(ctx context.Context) (chaos.Teardown, error) {
 		var (
 			left  []string
 			right = []string{cl.Client(0).Name}

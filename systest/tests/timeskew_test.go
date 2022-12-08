@@ -35,9 +35,9 @@ func TestShortTimeskew(t *testing.T) {
 	)
 
 	failed := int(0.2 * float64(tctx.ClusterSize))
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	client := cl.Client(0)
-	scheduleChaos(ctx, eg, client, enableSkew, stopSkew, func(ctx context.Context) (chaos.Teardown, error) {
+	scheduleChaos(egCtx, eg, client, enableSkew, stopSkew, func(ctx context.Context) (chaos.Teardown, error) {
 		names := []string{}
 		for i := 1; i <= failed; i++ {
 			names = append(names, cl.Client(cl.Total()-i).Name)

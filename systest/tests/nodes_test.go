@@ -127,8 +127,8 @@ func TestFailedNodes(t *testing.T) {
 
 	failed := int(0.6 * float64(tctx.ClusterSize))
 
-	eg, ctx := errgroup.WithContext(ctx)
-	scheduleChaos(ctx, eg, cl.Client(0), failAt, lastLayer, func(ctx context.Context) (chaos.Teardown, error) {
+	eg, egCtx := errgroup.WithContext(ctx)
+	scheduleChaos(egCtx, eg, cl.Client(0), failAt, lastLayer, func(ctx context.Context) (chaos.Teardown, error) {
 		names := []string{}
 		for i := 1; i <= failed; i++ {
 			names = append(names, cl.Client(cl.Total()-i).Name)

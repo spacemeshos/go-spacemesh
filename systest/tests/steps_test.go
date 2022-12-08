@@ -82,9 +82,9 @@ func TestStepShortDisconnect(t *testing.T) {
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := int(0.9*float64(cl.Total())) + 1
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	client := cl.Client(0)
-	scheduleChaos(ctx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
+	scheduleChaos(egCtx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
 		var (
 			left  []string
 			right = []string{cl.Client(0).Name}

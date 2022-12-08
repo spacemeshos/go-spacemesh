@@ -49,12 +49,12 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 		includedAll[i] = map[uint32][]*pb.Proposal{}
 	}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
-		watchProposals(ctx, eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(egCtx, eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
