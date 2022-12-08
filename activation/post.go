@@ -178,18 +178,17 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		opts.ComputeProviderID = int(p.ID)
 	}
 
-	m, err := initialization.LoadMetadata(opts.DataDir)
-	switch {
-	case err == nil:
-		commitmentAtx = m.CommitmentAtxId
-	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): commitmentAtx should be fetched by the PostSetupManager instead of passed in as argument.
-	default:
-		mgr.mu.Unlock()
-		return fmt.Errorf("load metadata: %w", err)
-	}
+	var err error
+	mgr.commitmentAtxId, err = mgr.getCommitmentAtx(opts.DataDir)
 
-	mgr.commitmentAtxId = types.ATXID(types.BytesToHash(commitmentAtx))
+	switch {
+	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
+		// TODO(mafa): remove this once we have a better way to handle this.
+		mgr.commitmentAtxId = types.ATXID(types.BytesToHash(commitmentAtx))
+	case err != nil:
+		mgr.mu.Unlock()
+		return err
+	}
 
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
@@ -248,6 +247,19 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.mu.Unlock()
 
 	return nil
+}
+
+func (mgr *PostSetupManager) getCommitmentAtx(dataDir string) (types.ATXID, error) {
+	m, err := initialization.LoadMetadata(dataDir)
+	switch {
+	case err == nil:
+		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
+	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
+		// TODO(mafa): commitmentAtx should be fetched by the PostSetupManager instead of passed in as argument.
+		return *types.EmptyATXID, initialization.ErrStateMetadataFileMissing
+	default:
+		return *types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
+	}
 }
 
 // Reset deletes the data file(s).
