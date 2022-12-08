@@ -51,6 +51,7 @@ type PostSetupState int32
 const (
 	PostSetupStateNotStarted PostSetupState = 1 + iota
 	PostSetupStateInProgress
+	PostSetupStateStopped
 	PostSetupStateComplete
 	PostSetupStateError
 )
@@ -67,21 +68,17 @@ func DefaultPostSetupOpts() PostSetupOpts {
 
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
-	mu sync.Mutex
+	id types.NodeID
 
-	id          types.NodeID
 	cfg         PostConfig
 	logger      log.Log
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	state PostSetupState
-
-	// init is the current initializer instance. It is being
-	// replaced at the beginning of every data creation session.
-	init *initialization.Initializer
-
-	lastOpts *PostSetupOpts
+	mu       sync.Mutex                  // mu protects setting the values below.
+	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
+	state    PostSetupState              // state is the current state of the Post setup.
+	init     *initialization.Initializer // init is the current initializer instance.
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
@@ -120,7 +117,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 }
 
 // ComputeProviders returns a list of available compute providers for Post setup.
-func (mgr *PostSetupManager) ComputeProviders() []PostSetupComputeProvider {
+func (*PostSetupManager) ComputeProviders() []PostSetupComputeProvider {
 	providers := initialization.Providers()
 
 	providersAlias := make([]PostSetupComputeProvider, len(providers))
@@ -161,23 +158,15 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
+//
+// TODO(mafa): commitmentAtx should be read from the filesystem if available and otherwise be fetched by the PostSetupManager
+// instead of passed in as argument.
 func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
 	mgr.mu.Lock()
 
-	switch mgr.state {
-	case PostSetupStateInProgress:
+	if mgr.state == PostSetupStateInProgress {
 		mgr.mu.Unlock()
 		return fmt.Errorf("post setup session in progress")
-
-	case PostSetupStateComplete:
-		// Check whether the new request invalidates the current status.
-		lastOpts := mgr.lastOpts
-		invalidate := opts.DataDir != lastOpts.DataDir || opts.NumUnits != lastOpts.NumUnits || opts.NumFiles != lastOpts.NumFiles
-		if !invalidate {
-			// Already complete.
-			mgr.mu.Unlock()
-			return nil
-		}
 	}
 
 	if opts.ComputeProviderID == config.BestProviderID {
@@ -207,9 +196,11 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	mgr.state = PostSetupStateInProgress
 	mgr.init = newInit
 	mgr.lastOpts = &opts
-
 	mgr.mu.Unlock()
+
 	mgr.logger.With().Info("post setup session starting",
+		log.String("node_id", mgr.id.String()),
+		log.String("commitment_atx", commitmentAtx.String()),
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
@@ -224,16 +215,18 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		switch {
 		case errors.Is(err, context.Canceled):
 			mgr.logger.Info("post setup session was stopped")
-			mgr.state = PostSetupStateNotStarted
-			return err
+			mgr.state = PostSetupStateStopped
 		default:
+			mgr.logger.With().Error("post setup session failed", log.Err(err))
 			mgr.state = PostSetupStateError
 		}
 		return err
 	}
 
 	mgr.logger.With().Info("post setup completed",
-		log.String("datadir", opts.DataDir),
+		log.String("node_id", mgr.id.String()),
+		log.String("commitment_atx", commitmentAtx.String()),
+		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
 		log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
@@ -257,11 +250,13 @@ func (mgr *PostSetupManager) Reset() error {
 
 	// Reset internal state.
 	mgr.state = PostSetupStateNotStarted
-
 	return nil
 }
 
 // GenerateProof generates a new Post.
+//
+// TODO(mafa): generating a proof should not require commitmentAtx as a parameter.
+// rather read it from the metadata of the initialized data file.
 func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
