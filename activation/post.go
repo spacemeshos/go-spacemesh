@@ -2,7 +2,6 @@ package activation
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -194,7 +193,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
-		initialization.WithCommitmentAtxId(commitmentAtx),
+		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
 		initialization.WithLogger(mgr.logger),
@@ -212,7 +211,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", hex.EncodeToString(commitmentAtx)),
+		log.String("commitment_atx", mgr.commitmentAtxId.String()),
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
@@ -237,7 +236,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	mgr.logger.With().Info("post setup completed",
 		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", hex.EncodeToString(commitmentAtx)),
+		log.String("commitment_atx", mgr.commitmentAtxId.String()),
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
