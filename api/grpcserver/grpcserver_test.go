@@ -135,7 +135,7 @@ func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	if err := activation.SignAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
@@ -147,7 +147,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
 	if err := activation.SignAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)

@@ -702,8 +702,11 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	}
 
 	var initialPost *types.Post
+	var nonce *types.VRFPostIndex
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		initialPost = b.initialPost
+		// TODO(mafa): find a way to add the nonce to ATX
+		// nonce = b.postSetupProvider.Nonce()
 	}
 
 	atx := types.NewActivationTx(
@@ -712,6 +715,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,
 		initialPost,
+		nonce,
 	)
 	return atx, nil
 }

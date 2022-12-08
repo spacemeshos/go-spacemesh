@@ -177,7 +177,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 }
 
 func newAtx(t testing.TB, challenge types.NIPostChallenge, sig signer, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil, nil)
 	require.NoError(t, SignAtx(sig, atx))
 	require.NoError(t, atx.CalcAndSetID())
 	require.NoError(t, atx.CalcAndSetNodeID())
@@ -1077,9 +1077,10 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	nipostBuilder := NewMocknipostBuilder(ctrl)
-	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, *types.PoetChallenge, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
-		return nil, 0, fmt.Errorf("NIPost builder error")
-	})
+	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *types.PoetChallenge, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
+			return nil, 0, fmt.Errorf("NIPost builder error")
+		})
 
 	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
