@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -103,7 +103,7 @@ func (nb *NIPostBuilder) updatePoETProvers(poetProvers []PoetProvingServiceClien
 // BuildNIPost uses the given challenge to build a NIPost.
 // The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
+func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
 	challengeHash, err := challenge.Hash()
 	if err != nil {
 		return nil, 0, err
@@ -134,7 +134,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 				nb.log.With().Info(
 					"poet returned invalid challenge hash",
 					log.Binary("hash", req.PoetRound.ChallengeHash),
-					log.String("poet_id", util.Bytes2Hex(req.PoetServiceID)),
+					log.String("poet_id", hex.EncodeToString(req.PoetServiceID)),
 				)
 			} else {
 				validPoetRequests = append(validPoetRequests, req)
@@ -171,7 +171,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetC
 		nb.log.With().Info("starting post execution",
 			log.Binary("challenge", nb.state.PoetProofRef))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef, commitmentAtx)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute Post: %v", err)
 		}
@@ -202,18 +202,18 @@ func submitPoetChallenge(ctx context.Context, logger log.Log, poet PoetProvingSe
 	}
 
 	logger.With().Debug("submitting challenge to poet proving service",
-		log.String("poet_id", util.Bytes2Hex(poetServiceID)))
+		log.String("poet_id", hex.EncodeToString(poetServiceID)))
 
 	round, err := poet.Submit(ctx, challenge, signature)
 	if err != nil {
 		logger.With().Error("failed to submit challenge to poet proving service",
-			log.String("poet_id", util.Bytes2Hex(poetServiceID)),
+			log.String("poet_id", hex.EncodeToString(poetServiceID)),
 			log.Err(err))
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
 
 	logger.With().Info("challenge submitted to poet proving service",
-		log.String("poet_id", util.Bytes2Hex(poetServiceID)),
+		log.String("poet_id", hex.EncodeToString(poetServiceID)),
 		log.String("round_id", round.ID))
 
 	return &types.PoetRequest{

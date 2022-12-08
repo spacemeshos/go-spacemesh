@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -68,7 +69,8 @@ func DefaultPostSetupOpts() PostSetupOpts {
 
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
-	id types.NodeID
+	id              types.NodeID
+	commitmentAtxId types.ATXID
 
 	cfg         PostConfig
 	logger      log.Log
@@ -158,10 +160,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
-//
-// TODO(mafa): commitmentAtx should be read from the filesystem if available and otherwise be fetched by the PostSetupManager
-// instead of passed in as argument.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx []byte) error {
 	mgr.mu.Lock()
 
 	if mgr.state == PostSetupStateInProgress {
@@ -180,9 +179,22 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 		opts.ComputeProviderID = int(p.ID)
 	}
 
+	m, err := initialization.LoadMetadata(opts.DataDir)
+	switch {
+	case err == nil:
+		commitmentAtx = m.CommitmentAtxId
+	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
+		// TODO(mafa): commitmentAtx should be fetched by the PostSetupManager instead of passed in as argument.
+	default:
+		mgr.mu.Unlock()
+		return fmt.Errorf("load metadata: %w", err)
+	}
+
+	mgr.commitmentAtxId = types.ATXID(types.BytesToHash(commitmentAtx))
+
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
-		initialization.WithCommitmentAtxId(commitmentAtx.Bytes()),
+		initialization.WithCommitmentAtxId(commitmentAtx),
 		initialization.WithConfig(config.Config(mgr.cfg)),
 		initialization.WithInitOpts(config.InitOpts(opts)),
 		initialization.WithLogger(mgr.logger),
@@ -200,7 +212,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	mgr.logger.With().Info("post setup session starting",
 		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", commitmentAtx.String()),
+		log.String("commitment_atx", hex.EncodeToString(commitmentAtx)),
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
@@ -225,7 +237,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	mgr.logger.With().Info("post setup completed",
 		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", commitmentAtx.String()),
+		log.String("commitment_atx", hex.EncodeToString(commitmentAtx)),
 		log.String("data_dir", opts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
@@ -257,7 +269,7 @@ func (mgr *PostSetupManager) Reset() error {
 //
 // TODO(mafa): generating a proof should not require commitmentAtx as a parameter.
 // rather read it from the metadata of the initialized data file.
-func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
+func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
 	if mgr.state != PostSetupStateComplete {
@@ -266,7 +278,7 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte, commitmentAtx types
 	}
 	mgr.mu.Unlock()
 
-	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.Bytes(), commitmentAtx.Bytes())
+	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id.Bytes(), mgr.commitmentAtxId.Bytes())
 	if err != nil {
 		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}

@@ -119,17 +119,17 @@ type NIPostBuilderMock struct {
 	SleepTime int
 
 	mu              sync.Mutex
-	buildNIPostFunc func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error)
+	buildNIPostFunc func(challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error)
 }
 
 func (np *NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, _ time.Time) (*types.NIPost, time.Duration, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, time.Duration, error) {
 	np.mu.Lock()
 	defer np.mu.Unlock()
 
 	if np.buildNIPostFunc != nil {
-		return np.buildNIPostFunc(challenge, commitmentAtx)
+		return np.buildNIPostFunc(challenge)
 	}
 	hash, err := challenge.Hash()
 	if err != nil {
@@ -286,7 +286,7 @@ func publishAtx(t *testing.T, b *Builder, clockEpoch types.EpochID, buildNIPostL
 	net.lastTransmission = nil
 
 	nipostBuilderMock.mu.Lock()
-	nipostBuilderMock.buildNIPostFunc = func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
+	nipostBuilderMock.buildNIPostFunc = func(challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
 		builtNIPost = true
 		layerClockMock.mu.Lock()
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
@@ -517,7 +517,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 
 	postSetupMock := NewMockpostSetupProvider(ctrl)
 	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	postSetupMock.EXPECT().GenerateProof(gomock.Any(), gomock.Any()).Return(nil, nil, nil)
+	postSetupMock.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil)
 	postSetupMock.EXPECT().Reset().Return(errors.New("couldn't delete files"))
 
 	net.atxHdlr = atxHdlr
@@ -873,8 +873,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		return &postSetupOpts
 	}).AnyTimes()
 
-	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ types.ATXID, _ time.Time) (*types.NIPost, int, error) {
+	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, int, error) {
 			hash, err := challenge.Hash()
 			r.NoError(err)
 			currentLayer = currentLayer.Add(5)
@@ -985,8 +985,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		return &postSetupOpts
 	}).AnyTimes()
 
-	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ types.ATXID, _ time.Time) (*types.NIPost, int, error) {
+	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, int, error) {
 			hash, err := challenge.Hash()
 			r.NoError(err)
 			currentLayer = currentLayer.Add(layersPerEpoch)
@@ -1077,8 +1077,8 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	nipostBuilder := NewMocknipostBuilder(ctrl)
-	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(context.Context, *types.PoetChallenge, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
+	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *types.PoetChallenge, time.Time) (*types.NIPost, time.Duration, error) {
 			return nil, 0, fmt.Errorf("NIPost builder error")
 		})
 
@@ -1320,7 +1320,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
 	nipostBuilder.mu.Lock()
-	nipostBuilder.buildNIPostFunc = func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
+	nipostBuilder.buildNIPostFunc = func(challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
 		tries++
 		if tries == expectedTries {
 			close(builderConfirmation)

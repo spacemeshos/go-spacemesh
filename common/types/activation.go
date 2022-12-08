@@ -470,7 +470,7 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddUint32("Nonce", p.Nonce)
-	encoder.AddString("Indicies", util.Bytes2Hex(p.Indices))
+	encoder.AddString("Indicies", hex.EncodeToString(p.Indices))
 	return nil
 }
 
@@ -502,7 +502,7 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if m == nil {
 		return nil
 	}
-	encoder.AddString("Challenge", util.Bytes2Hex(m.Challenge))
+	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
 	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
 	encoder.AddUint32("K1", m.K1)

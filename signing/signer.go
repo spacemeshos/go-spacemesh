@@ -2,12 +2,12 @@ package signing
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 
 	"github.com/spacemeshos/ed25519"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -47,7 +47,7 @@ func (p *PublicKey) Bytes() []byte {
 
 // String returns the public key as a hex representation string.
 func (p *PublicKey) String() string {
-	return util.Bytes2Hex(p.Bytes())
+	return hex.EncodeToString(p.Bytes())
 }
 
 // ShortString returns a representative sub string.

@@ -2,12 +2,12 @@ package types
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -205,7 +205,7 @@ type VotingEligibilityProof struct {
 // MarshalLogObject implements logging interface.
 func (v *VotingEligibilityProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("j", v.J)
-	encoder.AddString("sig", util.Bytes2Hex(v.Sig))
+	encoder.AddString("sig", hex.EncodeToString(v.Sig))
 	return nil
 }
 

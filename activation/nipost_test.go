@@ -63,7 +63,7 @@ func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error)
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+func (p *postSetupProviderMock) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx []byte) error {
 	return nil
 }
 
@@ -71,7 +71,7 @@ func (p *postSetupProviderMock) Reset() error {
 	return nil
 }
 
-func (p *postSetupProviderMock) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
+func (p *postSetupProviderMock) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	p.called++
 	if p.setError {
 		return nil, nil, fmt.Errorf("error")
@@ -133,7 +133,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 
 	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	assert.NoError(err)
 	assert.NotNil(nipost)
 }
@@ -153,10 +153,10 @@ func TestPostSetup(t *testing.T) {
 	nb := NewNIPostBuilder(minerID, postSetupProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
 
-	r.NoError(postSetupProvider.StartSession(context.Background(), postSetupOpts, goldenATXID))
+	r.NoError(postSetupProvider.StartSession(context.Background(), postSetupOpts, goldenATXID.Bytes()))
 	t.Cleanup(func() { assert.NoError(t, postSetupProvider.Reset()) })
 
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	r.NoError(err)
 	r.NotNil(nipost)
 }
@@ -197,12 +197,12 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	r.NotNil(postProvider)
 	tb.Cleanup(func() { assert.NoError(tb, postProvider.Reset()) })
 
-	r.NoError(postProvider.StartSession(context.Background(), postSetupOpts, goldenATXID))
+	r.NoError(postProvider.StartSession(context.Background(), postSetupOpts, goldenATXID.Bytes()))
 
 	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(tb), signing.NewEdSigner())
 
-	nipost, _, err := nb.BuildNIPost(context.Background(), &nipostChallenge, goldenATXID, time.Time{})
+	nipost, _, err := nb.BuildNIPost(context.Background(), &nipostChallenge, time.Time{})
 	r.NoError(err)
 	return nipost
 }
@@ -266,13 +266,13 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	nb := NewNIPostBuilder(minerIDNotInitialized, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
 
-	nipost, _, err := nb.BuildNIPost(context.Background(), &nipostChallenge, goldenATXID, time.Time{})
+	nipost, _, err := nb.BuildNIPost(context.Background(), &nipostChallenge, time.Time{})
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
-	r.NoError(postProvider.StartSession(context.Background(), postSetupOpts, goldenATXID))
+	r.NoError(postProvider.StartSession(context.Background(), postSetupOpts, goldenATXID.Bytes()))
 
-	nipost, _, err = nb.BuildNIPost(context.Background(), &nipostChallenge, goldenATXID, time.Time{})
+	nipost, _, err = nb.BuildNIPost(context.Background(), &nipostChallenge, time.Time{})
 	r.NoError(err)
 	r.NotNil(nipost)
 
@@ -306,7 +306,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
 
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	assert.NoError(err)
 	assert.NotNil(nipost)
 	db := sql.InMemory()
@@ -318,13 +318,13 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	poetDb.EXPECT().GetMembershipMap(gomock.Any()).AnyTimes().Return(map[types.Hash32]bool{}, nil)
 
 	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t), signing.NewEdSigner())
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	assert.Nil(nipost)
 	assert.Error(err)
 
 	// check that proof ref is not called again
 	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t), signing.NewEdSigner())
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	assert.Nil(nipost)
 	assert.Error(err)
 
@@ -337,7 +337,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb = NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, db, logtest.New(t), signing.NewEdSigner())
 	postProvider.setError = true
 	// check that proof ref is not called again
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	assert.Nil(nipost)
 	assert.Error(err)
 
@@ -354,13 +354,13 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	// poetDb.errOn = false
 	postProvider.setError = false
 	// check that proof ref is not called again
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 	assert.NotNil(nipost)
 	assert.NoError(err)
 
 	assert.Equal(3, postProvider.called)
 	// test state not loading if other challenge provided
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2, goldenATXID, time.Time{})
+	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2, time.Time{})
 	assert.NoError(err)
 	assert.NotNil(nipost)
 	assert.Equal(4, postProvider.called)
@@ -397,7 +397,7 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	require.NoError(err)
 
 	go func() error {
-		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, deadline)
+		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, deadline)
 		assert.NoError(t, err)
 		resultChan <- nipost
 		return nil
@@ -444,7 +444,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	deadline := time.Now().Add(time.Millisecond * 10)
 
 	go func() error {
-		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, deadline)
+		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, deadline)
 		assert.NoError(err)
 		resultChan <- nipost
 		return nil
@@ -557,7 +557,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	ctx, close := context.WithCancel(context.Background())
 	close()
-	nipost, _, err := nb.BuildNIPost(ctx, &challenge, goldenATXID, time.Time{})
+	nipost, _, err := nb.BuildNIPost(ctx, &challenge, time.Time{})
 	r.ErrorIs(err, context.Canceled)
 	r.Nil(nipost)
 }
@@ -576,21 +576,21 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 
 	t.Run("PoetServiceID", func(t *testing.T) {
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return(nil, errors.New("test"))
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
 	t.Run("Submit", func(t *testing.T) {
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
 		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("test"))
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
 	t.Run("Submit returns invalid hash", func(t *testing.T) {
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
 		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -601,7 +601,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		require.NoError(t, err)
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
 		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{ChallengeHash: hash.Bytes()}, nil)
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, goldenATXID, time.Time{})
+		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})

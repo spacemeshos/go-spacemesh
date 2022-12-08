@@ -4,6 +4,7 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -16,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -197,7 +197,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
-		if err := b.postSetupProvider.StartSession(ctx, opts, *commitmentAtx); err != nil {
+		if err := b.postSetupProvider.StartSession(ctx, opts, commitmentAtx.Bytes()); err != nil {
 			return err
 		}
 
@@ -292,17 +292,12 @@ func (b *Builder) generateProof(ctx context.Context) error {
 		b.log.Info("challenge not loaded: %s", err)
 	}
 
-	commitmentAtx, err := b.getCommitmentAtx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get commitment atx: %w", err)
-	}
-
 	// don't generate the commitment every time smeshing is starting, but once only.
 	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
-		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *commitmentAtx)
+		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
@@ -481,7 +476,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		if err != nil {
 			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
 		}
-		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
+		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid)))
 		clients = append(clients, client)
 	}
 
@@ -656,11 +651,6 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		log.Time("deadline time", poetProofDeadline),
 	)
 
-	commitmentAtx, err := b.getCommitmentAtx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
-	}
-
 	challenge := types.PoetChallenge{
 		NIPostChallenge: b.challenge,
 		NumUnits:        b.postSetupProvider.LastOpts().NumUnits,
@@ -669,7 +659,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		challenge.InitialPost = b.initialPost
 		challenge.InitialPostMetadata = b.initialPostMeta
 	}
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &challenge, *commitmentAtx, poetProofDeadline)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &challenge, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
