@@ -608,3 +608,18 @@ func (mr *MockpostSetupProviderMockRecorder) Status() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
 }
+
+// VRFNonce mocks base method.
+func (m *MockpostSetupProvider) VRFNonce() (*types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRFNonce")
+	ret0, _ := ret[0].(*types.VRFPostIndex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VRFNonce indicates an expected call of VRFNonce.
+func (mr *MockpostSetupProviderMockRecorder) VRFNonce() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MockpostSetupProvider)(nil).VRFNonce))
+}

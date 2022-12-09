@@ -25,18 +25,20 @@ import (
 )
 
 var (
-	minerID       = types.NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	postCfg       PostConfig
-	postSetupOpts PostSetupOpts
+	minerID = types.NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
+	postCfg PostConfig
 )
 
 func init() {
 	postCfg = DefaultPostConfig()
+}
 
-	postSetupOpts = DefaultPostSetupOpts()
-	postSetupOpts.DataDir, _ = os.MkdirTemp("", "post-test")
+func getPostSetupOpts(tb testing.TB) PostSetupOpts {
+	postSetupOpts := DefaultPostSetupOpts()
+	postSetupOpts.DataDir = tb.TempDir()
 	postSetupOpts.NumUnits = postCfg.MinNumUnits
 	postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
+	return postSetupOpts
 }
 
 type postSetupProviderMock struct {
@@ -81,11 +83,19 @@ func (p *postSetupProviderMock) GenerateProof(challenge []byte) (*types.Post, *t
 	}, nil
 }
 
+func (p *postSetupProviderMock) VRFNonce() (*types.VRFPostIndex, error) {
+	return nil, nil
+}
+
 func (p *postSetupProviderMock) LastError() error {
 	return nil
 }
 
 func (p *postSetupProviderMock) LastOpts() *PostSetupOpts {
+	postSetupOpts := DefaultPostSetupOpts()
+	postSetupOpts.DataDir, _ = os.MkdirTemp("", "post-test")
+	postSetupOpts.NumUnits = postCfg.MinNumUnits
+	postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
 	return &postSetupOpts
 }
 
@@ -153,7 +163,7 @@ func TestPostSetup(t *testing.T) {
 	nb := NewNIPostBuilder(minerID, postSetupProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
 
-	r.NoError(postSetupProvider.StartSession(context.Background(), postSetupOpts, goldenATXID.Bytes()))
+	r.NoError(postSetupProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID.Bytes()))
 	t.Cleanup(func() { assert.NoError(t, postSetupProvider.Reset()) })
 
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
@@ -174,7 +184,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challengeHash, err := challenge.Hash()
 	r.NoError(err)
 	nipost := buildNIPost(t, r, postCfg, challenge, poetDb)
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, postCfg, getPostSetupOpts(t).NumUnits)
 	r.NoError(err)
 }
 
@@ -195,9 +205,8 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	postProvider, err := NewPostSetupManager(minerID, postCfg, logtest.New(tb), cdb, goldenATXID)
 	r.NoError(err)
 	r.NotNil(postProvider)
-	tb.Cleanup(func() { assert.NoError(tb, postProvider.Reset()) })
 
-	r.NoError(postProvider.StartSession(context.Background(), postSetupOpts, goldenATXID.Bytes()))
+	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(tb), goldenATXID.Bytes()))
 
 	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(tb), signing.NewEdSigner())
@@ -242,7 +251,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	postProvider, err := NewPostSetupManager(minerIDNotInitialized, postCfg, logtest.New(t), cdb, goldenATXID)
 	r.NoError(err)
 	r.NotNil(postProvider)
-	t.Cleanup(func() { assert.NoError(t, postProvider.Reset()) })
 
 	gtw := util.NewMockGrpcServer(t)
 	pb.RegisterGatewayServiceServer(gtw.Server, &gatewayService{})
@@ -270,13 +278,13 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
-	r.NoError(postProvider.StartSession(context.Background(), postSetupOpts, goldenATXID.Bytes()))
+	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID.Bytes()))
 
 	nipost, _, err = nb.BuildNIPost(context.Background(), &nipostChallenge, time.Time{})
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	r.NoError(validateNIPost(minerIDNotInitialized, goldenATXID, nipost, *challengeHash, poetDb, postCfg, postSetupOpts.NumUnits))
+	r.NoError(validateNIPost(minerIDNotInitialized, goldenATXID, nipost, *challengeHash, poetDb, postCfg, getPostSetupOpts(t).NumUnits))
 }
 
 func TestNIPostBuilder_BuildNIPost(t *testing.T) {
@@ -495,46 +503,47 @@ func TestValidator_Validate(t *testing.T) {
 	poetDb := defaultPoetDbMockForChallenge(t, challenge)
 
 	nipost := buildNIPost(t, r, postCfg, challenge, poetDb)
+	numUnits := getPostSetupOpts(t).NumUnits
 
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, postCfg, numUnits)
 	r.NoError(err)
 
-	err = validateNIPost(minerID, goldenATXID, nipost, types.BytesToHash([]byte("lerner")), poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, types.BytesToHash([]byte("lerner")), poetDb, postCfg, numUnits)
 	r.Contains(err.Error(), "invalid `Challenge`")
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	err = validateNIPost(minerID, goldenATXID, &newNIPost, *challengeHash, poetDb, postCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, &newNIPost, *challengeHash, poetDb, postCfg, numUnits)
 	r.Contains(err.Error(), "invalid Post")
 
 	newPostCfg := postCfg
-	newPostCfg.MinNumUnits = postSetupOpts.NumUnits + 1
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, postSetupOpts.NumUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postSetupOpts.NumUnits))
+	newPostCfg.MinNumUnits = numUnits + 1
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, numUnits))
 
 	newPostCfg = postCfg
-	newPostCfg.MaxNumUnits = postSetupOpts.NumUnits - 1
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, postSetupOpts.NumUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postSetupOpts.NumUnits))
+	newPostCfg.MaxNumUnits = numUnits - 1
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, numUnits)
+	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, numUnits))
 
 	newPostCfg = postCfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, numUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 
 	newPostCfg = postCfg
 	newPostCfg.BitsPerLabel = nipost.PostMetadata.BitsPerLabel + 1
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, numUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `BitsPerLabel`; expected: >=%d, given: %d", newPostCfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel))
 
 	newPostCfg = postCfg
 	newPostCfg.K1 = nipost.PostMetadata.K2 - 1
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, numUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K1`; expected: <=%d, given: %d", newPostCfg.K1, nipost.PostMetadata.K1))
 
 	newPostCfg = postCfg
 	newPostCfg.K2 = nipost.PostMetadata.K2 + 1
-	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, postSetupOpts.NumUnits)
+	err = validateNIPost(minerID, goldenATXID, nipost, *challengeHash, poetDb, newPostCfg, numUnits)
 	r.EqualError(err, fmt.Sprintf("invalid `K2`; expected: >=%d, given: %d", newPostCfg.K2, nipost.PostMetadata.K2))
 }
 

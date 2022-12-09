@@ -277,9 +277,6 @@ func (mgr *PostSetupManager) Reset() error {
 }
 
 // GenerateProof generates a new Post.
-//
-// TODO(mafa): generating a proof should not require commitmentAtx as a parameter.
-// rather read it from the metadata of the initialized data file.
 func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
@@ -312,15 +309,16 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 }
 
 // GetPowNonce returns the PoW nonce found during initialization.
-func (mgr *PostSetupManager) GetPowNonce() (uint64, error) {
+func (mgr *PostSetupManager) VRFNonce() (*types.VRFPostIndex, error) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
 	if mgr.state != PostSetupStateComplete {
-		return 0, errNotComplete
+		return nil, errNotComplete
 	}
 
-	return *mgr.init.Nonce(), nil
+	nonce := types.VRFPostIndex(*mgr.init.Nonce())
+	return &nonce, nil
 }
 
 // LastOpts returns the Post setup last session options.

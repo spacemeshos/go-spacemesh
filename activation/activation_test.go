@@ -866,7 +866,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	}).Times(1)
 
 	postSetupProviderMock.EXPECT().LastOpts().DoAndReturn(func() *PostSetupOpts {
-		postSetupOpts = DefaultPostSetupOpts()
+		postSetupOpts := DefaultPostSetupOpts()
 		postSetupOpts.DataDir = t.TempDir()
 		postSetupOpts.NumUnits = postCfg.MinNumUnits
 		postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
@@ -978,12 +978,14 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	}).Times(1)
 
 	postSetupProviderMock.EXPECT().LastOpts().DoAndReturn(func() *PostSetupOpts {
-		postSetupOpts = DefaultPostSetupOpts()
+		postSetupOpts := DefaultPostSetupOpts()
 		postSetupOpts.DataDir = t.TempDir()
 		postSetupOpts.NumUnits = postCfg.MinNumUnits
 		postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
 		return &postSetupOpts
 	}).AnyTimes()
+
+	postSetupProviderMock.EXPECT().VRFNonce().Times(1)
 
 	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, int, error) {

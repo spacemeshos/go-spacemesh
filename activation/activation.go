@@ -695,8 +695,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	var nonce *types.VRFPostIndex
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		initialPost = b.initialPost
-		// TODO(mafa): find a way to add the nonce to ATX
-		// nonce = b.postSetupProvider.Nonce()
+		nonce, err = b.postSetupProvider.VRFNonce()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build atx: %w", err)
+		}
 	}
 
 	atx := types.NewActivationTx(

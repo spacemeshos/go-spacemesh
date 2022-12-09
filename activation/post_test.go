@@ -132,7 +132,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 }
 
-func TestPostSetupManager_GetPow(t *testing.T) {
+func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req := require.New(t)
 
 	cdb := newCachedDB(t)
@@ -141,14 +141,14 @@ func TestPostSetupManager_GetPow(t *testing.T) {
 	req.NoError(err)
 
 	// Attempt to get nonce.
-	_, err = mgr.GetPowNonce()
-	req.EqualError(err, errNotComplete.Error())
+	_, err = mgr.VRFNonce()
+	req.ErrorIs(err, errNotComplete)
 
 	// Create data.
 	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
 
 	// Get nonce.
-	nonce, err := mgr.GetPowNonce()
+	nonce, err := mgr.VRFNonce()
 	req.NoError(err)
 	req.NotZero(nonce)
 
@@ -157,7 +157,7 @@ func TestPostSetupManager_GetPow(t *testing.T) {
 	req.NoError(err)
 
 	// Attempt to get nonce.
-	_, err = mgr.GetPowNonce()
+	_, err = mgr.VRFNonce()
 	req.ErrorIs(err, errNotComplete)
 }
 
