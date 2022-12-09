@@ -144,18 +144,18 @@ func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.
 
 func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
 	if vrfNonce == nil {
-		return errors.New("vrfNonce is nil")
+		return errors.New("VRFNonce is nil")
 	}
 
-	meta := &shared.PostMetadata{
+	meta := &shared.VRFNonceMetadata{
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
 		BitsPerLabel:    PostMetadata.BitsPerLabel,
-		Nonce:           (*uint64)(vrfNonce),
+		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if err := verifying.VerifyPow(meta); err != nil {
+	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta); err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil

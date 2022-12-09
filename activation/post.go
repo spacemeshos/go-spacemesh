@@ -317,8 +317,7 @@ func (mgr *PostSetupManager) VRFNonce() (*types.VRFPostIndex, error) {
 		return nil, errNotComplete
 	}
 
-	nonce := types.VRFPostIndex(*mgr.init.Nonce())
-	return &nonce, nil
+	return (*types.VRFPostIndex)(mgr.init.Nonce()), nil
 }
 
 // LastOpts returns the Post setup last session options.
