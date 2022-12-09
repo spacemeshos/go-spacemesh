@@ -308,7 +308,7 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 	return p, m, nil
 }
 
-// GetPowNonce returns the PoW nonce found during initialization.
+// VRFNonce returns the VRF nonce found during initialization.
 func (mgr *PostSetupManager) VRFNonce() (*types.VRFPostIndex, error) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
