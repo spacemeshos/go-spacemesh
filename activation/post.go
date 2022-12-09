@@ -183,7 +183,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 
 	switch {
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): remove this once we have a better way to handle this.
+		// TODO(mafa): commitmentAtx shouldn't be passed in as an argument. See: https://github.com/spacemeshos/go-spacemesh/issues/3843
 		mgr.commitmentAtxId = commitmentAtx
 	case err != nil:
 		mgr.mu.Unlock()
@@ -255,7 +255,8 @@ func (mgr *PostSetupManager) getCommitmentAtx(dataDir string) (types.ATXID, erro
 	case err == nil:
 		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
-		// TODO(mafa): commitmentAtx should be fetched by the PostSetupManager instead of passed in as argument.
+		// TODO(mafa): instead of falling back to the provided commitmentAtx, decide here which commitmentAtx to use.
+		// See: https://github.com/spacemeshos/go-spacemesh/issues/3843
 		return *types.EmptyATXID, initialization.ErrStateMetadataFileMissing
 	default:
 		return *types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
