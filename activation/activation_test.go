@@ -270,11 +270,13 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
 		r.Nil(atx.InitialPostIndices)
+		r.Nil(atx.VRFNonce)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(*types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
 		r.NotNil(atx.InitialPostIndices)
+		r.NotNil(atx.VRFNonce)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
 	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)

@@ -84,7 +84,8 @@ func (p *postSetupProviderMock) GenerateProof(challenge []byte) (*types.Post, *t
 }
 
 func (p *postSetupProviderMock) VRFNonce() (*types.VRFPostIndex, error) {
-	return nil, nil
+	nonce := types.VRFPostIndex(5)
+	return &nonce, nil
 }
 
 func (p *postSetupProviderMock) LastError() error {
