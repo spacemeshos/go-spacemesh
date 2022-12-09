@@ -159,7 +159,7 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // StartSession starts (or continues) a data creation session.
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx []byte) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
 	mgr.mu.Lock()
 
 	if mgr.state == PostSetupStateInProgress {
@@ -184,7 +184,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, opts PostSetupOpt
 	switch {
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
 		// TODO(mafa): remove this once we have a better way to handle this.
-		mgr.commitmentAtxId = types.ATXID(types.BytesToHash(commitmentAtx))
+		mgr.commitmentAtxId = commitmentAtx
 	case err != nil:
 		mgr.mu.Unlock()
 		return err

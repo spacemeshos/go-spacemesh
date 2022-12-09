@@ -65,7 +65,7 @@ func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error)
 	return 0, nil
 }
 
-func (p *postSetupProviderMock) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx []byte) error {
+func (p *postSetupProviderMock) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
 	return nil
 }
 
@@ -163,7 +163,7 @@ func TestPostSetup(t *testing.T) {
 	nb := NewNIPostBuilder(minerID, postSetupProvider, []PoetProvingServiceClient{poetProvider},
 		poetDb, sql.InMemory(), logtest.New(t), signing.NewEdSigner())
 
-	r.NoError(postSetupProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID.Bytes()))
+	r.NoError(postSetupProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID))
 	t.Cleanup(func() { assert.NoError(t, postSetupProvider.Reset()) })
 
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, time.Time{})
@@ -206,7 +206,7 @@ func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipos
 	r.NoError(err)
 	r.NotNil(postProvider)
 
-	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(tb), goldenATXID.Bytes()))
+	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(tb), goldenATXID))
 
 	nb := NewNIPostBuilder(minerID, postProvider, []PoetProvingServiceClient{poetProver},
 		poetDb, sql.InMemory(), logtest.New(tb), signing.NewEdSigner())
@@ -278,7 +278,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
-	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID.Bytes()))
+	r.NoError(postProvider.StartSession(context.Background(), getPostSetupOpts(t), goldenATXID))
 
 	nipost, _, err = nb.BuildNIPost(context.Background(), &nipostChallenge, time.Time{})
 	r.NoError(err)

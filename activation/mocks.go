@@ -582,7 +582,7 @@ func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx []byte) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StartSession", context, opts, commitmentAtx)
 	ret0, _ := ret[0].(error)

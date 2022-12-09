@@ -96,7 +96,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	req.NoError(err)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Generate proof.
 	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge)

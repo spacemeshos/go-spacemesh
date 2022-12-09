@@ -59,20 +59,20 @@ func TestPostSetupManager(t *testing.T) {
 	})
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	cancel()
 	eg.Wait()
 
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Cleanup.
 	req.NoError(mgr.Reset())
 
 	// Create data (same opts, after deletion).
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -90,7 +90,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Re-instantiate `PostSetupManager`.
@@ -117,7 +117,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Generate proof.
 	_, _, err = mgr.GenerateProof(ch)
@@ -145,7 +145,7 @@ func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Get nonce.
 	nonce, err := mgr.VRFNonce()
@@ -175,7 +175,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 
 	// Create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify state.
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -187,7 +187,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	req.Equal(PostSetupStateNotStarted, mgr.Status().State)
 
 	// Create data again.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify state.
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
@@ -207,7 +207,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return mgr.StartSession(ctx, opts, goldenATXID.Bytes())
+		return mgr.StartSession(ctx, opts, goldenATXID)
 	})
 
 	// Wait a bit for the setup to proceed.
@@ -228,7 +228,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req.LessOrEqual(status.NumLabelsWritten, uint64(opts.NumUnits)*cfg.LabelsPerUnit)
 
 	// Continue to create data.
-	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID.Bytes()))
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Verify status.
 	status = mgr.Status()

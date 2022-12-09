@@ -197,7 +197,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
-		if err := b.postSetupProvider.StartSession(ctx, opts, commitmentAtx.Bytes()); err != nil {
+		if err := b.postSetupProvider.StartSession(ctx, opts, *commitmentAtx); err != nil {
 			return err
 		}
 
