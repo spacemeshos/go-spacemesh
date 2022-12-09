@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 var (
@@ -24,9 +23,9 @@ var (
 )
 
 type blockMetadata struct {
-	candidates     []*txtypes.NanoTX
-	byAddrAndNonce map[types.Address][]*txtypes.NanoTX
-	byTid          map[types.TransactionID]*txtypes.NanoTX
+	candidates     []*NanoTX
+	byAddrAndNonce map[types.Address][]*NanoTX
+	byTid          map[types.TransactionID]*NanoTX
 }
 
 type meshState struct {
@@ -178,14 +177,14 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 		logger:    logger,
 		stateF:    stateF,
 		pending:   make(map[types.Address]*accountCache),
-		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
+		cachedTXs: make(map[types.TransactionID]*NanoTX),
 	}
 	if err := txCache.BuildFromTXs(candidates, blockSeed); err != nil {
 		return nil, err
 	}
 	byAddrAndNonce := txCache.GetMempool(logger)
-	ntxs := make([]*txtypes.NanoTX, 0, len(pmd.mtxs))
-	byTid := make(map[types.TransactionID]*txtypes.NanoTX)
+	ntxs := make([]*NanoTX, 0, len(pmd.mtxs))
+	byTid := make(map[types.TransactionID]*NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
 		ntxs = append(ntxs, acctTXs...)
 		for _, ntx := range acctTXs {
@@ -216,7 +215,7 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, getState stateFunc, bloc
 	return prune(logger, ordered, bmd.byTid, gasLimit), nil
 }
 
-func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*txtypes.NanoTX, byAddrAndNonce map[types.Address][]*txtypes.NanoTX) []types.TransactionID {
+func getProposalTXs(logger log.Log, numTXs int, predictedBlock []*NanoTX, byAddrAndNonce map[types.Address][]*NanoTX) []types.TransactionID {
 	if len(predictedBlock) <= numTXs {
 		result := make([]types.TransactionID, 0, len(predictedBlock))
 		for _, ntx := range predictedBlock {
@@ -236,8 +235,8 @@ func shuffleWithNonceOrder(
 	logger log.Log,
 	rng *rand.Rand,
 	numTXs int,
-	ntxs []*txtypes.NanoTX,
-	byAddrAndNonce map[types.Address][]*txtypes.NanoTX,
+	ntxs []*NanoTX,
+	byAddrAndNonce map[types.Address][]*NanoTX,
 ) []types.TransactionID {
 	rng.Shuffle(len(ntxs), func(i, j int) { ntxs[i], ntxs[j] = ntxs[j], ntxs[i] })
 	total := util.Min(len(ntxs), numTXs)
@@ -279,7 +278,7 @@ func shuffleWithNonceOrder(
 	return result
 }
 
-func prune(logger log.Log, tids []types.TransactionID, byTid map[types.TransactionID]*txtypes.NanoTX, gasLimit uint64) []types.TransactionID {
+func prune(logger log.Log, tids []types.TransactionID, byTid map[types.TransactionID]*NanoTX, gasLimit uint64) []types.TransactionID {
 	var (
 		gasRemaining = gasLimit
 		idx          int

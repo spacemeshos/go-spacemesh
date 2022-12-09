@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 )
 
 const (
@@ -66,7 +65,7 @@ type testConState struct {
 	*ConservativeState
 	logger log.Log
 	db     *sql.Database
-	mvm    *mocks.MockvmState
+	mvm    *MockvmState
 }
 
 func (t *testConState) handler() *TxHandler {
@@ -101,7 +100,7 @@ func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.Transact
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
-	mvm := mocks.NewMockvmState(ctrl)
+	mvm := NewMockvmState(ctrl)
 	db := sql.InMemory()
 	cfg := CSConfig{
 		BlockGasLimit:      gasLimit,

@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 const (
@@ -34,7 +33,7 @@ var (
 // a candidate for the mempool.
 type candidate struct {
 	// this is the best tx among all the txs with the same nonce
-	best        *txtypes.NanoTX
+	best        *NanoTX
 	postBalance uint64
 }
 
@@ -74,7 +73,7 @@ type accountCache struct {
 	// https://github.com/spacemeshos/go-spacemesh/issues/3668
 	moreInDB bool
 
-	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with the cache instance
+	cachedTXs map[types.TransactionID]*NanoTX // shared with the cache instance
 }
 
 func (ac *accountCache) nextNonce() uint64 {
@@ -91,7 +90,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce.Back().Value.(*candidate).postBalance
 }
 
-func (ac *accountCache) precheck(logger log.Log, ntx *txtypes.NanoTX) (*list.Element, *candidate, error) {
+func (ac *accountCache) precheck(logger log.Log, ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
 		return nil, nil, errTooManyNonce
@@ -124,11 +123,11 @@ func (ac *accountCache) precheck(logger log.Log, ntx *txtypes.NanoTX) (*list.Ele
 	return prev, &candidate{best: ntx, postBalance: balance - ntx.MaxSpending()}, nil
 }
 
-func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, blockSeed []byte) error {
+func (ac *accountCache) accept(logger log.Log, ntx *NanoTX, blockSeed []byte) error {
 	var (
 		added, prev *list.Element
 		cand        *candidate
-		replaced    *txtypes.NanoTX
+		replaced    *NanoTX
 		err         error
 	)
 	prev, cand, err = ac.precheck(logger, ntx)
@@ -208,7 +207,7 @@ func nonceMarshaller(any any) log.ArrayMarshaler {
 			for nonce := range nonce2ID {
 				allNonce = append(allNonce, nonce)
 			}
-		} else if nonce2TXs, ok := any.(map[uint64][]*txtypes.NanoTX); ok {
+		} else if nonce2TXs, ok := any.(map[uint64][]*NanoTX); ok {
 			allNonce = make([]uint64, 0, len(nonce2TXs))
 			for nonce := range nonce2TXs {
 				allNonce = append(allNonce, nonce)
@@ -222,7 +221,7 @@ func nonceMarshaller(any any) log.ArrayMarshaler {
 	})
 }
 
-func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes.NanoTX, blockSeed []byte) error {
+func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*NanoTX, blockSeed []byte) error {
 	logger.With().Debug("account has pending txs", log.Int("num_pending", len(nonce2TXs)))
 	var (
 		nextNonce   = ac.nextNonce()
@@ -270,8 +269,8 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 	return nil
 }
 
-func findBest(ntxs []*txtypes.NanoTX, balance uint64, blockSeed []byte) *txtypes.NanoTX {
-	var best *txtypes.NanoTX
+func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
+	var best *NanoTX
 	for _, ntx := range ntxs {
 		if balance >= ntx.MaxSpending() &&
 			(best == nil || ntx.Better(best, blockSeed)) {
@@ -296,7 +295,7 @@ func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time
 		return errBadNonce
 	}
 
-	ntx := txtypes.NewNanoTX(&types.MeshTransaction{
+	ntx := NewNanoTX(&types.MeshTransaction{
 		Transaction: *tx,
 		Received:    received,
 		LayerID:     types.LayerID{},
@@ -354,8 +353,8 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, no
 
 // find the first nonce without a layer.
 // a nonce with a valid layer indicates that it's already packed in a proposal/block.
-func (ac *accountCache) getMempool(logger log.Log) []*txtypes.NanoTX {
-	bests := make([]*txtypes.NanoTX, 0, maxTXsPerAcct)
+func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
+	bests := make([]*NanoTX, 0, maxTXsPerAcct)
 	offset := 0
 	found := false
 	for e := ac.txsByNonce.Front(); e != nil; e = e.Next() {
@@ -416,7 +415,7 @@ type cache struct {
 
 	mu        sync.Mutex
 	pending   map[types.Address]*accountCache
-	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with accountCache instances
+	cachedTXs map[types.TransactionID]*NanoTX // shared with accountCache instances
 }
 
 func newCache(s stateFunc, logger log.Log) *cache {
@@ -424,22 +423,22 @@ func newCache(s stateFunc, logger log.Log) *cache {
 		logger:    logger,
 		stateF:    s,
 		pending:   make(map[types.Address]*accountCache),
-		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
+		cachedTXs: make(map[types.TransactionID]*NanoTX),
 	}
 }
 
-func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*txtypes.NanoTX {
-	byPrincipal := make(map[types.Address]map[uint64][]*txtypes.NanoTX)
+func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*NanoTX {
+	byPrincipal := make(map[types.Address]map[uint64][]*NanoTX)
 	for _, mtx := range mtxs {
 		principal := mtx.Principal
 		if _, ok := byPrincipal[principal]; !ok {
-			byPrincipal[principal] = make(map[uint64][]*txtypes.NanoTX)
+			byPrincipal[principal] = make(map[uint64][]*NanoTX)
 		}
 		if _, ok := byPrincipal[principal][mtx.Nonce]; !ok {
-			byPrincipal[principal][mtx.Nonce] = make([]*txtypes.NanoTX, 0, maxTXsPerNonce)
+			byPrincipal[principal][mtx.Nonce] = make([]*NanoTX, 0, maxTXsPerNonce)
 		}
 		if len(byPrincipal[principal][mtx.Nonce]) < maxTXsPerNonce {
-			byPrincipal[principal][mtx.Nonce] = append(byPrincipal[principal][mtx.Nonce], txtypes.NewNanoTX(mtx))
+			byPrincipal[principal][mtx.Nonce] = append(byPrincipal[principal][mtx.Nonce], NewNanoTX(mtx))
 		} else {
 			logger.With().Warning("too many txs in same nonce. ignoring tx",
 				mtx.ID,
@@ -581,7 +580,7 @@ func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction
 }
 
 // Get gets a transaction from the cache.
-func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
+func (c *cache) Get(tid types.TransactionID) *NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.cachedTXs[tid]
@@ -789,11 +788,11 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that eligible for a proposal/block.
-func (c *cache) GetMempool(logger log.Log) map[types.Address][]*txtypes.NanoTX {
+func (c *cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	all := make(map[types.Address][]*txtypes.NanoTX)
+	all := make(map[types.Address][]*NanoTX)
 	logger.With().Info("cache has pending accounts", log.Int("num_acct", len(c.pending)))
 	for addr, accCache := range c.pending {
 		txs := accCache.getMempool(logger.WithFields(addr))

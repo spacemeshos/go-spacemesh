@@ -5,7 +5,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 const (
@@ -13,7 +12,7 @@ const (
 )
 
 type item struct {
-	*txtypes.NanoTX
+	*NanoTX
 
 	// The index is needed by update and is maintained by the heap.Interface methods.
 	index int // The index of the item in the heap.
@@ -57,7 +56,7 @@ func (pq *priorityQueue) Pop() any {
 }
 
 // update modifies the fee and value of an item in the queue.
-func (pq *priorityQueue) update(it *item, ntx *txtypes.NanoTX) {
+func (pq *priorityQueue) update(it *item, ntx *NanoTX) {
 	it.NanoTX = ntx
 	heap.Fix(pq, it.index)
 }
@@ -68,7 +67,7 @@ type mempoolIterator struct {
 	logger       log.Log
 	gasRemaining uint64
 	pq           priorityQueue
-	txs          map[types.Address][]*txtypes.NanoTX
+	txs          map[types.Address][]*NanoTX
 }
 
 // newMempoolIterator builds and returns a mempoolIterator.
@@ -111,7 +110,7 @@ func (mi *mempoolIterator) buildPQ() {
 	heap.Init(&mi.pq)
 }
 
-func (mi *mempoolIterator) getNext(addr types.Address) *txtypes.NanoTX {
+func (mi *mempoolIterator) getNext(addr types.Address) *NanoTX {
 	if _, ok := mi.txs[addr]; !ok {
 		return nil
 	}
@@ -124,7 +123,7 @@ func (mi *mempoolIterator) getNext(addr types.Address) *txtypes.NanoTX {
 	return ntx
 }
 
-func (mi *mempoolIterator) pop() *txtypes.NanoTX {
+func (mi *mempoolIterator) pop() *NanoTX {
 	if mi.pq.Len() == 0 || mi.gasRemaining < minTXGas {
 		return nil
 	}
@@ -180,9 +179,9 @@ func (mi *mempoolIterator) pop() *txtypes.NanoTX {
 }
 
 // PopAll returns all the transaction in the mempoolIterator.
-func (mi *mempoolIterator) PopAll() ([]*txtypes.NanoTX, map[types.Address][]*txtypes.NanoTX) {
-	result := make([]*txtypes.NanoTX, 0)
-	byAddrAndNonce := make(map[types.Address][]*txtypes.NanoTX)
+func (mi *mempoolIterator) PopAll() ([]*NanoTX, map[types.Address][]*NanoTX) {
+	result := make([]*NanoTX, 0)
+	byAddrAndNonce := make(map[types.Address][]*NanoTX)
 	for {
 		popped := mi.pop()
 		if popped == nil {
@@ -191,7 +190,7 @@ func (mi *mempoolIterator) PopAll() ([]*txtypes.NanoTX, map[types.Address][]*txt
 		result = append(result, popped)
 		principal := popped.Principal
 		if _, ok := byAddrAndNonce[principal]; !ok {
-			byAddrAndNonce[principal] = make([]*txtypes.NanoTX, 0, maxTXsPerAcct)
+			byAddrAndNonce[principal] = make([]*NanoTX, 0, maxTXsPerAcct)
 		}
 		byAddrAndNonce[principal] = append(byAddrAndNonce[principal], popped)
 	}

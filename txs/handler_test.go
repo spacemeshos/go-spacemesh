@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/txs/mocks"
 )
 
 func Test_HandleBlock(t *testing.T) {
@@ -58,7 +57,7 @@ func Test_HandleBlock(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			cstate := mocks.NewMockconservativeState(ctrl)
+			cstate := NewMockconservativeState(ctrl)
 			th := NewTxHandler(cstate, logtest.New(t))
 
 			signer, err := signing.NewEdSigner()
@@ -88,7 +87,7 @@ func Test_HandleBlock(t *testing.T) {
 
 func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
-	cstate := mocks.NewMockconservativeState(ctrl)
+	cstate := NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer, err := signing.NewEdSigner()

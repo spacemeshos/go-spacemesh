@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 type testCache struct {
@@ -118,7 +117,7 @@ func checkMempool(t *testing.T, c *cache, expected map[types.Address][]*types.Me
 	for addr := range mempool {
 		var (
 			exp types.MeshTransaction
-			got txtypes.NanoTX
+			got NanoTX
 		)
 		for i, ntx := range mempool[addr] {
 			got = *ntx

@@ -7,14 +7,13 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
-	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 type txGetter interface {
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -package=txs -destination=./txs_mocks.go -source=./interface.go
 
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
@@ -37,5 +36,5 @@ type vmState interface {
 }
 
 type conStateCache interface {
-	GetMempool(log.Log) map[types.Address][]*txtypes.NanoTX
+	GetMempool(log.Log) map[types.Address][]*NanoTX
 }
