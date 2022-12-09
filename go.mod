@@ -48,9 +48,9 @@ require (
 	google.golang.org/genproto v0.0.0-20221114212237-e4508ebdbee1
 	google.golang.org/grpc v1.51.0
 	google.golang.org/protobuf v1.28.1
-	k8s.io/api v0.25.4
-	k8s.io/apimachinery v0.25.4
-	k8s.io/client-go v0.25.4
+	k8s.io/api v0.25.5
+	k8s.io/apimachinery v0.25.5
+	k8s.io/client-go v0.25.5
 	sigs.k8s.io/controller-runtime v0.13.1
 )
 
@@ -172,11 +172,11 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
 	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/net v0.2.0 // indirect
+	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
 	golang.org/x/oauth2 v0.2.0 // indirect
-	golang.org/x/sys v0.2.0 // indirect
-	golang.org/x/term v0.2.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/term v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
