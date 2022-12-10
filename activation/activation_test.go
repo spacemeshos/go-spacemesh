@@ -74,31 +74,25 @@ type NetMock struct {
 
 func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
 	n.lastTransmission = d
-	go n.hookToAtxPool(d)
-	return nil
-}
-
-func (n *NetMock) hookToAtxPool(transmission []byte) {
-	if atx, err := types.BytesToAtx(transmission); err == nil {
-		if err := atx.CalcAndSetID(); err != nil {
-			panic(err)
-		}
-		if err := atx.CalcAndSetNodeID(); err != nil {
-			panic(err)
-		}
-
-		if n.atxHdlr != nil {
-			if atxDb, ok := n.atxHdlr.(*Handler); ok {
-				vAtx, err := atx.Verify(0, 1)
-				if err != nil {
-					panic(err)
-				}
-				if err := atxDb.StoreAtx(context.Background(), vAtx); err != nil {
-					panic(err)
-				}
-			}
-		}
+	atx, err := types.BytesToAtx(d)
+	if err != nil {
+		return err
 	}
+	if err := atx.CalcAndSetID(); err != nil {
+		return err
+	}
+	if err := atx.CalcAndSetNodeID(); err != nil {
+		return err
+	}
+
+	if atxDb, ok := n.atxHdlr.(*Handler); ok {
+		vAtx, err := atx.Verify(0, 1)
+		if err != nil {
+			return err
+		}
+		return atxDb.StoreAtx(context.Background(), vAtx)
+	}
+	return nil
 }
 
 func NewTestSigner() *TestSigner {
