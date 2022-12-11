@@ -141,6 +141,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 	log := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
+
 	validator := NewMocknipostValidator(gomock.NewController(t))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, nil, log)
 
@@ -177,7 +178,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 		require.NoError(t, SignAtx(sig, atx))
 
-		validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
@@ -196,9 +197,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 		require.NoError(t, SignAtx(sig, atx))
 
-		validator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
+		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.NoError(t, err)
@@ -284,7 +285,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 		require.NoError(t, SignAtx(sig, atx))
 
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "VRFNonce is missing")
@@ -303,8 +304,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.NIPost = newNIPostWithChallenge(hash, poetRef)
 		require.NoError(t, SignAtx(sig, atx))
 
-		validator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(errors.New("invalid VRF nonce"))
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		validator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(errors.New("invalid VRF nonce"))
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 		_, err = atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF nonce")
@@ -342,7 +343,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
 
-		validator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed validation")).Times(1)
+		validator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("failed validation")).Times(1)
 
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
 		require.EqualError(t, err, "invalid initial Post: failed validation")
@@ -375,21 +376,21 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InitialPost = initialPost
 		atx.InitialPostIndices = initialPost.Indices
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorIs(t, err, &AtxNotFoundError{Id: cATX})
+		require.ErrorIs(t, err, &ErrAtxNotFound{Id: cATX})
 	})
 
 	t.Run("prevAtx declared but not found", func(t *testing.T) {
 		challenge := newChallenge(1, types.RandomATXID(), posAtx.ID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorIs(t, err, &AtxNotFoundError{Id: challenge.PrevATXID})
+		require.ErrorIs(t, err, &ErrAtxNotFound{Id: challenge.PrevATXID})
 	})
 
 	t.Run("posAtx declared but not found", func(t *testing.T) {
 		challenge := newChallenge(1, prevAtx.ID(), types.RandomATXID(), types.NewLayerID(1012), nil)
 		atx := newAtx(t, challenge, sig, &types.NIPost{}, 100, coinbase)
 		_, err := atxHdlr.SyntacticallyValidateAtx(context.Background(), atx)
-		require.ErrorIs(t, err, &AtxNotFoundError{Id: challenge.PositioningATX})
+		require.ErrorIs(t, err, &ErrAtxNotFound{Id: challenge.PositioningATX})
 	})
 
 	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {
@@ -542,7 +543,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	log := logtest.New(b)
 	cdb := datastore.NewCachedDB(sql.InMemory(), log)
 	validator := NewMocknipostValidator(gomock.NewController(b))
-	validator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
+	validator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil).AnyTimes()
 	receiver := NewMockatxReceiver(gomock.NewController(b))
 	atxHdlr := NewHandler(cdb, nil, layersPerEpochBig, testTickSize, goldenATXID, validator, receiver, log)
 
@@ -899,9 +900,9 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.NoError(t, err)
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().ValidateVRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().ValidatePost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.Background(), buf))
 
@@ -935,7 +936,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 
 	mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any()).Times(1)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Times(1)
-	mvalidator.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
+	mvalidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(leaves, nil).Times(1)
 	receiver.EXPECT().OnAtx(gomock.Any()).Times(1)
 	require.NoError(t, handler.HandleAtxData(context.Background(), buf))
 

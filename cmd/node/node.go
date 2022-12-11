@@ -298,7 +298,9 @@ type App struct {
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
 	poetListener     *activation.PoetListener
+	validator        *activation.Validator
 	edSgn            *signing.EdSigner
+	poetDB           *activation.PoetDb
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -486,7 +488,9 @@ func (app *App) initServices(ctx context.Context,
 	cdb := datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
 	app.atxDB = *cdb
 	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
+	app.poetDB = poetDb
 	validator := activation.NewValidator(poetDb, app.Config.POST)
+	app.validator = validator
 
 	if err := os.MkdirAll(dbStorepath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
@@ -808,7 +812,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(&app.atxDB, signing.DefaultVerifier, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(&app.atxDB, signing.DefaultVerifier, app.validator, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(app.host, verifier))
 	}
 	if apiConf.StartGlobalStateService {

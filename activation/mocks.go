@@ -136,47 +136,117 @@ func (m *MocknipostValidator) EXPECT() *MocknipostValidatorMockRecorder {
 	return m.recorder
 }
 
-// Validate mocks base method.
-func (m *MocknipostValidator) Validate(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+// InitialNIPostChallenge mocks base method.
+func (m *MocknipostValidator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validate", nodeId, atxId, NIPost, expectedChallenge, numUnits)
+	ret := m.ctrl.Call(m, "InitialNIPostChallenge", challenge, atxs, goldenATXID, expectedPostIndices)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InitialNIPostChallenge indicates an expected call of InitialNIPostChallenge.
+func (mr *MocknipostValidatorMockRecorder) InitialNIPostChallenge(challenge, atxs, goldenATXID, expectedPostIndices interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitialNIPostChallenge", reflect.TypeOf((*MocknipostValidator)(nil).InitialNIPostChallenge), challenge, atxs, goldenATXID, expectedPostIndices)
+}
+
+// NIPost mocks base method.
+func (m *MocknipostValidator) NIPost(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NIPost", nodeId, atxId, NIPost, expectedChallenge, numUnits)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Validate indicates an expected call of Validate.
-func (mr *MocknipostValidatorMockRecorder) Validate(nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}) *gomock.Call {
+// NIPost indicates an expected call of NIPost.
+func (mr *MocknipostValidatorMockRecorder) NIPost(nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MocknipostValidator)(nil).Validate), nodeId, atxId, NIPost, expectedChallenge, numUnits)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPost", reflect.TypeOf((*MocknipostValidator)(nil).NIPost), nodeId, atxId, NIPost, expectedChallenge, numUnits)
 }
 
-// ValidatePost mocks base method.
-func (m *MocknipostValidator) ValidatePost(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+// NIPostChallenge mocks base method.
+func (m *MocknipostValidator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidatePost", nodeId, atxId, Post, PostMetadata, numUnits)
+	ret := m.ctrl.Call(m, "NIPostChallenge", challenge, atxs, nodeID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ValidatePost indicates an expected call of ValidatePost.
-func (mr *MocknipostValidatorMockRecorder) ValidatePost(nodeId, atxId, Post, PostMetadata, numUnits interface{}) *gomock.Call {
+// NIPostChallenge indicates an expected call of NIPostChallenge.
+func (mr *MocknipostValidatorMockRecorder) NIPostChallenge(challenge, atxs, nodeID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatePost", reflect.TypeOf((*MocknipostValidator)(nil).ValidatePost), nodeId, atxId, Post, PostMetadata, numUnits)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPostChallenge", reflect.TypeOf((*MocknipostValidator)(nil).NIPostChallenge), challenge, atxs, nodeID)
 }
 
-// ValidateVRFNonce mocks base method.
-func (m *MocknipostValidator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+// NumUnits mocks base method.
+func (m *MocknipostValidator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateVRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+	ret := m.ctrl.Call(m, "NumUnits", cfg, numUnits)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ValidateVRFNonce indicates an expected call of ValidateVRFNonce.
-func (mr *MocknipostValidatorMockRecorder) ValidateVRFNonce(nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits interface{}) *gomock.Call {
+// NumUnits indicates an expected call of NumUnits.
+func (mr *MocknipostValidatorMockRecorder) NumUnits(cfg, numUnits interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateVRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).ValidateVRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumUnits", reflect.TypeOf((*MocknipostValidator)(nil).NumUnits), cfg, numUnits)
+}
+
+// PositioningAtx mocks base method.
+func (m *MocknipostValidator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, publayer types.LayerID, layersPerEpoch uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, publayer, layersPerEpoch)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PositioningAtx indicates an expected call of PositioningAtx.
+func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, publayer, layersPerEpoch interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, publayer, layersPerEpoch)
+}
+
+// Post mocks base method.
+func (m *MocknipostValidator) Post(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Post", nodeId, atxId, Post, PostMetadata, numUnits)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Post indicates an expected call of Post.
+func (mr *MocknipostValidatorMockRecorder) Post(nodeId, atxId, Post, PostMetadata, numUnits interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), nodeId, atxId, Post, PostMetadata, numUnits)
+}
+
+// PostMetadata mocks base method.
+func (m *MocknipostValidator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PostMetadata", cfg, metadata)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PostMetadata indicates an expected call of PostMetadata.
+func (mr *MocknipostValidatorMockRecorder) PostMetadata(cfg, metadata interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostMetadata", reflect.TypeOf((*MocknipostValidator)(nil).PostMetadata), cfg, metadata)
+}
+
+// VRFNonce mocks base method.
+func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VRFNonce indicates an expected call of VRFNonce.
+func (mr *MocknipostValidatorMockRecorder) VRFNonce(nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).VRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
 }
 
 // MocklayerClock is a mock of layerClock interface.

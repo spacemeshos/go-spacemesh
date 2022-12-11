@@ -49,28 +49,28 @@ func Test_ValidateVRFNonce(t *testing.T) {
 	t.Run("valid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.ValidateVRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("invalid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
 		nonce := types.VRFPostIndex(1)
-		require.Error(t, v.ValidateVRFNonce(nodeId, commitmentAtxId, &nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, &nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
 		commitmentAtxId := types.RandomATXID()
-		require.Error(t, v.ValidateVRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("numUnits can be smaller or larger", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.ValidateVRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits+1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits+1))
 
-		require.NoError(t, v.ValidateVRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
 	})
 }

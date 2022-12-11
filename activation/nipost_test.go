@@ -550,7 +550,7 @@ func TestValidator_Validate(t *testing.T) {
 
 func validateNIPost(minerID types.NodeID, commitmentAtx types.ATXID, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint32) error {
 	v := &Validator{poetDb, postCfg}
-	_, err := v.Validate(minerID, commitmentAtx, nipost, challenge, numUnits)
+	_, err := v.NIPost(minerID, commitmentAtx, nipost, challenge, numUnits)
 	return err
 }
 
