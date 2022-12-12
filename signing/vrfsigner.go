@@ -1,21 +1,25 @@
 package signing
 
 import (
+	"encoding/binary"
+
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
 )
-
-var _ Signer = VRFSigner{}
 
 // VRFSigner is a signer for VRF purposes.
 type VRFSigner struct {
 	privateKey []byte
 	pub        *PublicKey
+
+	nonce uint64
 }
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) []byte {
-	return ecvrf.Prove(ed25519.PrivateKey(s.privateKey), msg)
+	nonceMsg := make([]byte, 8)
+	binary.LittleEndian.PutUint64(nonceMsg, s.nonce)
+	return ecvrf.Prove(ed25519.PrivateKey(s.privateKey), append(nonceMsg, msg...))
 }
 
 // PublicKey of the signer.
@@ -34,12 +38,12 @@ func VRFVerify(pub, msg, sig []byte) bool {
 	return valid
 }
 
-var _ Verifier = VRFVerifier{}
-
 // VRFVerifier is a verifier for VRF purposes.
 type VRFVerifier struct{}
 
 // Verify that signature matches public key.
-func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
-	return VRFVerify(pub.Bytes(), msg, sig)
+func (VRFVerifier) Verify(pub *PublicKey, nonce uint64, msg, sig []byte) bool {
+	nonceMsg := make([]byte, 8)
+	binary.LittleEndian.PutUint64(nonceMsg, nonce)
+	return VRFVerify(pub.Bytes(), append(nonceMsg, msg...), sig)
 }

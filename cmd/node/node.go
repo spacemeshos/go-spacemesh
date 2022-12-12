@@ -943,12 +943,12 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner(signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
+		edSgn := signing.NewEdSigner(signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
 		err := os.MkdirAll(filepath.Dir(filename), 0o700)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.ToBuffer(), 0o600)
+		err = os.WriteFile(filename, edSgn.Bytes(), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -956,7 +956,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
@@ -1041,7 +1041,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner := app.edSgn.VRFSigner()
+	vrfSigner := app.edSgn.VRFSigner(0)
 
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 

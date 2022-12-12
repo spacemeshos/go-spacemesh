@@ -38,7 +38,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
-	return nodeID, edSigner, edSigner.VRFSigner()
+	return nodeID, edSigner, edSigner.VRFSigner(0)
 }
 
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {

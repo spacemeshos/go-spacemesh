@@ -344,7 +344,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	rng := rand.New(rand.NewSource(2))
 
 	o := defaultOracle(t)
-	o.vrfSigner = signing.NewEdSignerFromRand(rng).VRFSigner()
+	o.vrfSigner = signing.NewEdSignerFromRand(rng).VRFSigner(0)
 	nid := types.BytesToNodeID(o.vrfSigner.PublicKey().Bytes())
 
 	layer := types.NewLayerID(50)
@@ -424,7 +424,7 @@ func Test_Proof(t *testing.T) {
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner()
+	vrfSigner := signer.VRFSigner(0)
 
 	o.vrfSigner = vrfSigner
 	sig, err := o.Proof(context.TODO(), layer, 3)

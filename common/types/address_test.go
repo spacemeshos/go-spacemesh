@@ -131,7 +131,7 @@ func checkAddressesEqual(t *testing.T, addrA, addrB types.Address) {
 }
 
 func generatePublicKey(t *testing.T) []byte {
-	buff := signing.NewEdSigner().ToBuffer()
+	buff := signing.NewEdSigner().Bytes()
 	acc1Signer, err := signing.NewEdSignerFromBuffer(buff)
 	require.NoError(t, err)
 	return acc1Signer.PublicKey().Bytes()

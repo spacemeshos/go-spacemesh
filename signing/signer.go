@@ -65,8 +65,6 @@ func (p *PublicKey) Equals(o *PublicKey) bool {
 	return bytes.Equal(p.Bytes(), o.Bytes())
 }
 
-var _ Signer = (*EdSigner)(nil)
-
 // EdSigner represents an ED25519 signer.
 type EdSigner struct {
 	privKey ed25519.PrivateKey // the pub & private key
@@ -78,18 +76,18 @@ type EdSigner struct {
 // PrivateKeySize size of the private key in bytes.
 const PrivateKeySize = ed25519.PrivateKeySize
 
-// SignerOpt modifies EdSigner.
-type SignerOpt func(*EdSigner)
+// SignerOptionFunc modifies EdSigner.
+type SignerOptionFunc func(*EdSigner)
 
-// WithSignerPrefix sets used by EdSigner.
-func WithSignerPrefix(prefix []byte) SignerOpt {
+// WithPrefix sets used by EdSigner.
+func WithPrefix(prefix []byte) SignerOptionFunc {
 	return func(signer *EdSigner) {
 		signer.prefix = prefix
 	}
 }
 
 // NewEdSignerFromBuffer builds a signer from a private key as byte buffer.
-func NewEdSignerFromBuffer(buff []byte, opts ...SignerOpt) (*EdSigner, error) {
+func NewEdSignerFromBuffer(buff []byte, opts ...SignerOptionFunc) (*EdSigner, error) {
 	if len(buff) != ed25519.PrivateKeySize {
 		log.Error("Could not create EdSigner from the provided buffer: buffer too small")
 		return nil, errors.New("buffer too small")
@@ -117,7 +115,7 @@ func NewEdSignerFromRand(rand io.Reader) *EdSigner {
 }
 
 // NewEdSigner returns an auto-generated ed signer.
-func NewEdSigner(opts ...SignerOpt) *EdSigner {
+func NewEdSigner(opts ...SignerOptionFunc) *EdSigner {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Panic("Could not generate key pair err=%v", err)
@@ -153,26 +151,27 @@ func (es *EdSigner) LittleEndian() bool {
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
-func (es *EdSigner) VRFSigner() *VRFSigner {
+func (es *EdSigner) VRFSigner(nonce uint64) *VRFSigner {
 	return &VRFSigner{
 		privateKey: es.privKey,
 		pub:        es.PublicKey(),
+		nonce:      nonce,
 	}
 }
 
-// ToBuffer returns the private key as a byte buffer.
-func (es *EdSigner) ToBuffer() []byte {
+// Bytes returns the private key as a byte buffer.
+func (es *EdSigner) Bytes() []byte {
 	buff := make([]byte, len(es.privKey))
 	copy(buff, es.privKey)
 
 	return buff
 }
 
-// VerifierOpt to modify verifier.
-type VerifierOpt func(*EDVerifier)
+// VerifierOptionFunc to modify verifier.
+type VerifierOptionFunc func(*EDVerifier)
 
 // WithVerifierPrefix ...
-func WithVerifierPrefix(prefix []byte) VerifierOpt {
+func WithVerifierPrefix(prefix []byte) VerifierOptionFunc {
 	return func(verifier *EDVerifier) {
 		verifier.prefix = prefix
 	}
@@ -196,15 +195,13 @@ type EDVerifier struct {
 }
 
 // NewEDVerifier returns a new EDVerifier.
-func NewEDVerifier(opts ...VerifierOpt) EDVerifier {
+func NewEDVerifier(opts ...VerifierOptionFunc) EDVerifier {
 	verifier := EDVerifier{}
 	for _, opt := range opts {
 		opt(&verifier)
 	}
 	return verifier
 }
-
-var _ VerifyExtractor = EDVerifier{}
 
 // Extract public key from signature.
 func (e EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {

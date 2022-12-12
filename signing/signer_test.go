@@ -34,9 +34,9 @@ func TestNewEdSigner(t *testing.T) {
 	assert.Equal(t, []byte(ed.pubKey), []byte(ed.privKey[32:]))
 }
 
-func TestEdSigner_ToBuffer(t *testing.T) {
+func TestEdSigner_ToBytes(t *testing.T) {
 	ed := NewEdSigner()
-	buff := ed.ToBuffer()
+	buff := ed.Bytes()
 	ed2, err := NewEdSignerFromBuffer(buff)
 	assert.Nil(t, err)
 	assert.Equal(t, ed.privKey, ed2.privKey)
@@ -54,7 +54,7 @@ func TestPublicKey_ShortString(t *testing.T) {
 
 func TestPrefix(t *testing.T) {
 	t.Run("signer mismatch", func(t *testing.T) {
-		signer := NewEdSigner(WithSignerPrefix([]byte("one")))
+		signer := NewEdSigner(WithPrefix([]byte("one")))
 		verifier := NewEDVerifier(WithVerifierPrefix([]byte("two")))
 		msg := []byte("test")
 		sig := signer.Sign(msg)
@@ -64,7 +64,7 @@ func TestPrefix(t *testing.T) {
 		require.NotEqual(t, pub.Bytes(), signer.PublicKey().Bytes())
 	})
 	t.Run("no mismatch", func(t *testing.T) {
-		signer := NewEdSigner(WithSignerPrefix([]byte("one")))
+		signer := NewEdSigner(WithPrefix([]byte("one")))
 		verifier := NewEDVerifier(WithVerifierPrefix([]byte("one")))
 		msg := []byte("test")
 		sig := signer.Sign(msg)

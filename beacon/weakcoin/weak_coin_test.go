@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	smocks "github.com/spacemeshos/go-spacemesh/signing/mocks"
 )
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {
@@ -34,19 +33,19 @@ func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 	return buf
 }
 
-func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *smocks.MockSigner {
+func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *signing.MockSigner {
 	tb.Helper()
-	signer := smocks.NewMockSigner(ctrl)
+	signer := signing.NewMockSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(sig)).AnyTimes()
 	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
 }
 
-func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *smocks.MockVerifier {
+func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *signing.MockVerifier {
 	tb.Helper()
-	verifier := smocks.NewMockVerifier(ctrl)
-	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	verifier := signing.NewMockVerifier(ctrl)
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
 }
 
@@ -187,6 +186,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -209,6 +209,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -231,6 +232,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -256,6 +258,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
+				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -284,6 +287,7 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
 			staticSigner(t, ctrl, []byte{1}),
+			nil,
 			weakcoin.WithVerifier(sigVerifier(t, ctrl)))
 		epoch types.EpochID = 10
 		round types.RoundID = 2
@@ -315,6 +319,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
 		staticSigner(t, ctrl, oneLSB),
+		nil,
 		weakcoin.WithNextRoundBufferSize(bufSize),
 		weakcoin.WithVerifier(sigVerifier(t, ctrl)),
 	)
@@ -360,10 +365,10 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	}).AnyTimes()
 	r := rand.New(rand.NewSource(999))
 
-	signer := signing.NewEdSignerFromRand(r).VRFSigner()
+	signer := signing.NewEdSignerFromRand(r).VRFSigner(0)
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
+	instance := weakcoin.New(broadcaster, signer, nil, weakcoin.WithThreshold([]byte{0xff}))
 	instance.StartEpoch(context.TODO(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.TODO(), round))
 
@@ -398,9 +403,9 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 				return nil
 			}).AnyTimes()
-		signer := signing.NewEdSignerFromRand(r).VRFSigner()
+		signer := signing.NewEdSignerFromRand(r).VRFSigner(0)
 		allowances[string(signer.PublicKey().Bytes())] = 1
-		instances[i] = weakcoin.New(broadcaster, signer,
+		instances[i] = weakcoin.New(broadcaster, signer, nil,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 			weakcoin.WithVerifier(verifier))
 	}

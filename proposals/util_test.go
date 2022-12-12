@@ -21,7 +21,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	signer := genSigner()
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, signer.VRFSigner(0), genActiveSet(), beacon)
 	rb := blts[0]
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, ballots.Add(cdb, rb))
@@ -56,7 +56,7 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	signer := genSigner()
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, signer.VRFSigner(0), genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	b := blts[1]
 	b.RefBallot = types.EmptyBallotID
@@ -70,7 +70,7 @@ func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	signer := genSigner()
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, signer.VRFSigner(0), genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, blts[1], layerAvgSize, layersPerEpoch)
@@ -83,7 +83,7 @@ func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	signer := genSigner()
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, signer.VRFSigner(), genActiveSet(), beacon)
+	blts := createBallots(t, signer, signer.VRFSigner(0), genActiveSet(), beacon)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, blts[0], layerAvgSize, layersPerEpoch)
 	require.ErrorIs(t, err, sql.ErrNotFound)
