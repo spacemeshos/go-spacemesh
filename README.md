@@ -110,13 +110,14 @@ make build
 
 This will build the `go-spacemesh` binary, saving it in the `build/` directory.
 
-To build a binary for a specific architecture directory use:
+On linux or mac you can build a binary for windows using:
 
 ```bash
-make darwin | linux | freebsd | windows
+make windows
 ```
 
-Platform-specific binaries are saved to the `/build` directory.
+Be aware that this will require a cross-platform gcc like `x86_64-w64-mingw32-gcc`. Platform-specific binaries are saved to
+the `build/*target*` directory.
 
 ### Using `go build` and `go test` without `make`
 
