@@ -104,9 +104,7 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, vrfSigner *signing.V
 			Sig: vrfSig,
 		})
 	}
-	sort.Slice(order, func(i, j int) bool {
-		return order[i].Before(order[j])
-	})
+	sort.Slice(order, func(i, j int) bool { return order[i].Before(order[j]) })
 	blts := make([]*types.Ballot, 0, eligibleSlots)
 	for _, lyr := range order {
 		proofs := eligibilityProofs[lyr]
@@ -136,7 +134,7 @@ func TestCheckEligibility_FailedToGetRefBallot(t *testing.T) {
 	signer := genSigner()
 	vrfSigner := signer.VRFSigner(0)
 	blts := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "get ref ballot"))
 	require.False(t, eligible)
@@ -150,7 +148,7 @@ func TestCheckEligibility_RefBallotMissingEpochData(t *testing.T) {
 	rb := blts[0]
 	rb.EpochData = nil
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errMissingEpochData)
 	require.False(t, eligible)
 }
@@ -163,7 +161,7 @@ func TestCheckEligibility_RefBallotMissingBeacon(t *testing.T) {
 	rb := blts[0]
 	rb.EpochData.Beacon = types.EmptyBeacon
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errMissingBeacon)
 	require.False(t, eligible)
 }
@@ -176,7 +174,7 @@ func TestCheckEligibility_RefBallotEmptyActiveSet(t *testing.T) {
 	rb := blts[0]
 	rb.EpochData.ActiveSet = nil
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errEmptyActiveSet)
 	require.False(t, eligible)
 }
@@ -188,7 +186,7 @@ func TestCheckEligibility_FailToGetActiveSetATXHeader(t *testing.T) {
 	blts := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "get ATX header"))
 	require.False(t, eligible)
@@ -204,7 +202,7 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	b := blts[1]
 	b.AtxID = types.RandomATXID()
-	eligible, err := tv.CheckEligibility(context.TODO(), b)
+	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "get ballot ATX header"))
 	require.False(t, eligible)
@@ -243,7 +241,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
 	}
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errTargetEpochMismatch)
 	require.False(t, eligible)
 }
@@ -255,7 +253,7 @@ func TestCheckEligibility_KeyMismatch(t *testing.T) {
 	blts := createBallots(t, signer, signer.VRFSigner(0), activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, errPublicKeyMismatch)
 	require.False(t, eligible)
 }
@@ -293,7 +291,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(tv.cdb, vAtx, time.Now()))
 	}
-	eligible, err := tv.CheckEligibility(context.TODO(), blts[1])
+	eligible, err := tv.CheckEligibility(context.Background(), blts[1])
 	require.ErrorIs(t, err, util.ErrZeroTotalWeight)
 	require.False(t, eligible)
 }
@@ -307,7 +305,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	b := blts[1]
 	b.EligibilityProofs[0].J = b.EligibilityProofs[0].J + 100
-	eligible, err := tv.CheckEligibility(context.TODO(), b)
+	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectCounter)
 	require.False(t, eligible)
 }
@@ -320,13 +318,13 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	rb := blts[0]
 	require.Len(t, rb.EligibilityProofs, 2)
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
-	eligible, err := tv.CheckEligibility(context.TODO(), rb)
+	eligible, err := tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errInvalidProofsOrder)
 	require.False(t, eligible)
 
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 	rb.EligibilityProofs = append(rb.EligibilityProofs, types.VotingEligibilityProof{J: 2})
-	eligible, err = tv.CheckEligibility(context.TODO(), rb)
+	eligible, err = tv.CheckEligibility(context.Background(), rb)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
 	require.False(t, eligible)
 }
@@ -340,7 +338,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
-	eligible, err := tv.CheckEligibility(context.TODO(), b)
+	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
 	require.False(t, eligible)
 }
@@ -354,7 +352,7 @@ func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, rb))
 	b := blts[1]
 	b.EligibilityProofs[0].Sig = b.EligibilityProofs[0].Sig[1:]
-	eligible, err := tv.CheckEligibility(context.TODO(), b)
+	eligible, err := tv.CheckEligibility(context.Background(), b)
 	require.ErrorIs(t, err, errIncorrectVRFSig)
 	require.False(t, eligible)
 }
@@ -371,7 +369,7 @@ func TestCheckEligibility(t *testing.T) {
 		hdr, err := tv.cdb.GetAtxHeader(b.AtxID)
 		require.NoError(t, err)
 		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, hdr.GetWeight()).Times(1)
-		eligible, err := tv.CheckEligibility(context.TODO(), b)
+		eligible, err := tv.CheckEligibility(context.Background(), b)
 		require.NoError(t, err)
 		require.True(t, eligible)
 	}

@@ -32,12 +32,6 @@ func (s VRFSigner) LittleEndian() bool {
 	return true
 }
 
-// VRFVerify verifies a message and signature, given a public key.
-func VRFVerify(pub, msg, sig []byte) bool {
-	valid, _ := ecvrf.Verify(ed25519.PublicKey(pub), sig, msg)
-	return valid
-}
-
 // VRFVerifier is a verifier for VRF purposes.
 type VRFVerifier struct{}
 
@@ -45,5 +39,6 @@ type VRFVerifier struct{}
 func (VRFVerifier) Verify(pub *PublicKey, nonce uint64, msg, sig []byte) bool {
 	nonceMsg := make([]byte, 8)
 	binary.LittleEndian.PutUint64(nonceMsg, nonce)
-	return VRFVerify(pub.Bytes(), append(nonceMsg, msg...), sig)
+	valid, _ := ecvrf.Verify(pub.Bytes(), sig, append(nonceMsg, msg...))
+	return valid
 }
