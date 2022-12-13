@@ -19,7 +19,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
-	_ "github.com/nullstyle/go-xdr/xdr3" // without this go mod tidy will remove a necessary dependency
+	_ "github.com/nullstyle/go-xdr/xdr3" // without this TestSpacemeshApp_NodeService will fail to compile poet
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
