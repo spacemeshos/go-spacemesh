@@ -29,7 +29,7 @@ require (
 	github.com/prometheus/common v0.38.0
 	github.com/pyroscope-io/pyroscope v0.35.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.5.3-0.20221213183032-6801e21d7e3e
+	github.com/spacemeshos/api/release/go v1.5.3-0.20221213205015-6bb7a8a8dd5a
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
 	github.com/spacemeshos/ed25519 v0.1.1
 	github.com/spacemeshos/fixed v0.0.0-20210523192743-8d17e03c169a
