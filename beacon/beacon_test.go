@@ -134,7 +134,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestBeacon_MultipleNodes(t *testing.T) {
-	testNodes := make([]*testProtocolDriver, 0, numATXs)
+	numNodes := 5
+	testNodes := make([]*testProtocolDriver, 0, numNodes)
 	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, protocol string, data []byte) error {
@@ -144,6 +145,9 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 					require.NoError(t, node.handleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data, time.Now()))
 				case pubsub.BeaconFirstVotesProtocol:
 					require.NoError(t, node.handleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+				case pubsub.BeaconFollowingVotesProtocol:
+					require.NoError(t, node.handleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data, time.Now()))
+				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
 			return nil
@@ -151,13 +155,12 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 
 	atxPublishLid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
-	dbs := make([]*datastore.CachedDB, 0, numATXs)
+	dbs := make([]*datastore.CachedDB, 0, numNodes)
 	cfg := NodeSimUnitTestConfig()
 	now := time.Now()
-	for i := 0; i < numATXs; i++ {
+	for i := 0; i < numNodes; i++ {
 		node := newTestDriver(t, cfg, publisher)
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-		node.config = NodeSimUnitTestConfig()
 		node.mClock.EXPECT().GetCurrentLayer().Return(current).AnyTimes()
 		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
 		testNodes = append(testNodes, node)
@@ -189,6 +192,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
 		require.NoError(t, err)
+		require.NotEqual(t, types.EmptyBeacon, got)
 		beacons[got] = struct{}{}
 	}
 	require.Len(t, beacons, 1)
