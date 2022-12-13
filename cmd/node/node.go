@@ -524,9 +524,10 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
+	beaconProtocol := beacon.New(nodeID, sgn, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithPublisher(app.host),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
 	trtlCfg := app.Config.Tortoise

@@ -38,6 +38,8 @@ var (
 	errBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 	errZeroEpochWeight     = errors.New("zero epoch weight provided")
 	errDifferentBeacon     = errors.New("different beacons detected")
+	errGenesis             = errors.New("genesis")
+	errNodeNotSynced       = errors.New("nodes not synced")
 )
 
 type (
@@ -79,10 +81,21 @@ func withWeakCoin(wc coin) Opt {
 	}
 }
 
+func withCheckerFunc(f checkerFunc) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.checkerF = f
+	}
+}
+
+func WithPublisher(p pubsub.Publisher) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.publisher = p
+	}
+}
+
 // New returns a new ProtocolDriver.
 func New(
 	nodeID types.NodeID,
-	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
@@ -94,7 +107,6 @@ func New(
 		logger:             log.NewNop(),
 		config:             DefaultConfig(),
 		nodeID:             nodeID,
-		publisher:          publisher,
 		edSigner:           edSigner,
 		vrfSigner:          vrfSigner,
 		cdb:                cdb,
@@ -106,11 +118,14 @@ func New(
 	for _, opt := range opts {
 		opt(pd)
 	}
+	if pd.checkerF == nil {
+		pd.checkerF = createProposalChecker
+	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(publisher, vrfSigner,
+		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -137,6 +152,7 @@ type ProtocolDriver struct {
 	vrfSigner   *signing.VRFSigner
 	vrfVerifier signing.VRFVerifier
 	weakCoin    coin
+	checkerF    checkerFunc
 	theta       *big.Float
 
 	clock       layerClock
@@ -411,7 +427,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return s, nil
 	}
 
-	epochWeight, atxs, err := pd.cdb.GetEpochWeight(epoch)
+	epochWeight, atxids, err := pd.cdb.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
 		return nil, fmt.Errorf("get epoch weight: %w", err)
@@ -421,7 +437,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return nil, errZeroEpochWeight
 	}
 
-	pd.states[epoch] = newState(logger, pd.config, epochWeight, atxs)
+	pd.states[epoch] = newState(logger, pd.config, epochWeight, atxids, pd.checkerF)
 	return pd.states[epoch], nil
 }
 
@@ -486,7 +502,7 @@ func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
 				pd.setProposalTimeForNextEpoch()
 				pd.logger.With().Info("first layer in epoch", layer, epoch)
 				pd.eg.Go(func() error {
-					pd.onNewEpoch(ctx, epoch)
+					_ = pd.onNewEpoch(ctx, epoch)
 					return nil
 				})
 			}
@@ -514,38 +530,39 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 	pd.earliestVoteTime = earliestVoteTime
 }
 
-func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {
+func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) error {
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	defer pd.cleanupEpoch(epoch)
 
 	if epoch.IsGenesis() {
 		logger.Info("not running beacon protocol: genesis epochs")
-		return
+		return errGenesis
 	}
 	if !pd.sync.IsSynced(ctx) {
 		logger.Info("not running beacon protocol: node not synced")
-		return
+		return errNodeNotSynced
 	}
 	if pd.isInProtocol() {
 		logger.Error("not running beacon protocol: last one still running")
-		return
+		return errProtocolRunning
 	}
 
 	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
 	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch-1, pd.nodeID)
 	if err != nil {
 		logger.With().Info("not running beacon protocol: no own ATX in last epoch", log.Err(err))
-		return
+		return err
 	}
 
-	atxs, epochWeight, err := pd.setupEpoch(logger, epoch)
+	atxids, epochWeight, err := pd.setupEpoch(logger, epoch)
 	if err != nil {
 		logger.With().Error("epoch not setup correctly", log.Err(err))
-		return
+		return err
 	}
 
 	logger.With().Info("participating beacon protocol with ATX", atxID, log.Uint64("epoch_weight", epochWeight))
-	pd.runProtocol(ctx, epoch, atxs)
+	pd.runProtocol(ctx, epoch, atxids)
+	return nil
 }
 
 func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, atxs []types.ATXID) {
@@ -587,7 +604,7 @@ func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
 	allHashes := lastRoundVotes.support.sort()
 	allHashHexes := make([]string, len(allHashes))
 	for i, h := range allHashes {
-		allHashHexes[i] = types.BytesToHash(h).ShortString()
+		allHashHexes[i] = util.Bytes2Hex(h)
 	}
 	logger.With().Debug("calculating beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
@@ -864,14 +881,15 @@ type proposalChecker struct {
 	threshold *big.Int
 }
 
-func createProposalChecker(logger log.Log, kappa uint64, q *big.Rat, epochWeight uint64) *proposalChecker {
-	if epochWeight == 0 {
-		logger.Panic("creating proposal checker with zero weight")
+func createProposalChecker(logger log.Log, conf Config, numATXs int) eligibilityChecker {
+	if numATXs == 0 {
+		logger.Error("creating proposal checker with zero atxs")
+		return &proposalChecker{threshold: big.NewInt(0)}
 	}
 
-	threshold := atxThreshold(kappa, q, epochWeight)
+	threshold := atxThreshold(conf.Kappa, conf.Q, numATXs)
 	logger.With().Info("created proposal checker with ATX threshold",
-		log.Uint64("epoch_weight", epochWeight),
+		log.Int("num_atxs", numATXs),
 		log.String("threshold", threshold.String()))
 	return &proposalChecker{threshold: threshold}
 }
@@ -882,13 +900,13 @@ func (pc *proposalChecker) IsProposalEligible(proposal []byte) bool {
 }
 
 // TODO(nkryuchkov): Consider replacing github.com/ALTree/bigfloat.
-func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Float {
-	if epochWeight == 0 {
+func atxThresholdFraction(kappa int, q *big.Rat, numATXs int) *big.Float {
+	if numATXs == 0 {
 		return big.NewFloat(0)
 	}
 
 	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))))
-	// Floating point: 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
+	// Floating point: 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(numATXs))))
 	// Fixed point:
 	v := new(big.Float).Sub(
 		new(big.Float).SetInt64(1),
@@ -897,13 +915,13 @@ func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Flo
 			new(big.Float).SetRat(
 				new(big.Rat).Neg(
 					new(big.Rat).Quo(
-						new(big.Rat).SetUint64(kappa),
+						new(big.Rat).SetInt(big.NewInt(int64(kappa))),
 						new(big.Rat).Mul(
 							new(big.Rat).Sub(
 								new(big.Rat).SetInt64(1.0),
 								q,
 							),
-							new(big.Rat).SetUint64(epochWeight),
+							new(big.Rat).SetInt(big.NewInt(int64(numATXs))),
 						),
 					),
 				),
@@ -915,13 +933,13 @@ func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Flo
 }
 
 // TODO(nkryuchkov): Consider having a generic function for probabilities.
-func atxThreshold(kappa uint64, q *big.Rat, epochWeight uint64) *big.Int {
+func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	const (
 		sigLengthBytes = 80
 		sigLengthBits  = sigLengthBytes * 8
 	)
 
-	fraction := atxThresholdFraction(kappa, q, epochWeight)
+	fraction := atxThresholdFraction(kappa, q, numATXs)
 	two := big.NewInt(2)
 	signatureLengthBigInt := big.NewInt(sigLengthBits)
 

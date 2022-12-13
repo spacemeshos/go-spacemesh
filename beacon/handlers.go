@@ -31,7 +31,7 @@ var (
 	errAlreadyProposed             = errors.New("already proposed")
 	errAlreadyVoted                = errors.New("already voted")
 	errMinerATXNotFound            = errors.New("miner ATX not found in previous epoch")
-	errProtocolNotRunning          = errors.New("beacon protocol not running")
+	errProtocolRunning             = errors.New("last beacon protocol still running")
 	errEpochNotActive              = errors.New("epoch not active")
 	errMalformedMessage            = errors.New("malformed msg")
 	errUntimelyMessage             = errors.New("untimely msg")
@@ -299,7 +299,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing first votes")
-		return errProtocolNotRunning
+		return errProtocolRunning
 	}
 
 	pd.mu.Lock()
@@ -430,7 +430,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing following votes")
-		return errProtocolNotRunning
+		return errProtocolRunning
 	}
 
 	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, minerPK)
