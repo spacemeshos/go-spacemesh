@@ -3,6 +3,7 @@ package activation_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,9 @@ func TestHTTPPoet(t *testing.T) {
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 	t.Cleanup(gtw.Stop)
 
-	c, err := activation.NewHTTPPoetHarness(true, activation.WithGateway(gtw.Target()))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	c, err := activation.NewHTTPPoetHarness(ctx, activation.WithGateway(gtw.Target()))
 	r.NoError(err)
 	r.NotNil(c)
 

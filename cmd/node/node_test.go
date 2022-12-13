@@ -530,7 +530,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
-	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	poetHarness, err := activation.NewHTTPPoetHarness(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		err := poetHarness.Teardown(true)
@@ -569,7 +571,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		require.NoError(t, app.Start(appCtx))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.

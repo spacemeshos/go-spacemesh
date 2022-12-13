@@ -1,9 +1,12 @@
 package types
 
 import (
+	"bytes"
 	"testing"
+	"time"
 
 	fuzz "github.com/google/gofuzz"
+	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -40,6 +43,19 @@ func BenchmarkMul(b *testing.B) {
 func unsafeMul(x, y uint64) uint64 {
 	result = x // avoid compiler optimizations
 	return x * y
+}
+
+func TestRoundEndSerialization(t *testing.T) {
+	end := RoundEnd(time.Now())
+	var data bytes.Buffer
+	_, err := end.EncodeScale(scale.NewEncoder(&data))
+	require.NoError(t, err)
+
+	var deserialized RoundEnd
+	_, err = deserialized.DecodeScale(scale.NewDecoder(&data))
+	require.NoError(t, err)
+
+	require.EqualValues(t, end.IntoTime().Unix(), deserialized.IntoTime().Unix())
 }
 
 func layerTester(tb testing.TB, encodable codec.Encodable) LayerID {
