@@ -1,27 +1,27 @@
 package activation
 
 import (
-	"sync"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 var id = types.NodeID{}
 
-func getTestConfig(t *testing.T) (atypes.PostConfig, atypes.PostSetupOpts) {
+func getTestConfig(t *testing.T) (PostConfig, PostSetupOpts) {
 	cfg := DefaultPostConfig()
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.NumUnits = cfg.MinNumUnits
-	opts.ComputeProviderID = initialization.CPUProviderID()
+	opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	return cfg, opts
 }
@@ -34,32 +34,42 @@ func TestPostSetupManager(t *testing.T) {
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
 	req.NoError(err)
 
-	lastStatus := &atypes.PostSetupStatus{}
-	go func() {
-		for status := range mgr.StatusChan() {
-			req.True(status.NumLabelsWritten >= lastStatus.NumLabelsWritten)
-			req.Equal(opts, *status.LastOpts)
-			req.Nil(status.LastError)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-			if status.NumLabelsWritten == uint64(opts.NumUnits)*cfg.LabelsPerUnit {
-				// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
-				// req.Equal(postSetupStateComplete, status.State)
-			} else {
-				req.Equal(atypes.PostSetupStateInProgress, status.State)
+	var eg errgroup.Group
+	lastStatus := &PostSetupStatus{}
+	eg.Go(func() error {
+		timer := time.NewTicker(50 * time.Millisecond)
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-timer.C:
+				status := mgr.Status()
+				req.GreaterOrEqual(status.NumLabelsWritten, lastStatus.NumLabelsWritten)
+				req.Equal(opts, *status.LastOpts)
+				req.Nil(status.LastError)
+
+				if status.NumLabelsWritten < uint64(opts.NumUnits)*cfg.LabelsPerUnit {
+					req.Equal(PostSetupStateInProgress, status.State)
+				}
 			}
-
-			lastStatus = status
 		}
-	}()
+	})
 
 	// Create data.
 	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
+	cancel()
+	eg.Wait()
+
 	req.Equal(opts, *mgr.LastOpts())
 	req.NoError(mgr.LastError())
-	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
-	// req.Equal(lastStatus, mgr.Status())
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).
 	doneChan, err = mgr.StartSession(opts, goldenATXID)
@@ -69,8 +79,7 @@ func TestPostSetupManager(t *testing.T) {
 	req.NoError(mgr.LastError())
 
 	// Cleanup.
-	err = mgr.StopSession(true)
-	req.NoError(err)
+	req.NoError(mgr.StopSession(true))
 
 	// Create data (same opts, after deletion).
 	doneChan, err = mgr.StartSession(opts, goldenATXID)
@@ -78,8 +87,7 @@ func TestPostSetupManager(t *testing.T) {
 	<-doneChan
 	req.Equal(opts, *mgr.LastOpts())
 	req.NoError(mgr.LastError())
-	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
-	// req.Equal(lastStatus, mgr.Status())
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
 func TestPostSetupManager_InitialStatus(t *testing.T) {
@@ -92,7 +100,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status := mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 	req.Nil(status.LastError)
@@ -101,10 +109,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	doneChan, err := mgr.StartSession(opts, goldenATXID)
 	req.NoError(err)
 	<-doneChan
-
-	// Compare the last status update to the status queried directly.
-	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
-	// req.Equal(lastStatus, mgr.Status())
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Re-instantiate `PostSetupManager`.
 	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
@@ -112,7 +117,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status = mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 	req.Nil(status.LastOpts)
 	req.Nil(status.LastError)
@@ -149,94 +154,6 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.ErrorIs(err, errNotComplete)
 }
 
-func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
-	req := require.New(t)
-
-	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
-	req.NoError(err)
-
-	// Verify that the status stream works properly when called *before* session started.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ch := mgr.StatusChan()
-		var prevStatus *atypes.PostSetupStatus
-		for {
-			status, more := <-ch
-			if more {
-				if prevStatus == nil {
-					// Verify initial status.
-					req.Equal(uint64(0), status.NumLabelsWritten)
-				}
-				prevStatus = status
-			} else {
-				// Verify last status.
-				req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, prevStatus.NumLabelsWritten)
-				break
-			}
-		}
-	}()
-
-	// Create data.
-	time.Sleep(1 * time.Second) // Short delay.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
-	wg.Wait()
-
-	// Cleanup.
-	err = mgr.StopSession(true)
-	req.NoError(err)
-}
-
-func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
-	req := require.New(t)
-
-	cdb := newCachedDB(t)
-	cfg, opts := getTestConfig(t)
-	opts.NumUnits *= 10
-	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t), cdb, goldenATXID)
-	req.NoError(err)
-
-	// Verify that the status stream works properly when called *after* session started (yet before it ended).
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		time.Sleep(100 * time.Millisecond) // Short delay.
-
-		ch := mgr.StatusChan()
-		var prevStatus *atypes.PostSetupStatus
-		for {
-			status, more := <-ch
-			if more {
-				if prevStatus == nil {
-					// Verify initial status.
-					req.Equal(uint64(0), status.NumLabelsWritten)
-				}
-				prevStatus = status
-			} else {
-				// Verify last status.
-				req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, prevStatus.NumLabelsWritten)
-				break
-			}
-		}
-		wg.Done()
-	}()
-
-	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
-	wg.Wait()
-
-	// Cleanup.
-	err = mgr.StopSession(true)
-	req.NoError(err)
-}
-
 func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
@@ -247,7 +164,9 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status := mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Zero(status.NumLabelsWritten)
+	req.Nil(status.LastOpts)
 
 	// Create data.
 	doneChan, err := mgr.StartSession(opts, goldenATXID)
@@ -255,24 +174,19 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	<-doneChan
 
 	// Verify state.
-	status = mgr.Status()
-	req.Equal(atypes.PostSetupStateComplete, status.State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Stop without file deletion.
-	err = mgr.StopSession(false)
-	req.NoError(err)
+	req.NoError(mgr.StopSession(false))
 
 	// Verify state.
-	status = mgr.Status()
-	req.Equal(atypes.PostSetupStateComplete, status.State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Stop with file deletion.
-	err = mgr.StopSession(true)
-	req.NoError(err)
+	req.NoError(mgr.StopSession(true))
 
 	// Verify state.
-	status = mgr.Status()
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, mgr.Status().State)
 
 	// Create data again.
 	doneChan, err = mgr.StartSession(opts, goldenATXID)
@@ -280,8 +194,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 	<-doneChan
 
 	// Verify state.
-	status = mgr.Status()
-	req.Equal(atypes.PostSetupStateComplete, status.State)
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
@@ -303,11 +216,10 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify the intermediate status.
 	status := mgr.Status()
 	req.Equal(&opts, status.LastOpts)
-	req.Equal(atypes.PostSetupStateInProgress, status.State)
+	req.Equal(PostSetupStateInProgress, status.State)
 
 	// Stop without files deletion.
-	err = mgr.StopSession(false)
-	req.NoError(err)
+	req.NoError(mgr.StopSession(false))
 
 	select {
 	case <-doneChan:
@@ -318,7 +230,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Nil(status.LastOpts)
-	req.Equal(atypes.PostSetupStateNotStarted, status.State)
+	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Zero(status.NumLabelsWritten)
 
 	// Continue to create data.
@@ -329,6 +241,6 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Equal(&opts, status.LastOpts)
-	req.Equal(atypes.PostSetupStateComplete, status.State)
+	req.Equal(PostSetupStateComplete, status.State)
 	req.Equal(uint64(opts.NumUnits)*cfg.LabelsPerUnit, status.NumLabelsWritten)
 }

@@ -50,9 +50,9 @@ func discoverNodes(ctx *testcontext.Context, kind string, pt PodType) ([]*NodeCl
 }
 
 func decodeOrdinal(name string) int {
-	// expected name is boot-1-0
+	// expected name is boot-1-0 or poet-3213221321
 	parts := strings.Split(name, "-")
-	if len(parts) != 3 {
+	if len(parts) < 2 {
 		panic(fmt.Sprintf("unexpected name format %s", name))
 	}
 	ord, err := strconv.Atoi(parts[1])

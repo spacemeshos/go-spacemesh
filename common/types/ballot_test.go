@@ -20,8 +20,8 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	ballot2 := Ballot{
 		InnerBallot: inner,
 	}
-	ballot1.Votes.Support = []BlockID{{1}}
-	ballot1.Votes.Support = []BlockID{{2}}
+	ballot1.Votes.Support = []Vote{{ID: BlockID{1}}}
+	ballot1.Votes.Support = []Vote{{ID: BlockID{2}}}
 	signer := signing.NewEdSigner()
 	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
 	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
@@ -46,7 +46,7 @@ func TestBallot_Initialize(t *testing.T) {
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),
-			Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			Against: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
 	signer := signing.NewEdSigner()
@@ -68,7 +68,7 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 		},
 		Votes: Votes{
 			Base:    RandomBallotID(),
-			Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
 	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())[1:]
@@ -114,4 +114,12 @@ func FuzzVotingEligibilityProofConsistency(f *testing.F) {
 
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
 	tester.FuzzSafety[VotingEligibilityProof](f)
+}
+
+func TestBallotEncoding(t *testing.T) {
+	t.Run("layer is first", func(t *testing.T) {
+		ballot := Ballot{}
+		lid := layerTester(t, &ballot)
+		require.Equal(t, ballot.LayerIndex, lid)
+	})
 }

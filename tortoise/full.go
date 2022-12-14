@@ -1,6 +1,8 @@
 package tortoise
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -28,6 +30,7 @@ type full struct {
 }
 
 func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
+	start := time.Now()
 	if f.shouldBeDelayed(logger, ballot) {
 		return
 	}
@@ -62,24 +65,28 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 			lvote.empty = lvote.empty.Add(ballot.weight)
 		}
 	}
+	fcountBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func (f *full) countForLateBlock(block *blockInfo) {
-	// ballots are always added to the state after blocks that are
-	// explicitly referenced in the ballot.
-	// therefore if block is added later - all previous ballots vote
-	// for it negatively.
-	//
-	// we could store all negative weight in a single variable and avoid
-	// this computation if there would be no height
+	start := time.Now()
 	for lid := block.layer.Add(1); !lid.After(f.counted); lid = lid.Add(1) {
-		for _, ballot := range f.layer(lid).ballots {
+		for _, ballot := range f.ballots[lid] {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			block.margin = block.margin.Sub(ballot.weight)
+			for current := ballot.votes.tail; current != nil && !current.lid.Before(block.layer); current = current.prev {
+				if current.lid != block.layer {
+					continue
+				}
+				if current.vote == abstain {
+					continue
+				}
+				block.margin = block.margin.Sub(ballot.weight)
+			}
 		}
 	}
+	lateBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
@@ -89,13 +96,14 @@ func (f *full) countDelayed(logger log.Log, lid types.LayerID) {
 	}
 	delete(f.delayed, lid)
 	for _, ballot := range delayed {
+		delayedBallots.Dec()
 		f.countBallot(logger.WithFields(log.Bool("delayed", true)), ballot)
 	}
 }
 
 func (f *full) countVotes(logger log.Log) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
-		for _, ballot := range f.layer(lid).ballots {
+		for _, ballot := range f.ballots[lid] {
 			f.countBallot(logger, ballot)
 		}
 	}
@@ -150,6 +158,7 @@ func (f *full) shouldBeDelayed(logger log.Log, ballot *ballotInfo) bool {
 		log.Uint32("ballot lid", ballot.layer.Value),
 		log.Uint32("counted at", delay.Value),
 	)
+	delayedBallots.Inc()
 	f.delayed[delay] = append(f.delayed[delay], ballot)
 	return true
 }

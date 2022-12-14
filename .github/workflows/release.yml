@@ -76,7 +76,7 @@ jobs:
           export_default_credentials: true
       
       - name: Upload zip
-        uses: google-github-actions/upload-cloud-storage@main
+        uses: google-github-actions/upload-cloud-storage@v0
         with:
           path: ${{ runner.os }}.zip
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/

@@ -6,10 +6,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
-
-var abstainSentinel = []byte{0}
 
 type (
 	weight = util.Weight
@@ -40,8 +38,8 @@ type (
 		margin weight
 
 		validity sign
-		// persisted validity
-		persisted sign
+		// emitted validity
+		emitted sign
 	}
 
 	state struct {
@@ -66,6 +64,11 @@ type (
 
 		epochs map[types.EpochID]*epochInfo
 		layers map[types.LayerID]*layerInfo
+		// ballots should not be referenced by other ballots
+		// each ballot stores references (votes) for X previous layers
+		// those X layers may reference another set of ballots that will
+		// reference recursively more layers with another set of ballots
+		ballots map[types.LayerID][]*ballotInfo
 
 		// to efficiently find base and reference ballots
 		ballotRefs map[types.BallotID]*ballotInfo
@@ -79,6 +82,7 @@ func newState() *state {
 		localThreshold: util.WeightFromUint64(0),
 		epochs:         map[types.EpochID]*epochInfo{},
 		layers:         map[types.LayerID]*layerInfo{},
+		ballots:        map[types.LayerID][]*ballotInfo{},
 		ballotRefs:     map[types.BallotID]*ballotInfo{},
 		blockRefs:      map[types.BlockID]*blockInfo{},
 	}
@@ -95,6 +99,7 @@ func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
 func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
+		layersNumber.Inc()
 		layer = &layerInfo{lid: lid, empty: util.WeightFromUint64(0)}
 		s.layers[lid] = layer
 	}
@@ -104,6 +109,7 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 func (s *state) epoch(eid types.EpochID) *epochInfo {
 	epoch, exist := s.epochs[eid]
 	if !exist {
+		epochsNumber.Inc()
 		epoch = &epochInfo{atxs: map[types.ATXID]uint64{}}
 		s.epochs[eid] = epoch
 	}
@@ -111,12 +117,14 @@ func (s *state) epoch(eid types.EpochID) *epochInfo {
 }
 
 func (s *state) addBallot(ballot *ballotInfo) {
-	layer := s.layer(ballot.layer)
-	layer.ballots = append(layer.ballots, ballot)
+	ballotsNumber.Inc()
+	s.ballots[ballot.layer] = append(s.ballots[ballot.layer], ballot)
 	s.ballotRefs[ballot.id] = ballot
 }
 
 func (s *state) addBlock(block *blockInfo) {
+	blocksNumber.Inc()
+
 	layer := s.layer(block.layer)
 	layer.blocks = append(layer.blocks, block)
 	sortBlocks(layer.blocks)
@@ -156,7 +164,6 @@ type layerInfo struct {
 	empty          weight
 	hareTerminated bool
 	blocks         []*blockInfo
-	ballots        []*ballotInfo
 	verifying      verifyingInfo
 
 	opinion types.Hash32
@@ -167,22 +174,22 @@ type layerInfo struct {
 }
 
 func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
-	hasher := hash.New()
+	hasher := opinionhash.New()
 	if l.prevOpinion != nil {
-		hasher.Write(l.prevOpinion[:])
+		hasher.WritePrevious(*l.prevOpinion)
 	}
 	if !l.hareTerminated {
-		hasher.Write(abstainSentinel)
+		hasher.WriteAbstain()
 	} else if withinDistance(hdist, l.lid, last) {
 		for _, block := range l.blocks {
 			if block.hare == support {
-				hasher.Write(block.id[:])
+				hasher.WriteSupport(block.id, block.height)
 			}
 		}
 	} else {
 		for _, block := range l.blocks {
 			if block.validity == support {
-				hasher.Write(block.id[:])
+				hasher.WriteSupport(block.id, block.height)
 			}
 		}
 	}
@@ -260,20 +267,6 @@ func (v *votes) cutBefore(lid types.LayerID) {
 	}
 }
 
-func (v *votes) find(lid types.LayerID, bid types.BlockID) sign {
-	for current := v.tail; current != nil; current = current.prev {
-		if current.lid == lid {
-			for _, block := range current.supported {
-				if block.id == bid {
-					return support
-				}
-			}
-			return against
-		}
-	}
-	return abstain
-}
-
 func (v *votes) opinion() types.Hash32 {
 	if v.tail == nil {
 		return types.Hash32{}
@@ -348,16 +341,16 @@ func (l *layerVote) sortSupported() {
 }
 
 func (l *layerVote) computeOpinion() {
-	hasher := hash.New()
+	hasher := opinionhash.New()
 	if l.prev != nil {
-		hasher.Write(l.prev.opinion[:])
+		hasher.WritePrevious(l.prev.opinion)
 	}
 	if len(l.supported) > 0 {
 		for _, block := range l.supported {
-			hasher.Write(block.id[:])
+			hasher.WriteSupport(block.id, block.height)
 		}
 	} else if l.vote == abstain {
-		hasher.Write(abstainSentinel)
+		hasher.WriteAbstain()
 	}
 	hasher.Sum(l.opinion[:0])
 }

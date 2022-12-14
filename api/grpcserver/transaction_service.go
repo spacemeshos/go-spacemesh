@@ -93,12 +93,8 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*
 	switch tx.State {
 	case types.MEMPOOL:
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
-	case types.PROPOSAL, types.BLOCK:
-		state = pb.TransactionState_TRANSACTION_STATE_MESH
 	case types.APPLIED:
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
-	case types.DISCARDED:
-		state = pb.TransactionState_TRANSACTION_STATE_REJECTED
 	default:
 		state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 	}
@@ -153,7 +149,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
 	var (
-		txCh, layerCh           <-chan interface{}
+		txCh, layerCh           <-chan any
 		txBufFull, layerBufFull <-chan struct{}
 	)
 

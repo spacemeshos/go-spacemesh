@@ -182,6 +182,7 @@ func createTestHare(t testing.TB, db *sql.Database, tcfg config.Config, clock *m
 	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 
 	mockRoracle := mocks.NewMockRolacle(ctrl)
 

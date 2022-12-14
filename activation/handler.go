@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -148,10 +147,6 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 //   - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 //   - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-	if atx.PositioningATX == *types.EmptyATXID {
-		return nil, fmt.Errorf("empty positioning atx")
-	}
-
 	if atx.PrevATXID == *types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, err
@@ -162,22 +157,13 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 		}
 	}
 
-	if atx.PositioningATX == h.goldenATXID && !atx.PublishEpoch().IsGenesis() {
-		return nil, fmt.Errorf("golden atx used for positioning atx in epoch %d, but is only valid in epoch 1", atx.PublishEpoch())
+	if err := validatePositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PubLayerID, h.layersPerEpoch); err != nil {
+		return nil, err
 	}
 
 	var baseTickHeight uint64
 	if atx.PositioningATX != h.goldenATXID {
-		posAtx, err := h.cdb.GetAtxHeader(atx.PositioningATX)
-		if err != nil {
-			return nil, fmt.Errorf("positioning atx not found")
-		}
-		if !atx.PubLayerID.After(posAtx.PubLayerID) {
-			return nil, fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)", atx.PubLayerID, posAtx.PubLayerID)
-		}
-		if d := atx.PubLayerID.Difference(posAtx.PubLayerID); d > h.layersPerEpoch {
-			return nil, fmt.Errorf("expected distance of one epoch (%v layers) from positioning atx but found %v", h.layersPerEpoch, d)
-		}
+		posAtx, _ := h.cdb.GetAtxHeader(atx.PositioningATX) // cannot fail as pos atx is already verified
 		baseTickHeight = posAtx.TickHeight()
 	}
 
@@ -188,12 +174,12 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 
 	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	commitment, err := h.getCommitmentFromAtx(atx)
+	commitmentATX, err := h.getCommitmentAtx(atx)
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: initial atx not found: %w", err)
 	}
 
-	leaves, err := h.nipostValidator.Validate(commitment, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.Validate(atx.NodeID(), *commitmentATX, atx.NIPost, *expectedChallengeHash, atx.NumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -202,38 +188,11 @@ func (h *Handler) SyntacticallyValidateAtx(ctx context.Context, atx *types.Activ
 }
 
 func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
-	if atx.Sequence != 0 {
-		return fmt.Errorf("no prevATX declared, but sequence number not zero")
-	}
-
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
-
-	if atx.InitialPostIndices == nil {
-		return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
-	}
-
-	if !bytes.Equal(atx.InitialPost.Indices, atx.InitialPostIndices) {
-		return fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
-	}
-
-	if atx.CommitmentATX == nil {
-		return fmt.Errorf("no prevATX declared, but commitmentATX is missing")
-	}
-
-	if *atx.CommitmentATX == h.goldenATXID && !atx.PublishEpoch().IsGenesis() {
-		return fmt.Errorf("golden atx used for commitment atx in epoch %d, but is only valid in epoch 1", atx.PublishEpoch())
-	}
-
-	if *atx.CommitmentATX != h.goldenATXID {
-		commitmentAtx, err := h.cdb.GetAtxHeader(*atx.CommitmentATX)
-		if err != nil {
-			return fmt.Errorf("commitment atx not found")
-		}
-		if !atx.PubLayerID.After(commitmentAtx.PubLayerID) {
-			return fmt.Errorf("atx layer (%v) must be after commitment atx layer (%v)", atx.PubLayerID, commitmentAtx.PubLayerID)
-		}
+	if err := validateInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
+		return err
 	}
 
 	// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
@@ -241,8 +200,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	initialPostMetadata := *atx.NIPost.PostMetadata
 	initialPostMetadata.Challenge = shared.ZeroChallenge
 
-	commitment := GetCommitmentBytes(atx.NodeID(), *atx.CommitmentATX)
-	if err := h.nipostValidator.ValidatePost(commitment, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+	if err := h.nipostValidator.ValidatePost(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
 	}
 
@@ -250,47 +208,20 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 }
 
 func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
-	prevATX, err := h.cdb.GetAtxHeader(atx.PrevATXID)
-	if err != nil {
-		return fmt.Errorf("validation failed: prevATX not found: %w", err)
-	}
-
-	if prevATX.NodeID != atx.NodeID() {
-		return fmt.Errorf(
-			"previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
-			atx.ShortString(), atx.NodeID(), prevATX.ID.ShortString(), prevATX.NodeID,
-		)
-	}
-
-	if prevATX.PublishEpoch() >= atx.PublishEpoch() {
-		return fmt.Errorf(
-			"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
-			prevATX.PublishEpoch(), prevATX.PubLayerID, atx.PublishEpoch(), atx.PubLayerID,
-		)
-	}
-
-	if prevATX.Sequence+1 != atx.Sequence {
-		return fmt.Errorf("sequence number is not one more than prev sequence number")
+	if err := validateNonInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, atx.NodeID()); err != nil {
+		return err
 	}
 
 	if atx.InitialPost != nil {
 		return fmt.Errorf("prevATX declared, but initial Post is included")
 	}
 
-	if atx.InitialPostIndices != nil {
-		return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
-	}
-
-	if atx.CommitmentATX != nil {
-		return fmt.Errorf("prevATX declared, but commitmentATX is included")
-	}
-
 	return nil
 }
 
-func (h *Handler) getCommitmentFromAtx(atx *types.ActivationTx) ([]byte, error) {
+func (h *Handler) getCommitmentAtx(atx *types.ActivationTx) (*types.ATXID, error) {
 	if atx.CommitmentATX != nil {
-		return GetCommitmentBytes(atx.NodeID(), *atx.CommitmentATX), nil
+		return atx.CommitmentATX, nil
 	}
 
 	id, err := atxs.GetFirstIDByNodeID(h.cdb, atx.NodeID())
@@ -301,7 +232,7 @@ func (h *Handler) getCommitmentFromAtx(atx *types.ActivationTx) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	return GetCommitmentBytes(atx.NodeID(), *initialATX.CommitmentATX), nil
+	return initialATX.CommitmentATX, nil
 }
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -443,7 +374,7 @@ func (h *Handler) handleAtxData(ctx context.Context, data []byte) error {
 	err = h.ProcessAtx(ctx, vAtx)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
-		// TODO: blacklist peer
+		// TODO(anton): blacklist peer
 	}
 	header, err := h.cdb.GetAtxHeader(vAtx.ID())
 	if err != nil {

@@ -144,17 +144,21 @@ func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transacti
 }
 
 // RevertState reverts the VM state and database to the given layer.
-func (cs *ConservativeState) RevertState(revertTo types.LayerID) (types.Hash32, error) {
-	root, err := cs.vmState.Revert(revertTo)
+func (cs *ConservativeState) RevertState(revertTo types.LayerID) error {
+	err := cs.vmState.Revert(revertTo)
 	if err != nil {
-		return root, fmt.Errorf("vm revert %v: %w", revertTo, err)
+		return fmt.Errorf("vm revert %v: %w", revertTo, err)
 	}
 
-	return root, cs.cache.RevertToLayer(cs.db, revertTo)
+	return cs.cache.RevertToLayer(cs.db, revertTo)
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
-func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block) error {
+func (cs *ConservativeState) ApplyLayer(ctx context.Context, lid types.LayerID, block *types.Block) error {
+	if block == nil {
+		return cs.applyEmptyLayer(ctx, lid)
+	}
+
 	logger := cs.logger.WithFields(block.LayerIndex, block.ID())
 	logger.Debug("applying layer to conservative state")
 
@@ -182,6 +186,14 @@ func (cs *ConservativeState) ApplyLayer(ctx context.Context, block *types.Block)
 	}
 	cacheApplyDuration.Observe(float64(time.Since(t0)))
 	return nil
+}
+
+func (cs *ConservativeState) applyEmptyLayer(ctx context.Context, lid types.LayerID) error {
+	_, _, err := cs.vmState.Apply(vm.ApplyContext{Layer: lid}, nil, nil)
+	if err != nil {
+		return fmt.Errorf("apply empty layer: %w", err)
+	}
+	return cs.cache.ApplyLayer(ctx, cs.db, lid, types.EmptyBlockID, nil, nil)
 }
 
 // GetProjection returns the projected nonce and balance for an account, including

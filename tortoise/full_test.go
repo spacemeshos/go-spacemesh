@@ -1,7 +1,7 @@
 package tortoise
 
 import (
-	mrand "math/rand"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -84,7 +84,7 @@ func TestFullCountVotes(t *testing.T) {
 		BaseHeight, TickCount uint64
 	}
 	const localHeight = 100
-	rng := mrand.New(mrand.NewSource(0))
+	rng := rand.New(rand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
 	getDiff := func(layers [][]types.Block, choices [][2]int) []types.BlockID {
@@ -380,8 +380,12 @@ func TestFullCountVotes(t *testing.T) {
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
 					if i > 0 {
-						ballot.Votes.Support = getDiff(blocks, b.Support)
-						ballot.Votes.Against = getDiff(blocks, b.Against)
+						for _, support := range getDiff(blocks, b.Support) {
+							ballot.Votes.Support = append(ballot.Votes.Support, types.Vote{ID: support})
+						}
+						for _, against := range getDiff(blocks, b.Against) {
+							ballot.Votes.Against = append(ballot.Votes.Against, types.Vote{ID: against})
+						}
 						for _, layerNumber := range b.Abstain {
 							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
 						}

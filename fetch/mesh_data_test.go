@@ -14,10 +14,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -39,16 +39,16 @@ func (f *testFetch) withMethod(method int) *testFetch {
 	return f
 }
 
-func (f *testFetch) expectTransactionCall(data []byte) *gomock.Call {
+func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 	if f.method == txsForBlock {
-		return f.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data)
+		return f.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), gomock.Any()).Times(times)
 	} else if f.method == txsForProposal {
-		return f.mTxH.EXPECT().HandleProposalTransaction(gomock.Any(), data)
+		return f.mTxH.EXPECT().HandleProposalTransaction(gomock.Any(), gomock.Any()).Times(times)
 	}
 	return nil
 }
 
-func (f *testFetch) getTxs(tids []types.TransactionID) error {
+func (f *testFetch) testGetTxs(tids []types.TransactionID) error {
 	if f.method == txsForBlock {
 		return f.GetBlockTxs(context.TODO(), tids)
 	} else if f.method == txsForProposal {
@@ -62,10 +62,23 @@ const (
 	numBlocks  = 3
 )
 
-func startTestLoop(f *Fetch, eg *errgroup.Group, hdlr func(*request)) {
+func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{}) {
+	t.Helper()
 	eg.Go(func() error {
-		f.loop(hdlr)
-		return nil
+		for {
+			select {
+			case <-stop:
+				return nil
+			default:
+				f.mu.Lock()
+				for h, req := range f.unprocessed {
+					require.NoError(t, req.validator(req.ctx, []byte{}))
+					close(req.promise.completed)
+					delete(f.unprocessed, h)
+				}
+				f.mu.Unlock()
+			}
+		}
 	})
 }
 
@@ -87,220 +100,144 @@ func generateLayerContent(t *testing.T) []byte {
 	return out
 }
 
-func TestGetBlocks(t *testing.T) {
+func TestFetch_getHashes(t *testing.T) {
+	blks := []*types.Block{
+		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		types.GenLayerBlock(types.NewLayerID(11), types.RandomTXSet(10)),
+		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+	}
+	blockIDs := types.ToBlockIDs(blks)
+	hashes := types.BlockIDsToHashes(blockIDs)
+	tt := []struct {
+		name      string
+		fetchErrs map[types.Hash32]struct{}
+		hdlrErr   error
+	}{
+		{
+			name: "all hashes fetched",
+		},
+		{
+			name:      "all hashes failed",
+			fetchErrs: map[types.Hash32]struct{}{hashes[0]: {}, hashes[1]: {}, hashes[2]: {}},
+		},
+		{
+			name:      "some hashes failed",
+			fetchErrs: map[types.Hash32]struct{}{hashes[1]: {}},
+		},
+		{
+			name:    "handler failed",
+			hdlrErr: errors.New("unknown"),
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := createFetch(t)
+			f.cfg.QueueSize = 3
+			f.cfg.BatchSize = 2
+			f.cfg.MaxRetriesForRequest = 0
+			f.cfg.MaxRetriesForPeer = 0
+			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
+			f.mh.EXPECT().GetPeers().Return(peers)
+			f.RegisterPeerHashes(peers[0], hashes[:2])
+			f.RegisterPeerHashes(peers[1], hashes[2:])
+
+			responses := make(map[types.Hash32]ResponseMessage)
+			for _, h := range hashes {
+				res := ResponseMessage{
+					Hash: h,
+					Data: []byte("a"),
+				}
+				responses[h] = res
+			}
+			f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+					var rb RequestBatch
+					err := codec.Decode(req, &rb)
+					require.NoError(t, err)
+
+					resBatch := ResponseBatch{
+						ID: rb.ID,
+					}
+					for _, r := range rb.Requests {
+						if _, ok := tc.fetchErrs[r.Hash]; ok {
+							continue
+						}
+						res := responses[r.Hash]
+						resBatch.Responses = append(resBatch.Responses, res)
+						f.mBlocksH.EXPECT().HandleSyncedBlock(gomock.Any(), res.Data).Return(tc.hdlrErr)
+					}
+					bts, err := codec.Encode(&resBatch)
+					require.NoError(t, err)
+					okFunc(bts)
+					return nil
+				}).Times(len(peers))
+
+			got := f.getHashes(context.TODO(), hashes, datastore.BlockDB, f.blockHandler.HandleSyncedBlock)
+			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
+				require.NotEmpty(t, got)
+			} else {
+				require.Empty(t, got)
+			}
+		})
+	}
+}
+
+func TestFetch_GetBlocks(t *testing.T) {
 	blks := []*types.Block{
 		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
 		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
 	}
 	blockIDs := types.ToBlockIDs(blks)
-	hashes := types.BlockIDsToHashes(blockIDs)
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name         string
-		fetchErrs    []error
-		hdlrErr, err error
-	}{
-		{
-			name:      "all hashes fetched",
-			fetchErrs: []error{nil, nil},
-		},
-		{
-			name:      "all hashes failed",
-			fetchErrs: []error{errUnknown, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "some hashes failed",
-			fetchErrs: []error{nil, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "handler failed",
-			fetchErrs: []error{nil, nil},
-			hdlrErr:   errUnknown,
-			err:       errUnknown,
-		},
-	}
+	f := createFetch(t)
+	f.mBlocksH.EXPECT().HandleSyncedBlock(gomock.Any(), gomock.Any()).Return(nil).Times(len(blockIDs))
 
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
 
-			require.Len(t, tc.fetchErrs, len(hashes))
-			f := createFetch(t)
-			results := make(map[types.Hash32]HashDataPromiseResult, len(hashes))
-			for i, h := range hashes {
-				if tc.fetchErrs[i] == nil {
-					data, err := codec.Encode(blks[i])
-					require.NoError(t, err)
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Data: data,
-					}
-					f.mBlocksH.EXPECT().HandleSyncedBlock(gomock.Any(), data).Return(tc.hdlrErr)
-				} else {
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Err:  tc.fetchErrs[i],
-					}
-				}
-			}
-
-			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) {
-				req.returnChan <- results[req.hash]
-			})
-
-			require.ErrorIs(t, f.GetBlocks(context.TODO(), blockIDs), tc.err)
-			f.cancel()
-			require.NoError(t, eg.Wait())
-		})
-	}
+	require.NoError(t, f.GetBlocks(context.TODO(), blockIDs))
+	close(stop)
+	require.NoError(t, eg.Wait())
 }
 
-func TestGetBallots(t *testing.T) {
+func TestFetch_GetBallots(t *testing.T) {
 	blts := []*types.Ballot{
 		types.GenLayerBallot(types.NewLayerID(10)),
 		types.GenLayerBallot(types.NewLayerID(20)),
 	}
 	ballotIDs := types.ToBallotIDs(blts)
-	hashes := types.BallotIDsToHashes(ballotIDs)
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name         string
-		fetchErrs    []error
-		hdlrErr, err error
-	}{
-		{
-			name:      "all hashes fetched",
-			fetchErrs: []error{nil, nil},
-		},
-		{
-			name:      "all hashes failed",
-			fetchErrs: []error{errUnknown, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "some hashes failed",
-			fetchErrs: []error{nil, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "handler failed",
-			fetchErrs: []error{nil, nil},
-			hdlrErr:   errUnknown,
-			err:       errUnknown,
-		},
-	}
+	f := createFetch(t)
+	f.mBallotH.EXPECT().HandleSyncedBallot(gomock.Any(), gomock.Any()).Return(nil).Times(len(ballotIDs))
 
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
 
-			require.Len(t, tc.fetchErrs, len(hashes))
-			f := createFetch(t)
-			results := make(map[types.Hash32]HashDataPromiseResult, len(hashes))
-			for i, h := range hashes {
-				if tc.fetchErrs[i] == nil {
-					data, err := codec.Encode(blts[i])
-					require.NoError(t, err)
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Data: data,
-					}
-					f.mBallotH.EXPECT().HandleSyncedBallot(gomock.Any(), data).Return(tc.hdlrErr)
-				} else {
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Err:  tc.fetchErrs[i],
-					}
-				}
-			}
-
-			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) {
-				req.returnChan <- results[req.hash]
-			})
-
-			require.ErrorIs(t, f.GetBallots(context.TODO(), ballotIDs), tc.err)
-			f.cancel()
-			require.NoError(t, eg.Wait())
-		})
-	}
+	require.NoError(t, f.GetBallots(context.TODO(), ballotIDs))
+	close(stop)
+	require.NoError(t, eg.Wait())
 }
 
-func TestGetProposals(t *testing.T) {
+func TestFetch_GetProposals(t *testing.T) {
 	proposals := []*types.Proposal{
 		types.GenLayerProposal(types.NewLayerID(10), nil),
 		types.GenLayerProposal(types.NewLayerID(20), nil),
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
-	hashes := types.ProposalIDsToHashes(proposalIDs)
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name         string
-		fetchErrs    []error
-		hdlrErr, err error
-	}{
-		{
-			name:      "all hashes fetched",
-			fetchErrs: []error{nil, nil},
-		},
-		{
-			name:      "all hashes failed",
-			fetchErrs: []error{errUnknown, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "some hashes failed",
-			fetchErrs: []error{nil, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "handler failed",
-			fetchErrs: []error{nil, nil},
-			hdlrErr:   errUnknown,
-			err:       errUnknown,
-		},
-	}
+	f := createFetch(t)
+	f.mProposalH.EXPECT().HandleSyncedProposal(gomock.Any(), gomock.Any()).Return(nil).Times(len(proposalIDs))
 
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
 
-			require.Len(t, tc.fetchErrs, len(hashes))
-			f := createFetch(t)
-			results := make(map[types.Hash32]HashDataPromiseResult, len(hashes))
-			for i, h := range hashes {
-				if tc.fetchErrs[i] == nil {
-					data, err := codec.Encode(proposals[i])
-					require.NoError(t, err)
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Data: data,
-					}
-					f.mProposalH.EXPECT().HandleSyncedProposal(gomock.Any(), data).Return(tc.hdlrErr)
-				} else {
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Err:  tc.fetchErrs[i],
-					}
-				}
-			}
-
-			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) {
-				req.returnChan <- results[req.hash]
-			})
-
-			require.ErrorIs(t, f.GetProposals(context.TODO(), proposalIDs), tc.err)
-			f.cancel()
-			require.NoError(t, eg.Wait())
-		})
-	}
+	require.NoError(t, f.GetProposals(context.TODO(), proposalIDs))
+	close(stop)
+	require.NoError(t, eg.Wait())
 }
 
 func genTx(t *testing.T, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
@@ -330,7 +267,7 @@ func genTransactions(t *testing.T, num int) []*types.Transaction {
 	return txs
 }
 
-func TestGetTxs_FetchSomeError(t *testing.T) {
+func TestFetch_GetTxs(t *testing.T) {
 	for _, tc := range []struct {
 		desc   string
 		method int
@@ -348,81 +285,14 @@ func TestGetTxs_FetchSomeError(t *testing.T) {
 			f := createFetch(t).withMethod(tc.method)
 			txs := genTransactions(t, 19)
 			tids := types.ToTransactionIDs(txs)
-			hashes := types.TransactionIDsToHashes(tids)
+			f.expectTransactionCall(len(tids))
 
-			errUnknown := errors.New("unknown")
-			results := make(map[types.Hash32]HashDataPromiseResult, len(hashes))
-			for i, h := range hashes {
-				if i == 0 {
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Err:  errUnknown,
-					}
-				} else {
-					data, err := codec.Encode(&tids[i])
-					require.NoError(t, err)
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Data: data,
-					}
-					f.expectTransactionCall(data).Return(nil).Times(1)
-				}
-			}
-
+			stop := make(chan struct{}, 1)
 			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) {
-				req.returnChan <- results[req.hash]
-			})
+			startTestLoop(t, f.Fetch, &eg, stop)
 
-			require.ErrorIs(t, f.getTxs(tids), errUnknown)
-			f.cancel()
-			require.NoError(t, eg.Wait())
-		})
-	}
-}
-
-func TestGetTxs(t *testing.T) {
-	errUnknown := errors.New("unknown")
-	txs := genTransactions(t, 19)
-	tids := types.ToTransactionIDs(txs)
-	hashes := types.TransactionIDsToHashes(tids)
-	tt := []struct {
-		name         string
-		hdlrErr, err error
-	}{
-		{
-			name: "all hashes fetched",
-		},
-		{
-			name:    "handler error",
-			hdlrErr: errUnknown,
-			err:     errUnknown,
-		},
-	}
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			f := createFetch(t)
-			results := make(map[types.Hash32]HashDataPromiseResult, len(hashes))
-			for i, h := range hashes {
-				data, err := codec.Encode(&tids[i])
-				require.NoError(t, err)
-				results[h] = HashDataPromiseResult{
-					Hash: h,
-					Data: data,
-				}
-				f.mTxH.EXPECT().HandleBlockTransaction(gomock.Any(), data).Return(tc.hdlrErr).Times(1)
-			}
-
-			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) {
-				req.returnChan <- results[req.hash]
-			})
-
-			require.ErrorIs(t, f.GetBlockTxs(context.TODO(), tids), tc.err)
-			f.cancel()
+			require.NoError(t, f.testGetTxs(tids))
+			close(stop)
 			require.NoError(t, eg.Wait())
 		})
 	}
@@ -445,96 +315,29 @@ func genATXs(t *testing.T, num uint32) []*types.ActivationTx {
 func TestGetATXs(t *testing.T) {
 	atxs := genATXs(t, 2)
 	atxIDs := types.ToATXIDs(atxs)
-	hashes := types.ATXIDsToHashes(atxIDs)
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name         string
-		fetchErrs    []error
-		hdlrErr, err error
-	}{
-		{
-			name:      "all hashes fetched",
-			fetchErrs: []error{nil, nil},
-		},
-		{
-			name:      "all hashes failed",
-			fetchErrs: []error{errUnknown, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "some hashes failed",
-			fetchErrs: []error{nil, errUnknown},
-			err:       errUnknown,
-		},
-		{
-			name:      "handler failed",
-			fetchErrs: []error{nil, nil},
-			hdlrErr:   errUnknown,
-			err:       errUnknown,
-		},
-	}
+	f := createFetch(t)
+	f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), gomock.Any()).Return(nil).Times(len(atxIDs))
 
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
 
-			require.Len(t, tc.fetchErrs, len(hashes))
-			f := createFetch(t)
-			results := make(map[types.Hash32]HashDataPromiseResult, len(hashes))
-			for i, h := range hashes {
-				if tc.fetchErrs[i] == nil {
-					data, err := codec.Encode(atxs[i])
-					require.NoError(t, err)
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Data: data,
-					}
-					f.mAtxH.EXPECT().HandleAtxData(gomock.Any(), data).Return(tc.hdlrErr)
-				} else {
-					results[h] = HashDataPromiseResult{
-						Hash: h,
-						Err:  tc.fetchErrs[i],
-					}
-				}
-			}
-
-			var eg errgroup.Group
-			startTestLoop(f.Fetch, &eg, func(req *request) {
-				req.returnChan <- results[req.hash]
-			})
-
-			require.ErrorIs(t, f.GetAtxs(context.TODO(), atxIDs), tc.err)
-			f.cancel()
-			require.NoError(t, eg.Wait())
-		})
-	}
+	require.NoError(t, f.GetAtxs(context.TODO(), atxIDs))
+	close(stop)
+	require.NoError(t, eg.Wait())
 }
 
 func TestGetPoetProof(t *testing.T) {
 	f := createFetch(t)
-	proof := types.PoetProofMessage{}
 	h := types.RandomHash()
-	data, err := codec.Encode(&proof)
-	require.NoError(t, err)
+	f.mPoetH.EXPECT().ValidateAndStoreMsg(gomock.Any(), gomock.Any()).Return(nil)
 
+	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
-	startTestLoop(f.Fetch, &eg, func(req *request) {
-		req.returnChan <- HashDataPromiseResult{
-			Hash: h,
-			Data: data,
-		}
-	})
+	startTestLoop(t, f.Fetch, &eg, stop)
 
-	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(nil).Times(1)
 	require.NoError(t, f.GetPoetProof(context.TODO(), h))
-
-	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(sql.ErrObjectExists).Times(1)
-	require.NoError(t, f.GetPoetProof(context.TODO(), h))
-
-	f.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(errors.New("unknown")).Times(1)
-	require.Error(t, f.GetPoetProof(context.TODO(), h))
-	f.cancel()
+	close(stop)
 	require.NoError(t, eg.Wait())
 }
 
@@ -662,7 +465,17 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 	}
 }
 
-func TestFetch_GetEpochATXIDs(t *testing.T) {
+func generateEpochData(t *testing.T) (*EpochData, []byte) {
+	t.Helper()
+	ed := &EpochData{
+		AtxIDs: types.RandomActiveSet(11),
+	}
+	data, err := codec.Encode(ed)
+	require.NoError(t, err)
+	return ed, data
+}
+
+func Test_PeerEpochInfo(t *testing.T) {
 	peer := p2p.Peer("p0")
 	errUnknown := errors.New("unknown")
 	tt := []struct {
@@ -684,26 +497,23 @@ func TestFetch_GetEpochATXIDs(t *testing.T) {
 			t.Parallel()
 
 			f := createFetch(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			okFunc := func(_ []byte) {
-				wg.Done()
-			}
-			errFunc := func(err error) {
-				require.ErrorIs(t, err, tc.err)
-				wg.Done()
-			}
+			var expected *EpochData
 			f.mAtxS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ p2p.Peer, req []byte, okCB func([]byte), errCB func(error)) error {
 					if tc.err == nil {
-						go okCB([]byte("a"))
+						var data []byte
+						expected, data = generateEpochData(t)
+						okCB(data)
 					} else {
-						go errCB(tc.err)
+						errCB(tc.err)
 					}
 					return nil
 				})
-			require.NoError(t, f.GetEpochATXIDs(context.TODO(), peer, types.EpochID(111), okFunc, errFunc))
-			wg.Wait()
+			got, err := f.PeerEpochInfo(context.TODO(), peer, types.EpochID(111))
+			require.ErrorIs(t, err, tc.err)
+			if tc.err == nil {
+				require.Equal(t, expected, got)
+			}
 		})
 	}
 }
@@ -764,13 +574,9 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 					if tc.err == nil {
 						data, err := codec.EncodeSlice(expected.Hashes)
 						require.NoError(t, err)
-						go func() {
-							okCB(data)
-						}()
+						okCB(data)
 					} else {
-						go func() {
-							errCB(tc.err)
-						}()
+						errCB(tc.err)
 					}
 					return nil
 				})

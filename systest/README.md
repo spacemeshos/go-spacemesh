@@ -158,6 +158,32 @@ This is related to minikube setup though and shouldn't be an issue for Kubernete
 * If you are switching between remote and local k8s, you have to run `minikube start` before running the tests locally.
 * If you did `make clean`, you will have to install `loki` again for grafana to be installed.
 
+## Parametrizable tests
+
+Tests are parametrized using configmap that must be created in the same namespace
+where test pod is running. Name of the configmap by default will match name of the pod where
+tests are running.
+
+Developer can replace configmap that is used in tests by creating a custom one, and updating `configname` variable.
+
+```bash
+make run configname=<custom configmap> test_name=TestStepCreate
+```
+
+Alternatively it is possible to replace smesher/poet config and add more values to the config map.
+
+Command below will update configmap to use longer epochs:
+
+```bash
+make run smesher_config=parameters/longfast/smesher.json poet_config=parameters/longfast/poet.conf test_name=TestStepCreate
+```
+
+Command below will add additional variable to configmap from env file:
+```bash
+echo "layers-to-check=20" >> properties.env
+make run properties=properties.env test_name=TestStepCreate
+```
+
 ## Longevity testing
 
 ### Manual mode
@@ -220,3 +246,15 @@ On gke for the network with a moderate load `premium-rwo` storage class with 10G
 ```bash
 export storage=premium-rwo=10Gi
 ```
+
+### Schedule chaos tasks for longevity network.
+
+Chaos-mesh tasks are scheduled using native chaos-mesh api for flexibility.
+After cluster was created and all pods of the cluter have spawned it is possible to apply
+a predefined set of tasks using kubectl
+
+```bash
+kubectl apply -n <namespace> -f ./parameters/chaos
+```
+
+Or use chaos mesh dashboard for custom chaos tasks.

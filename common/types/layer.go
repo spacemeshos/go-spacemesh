@@ -157,8 +157,8 @@ func (id NodeID) String() string {
 	return id.hex()
 }
 
-// ToBytes returns the byte representation of the Edwards public key.
-func (id NodeID) ToBytes() []byte {
+// Bytes returns the byte representation of the Edwards public key.
+func (id NodeID) Bytes() []byte {
 	return id[:]
 }
 

@@ -7,9 +7,8 @@ import (
 	"sync"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
-	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -26,13 +25,11 @@ func NewJSONHTTPServer(port int) *JSONHTTPServer {
 	return &JSONHTTPServer{port: port}
 }
 
-// Close stops the server.
-func (s *JSONHTTPServer) Close() error {
+// Shutdown stops the server.
+func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 	log.Debug("stopping new json-http service...")
 	server := s.getServer()
 	if server != nil {
-		ctx := cmdp.Ctx()
-
 		if err := server.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown: %w", err)
 		}
@@ -75,19 +72,19 @@ func (s *JSONHTTPServer) startInternal(
 		var err error
 		switch typed := svc.(type) {
 		case *GatewayService:
-			err = gw.RegisterGatewayServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterGatewayServiceHandlerServer(ctx, mux, typed)
 		case *GlobalStateService:
-			err = gw.RegisterGlobalStateServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterGlobalStateServiceHandlerServer(ctx, mux, typed)
 		case *MeshService:
-			err = gw.RegisterMeshServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterMeshServiceHandlerServer(ctx, mux, typed)
 		case *NodeService:
-			err = gw.RegisterNodeServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterNodeServiceHandlerServer(ctx, mux, typed)
 		case *SmesherService:
-			err = gw.RegisterSmesherServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterSmesherServiceHandlerServer(ctx, mux, typed)
 		case *TransactionService:
-			err = gw.RegisterTransactionServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterTransactionServiceHandlerServer(ctx, mux, typed)
 		case *DebugService:
-			err = gw.RegisterDebugServiceHandlerServer(ctx, mux, typed)
+			err = pb.RegisterDebugServiceHandlerServer(ctx, mux, typed)
 		}
 		if err != nil {
 			log.Error("registering %T with grpc gateway failed with %v", svc, err)

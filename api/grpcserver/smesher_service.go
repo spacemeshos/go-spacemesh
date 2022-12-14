@@ -1,34 +1,29 @@
 package grpcserver
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type PostSetupProvider interface {
-	Status() *atypes.PostSetupStatus
-	StatusChan() <-chan *atypes.PostSetupStatus
-	ComputeProviders() []atypes.PostSetupComputeProvider
-	Benchmark(p atypes.PostSetupComputeProvider) (int, error)
-	Config() atypes.PostConfig
-}
-
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider PostSetupProvider
+	postSetupProvider api.PostSetupProvider
 	smeshingProvider  api.SmeshingAPI
+
+	streamInterval time.Duration
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -37,8 +32,8 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post PostSetupProvider, smeshing api.SmeshingAPI) *SmesherService {
-	return &SmesherService{post, smeshing}
+func NewSmesherService(post api.PostSetupProvider, smeshing api.SmeshingAPI, streamInterval time.Duration) *SmesherService {
+	return &SmesherService{post, smeshing, streamInterval}
 }
 
 // IsSmeshing reports whether the node is smeshing.
@@ -71,7 +66,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
 	}
 
-	opts := atypes.PostSetupOpts{
+	opts := activation.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          in.Opts.NumUnits,
 		NumFiles:          in.Opts.NumFiles,
@@ -183,13 +178,13 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
 	log.Info("GRPC SmesherService.PostSetupStatusStream")
 
-	statusChan := s.postSetupProvider.StatusChan()
+	timer := time.NewTicker(s.streamInterval)
+	defer timer.Stop()
+
 	for {
 		select {
-		case status, more := <-statusChan:
-			if !more {
-				return nil
-			}
+		case <-timer.C:
+			status := s.postSetupProvider.Status()
 			if err := stream.Send(&pb.PostSetupStatusStreamResponse{Status: statusToPbStatus(status)}); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
@@ -237,13 +232,15 @@ func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfi
 
 	return &pb.PostConfigResponse{
 		BitsPerLabel:  uint32(cfg.BitsPerLabel),
-		LabelsPerUnit: uint64(cfg.LabelsPerUnit),
-		MinNumUnits:   uint32(cfg.MinNumUnits),
-		MaxNumUnits:   uint32(cfg.MaxNumUnits),
+		LabelsPerUnit: cfg.LabelsPerUnit,
+		MinNumUnits:   cfg.MinNumUnits,
+		MaxNumUnits:   cfg.MaxNumUnits,
+		K1:            cfg.K1,
+		K2:            cfg.K2,
 	}, nil
 }
 
-func statusToPbStatus(status *atypes.PostSetupStatus) *pb.PostSetupStatus {
+func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus := &pb.PostSetupStatus{}
 
 	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.

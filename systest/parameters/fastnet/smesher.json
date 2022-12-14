@@ -1,0 +1,11 @@
+{
+    "preset": "fastnet",
+    "poet": {
+        "phase-shift": "20s",
+        "cycle-gap": "10s",
+        "grace-period": "3s"  
+    },
+    "logging": {
+        "trtl": "debug"
+    }
+}

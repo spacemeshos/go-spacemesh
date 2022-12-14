@@ -1,6 +1,3 @@
-all: install build
-.PHONY: all
-
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-gpu.Inc
 # TODO(nkryuchkov): uncomment when go-svm is imported
@@ -14,7 +11,7 @@ SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 export CGO_ENABLED := 1
-export CGO_CFLAGS := "-DSQLITE_ENABLE_DBSTAT_VTAB=1"
+export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
@@ -62,11 +59,14 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
+all: install build
+.PHONY: all
+
 install:
 	go run scripts/check-go-version.go --major 1 --minor 19
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.50.0
-	go install github.com/spacemeshos/go-scale/scalegen@v1.0.0
+	go install github.com/spacemeshos/go-scale/scalegen@v1.1.1
 	go install github.com/golang/mock/mockgen
 	go install gotest.tools/gotestsum@v1.8.2
 	go install honnef.co/go/tools/cmd/staticcheck@latest
@@ -80,13 +80,13 @@ get-libs: get-gpu-setup #get-svm
 .PHONY: get-libs
 
 gen-p2p-identity:
-	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)$@$(EXE) .
 hare p2p: get-libs
-	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
+	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 harness: get-libs
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
+	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: hare p2p harness go-spacemesh gen-p2p-identity
 
 tidy:
@@ -96,17 +96,6 @@ tidy:
 ifeq ($(HOST_OS),$(filter $(HOST_OS),linux darwin))
 windows:
 	CC=x86_64-w64-mingw32-gcc $(MAKE) GOOS=$@ GOARCH=amd64 BIN_DIR=$(PROJ_DIR)build/ go-spacemesh
-.PHONY: windows
-arm6:
-	$(error gpu lib is  not available for arm6 yet)
-	#CC=x86_64-arm6-gcc $(MAKE) GOOS=$@ GOARCH=arm6 GOARM=6 BIN_DIR=$(PROJ_DIR)build/arm6/ go-spacemesh
-.PHONY: arm6
-$(HOST_OS): go-spacemesh
-.PHONY: $(HOST_OS)
-endif
-
-ifeq ($(HOST_OS),windows)
-windows: go-spacemesh
 .PHONY: windows
 endif
 
@@ -123,7 +112,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 5m -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
@@ -150,7 +139,6 @@ test-fmt:
 .PHONY: test-fmt
 
 lint: get-libs
-	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml
 .PHONY: lint
 
@@ -160,7 +148,6 @@ lint-fix: get-libs
 .PHONY: lint-fix
 
 lint-github-action: get-libs
-	go vet ./...
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: lint-github-action
 

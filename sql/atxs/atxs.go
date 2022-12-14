@@ -75,7 +75,7 @@ func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err err
 // GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
 func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.ToBytes())
+		stmt.BindBytes(1, nodeID.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, id[:])
@@ -98,7 +98,7 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 // GetLastIDByNodeID gets the last ATX ID for a given node ID.
 func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.ToBytes())
+		stmt.BindBytes(1, nodeID.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, id[:])
@@ -122,7 +122,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
-		stmt.BindBytes(2, nodeID.ToBytes())
+		stmt.BindBytes(2, nodeID.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, id[:])
@@ -172,9 +172,9 @@ func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 			stmt.ColumnBytes(0, buf)
 			return true
 		}); err != nil {
-		return nil, fmt.Errorf("get %s: %w", id, err)
+		return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
 	} else if rows == 0 {
-		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, id)
+		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
 	}
 	return buf, nil
 }
@@ -190,7 +190,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PublishEpoch()))
-		stmt.BindBytes(4, atx.NodeID().ToBytes())
+		stmt.BindBytes(4, atx.NodeID().Bytes())
 		stmt.BindBytes(5, buf)
 		stmt.BindInt64(6, timestamp.UnixNano())
 		stmt.BindInt64(7, int64(atx.BaseTickHeight()))
@@ -209,7 +209,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx, timestamp time.Time) 
 // DeleteATXsByNodeID deletes ATXs by node ID.
 func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
 	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.ToBytes())
+		stmt.BindBytes(1, nodeID.Bytes())
 	}
 
 	if _, err := db.Exec("delete from atxs where smesher = ?1;", enc, nil); err != nil {

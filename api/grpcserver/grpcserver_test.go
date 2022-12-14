@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +25,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -33,7 +35,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
@@ -290,7 +291,7 @@ func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) (types.Layer
 func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if ok {
-		return &types.MeshTransaction{Transaction: *tx, State: types.BLOCK}, nil
+		return &types.MeshTransaction{Transaction: *tx, State: types.APPLIED}, nil
 	}
 	tx, ok = t.poolByTxid[id]
 	if ok {
@@ -372,42 +373,38 @@ func NewMockSigner() *MockSigning {
 
 // TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
 type MockSigning struct {
-	signer *signing.EdSigner
+	*signing.EdSigner
 }
 
 func (ms *MockSigning) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.signer.PublicKey().Bytes())
-}
-
-func (ms *MockSigning) Sign(m []byte) []byte {
-	return ms.signer.Sign(m)
+	return types.BytesToNodeID(ms.PublicKey().Bytes())
 }
 
 // PostAPIMock is a mock for Post API.
 // TODO(mafa): replace this mock with the generated mock.
 type PostAPIMock struct{}
 
-func (*PostAPIMock) Status() *atypes.PostSetupStatus {
-	return &atypes.PostSetupStatus{}
+func (*PostAPIMock) Status() *activation.PostSetupStatus {
+	return &activation.PostSetupStatus{}
 }
 
-func (p *PostAPIMock) StatusChan() <-chan *atypes.PostSetupStatus {
-	ch := make(chan *atypes.PostSetupStatus, 1)
+func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
+	ch := make(chan *activation.PostSetupStatus, 1)
 	ch <- p.Status()
 	close(ch)
 
 	return ch
 }
 
-func (p *PostAPIMock) ComputeProviders() []atypes.PostSetupComputeProvider {
+func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
 	return nil
 }
 
-func (p *PostAPIMock) Benchmark(atypes.PostSetupComputeProvider) (int, error) {
+func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
 	return 0, nil
 }
 
-func (p *PostAPIMock) StartSession(opts atypes.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -423,12 +420,12 @@ func (p *PostAPIMock) LastError() error {
 	return nil
 }
 
-func (p *PostAPIMock) LastOpts() *atypes.PostSetupOpts {
-	return &atypes.PostSetupOpts{}
+func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
+	return &activation.PostSetupOpts{}
 }
 
-func (p *PostAPIMock) Config() atypes.PostConfig {
-	return atypes.PostConfig{}
+func (p *PostAPIMock) Config() activation.PostConfig {
+	return activation.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
@@ -438,7 +435,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, atypes.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
 	return nil
 }
 
@@ -505,8 +502,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(
-		context.TODO(), services...)
+	jsonStarted := jsonService.StartService(context.Background(), services...)
 
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
@@ -520,7 +516,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) func() {
 	}
 
 	return func() {
-		require.NoError(tb, jsonService.Close())
+		require.NoError(tb, jsonService.Shutdown(context.Background()))
 		_ = grpcService.Close()
 	}
 }
@@ -530,7 +526,7 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
@@ -656,21 +652,15 @@ func TestNodeService(t *testing.T) {
 		}},
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
-			called := false
-
-			cmd.SetCancel(func() { called = true })
-
-			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
 			res, err := c.Shutdown(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, true, called, "cmd.Shutdown() was called")
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unimplemented, "UNIMPLEMENTED"))
 		}},
 		{"UpdatePoetServer", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = nil
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 			require.NoError(t, err)
 			require.EqualValues(t, res.Status.Code, code.Code_OK)
 		}},
@@ -678,7 +668,7 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
 			urls := []string{"test"}
-			res, err := c.UpdatePoetServers(context.TODO(), &pb.UpdatePoetServersRequest{Urls: urls})
+			res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
 			require.Nil(t, res)
 			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", atxapi.UpdatePoETErr))
 		}},
@@ -975,7 +965,7 @@ func TestGlobalStateService(t *testing.T) {
 
 func TestSmesherService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{})
+	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{}, 10*time.Millisecond)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -984,112 +974,118 @@ func TestSmesherService(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewSmesherServiceClient(conn)
 
-	// Construct an array of test cases to test each endpoint in turn
-	testCases := []struct {
-		name string
-		run  func(*testing.T)
-	}{
-		{"IsSmeshing", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
-		}},
-		{"StartSmeshingMissingArgs", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
-			require.Equal(t, codes.InvalidArgument, status.Code(err))
-		}},
-		{"StartSmeshing", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			opts := &pb.PostSetupOpts{}
-			opts.DataDir = t.TempDir()
-			opts.NumUnits = 1
-			opts.NumFiles = 1
+	t.Run("IsSmeshing", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
+	})
 
-			coinbase := &pb.AccountId{Address: addr1.String()}
+	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
 
-			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
-				Opts:     opts,
-				Coinbase: coinbase,
-			})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"StopSmeshing", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"SmesherID", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.SmesherID(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			nodeAddr := types.GenerateAddress(signer.NodeID().ToBytes())
-			resAddr, err := types.StringToAddress(res.AccountId.Address)
-			require.NoError(t, err)
-			require.Equal(t, nodeAddr.String(), resAddr.String())
-		}},
-		{"SetCoinbaseMissingArgs", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-		}},
-		{"SetCoinbase", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
-				Id: &pb.AccountId{Address: addr1.String()},
-			})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"Coinbase", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			res, err := c.Coinbase(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			addr, err := types.StringToAddress(res.AccountId.Address)
-			require.NoError(t, err)
-			require.Equal(t, addr1.Bytes(), addr.Bytes())
-		}},
-		{"MinGas", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.MinGas(context.Background(), &empty.Empty{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"SetMinGas", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"PostSetupComputeProviders", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
-			require.NoError(t, err)
-		}},
-		{"PostSetupStatusStream", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			stream, err := c.PostSetupStatusStream(context.Background(), &empty.Empty{})
+	t.Run("StartSmeshing", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		opts := &pb.PostSetupOpts{}
+		opts.DataDir = t.TempDir()
+		opts.NumUnits = 1
+		opts.NumFiles = 1
 
-			// Expecting the stream to return a single update before closing.
-			require.NoError(t, err)
+		coinbase := &pb.AccountId{Address: addr1.String()}
+
+		res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+			Opts:     opts,
+			Coinbase: coinbase,
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	})
+
+	t.Run("StopSmeshing", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	})
+
+	t.Run("SmesherID", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.SmesherID(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
+		resAddr, err := types.StringToAddress(res.AccountId.Address)
+		require.NoError(t, err)
+		require.Equal(t, nodeAddr.String(), resAddr.String())
+	})
+
+	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
+		require.Error(t, err)
+		statusCode := status.Code(err)
+		require.Equal(t, codes.InvalidArgument, statusCode)
+	})
+
+	t.Run("SetCoinbase", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
+			Id: &pb.AccountId{Address: addr1.String()},
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	})
+
+	t.Run("Coinbase", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		res, err := c.Coinbase(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		addr, err := types.StringToAddress(res.AccountId.Address)
+		require.NoError(t, err)
+		require.Equal(t, addr1.Bytes(), addr.Bytes())
+	})
+
+	t.Run("MinGas", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.MinGas(context.Background(), &empty.Empty{})
+		require.Error(t, err)
+		statusCode := status.Code(err)
+		require.Equal(t, codes.Unimplemented, statusCode)
+	})
+
+	t.Run("SetMinGas", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
+		require.Error(t, err)
+		statusCode := status.Code(err)
+		require.Equal(t, codes.Unimplemented, statusCode)
+	})
+
+	t.Run("PostSetupComputeProviders", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		_, err := c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
+		require.NoError(t, err)
+	})
+
+	t.Run("PostSetupStatusStream", func(t *testing.T) {
+		logtest.SetupGlobal(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		stream, err := c.PostSetupStatusStream(ctx, &empty.Empty{})
+		require.NoError(t, err)
+
+		// Expecting the stream to return updates before closing.
+		for i := 0; i < 3; i++ {
 			_, err = stream.Recv()
 			require.NoError(t, err)
-			_, err = stream.Recv()
-			require.EqualError(t, err, io.EOF.Error())
-		}},
-	}
+		}
 
-	// Run subtests
-	for _, tc := range testCases {
-		t.Run(tc.name, tc.run)
-	}
+		cancel()
+		_, err = stream.Recv()
+		require.ErrorContains(t, err, context.Canceled.Error())
+	})
 }
 
 func TestMeshService(t *testing.T) {
@@ -1745,7 +1741,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 0, len(res.Transactions))
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 		}},
 		{"TransactionsState_All", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1759,7 +1755,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, 1, len(res.TransactionsState))
 			require.Equal(t, 1, len(res.Transactions))
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 
 			checkTransaction(t, res.Transactions[0])
 		}},
@@ -1812,7 +1808,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				require.Nil(t, res.Transaction)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 			}()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
@@ -1841,7 +1837,7 @@ func TestTransactionService(t *testing.T) {
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 				checkTransaction(t, res.Transaction)
 			}()
 
@@ -1944,7 +1940,7 @@ func TestTransactionService(t *testing.T) {
 					res, err := stream.Recv()
 					require.NoError(t, err)
 					require.Equal(t, globalTx.ID.Bytes(), res.TransactionState.Id.Id)
-					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 					checkTransaction(t, res.Transaction)
 				}
 			}()
@@ -2034,7 +2030,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
 				continue
 			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().ToBytes()) {
+			if !bytes.Equal(a.SmesherId.Id, globalAtx.NodeID().Bytes()) {
 				continue
 			}
 			if a.Coinbase.Address != globalAtx.Coinbase.String() {
@@ -2340,7 +2336,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
-		Status:  events.LayerStatusTypeConfirmed,
+		Status:  events.LayerStatusTypeApplied,
 	})
 
 	// close the stream
@@ -2421,7 +2417,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	wg.Wait()
 }
 
-func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
+func checkAccountDataQueryItemAccount(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.AccountData_AccountWrapper)
@@ -2438,7 +2434,7 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 		"inner account has bad projected balance")
 }
 
-func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
+func checkAccountDataQueryItemReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
@@ -2449,7 +2445,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 	require.Nil(t, x.Reward.Smesher)
 }
 
-func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
+func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountMeshData_MeshTransaction{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_MeshTransaction)
@@ -2457,19 +2453,19 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 }
 
-func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
+func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_Activation)
 	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
 	require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.NodeID().ToBytes(), x.Activation.SmesherId.Id)
+	require.Equal(t, globalAtx.NodeID().Bytes(), x.Activation.SmesherId.Id)
 	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
 	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
 	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 }
 
-func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
+func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
@@ -2479,7 +2475,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
-func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
+func checkAccountDataItemAccount(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.AccountData_AccountWrapper)
@@ -2490,7 +2486,7 @@ func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
-func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
+func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_Reward{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_Reward)
@@ -2500,7 +2496,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
 }
 
-func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
+func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_AccountWrapper)
@@ -2511,7 +2507,7 @@ func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
 	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
-func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
+func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_GlobalState{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_GlobalState)
@@ -2630,7 +2626,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.TODO(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2664,8 +2660,9 @@ func TestGatewayService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	verifier := mocks.NewMockChallengeVerifier(ctrl)
 
-	svc := NewGatewayService(publisher)
+	svc := NewGatewayService(publisher, verifier)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2761,7 +2758,7 @@ func TestEventsReceived(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, txRes.Transaction)
 		require.Equal(t, globalTx.ID.Bytes(), txRes.TransactionState.Id.Id)
-		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, txRes.TransactionState.State)
 
 		acc1Res, err := principalStream.Recv()
 		require.NoError(t, err)
@@ -2777,7 +2774,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
-	conState.AddToCache(context.TODO(), globalTx)
+	conState.AddToCache(context.Background(), globalTx)
 
 	weight := util.WeightFromFloat64(18.7)
 	require.NoError(t, err)
@@ -2786,4 +2783,86 @@ func TestEventsReceived(t *testing.T) {
 		[]types.Transaction{*globalTx}, rewards)
 
 	wg.Wait()
+}
+
+func TestVMAccountUpdates(t *testing.T) {
+	logtest.SetupGlobal(t)
+	events.CloseEventReporter()
+	events.InitializeReporter()
+
+	// in memory database doesn't allow reads while writer locked db
+	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
+	t.Cleanup(launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+
+	keys := make([]ed25519.PrivateKey, 10)
+	accounts := make([]types.Account, len(keys))
+	const initial = 100_000_000
+	for i := range keys {
+		pub, pk, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		keys[i] = pk
+		accounts[i] = types.Account{
+			Address: wallet.Address(pub),
+			Balance: initial,
+		}
+	}
+	require.NoError(t, svm.ApplyGenesis(accounts))
+	spawns := []types.Transaction{}
+	for _, pk := range keys {
+		spawns = append(spawns, types.Transaction{
+			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, 0)),
+		})
+	}
+	lid := types.GetEffectiveGenesis().Add(1)
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	eg, ctx := errgroup.WithContext(ctx)
+	states := make(chan *pb.AccountState, len(accounts))
+	for _, account := range accounts {
+		stream, err := client.AccountDataStream(ctx, &pb.AccountDataStreamRequest{
+			Filter: &pb.AccountDataFilter{
+				AccountId:        &pb.AccountId{Address: account.Address.String()},
+				AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
+			},
+		})
+		require.NoError(t, err)
+		_, err = stream.Header()
+		require.NoError(t, err)
+		eg.Go(func() error {
+			response, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			states <- response.Datum.GetAccountWrapper().StateCurrent
+			return nil
+		})
+	}
+
+	spends := []types.Transaction{}
+	const amount = 100_000
+	for _, pk := range keys {
+		spends = append(spends, types.Transaction{
+			RawTx: types.NewRawTx(wallet.Spend(
+				pk, types.Address{1}, amount, 1,
+			)),
+		})
+	}
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid.Add(1)}, spends, nil)
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
+	close(states)
+	i := 0
+	for state := range states {
+		i++
+		require.Equal(t, 2, int(state.Counter))
+		require.Less(t, int(state.Balance.Value), initial-amount)
+	}
+	require.Equal(t, len(accounts), i)
 }

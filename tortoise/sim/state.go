@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -67,7 +68,7 @@ func (s *State) OnBlock(block *types.Block) {
 
 // OnHareOutput callback to store hare output.
 func (s *State) OnHareOutput(lid types.LayerID, bid types.BlockID) {
-	if err := layers.SetHareOutput(s.DB, lid, bid); err != nil {
+	if err := certificates.SetHareOutput(s.DB, lid, bid); err != nil {
 		s.logger.With().Panic("failed to save hare output", log.Err(err))
 	}
 }

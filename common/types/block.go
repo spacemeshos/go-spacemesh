@@ -18,7 +18,7 @@ const (
 	BlockIDSize = Hash32Length
 )
 
-//go:generate scalegen
+//go:generate scalegen -types Block,InnerBlock,RatNum,AnyReward,Certificate,CertifyMessage,CertifyContent
 
 // BlockID is a 20-byte sha256 sum of the serialized block used to identify a Block.
 type BlockID Hash20
@@ -94,6 +94,11 @@ func (b *Block) ID() BlockID {
 	return b.blockID
 }
 
+// ToVote creates Vote struct from block.
+func (b *Block) ToVote() Vote {
+	return Vote{ID: b.ID(), LayerID: b.LayerIndex, Height: b.TickHeight}
+}
+
 // MarshalLogObject implements logging encoder for Block.
 func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
@@ -167,9 +172,10 @@ func ToBlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// BlockContextualValidity tuple with block id and contextual validity.
+// BlockContextualValidity represents the contextual validity of a block.
 type BlockContextualValidity struct {
 	ID       BlockID
+	Layer    LayerID
 	Validity bool
 }
 

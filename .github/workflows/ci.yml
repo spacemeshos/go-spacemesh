@@ -221,7 +221,7 @@ jobs:
       # this is the easiest way to access success/failure state of previous jobs in this workflow
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.lint.result == 'success' && needs.unittests.result == 'success')) && 'success' || 'failure' }}
     steps:
-      - uses: act10ns/slack@v1
+      - uses: act10ns/slack@v2
         name: Slack notification
         # skip if the secret is not accessible
         if: env.SLACK_WEBHOOK_URL
@@ -263,19 +263,19 @@ jobs:
     needs:
       - filter-changes
       - dockerpush
-    timeout-minutes: 60
+    timeout-minutes: 90
     concurrency: cloud-limits
     steps:
       - uses: actions/checkout@v3
 
       - id: "auth"
-        uses: "google-github-actions/auth@v0"
+        uses: "google-github-actions/auth@v1"
         with:
           # GCP_CREDENTIALS is minified JSON of service account
           credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
 
       - name: Configure gcloud
-        uses: "google-github-actions/setup-gcloud@v0"
+        uses: "google-github-actions/setup-gcloud@v1"
 
       - name: Configure kubectl
         run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
@@ -292,44 +292,50 @@ jobs:
       - name: Get branch and commit hash
         id: vars
         shell: bash
-        run: |
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-          echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build tests docker image
-        run: cd systest && make docker
+        run: make -C systest docker
 
       - name: Push tests docker images
-        run: cd systest && make push
+        run: make -C systest push
 
-      - name: Run tests
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.go-version }}
+
+      - name: Run tests I
         timeout-minutes: 50
-        run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha label=sanity storage=premium-rwo=10Gi
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: sanity
+          storage: premium-rwo=10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 50
+          bootstrap: 10m
+          level: debug
+          clusters: 2
+        run: make -C systest run test_name=.
 
-      - name: System test result
-        run: |
-          SUCCESS=$(kubectl get pod --selector testid=systest-${{ steps.vars.outputs.sha_short }} -o json | jq .items[].status.containerStatuses[].state.terminated.exitCode)
-          SUCCESS="${SUCCESS//'%'/'%25'}"
-          SUCCESS="${SUCCESS//$'\n'/'%0A'}"
-          SUCCESS="${SUCCESS//$'\r'/'%0D'}"
-          echo "::set-output name=content::$SUCCESS"
-        id: tests_logs
+      - name: Run tests II
+        timeout-minutes: 30
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          label: destructive
+          storage: premium-rwo=10Gi
+          node_selector: cloud.google.com/gke-nodepool=gha
+          size: 30
+          bootstrap: 10m
+          level: debug
+          clusters: 2
+        run: make -C systest run test_name=.
 
       - name: Delete pod
         if: always()
-        run: cd systest && make clean
-
-      - name: Tests Passed or Failed
-        run: |
-          SUCCESS='${{ steps.tests_logs.outputs.content }}'
-          ISTRUE='0'
-          if [[ "$SUCCESS" == "$ISTRUE" ]]; then
-            exit 0
-          else
-            exit 1
-          fi
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+        run: make -C systest clean
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
@@ -345,7 +351,7 @@ jobs:
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
-      - uses: act10ns/slack@v1
+      - uses: act10ns/slack@v2
         name: Slack notification
         with:
           status: ${{ env.status }}

@@ -564,13 +564,13 @@ func TestGetMeshTransaction(t *testing.T) {
 	require.NoError(t, tcs.LinkTXsWithProposal(lid, pid, []types.TransactionID{tx.ID}))
 	mtx, err = tcs.GetMeshTransaction(tx.ID)
 	require.NoError(t, err)
-	require.Equal(t, types.PROPOSAL, mtx.State)
+	require.Equal(t, types.MEMPOOL, mtx.State)
 
 	bid := types.BlockID{2, 3, 4}
 	require.NoError(t, tcs.LinkTXsWithBlock(lid, bid, []types.TransactionID{tx.ID}))
 	mtx, err = tcs.GetMeshTransaction(tx.ID)
 	require.NoError(t, err)
-	require.Equal(t, types.BLOCK, mtx.State)
+	require.Equal(t, types.MEMPOOL, mtx.State)
 }
 
 func Test_ApplyLayer_UpdateHeader(t *testing.T) {
@@ -618,7 +618,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 			return nil, rst, nil
 		}).Times(1)
 
-	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block))
 
 	got, err = transactions.Get(tcs.db, tx.ID)
 	require.NoError(t, err)
@@ -659,15 +659,29 @@ func TestApplyLayer(t *testing.T) {
 			return nil, rst, nil
 		}).Times(1)
 
-	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block))
 
 	for _, id := range ids {
 		mtx, err := transactions.Get(tcs.db, id)
 		require.NoError(t, err)
 		require.Equal(t, types.APPLIED, mtx.State)
-		require.Equal(t, block.ID(), mtx.BlockID)
 		require.Equal(t, lid, mtx.LayerID)
+		require.Equal(t, block.ID(), mtx.BlockID)
 	}
+}
+
+func TestApplyEmptyLayer(t *testing.T) {
+	tcs := createConservativeState(t)
+	lid := types.NewLayerID(1)
+	ids, _ := addBatch(t, tcs, numTXs)
+	require.NoError(t, tcs.LinkTXsWithBlock(lid, types.BlockID{1, 2, 3}, ids))
+	mempoolTxs := tcs.SelectProposalTXs(lid, 2)
+	require.Empty(t, mempoolTxs)
+
+	tcs.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid, Block: types.EmptyBlockID}, nil, nil).Return(nil, nil, nil)
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), lid, nil))
+	mempoolTxs = tcs.SelectProposalTXs(lid, 2)
+	require.Len(t, mempoolTxs, len(ids))
 }
 
 func TestApplyLayer_TXsFailedVM(t *testing.T) {
@@ -713,7 +727,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			return inefective, rst, nil
 		}).Times(1)
 
-	require.NoError(t, tcs.ApplyLayer(context.TODO(), block))
+	require.NoError(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block))
 
 	for i, id := range ids {
 		mtx, err := transactions.Get(tcs.db, id)
@@ -724,8 +738,8 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 			require.Equal(t, types.LayerID{}, mtx.LayerID)
 		} else {
 			require.Equal(t, types.APPLIED, mtx.State)
-			require.Equal(t, block.ID(), mtx.BlockID)
 			require.Equal(t, lid, mtx.LayerID)
+			require.Equal(t, block.ID(), mtx.BlockID)
 		}
 	}
 }
@@ -751,7 +765,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 			return nil, nil, errVM
 		}).Times(1)
 
-	require.ErrorIs(t, tcs.ApplyLayer(context.TODO(), block), errVM)
+	require.ErrorIs(t, tcs.ApplyLayer(context.TODO(), block.LayerIndex, block), errVM)
 
 	for _, id := range ids {
 		mtx, err := transactions.Get(tcs.db, id)
@@ -836,7 +850,7 @@ func TestConsistentHandling(t *testing.T) {
 			Block: block.ID(),
 		}, raw, block.Rewards).Return(nil, results, nil).Times(1)
 		for _, instance := range instances {
-			require.NoError(t, instance.ApplyLayer(context.TODO(), block))
+			require.NoError(t, instance.ApplyLayer(context.TODO(), block.LayerIndex, block))
 			require.NoError(t, layers.SetApplied(instance.db, block.LayerIndex, block.ID()))
 		}
 	}

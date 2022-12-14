@@ -9,6 +9,13 @@ import (
 
 func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := t.PubLayerID.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Sequence))
 		if err != nil {
 			return total, err
@@ -17,13 +24,6 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.PrevATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.PubLayerID.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -55,6 +55,13 @@ func (t *NIPostChallenge) EncodeScale(enc *scale.Encoder) (total int, err error)
 
 func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
+		n, err := t.PubLayerID.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
 			return total, err
@@ -64,13 +71,6 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.PrevATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.PubLayerID.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -98,6 +98,74 @@ func (t *NIPostChallenge) DecodeScale(dec *scale.Decoder) (total int, err error)
 		}
 		total += n
 		t.InitialPostIndices = field
+	}
+	return total, nil
+}
+
+func (t *PoetChallenge) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.NIPostChallenge)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.InitialPost)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.InitialPostMetadata)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.NumUnits))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *PoetChallenge) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeOption[NIPostChallenge](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NIPostChallenge = field
+	}
+	{
+		field, n, err := scale.DecodeOption[Post](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.InitialPost = field
+	}
+	{
+		field, n, err := scale.DecodeOption[PostMetadata](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.InitialPostMetadata = field
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NumUnits = uint32(field)
 	}
 	return total, nil
 }
@@ -347,6 +415,13 @@ func (t *PoetRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteSlice(enc, t.ChallengeHash)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -358,6 +433,14 @@ func (t *PoetRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.ID = string(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ChallengeHash = field
 	}
 	return total, nil
 }

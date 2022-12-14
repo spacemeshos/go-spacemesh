@@ -26,8 +26,6 @@ CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,
     weak_coin       SMALL INT,
-    hare_output     VARCHAR,
-    cert            BLOB,
     processed       SMALL INT,
     applied_block   VARCHAR,
     state_hash      CHAR(32),
@@ -36,9 +34,18 @@ CREATE TABLE layers
 ) WITHOUT ROWID;
 CREATE INDEX layers_by_processed ON layers (processed);
 
+CREATE TABLE certificates
+(
+    layer INT NOT NULL,
+    block VARCHAR NOT NULL,
+    cert  BLOB,
+    valid bool NOT NULL,
+    PRIMARY KEY (layer, block)
+) WITHOUT ROWID;
+
 CREATE TABLE rewards
 (
-    coinbase     CHAR(20),
+    coinbase     CHAR(24),
     layer        INT NOT NULL,
     total_reward UNSIGNED LONG INT,
     layer_reward UNSIGNED LONG INT,
@@ -55,18 +62,16 @@ CREATE TABLE transactions
     result      BLOB,
     layer       INT,
     block       CHAR(20),
-    principal   CHAR(20),
+    principal   CHAR(24),
     nonce       BLOB,
-    timestamp   INT NOT NULL,
-    applied     SMALL INT DEFAULT 0
+    timestamp   INT NOT NULL
 ) WITHOUT ROWID;
-CREATE INDEX transaction_by_applied ON transactions (applied);
 CREATE INDEX transaction_by_principal_nonce ON transactions (principal, nonce);
 CREATE INDEX transaction_by_layer_principal ON transactions (layer asc, principal);
 
 CREATE TABLE transactions_results_addresses
 (
-    address CHAR(20),
+    address CHAR(24),
     tid     CHAR(32),
     PRIMARY KEY (tid, address)
 ) WITHOUT ROWID;
@@ -139,12 +144,12 @@ CREATE TABLE kvstore
 
 CREATE TABLE accounts
 (
-    address        CHAR(20),
+    address        CHAR(24),
     balance        UNSIGNED LONG INT,
     initialized    BOOL,
     next_nonce     UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
-    template       CHAR(20),
+    template       CHAR(24),
     state          BLOB,
     PRIMARY KEY (address, layer_updated DESC)
 );

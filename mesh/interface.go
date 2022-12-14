@@ -9,9 +9,9 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
-	ApplyLayer(context.Context, *types.Block) error
+	ApplyLayer(context.Context, types.LayerID, *types.Block) error
 	GetStateRoot() (types.Hash32, error)
-	RevertState(types.LayerID) (types.Hash32, error)
+	RevertState(types.LayerID) error
 	LinkTXsWithProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
 	LinkTXsWithBlock(types.LayerID, types.BlockID, []types.TransactionID) error
 }

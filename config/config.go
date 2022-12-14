@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	atypes "github.com/spacemeshos/go-spacemesh/activation/types"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -53,7 +52,7 @@ type Config struct {
 	Beacon          beacon.Config         `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	VM              vm.Config             `mapstructure:"vm"`
-	POST            atypes.PostConfig     `mapstructure:"post"`
+	POST            activation.PostConfig `mapstructure:"post"`
 	POET            activation.PoetConfig `mapstructure:"poet"`
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
@@ -92,8 +91,6 @@ type BaseConfig struct {
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
-	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
-
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
 
 	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
@@ -110,9 +107,9 @@ type BaseConfig struct {
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
-	Start           bool                 `mapstructure:"smeshing-start"`
-	CoinbaseAccount string               `mapstructure:"smeshing-coinbase"`
-	Opts            atypes.PostSetupOpts `mapstructure:"smeshing-opts"`
+	Start           bool                     `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
+	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node.

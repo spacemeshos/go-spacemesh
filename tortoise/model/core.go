@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -37,7 +38,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
-	c.tortoise = tortoise.New(c.cdb, c.beacons, updater{c.cdb},
+	c.tortoise = tortoise.New(c.cdb, c.beacons,
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
@@ -152,7 +153,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
-			layers.SetHareOutput(c.cdb, ev.Block.LayerIndex, ev.Block.ID())
+			certificates.SetHareOutput(c.cdb, ev.Block.LayerIndex, ev.Block.ID())
 		}
 		blocks.Add(c.cdb, ev.Block)
 	case MessageBallot:
@@ -197,18 +198,4 @@ func max(i, j uint32) uint32 {
 		return i
 	}
 	return j
-}
-
-type updater struct {
-	*datastore.CachedDB
-}
-
-func (u updater) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
-	var err error
-	if valid {
-		err = blocks.SetValid(u, bid)
-	} else {
-		err = blocks.SetInvalid(u, bid)
-	}
-	return err
 }

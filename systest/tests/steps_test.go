@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -65,18 +65,23 @@ func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
+	require.Greater(t, cl.Bootnodes(), 1)
 
 	var (
 		enable = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
 		stop   = enable + 2
 	)
-	split := int(0.9 * float64(cl.Total()))
+	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
+	split := int(0.9*float64(cl.Total())) + 1
 
 	eg, ctx := errgroup.WithContext(tctx)
 	client := cl.Client(0)
 	scheduleChaos(ctx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
-		var left, right []string
-		for i := 0; i < cl.Total(); i++ {
+		var (
+			left  []string
+			right = []string{cl.Client(0).Name}
+		)
+		for i := 1; i < cl.Total(); i++ {
 			if i < split {
 				left = append(left, cl.Client(i).Name)
 			} else {
@@ -103,11 +108,13 @@ func TestStepTransactions(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		cl.CloseClients()
+	})
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
 
 	clients := make([]*txClient, cl.Accounts())
 	synced := syncedNodes(tctx, cl)
-	require.GreaterOrEqual(t, len(synced), tctx.ClusterSize/2)
 
 	for i := range clients {
 		clients[i] = &txClient{
@@ -124,7 +131,9 @@ func TestStepTransactions(t *testing.T) {
 			rng := rand.New(rand.NewSource(time.Now().Unix() + int64(i)))
 			n := rng.Intn(batch) + batch
 			nonce, err := client.nonce(tctx)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			if nonce == 0 {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
@@ -177,7 +186,9 @@ func TestStepTransactions(t *testing.T) {
 			return nil
 		})
 	}
-	require.NoError(t, eg.Wait())
+	if err := eg.Wait(); err != nil {
+		tctx.Log.Errorw("failed to submit transactions", "error", err)
+	}
 }
 
 func TestStepReplaceNodes(t *testing.T) {
@@ -223,7 +234,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 		"hash", prettyHex(reference.Hash),
 		"state hash", prettyHex(reference.RootStateHash),
 	)
-	layers := make([]*spacemeshv1.Layer, len(synced))
+	layers := make([]*pb.Layer, len(synced))
 
 	// eventually because we don't want to fail whole test
 	// if one of the nodes are slightly behind
@@ -367,6 +378,15 @@ func TestScheduleBasic(t *testing.T) {
 	})
 	rn.one(60*time.Minute, func() bool {
 		return t.Run("replace nodes", TestStepReplaceNodes)
+	})
+	rn.wait()
+}
+
+func TestScheduleTransactions(t *testing.T) {
+	TestStepCreate(t)
+	rn := newRunner()
+	rn.concurrent(10*time.Second, func() bool {
+		return t.Run("txs", TestStepTransactions)
 	})
 	rn.wait()
 }

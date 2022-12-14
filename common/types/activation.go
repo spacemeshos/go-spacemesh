@@ -98,11 +98,11 @@ var EmptyATXID = &ATXID{}
 // the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPostChallenge struct {
+	PubLayerID LayerID
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against that miner.
 	Sequence       uint64
 	PrevATXID      ATXID
-	PubLayerID     LayerID
 	PositioningATX ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
@@ -110,9 +110,48 @@ type NIPostChallenge struct {
 	InitialPostIndices []byte
 }
 
+func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if c == nil {
+		return nil
+	}
+	encoder.AddUint64("Sequence", c.Sequence)
+	encoder.AddString("PrevATXID", c.PrevATXID.String())
+	encoder.AddUint32("PubLayerID", c.PubLayerID.Value)
+	encoder.AddString("PositioningATX", c.PositioningATX.String())
+	if c.CommitmentATX != nil {
+		encoder.AddString("CommitmentATX", c.CommitmentATX.String())
+	}
+	encoder.AddBinary("InitialPostIndices", c.InitialPostIndices)
+	return nil
+}
+
+type PoetChallenge struct {
+	*NIPostChallenge
+	InitialPost         *Post
+	InitialPostMetadata *PostMetadata
+	NumUnits            uint32
+}
+
+func (c *PoetChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if c == nil {
+		return nil
+	}
+	if err := encoder.AddObject("NIPostChallenge", c.NIPostChallenge); err != nil {
+		return err
+	}
+	if err := encoder.AddObject("InitialPost", c.InitialPost); err != nil {
+		return err
+	}
+	if err := encoder.AddObject("InitialPostMetadata", c.InitialPostMetadata); err != nil {
+		return err
+	}
+	encoder.AddUint32("NumUnits", c.NumUnits)
+	return nil
+}
+
 // Hash serializes the NIPostChallenge and returns its hash.
 func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
-	ncBytes, err := NIPostChallengeToBytes(challenge)
+	ncBytes, err := codec.Encode(challenge)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +368,8 @@ func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
 
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	ID string
+	ID            string
+	ChallengeHash []byte
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.
@@ -395,6 +435,15 @@ func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddUint32("Nonce", p.Nonce)
+	encoder.AddString("Indicies", util.Bytes2Hex(p.Indices))
+	return nil
+}
+
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p *Post) String() string {
@@ -417,6 +466,18 @@ type PostMetadata struct {
 	LabelsPerUnit uint64
 	K1            uint32
 	K2            uint32
+}
+
+func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if m == nil {
+		return nil
+	}
+	encoder.AddString("Challenge", util.Bytes2Hex(m.Challenge))
+	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
+	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
+	encoder.AddUint32("K1", m.K1)
+	encoder.AddUint32("K2", m.K2)
+	return nil
 }
 
 // ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
