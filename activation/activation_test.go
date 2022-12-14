@@ -459,7 +459,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			ch := make(chan struct{})
 			close(ch)
 			return ch
-		})
+		}).AnyTimes()
 
 		builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
 			&postSetupProviderMock{},
@@ -473,7 +473,6 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
 			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
-			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
 			require.Eventually(t, func() bool { return !builder.Smeshing() }, 100*time.Millisecond, time.Millisecond, "failed on execution %d", i)
 		}
@@ -484,7 +483,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		// It cannot check `builder.Smeshing()` as Start/Stop is happening from many goroutines simultaneously.
 		// Both Start and Stop can fail as it is not known if builder is smeshing or not.
 		builder := getBuilder(t)
-		eg, _ := errgroup.WithContext(context.Background())
+		var eg errgroup.Group
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
 				for i := 0; i < 100; i++ {
