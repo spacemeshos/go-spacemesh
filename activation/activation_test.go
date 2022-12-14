@@ -505,14 +505,14 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 	require.ErrorContains(t, builder.StopSmeshing(true), "not started")
 }
 
-func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
+func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
 	postSetupMock := NewMockpostSetupProvider(ctrl)
-	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	postSetupMock.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil)
+	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	postSetupMock.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil).AnyTimes()
 	postSetupMock.EXPECT().Reset().Return(errors.New("couldn't delete files"))
 
 	net.atxHdlr = atxHdlr
