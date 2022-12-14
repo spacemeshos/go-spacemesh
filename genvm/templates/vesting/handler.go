@@ -21,17 +21,22 @@ var (
 )
 
 const (
-	TotalGasSpawn1 = multisig.TotalGasSpawn1
-	TotalGasSpawn2 = multisig.TotalGasSpawn2
-	TotalGasSpawn3 = multisig.TotalGasSpawn3
+	// BaseGas is a cost of Parse and Verify methods.
+	BaseGas1 = multisig.BaseGas1
+	BaseGas2 = multisig.BaseGas1
+	BaseGas3 = multisig.BaseGas1
 
-	TotalGasSpend1 = multisig.TotalGasSpend1
-	TotalGasSpend2 = multisig.TotalGasSpend2
-	TotalGasSpend3 = multisig.TotalGasSpend3
+	FixedGasSpawn1 = multisig.FixedGasSpawn1
+	FixedGasSpawn2 = multisig.FixedGasSpawn2
+	FixedGasSpawn3 = multisig.FixedGasSpawn3
 
-	TotalGasDrainVault1 = 100
-	TotalGasDrainVault2 = 200
-	TotalGasDrainVault3 = 300
+	FixedGasSpend1 = multisig.FixedGasSpend1
+	FixedGasSpend2 = multisig.FixedGasSpend2
+	FixedGasSpend3 = multisig.FixedGasSpend3
+
+	FixedGasDrainVault1 = 100
+	FixedGasDrainVault2 = 200
+	FixedGasDrainVault3 = 300
 )
 
 // MethodDrainVault is used to relay a call to drain a vault.
@@ -46,22 +51,25 @@ func init() {
 // Register vesting templates.
 func Register(reg *registry.Registry) {
 	reg.Register(TemplateAddress1, &handler{
-		multisig:      multisig.NewHandler(TemplateAddress1, 1, multisig.TotalGasSpawn1, multisig.TotalGasSpend1),
-		drainVaultGas: TotalGasDrainVault1,
+		multisig:      multisig.NewHandler(TemplateAddress1, 1, BaseGas1, FixedGasSpawn1, FixedGasSpend1),
+		baseGas:       BaseGas1,
+		drainVaultGas: FixedGasDrainVault1,
 	})
 	reg.Register(TemplateAddress2, &handler{
-		multisig:      multisig.NewHandler(TemplateAddress2, 2, multisig.TotalGasSpawn2, multisig.TotalGasSpend2),
-		drainVaultGas: TotalGasDrainVault2,
+		multisig:      multisig.NewHandler(TemplateAddress2, 2, BaseGas2, FixedGasSpawn2, FixedGasSpend2),
+		baseGas:       BaseGas2,
+		drainVaultGas: FixedGasDrainVault2,
 	})
 	reg.Register(TemplateAddress3, &handler{
-		multisig:      multisig.NewHandler(TemplateAddress3, 3, multisig.TotalGasSpawn3, multisig.TotalGasSpend3),
-		drainVaultGas: TotalGasDrainVault3,
+		multisig:      multisig.NewHandler(TemplateAddress3, 3, BaseGas3, FixedGasSpawn3, FixedGasSpend3),
+		baseGas:       BaseGas3,
+		drainVaultGas: FixedGasDrainVault3,
 	})
 }
 
 type handler struct {
-	multisig      core.Handler
-	drainVaultGas uint64
+	multisig               core.Handler
+	baseGas, drainVaultGas uint64
 }
 
 // Parse header and arguments.

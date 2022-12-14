@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	// TotalGasSpawn is consumed from principal in case of successful spawn.
-	TotalGasSpawn = 100
-	// TotalGasSpend is consumed from principal in case of successful spend.
-	TotalGasSpend = 100
+	// BaseGas is a cost of Parse and Verify methods.
+	BaseGas = 100
+	// FixedGasSpawn is consumed from principal in case of successful spawn.
+	FixedGasSpawn = 100
+	// FixedGasSpend is consumed from principal in case of successful spend.
+	FixedGasSpend = 100
 )
 
 func init() {
@@ -36,11 +38,12 @@ type handler struct{}
 
 // Parse header and arguments.
 func (*handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+	output.BaseGas = BaseGas
 	switch method {
 	case core.MethodSpawn:
-		output.FixedGas = TotalGasSpawn
+		output.FixedGas = FixedGasSpawn
 	case core.MethodSpend:
-		output.FixedGas = TotalGasSpend
+		output.FixedGas = FixedGasSpend
 	default:
 		return output, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
 	}
