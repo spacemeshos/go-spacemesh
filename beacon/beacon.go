@@ -40,6 +40,7 @@ var (
 	errDifferentBeacon     = errors.New("different beacons detected")
 	errGenesis             = errors.New("genesis")
 	errNodeNotSynced       = errors.New("nodes not synced")
+	errProtocolRunning     = errors.New("last beacon protocol still running")
 )
 
 type (
