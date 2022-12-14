@@ -1,6 +1,6 @@
 package core
 
-// ComputeIntrinsicGasCost computes intrinsic gas from base gas and storage cost
+// ComputeIntrinsicGasCost computes intrinsic gas from base gas and storage cost.
 func ComputeIntrinsicGasCost(baseGas uint64, tx []byte, storageFactor uint64) uint64 {
 	return baseGas + uint64(len(tx))*storageFactor
 }
