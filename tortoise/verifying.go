@@ -3,8 +3,6 @@ package tortoise
 import (
 	"time"
 
-	"github.com/spacemeshos/fixed"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -81,7 +79,8 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		Sub(layer.verifying.goodUncounted)
 	uncounted := v.expectedWeight(v.Config, lid).
 		Sub(margin)
-	if uncounted.GreaterThan(fixed.Zero) {
+	// GreaterThan(zero) returns true even if value with negative sign
+	if uncounted.Float() > 0 {
 		margin = margin.Sub(uncounted)
 	}
 

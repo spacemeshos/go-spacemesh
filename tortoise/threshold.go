@@ -63,10 +63,10 @@ func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last typ
 		einfo := epochs[epoch]
 		weight = weight.Add(einfo.weight)
 	}
-	weight = weight.Add(epochs[lastEpoch].weight).
+	return weight.Add(epochs[lastEpoch].weight.
 		Mul(fixed.New64(int64(last.OrdinalInEpoch() + 1))).
-		Div(fixed.New64(int64(length)))
-	return weight
+		Div(fixed.New64(int64(length))),
+	)
 }
 
 // computeGlobalTreshold computes global treshold based on the expected weight.
@@ -88,10 +88,10 @@ func computeExpectedWeightInWindow(config Config, epochs map[types.EpochID]*epoc
 }
 
 func crossesThreshold(w, t weight) sign {
-	if w.GreaterThan(fixed.Zero) && w.GreaterThan(t) {
+	if w.Float() > 0 && w.GreaterThan(t) {
 		return support
 	}
-	if w.LessThan(fixed.Zero) && w.Abs().GreaterThan(t) {
+	if w.Float() < 0 && w.Abs().GreaterThan(t) {
 		return against
 	}
 	return neutral

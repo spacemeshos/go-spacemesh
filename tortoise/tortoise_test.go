@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math"
-	"math/big"
 	"math/rand"
 	"os"
 	"testing"
@@ -322,75 +320,61 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 		desc      string
 		expect    sign
 		vote      weight
-		threshold *big.Rat
-		weight    weight
+		threshold weight
 	}{
 		{
 			desc:      "Support",
 			expect:    support,
 			vote:      fixed.From(6),
-			threshold: big.NewRat(1, 2),
-			weight:    fixed.From(10),
+			threshold: fixed.From(5),
 		},
 		{
 			desc:      "Abstain",
 			expect:    abstain,
 			vote:      fixed.From(3),
-			threshold: big.NewRat(1, 2),
-			weight:    fixed.From(10),
+			threshold: fixed.From(5),
 		},
 		{
 			desc:      "AbstainZero",
 			expect:    abstain,
 			vote:      fixed.From(0),
-			threshold: big.NewRat(1, 2),
-			weight:    fixed.From(10),
+			threshold: fixed.From(5),
 		},
 		{
 			desc:      "Against",
 			expect:    against,
 			vote:      fixed.From(-6),
-			threshold: big.NewRat(1, 2),
-			weight:    fixed.From(10),
+			threshold: fixed.From(5),
 		},
 		{
-			desc:      "ComplexSupport",
+			desc:      "Support",
 			expect:    support,
 			vote:      fixed.From(121),
-			threshold: big.NewRat(60, 100),
-			weight:    fixed.From(200),
+			threshold: fixed.From(120),
 		},
 		{
-			desc:      "ComplexAbstain",
+			desc:      "Abstain",
 			expect:    abstain,
 			vote:      fixed.From(120),
-			threshold: big.NewRat(60, 100),
-			weight:    fixed.From(200),
+			threshold: fixed.From(120),
 		},
 		{
-			desc:      "ComplexAbstain2",
+			desc:      "Abstain",
 			expect:    abstain,
 			vote:      fixed.From(-120),
-			threshold: big.NewRat(60, 100),
-			weight:    fixed.From(200),
+			threshold: fixed.From(120),
 		},
 		{
-			desc:      "ComplexAgainst",
+			desc:      "Against",
 			expect:    against,
 			vote:      fixed.From(-121),
-			threshold: big.NewRat(60, 100),
-			weight:    fixed.From(200),
+			threshold: fixed.From(120),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.EqualValues(t, tc.expect,
-				crossesThreshold(
-					tc.vote,
-					tc.weight.Mul(fixed.DivUint64(
-						tc.threshold.Num().Uint64(),
-						tc.threshold.Denom().Uint64(),
-					))))
+				crossesThreshold(tc.vote, tc.threshold))
 		})
 	}
 }
@@ -2809,9 +2793,4 @@ func BenchmarkOnBallot(b *testing.B) {
 		tortoise.trtl.isFull = true
 		bench(b)
 	})
-}
-
-func TestFixed(t *testing.T) {
-	val := fixed.New64(math.MaxInt64)
-	fmt.Println(val.Floor())
 }
