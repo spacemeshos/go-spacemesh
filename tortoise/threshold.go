@@ -87,5 +87,11 @@ func computeExpectedWeightInWindow(config Config, epochs map[types.EpochID]*epoc
 }
 
 func crossesThreshold(w, t weight) sign {
+	if w.GreaterThan(fixed.Zero) && w.GreaterThan(t) {
+		return support
+	}
+	if w.LessThan(fixed.Zero) && w.Abs().GreaterThan(t) {
+		return against
+	}
 	return neutral
 }
