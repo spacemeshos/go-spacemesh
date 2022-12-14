@@ -272,7 +272,7 @@ jobs:
         id: install
         uses: azure/setup-kubectl@v3
         with:
-          version: "v1.23.0"
+          version: "v1.23.15"
 
       - name: Setup gcloud authentication
         id: "auth"
