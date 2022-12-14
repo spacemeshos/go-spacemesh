@@ -45,12 +45,7 @@ func createEpochState(t *testing.T, pd *ProtocolDriver, epoch types.EpochID) {
 	t.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, nil,
-		func(_ log.Log, _ Config, _ int) eligibilityChecker {
-			mc := mocks.NewMockeligibilityChecker(gomock.NewController(t))
-			mc.EXPECT().IsProposalEligible(gomock.Any()).Return(true).AnyTimes()
-			return mc
-		})
+	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, nil)
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {

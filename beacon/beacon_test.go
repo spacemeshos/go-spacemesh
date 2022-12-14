@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -90,16 +89,10 @@ func newTestDriver(t *testing.T, cfg Config, p pubsub.Publisher) *testProtocolDr
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	lg := logtest.New(t).WithName(minerID.ShortString())
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, edSgn, vrfSigner, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, vrfSigner, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
-		WithPublisher(p),
 		WithLogger(lg),
-		withWeakCoin(coinValueMock(t, true)),
-		withCheckerFunc(func(_ log.Log, _ Config, _ int) eligibilityChecker {
-			mc := mocks.NewMockeligibilityChecker(gomock.NewController(t))
-			mc.EXPECT().IsProposalEligible(gomock.Any()).Return(true).AnyTimes()
-			return mc
-		}))
+		withWeakCoin(coinValueMock(t, true)))
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
 	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tpd
@@ -175,12 +168,13 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
 	}
-
-	var wg sync.WaitGroup
 	for _, node := range testNodes {
 		for _, db := range dbs {
 			createATX(t, db, atxPublishLid, node.edSigner, 1)
 		}
+	}
+	var wg sync.WaitGroup
+	for _, node := range testNodes {
 		wg.Add(1)
 		go func(testNode *testProtocolDriver) {
 			require.NoError(t, testNode.onNewEpoch(context.TODO(), types.EpochID(2)))

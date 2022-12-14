@@ -29,9 +29,7 @@ type state struct {
 	proposalChecker           eligibilityChecker
 }
 
-type checkerFunc func(log.Log, Config, int) eligibilityChecker
-
-func newState(logger log.Log, cfg Config, epochWeight uint64, atxids []types.ATXID, create checkerFunc) *state {
+func newState(logger log.Log, cfg Config, epochWeight uint64, atxids []types.ATXID) *state {
 	return &state{
 		logger:                  logger,
 		epochWeight:             epochWeight,
@@ -40,7 +38,7 @@ func newState(logger log.Log, cfg Config, epochWeight uint64, atxids []types.ATX
 		votesMargin:             map[string]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
-		proposalChecker:         create(logger, cfg, len(atxids)),
+		proposalChecker:         createProposalChecker(logger, cfg, len(atxids)),
 	}
 }
 

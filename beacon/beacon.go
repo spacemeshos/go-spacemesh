@@ -81,21 +81,10 @@ func withWeakCoin(wc coin) Opt {
 	}
 }
 
-func withCheckerFunc(f checkerFunc) Opt {
-	return func(pd *ProtocolDriver) {
-		pd.checkerF = f
-	}
-}
-
-func WithPublisher(p pubsub.Publisher) Opt {
-	return func(pd *ProtocolDriver) {
-		pd.publisher = p
-	}
-}
-
 // New returns a new ProtocolDriver.
 func New(
 	nodeID types.NodeID,
+	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
@@ -107,6 +96,7 @@ func New(
 		logger:             log.NewNop(),
 		config:             DefaultConfig(),
 		nodeID:             nodeID,
+		publisher:          publisher,
 		edSigner:           edSigner,
 		vrfSigner:          vrfSigner,
 		cdb:                cdb,
@@ -117,9 +107,6 @@ func New(
 	}
 	for _, opt := range opts {
 		opt(pd)
-	}
-	if pd.checkerF == nil {
-		pd.checkerF = createProposalChecker
 	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
@@ -152,7 +139,6 @@ type ProtocolDriver struct {
 	vrfSigner   *signing.VRFSigner
 	vrfVerifier signing.VRFVerifier
 	weakCoin    coin
-	checkerF    checkerFunc
 	theta       *big.Float
 
 	clock       layerClock
@@ -437,7 +423,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return nil, errZeroEpochWeight
 	}
 
-	pd.states[epoch] = newState(logger, pd.config, epochWeight, atxids, pd.checkerF)
+	pd.states[epoch] = newState(logger, pd.config, epochWeight, atxids)
 	return pd.states[epoch], nil
 }
 
@@ -454,10 +440,10 @@ func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 	pd.earliestProposalTime = t
 }
 
-func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]types.ATXID, uint64, error) {
+func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]types.ATXID, error) {
 	s, err := pd.initEpochStateIfNotPresent(logger, epoch)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	pd.mu.Lock()
@@ -465,7 +451,7 @@ func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]typ
 	pd.roundInProgress = types.FirstRound
 	pd.earliestVoteTime = time.Time{}
 
-	return s.atxs, s.epochWeight, nil
+	return s.atxs, nil
 }
 
 func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
@@ -554,13 +540,13 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 		return err
 	}
 
-	atxids, epochWeight, err := pd.setupEpoch(logger, epoch)
+	atxids, err := pd.setupEpoch(logger, epoch)
 	if err != nil {
 		logger.With().Error("epoch not setup correctly", log.Err(err))
 		return err
 	}
 
-	logger.With().Info("participating beacon protocol with ATX", atxID, log.Uint64("epoch_weight", epochWeight))
+	logger.With().Info("participating beacon protocol with ATX", atxID)
 	pd.runProtocol(ctx, epoch, atxids)
 	return nil
 }
