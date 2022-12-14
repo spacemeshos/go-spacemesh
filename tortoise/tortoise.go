@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -696,7 +697,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 		epoch.atxs[atx.ID] = atx.GetWeight()
 		if atx.GetWeight() > math.MaxInt64 {
 			// atx weight is not expected to overflow int64
-			panic("fixme: atx size overflows int64 " + strconv.FormatUint(atx.GetWeight(), 0))
+			panic("fixme: atx size overflows int64 " + strconv.FormatUint(atx.GetWeight(), 10))
 		}
 		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.GetWeight())))
 	}

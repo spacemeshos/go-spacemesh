@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )

@@ -3,9 +3,9 @@ package tortoise
 import (
 	"testing"
 
+	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
