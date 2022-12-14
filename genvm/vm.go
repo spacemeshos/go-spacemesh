@@ -320,6 +320,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
+			continue
 		}
 		if ctx.PrincipalAccount.Balance < ctx.ParseOutput.FixedGas*ctx.ParseOutput.GasPrice {
 			logger.With().Warning("ineffective transaction. fixed gas not covered",
