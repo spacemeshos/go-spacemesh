@@ -2,15 +2,17 @@ package tortoise
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 
+	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
 type (
-	weight = util.Weight
+	weight = fixed.Fixed
 
 	verifyingInfo struct {
 		// goodUncounted is a weight that doesn't vote for this layer
@@ -25,7 +27,7 @@ type (
 	epochInfo struct {
 		atxs map[types.ATXID]uint64
 		// weight is a sum of all atxs
-		weight uint64
+		weight weight
 		// median height from atxs
 		height uint64
 	}
@@ -48,7 +50,7 @@ type (
 		// https://github.com/spacemeshos/go-spacemesh/issues/2921
 		last types.LayerID
 		// localThreshold is updated together with the last layer.
-		localThreshold util.Weight
+		localThreshold weight
 
 		// last verified layer
 		verified types.LayerID
@@ -79,12 +81,11 @@ type (
 
 func newState() *state {
 	return &state{
-		localThreshold: util.WeightFromUint64(0),
-		epochs:         map[types.EpochID]*epochInfo{},
-		layers:         map[types.LayerID]*layerInfo{},
-		ballots:        map[types.LayerID][]*ballotInfo{},
-		ballotRefs:     map[types.BallotID]*ballotInfo{},
-		blockRefs:      map[types.BlockID]*blockInfo{},
+		epochs:     map[types.EpochID]*epochInfo{},
+		layers:     map[types.LayerID]*layerInfo{},
+		ballots:    map[types.LayerID][]*ballotInfo{},
+		ballotRefs: map[types.BallotID]*ballotInfo{},
+		blockRefs:  map[types.BlockID]*blockInfo{},
 	}
 }
 
@@ -100,7 +101,7 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
 		layersNumber.Inc()
-		layer = &layerInfo{lid: lid, empty: util.WeightFromUint64(0)}
+		layer = &layerInfo{lid: lid}
 		s.layers[lid] = layer
 	}
 	return layer
@@ -208,7 +209,7 @@ type (
 	}
 
 	referenceInfo struct {
-		weight weight
+		weight *big.Rat
 		height uint64
 		beacon types.Beacon
 	}

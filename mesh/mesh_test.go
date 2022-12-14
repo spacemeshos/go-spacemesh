@@ -3,13 +3,13 @@ package mesh
 import (
 	"context"
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -64,7 +64,7 @@ func createTestMesh(t *testing.T) *testMesh {
 func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.NodeID) *types.Block {
 	t.Helper()
 	txIDs := types.RandomTXSet(numTXs)
-	weight := util.WeightFromFloat64(312.13)
+	weight := new(big.Rat).SetFloat64(312.13)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,

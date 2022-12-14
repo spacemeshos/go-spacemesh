@@ -3,8 +3,8 @@ package tortoise
 import (
 	"time"
 
+	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -20,7 +20,7 @@ type verifying struct {
 	*state
 
 	// total weight of good ballots from verified + 1 up to last processed
-	totalGoodWeight util.Weight
+	totalGoodWeight weight
 }
 
 // reset all weight that can vote on a voted layer.
@@ -80,7 +80,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		Sub(layer.verifying.goodUncounted)
 	uncounted := v.expectedWeight(v.Config, lid).
 		Sub(margin)
-	if uncounted.Sign() > 0 {
+	if uncounted.GreaterThan(fixed.Zero) {
 		margin = margin.Sub(uncounted)
 	}
 
@@ -94,7 +94,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("good_uncounted", layer.verifying.goodUncounted),
 		log.Stringer("global_threshold", threshold),
 	)
-	if sign(margin.Cmp(threshold)) != support {
+	if crossesThreshold(margin, threshold) != support {
 		logger.With().Debug("doesn't cross global threshold")
 		return false
 	} else {

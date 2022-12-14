@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -322,71 +321,76 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		expect    sign
-		vote      util.Weight
+		vote      weight
 		threshold *big.Rat
-		weight    util.Weight
+		weight    weight
 	}{
 		{
 			desc:      "Support",
 			expect:    support,
-			vote:      util.WeightFromInt64(6),
+			vote:      fixed.From(6),
 			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			weight:    fixed.From(10),
 		},
 		{
 			desc:      "Abstain",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(3),
+			vote:      fixed.From(3),
 			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			weight:    fixed.From(10),
 		},
 		{
 			desc:      "AbstainZero",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(0),
+			vote:      fixed.From(0),
 			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			weight:    fixed.From(10),
 		},
 		{
 			desc:      "Against",
 			expect:    against,
-			vote:      util.WeightFromInt64(-6),
+			vote:      fixed.From(-6),
 			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			weight:    fixed.From(10),
 		},
 		{
 			desc:      "ComplexSupport",
 			expect:    support,
-			vote:      util.WeightFromInt64(121),
+			vote:      fixed.From(121),
 			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			weight:    fixed.From(200),
 		},
 		{
 			desc:      "ComplexAbstain",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(120),
+			vote:      fixed.From(120),
 			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			weight:    fixed.From(200),
 		},
 		{
 			desc:      "ComplexAbstain2",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(-120),
+			vote:      fixed.From(-120),
 			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			weight:    fixed.From(200),
 		},
 		{
 			desc:      "ComplexAgainst",
 			expect:    against,
-			vote:      util.WeightFromInt64(-121),
+			vote:      fixed.From(-121),
 			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			weight:    fixed.From(200),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.EqualValues(t, tc.expect,
-				tc.vote.Cmp(tc.weight.Fraction(tc.threshold)))
+				crossesThreshold(
+					tc.vote,
+					tc.weight.Mul(fixed.DivUint64(
+						tc.threshold.Num().Uint64(),
+						tc.threshold.Denom().Uint64(),
+					))))
 		})
 	}
 }
@@ -468,13 +472,28 @@ func TestComputeExpectedWeight(t *testing.T) {
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
 				require.NoError(t, err)
-				epochs[lid.GetEpoch()] = &epochInfo{weight: weight}
+				epochs[lid.GetEpoch()] = &epochInfo{weight: fixed.New64(int64(weight))}
 			}
 
 			weight := computeExpectedWeight(epochs, tc.target, tc.last)
 			require.Equal(t, tc.expect, weight.Float())
 		})
 	}
+}
+
+func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (uint64, uint64, error) {
+	var (
+		weight  uint64
+		heights []uint64
+	)
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		weight += header.GetWeight()
+		heights = append(heights, header.TickHeight())
+		return true
+	}); err != nil {
+		return 0, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
+	}
+	return weight, getMedian(heights), nil
 }
 
 func TestOutOfOrderLayersAreVerified(t *testing.T) {

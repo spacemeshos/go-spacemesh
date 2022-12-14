@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
+	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
@@ -65,7 +67,6 @@ func newTurtle(
 	t.epochs[genesis.GetEpoch()] = &epochInfo{}
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
-		empty:          util.WeightFromUint64(0),
 		hareTerminated: true,
 	}
 	t.verifying = newVerifying(config, t.state)
@@ -344,7 +345,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
-	vote = sign(block.margin.Cmp(t.localThreshold))
+	vote = crossesThreshold(block.margin, t.localThreshold)
 	if vote != abstain {
 		return vote, reasonLocalThreshold, nil
 	}
@@ -579,7 +580,7 @@ func (t *turtle) loadAtxs(epoch types.EpochID) error {
 	einfo.height = getMedian(heights)
 	t.logger.With().Info("computed height and weight for epoch",
 		epoch,
-		log.Uint64("weight", einfo.weight),
+		log.Stringer("weight", einfo.weight),
 		log.Uint64("height", einfo.height),
 	)
 	return nil
@@ -615,7 +616,6 @@ func (t *turtle) onBlock(lid types.LayerID, block *types.Block) error {
 		layer:  block.LayerIndex,
 		hare:   neutral,
 		height: block.TickHeight,
-		margin: util.WeightFromUint64(0),
 	}
 	if t.layer(block.LayerIndex).hareTerminated {
 		binfo.hare = against
@@ -694,12 +694,16 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 			log.Uint64("weight", atx.GetWeight()),
 		)
 		epoch.atxs[atx.ID] = atx.GetWeight()
-		epoch.weight += atx.GetWeight()
+		if atx.GetWeight() > math.MaxInt64 {
+			// atx weight is not expected to overflow int64
+			panic("fixme: atx size overflows int64 " + strconv.FormatUint(atx.GetWeight(), 0))
+		}
+		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.GetWeight())))
 	}
 	if atx.TargetEpoch() == t.last.GetEpoch() {
-		t.localThreshold = util.WeightFromUint64(epoch.weight).
-			Fraction(localThresholdFraction).
-			Div(util.WeightFromUint64(uint64(types.GetLayersPerEpoch())))
+		t.localThreshold = epoch.weight.
+			Div(fixed.New(localThresholdFraction)).
+			Div(fixed.New64(int64(types.GetLayersPerEpoch())))
 	}
 	addAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
@@ -780,8 +784,10 @@ func (t *turtle) decodeBallot(ballot *types.Ballot) (*ballotInfo, error) {
 	}
 
 	if !ballot.IsMalicious() {
-		binfo.weight = refinfo.weight.Mul(
-			util.WeightFromUint64(uint64(len(ballot.EligibilityProofs))))
+		binfo.weight = fixed.DivUint64(
+			refinfo.weight.Num().Uint64(),
+			refinfo.weight.Denom().Uint64(),
+		).Mul(fixed.New(len(ballot.EligibilityProofs)))
 	} else {
 		binfo.malicious = true
 		t.logger.With().Warning("malicious ballot with zeroed weight", ballot.LayerIndex, ballot.ID())

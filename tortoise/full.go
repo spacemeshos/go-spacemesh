@@ -119,7 +119,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("global_threshold", threshold),
 	)
 	layer := f.state.layer(lid)
-	empty := layer.empty.Cmp(threshold) > 0
+	empty := crossesThreshold(layer.empty, threshold) == support
 	if len(layer.blocks) == 0 {
 		if empty {
 			logger.With().Debug("candidate layer is empty")
@@ -135,7 +135,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
-			decision := sign(block.margin.Cmp(threshold))
+			decision := crossesThreshold(block.margin, threshold)
 			if decision == neutral && empty {
 				return against
 			}

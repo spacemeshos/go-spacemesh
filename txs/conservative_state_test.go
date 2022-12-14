@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"math/rand"
 	"testing"
 	"time"
@@ -592,7 +593,7 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	require.Nil(t, got.TxHeader)
 
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
@@ -630,7 +631,7 @@ func TestApplyLayer(t *testing.T) {
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
@@ -681,7 +682,7 @@ func TestApplyLayer_TXsFailedVM(t *testing.T) {
 		tcs.mvm.EXPECT().GetNonce(principal).Return(types.Nonce{Counter: nonce + 1}, nil).Times(1)
 	}
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
@@ -735,7 +736,7 @@ func TestApplyLayer_VMError(t *testing.T) {
 	lid := types.NewLayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
 	coinbase := types.GenerateAddress(types.RandomBytes(types.AddressLength))
-	weight := util.WeightFromFloat64(200.56)
+	weight := new(big.Rat).SetFloat64(200.56)
 	block := types.NewExistingBlock(types.BlockID{1},
 		types.InnerBlock{
 			LayerIndex: lid,
