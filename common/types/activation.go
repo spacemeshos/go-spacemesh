@@ -190,6 +190,7 @@ type InnerActivationTx struct {
 
 	NIPost      *NIPost
 	InitialPost *Post
+	VRFNonce    *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
 	id *ATXID // non-exported cache of the ATXID
@@ -205,7 +206,7 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint32, initialPost *Post) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint32, initialPost *Post, nonce *VRFPostIndex) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			NIPostChallenge: challenge,
@@ -214,6 +215,8 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 
 			NIPost:      nipost,
 			InitialPost: initialPost,
+
+			VRFNonce: nonce,
 		},
 	}
 	return atx
@@ -392,6 +395,33 @@ type NIPost struct {
 	PostMetadata *PostMetadata
 }
 
+// VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
+// grinding of identities for VRF eligibility.
+type VRFPostIndex uint64
+
+func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(*v))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		value, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		*v = VRFPostIndex(value)
+	}
+	return total, nil
+}
+
 // Post is an alias to postShared.Proof.
 type Post postShared.Proof
 
@@ -440,7 +470,7 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 		return nil
 	}
 	encoder.AddUint32("Nonce", p.Nonce)
-	encoder.AddString("Indicies", util.Bytes2Hex(p.Indices))
+	encoder.AddString("Indicies", hex.EncodeToString(p.Indices))
 	return nil
 }
 
@@ -472,7 +502,7 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if m == nil {
 		return nil
 	}
-	encoder.AddString("Challenge", util.Bytes2Hex(m.Challenge))
+	encoder.AddString("Challenge", hex.EncodeToString(m.Challenge))
 	encoder.AddUint8("BitsPerLabel", m.BitsPerLabel)
 	encoder.AddUint64("LabelsPerUnit", m.LabelsPerUnit)
 	encoder.AddUint32("K1", m.K1)

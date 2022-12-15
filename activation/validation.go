@@ -2,9 +2,11 @@ package activation
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/post/proving"
+	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -62,6 +64,7 @@ func (v *Validator) Validate(nodeId types.NodeID, commitmentAtxId types.ATXID, n
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}
+
 	if !contains(proof, nipost.Challenge.Bytes()) {
 		return 0, fmt.Errorf("challenge is not included in the proof %x", nipost.PostMetadata.Challenge)
 	}
@@ -139,7 +142,26 @@ func validatePost(nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.
 	return nil
 }
 
-func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndicies []byte) error {
+func (*Validator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	if vrfNonce == nil {
+		return errors.New("VRFNonce is nil")
+	}
+
+	meta := &shared.VRFNonceMetadata{
+		NodeId:          nodeId.Bytes(),
+		CommitmentAtxId: commitmentAtxId.Bytes(),
+		NumUnits:        numUnits,
+		BitsPerLabel:    PostMetadata.BitsPerLabel,
+		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
+	}
+
+	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta); err != nil {
+		return fmt.Errorf("verify VRF nonce: %w", err)
+	}
+	return nil
+}
+
+func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID, expectedPostIndices []byte) error {
 	if challenge.Sequence != 0 {
 		return fmt.Errorf("no prevATX declared, but sequence number not zero")
 	}
@@ -148,7 +170,7 @@ func validateInitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxPr
 		return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
 	}
 
-	if !bytes.Equal(expectedPostIndicies, challenge.InitialPostIndices) {
+	if !bytes.Equal(expectedPostIndices, challenge.InitialPostIndices) {
 		return fmt.Errorf("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 	}
 
