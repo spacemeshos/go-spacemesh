@@ -40,7 +40,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -2777,7 +2776,7 @@ func TestEventsReceived(t *testing.T) {
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(context.Background(), globalTx)
 
-	weight := util.WeightFromFloat64(18.7)
+	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},

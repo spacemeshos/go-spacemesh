@@ -179,7 +179,7 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	b.Log("generated state", time.Since(start))
 	// count ballots and form initial opinion
 	tortoise.TallyVotes(ctx, last)
-	b.Log("counted votes", time.Since(start))
+	b.Log("loaded state", time.Since(start))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

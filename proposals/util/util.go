@@ -4,9 +4,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
@@ -47,7 +47,7 @@ func ComputeWeightPerEligibility(
 	ballot *types.Ballot,
 	layerSize,
 	layersPerEpoch uint32,
-) (util.Weight, error) {
+) (*big.Rat, error) {
 	var (
 		refBallot        = ballot
 		hdr              *types.ActivationTxHeader
@@ -56,17 +56,17 @@ func ComputeWeightPerEligibility(
 	)
 	if ballot.EpochData == nil {
 		if ballot.RefBallot == types.EmptyBallotID {
-			return util.Weight{}, fmt.Errorf("%w: empty ref ballot but no epoch data %s", ErrBadBallotData, ballot.ID())
+			return nil, fmt.Errorf("%w: empty ref ballot but no epoch data %s", ErrBadBallotData, ballot.ID())
 		}
 		refBallot, err = ballots.Get(cdb, ballot.RefBallot)
 		if err != nil {
-			return util.Weight{}, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
+			return nil, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
 		}
 	}
 	for _, atxID := range refBallot.EpochData.ActiveSet {
 		hdr, err = cdb.GetAtxHeader(atxID)
 		if err != nil {
-			return util.Weight{}, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
+			return nil, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
 		}
 		weight := hdr.GetWeight()
 		total += weight
@@ -76,7 +76,10 @@ func ComputeWeightPerEligibility(
 	}
 	expNumSlots, err := GetNumEligibleSlots(atxWeight, total, layerSize, layersPerEpoch)
 	if err != nil {
-		return util.Weight{}, fmt.Errorf("failed to compute num eligibility for atx %s: %w", ballot.AtxID, err)
+		return nil, fmt.Errorf("failed to compute num eligibility for atx %s: %w", ballot.AtxID, err)
 	}
-	return util.WeightFromUint64(atxWeight).Div(util.WeightFromUint64(uint64(expNumSlots))), nil
+	return new(big.Rat).SetFrac(
+		new(big.Int).SetUint64(atxWeight),
+		new(big.Int).SetUint64(uint64(expNumSlots)),
+	), nil
 }
