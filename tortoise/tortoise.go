@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/spacemeshos/fixed"
@@ -697,7 +696,7 @@ func (t *turtle) onAtx(atx *types.ActivationTxHeader) {
 		epoch.atxs[atx.ID] = atx.GetWeight()
 		if atx.GetWeight() > math.MaxInt64 {
 			// atx weight is not expected to overflow int64
-			panic("fixme: atx size overflows int64 " + strconv.FormatUint(atx.GetWeight(), 10))
+			t.logger.With().Fatal("fixme: atx size overflows int64", log.Uint64("weight", atx.GetWeight()))
 		}
 		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.GetWeight())))
 	}
