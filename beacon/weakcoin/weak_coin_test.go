@@ -186,7 +186,6 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -209,7 +208,6 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -232,7 +230,6 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -258,7 +255,6 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				nil,
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
 			)
@@ -287,7 +283,6 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
 			staticSigner(t, ctrl, []byte{1}),
-			nil,
 			weakcoin.WithVerifier(sigVerifier(t, ctrl)))
 		epoch types.EpochID = 10
 		round types.RoundID = 2
@@ -319,7 +314,6 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
 		staticSigner(t, ctrl, oneLSB),
-		nil,
 		weakcoin.WithNextRoundBufferSize(bufSize),
 		weakcoin.WithVerifier(sigVerifier(t, ctrl)),
 	)
@@ -368,7 +362,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	signer := signing.NewEdSignerFromRand(r).VRFSigner()
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	instance := weakcoin.New(broadcaster, signer, nil, weakcoin.WithThreshold([]byte{0xff}))
+	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
 	instance.StartEpoch(context.Background(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
@@ -405,9 +399,12 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			}).AnyTimes()
 		signer := signing.NewEdSignerFromRand(r).VRFSigner()
 		allowances[string(signer.PublicKey().Bytes())] = 1
-		instances[i] = weakcoin.New(broadcaster, signer, nil,
+		instances[i] = weakcoin.New(
+			broadcaster,
+			signer,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
-			weakcoin.WithVerifier(verifier))
+			weakcoin.WithVerifier(verifier),
+		)
 	}
 
 	for epoch := epochStart; epoch <= epochEnd; epoch++ {
