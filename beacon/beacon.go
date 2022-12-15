@@ -591,7 +591,7 @@ func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
 	allHashes := lastRoundVotes.support.sort()
 	allHashHexes := make([]string, len(allHashes))
 	for i, h := range allHashes {
-		allHashHexes[i] = util.Bytes2Hex(h)
+		allHashHexes[i] = hex.EncodeToString(h)
 	}
 	logger.With().Debug("calculating beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
