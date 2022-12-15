@@ -98,6 +98,7 @@ func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *sig
 		nil,
 		numUnits,
 		nil,
+		nil,
 	)
 
 	require.NoError(t, activation.SignAtx(sig, atx))
