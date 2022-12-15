@@ -1,8 +1,6 @@
 package wallet
 
 import (
-	"bytes"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
@@ -20,18 +18,6 @@ const (
 	// TotalGasSpend is a fixed amount of gas for spend.
 	TotalGasSpend = wallet.TotalGasSpend
 )
-
-func encode(fields ...scale.Encodable) []byte {
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	for _, field := range fields {
-		_, err := field.EncodeScale(encoder)
-		if err != nil {
-			panic(err)
-		}
-	}
-	return buf.Bytes()
-}
 
 // SelfSpawn creates a self-spawn transaction.
 func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
@@ -56,7 +42,7 @@ func Spawn(pk signing.PrivateKey, template core.Address, args scale.Encodable, n
 	// note that principal is computed from pk
 	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
 
-	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
+	tx := sdk.Encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, sdk.LengthPrefixedStruct{Encodable: args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)
@@ -81,7 +67,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	args.Destination = to
 	args.Amount = amount
 
-	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
+	tx := sdk.Encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, sdk.LengthPrefixedStruct{Encodable: &args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	return append(tx, sig...)

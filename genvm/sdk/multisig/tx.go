@@ -92,7 +92,7 @@ func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, 
 	payload.Nonce = nonce
 	payload.GasPrice = options.GasPrice
 
-	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, args)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpawn, &template, &payload, sdk.LengthPrefixedStruct{Encodable: args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}
@@ -117,7 +117,7 @@ func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount
 	args.Destination = to
 	args.Amount = amount
 
-	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, &args)
+	tx := encode(&sdk.TxVersion, &principal, &sdk.MethodSpend, &payload, sdk.LengthPrefixedStruct{Encodable: &args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	aggregator := &Aggregator{unsigned: tx, parts: map[uint8]multisig.Part{}}

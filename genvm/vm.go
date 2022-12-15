@@ -529,11 +529,15 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	buf, _, err := scale.DecodeByteSlice(decoder)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	args := handler.Args(method)
 	if args == nil {
 		return nil, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
 	}
-	if _, err := args.DecodeScale(decoder); err != nil {
+	if _, err := args.DecodeScale(scale.NewDecoder(bytes.NewReader(buf))); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
 	}
 	if method == core.MethodSpawn {

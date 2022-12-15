@@ -1998,7 +1998,7 @@ func TestVaultValidation(t *testing.T) {
 			&principal,
 			&sdk.MethodSpawn,
 			&vault.TemplateAddress,
-			tt.accounts[2].spawnArgs(),
+			sdk.LengthPrefixedStruct{Encodable: tt.accounts[2].spawnArgs()},
 		)
 		req := tt.Validation(types.NewRawTx(tx))
 		header, err := req.Parse()
@@ -2013,7 +2013,7 @@ func TestVaultValidation(t *testing.T) {
 			&principal,
 			&sdk.MethodSpawn,
 			&vault.TemplateAddress,
-			tt.accounts[2].spawnArgs(),
+			sdk.LengthPrefixedStruct{Encodable: tt.accounts[2].spawnArgs()},
 		)
 		req := tt.Validation(types.NewRawTx(tx))
 		header, err := req.Parse()
@@ -2027,7 +2027,7 @@ func TestVaultValidation(t *testing.T) {
 			&sdk.TxVersion,
 			&principal,
 			&sdk.MethodSpend,
-			&vault.SpendArguments{},
+			sdk.LengthPrefixedStruct{Encodable: &vault.SpendArguments{}},
 		)
 		req := tt.Validation(types.NewRawTx(tx))
 		header, err := req.Parse()

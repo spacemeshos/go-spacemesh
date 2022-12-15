@@ -17,3 +17,16 @@ func Encode(fields ...scale.Encodable) []byte {
 	}
 	return buf.Bytes()
 }
+
+type LengthPrefixedStruct struct {
+	scale.Encodable
+}
+
+func (lp LengthPrefixedStruct) EncodeScale(enc *scale.Encoder) (int, error) {
+	buf := bytes.NewBuffer(nil)
+	n, err := lp.Encodable.EncodeScale(scale.NewEncoder(buf))
+	if err != nil {
+		return n, err
+	}
+	return scale.EncodeByteSlice(enc, buf.Bytes())
+}

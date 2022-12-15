@@ -40,7 +40,7 @@ func DrainVault(ref uint8, pk ed25519.PrivateKey, principal, vault, receiver typ
 	args.Amount = amount
 
 	method := scale.U8(vesting.MethodDrainVault)
-	tx := sdk.Encode(&sdk.TxVersion, &principal, &method, &payload, &args)
+	tx := sdk.Encode(&sdk.TxVersion, &principal, &method, &payload, sdk.LengthPrefixedStruct{Encodable: &args})
 	hh := hash.Sum(options.GenesisID[:], tx)
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), hh[:])
 	aggregator := NewAggregator(tx)
