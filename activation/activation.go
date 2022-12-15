@@ -4,6 +4,7 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -11,11 +12,11 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -62,6 +63,8 @@ type Config struct {
 type Builder struct {
 	pendingPoetClients atomic.Pointer[[]PoetProvingServiceClient]
 	started            *atomic.Bool
+
+	eg errgroup.Group
 
 	signer
 	accountLock       sync.RWMutex
@@ -185,33 +188,21 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
 
-	commitmentAtx, err := b.getCommitmentAtx(ctx)
-	if err != nil {
-		b.started.Store(false)
-		return fmt.Errorf("failed to start post setup session: %w", err)
-	}
-
-	doneChan, err := b.postSetupProvider.StartSession(opts, *commitmentAtx)
-	if err != nil {
-		b.started.Store(false)
-		return fmt.Errorf("failed to start post setup session: %w", err)
-	}
-	go func() {
-		// Signal that smeshing is finished. StartSmeshing will refuse to restart until this
-		// goroutine finished.
+	b.eg.Go(func() error {
 		defer b.started.Store(false)
-		select {
-		case <-ctx.Done():
-			return
-		case <-doneChan:
+
+		commitmentAtx, err := b.getCommitmentAtx(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to start post setup session: %w", err)
 		}
 
-		if s := b.postSetupProvider.Status(); s.State != PostSetupStateComplete {
-			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
-			return
+		if err := b.postSetupProvider.StartSession(ctx, opts, *commitmentAtx); err != nil {
+			return err
 		}
+
 		b.run(ctx)
-	}()
+		return nil
+	})
 
 	return nil
 }
@@ -241,12 +232,22 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		return errors.New("not started")
 	}
 
-	if err := b.postSetupProvider.StopSession(deleteFiles); err != nil {
+	b.stop()
+	err := b.eg.Wait()
+	switch {
+	case err == nil || errors.Is(err, context.Canceled):
+		if !deleteFiles {
+			return nil
+		}
+
+		if err := b.postSetupProvider.Reset(); err != nil {
+			b.log.With().Error("failed to delete post files", log.Err(err))
+			return err
+		}
+		return nil
+	default:
 		return fmt.Errorf("failed to stop post data creation session: %w", err)
 	}
-
-	b.stop()
-	return nil
 }
 
 // SmesherID returns the ID of the smesher that created this activation.
@@ -290,17 +291,12 @@ func (b *Builder) generateProof(ctx context.Context) error {
 		b.log.Info("challenge not loaded: %s", err)
 	}
 
-	commitmentAtx, err := b.getCommitmentAtx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get commitment atx: %w", err)
-	}
-
 	// don't generate the commitment every time smeshing is starting, but once only.
 	if _, err := b.cdb.GetPrevAtx(b.nodeID); err != nil {
 		// Once initialized, run the execution phase with zero-challenge,
 		// to create the initial proof (the commitment).
 		startTime := time.Now()
-		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge, *commitmentAtx)
+		b.initialPost, b.initialPostMeta, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 		if err != nil {
 			return fmt.Errorf("post execution: %w", err)
 		}
@@ -394,7 +390,7 @@ func (b *Builder) loop(ctx context.Context) {
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-			if errors.Is(err, ErrStopRequested) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			switch {
@@ -431,7 +427,7 @@ func (b *Builder) loop(ctx context.Context) {
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return ErrStopRequested
+		return ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
 	challenge := &types.NIPostChallenge{}
@@ -479,7 +475,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		if err != nil {
 			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query Poet '%s' for ID (%w)", endpoint, err)}
 		}
-		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", util.Bytes2Hex(sid)))
+		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid)))
 		clients = append(clients, client)
 	}
 
@@ -519,12 +515,6 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 		return b.commitmentAtx, nil
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ErrStopRequested
-	case <-b.syncer.RegisterForATXSynced():
-	}
-
 	// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
 	atxId, err := atxs.GetFirstIDByNodeID(b.cdb, b.nodeID)
 	if err == nil {
@@ -540,6 +530,13 @@ func (b *Builder) getCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	atxId, err = kvstore.GetCommitmentATXForNode(b.cdb, b.nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
+		// wait for ATX to be synced before selecting commitment ATX
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-b.syncer.RegisterForATXSynced():
+		}
+
 		atxId, err := b.findCommitmentAtx()
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine commitment ATX: %w", err)
@@ -610,10 +607,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
 		case <-ctx.Done():
-			return ErrStopRequested
+			return ctx.Err()
 		}
 	case <-ctx.Done():
-		return ErrStopRequested
+		return ctx.Err()
 	}
 	b.discardChallenge()
 	return nil
@@ -654,11 +651,6 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		log.Time("deadline time", poetProofDeadline),
 	)
 
-	commitmentAtx, err := b.getCommitmentAtx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting commitment atx failed: %w", err)
-	}
-
 	challenge := types.PoetChallenge{
 		NIPostChallenge: b.challenge,
 		NumUnits:        b.postSetupProvider.LastOpts().NumUnits,
@@ -667,7 +659,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		challenge.InitialPost = b.initialPost
 		challenge.InitialPostMetadata = b.initialPostMeta
 	}
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &challenge, *commitmentAtx, poetProofDeadline)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, &challenge, poetProofDeadline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
@@ -695,13 +687,18 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// ensure we are synced before generating the ATX's view
 	select {
 	case <-ctx.Done():
-		return nil, ErrStopRequested
+		return nil, ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
 
 	var initialPost *types.Post
+	var nonce *types.VRFPostIndex
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		initialPost = b.initialPost
+		nonce, err = b.postSetupProvider.VRFNonce()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build atx: %w", err)
+		}
 	}
 
 	atx := types.NewActivationTx(
@@ -710,6 +707,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		nipost,
 		b.postSetupProvider.LastOpts().NumUnits,
 		initialPost,
+		nonce,
 	)
 	return atx, nil
 }

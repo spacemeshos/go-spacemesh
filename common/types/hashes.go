@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -30,7 +31,7 @@ type Hash32 [Hash32Length]byte
 type Hash20 [hash20Length]byte
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -103,7 +104,7 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash20) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
 func CalcHash12(data []byte) (h Hash12) {
@@ -269,7 +270,7 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash32) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
+func (h Hash32) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // EncodeScale implements scale codec interface.
 func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {

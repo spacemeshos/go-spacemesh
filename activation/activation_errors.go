@@ -6,8 +6,6 @@ import (
 )
 
 var (
-	// ErrStopRequested is returned when builder is stopped.
-	ErrStopRequested = errors.New("builder: stop requested")
 	// ErrATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
 	ErrATXChallengeExpired = errors.New("builder: atx expired")
 	// ErrPoetServiceUnstable is returned when poet quality of service is low.

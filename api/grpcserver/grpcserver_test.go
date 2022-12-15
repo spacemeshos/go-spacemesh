@@ -40,7 +40,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -135,7 +134,7 @@ func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	if err := activation.SignAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
@@ -147,7 +146,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
 	if err := activation.SignAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
 		os.Exit(1)
@@ -2777,7 +2776,7 @@ func TestEventsReceived(t *testing.T) {
 	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
 	conState.AddToCache(context.Background(), globalTx)
 
-	weight := util.WeightFromFloat64(18.7)
+	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.AnyReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
 	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},

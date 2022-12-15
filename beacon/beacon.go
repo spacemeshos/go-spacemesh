@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -944,7 +944,7 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 	signature := signer.Sign(p)
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
-		log.String("proposal", util.Bytes2Hex(p)),
+		log.String("proposal", hex.EncodeToString(p)),
 		log.String("signature", string(signature)))
 
 	return signature

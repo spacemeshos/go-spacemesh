@@ -87,6 +87,9 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s (err: %s)", errParse, raw.ID, err)
 	}
+	if header.GasPrice == 0 {
+		return fmt.Errorf("%w: zero gas price %s", errParse, raw.ID)
+	}
 	if !req.Verify() {
 		return fmt.Errorf("%w: %s", errVerify, raw.ID)
 	}

@@ -20,30 +20,39 @@ import (
 func Test_HandleBlock(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
+		fee                      uint64
 		has                      bool
 		hasErr, parseErr, addErr error
 		failed                   bool
 	}{
 		{
 			desc: "Success",
+			fee:  1,
 		},
 		{
 			desc:     "Success raw",
+			fee:      1,
 			parseErr: errors.New("test"),
 		},
 		{
 			desc: "Dup",
+			fee:  1,
 			has:  true,
 		},
 		{
 			desc:   "HasFailed",
+			fee:    1,
 			hasErr: errors.New("test"),
 			failed: true,
 		},
 		{
 			desc:   "AddFailed",
+			fee:    1,
 			addErr: errors.New("test"),
 			failed: true,
+		},
+		{
+			desc: "ZeroPrice",
 		},
 	} {
 		tc := tc
@@ -53,7 +62,7 @@ func Test_HandleBlock(t *testing.T) {
 			th := NewTxHandler(cstate, logtest.New(t))
 
 			signer := signing.NewEdSigner()
-			tx := newTx(t, 3, 10, 1, signer)
+			tx := newTx(t, 3, 10, tc.fee, signer)
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
 				req := smocks.NewMockValidationRequest(ctrl)
@@ -76,13 +85,13 @@ func Test_HandleBlock(t *testing.T) {
 	}
 }
 
-func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
+func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noheader bool) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, 1, signer)
+	tx := newTx(t, 3, 10, fee, signer)
 	var rst *types.MeshTransaction
 	if has {
 		rst = &types.MeshTransaction{Transaction: *tx}
@@ -95,7 +104,7 @@ func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verif
 		req := smocks.NewMockValidationRequest(ctrl)
 		req.EXPECT().Parse().Times(1).Return(tx.TxHeader, parseErr)
 		cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
-		if parseErr == nil {
+		if parseErr == nil && fee != 0 {
 			req.EXPECT().Verify().Times(1).Return(verify)
 			if verify {
 				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -113,6 +122,7 @@ func gossipExpectations(t *testing.T, hasErr, parseErr, addErr error, has, verif
 func Test_HandleGossip(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
+		fee                      uint64
 		has                      bool
 		noheader                 bool
 		hasErr, addErr, parseErr error
@@ -121,44 +131,56 @@ func Test_HandleGossip(t *testing.T) {
 	}{
 		{
 			desc:   "Success",
+			fee:    1,
 			verify: true,
 			expect: pubsub.ValidationAccept,
 		},
 		{
 			desc:     "SuccessNoHeader",
+			fee:      1,
 			noheader: true,
 			verify:   true,
 			expect:   pubsub.ValidationAccept,
 		},
 		{
 			desc:   "Dup",
+			fee:    1,
 			has:    true,
 			expect: pubsub.ValidationIgnore,
 		},
 		{
 			desc:   "HasFailed",
+			fee:    1,
 			hasErr: errors.New("test"),
 			expect: pubsub.ValidationIgnore,
 		},
 		{
 			desc:   "ParseFailed",
+			fee:    1,
 			addErr: errors.New("test"),
 			expect: pubsub.ValidationIgnore,
 		},
 		{
 			desc:   "VerifyFalse",
+			fee:    1,
 			expect: pubsub.ValidationIgnore,
 		},
 		{
 			desc:   "AddFailed",
+			fee:    1,
 			verify: true,
 			addErr: errors.New("test"),
+			expect: pubsub.ValidationIgnore,
+		},
+		{
+			desc:   "ZeroPrice",
+			fee:    1,
 			expect: pubsub.ValidationIgnore,
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			th, tx := gossipExpectations(t,
+			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noheader,
 			)
@@ -173,6 +195,7 @@ func Test_HandleGossip(t *testing.T) {
 func Test_HandleProposal(t *testing.T) {
 	for _, tc := range []struct {
 		desc                     string
+		fee                      uint64
 		has                      bool
 		noheader                 bool
 		hasErr, addErr, parseErr error
@@ -181,41 +204,52 @@ func Test_HandleProposal(t *testing.T) {
 	}{
 		{
 			desc:   "Success",
+			fee:    1,
 			verify: true,
 		},
 		{
 			desc:     "SuccessNoHeader",
+			fee:      1,
 			noheader: true,
 			verify:   true,
 		},
 		{
 			desc: "Dup",
+			fee:  1,
 			has:  true,
 		},
 		{
 			desc:   "HasFailed",
+			fee:    1,
 			hasErr: errors.New("test"),
 			fail:   true,
 		},
 		{
 			desc:     "ParseFailed",
+			fee:      1,
 			parseErr: errors.New("test"),
 			fail:     true,
 		},
 		{
 			desc: "VerifyFalse",
+			fee:  1,
 			fail: true,
 		},
 		{
 			desc:   "AddFailed",
+			fee:    1,
 			verify: true,
 			addErr: errors.New("test"),
 			fail:   true,
 		},
+		{
+			desc: "ZeroPrice",
+			fail: true,
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			th, tx := gossipExpectations(t,
+			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noheader,
 			)
