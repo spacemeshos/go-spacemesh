@@ -383,12 +383,12 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) error {
 		t.processed = process
 		processedLayer.Set(float64(t.processed.Value))
 
-		for _, ballot := range t.ballots[process] {
-			t.countBallot(t.logger, ballot)
-		}
 		if t.isFull {
 			t.full.countDelayed(t.logger, process)
 			t.full.counted = process
+		}
+		for _, ballot := range t.ballots[process] {
+			t.countBallot(t.logger, ballot)
 		}
 
 		if err := t.loadBlocksData(process); err != nil {
@@ -438,7 +438,7 @@ func (t *turtle) countBallot(logger log.Log, ballot *ballotInfo) error {
 	}
 	ballot.conditions.badBeacon = badBeacon
 	t.verifying.countBallot(logger, ballot)
-	if t.isFull {
+	if !ballot.layer.After(t.full.counted) {
 		t.full.countBallot(logger, ballot)
 	}
 	return nil
@@ -585,8 +585,6 @@ func (t *turtle) loadAtxs(epoch types.EpochID) error {
 	return nil
 }
 
-// loadBallots from database.
-// must be loaded in order, as base ballot information needs to be in the state.
 func (t *turtle) loadBallots(lid types.LayerID) error {
 	blts, err := ballots.Layer(t.cdb, lid)
 	if err != nil {
