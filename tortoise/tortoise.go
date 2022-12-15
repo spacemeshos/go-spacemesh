@@ -135,103 +135,49 @@ func (t *turtle) evict(ctx context.Context) {
 // EncodeVotes by choosing base ballot and explicit votes.
 func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opinion, error) {
 	var (
-		logger        = t.logger.WithContext(ctx)
-		disagreements = map[types.BallotID]types.LayerID{}
-		choices       []*ballotInfo
-		base          *ballotInfo
+		logger = t.logger.WithContext(ctx)
+		err    error
 
-		opinion *types.Opinion
 		current = t.last.Add(1)
-		err     error
 	)
 	if conf.current != nil {
 		current = *conf.current
 	}
-
-	for lid := t.evicted.Add(1); lid.Before(current); lid = lid.Add(1) {
-		for _, ballot := range t.ballots[lid] {
-			if ballot.malicious {
+	for lid := current.Sub(1); lid.After(t.evicted); lid = lid.Sub(1) {
+		var choices []*ballotInfo
+		if lid == types.GetEffectiveGenesis() {
+			choices = []*ballotInfo{{layer: types.GetEffectiveGenesis()}}
+		} else {
+			choices = t.ballots[lid]
+		}
+		for _, base := range choices {
+			if base.malicious {
+				// skim them as they are candidates for pruning
 				continue
 			}
-			dis, err := t.firstDisagreement(ctx, current, ballot, disagreements)
-			if err != nil {
-				logger.With().Error("failed to compute first disagreement", ballot.id, log.Err(err))
-				continue
-			}
-			disagreements[ballot.id] = dis
-			choices = append(choices, ballot)
-		}
-	}
-
-	prioritizeBallots(choices, disagreements)
-	if len(choices) == 0 {
-		choices = append(choices, &ballotInfo{layer: types.GetEffectiveGenesis()})
-	}
-	for _, base = range choices {
-		opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
-		if err == nil {
-			break
-		}
-		logger.With().Warning("error calculating vote exceptions for ballot",
-			base.id,
-			log.Err(err),
-			log.Stringer("current layer", current),
-		)
-	}
-
-	if opinion == nil {
-		// TODO: special error encoding when exceeding exception list size
-		return nil, errNoBaseBallotFound
-	}
-	logger.With().Info("choose base ballot",
-		log.Stringer("base layer", base.layer),
-		log.Stringer("voting layer", current),
-		log.Inline(opinion),
-	)
-	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
-	return opinion, nil
-}
-
-// firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx context.Context, current types.LayerID, ballot *ballotInfo, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
-	// using it as a mark that the votes for block are completely consistent
-	// with a local opinion. so if two blocks have consistent histories select block
-	// from a higher layer as it is more consistent.
-	consistent := ballot.layer
-	if basedis, exists := disagreements[ballot.base.id]; exists && basedis != ballot.base.layer {
-		return basedis, nil
-	}
-
-	for lvote := ballot.votes.tail; lvote != nil; lvote = lvote.prev {
-		if lvote.lid.Before(ballot.base.layer) {
-			break
-		}
-		if lvote.vote == abstain && lvote.hareTerminated {
-			t.logger.With().Debug("ballot votes abstain on a terminated layer. can't use as a base ballot",
-				ballot.id,
-				lvote.lid,
-			)
-			return types.LayerID{}, nil
-		}
-		for _, block := range lvote.blocks {
-			vote, _, err := t.getFullVote(t.verified, current, block)
-			if err != nil {
-				return types.LayerID{}, err
-			}
-			if bvote := lvote.getVote(block.id); vote != bvote {
-				t.logger.With().Debug("found disagreement on a block",
-					ballot.id,
-					block.id,
-					log.Stringer("block_layer", lvote.lid),
-					log.Stringer("ballot_layer", ballot.layer),
-					log.Stringer("local_vote", vote),
-					log.Stringer("vote", bvote),
+			var opinion *types.Opinion
+			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
+			if err == nil {
+				metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - base.layer.Value))
+				logger.With().Info("encoded votes",
+					log.Stringer("base ballot", base.id),
+					log.Stringer("base layer", base.layer),
+					log.Stringer("voting layer", current),
+					log.Inline(opinion),
 				)
-				return lvote.lid, nil
+				return opinion, nil
 			}
+			logger.With().Debug("failed to encode votes using base ballot id",
+				base.id,
+				log.Err(err),
+				log.Stringer("current layer", current),
+			)
 		}
 	}
-	return consistent, nil
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", errNoBaseBallotFound, err)
+	}
+	return nil, fmt.Errorf("%w: no ballots within a sliding window", errNoBaseBallotFound)
 }
 
 // encode differences between selected base ballot and local votes.
