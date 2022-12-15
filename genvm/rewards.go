@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/economics/rewards"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -36,14 +35,15 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, bl
 		subsidy                     = rewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
 		total                       = subsidy + fees
 		transferred                 uint64
-		totalWeight                 = util.WeightFromUint64(0)
+		totalWeight                 = new(big.Rat)
 	)
 	for _, blockReward := range blockRewards {
-		totalWeight.Add(util.WeightFromNumDenom(blockReward.Weight.Num, blockReward.Weight.Denom))
+		totalWeight.Add(totalWeight, blockReward.Weight.ToBigRat())
 	}
 	result := make([]types.Reward, 0, len(blockRewards))
 	for _, blockReward := range blockRewards {
-		relative := util.WeightFromNumDenom(blockReward.Weight.Num, blockReward.Weight.Denom).Div(totalWeight)
+		relative := blockReward.Weight.ToBigRat()
+		relative.Quo(relative, totalWeight)
 
 		totalReward := new(big.Int).SetUint64(total)
 		totalReward.

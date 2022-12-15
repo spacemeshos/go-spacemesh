@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math/big"
 	"math/rand"
 	"sort"
 	"testing"
@@ -15,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -171,14 +171,14 @@ func createProposal(t *testing.T, epochData *types.EpochData, lid types.LayerID,
 	return p
 }
 
-func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer util.Weight, rewards []types.AnyReward) {
+func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer *big.Rat, rewards []types.AnyReward) {
 	t.Helper()
 	sort.Slice(atxs, func(i, j int) bool {
 		return bytes.Compare(atxs[i].Coinbase.Bytes(), atxs[j].Coinbase.Bytes()) < 0
 	})
 	for i, r := range rewards {
 		require.Equal(t, atxs[i].Coinbase, r.Coinbase)
-		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
+		got := r.Weight.ToBigRat()
 		require.Equal(t, expWeightPer, got)
 	}
 }
@@ -213,7 +213,7 @@ func Test_processHareOutput(t *testing.T) {
 			require.Len(t, block.Rewards, numProposals)
 			// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 			// the expected weight for each eligibility is `numUnit` * 1/3
-			expWeight := util.WeightFromInt64(numUint * 1 / 3)
+			expWeight := new(big.Rat).SetInt64(numUint * 1 / 3)
 			checkRewards(t, atxes, expWeight, block.Rewards)
 			return nil
 		})
@@ -267,7 +267,7 @@ func Test_processHareOutput_ProcessFailed(t *testing.T) {
 			require.Len(t, block.Rewards, numProposals)
 			// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 			// the expected weight for each eligibility is `numUnit` * 1/3
-			expWeight := util.WeightFromInt64(numUint * 1 / 3)
+			expWeight := new(big.Rat).SetInt64(numUint * 1 / 3)
 			checkRewards(t, atxes, expWeight, block.Rewards)
 			return nil
 		})
@@ -383,7 +383,7 @@ func Test_generateBlock_EmptyProposals(t *testing.T) {
 	require.Len(t, block.Rewards, numProposals)
 	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
-	expWeight := util.WeightFromInt64(numUint * 1 / 3)
+	expWeight := new(big.Rat).SetInt64(numUint * 1 / 3)
 	checkRewards(t, atxes, expWeight, block.Rewards)
 }
 
@@ -442,7 +442,7 @@ func Test_generateBlock_SameCoinbase(t *testing.T) {
 	// numUint is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
 	// the expected weight for each eligibility is `numUnit` * 1/3
 	// since there are two proposals for the same coinbase, the final weight is `numUnit` * 1/3 * 2
-	expWeight := util.WeightFromInt64(numUint * 1 / 3 * 2)
+	expWeight := new(big.Rat).SetInt64(numUint * 1 / 3 * 2)
 	checkRewards(t, atxes[0:1], expWeight, block.Rewards)
 }
 
@@ -491,14 +491,14 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 		cbj := types.GenerateAddress(plist[j].SmesherID().Bytes())
 		return bytes.Compare(cbi.Bytes(), cbj.Bytes()) < 0
 	})
-	totalWeight := util.WeightFromUint64(0)
+	totalWeight := new(big.Rat)
 	for i, r := range block.Rewards {
 		require.Equal(t, types.GenerateAddress(plist[i].SmesherID().Bytes()), r.Coinbase)
-		got := util.WeightFromNumDenom(r.Weight.Num, r.Weight.Denom)
+		got := r.Weight.ToBigRat()
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3
-		require.Equal(t, util.WeightFromInt64(numUint*1/3*int64(len(plist[i].EligibilityProofs))), got)
-		totalWeight.Add(got)
+		require.Equal(t, new(big.Rat).SetInt64(numUint*1/3*int64(len(plist[i].EligibilityProofs))), got)
+		totalWeight.Add(totalWeight, got)
 	}
-	require.Equal(t, util.WeightFromInt64(numUint*8*1/3), totalWeight)
+	require.Equal(t, new(big.Rat).SetInt64(numUint*8*1/3), totalWeight)
 }
