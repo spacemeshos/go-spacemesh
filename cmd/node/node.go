@@ -184,7 +184,7 @@ type Service interface {
 	Close()
 }
 
-// TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
+// TickProvider is an interface to a global system clock that releases ticks on each layer.
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timesync.LayerTimer)
@@ -568,7 +568,7 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerifier{}, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
@@ -1041,7 +1041,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner := app.edSgn.VRFSigner(0)
+	vrfSigner := app.edSgn.VRFSigner()
 
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 
