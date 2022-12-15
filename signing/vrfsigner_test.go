@@ -7,15 +7,14 @@ import (
 )
 
 func Fuzz_VRFSignAndVerify(f *testing.F) {
-	f.Fuzz(func(t *testing.T, nonce uint64, message []byte) {
-		signer := NewEdSigner().VRFSigner(nonce)
+	f.Fuzz(func(t *testing.T, message []byte) {
+		signer := NewEdSigner().VRFSigner()
 		verifier := VRFVerifier{}
 
-		t.Logf("nonce: %d\n", nonce)
 		t.Logf("message: %x\n", message)
 
 		signature := signer.Sign(message)
-		ok := verifier.Verify(signer.PublicKey(), nonce, message, signature)
+		ok := verifier.Verify(signer.PublicKey(), message, signature)
 		require.True(t, ok, "failed to verify VRF signature")
 	})
 }

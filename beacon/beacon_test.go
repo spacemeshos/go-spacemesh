@@ -79,7 +79,7 @@ func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
 	}
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
-	vrfSigner := edSgn.VRFSigner(0)
+	vrfSigner := edSgn.VRFSigner()
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	tpd.store = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	tpd.ProtocolDriver = New(minerID, newPublisher(t), edSgn, vrfSigner, tpd.store, tpd.mClock,
@@ -739,7 +739,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	r := require.New(t)
 
 	edSgn := signing.NewEdSigner()
-	vrfSigner := edSgn.VRFSigner(0)
+	vrfSigner := edSgn.VRFSigner()
 
 	tt := []struct {
 		name   string

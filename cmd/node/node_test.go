@@ -1038,7 +1038,7 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
-	vrfSigner := edSgn.VRFSigner(0)
+	vrfSigner := edSgn.VRFSigner()
 
 	nodeID := types.BytesToNodeID(pub.Bytes())
 

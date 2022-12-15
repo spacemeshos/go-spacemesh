@@ -68,7 +68,7 @@ type Oracle struct {
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
-	vrfVerifier    verifierFunc
+	vrfVerifier    signing.Verifier
 	layersPerEpoch uint32
 	vrfMsgCache    cache
 	activesCache   cache
@@ -112,7 +112,7 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
-	vrfVerifier verifierFunc,
+	vrfVerifier signing.Verifier,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
@@ -262,7 +262,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier(id.Bytes(), msg, vrfSig) {
+	if !o.vrfVerifier.Verify(signing.NewPublicKey(id.Bytes()), msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)

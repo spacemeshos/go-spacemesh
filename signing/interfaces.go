@@ -11,7 +11,7 @@ type Signer interface {
 
 // Verifier is a common interface for signature verification.
 type Verifier interface {
-	Verify(pub *PublicKey, nonce uint64, msg, sig []byte) bool
+	Verify(pub *PublicKey, msg, sig []byte) bool
 }
 
 // VerifyExtractor is a common interface for signature verification with support of public key extraction.

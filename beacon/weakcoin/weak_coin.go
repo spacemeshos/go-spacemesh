@@ -212,8 +212,11 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return err
 	}
 
+	// TODO(mafa): incorporate VRF nonce into message
+	_ = nonce
+
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(signing.NewPublicKey(nodeId.Bytes()), uint64(*nonce), buf, message.Signature) {
+	if !wc.verifier.Verify(signing.NewPublicKey(nodeId.Bytes()), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 

@@ -203,7 +203,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer1 := signing.NewEdSigner()
-	vrfSigner1 := signer1.VRFSigner(0)
+	vrfSigner1 := signer1.VRFSigner()
 
 	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
@@ -218,7 +218,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now()))
 
 	signer2 := signing.NewEdSigner()
-	vrfSigner2 := signer2.VRFSigner(0)
+	vrfSigner2 := signer2.VRFSigner()
 
 	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
@@ -249,7 +249,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 	tpd.Close()
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
@@ -269,7 +269,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)
@@ -299,7 +299,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := []byte("guaranteed to be  malformed")
 	got := tpd.handleProposal(context.TODO(), "peerID", msg, time.Now())
@@ -316,7 +316,7 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch-1, false)
 	msgBytes, err := codec.Encode(msg)
@@ -339,7 +339,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1))
 	signer := signing.NewEdSignerFromRand(rng)
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
 	msgBytes, err := codec.Encode(msg)
@@ -373,7 +373,7 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
 	msgBytes, err := codec.Encode(msg)
@@ -401,7 +401,7 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch+2, false)
 	msgBytes, err := codec.Encode(msg)
@@ -422,7 +422,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, true)
 	msgBytes, err := codec.Encode(msg)
@@ -444,7 +444,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSignerFromRand(rand.New(rand.NewSource(101)))
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg1 := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes1, err := codec.Encode(msg1)
@@ -485,7 +485,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 
-	msg := createProposal(t, signer, signer.VRFSigner(0), epoch, false)
+	msg := createProposal(t, signer, signer.VRFSigner(), epoch, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -505,7 +505,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	tpd := createProtocolDriver(t, epoch)
 
 	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner(0)
+	vrfSigner := signer.VRFSigner()
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 	msgBytes, err := codec.Encode(msg)

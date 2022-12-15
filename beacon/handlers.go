@@ -194,9 +194,12 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get initial ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
+	// TODO(mafa): incorporate VRF nonce into message
+	_ = atx
+
 	vrfPK := signing.NewPublicKey(m.NodeID.Bytes())
 	currentEpochProposal := buildProposal(m.EpochID, logger)
-	if !pd.vrfVerifier.Verify(vrfPK, uint64(*atx.VRFNonce), currentEpochProposal, m.VRFSignature) {
+	if !pd.vrfVerifier.Verify(vrfPK, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, errVRFNotVerified)
