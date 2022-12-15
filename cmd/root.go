@@ -154,7 +154,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Beacon Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&cfg.Beacon.Kappa, "beacon-kappa",
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.Kappa, "beacon-kappa",
 		cfg.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
 	cmd.PersistentFlags().Var((*types.RatVar)(cfg.Beacon.Q), "beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
