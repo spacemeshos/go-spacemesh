@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"encoding/hex"
+	"fmt"
+	"math"
 	"testing"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -107,5 +110,84 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 	for epoch := range beacons {
 		assert.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
+	}
+}
+
+func TestNodesUsingDifferentPoets(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	if tctx.PoetSize < 2 {
+		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
+	}
+	logger := tctx.Log.Named("TestNodesUsingDifferentPoets")
+
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	require.NoError(t, err)
+	logger.Debug("Obtained cluster")
+
+	poetEndpoints := make([]string, 0, tctx.PoetSize)
+	for i := 0; i < tctx.PoetSize; i++ {
+		poetEndpoints = append(poetEndpoints, cluster.MakePoetEndpoint(i))
+	}
+
+	for i := 0; i < cl.Total(); i++ {
+		node := cl.Client(i)
+		endpoint := poetEndpoints[i%len(poetEndpoints)]
+		logger.Debugw("updating node's poet server", "node", node.Name, "poet", endpoint)
+		updated, err := updatePoetServers(tctx, node, []string{endpoint})
+		require.NoError(t, err)
+		require.True(t, updated)
+	}
+
+	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
+	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
+	last := first + layersCount - 1
+	logger.Debugw("watching layers between", "first", first, "last", last)
+
+	createdch := make(chan *pb.Proposal, cl.Total()*(int(layersCount)))
+
+	eg, ctx := errgroup.WithContext(tctx)
+	for i := 0; i < cl.Total(); i++ {
+		clientId := i
+		client := cl.Client(clientId)
+		logger.Debugw("watching", "client", client.Name, "clientId", clientId)
+		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+			if proposal.Layer.Number < first {
+				return true, nil
+			}
+			if proposal.Layer.Number > last {
+				logger.Debugw("proposal watcher is done", "client", client.Name)
+				return false, nil
+			}
+
+			if proposal.Status == pb.Proposal_Created {
+				logger.Debugw("received proposal event",
+					"client", client.Name,
+					"id", hex.EncodeToString(proposal.Smesher.Id),
+					"layer", proposal.Layer.Number,
+					"eligibilities", len(proposal.Eligibilities),
+				)
+				createdch <- proposal
+			}
+			return true, nil
+		})
+	}
+
+	require.NoError(t, eg.Wait())
+	close(createdch)
+
+	type EpochSet = map[uint64]struct{}
+	smeshers := map[string]EpochSet{}
+	for proposal := range createdch {
+		if smesher, ok := smeshers[string(proposal.Smesher.Id)]; !ok {
+			smeshers[string(proposal.Smesher.Id)] = EpochSet{proposal.Epoch.Value: struct{}{}}
+		} else {
+			smesher[proposal.Epoch.Value] = struct{}{}
+		}
+	}
+
+	firstEpochWithEligibility := uint32(math.Max(2.0, float64(first/layersPerEpoch)))
+	epochsInTest := (last/layersPerEpoch - firstEpochWithEligibility + 1)
+	for id, eligibleEpochs := range smeshers {
+		assert.EqualValues(t, epochsInTest, len(eligibleEpochs), fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs))
 	}
 }
