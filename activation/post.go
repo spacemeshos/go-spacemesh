@@ -34,7 +34,7 @@ type PostConfig struct {
 type PostSetupOpts struct {
 	DataDir           string `mapstructure:"smeshing-opts-datadir"`
 	NumUnits          uint32 `mapstructure:"smeshing-opts-numunits"`
-	NumFiles          uint32 `mapstructure:"smeshing-opts-numfiles"`
+	MaxFileSize       uint64 `mapstructure:"smeshing-opts-maxfilesize"`
 	ComputeProviderID int    `mapstructure:"smeshing-opts-provider"`
 	Throttle          bool   `mapstructure:"smeshing-opts-throttle"`
 }
