@@ -63,6 +63,8 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 		}
 		if empty {
 			lvote.empty = lvote.empty.Add(ballot.weight)
+		} else {
+			lvote.empty = lvote.empty.Sub(ballot.weight)
 		}
 	}
 	fcountBallotDuration.Observe(float64(time.Since(start).Nanoseconds()))
@@ -112,15 +114,17 @@ func (f *full) countVotes(logger log.Log) {
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	threshold := f.globalThreshold(f.Config, lid)
-	logger = logger.WithFields(
-		log.String("verifier", "full"),
-		log.Stringer("counted_layer", f.counted),
-		log.Stringer("candidate_layer", lid),
-		log.Stringer("local_threshold", f.localThreshold),
-		log.Stringer("global_threshold", threshold),
-	)
 	layer := f.state.layer(lid)
 	empty := layer.empty.Cmp(threshold) > 0
+	logger = logger.WithFields(
+		log.String("verifier", "full"),
+		log.Stringer("counted layer", f.counted),
+		log.Stringer("candidate layer", lid),
+		log.Stringer("local threshold", f.localThreshold),
+		log.Stringer("global threshold", threshold),
+		log.Stringer("empty weight", layer.empty),
+		log.Bool("is empty", empty),
+	)
 	if len(layer.blocks) == 0 {
 		if empty {
 			logger.With().Debug("candidate layer is empty")

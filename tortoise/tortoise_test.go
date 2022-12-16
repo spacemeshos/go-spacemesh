@@ -2207,7 +2207,6 @@ func TestSwitchMode(t *testing.T) {
 			last = s.Next(sim.WithNumBlocks(1))
 		}
 		tortoise.TallyVotes(ctx, last)
-		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		layer := tortoise.trtl.layer(types.GetEffectiveGenesis().Add(1))
 		require.Len(t, layer.blocks, 1)
 		require.Equal(t, layer.blocks[0].validity, against)
@@ -2219,14 +2218,64 @@ func TestSwitchMode(t *testing.T) {
 			Height:  block.height,
 		})))
 		tortoise.TallyVotes(ctx, last)
-		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		for i := 0; i < 10; i++ {
 			last = s.Next(sim.WithNumBlocks(1))
 			tortoise.TallyVotes(ctx, last)
 		}
 		tortoise.TallyVotes(ctx, last)
-		processBlockUpdates(t, tortoise, s.GetState(0).DB)
 		require.False(t, tortoise.trtl.isFull)
+	})
+	t.Run("count after switch back", func(t *testing.T) {
+		const size = 4
+
+		ctx := context.Background()
+
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		cfg.Zdist = 2
+		cfg.Hdist = 2
+
+		s := sim.New(
+			sim.WithLayerSize(cfg.LayerSize),
+		)
+		s.Setup(
+			sim.WithSetupMinerRange(size, size),
+		)
+		tortoise := tortoiseFromSimState(
+			s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)),
+		)
+		nohare := s.Next(sim.WithEmptyHareOutput(), sim.WithNumBlocks(1))
+		last := nohare
+		for i := 0; i < int(cfg.Hdist); i++ {
+			last = s.Next(sim.WithNumBlocks(1))
+			tortoise.TallyVotes(ctx, last)
+		}
+		_, events := tortoise.Updates()
+		require.Len(t, events, int(cfg.Hdist))
+		require.Equal(t, events[0].Layer, nohare)
+		require.True(t, events[0].Validity)
+
+		templates, err := ballots.Layer(s.GetState(0).DB, nohare.Add(1))
+		require.NoError(t, err)
+		require.NotEmpty(t, templates)
+		template := templates[0]
+		template.Votes.Support = nil
+
+		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
+		header := &types.ActivationTxHeader{ID: types.ATXID{1}, NumUnits: 1, TickCount: 200}
+		header.PubLayerID = types.EpochID(1).FirstLayer()
+		tortoise.OnAtx(header)
+		// feed ballots that vote against previously validated layer
+		// without the fix they would be ignored
+		for i := 1; i <= 16; i++ {
+			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, nil, nil, template.InnerBallot)
+			tortoise.OnBallot(&ballot)
+		}
+		tortoise.TallyVotes(ctx, last)
+		_, events = tortoise.Updates()
+		require.Len(t, events, 1)
+		require.Equal(t, events[0].Layer, nohare)
+		require.False(t, events[0].Validity)
 	})
 }
 
