@@ -75,7 +75,7 @@ beacon-voting-round-duration = "30m"
 beacon-weak-coin-round-duration = "1m"
 beacon-theta = "1/4"
 beacon-votes-limit = 100
-beacon-sync-num-blocks = 1600
+beacon-sync-weight-units = 800
 
 [logging]
 app = "info"

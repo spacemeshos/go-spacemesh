@@ -174,8 +174,8 @@ func AddCommands(cmd *cobra.Command) {
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.VotesLimit, "beacon-votes-limit",
 		cfg.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
-	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
-		cfg.Beacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.BeaconSyncWeightUnits, "beacon-sync-weight-units",
+		cfg.Beacon.BeaconSyncWeightUnits, "Numbers of weight units to wait before determining beacon values from them.")
 
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Hdist, "tortoise-hdist",

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ALTree/bigfloat"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spacemeshos/fixed"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
@@ -46,9 +47,10 @@ var (
 type (
 	proposals    = struct{ valid, potentiallyValid proposalSet }
 	allVotes     = struct{ support, against proposalSet }
-	ballotWeight = struct {
-		weight  uint64
-		ballots map[types.BallotID]struct{}
+	beaconWeight = struct {
+		ballots     map[types.BallotID]struct{}
+		totalWeight fixed.Fixed
+		weightUnits int
 	}
 )
 
@@ -93,18 +95,18 @@ func New(
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		ctx:                context.Background(),
-		logger:             log.NewNop(),
-		config:             DefaultConfig(),
-		nodeID:             nodeID,
-		publisher:          publisher,
-		edSigner:           edSigner,
-		vrfSigner:          vrfSigner,
-		cdb:                cdb,
-		clock:              clock,
-		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
-		states:             make(map[types.EpochID]*state),
+		ctx:            context.Background(),
+		logger:         log.NewNop(),
+		config:         DefaultConfig(),
+		nodeID:         nodeID,
+		publisher:      publisher,
+		edSigner:       edSigner,
+		vrfSigner:      vrfSigner,
+		cdb:            cdb,
+		clock:          clock,
+		beacons:        make(map[types.EpochID]types.Beacon),
+		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+		states:         make(map[types.EpochID]*state),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -165,10 +167,10 @@ type ProtocolDriver struct {
 	// the map key is the target epoch when beacon is used. if a beacon is calculated in epoch N, it will be used
 	// in epoch N+1.
 	beacons map[types.EpochID]types.Beacon
-	// beaconsFromBallots store beacons collected from ballots.
+	// ballotsBeacons store beacons collected from ballots.
 	// the map key is the epoch when the ballot is published. the beacon value is calculated in the
 	// previous epoch and used in the current epoch.
-	beaconsFromBallots map[types.EpochID]map[types.Beacon]*ballotWeight
+	ballotsBeacons map[types.EpochID]map[types.Beacon]*beaconWeight
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
@@ -233,86 +235,111 @@ func (pd *ProtocolDriver) isClosed() bool {
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
-func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, bid types.BallotID, beacon types.Beacon, weight uint64) {
-	pd.recordBeacon(epoch, bid, beacon, weight)
+func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, ballot *types.Ballot, beacon types.Beacon, weightPer fixed.Fixed) {
+	pd.recordBeacon(epoch, ballot, beacon, weightPer)
 
 	if _, err := pd.GetBeacon(epoch); err == nil {
 		// already has beacon. i.e. we had participated in the beacon protocol during the last epoch
 		return
 	}
 
-	if eBeacon := pd.findMostWeightedBeaconForEpoch(epoch); eBeacon != types.EmptyBeacon {
+	if eBeacon := pd.findMajorityBeacon(epoch); eBeacon != types.EmptyBeacon {
 		if err := pd.setBeacon(epoch, eBeacon); err != nil {
 			pd.logger.With().Error("beacon sync: failed to set beacon", log.Err(err))
 		}
 	}
 }
 
-func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, bid types.BallotID, beacon types.Beacon, weight uint64) {
+func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ballot, beacon types.Beacon, weightPer fixed.Fixed) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	if _, ok := pd.beaconsFromBallots[epochID]; !ok {
-		pd.beaconsFromBallots[epochID] = make(map[types.Beacon]*ballotWeight)
+	// using ballot weight here because we're sampling miners for the beacon value recorded
+	// in the ballots. we can't just take the entire ATX weight because otherwise, a "whale"
+	// ATX would dominate the voting.
+	ballotWeight := weightPer.Mul(fixed.New(len(ballot.EligibilityProofs)))
+	weightUinit := len(ballot.EligibilityProofs)
+	if _, ok := pd.ballotsBeacons[epochID]; !ok {
+		pd.ballotsBeacons[epochID] = make(map[types.Beacon]*beaconWeight)
 	}
-	entry, ok := pd.beaconsFromBallots[epochID][beacon]
+	entry, ok := pd.ballotsBeacons[epochID][beacon]
 	if !ok {
-		pd.beaconsFromBallots[epochID][beacon] = &ballotWeight{
-			weight:  weight,
-			ballots: map[types.BallotID]struct{}{bid: {}},
+		pd.ballotsBeacons[epochID][beacon] = &beaconWeight{
+			ballots:     map[types.BallotID]struct{}{ballot.ID(): {}},
+			totalWeight: ballotWeight,
+			weightUnits: weightUinit,
 		}
 		pd.logger.With().Debug("added beacon from ballot",
 			epochID,
-			bid,
+			ballot.ID(),
 			beacon,
-			log.Uint64("weight", weight))
+			log.Stringer("weight_per", weightPer),
+			log.Int("weight_units", weightUinit),
+			log.Stringer("weight", ballotWeight))
 		return
 	}
 
-	// checks if we have recorded this blockID before
-	if _, ok := entry.ballots[bid]; ok {
-		pd.logger.With().Warning("ballot already reported beacon", epochID, bid)
+	// checks if we have recorded this ballot before
+	if _, ok = entry.ballots[ballot.ID()]; ok {
+		pd.logger.With().Warning("ballot already reported beacon", epochID, ballot.ID())
 		return
 	}
 
-	entry.ballots[bid] = struct{}{}
-	entry.weight += weight
+	entry.ballots[ballot.ID()] = struct{}{}
+	entry.totalWeight = entry.totalWeight.Add(ballotWeight)
+	entry.weightUnits += weightUinit
 	pd.logger.With().Debug("added beacon from ballot",
 		epochID,
-		bid,
+		ballot.ID(),
 		beacon,
-		log.Uint64("weight", weight))
+		log.Stringer("weight_per", weightPer),
+		log.Int("weight_units", weightUinit),
+		log.Stringer("weight", ballotWeight))
 }
 
-func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) types.Beacon {
+func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	epochBeacons, ok := pd.beaconsFromBallots[epoch]
+	epochBeacons, ok := pd.ballotsBeacons[epoch]
 	if !ok {
 		return types.EmptyBeacon
 	}
-	var mostWeight uint64
-	var beacon types.Beacon
-	numBallots := 0
-	for k, v := range epochBeacons {
-		if v.weight > mostWeight {
-			beacon = k
-			mostWeight = v.weight
-		}
-		numBallots += len(v.ballots)
+	totalWeight := fixed.New64(0)
+	totalWeightUnits := 0
+	for _, bw := range epochBeacons {
+		totalWeightUnits += bw.weightUnits
+		totalWeight = totalWeight.Add(bw.totalWeight)
 	}
 
-	logger := pd.logger.WithFields(epoch, log.Int("num_ballots", numBallots))
-
-	if uint32(numBallots) < pd.config.BeaconSyncNumBallots {
-		logger.Debug("not enough ballots to determine beacon")
+	logger := pd.logger.WithFields(epoch, log.Int("total_weight_units", totalWeightUnits))
+	if totalWeightUnits < pd.config.BeaconSyncWeightUnits {
+		logger.Debug("not enough weight units to determine beacon")
 		return types.EmptyBeacon
 	}
 
-	logger.With().Info("beacon determined for epoch",
-		beacon,
-		log.Uint64("weight", mostWeight))
-	return beacon
+	majorityWeight := totalWeight.Div(fixed.New(2))
+	maxWeight := fixed.New64(0)
+	var bPlurality types.Beacon
+	for beacon, bw := range epochBeacons {
+		if bw.totalWeight.GreaterThan(majorityWeight) {
+			logger.With().Info("beacon determined for epoch",
+				beacon,
+				log.Int("total_weight_unit", totalWeightUnits),
+				log.Stringer("total_weight", totalWeight),
+				log.Stringer("beacon_weight", bw.totalWeight))
+			return beacon
+		}
+		if bw.totalWeight.GreaterThan(maxWeight) {
+			bPlurality = beacon
+			maxWeight = bw.totalWeight
+		}
+	}
+	logger.With().Warning("beacon determined for epoch by plurality, not majority",
+		bPlurality,
+		log.Int("total_weight_unit", totalWeightUnits),
+		log.Stringer("total_weight", totalWeight),
+		log.Stringer("beacon_weight", maxWeight))
+	return bPlurality
 }
 
 // GetBeacon returns the beacon for the specified epoch or an error if it doesn't exist.
@@ -471,7 +498,7 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 	}
 	oldest := epoch - numEpochsToKeep
 	delete(pd.beacons, oldest)
-	delete(pd.beaconsFromBallots, oldest)
+	delete(pd.ballotsBeacons, oldest)
 }
 
 // listens to new layers.
@@ -984,49 +1011,29 @@ func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, ser
 	})
 }
 
-func (pd *ProtocolDriver) getOwnWeight(epoch types.EpochID) uint64 {
-	atxID, err := atxs.GetIDByEpochAndNodeID(pd.cdb, epoch, pd.nodeID)
-	if err != nil {
-		pd.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
-		return 0
-	}
-	hdr, err := pd.cdb.GetAtxHeader(atxID)
-	if err != nil {
-		pd.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
-		return 0
-	}
-	return hdr.GetWeight()
-}
-
 func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
 	epoch := pd.clock.GetCurrentLayer().GetEpoch()
 	var observed []*metrics.BeaconStats
-	if epochBeacons, ok := pd.beaconsFromBallots[epoch]; ok {
+	if epochBeacons, ok := pd.ballotsBeacons[epoch]; ok {
 		for beacon, stats := range epochBeacons {
 			stat := &metrics.BeaconStats{
-				Epoch:  epoch,
-				Beacon: beacon.ShortString(),
-				Count:  uint64(len(stats.ballots)),
-				Weight: stats.weight,
+				Epoch:      epoch,
+				Beacon:     beacon.ShortString(),
+				Weight:     stats.totalWeight,
+				WeightUnit: stats.weightUnits,
 			}
 			observed = append(observed, stat)
 		}
 	}
 	var calculated *metrics.BeaconStats
-	ownWeight := uint64(0)
-	if !epoch.IsGenesis() {
-		ownWeight = pd.getOwnWeight(epoch - 1)
-	}
 	// whether the beacon for the next epoch is calculated
 	if beacon, ok := pd.beacons[epoch+1]; ok {
 		calculated = &metrics.BeaconStats{
 			Epoch:  epoch + 1,
 			Beacon: beacon.ShortString(),
-			Count:  1,
-			Weight: ownWeight,
 		}
 	}
 
