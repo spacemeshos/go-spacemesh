@@ -22,10 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
-var (
-	errstrTooManyExceptions = "too many exceptions to base ballot vote"
-)
-
 type turtle struct {
 	Config
 	logger log.Log
@@ -270,7 +266,7 @@ func (t *turtle) encodeVotes(
 	}
 
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
-		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
+		return nil, fmt.Errorf("too many exceptions (%v)", explen)
 	}
 	decoded, err := t.decodeExceptions(current, base, votes)
 	if err != nil {
