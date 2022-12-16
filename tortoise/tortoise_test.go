@@ -4,19 +4,18 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -175,7 +174,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 			sim.WithoutHareOutput(),
 		))
 	}
-	for i := 0; i <= int(cfg.Zdist); i++ {
+	for i := 0; i < int(cfg.Zdist); i++ {
 		tortoise.TallyVotes(ctx, s.Next(
 			sim.WithNumBlocks(1),
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
@@ -354,71 +353,62 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		expect    sign
-		vote      util.Weight
-		threshold *big.Rat
-		weight    util.Weight
+		vote      weight
+		threshold weight
 	}{
 		{
 			desc:      "Support",
 			expect:    support,
-			vote:      util.WeightFromInt64(6),
-			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			vote:      fixed.From(6),
+			threshold: fixed.From(5),
 		},
 		{
 			desc:      "Abstain",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(3),
-			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			vote:      fixed.From(3),
+			threshold: fixed.From(5),
 		},
 		{
 			desc:      "AbstainZero",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(0),
-			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			vote:      fixed.From(0),
+			threshold: fixed.From(5),
 		},
 		{
 			desc:      "Against",
 			expect:    against,
-			vote:      util.WeightFromInt64(-6),
-			threshold: big.NewRat(1, 2),
-			weight:    util.WeightFromInt64(10),
+			vote:      fixed.From(-6),
+			threshold: fixed.From(5),
 		},
 		{
-			desc:      "ComplexSupport",
+			desc:      "Support",
 			expect:    support,
-			vote:      util.WeightFromInt64(121),
-			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			vote:      fixed.From(121),
+			threshold: fixed.From(120),
 		},
 		{
-			desc:      "ComplexAbstain",
+			desc:      "Abstain",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(120),
-			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			vote:      fixed.From(120),
+			threshold: fixed.From(120),
 		},
 		{
-			desc:      "ComplexAbstain2",
+			desc:      "Abstain",
 			expect:    abstain,
-			vote:      util.WeightFromInt64(-120),
-			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			vote:      fixed.From(-120),
+			threshold: fixed.From(120),
 		},
 		{
-			desc:      "ComplexAgainst",
+			desc:      "Against",
 			expect:    against,
-			vote:      util.WeightFromInt64(-121),
-			threshold: big.NewRat(60, 100),
-			weight:    util.WeightFromInt64(200),
+			vote:      fixed.From(-121),
+			threshold: fixed.From(120),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.EqualValues(t, tc.expect,
-				tc.vote.Cmp(tc.weight.Fraction(tc.threshold)))
+				crossesThreshold(tc.vote, tc.threshold))
 		})
 	}
 }
@@ -430,49 +420,49 @@ func TestComputeExpectedWeight(t *testing.T) {
 		desc         string
 		target, last types.LayerID
 		totals       []uint64 // total weights starting from (target, last]
-		expect       *big.Float
+		expect       float64
 	}{
 		{
 			desc:   "SingleIncompleteEpoch",
 			target: genesis,
 			last:   genesis.Add(2),
 			totals: []uint64{10},
-			expect: big.NewFloat(5),
+			expect: 5,
 		},
 		{
 			desc:   "SingleCompleteEpoch",
 			target: genesis,
 			last:   genesis.Add(4),
 			totals: []uint64{10},
-			expect: big.NewFloat(10),
+			expect: 10,
 		},
 		{
 			desc:   "ExpectZeroEpoch",
 			target: genesis,
 			last:   genesis.Add(8),
 			totals: []uint64{10, 0},
-			expect: big.NewFloat(10),
+			expect: 10,
 		},
 		{
 			desc:   "MultipleIncompleteEpochs",
 			target: genesis.Add(2),
 			last:   genesis.Add(7),
 			totals: []uint64{8, 12},
-			expect: big.NewFloat(13),
+			expect: 13,
 		},
 		{
 			desc:   "IncompleteEdges",
 			target: genesis.Add(2),
 			last:   genesis.Add(13),
 			totals: []uint64{4, 12, 12, 4},
-			expect: big.NewFloat(2 + 12 + 12 + 1),
+			expect: 2 + 12 + 12 + 1,
 		},
 		{
 			desc:   "MultipleCompleteEpochs",
 			target: genesis,
 			last:   genesis.Add(8),
 			totals: []uint64{8, 12},
-			expect: big.NewFloat(20),
+			expect: 20,
 		},
 	} {
 		tc := tc
@@ -500,13 +490,28 @@ func TestComputeExpectedWeight(t *testing.T) {
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
 				require.NoError(t, err)
-				epochs[lid.GetEpoch()] = &epochInfo{weight: weight}
+				epochs[lid.GetEpoch()] = &epochInfo{weight: fixed.New64(int64(weight))}
 			}
 
 			weight := computeExpectedWeight(epochs, tc.target, tc.last)
-			require.Equal(t, tc.expect.String(), weight.String())
+			require.Equal(t, tc.expect, weight.Float())
 		})
 	}
+}
+
+func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (uint64, uint64, error) {
+	var (
+		weight  uint64
+		heights []uint64
+	)
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+		weight += header.GetWeight()
+		heights = append(heights, header.TickHeight())
+		return true
+	}); err != nil {
+		return 0, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
+	}
+	return weight, getMedian(heights), nil
 }
 
 func TestOutOfOrderLayersAreVerified(t *testing.T) {
@@ -1408,7 +1413,7 @@ func TestComputeBallotWeight(t *testing.T) {
 		ActiveSet      []int // optional index to atx's to form an active set
 		RefBallot      int   // optional index to the ballot, use it in test if active set is nil
 		ATX            int   // non optional index to this ballot atx
-		ExpectedWeight *big.Float
+		ExpectedWeight float64
 		Eligibilities  int
 	}
 	createActiveSet := func(pos []int, atxdis []types.ATXID) []types.ATXID {
@@ -1431,8 +1436,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: 10, Eligibilities: 1},
 			},
 		},
 		{
@@ -1441,8 +1446,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
 			},
 		},
 		{
@@ -1451,8 +1456,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
 			},
 		},
 		{
@@ -1461,8 +1466,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
 			},
 		},
 		{
@@ -1471,8 +1476,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(30), Eligibilities: 3},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: 30, Eligibilities: 3},
 			},
 		},
 		{
@@ -1481,8 +1486,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 2,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
-				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: big.NewFloat(20), Eligibilities: 1},
+				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: 20, Eligibilities: 1},
 			},
 		},
 		{
@@ -1491,7 +1496,7 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 2,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(0), Eligibilities: 1},
+				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: 0, Eligibilities: 1},
 			},
 		},
 	} {
@@ -1557,7 +1562,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 				trtl.OnBallot(ballot)
 				ref := trtl.trtl.ballotRefs[ballot.ID()]
-				require.Equal(t, b.ExpectedWeight.String(), ref.weight.String())
+				require.Equal(t, b.ExpectedWeight, ref.weight.Float())
 			}
 		})
 	}
@@ -1692,7 +1697,7 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	var last types.LayerID
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(2, sim.WithNumBlocks(1)),
-		sim.WithSequence(1, sim.WithNumBlocks(1), sim.WithLayerSizeOverwrite(size/2)),
+		sim.WithSequence(1, sim.WithNumBlocks(1), sim.WithLayerSizeOverwrite(size/3)),
 	) {
 		tortoise.TallyVotes(ctx, last)
 	}
@@ -2757,13 +2762,17 @@ func TestEncodeVotes(t *testing.T) {
 		opinion, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
 		require.Len(t, opinion.Abstain, 1)
+		require.Empty(t, opinion.Support)
+		require.Empty(t, opinion.Against)
 
 		tortoise.OnHareOutput(hare, types.EmptyBlockID)
 
 		rewritten, err := tortoise.EncodeVotes(ctx, EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
 		require.Len(t, rewritten.Abstain, 1)
-		require.Equal(t, rewritten.Against, []types.Vote{block.ToVote()})
+		require.Empty(t, rewritten.Support)
+		require.Len(t, rewritten.Against, 1)
+		require.Equal(t, block.ToVote(), rewritten.Against[0])
 
 		hasher.Reset()
 		hasher.Sum(rst[:0])

@@ -268,7 +268,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - id: "auth"
+      - name: Setup kubectl
+        id: install
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.23.15"
+
+      - name: Setup gcloud authentication
+        id: "auth"
         uses: "google-github-actions/auth@v1"
         with:
           # GCP_CREDENTIALS is minified JSON of service account
@@ -306,7 +313,7 @@ jobs:
           go-version: ${{ env.go-version }}
 
       - name: Run tests I
-        timeout-minutes: 50
+        timeout-minutes: 70
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
@@ -319,7 +326,7 @@ jobs:
         run: make -C systest run test_name=.
 
       - name: Run tests II
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: destructive

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -20,16 +19,16 @@ type verifying struct {
 	*state
 
 	// total weight of good ballots from verified + 1 up to last processed
-	totalGoodWeight util.Weight
+	totalGoodWeight weight
 }
 
 // reset all weight that can vote on a voted layer.
 func (v *verifying) resetWeights(voted types.LayerID) {
 	vlayer := v.layer(voted)
-	v.totalGoodWeight = vlayer.verifying.goodUncounted.Copy()
+	v.totalGoodWeight = vlayer.verifying.goodUncounted
 	for lid := voted.Add(1); !lid.After(v.processed); lid = lid.Add(1) {
 		layer := v.layer(lid)
-		layer.verifying.goodUncounted = vlayer.verifying.goodUncounted.Copy()
+		layer.verifying.goodUncounted = vlayer.verifying.goodUncounted
 	}
 }
 
@@ -76,13 +75,13 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		return false
 	}
 
-	margin := util.WeightFromUint64(0).
-		Add(v.totalGoodWeight).
+	margin := v.totalGoodWeight.
 		Sub(layer.verifying.goodUncounted)
 	uncounted := v.expectedWeight(v.Config, lid).
 		Sub(margin)
-	if uncounted.Sign() > 0 {
-		margin.Sub(uncounted)
+	// GreaterThan(zero) returns true even if value with negative sign
+	if uncounted.Float() > 0 {
+		margin = margin.Sub(uncounted)
 	}
 
 	threshold := v.globalThreshold(v.Config, lid)
@@ -95,7 +94,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.Stringer("good uncounted", layer.verifying.goodUncounted),
 		log.Stringer("global threshold", threshold),
 	)
-	if sign(margin.Cmp(threshold)) != support {
+	if crossesThreshold(margin, threshold) != support {
 		logger.With().Debug("doesn't cross global threshold")
 		return false
 	} else {

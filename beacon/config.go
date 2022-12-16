@@ -9,7 +9,7 @@ import (
 
 // Config is the configuration of the beacon.
 type Config struct {
-	Kappa                    uint64        `mapstructure:"beacon-kappa"`                       // Security parameter (for calculating ATX threshold)
+	Kappa                    int           `mapstructure:"beacon-kappa"`                       // Security parameter (for calculating ATX threshold)
 	Q                        *big.Rat      `mapstructure:"beacon-q"`                           // Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
 	RoundsNumber             types.RoundID `mapstructure:"beacon-rounds-number"`               // Amount of rounds in every epoch
 	GracePeriodDuration      time.Duration `mapstructure:"beacon-grace-period-duration"`       // Grace period duration
@@ -42,7 +42,7 @@ func DefaultConfig() Config {
 // UnitTestConfig returns the unit test configuration for the beacon.
 func UnitTestConfig() Config {
 	return Config{
-		Kappa:                    400000,
+		Kappa:                    40,
 		Q:                        big.NewRat(1, 3),
 		RoundsNumber:             10,
 		GracePeriodDuration:      20 * time.Millisecond,
@@ -59,14 +59,14 @@ func UnitTestConfig() Config {
 // NodeSimUnitTestConfig returns configuration for the beacon the unit tests with node simulation .
 func NodeSimUnitTestConfig() Config {
 	return Config{
-		Kappa:                    400000,
+		Kappa:                    40,
 		Q:                        big.NewRat(1, 3),
 		RoundsNumber:             2,
 		GracePeriodDuration:      200 * time.Millisecond,
-		ProposalDuration:         100 * time.Millisecond,
-		FirstVotingRoundDuration: 100 * time.Millisecond,
-		VotingRoundDuration:      100 * time.Millisecond,
-		WeakCoinRoundDuration:    100 * time.Millisecond,
+		ProposalDuration:         500 * time.Millisecond,
+		FirstVotingRoundDuration: time.Second,
+		VotingRoundDuration:      500 * time.Millisecond,
+		WeakCoinRoundDuration:    200 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
 		BeaconSyncNumBallots:     10,

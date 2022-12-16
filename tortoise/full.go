@@ -34,7 +34,7 @@ func (f *full) countBallot(logger log.Log, ballot *ballotInfo) {
 	if f.shouldBeDelayed(logger, ballot) {
 		return
 	}
-	if ballot.weight.IsNil() {
+	if ballot.malicious {
 		return
 	}
 	logger.With().Debug("counted votes from ballot",
@@ -115,7 +115,8 @@ func (f *full) countVotes(logger log.Log) {
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	threshold := f.globalThreshold(f.Config, lid)
 	layer := f.state.layer(lid)
-	empty := layer.empty.Cmp(threshold) > 0
+	empty := crossesThreshold(layer.empty, threshold) == support
+
 	logger = logger.WithFields(
 		log.String("verifier", "full"),
 		log.Stringer("counted layer", f.counted),
@@ -140,7 +141,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		logger,
 		layer.blocks,
 		func(block *blockInfo) sign {
-			decision := sign(block.margin.Cmp(threshold))
+			decision := crossesThreshold(block.margin, threshold)
 			if decision == neutral && empty {
 				return against
 			}
