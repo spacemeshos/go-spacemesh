@@ -96,12 +96,10 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	req.NoError(err)
 
 	// Create data.
-	doneChan, err := mgr.StartSession(opts, goldenATXID)
-	req.NoError(err)
-	<-doneChan
+	req.NoError(mgr.StartSession(context.Background(), opts, goldenATXID))
 
 	// Generate proof.
-	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge, goldenATXID)
+	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge)
 	req.NoError(err)
 
 	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), &sigVerifier, postConfig, goldenATXID, layersPerEpoch)

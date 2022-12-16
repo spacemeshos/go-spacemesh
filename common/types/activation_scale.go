@@ -206,6 +206,13 @@ func (t *InnerActivationTx) EncodeScale(enc *scale.Encoder) (total int, err erro
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeOption(enc, t.VRFNonce)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -247,6 +254,14 @@ func (t *InnerActivationTx) DecodeScale(dec *scale.Decoder) (total int, err erro
 		}
 		total += n
 		t.InitialPost = field
+	}
+	{
+		field, n, err := scale.DecodeOption[VRFPostIndex](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.VRFNonce = field
 	}
 	return total, nil
 }

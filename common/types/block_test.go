@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/spacemeshos/go-scale/tester"
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -132,7 +132,7 @@ func TestToBlockIDs(t *testing.T) {
 }
 
 func TestRewardCodec(t *testing.T) {
-	weight := util.WeightFromUint64(1234).Div(util.WeightFromUint64(7))
+	weight := big.NewRat(1234, 7)
 	r := &AnyReward{
 		Coinbase: GenerateAddress(RandomBytes(AddressLength)),
 		Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},

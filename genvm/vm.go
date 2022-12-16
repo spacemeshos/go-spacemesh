@@ -313,6 +313,16 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 		ctx := req.ctx
 		args := req.args
+
+		if header.GasPrice == 0 {
+			logger.With().Warning("ineffective transaction. zero gas price",
+				log.Object("header", header),
+				log.Object("account", &ctx.PrincipalAccount),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
 		if intrinsic := core.ComputeIntrinsicGasCost(ctx.ParseOutput.BaseGas, tx.GetRaw().Raw, v.cfg.StorageCostFactor); ctx.PrincipalAccount.Balance < intrinsic {
 			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
 				log.Object("header", header),

@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -103,7 +103,7 @@ func TestFullCountVotes(t *testing.T) {
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
-		expect       util.Weight
+		expect       weight
 	}{
 		{
 			desc:      "TwoLayersSupport",
@@ -126,7 +126,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(15),
+			expect: fixed.From(15),
 		},
 		{
 			desc:      "ConflictWithBase",
@@ -161,11 +161,11 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(0),
+			expect: fixed.From(0),
 		},
 		{
 			desc:      "UnequalWeights",
-			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
+			activeset: []testAtx{{TickCount: 90}, {TickCount: 60}, {TickCount: 30}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -191,11 +191,11 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(140),
+			expect: fixed.From(150),
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
-			activeset: []testAtx{{TickCount: 80}, {TickCount: 40}, {TickCount: 20}},
+			activeset: []testAtx{{TickCount: 90}, {TickCount: 60}, {TickCount: 30}},
 			layerBlocks: [][]testBlock{
 				{{}, {}, {}},
 				{{}, {}, {}},
@@ -218,7 +218,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(100),
+			expect: fixed.From(105),
 		},
 		{
 			desc:      "OneLayerSupport",
@@ -234,7 +234,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(7.5),
+			expect: fixed.From(7.5),
 		},
 		{
 			desc:      "OneBlockAbstain",
@@ -251,7 +251,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(5),
+			expect: fixed.From(5),
 		},
 		{
 			desc:      "OneBlockAagaisnt",
@@ -268,7 +268,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(2.5),
+			expect: fixed.From(2.5),
 		},
 		{
 			desc:      "MajorityAgainst",
@@ -285,7 +285,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(-2.5),
+			expect: fixed.From(-2.5),
 		},
 		{
 			desc:      "NoVotes",
@@ -297,7 +297,7 @@ func TestFullCountVotes(t *testing.T) {
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(0),
+			expect: fixed.From(0),
 		},
 		{
 			desc:      "FutureVotes",
@@ -317,7 +317,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: util.WeightFromFloat64(4),
+			expect: fixed.From(4),
 		},
 	} {
 		tc := tc
@@ -423,7 +423,7 @@ func TestFullVerify(t *testing.T) {
 	target := epoch.FirstLayer().Sub(1)
 	last := target.Add(types.GetLayersPerEpoch())
 	epochs := map[types.EpochID]*epochInfo{
-		1: {weight: 10},
+		1: {weight: fixed.From(10)},
 	}
 	positive := 7
 	negative := -7
@@ -535,13 +535,13 @@ func TestFullVerify(t *testing.T) {
 			full.processed = last
 
 			layer := full.layer(target)
-			layer.empty = util.WeightFromInt64(int64(tc.empty))
+			layer.empty = fixed.From(float64(tc.empty))
 			for i, block := range tc.blocks {
 				block := &blockInfo{
 					id:     types.BlockID{uint8(i) + 1},
 					layer:  target,
 					height: uint64(block.height),
-					margin: util.WeightFromInt64(int64(block.margin)),
+					margin: fixed.From(float64(block.margin)),
 				}
 				layer.blocks = append(layer.blocks, block)
 				full.state.blockRefs[block.id] = block

@@ -1362,6 +1362,20 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 			},
 		},
+		{
+			desc: "inefective zero gas price",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTxWithOpts{0, []sdk.Opt{sdk.WithGasPrice(0)}},
+					},
+					ineffective: []int{0},
+					expected: map[int]change{
+						0: same{},
+					},
+				},
+			},
+		},
 	}
 }
 
