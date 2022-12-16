@@ -464,7 +464,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			beaconBallots: map[types.Beacon][]fixed.Fixed{
 				beacon1: {fixed.New64(1)},
 				beacon2: {fixed.Div64(11, 10)},
-				beacon3: {fixed.New64(1)},
+				beacon3: {fixed.Div64(3, 10), fixed.Div64(7, 10)},
 			},
 			beacon: beacon2,
 		},
