@@ -258,7 +258,7 @@ func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ball
 	// in the ballots. we can't just take the entire ATX weight because otherwise, a "whale"
 	// ATX would dominate the voting.
 	ballotWeight := weightPer.Mul(fixed.New(len(ballot.EligibilityProofs)))
-	weightUinit := len(ballot.EligibilityProofs)
+	weightUnit := len(ballot.EligibilityProofs)
 	if _, ok := pd.ballotsBeacons[epochID]; !ok {
 		pd.ballotsBeacons[epochID] = make(map[types.Beacon]*beaconWeight)
 	}
@@ -267,14 +267,14 @@ func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ball
 		pd.ballotsBeacons[epochID][beacon] = &beaconWeight{
 			ballots:     map[types.BallotID]struct{}{ballot.ID(): {}},
 			totalWeight: ballotWeight,
-			weightUnits: weightUinit,
+			weightUnits: weightUnit,
 		}
 		pd.logger.With().Debug("added beacon from ballot",
 			epochID,
 			ballot.ID(),
 			beacon,
 			log.Stringer("weight_per", weightPer),
-			log.Int("weight_units", weightUinit),
+			log.Int("weight_units", weightUnit),
 			log.Stringer("weight", ballotWeight))
 		return
 	}
@@ -287,13 +287,13 @@ func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ball
 
 	entry.ballots[ballot.ID()] = struct{}{}
 	entry.totalWeight = entry.totalWeight.Add(ballotWeight)
-	entry.weightUnits += weightUinit
+	entry.weightUnits += weightUnit
 	pd.logger.With().Debug("added beacon from ballot",
 		epochID,
 		ballot.ID(),
 		beacon,
 		log.Stringer("weight_per", weightPer),
-		log.Int("weight_units", weightUinit),
+		log.Int("weight_units", weightUnit),
 		log.Stringer("weight", ballotWeight))
 }
 
