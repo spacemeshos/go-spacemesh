@@ -23,7 +23,6 @@ import (
 )
 
 var (
-	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
 )
 
@@ -152,7 +151,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 		}
 		for _, base := range choices {
 			if base.malicious {
-				// skim them as they are candidates for pruning
+				// skip them as they are candidates for pruning
 				continue
 			}
 			var opinion *types.Opinion
@@ -175,9 +174,9 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", errNoBaseBallotFound, err)
+		return nil, fmt.Errorf("failed to encode votes: %w", err)
 	}
-	return nil, fmt.Errorf("%w: no ballots within a sliding window", errNoBaseBallotFound)
+	return nil, fmt.Errorf("no ballots within a sliding window")
 }
 
 // encode differences between selected base ballot and local votes.
