@@ -82,6 +82,7 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 
 	created := map[uint32][]*pb.Proposal{}
 	beacons := map[uint64]map[string]struct{}{}
+	beaconSet := map[string]struct{}{}
 	for proposal := range createdch {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
 		if edata := proposal.GetData(); edata != nil {
@@ -89,6 +90,7 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 				beacons[proposal.Epoch.Value] = map[string]struct{}{}
 			}
 			beacons[proposal.Epoch.Value][prettyHex(edata.Beacon)] = struct{}{}
+			beaconSet[prettyHex(edata.Beacon)] = struct{}{}
 		}
 	}
 	requireEqualEligibilities(t, created)
@@ -96,6 +98,8 @@ func testSmeshing(ctx context.Context, t *testing.T, tctx *testcontext.Context, 
 	for epoch := range beacons {
 		require.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
 	}
+	// each epoch should have a unique beacon
+	require.Len(t, beaconSet, len(beacons), "beacons=%v", beaconSet)
 }
 
 func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal) {

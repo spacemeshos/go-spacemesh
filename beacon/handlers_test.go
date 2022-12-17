@@ -45,7 +45,7 @@ func createEpochState(t *testing.T, pd *ProtocolDriver, epoch types.EpochID) {
 	t.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, nil)
+	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, types.RandomActiveSet(1))
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
@@ -211,7 +211,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(time.Now()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer1, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer1, 10)
 	res := tpd.HandleProposal(context.TODO(), "peerID", msgBytes1)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
@@ -226,7 +226,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(time.Now()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer2, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer2, 10)
 	res = tpd.HandleProposal(context.TODO(), "peerID", msgBytes2)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
@@ -277,7 +277,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(time.Now()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 
 	tpd.setEndProtocol(context.TODO())
 	require.False(t, tpd.isInProtocol())
@@ -348,7 +348,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	setEarliestProposalTime(tpd.ProtocolDriver, time.Now().Add(-1*time.Second))
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 	tpd.mClock.EXPECT().LayerToTime((nextEpoch).FirstLayer()).Return(time.Now()).Times(1)
-	createATX(t, tpd.store, nextEpoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, nextEpoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleProposal(context.TODO(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 
@@ -429,7 +429,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleProposal(context.TODO(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errVRFNotVerified)
 
@@ -452,7 +452,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(time.Now()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleProposal(context.TODO(), "peerID", msgBytes1, time.Now())
 	require.NoError(t, got)
 
@@ -490,7 +490,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleProposal(context.TODO(), "peerID", msgBytes, time.Now())
 	require.ErrorIs(t, got, errProposalDoesntPassThreshold)
 
@@ -533,7 +533,7 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	res := tpd.HandleFirstVotes(context.TODO(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
@@ -694,7 +694,7 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleFirstVotes(context.TODO(), "peerID", msgBytes)
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
@@ -749,7 +749,7 @@ func Test_HandleFollowingVotes_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	res := tpd.HandleFollowingVotes(context.TODO(), "peerID", msgBytes)
 	require.Equal(t, pubsub.ValidationAccept, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
@@ -915,7 +915,7 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
@@ -982,7 +982,7 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
-	createATX(t, tpd.store, epoch.FirstLayer().Sub(1), signer, 10)
+	createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10)
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	require.NoError(t, got)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
