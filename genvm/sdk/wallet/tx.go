@@ -14,13 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-const (
-	// TotalGasSpawn is a fixed amount of gas for spawn.
-	TotalGasSpawn = wallet.TotalGasSpawn
-	// TotalGasSpend is a fixed amount of gas for spend.
-	TotalGasSpend = wallet.TotalGasSpend
-)
-
 func encode(fields ...scale.Encodable) []byte {
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
