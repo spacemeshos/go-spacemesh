@@ -207,22 +207,22 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 // }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	nodeId := types.BytesToNodeID(message.MinerPK)
-
 	// TODO(mafa): incorporate VRF nonce into message
+	// nodeId := types.BytesToNodeID(message.MinerPK)
+	//
 	// nonce, err := wc.getVRFNonce(nodeId)
 	// if err != nil {
 	// 	return err
 	// }
 
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(signing.NewPublicKey(nodeId.Bytes()), buf, message.Signature) {
+	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
 	allowed, exists := wc.allowances[string(message.MinerPK)]
 	if !exists || allowed < message.Unit {
-		return fmt.Errorf("miner %s is not allowed to submit proposal for unit %d", nodeId, message.Unit)
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", message.MinerPK, message.Unit)
 	}
 
 	wc.updateSmallest(ctx, message.Signature)
