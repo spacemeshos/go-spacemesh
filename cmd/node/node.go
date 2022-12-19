@@ -93,6 +93,7 @@ const (
 	VMLogger               = "vm"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
+	Executor               = "executor"
 )
 
 func GetCommand() *cobra.Command {
@@ -499,9 +500,7 @@ func (app *App) initServices(ctx context.Context,
 		vm.WithLogger(app.addLogger(VMLogger, lg)))
 	app.conState = txs.NewConservativeState(state, sqlDB,
 		txs.WithCSConfig(txs.CSConfig{
-			BlockGasLimit:      app.Config.BlockGasLimit,
-			NumTXsPerProposal:  app.Config.TxsPerProposal,
-			OptFilterThreshold: app.Config.OptFilterThreshold,
+			NumTXsPerProposal: app.Config.TxsPerProposal,
 		}),
 		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
 
@@ -551,7 +550,8 @@ func (app *App) initServices(ctx context.Context,
 		tortoise.WithConfig(trtlCfg),
 	)
 
-	msh, err := mesh.NewMesh(cdb, trtl, app.conState, app.addLogger(MeshLogger, lg))
+	executor := mesh.NewExecutor(sqlDB, state, app.conState, app.addLogger(Executor, lg))
+	msh, err := mesh.NewMesh(cdb, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -623,12 +623,15 @@ func (app *App) initServices(ctx context.Context,
 	beaconProtocol.SetSyncState(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(cdb, app.conState, msh, fetcherWrapped, app.certifier,
+	app.blockGen = blocks.NewGenerator(cdb, executor, msh, fetcherWrapped, app.certifier,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
-			LayerSize:        layerSize,
-			LayersPerEpoch:   layersPerEpoch,
-			GenBlockInterval: 500 * time.Millisecond,
+			LayerSize:          layerSize,
+			LayersPerEpoch:     layersPerEpoch,
+			BlockGasLimit:      app.Config.BlockGasLimit,
+			NumTXsPerProposal:  app.Config.TxsPerProposal,
+			OptFilterThreshold: app.Config.OptFilterThreshold,
+			GenBlockInterval:   500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))

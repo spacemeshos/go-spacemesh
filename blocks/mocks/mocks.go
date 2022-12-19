@@ -51,55 +51,55 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 }
 
 // ProcessLayerPerHareOutput mocks base method.
-func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
+func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ProcessLayerPerHareOutput indicates an expected call of ProcessLayerPerHareOutput.
-func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2, arg3)
 }
 
-// MockconservativeState is a mock of conservativeState interface.
-type MockconservativeState struct {
+// Mockexecutor is a mock of executor interface.
+type Mockexecutor struct {
 	ctrl     *gomock.Controller
-	recorder *MockconservativeStateMockRecorder
+	recorder *MockexecutorMockRecorder
 }
 
-// MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
-type MockconservativeStateMockRecorder struct {
-	mock *MockconservativeState
+// MockexecutorMockRecorder is the mock recorder for Mockexecutor.
+type MockexecutorMockRecorder struct {
+	mock *Mockexecutor
 }
 
-// NewMockconservativeState creates a new mock instance.
-func NewMockconservativeState(ctrl *gomock.Controller) *MockconservativeState {
-	mock := &MockconservativeState{ctrl: ctrl}
-	mock.recorder = &MockconservativeStateMockRecorder{mock}
+// NewMockexecutor creates a new mock instance.
+func NewMockexecutor(ctrl *gomock.Controller) *Mockexecutor {
+	mock := &Mockexecutor{ctrl: ctrl}
+	mock.recorder = &MockexecutorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
+func (m *Mockexecutor) EXPECT() *MockexecutorMockRecorder {
 	return m.recorder
 }
 
-// SelectBlockTXs mocks base method.
-func (m *MockconservativeState) SelectBlockTXs(arg0 types.LayerID, arg1 []*types.Proposal) ([]types.TransactionID, error) {
+// ExecuteOptimistic mocks base method.
+func (m *Mockexecutor) ExecuteOptimistic(arg0 context.Context, arg1 types.LayerID, arg2 uint64, arg3 []types.AnyReward, arg4 []types.TransactionID) (*types.Block, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectBlockTXs", arg0, arg1)
-	ret0, _ := ret[0].([]types.TransactionID)
+	ret := m.ctrl.Call(m, "ExecuteOptimistic", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(*types.Block)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SelectBlockTXs indicates an expected call of SelectBlockTXs.
-func (mr *MockconservativeStateMockRecorder) SelectBlockTXs(arg0, arg1 interface{}) *gomock.Call {
+// ExecuteOptimistic indicates an expected call of ExecuteOptimistic.
+func (mr *MockexecutorMockRecorder) ExecuteOptimistic(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBlockTXs", reflect.TypeOf((*MockconservativeState)(nil).SelectBlockTXs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteOptimistic", reflect.TypeOf((*Mockexecutor)(nil).ExecuteOptimistic), arg0, arg1, arg2, arg3, arg4)
 }
 
 // MocklayerClock is a mock of layerClock interface.

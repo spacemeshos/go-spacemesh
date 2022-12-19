@@ -24,7 +24,6 @@ const (
 
 var (
 	errBadNonce            = errors.New("bad nonce")
-	errNonceTooBig         = errors.New("nonce too big")
 	errInsufficientBalance = errors.New("insufficient balance")
 	errTooManyNonce        = errors.New("account has too many nonce pending")
 	errLayerNotInOrder     = errors.New("layers not applied in order")
@@ -409,7 +408,7 @@ func (ac *accountCache) shouldEvict() bool {
 
 type stateFunc func(types.Address) (uint64, uint64)
 
-type cache struct {
+type Cache struct {
 	logger log.Log
 	stateF stateFunc
 
@@ -418,8 +417,8 @@ type cache struct {
 	cachedTXs map[types.TransactionID]*NanoTX // shared with accountCache instances
 }
 
-func newCache(s stateFunc, logger log.Log) *cache {
-	return &cache{
+func NewCache(s stateFunc, logger log.Log) *Cache {
+	return &Cache{
 		logger:    logger,
 		stateF:    s,
 		pending:   make(map[types.Address]*accountCache),
@@ -451,7 +450,7 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 }
 
 // buildFromScratch builds the cache from database.
-func (c *cache) buildFromScratch(db *sql.Database) error {
+func (c *Cache) buildFromScratch(db *sql.Database) error {
 	applied, err := layers.GetLastApplied(db)
 	if err != nil {
 		return fmt.Errorf("cache: get pending %w", err)
@@ -483,7 +482,7 @@ func (c *cache) buildFromScratch(db *sql.Database) error {
 }
 
 // BuildFromTXs builds the cache from the provided transactions.
-func (c *cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) error {
+func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -513,7 +512,7 @@ func (c *cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 	return nil
 }
 
-func (c *cache) createAcctIfNotPresent(addr types.Address) {
+func (c *Cache) createAcctIfNotPresent(addr types.Address) {
 	if _, ok := c.pending[addr]; !ok {
 		nextNonce, balance := c.stateF(addr)
 		c.logger.With().Debug("created account with nonce/balance",
@@ -530,7 +529,7 @@ func (c *cache) createAcctIfNotPresent(addr types.Address) {
 	}
 }
 
-func (c *cache) MoreInDB(addr types.Address) bool {
+func (c *Cache) MoreInDB(addr types.Address) bool {
 	acct, ok := c.pending[addr]
 	if !ok {
 		return false
@@ -538,7 +537,7 @@ func (c *cache) MoreInDB(addr types.Address) bool {
 	return acct.moreInDB
 }
 
-func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
+func (c *Cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	for addr := range accounts {
 		if _, ok := c.pending[addr]; ok && c.pending[addr].shouldEvict() {
 			delete(c.pending, addr)
@@ -551,15 +550,13 @@ func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 //     a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
 //     received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
 //     re-evaluate it after each layer is applied.
-//   - errNonceTooBig: transactions are gossiped/synced out of nonce order. when we receive a errNonceTooBig tx,
-//     we should store it in db and retrieve it when the nonce gap is filled in the cache.
 //   - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
 //     be stored in db and retrieved after each earlier nonce is applied.
 func acceptable(err error) bool {
-	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errNonceTooBig) || errors.Is(err, errTooManyNonce)
+	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errTooManyNonce)
 }
 
-func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool) error {
+func (c *Cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	principal := tx.Principal
@@ -580,25 +577,25 @@ func (c *cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction
 }
 
 // Get gets a transaction from the cache.
-func (c *cache) Get(tid types.TransactionID) *NanoTX {
+func (c *Cache) Get(tid types.TransactionID) *NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.cachedTXs[tid]
 }
 
 // Has returns true if transaction exists in the cache.
-func (c *cache) Has(tid types.TransactionID) bool {
+func (c *Cache) Has(tid types.TransactionID) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.has(tid)
 }
 
-func (c *cache) has(tid types.TransactionID) bool {
+func (c *Cache) has(tid types.TransactionID) bool {
 	return c.cachedTXs[tid] != nil
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
-func (c *cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+func (c *Cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
 	if len(tids) == 0 {
 		return nil
 	}
@@ -610,7 +607,7 @@ func (c *cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid typ
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
-func (c *cache) LinkTXsWithBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *Cache) LinkTXsWithBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	if len(tids) == 0 {
 		return nil
 	}
@@ -624,7 +621,7 @@ func (c *cache) LinkTXsWithBlock(db *sql.Database, lid types.LayerID, bid types.
 // A transaction is tagged with a layer when it's included in a proposal/block.
 // If a transaction is included in multiple proposals/blocks in different layers,
 // the lowest layer is retained.
-func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -638,7 +635,7 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 	return nil
 }
 
-func (c *cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
+func (c *Cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -655,7 +652,7 @@ func (c *cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
 }
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
-func (c *cache) ApplyLayer(
+func (c *Cache) ApplyLayer(
 	ctx context.Context,
 	db *sql.Database,
 	lid types.LayerID,
@@ -697,7 +694,7 @@ func (c *cache) ApplyLayer(
 		byPrincipal[rst.Principal] = struct{}{}
 		toCleanup[rst.Principal] = struct{}{}
 		if !c.has(rst.ID) {
-			rawTxCount.WithLabelValues(updated).Inc()
+			RawTxCount.WithLabelValues(updated).Inc()
 			if err := transactions.Add(db, &rst.Transaction, time.Now()); err != nil {
 				return err
 			}
@@ -711,7 +708,7 @@ func (c *cache) ApplyLayer(
 			continue
 		}
 		if !c.has(tx.ID) {
-			rawTxCount.WithLabelValues(updated).Inc()
+			RawTxCount.WithLabelValues(updated).Inc()
 			if err := transactions.Add(db, &tx, time.Now()); err != nil {
 				return err
 			}
@@ -763,7 +760,7 @@ func (c *cache) ApplyLayer(
 	return nil
 }
 
-func (c *cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
+func (c *Cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
 	if err := undoLayers(db, revertTo.Add(1)); err != nil {
 		return err
 	}
@@ -777,7 +774,7 @@ func (c *cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
 
 // GetProjection returns the projected nonce and balance for an account, including
 // pending transactions that are paced in proposals/blocks but not yet applied to the state.
-func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
+func (c *Cache) GetProjection(addr types.Address) (uint64, uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -788,7 +785,7 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that eligible for a proposal/block.
-func (c *cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
+func (c *Cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

@@ -10,48 +10,9 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	genvm "github.com/spacemeshos/go-spacemesh/genvm"
 	log "github.com/spacemeshos/go-spacemesh/log"
 	system "github.com/spacemeshos/go-spacemesh/system"
 )
-
-// MocktxGetter is a mock of txGetter interface.
-type MocktxGetter struct {
-	ctrl     *gomock.Controller
-	recorder *MocktxGetterMockRecorder
-}
-
-// MocktxGetterMockRecorder is the mock recorder for MocktxGetter.
-type MocktxGetterMockRecorder struct {
-	mock *MocktxGetter
-}
-
-// NewMocktxGetter creates a new mock instance.
-func NewMocktxGetter(ctrl *gomock.Controller) *MocktxGetter {
-	mock := &MocktxGetter{ctrl: ctrl}
-	mock.recorder = &MocktxGetterMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktxGetter) EXPECT() *MocktxGetterMockRecorder {
-	return m.recorder
-}
-
-// GetMeshTransaction mocks base method.
-func (m *MocktxGetter) GetMeshTransaction(arg0 types.TransactionID) (*types.MeshTransaction, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMeshTransaction", arg0)
-	ret0, _ := ret[0].(*types.MeshTransaction)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMeshTransaction indicates an expected call of GetMeshTransaction.
-func (mr *MocktxGetterMockRecorder) GetMeshTransaction(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransaction", reflect.TypeOf((*MocktxGetter)(nil).GetMeshTransaction), arg0)
-}
 
 // MockconservativeState is a mock of conservativeState interface.
 type MockconservativeState struct {
@@ -171,22 +132,6 @@ func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
 	return m.recorder
 }
 
-// Apply mocks base method.
-func (m *MockvmState) Apply(arg0 genvm.ApplyContext, arg1 []types.Transaction, arg2 []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]types.Transaction)
-	ret1, _ := ret[1].([]types.TransactionWithResult)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// Apply indicates an expected call of Apply.
-func (mr *MockvmStateMockRecorder) Apply(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockvmState)(nil).Apply), arg0, arg1, arg2)
-}
-
 // GetAllAccounts mocks base method.
 func (m *MockvmState) GetAllAccounts() ([]*types.Account, error) {
 	m.ctrl.T.Helper()
@@ -275,20 +220,6 @@ func (m *MockvmState) GetStateRoot() (types.Hash32, error) {
 func (mr *MockvmStateMockRecorder) GetStateRoot() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockvmState)(nil).GetStateRoot))
-}
-
-// Revert mocks base method.
-func (m *MockvmState) Revert(arg0 types.LayerID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Revert", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Revert indicates an expected call of Revert.
-func (mr *MockvmStateMockRecorder) Revert(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revert", reflect.TypeOf((*MockvmState)(nil).Revert), arg0)
 }
 
 // Validation mocks base method.

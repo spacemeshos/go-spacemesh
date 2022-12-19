@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	minTXGas = uint64(1) // gas required for the most basic transaction
+	MinTXGas = uint64(1) // gas required for the most basic transaction
 )
 
 type item struct {
@@ -124,7 +124,7 @@ func (mi *mempoolIterator) getNext(addr types.Address) *NanoTX {
 }
 
 func (mi *mempoolIterator) pop() *NanoTX {
-	if mi.pq.Len() == 0 || mi.gasRemaining < minTXGas {
+	if mi.pq.Len() == 0 || mi.gasRemaining < MinTXGas {
 		return nil
 	}
 

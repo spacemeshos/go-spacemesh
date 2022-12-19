@@ -4,14 +4,9 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
-
-type txGetter interface {
-	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
-}
 
 //go:generate mockgen -package=txs -destination=./txs_mocks.go -source=./interface.go
 
@@ -31,8 +26,6 @@ type vmState interface {
 	GetAllAccounts() ([]*types.Account, error)
 	GetBalance(types.Address) (uint64, error)
 	GetNonce(types.Address) (types.Nonce, error)
-	Revert(types.LayerID) error
-	Apply(vm.ApplyContext, []types.Transaction, []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error)
 }
 
 type conStateCache interface {

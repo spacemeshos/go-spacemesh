@@ -33,6 +33,7 @@ type Mesh struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
 
+	executor *Executor
 	conState conservativeState
 	trtl     system.Tortoise
 
@@ -51,11 +52,12 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
 		trtl:                trtl,
+		executor:            exec,
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 	}
@@ -83,7 +85,7 @@ func NewMesh(cdb *datastore.CachedDB, trtl system.Tortoise, state conservativeSt
 				return fmt.Errorf("mesh init: %w", err)
 			}
 		}
-		return persistLayerHashes(msh.logger, dbtx, gLid, nil)
+		return persistLayerHashes(dbtx, gLid, nil)
 	}); err != nil {
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
@@ -109,18 +111,15 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 	}
 	msh.setLatestLayerInState(applied)
 
-	root := types.Hash32{}
 	if applied.After(types.GetEffectiveGenesis()) {
-		err = msh.conState.RevertState(msh.LatestLayerInState())
-		if err != nil {
+		if err = msh.executor.Revert(context.Background(), applied); err != nil {
 			msh.logger.With().Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 		}
 	}
 
 	msh.logger.With().Info("recovered mesh from disk",
 		log.Stringer("latest", msh.LatestLayer()),
-		log.Stringer("processed", msh.ProcessedLayer()),
-		log.Stringer("root_hash", root))
+		log.Stringer("processed", msh.ProcessedLayer()))
 }
 
 // LatestLayerInState returns the latest layer we applied to state.
@@ -290,7 +289,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 		revertTo := minChanged.Sub(1)
 		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
 		logger.Info("reverting state")
-		if err := msh.revertState(logger, revertTo); err != nil {
+		if err := msh.revertState(ctx, revertTo); err != nil {
 			return fmt.Errorf("revert state to %v: %w", revertTo, err)
 		}
 		msh.setLatestLayerInState(revertTo)
@@ -360,8 +359,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	return nil
 }
 
-func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
-	logger.With().Debug("persisting layer hash", log.Int("num_blocks", len(valids)))
+func persistLayerHashes(dbtx *sql.Tx, lid types.LayerID, valids []*types.Block) error {
 	sortBlocks(valids)
 	var (
 		hash   = types.CalcBlocksHash32(types.ToBlockIDs(valids), nil)
@@ -373,19 +371,14 @@ func persistLayerHashes(logger log.Log, dbtx *sql.Tx, lid types.LayerID, valids 
 		if err != nil {
 			return fmt.Errorf("get previous aggregated hash %v: %w", lid, err)
 		}
-		logger.With().Debug("got previous aggregatedHash", log.String("prevAggHash", prev.ShortString()))
 		hasher.WritePrevious(prev)
 	}
 	for _, block := range valids {
 		hasher.WriteSupport(block.ID(), block.TickHeight)
 	}
-	newAggHash := hasher.Hash()
 	if err = layers.SetHashes(dbtx, lid, hash, hasher.Hash()); err != nil {
 		return fmt.Errorf("persist hashes %v: %w", lid, err)
 	}
-	logger.With().Info("layer hashes updated",
-		log.String("hash", hash.ShortString()),
-		log.String("agg_hash", newAggHash.ShortString()))
 	return nil
 }
 
@@ -494,12 +487,6 @@ func (msh *Mesh) pushLayer(ctx context.Context, logger log.Log, lid, verified ty
 		return err
 	}
 	msh.setLatestLayerInState(lid)
-
-	root, err := msh.conState.GetStateRoot()
-	if err != nil {
-		return fmt.Errorf("failed to load state root after update: %w", err)
-	}
-	logger.Event().Info("end of layer state root", log.Stringer("state_root", root))
 	return nil
 }
 
@@ -513,18 +500,19 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 		applied = block.ID()
 	}
 
-	if err := msh.conState.ApplyLayer(ctx, lid, block); err != nil {
-		return fmt.Errorf("apply layer %v/%v: %w", lid, applied, err)
+	if err := msh.executor.Execute(ctx, lid, block); err != nil {
+		return fmt.Errorf("execute block %v/%v: %w", lid, applied, err)
 	}
+	logger.With().Info("block executed", log.Stringer("applied", applied))
+	return msh.persistState(ctx, logger, lid, applied, valids)
+}
 
-	logger = logger.WithFields(log.Stringer("applied", applied))
-	logger.With().Info("applying block for layer")
-
+func (msh *Mesh) persistState(ctx context.Context, logger log.Log, lid types.LayerID, applied types.BlockID, valids []*types.Block) error {
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if err := layers.SetApplied(dbtx, lid, applied); err != nil {
 			return fmt.Errorf("set applied for %v/%v: %w", lid, applied, err)
 		}
-		if err := persistLayerHashes(logger, dbtx, lid, valids); err != nil {
+		if err := persistLayerHashes(dbtx, lid, valids); err != nil {
 			return err
 		}
 		return nil
@@ -535,35 +523,35 @@ func (msh *Mesh) applyState(ctx context.Context, logger log.Log, lid types.Layer
 		LayerID: lid,
 		Status:  events.LayerStatusTypeApplied,
 	})
+	logger.With().Info("state persisted", log.Stringer("applied", applied))
 	return nil
 }
 
 // revertState reverts the conservative state / vm and updates mesh's internal state.
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
-func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
-	if err := msh.conState.RevertState(revertTo); err != nil {
+func (msh *Mesh) revertState(ctx context.Context, revertTo types.LayerID) error {
+	if err := msh.executor.Revert(ctx, revertTo); err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
 	if err := layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
-		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
+		return fmt.Errorf("unset applied layer %v: %w", revertTo.Add(1), err)
 	}
-	stateHash, err := msh.conState.GetStateRoot()
-	if err != nil {
-		return fmt.Errorf("after revert get state: %w", err)
-	}
-	logger.With().Info("successfully reverted state", log.Stringer("state_hash", stateHash))
 	return nil
 }
 
 // ProcessLayerPerHareOutput receives hare output once it finishes running for a given layer.
-func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID) error {
+func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID, executed bool) error {
 	logger := msh.logger.WithContext(ctx).WithFields(layerID, blockID)
+	var (
+		block *types.Block
+		err   error
+	)
 	if blockID == types.EmptyBlockID {
 		logger.Info("received empty set from hare")
 	} else {
 		// double-check we have this block in the mesh
-		_, err := blocks.Get(msh.cdb, blockID)
+		block, err = blocks.Get(msh.cdb, blockID)
 		if err != nil {
 			return fmt.Errorf("failed to lookup hare output %v: %w", blockID, err)
 		}
@@ -575,10 +563,16 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 	})
 
 	logger.Info("saving hare output for layer")
-	if err := certificates.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
+	if err = certificates.SetHareOutput(msh.cdb, layerID, blockID); err != nil {
 		return fmt.Errorf("save hare output %v: %w", blockID, err)
 	}
 	msh.trtl.OnHareOutput(layerID, blockID)
+	if executed {
+		if err = msh.persistState(ctx, logger, layerID, block.ID(), []*types.Block{block}); err != nil {
+			return err
+		}
+		msh.setLatestLayerInState(layerID)
+	}
 	return msh.ProcessLayer(ctx, layerID)
 }
 
