@@ -11,20 +11,25 @@ import (
 )
 
 const (
-	// TotalGasSpawn1 is consumed from principal in case of successful spawn.
-	TotalGasSpawn1 = 100
-	// TotalGasSpend1 is consumed from principal in case of successful spend.
-	TotalGasSpend1 = 100
+	// BaseGas is a cost of Parse and Verify methods.
+	BaseGas1 = 100
+	BaseGas2 = 200
+	BaseGas3 = 300
 
-	// TotalGasSpawn2 is consumed from principal in case of successful spawn.
-	TotalGasSpawn2 = 200
-	// TotalGasSpend2 is consumed from principal in case of successful spend.
-	TotalGasSpend2 = 200
+	// FixedGasSpawn1 is consumed from principal in case of successful spawn.
+	FixedGasSpawn1 = 100
+	// FixedGasSpend1 is consumed from principal in case of successful spend.
+	FixedGasSpend1 = 100
 
-	// TotalGasSpawn3 is consumed from principal in case of successful spawn.
-	TotalGasSpawn3 = 300
-	// TotalGasSpend3 is consumed from principal in case of successful spend.
-	TotalGasSpend3 = 300
+	// FixedGasSpawn2 is consumed from principal in case of successful spawn.
+	FixedGasSpawn2 = 200
+	// FixedGasSpend2 is consumed from principal in case of successful spend.
+	FixedGasSpend2 = 200
+
+	// FixedGasSpawn3 is consumed from principal in case of successful spawn.
+	FixedGasSpawn3 = 300
+	// FixedGasSpend3 is consumed from principal in case of successful spend.
+	FixedGasSpend3 = 300
 
 	// StorageLimit is a limit of keys that can be used when multisig is spawned.
 	StorageLimit = 10
@@ -40,18 +45,21 @@ func init() {
 func Register(registry *registry.Registry) {
 	registry.Register(TemplateAddress1, &handler{
 		k: 1, address: TemplateAddress1,
-		totalGasSpawn: TotalGasSpawn1,
-		totalGasSpend: TotalGasSpend1,
+		baseGas:       BaseGas1,
+		totalGasSpawn: FixedGasSpawn1,
+		totalGasSpend: FixedGasSpend1,
 	})
 	registry.Register(TemplateAddress2, &handler{
 		k: 2, address: TemplateAddress2,
-		totalGasSpawn: TotalGasSpawn2,
-		totalGasSpend: TotalGasSpend2,
+		baseGas:       BaseGas2,
+		totalGasSpawn: FixedGasSpawn2,
+		totalGasSpend: FixedGasSpend2,
 	})
 	registry.Register(TemplateAddress3, &handler{
 		k: 3, address: TemplateAddress3,
-		totalGasSpawn: TotalGasSpawn3,
-		totalGasSpend: TotalGasSpend3,
+		baseGas:       BaseGas3,
+		totalGasSpawn: FixedGasSpawn3,
+		totalGasSpend: FixedGasSpend3,
 	})
 }
 
@@ -66,14 +74,14 @@ var (
 )
 
 // NewHandler instantiates multisig handler with a particular configuration.
-func NewHandler(address core.Address, k uint8, gasSpawn, gasSpend uint64) core.Handler {
-	return &handler{k: k, address: address, totalGasSpawn: gasSpawn, totalGasSpend: gasSpend}
+func NewHandler(address core.Address, k uint8, baseGas, gasSpawn, gasSpend uint64) core.Handler {
+	return &handler{k: k, address: address, baseGas: baseGas, totalGasSpawn: gasSpawn, totalGasSpend: gasSpend}
 }
 
 type handler struct {
-	k                            uint8
-	address                      core.Address
-	totalGasSpawn, totalGasSpend uint64
+	k                                     uint8
+	address                               core.Address
+	baseGas, totalGasSpawn, totalGasSpend uint64
 }
 
 // Parse header and arguments.
@@ -91,6 +99,7 @@ func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (o
 		err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
 		return
 	}
+	output.BaseGas = h.baseGas
 	output.GasPrice = p.GasPrice
 	output.Nonce = p.Nonce
 	return output, nil
