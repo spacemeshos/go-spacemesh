@@ -207,14 +207,6 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([]byte, []byte) {
-	// TODO(mafa): incorporate VRF nonce into message
-	// nodeId := types.BytesToNodeID(wc.signer.PublicKey().Bytes())
-	//
-	// nonce, err := wc.getVRFNonce(nodeId)
-	// if err != nil {
-	// 	wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
-	// }
-
 	// TODO(dshulyak) double check that 10 means that 10 units are allowed
 	allowed, exists := wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	if !exists {
