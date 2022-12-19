@@ -88,12 +88,14 @@ func WithVerifier(v signing.Verifier) OptionFunc {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
+	cdb *datastore.CachedDB,
 	signer signing.Signer,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
 		config:    defaultConfig(),
+		cdb:       cdb,
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),

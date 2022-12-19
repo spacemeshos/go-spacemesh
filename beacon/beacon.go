@@ -115,7 +115,7 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner,
+		pd.weakCoin = weakcoin.New(pd.publisher, cdb, vrfSigner,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
