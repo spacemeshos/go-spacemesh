@@ -97,10 +97,10 @@ var (
 	signer2     = signing.NewEdSigner()
 	globalTx    = NewTx(0, addr1, signer1)
 	globalTx2   = NewTx(1, addr2, signer2)
-	ballot1     = types.GenLayerBallot(types.LayerID{})
-	block1      = types.GenLayerBlock(types.LayerID{}, nil)
-	block2      = types.GenLayerBlock(types.LayerID{}, nil)
-	block3      = types.GenLayerBlock(types.LayerID{}, nil)
+	ballot1     = genLayerBallot(types.LayerID{})
+	block1      = genLayerBlock(types.LayerID{}, nil)
+	block2      = genLayerBlock(types.LayerID{}, nil)
+	block3      = genLayerBlock(types.LayerID{}, nil)
 	meshAPI     = &MeshAPIMock{}
 	conStateAPI = &ConStateAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
@@ -117,6 +117,26 @@ var (
 	}
 	stateRoot = types.HexToHash32("11111")
 )
+
+func genLayerBallot(layerID types.LayerID) *types.Ballot {
+	b := types.RandomBallot()
+	b.LayerIndex = layerID
+	signer := signing.NewEdSigner()
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.Initialize()
+	return b
+}
+
+func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Block {
+	b := &types.Block{
+		InnerBlock: types.InnerBlock{
+			LayerIndex: layerID,
+			TxIDs:      txs,
+		},
+	}
+	b.Initialize()
+	return b
+}
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg config.Config) *grpc.ClientConn {
 	tb.Helper()

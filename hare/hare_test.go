@@ -101,7 +101,7 @@ func noopPubSub(tb testing.TB) pubsub.PublishSubsciber {
 }
 
 func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
-	p := types.GenLayerProposal(lyrID, nil)
+	p := genLayerProposal(lyrID, nil)
 	p.Ballot.RefBallot = types.EmptyBallotID
 	p.Ballot.EpochData = &types.EpochData{
 		Beacon: beacon,

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -93,11 +94,20 @@ func createLayerBlocks(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.B
 	return blks
 }
 
+func genLayerBallot(layerID types.LayerID) *types.Ballot {
+	b := types.RandomBallot()
+	b.LayerIndex = layerID
+	signer := signing.NewEdSigner()
+	b.Signature = signer.Sign(b.SignedBytes())
+	b.Initialize()
+	return b
+}
+
 func createLayerBallots(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.Ballot {
 	t.Helper()
 	blts := make([]*types.Ballot, 0, numBallots)
 	for i := 0; i < numBallots; i++ {
-		ballot := types.GenLayerBallot(lyrID)
+		ballot := genLayerBallot(lyrID)
 		blts = append(blts, ballot)
 		require.NoError(t, mesh.AddBallot(context.TODO(), ballot))
 	}
@@ -608,9 +618,20 @@ func TestMesh_pushLayersToState_notVerified(t *testing.T) {
 	checkLastAppliedInDB(t, tm.Mesh, layerID)
 }
 
+func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Block {
+	b := &types.Block{
+		InnerBlock: types.InnerBlock{
+			LayerIndex: layerID,
+			TxIDs:      txs,
+		},
+	}
+	b.Initialize()
+	return b
+}
+
 func addBlockWithTXsToMesh(t *testing.T, tm *testMesh, id types.LayerID, txIDs []types.TransactionID) *types.Block {
 	t.Helper()
-	b := types.GenLayerBlock(id, txIDs)
+	b := genLayerBlock(id, txIDs)
 	tm.mockState.EXPECT().LinkTXsWithBlock(id, b.ID(), b.TxIDs)
 	require.NoError(t, tm.Mesh.AddBlockWithTXs(context.TODO(), b))
 	return b
@@ -633,7 +654,7 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 
 	txIDs := types.RandomTXSet(numTXs)
 	layerID := types.GetEffectiveGenesis().Add(1)
-	block := types.GenLayerBlock(layerID, txIDs)
+	block := genLayerBlock(layerID, txIDs)
 	tm.mockState.EXPECT().LinkTXsWithBlock(layerID, block.ID(), txIDs).Return(nil)
 	r.NoError(tm.AddBlockWithTXs(context.TODO(), block))
 }
