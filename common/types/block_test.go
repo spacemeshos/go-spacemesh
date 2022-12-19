@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,14 +188,5 @@ func FuzzInnerBlockSafety(f *testing.F) {
 }
 
 func TestBlockEncoding(t *testing.T) {
-	t.Run("layer is first", func(t *testing.T) {
-		block := types.Block{}
-		f := fuzz.NewWithSeed(1001)
-		f.Fuzz(&block)
-		buf, err := codec.Encode(&block)
-		require.NoError(t, err)
-		var lid types.LayerID
-		require.NoError(t, codec.Decode(buf, &lid))
-		require.Equal(t, block.LayerIndex, lid)
-	})
+	types.CheckLayerFirstEncoding(t, func(object types.Block) types.LayerID { return object.LayerIndex })
 }

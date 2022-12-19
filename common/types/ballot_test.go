@@ -3,12 +3,10 @@ package types_test
 import (
 	"testing"
 
-	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -120,14 +118,5 @@ func FuzzVotingEligibilityProofSafety(f *testing.F) {
 }
 
 func TestBallotEncoding(t *testing.T) {
-	t.Run("layer is first", func(t *testing.T) {
-		ballot := types.Ballot{}
-		f := fuzz.NewWithSeed(1001)
-		f.Fuzz(&ballot)
-		buf, err := codec.Encode(&ballot)
-		require.NoError(t, err)
-		var lid types.LayerID
-		require.NoError(t, codec.Decode(buf, &lid))
-		require.Equal(t, ballot.LayerIndex, lid)
-	})
+	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.LayerIndex })
 }

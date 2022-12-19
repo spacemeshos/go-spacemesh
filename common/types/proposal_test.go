@@ -3,12 +3,9 @@ package types_test
 import (
 	"testing"
 
-	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -80,14 +77,5 @@ func FuzzInnerProposalSafety(f *testing.F) {
 }
 
 func TestProposalEncoding(t *testing.T) {
-	t.Run("layer is first", func(t *testing.T) {
-		proposal := types.Proposal{}
-		f := fuzz.NewWithSeed(1001)
-		f.Fuzz(&proposal)
-		buf, err := codec.Encode(&proposal)
-		require.NoError(t, err)
-		var lid types.LayerID
-		require.NoError(t, codec.Decode(buf, &lid))
-		require.Equal(t, proposal.LayerIndex, lid)
-	})
+	types.CheckLayerFirstEncoding(t, func(object types.Proposal) types.LayerID { return object.LayerIndex })
 }
