@@ -42,7 +42,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
 	signer := signing.NewEdSigner()
-	nid := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
 	mo := hmocks.NewMockRolacle(ctrl)
 	mp := pubsubmock.NewMockPublisher(ctrl)
@@ -84,7 +84,7 @@ func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID, cnt uint1
 		},
 	}
 	msg.Signature = signer.Sign(msg.Bytes())
-	return types.BytesToNodeID(signer.PublicKey().Bytes()), msg
+	return signer.NodeID(), msg
 }
 
 func genEncodedMsg(t *testing.T, lid types.LayerID, bid types.BlockID) (types.NodeID, *types.CertifyMessage, []byte) {

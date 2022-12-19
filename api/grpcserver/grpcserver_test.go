@@ -2676,7 +2676,6 @@ func TestDebugService(t *testing.T) {
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	verifier := mocks.NewMockChallengeVerifier(ctrl)
 

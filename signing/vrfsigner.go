@@ -3,13 +3,29 @@ package signing
 import (
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // VRFSigner is a signer for VRF purposes.
 type VRFSigner struct {
+	// cdb *datastore.CachedDB
+
 	privateKey []byte
-	pub        *PublicKey
+	nodeID     types.NodeID
 }
+
+// func (s VRFSigner) getVRFNonce(nodeId types.NodeID) (*types.VRFPostIndex, error) {
+// 	atxId, err := atxs.GetFirstIDByNodeID(s.cdb, nodeId)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
+// 	}
+// 	atx, err := s.cdb.GetAtxHeader(atxId)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
+// 	}
+// 	return atx.VRFNonce, nil
+// }
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) []byte {
@@ -18,7 +34,7 @@ func (s VRFSigner) Sign(msg []byte) []byte {
 
 // PublicKey of the signer.
 func (s VRFSigner) PublicKey() *PublicKey {
-	return s.pub
+	return NewPublicKey(s.nodeID.Bytes())
 }
 
 // LittleEndian indicates whether byte order in a signature is little-endian.

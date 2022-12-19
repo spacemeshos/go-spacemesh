@@ -161,7 +161,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.NewLayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: latest})
+	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, []byte{}, types.NodeID{}, types.InnerBallot{LayerIndex: latest})
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -779,7 +779,7 @@ func TestMesh_CallOnBlock(t *testing.T) {
 func TestMesh_MaliciousBallots(t *testing.T) {
 	tm := createTestMesh(t)
 	lid := types.NewLayerID(1)
-	pub := []byte{1, 1, 1}
+	pub := types.BytesToNodeID([]byte{1, 1, 1})
 
 	blts := []types.Ballot{
 		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),

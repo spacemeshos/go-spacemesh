@@ -104,10 +104,6 @@ type TestSigner struct {
 	*signing.EdSigner
 }
 
-func (ms *TestSigner) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.PublicKey().Bytes())
-}
-
 type NIPostBuilderMock struct {
 	poetRef   []byte
 	SleepTime int
@@ -795,7 +791,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
 	signer := signing.NewEdSigner()
-	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeId := signer.NodeID()
 
 	otherSigner := signing.NewEdSigner()
 
@@ -918,7 +914,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
 	signer := signing.NewEdSigner()
-	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeId := signer.NodeID()
 
 	otherSigner := signing.NewEdSigner()
 

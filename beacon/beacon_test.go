@@ -56,7 +56,6 @@ func coinValueMock(tb testing.TB, value bool) coin {
 func newPublisher(tb testing.TB) pubsub.Publisher {
 	tb.Helper()
 	ctrl := gomock.NewController(tb)
-	defer ctrl.Finish()
 
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().

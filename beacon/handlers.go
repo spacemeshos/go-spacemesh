@@ -182,20 +182,18 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to get ATX for epoch (miner ID %v): %w", minerID, err)
 	}
 
-	initialAtxID, err := atxs.GetFirstIDByNodeID(pd.cdb, m.NodeID)
-	if err != nil {
-		logger.With().Warning("[proposal] failed to find initial ATX for miner", log.Err(err))
-		return types.ATXID{}, fmt.Errorf("[proposal] failed to get initial ATX for epoch (miner ID %v): %w", minerID, err)
-	}
-
-	atx, err := atxs.Get(pd.cdb, initialAtxID)
-	if err != nil {
-		logger.With().Warning("[proposal] failed to find initial ATX for miner", log.Err(err))
-		return types.ATXID{}, fmt.Errorf("[proposal] failed to get initial ATX for epoch (miner ID %v): %w", minerID, err)
-	}
-
 	// TODO(mafa): incorporate VRF nonce into message
-	_ = atx
+	// initialAtxID, err := atxs.GetFirstIDByNodeID(pd.cdb, m.NodeID)
+	// if err != nil {
+	// 	logger.With().Warning("[proposal] failed to find initial ATX for miner", log.Err(err))
+	// 	return types.ATXID{}, fmt.Errorf("[proposal] failed to get initial ATX for epoch (miner ID %v): %w", minerID, err)
+	// }
+
+	// atx, err := atxs.Get(pd.cdb, initialAtxID)
+	// if err != nil {
+	// 	logger.With().Warning("[proposal] failed to find initial ATX for miner", log.Err(err))
+	// 	return types.ATXID{}, fmt.Errorf("[proposal] failed to get initial ATX for epoch (miner ID %v): %w", minerID, err)
+	// }
 
 	vrfPK := signing.NewPublicKey(m.NodeID.Bytes())
 	currentEpochProposal := buildProposal(m.EpochID, logger)

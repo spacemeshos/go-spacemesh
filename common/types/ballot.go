@@ -356,11 +356,11 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 }
 
 // NewExistingBallot creates ballot from stored data.
-func NewExistingBallot(id BallotID, sig []byte, pub []byte, inner InnerBallot) Ballot {
+func NewExistingBallot(id BallotID, sig []byte, nodeId NodeID, inner InnerBallot) Ballot {
 	return Ballot{
 		ballotID:    id,
 		Signature:   sig,
-		smesherID:   BytesToNodeID(pub),
+		smesherID:   nodeId,
 		InnerBallot: inner,
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func defaultConfig() config {
@@ -195,27 +194,26 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	return wc.publishProposal(ctx, epoch, round)
 }
 
-func (wc *WeakCoin) getVRFNonce(nodeId types.NodeID) (*types.VRFPostIndex, error) {
-	atxId, err := atxs.GetFirstIDByNodeID(wc.cdb, nodeId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
-	}
-	atx, err := wc.cdb.GetAtxHeader(atxId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
-	}
-	return atx.VRFNonce, nil
-}
+// func (wc *WeakCoin) getVRFNonce(nodeId types.NodeID) (*types.VRFPostIndex, error) {
+// 	atxId, err := atxs.GetFirstIDByNodeID(wc.cdb, nodeId)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
+// 	}
+// 	atx, err := wc.cdb.GetAtxHeader(atxId)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
+// 	}
+// 	return atx.VRFNonce, nil
+// }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	nodeId := types.BytesToNodeID(message.MinerPK)
-	nonce, err := wc.getVRFNonce(nodeId)
-	if err != nil {
-		return err
-	}
 
 	// TODO(mafa): incorporate VRF nonce into message
-	_ = nonce
+	// nonce, err := wc.getVRFNonce(nodeId)
+	// if err != nil {
+	// 	return err
+	// }
 
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
 	if !wc.verifier.Verify(signing.NewPublicKey(nodeId.Bytes()), buf, message.Signature) {
@@ -233,6 +231,8 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([]byte, []byte) {
 	nodeId := types.BytesToNodeID(wc.signer.PublicKey().Bytes())
+
+	// TODO(mafa): incorporate VRF nonce into message
 	// nonce, err := wc.getVRFNonce(nodeId)
 	// if err != nil {
 	// 	wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))

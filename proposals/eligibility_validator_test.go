@@ -49,7 +49,7 @@ func genActiveSetAndSave(t *testing.T, cdb *datastore.CachedDB, nid types.NodeID
 	require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
 
 	for _, id := range activeset[1:] {
-		nodeID := types.BytesToNodeID(signing.NewEdSigner().PublicKey().Bytes())
+		nodeID := signing.NewEdSigner().NodeID()
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PubLayerID: epoch.FirstLayer().Sub(layersPerEpoch),
@@ -196,7 +196,7 @@ func TestCheckEligibility_FailToGetBallotATXHeader(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
 	vrfSigner := signer.VRFSigner()
-	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
 	blts := createBallots(t, signer, vrfSigner, activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -222,7 +222,7 @@ func TestCheckEligibility_TargetEpochMismatch(t *testing.T) {
 		NumUnits: testedATXUnit,
 	}}
 	atx.SetID(&rb.EpochData.ActiveSet[0])
-	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeID := signer.NodeID()
 	atx.SetNodeID(&nodeID)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 		NumUnits: 0,
 	}}
 	atx.SetID(&rb.EpochData.ActiveSet[0])
-	nodeID := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeID := signer.NodeID()
 	atx.SetNodeID(&nodeID)
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestCheckEligibility_ZeroTotalWeight(t *testing.T) {
 func TestCheckEligibility_BadCounter(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
 	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -313,7 +313,7 @@ func TestCheckEligibility_BadCounter(t *testing.T) {
 func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := signing.NewEdSignerFromRand(rand.New(rand.NewSource(2222)))
-	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
 	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{10})
 	rb := blts[0]
 	require.Len(t, rb.EligibilityProofs, 2)
@@ -332,7 +332,7 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
 	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -346,7 +346,7 @@ func TestCheckEligibility_BadVRFSignature(t *testing.T) {
 func TestCheckEligibility_IncorrectLayerIndex(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
-	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
 	blts := createBallots(t, signer, signer.VRFSigner(), activeset, types.Beacon{1, 1, 1})
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))
@@ -361,7 +361,7 @@ func TestCheckEligibility(t *testing.T) {
 	tv := createTestValidator(t)
 	signer := genSigner()
 	beacon := types.Beacon{1, 1, 1}
-	activeset := genActiveSetAndSave(t, tv.cdb, types.BytesToNodeID(signer.PublicKey().Bytes()))
+	activeset := genActiveSetAndSave(t, tv.cdb, signer.NodeID())
 	blts := createBallots(t, signer, signer.VRFSigner(), activeset, beacon)
 	rb := blts[0]
 	require.NoError(t, ballots.Add(tv.cdb, rb))

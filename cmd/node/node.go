@@ -951,7 +951,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.Bytes(), 0o600)
+		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -959,7 +959,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	edSgn, err := signing.NewEdSignerFromKey(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
