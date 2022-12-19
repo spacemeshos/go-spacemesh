@@ -20,9 +20,15 @@ type gatewayService struct {
 	pb.UnimplementedGatewayServiceServer
 }
 
+func hash32FromBytes(b []byte) types.Hash32 {
+	hash := types.Hash32{}
+	hash.SetBytes(b)
+	return hash
+}
+
 func (*gatewayService) VerifyChallenge(ctx context.Context, req *pb.VerifyChallengeRequest) (*pb.VerifyChallengeResponse, error) {
 	return &pb.VerifyChallengeResponse{
-		Hash: []byte("hash"),
+		Hash: hash32FromBytes([]byte("hash")).Bytes(),
 	}, nil
 }
 
@@ -56,5 +62,5 @@ func TestHTTPPoet(t *testing.T) {
 	poetRound, err := c.Submit(context.Background(), ch.Bytes(), signing.NewEdSigner().Sign(ch.Bytes()))
 	r.NoError(err)
 	r.NotNil(poetRound)
-	r.Equal([]byte("hash"), poetRound.ChallengeHash)
+	r.Equal(hash32FromBytes([]byte("hash")), poetRound.ChallengeHash)
 }

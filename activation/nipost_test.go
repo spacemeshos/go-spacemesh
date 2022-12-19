@@ -106,7 +106,7 @@ func defaultPoetServiceMock(tb testing.TB, id []byte) *MockPoetProvingServiceCli
 	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(_ context.Context, challenge, _ []byte) (*types.PoetRound, error) {
 			return &types.PoetRound{
-				ChallengeHash: getSerializedChallengeHash(challenge).Bytes(),
+				ChallengeHash: *getSerializedChallengeHash(challenge),
 			}, nil
 		})
 	poetClient.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(id, nil)

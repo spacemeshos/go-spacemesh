@@ -594,7 +594,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return fmt.Errorf("broadcast: %w", err)
 	}
 
-	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size), atx.ID().Field())
+	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
 
 	select {
 	case <-atxReceived:

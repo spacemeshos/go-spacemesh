@@ -130,7 +130,12 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, challenge []byte, signature
 	if resBody.RoundEnd != nil {
 		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
 	}
-	return &types.PoetRound{ID: resBody.RoundId, ChallengeHash: resBody.Hash, End: types.RoundEnd(roundEnd)}, nil
+	if len(resBody.Hash) != types.Hash32Length {
+		return nil, fmt.Errorf("invalid hash len (%d instead of %d)", len(resBody.Hash), types.Hash32Length)
+	}
+	hash := types.Hash32{}
+	hash.SetBytes(resBody.Hash)
+	return &types.PoetRound{ID: resBody.RoundId, ChallengeHash: hash, End: types.RoundEnd(roundEnd)}, nil
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
@@ -169,6 +174,9 @@ func (c *HTTPPoetClient) GetProof(ctx context.Context, roundID string) (*types.P
 		},
 		PoetServiceID: resBody.Pubkey,
 		RoundID:       roundID,
+	}
+	if c.poetServiceID == nil {
+		c.poetServiceID = &proof.PoetServiceID
 	}
 
 	return &proof, nil

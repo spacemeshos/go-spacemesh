@@ -237,7 +237,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if err == nil && h != nil {
 		encoder.AddString("challenge", h.String())
 	}
-	encoder.AddString("id", atx.id.String())
+	atx.id.Field().AddTo(encoder)
 	encoder.AddString("sender_id", atx.nodeID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -400,10 +400,10 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
-func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
+func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
 	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
+		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
 	ref := hash.Sum(poetProofBytes)
@@ -413,8 +413,8 @@ func (proofMessage PoetProofMessage) Ref() (PoetProofRef, error) {
 
 type RoundEnd time.Time
 
-func (re RoundEnd) IntoTime() time.Time {
-	return (time.Time)(re)
+func (re *RoundEnd) IntoTime() time.Time {
+	return (time.Time)(*re)
 }
 
 func (p *RoundEnd) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -443,7 +443,7 @@ func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
 	ID            string
-	ChallengeHash []byte
+	ChallengeHash Hash32
 	End           RoundEnd
 }
 
