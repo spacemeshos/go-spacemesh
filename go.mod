@@ -5,7 +5,7 @@ go 1.19
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20221213145053-386291e73746
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20221215071653-5b5c537d2ff6
 	github.com/cosmos/btcutil v1.0.5
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
@@ -27,7 +27,7 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.39.0
-	github.com/pyroscope-io/pyroscope v0.35.1
+	github.com/pyroscope-io/pyroscope v0.36.0
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.5.3
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d
@@ -43,7 +43,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/exp v0.0.0-20221212164502-fae10dda9338
+	golang.org/x/exp v0.0.0-20221217163422-3c43f8badb15
 	golang.org/x/sync v0.1.0
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37
 	google.golang.org/grpc v1.51.0
