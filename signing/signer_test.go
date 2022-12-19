@@ -55,21 +55,21 @@ func TestPublicKey_ShortString(t *testing.T) {
 func TestPrefix(t *testing.T) {
 	t.Run("signer mismatch", func(t *testing.T) {
 		signer := NewEdSigner(WithPrefix([]byte("one")))
-		verifier := NewEDVerifier(WithVerifierPrefix([]byte("two")))
+		extractor := NewPubKeyExtractor(WithVerifierPrefix([]byte("two")))
 		msg := []byte("test")
 		sig := signer.Sign(msg)
 
-		pub, err := verifier.Extract(msg, sig)
+		pub, err := extractor.Extract(msg, sig)
 		require.NoError(t, err)
 		require.NotEqual(t, pub.Bytes(), signer.PublicKey().Bytes())
 	})
 	t.Run("no mismatch", func(t *testing.T) {
 		signer := NewEdSigner(WithPrefix([]byte("one")))
-		verifier := NewEDVerifier(WithVerifierPrefix([]byte("one")))
+		extractor := NewPubKeyExtractor(WithVerifierPrefix([]byte("one")))
 		msg := []byte("test")
 		sig := signer.Sign(msg)
 
-		pub, err := verifier.Extract(msg, sig)
+		pub, err := extractor.Extract(msg, sig)
 		require.NoError(t, err)
 		require.Equal(t, pub.Bytes(), signer.PublicKey().Bytes())
 	})

@@ -3,31 +3,31 @@ package signing
 import "github.com/spacemeshos/ed25519"
 
 // VerifierOptionFunc to modify verifier.
-type VerifierOptionFunc func(*EDVerifier)
+type VerifierOptionFunc func(*PubKeyExtractor)
 
 // WithVerifierPrefix ...
 func WithVerifierPrefix(prefix []byte) VerifierOptionFunc {
-	return func(verifier *EDVerifier) {
+	return func(verifier *PubKeyExtractor) {
 		verifier.prefix = prefix
 	}
 }
 
-// EDVerifier is a verifier for ED purposes.
-type EDVerifier struct {
+// PubKeyExtractor is a verifier for ED purposes.
+type PubKeyExtractor struct {
 	prefix []byte
 }
 
-// NewEDVerifier returns a new EDVerifier.
-func NewEDVerifier(opts ...VerifierOptionFunc) *EDVerifier {
-	verifier := EDVerifier{}
+// NewPubKeyExtractor returns a new EDVerifier.
+func NewPubKeyExtractor(opts ...VerifierOptionFunc) *PubKeyExtractor {
+	extractor := PubKeyExtractor{}
 	for _, opt := range opts {
-		opt(&verifier)
+		opt(&extractor)
 	}
-	return &verifier
+	return &extractor
 }
 
 // Extract public key from signature.
-func (e EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+func (e PubKeyExtractor) Extract(msg, sig []byte) (*PublicKey, error) {
 	if e.prefix != nil {
 		msg = append(e.prefix, msg...)
 	}

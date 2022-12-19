@@ -299,7 +299,7 @@ type App struct {
 	atxHandler       *activation.Handler
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
-	edVerify         *signing.EDVerifier
+	keyExtractor     *signing.PubKeyExtractor
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -523,11 +523,11 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	app.edVerify = signing.NewEDVerifier(
+	app.keyExtractor = signing.NewPubKeyExtractor(
 		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.edVerify, vrfSigner, cdb, clock,
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -809,7 +809,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(&app.atxDB, app.edVerify, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(app.host, verifier))
 	}
 	if apiConf.StartGlobalStateService {

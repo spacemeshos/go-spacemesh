@@ -83,13 +83,13 @@ func newTestDriver(t *testing.T, cfg Config, p pubsub.Publisher) *testProtocolDr
 		mSync:  smocks.NewMockSyncStateProvider(ctrl),
 	}
 	edSgn := signing.NewEdSigner()
-	sigVerify := signing.NewEDVerifier()
+	extractor := signing.NewPubKeyExtractor()
 	edPubkey := edSgn.PublicKey()
 	vrfSigner := edSgn.VRFSigner()
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	lg := logtest.New(t).WithName(minerID.ShortString())
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, sigVerify, vrfSigner, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(t, true)))
@@ -786,12 +786,12 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
 	signer := signing.NewEdSigner()
-	verifier := signing.NewEDVerifier()
+	extractor := signing.NewPubKeyExtractor()
 
 	message := []byte{1, 2, 3, 4}
 
 	signature := signer.Sign(message)
-	extractedPK, err := verifier.Extract(message, signature)
+	extractedPK, err := extractor.Extract(message, signature)
 	r.NoError(err)
 
 	r.Equal(signer.PublicKey().String(), extractedPK.String())
