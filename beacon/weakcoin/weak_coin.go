@@ -220,7 +220,7 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
-	allowed, exists := wc.allowances[nodeId.String()]
+	allowed, exists := wc.allowances[string(message.MinerPK)]
 	if !exists || allowed < message.Unit {
 		return fmt.Errorf("miner %s is not allowed to submit proposal for unit %d", nodeId, message.Unit)
 	}
@@ -230,16 +230,16 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([]byte, []byte) {
-	nodeId := types.BytesToNodeID(wc.signer.PublicKey().Bytes())
-
 	// TODO(mafa): incorporate VRF nonce into message
+	// nodeId := types.BytesToNodeID(wc.signer.PublicKey().Bytes())
+	//
 	// nonce, err := wc.getVRFNonce(nodeId)
 	// if err != nil {
 	// 	wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
 	// }
 
 	// TODO(dshulyak) double check that 10 means that 10 units are allowed
-	allowed, exists := wc.allowances[nodeId.String()]
+	allowed, exists := wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	if !exists {
 		return nil, nil
 	}
@@ -256,7 +256,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      unit,
-				MinerPK:   nodeId.Bytes(),
+				MinerPK:   wc.signer.PublicKey().Bytes(),
 				Signature: signature,
 			}
 			msg, err := codec.Encode(&message)
