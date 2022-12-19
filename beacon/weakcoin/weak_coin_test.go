@@ -14,11 +14,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {
@@ -53,7 +51,6 @@ func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *signing.MockVerifier {
 
 func TestWeakCoin(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t).WithName("weakcoin"))
 
 	var (
 		epoch types.EpochID = 10
@@ -187,7 +184,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				cdb,
 				staticSigner(t, ctrl, tc.local),
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
@@ -210,7 +206,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run("BufferingStartEpoch/"+tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				cdb,
 				staticSigner(t, ctrl, tc.local),
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
@@ -233,7 +228,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run("BufferingNextRound/"+tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				cdb,
 				staticSigner(t, ctrl, tc.local),
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
@@ -259,7 +253,6 @@ func TestWeakCoin(t *testing.T) {
 		t.Run("BufferingNextEpochAfterCompletion/"+tc.desc, func(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				cdb,
 				staticSigner(t, ctrl, tc.local),
 				weakcoin.WithThreshold([]byte{0xfe}),
 				weakcoin.WithVerifier(verifier),
@@ -286,10 +279,8 @@ func TestWeakCoin(t *testing.T) {
 func TestWeakCoinGetPanic(t *testing.T) {
 	var (
 		ctrl = gomock.NewController(t)
-		cdb  = datastore.NewCachedDB(sql.InMemory(), logtest.New(t).WithName("weakcoin"))
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
-			cdb,
 			staticSigner(t, ctrl, []byte{1}),
 			weakcoin.WithVerifier(sigVerifier(t, ctrl)))
 		epoch types.EpochID = 10
@@ -307,7 +298,6 @@ func TestWeakCoinGetPanic(t *testing.T) {
 func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	var (
 		ctrl = gomock.NewController(t)
-		cdb  = datastore.NewCachedDB(sql.InMemory(), logtest.New(t).WithName("weakcoin"))
 
 		oneLSB  = []byte{0b0001}
 		zeroLSB = []byte{0b0000}
@@ -320,7 +310,6 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		cdb,
 		staticSigner(t, ctrl, oneLSB),
 		weakcoin.WithNextRoundBufferSize(bufSize),
 		weakcoin.WithVerifier(sigVerifier(t, ctrl)),
@@ -351,7 +340,6 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 
 func TestWeakCoinEncodingRegression(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t).WithName("weakcoin"))
 
 	var (
 		sig   []byte
@@ -370,7 +358,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	signer := signing.NewEdSignerFromRand(r).VRFSigner()
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	instance := weakcoin.New(broadcaster, cdb, signer, weakcoin.WithThreshold([]byte{0xff}))
+	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
 	instance.StartEpoch(context.Background(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
@@ -381,7 +369,6 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 func TestWeakCoinExchangeProposals(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t).WithName("weakcoin"))
 
 	var (
 		instances                          = make([]*weakcoin.WeakCoin, 10)
@@ -409,7 +396,6 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		allowances[string(signer.PublicKey().Bytes())] = 1
 		instances[i] = weakcoin.New(
 			broadcaster,
-			cdb,
 			signer,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 			weakcoin.WithVerifier(verifier),

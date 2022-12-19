@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -87,17 +86,16 @@ func WithVerifier(v signing.Verifier) OptionFunc {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	cdb *datastore.CachedDB,
 	signer signing.Signer,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
 		config:    defaultConfig(),
-		cdb:       cdb,
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
+		verifier:  signing.VRFVerifier{},
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -114,7 +112,6 @@ type WeakCoin struct {
 	verifier  signing.Verifier
 	signer    signing.Signer
 	publisher pubsub.Publisher
-	cdb       *datastore.CachedDB
 
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
@@ -194,27 +191,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	return wc.publishProposal(ctx, epoch, round)
 }
 
-// func (wc *WeakCoin) getVRFNonce(nodeId types.NodeID) (*types.VRFPostIndex, error) {
-// 	atxId, err := atxs.GetFirstIDByNodeID(wc.cdb, nodeId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
-// 	}
-// 	atx, err := wc.cdb.GetAtxHeader(atxId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
-// 	}
-// 	return atx.VRFNonce, nil
-// }
-
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
-	// TODO(mafa): incorporate VRF nonce into message
-	// nodeId := types.BytesToNodeID(message.MinerPK)
-	//
-	// nonce, err := wc.getVRFNonce(nodeId)
-	// if err != nil {
-	// 	return err
-	// }
-
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
 	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
