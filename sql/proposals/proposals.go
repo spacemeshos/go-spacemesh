@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -174,7 +173,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 		return nil, err
 	}
 	ballot.SetID(ballotID)
-	ballot.SetSmesherID(signing.NewPublicKey(pubKeyBytes))
+	ballot.SetSmesherID(types.BytesToNodeID(pubKeyBytes))
 	if stmt.ColumnInt(2) > 0 {
 		ballot.SetMalicious()
 	}

@@ -59,7 +59,7 @@ func createInitialChallenge(post types.Post, meta types.PostMetadata, numUnits u
 func Test_SignatureVerification(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
-	sigVerifier := signing.DefaultVerifier
+	sigVerifier := signing.NewEDVerifier()
 	challenge := types.PoetChallenge{
 		NIPostChallenge: &types.NIPostChallenge{
 			Sequence:  1,
@@ -74,7 +74,7 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }
@@ -88,7 +88,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	req.NoError(err)
 	nodeID := types.BytesToNodeID(pubKey)
 
-	sigVerifier := signing.DefaultVerifier
+	sigVerifier := signing.NewEDVerifier()
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	postConfig, opts := getTestConfig(t)
@@ -102,7 +102,7 @@ func Test_ChallengeValidation_Initial(t *testing.T) {
 	validPost, validPostMeta, err := mgr.GenerateProof(shared.ZeroChallenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), &sigVerifier, postConfig, goldenATXID, layersPerEpoch)
+	verifier := activation.NewChallengeVerifier(activation.NewMockatxProvider(gomock.NewController(t)), sigVerifier, postConfig, goldenATXID, layersPerEpoch)
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
@@ -253,7 +253,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 	req.NoError(err)
 	nodeID := types.BytesToNodeID(pubKey)
 
-	sigVerifier := signing.DefaultVerifier
+	sigVerifier := signing.NewEDVerifier()
 
 	challenge := types.PoetChallenge{
 		NIPostChallenge: &types.NIPostChallenge{
@@ -283,7 +283,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 				ID:     goldenATXID,
 				NodeID: nodeID,
 			}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		result, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.NoError(err)
 		req.Equal(*challengeHash, result.Hash)
@@ -294,7 +294,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(nil, errAtxNotFound)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, &activation.VerifyError{})
 		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PositioningATX})
@@ -306,7 +306,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "previous atx belongs to different miner")
@@ -317,7 +317,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 		atxProvider := activation.NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PositioningATX).AnyTimes().Return(&types.ActivationTxHeader{}, nil)
 		atxProvider.EXPECT().GetAtxHeader(challenge.PrevATXID).AnyTimes().Return(nil, errAtxNotFound)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, &activation.VerifyError{})
 		req.ErrorIs(err, &activation.AtxNotFoundError{Id: challenge.PrevATXID})
@@ -334,7 +334,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 			},
 			NodeID: nodeID,
 		}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "prevAtx epoch (1, layer 10) isn't older than current atx epoch (1, layer 10)")
@@ -350,7 +350,7 @@ func Test_ChallengeValidation_NonInitial(t *testing.T) {
 			},
 			NodeID: nodeID,
 		}, nil)
-		verifier := activation.NewChallengeVerifier(atxProvider, &sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+		verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 		_, err := verifier.Verify(context.Background(), challengeBytes, ed25519.Sign2(privKey, challengeBytes))
 		req.ErrorIs(err, activation.ErrChallengeInvalid)
 		req.ErrorContains(err, "positioning atx layer (10) must be before 10")

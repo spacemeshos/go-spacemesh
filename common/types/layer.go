@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -142,6 +144,15 @@ func (l LayerID) String() string {
 func BytesToNodeID(buf []byte) (id NodeID) {
 	copy(id[:], buf)
 	return id
+}
+
+// ExtractNodeIDFromSig extracts the NodeID from a signature.
+func ExtractNodeIDFromSig(msg, sig []byte) (NodeID, error) {
+	pub, err := ed25519.ExtractPublicKey(msg, sig)
+	if err != nil {
+		return NodeID{}, err
+	}
+	return BytesToNodeID(pub), nil
 }
 
 // NodeID contains a miner's public key.

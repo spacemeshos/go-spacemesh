@@ -299,6 +299,7 @@ type App struct {
 	atxHandler       *activation.Handler
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
+	edVerify         *signing.EDVerifier
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -355,8 +356,6 @@ func (app *App) Initialize() (err error) {
 			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
 		}
 	}
-	signing.DefaultVerifier = signing.NewEDVerifier(
-		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
@@ -524,7 +523,11 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
+	app.edVerify = signing.NewEDVerifier(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
+
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.edVerify, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -806,7 +809,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(&app.atxDB, signing.DefaultVerifier, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(&app.atxDB, app.edVerify, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(app.host, verifier))
 	}
 	if apiConf.StartGlobalStateService {

@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 const (
@@ -49,7 +48,7 @@ type Ballot struct {
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
 	// the public key of the smesher used
-	smesherID *signing.PublicKey
+	smesherID NodeID
 	// malicious is set to true if smesher that produced this ballot is known to be malicious.
 	malicious bool
 }
@@ -231,11 +230,11 @@ func (b *Ballot) Initialize() error {
 	b.ballotID = BallotID(BytesToHash(hasher.Sum(nil)).ToHash20())
 
 	data := b.SignedBytes()
-	pubkey, err := signing.ExtractPublicKey(data, b.Signature)
+	nodeId, err := ExtractNodeIDFromSig(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
 	}
-	b.smesherID = signing.NewPublicKey(pubkey)
+	b.smesherID = nodeId
 	return nil
 }
 
@@ -259,12 +258,12 @@ func (b *Ballot) ID() BallotID {
 }
 
 // SetSmesherID from stored data.
-func (b *Ballot) SetSmesherID(id *signing.PublicKey) {
+func (b *Ballot) SetSmesherID(id NodeID) {
 	b.smesherID = id
 }
 
 // SmesherID returns the smesher's Edwards public key.
-func (b *Ballot) SmesherID() *signing.PublicKey {
+func (b *Ballot) SmesherID() NodeID {
 	return b.smesherID
 }
 
@@ -361,7 +360,7 @@ func NewExistingBallot(id BallotID, sig []byte, pub []byte, inner InnerBallot) B
 	return Ballot{
 		ballotID:    id,
 		Signature:   sig,
-		smesherID:   signing.NewPublicKey(pub),
+		smesherID:   BytesToNodeID(pub),
 		InnerBallot: inner,
 	}
 }

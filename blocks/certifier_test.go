@@ -586,9 +586,9 @@ func Test_CertifyIfEligible(t *testing.T) {
 		func(_ context.Context, _ string, got []byte) error {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
-			pubkey, err := signing.ExtractPublicKey(msg.Bytes(), msg.Signature)
+			nodeId, err := types.ExtractNodeIDFromSig(msg.Bytes(), msg.Signature)
 			require.NoError(t, err)
-			require.Equal(t, tc.nodeID, types.BytesToNodeID(pubkey))
+			require.Equal(t, tc.nodeID, nodeId)
 			require.Equal(t, b.LayerIndex, msg.LayerID)
 			require.Equal(t, b.ID(), msg.BlockID)
 			require.Equal(t, proof, msg.Proof)

@@ -176,30 +176,18 @@ func WithVerifierPrefix(prefix []byte) VerifierOptionFunc {
 	}
 }
 
-// DefaultVerifier used by ExtractPublicKey.
-var DefaultVerifier = EDVerifier{}
-
-// ExtractPublicKey using DefaultVerifier Extract method.
-func ExtractPublicKey(msg, sig []byte) (ed25519.PublicKey, error) {
-	pub, err := DefaultVerifier.Extract(msg, sig)
-	if err != nil {
-		return nil, err
-	}
-	return pub.Bytes(), nil
-}
-
 // EDVerifier is a verifier for ED purposes.
 type EDVerifier struct {
 	prefix []byte
 }
 
 // NewEDVerifier returns a new EDVerifier.
-func NewEDVerifier(opts ...VerifierOptionFunc) EDVerifier {
+func NewEDVerifier(opts ...VerifierOptionFunc) *EDVerifier {
 	verifier := EDVerifier{}
 	for _, opt := range opts {
 		opt(&verifier)
 	}
-	return verifier
+	return &verifier
 }
 
 // Extract public key from signature.
