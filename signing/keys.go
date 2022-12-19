@@ -1,7 +1,6 @@
 package signing
 
 import (
-	"bytes"
 	"encoding/hex"
 
 	"github.com/spacemeshos/ed25519"
@@ -62,5 +61,5 @@ func (p *PublicKey) ShortString() string {
 
 // Equals returns true iff the public keys are equal.
 func (p *PublicKey) Equals(o *PublicKey) bool {
-	return bytes.Equal(p.Bytes(), o.Bytes())
+	return p.PublicKey.Equal(o.PublicKey)
 }
