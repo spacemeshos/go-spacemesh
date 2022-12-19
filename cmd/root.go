@@ -154,7 +154,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Beacon Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&cfg.Beacon.Kappa, "beacon-kappa",
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.Kappa, "beacon-kappa",
 		cfg.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
 	cmd.PersistentFlags().Var((*types.RatVar)(cfg.Beacon.Q), "beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
@@ -208,8 +208,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.DataDir, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
 		cfg.SMESHING.Opts.NumUnits, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
-		cfg.SMESHING.Opts.NumFiles, "")
+	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
+		cfg.SMESHING.Opts.MaxFileSize, "")
 	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
 		cfg.SMESHING.Opts.ComputeProviderID, "")
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",

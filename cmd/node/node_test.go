@@ -987,7 +987,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.NumFiles = 1
 	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec

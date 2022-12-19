@@ -546,8 +546,8 @@ github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic
 github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
 github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:UdhH50NIW0fCiwBSr0co2m7BnFLdv4fQTgdqdJTHFeE=
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
-github.com/spacemeshos/api/release/go v1.5.3 h1:gYgmJ0FCus7P7UkKGN6CEMdhr7G4YG8Gvll3izTVmGo=
-github.com/spacemeshos/api/release/go v1.5.3/go.mod h1:wdOmu6USQAGdPOIBgtcMIj8VC+JcJ/dnzFu/zvuZghM=
+github.com/spacemeshos/api/release/go v1.5.5 h1:XfnRjf2OPXRQS1LKfz8qMG/ReH6bmDL9eyyTaFHv9+U=
+github.com/spacemeshos/api/release/go v1.5.5/go.mod h1:F87cJ5P8jBbqxHe9wlWmOqnm+v/J9qe+iA1P8ibEAcY=
 github.com/spacemeshos/bitstream v0.1.0 h1:p49/dC7dH2Istgas9TJPQ02ky6UU8GtQwSx+Ph0hKps=
 github.com/spacemeshos/bitstream v0.1.0/go.mod h1:iXo4HfT712ox6fxwoqVeGRKD+GeU1igYZqrU2OW+XcY=
 github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d h1:ivLphqrvVa4Spg1PdjOALDJc4q+gtivJ9JwRk5LUcPI=
@@ -562,8 +562,8 @@ github.com/spacemeshos/merkle-tree v0.1.0 h1:3oGOfJab60BPy0qn05gHYQpqvpA/Szr7Cge
 github.com/spacemeshos/merkle-tree v0.1.0/go.mod h1:uGtTEKksCgRdSMyeDdHM1W2d/rI7CxYlzNnKP1GU5Mw=
 github.com/spacemeshos/poet v0.4.0 h1:cS+aYzFF2pPthqSmWR0G1sI/Ks8mmlr0UpoyMQUN36c=
 github.com/spacemeshos/poet v0.4.0/go.mod h1:ZDf3nq3JX9Q1yfqwyyghSOf9ohyYVuEW/MzDkCSMO9w=
-github.com/spacemeshos/post v0.2.4 h1:JWpsRPx0aFNspc+0b+0pdOYbwvPqDhXY5A516Nt5N1Q=
-github.com/spacemeshos/post v0.2.4/go.mod h1:wH2tJxaokZKIdzbEPLe9kLqVmD5l5MGwcIDb2oBaUcY=
+github.com/spacemeshos/post v0.3.0 h1:G21a/K9/CnHWyraUZ86PfeCpnc2s3QjYOSGFE5lsUG0=
+github.com/spacemeshos/post v0.3.0/go.mod h1:wH2tJxaokZKIdzbEPLe9kLqVmD5l5MGwcIDb2oBaUcY=
 github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d h1:09R53k+V+cPCwTH3AnvOJO2OmCb4dJlG6hfgqQlTm6w=
 github.com/spacemeshos/smutil v0.0.0-20220819180433-6aaadca3eb1d/go.mod h1:ZCb6K2K6Dz51qrYp04sZtf4kJex9lCwGBH5Npok9uy8=
 github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 h1:RC6RW7j+1+HkWaX/Yh71Ee5ZHaHYt7ZP4sQgUrm6cDU=
