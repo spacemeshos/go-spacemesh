@@ -9,23 +9,9 @@ import (
 
 // VRFSigner is a signer for VRF purposes.
 type VRFSigner struct {
-	// cdb *datastore.CachedDB
-
 	privateKey []byte
 	nodeID     types.NodeID
 }
-
-// func (s VRFSigner) getVRFNonce(nodeId types.NodeID) (*types.VRFPostIndex, error) {
-// 	atxId, err := atxs.GetFirstIDByNodeID(s.cdb, nodeId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
-// 	}
-// 	atx, err := s.cdb.GetAtxHeader(atxId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get initial atx for miner %s: %w", nodeId.String(), err)
-// 	}
-// 	return atx.VRFNonce, nil
-// }
 
 // Sign signs a message for VRF purposes.
 func (s VRFSigner) Sign(msg []byte) []byte {
