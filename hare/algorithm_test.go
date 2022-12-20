@@ -491,6 +491,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 
 func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
 	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 	m := BuildNotifyMsg(signing.NewEdSigner(), s)
@@ -507,6 +508,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 
 func TestConsensusProcess_Termination(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
 	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 
