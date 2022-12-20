@@ -742,5 +742,4 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
 	r.Equal(1, net.callBroadcast)
-	r.True(proc.notifySent)
 }

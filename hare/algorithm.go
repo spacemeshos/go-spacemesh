@@ -176,7 +176,6 @@ type consensusProcess struct {
 	notifyTracker     *notifyTracker
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
-	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
 	terminating       bool
 	eligibilityCount  uint16
@@ -199,7 +198,6 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 		nid:               nid,
 		publisher:         p2p,
 		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
-		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
@@ -597,18 +595,13 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(proc.instanceID)
+	proc.notifyTracker = newNotifyTracker(proc.cfg.N)
 
 	// release proposal & commit trackers
 	defer func() {
 		proc.commitTracker = nil
 		proc.proposalTracker = nil
 	}()
-
-	// send notify message only once
-	if proc.notifySent {
-		logger.Debug("begin notify round: notify already sent")
-		return
-	}
 
 	if proc.proposalTracker.IsConflicting() {
 		logger.Warning("begin notify round: proposal is conflicting")
@@ -653,9 +646,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	logger.With().Debug("sending notify message", notifyMsg)
-	if proc.sendMessage(ctx, notifyMsg) { // on success, mark sent
-		proc.notifySent = true
-	}
+	proc.sendMessage(ctx, notifyMsg)
 }
 
 // passes all pending messages to the inbox of the process so they will be handled.
@@ -739,6 +730,11 @@ func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 }
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
+	if proc.notifyTracker == nil {
+		proc.WithContext(ctx).With().Error("notify tracker is nil")
+		return
+	}
+
 	s := NewSet(msg.InnerMsg.Values)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
