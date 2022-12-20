@@ -83,6 +83,7 @@ type AccountUpdater interface {
 type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
+	BaseGas  uint64
 	FixedGas uint64
 }
 
