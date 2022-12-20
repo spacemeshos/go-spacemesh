@@ -44,20 +44,23 @@ func createTestHandler(t *testing.T) *testHandler {
 	}
 }
 
-func createLayer(t *testing.T, db *datastore.CachedDB, lid types.LayerID) ([]types.BallotID, []types.BlockID) {
+func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]types.BallotID, []types.BlockID) {
 	num := 5
 	blts := make([]types.BallotID, 0, num)
 	blks := make([]types.BlockID, 0, num)
 	for i := 0; i < num; i++ {
+		signer, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		
 		b := types.RandomBallot()
 		b.LayerIndex = lid
-		b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())
-		require.NoError(t, b.Initialize())
-		require.NoError(t, ballots.Add(db, b))
+		b.Signature = signer.Sign(b.SignedBytes())
+		require.NoError(tb, b.Initialize())
+		require.NoError(tb, ballots.Add(db, b))
 		blts = append(blts, b.ID())
 
 		bk := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
-		require.NoError(t, blocks.Add(db, bk))
+		require.NoError(tb, blocks.Add(db, bk))
 		blks = append(blks, bk.ID())
 	}
 	return blts, blks
@@ -237,9 +240,11 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 		},
 	}
 
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	bts, err := atx.InnerBytes()
 	require.NoError(t, err)
-	atx.Sig = signing.NewEdSigner().Sign(bts)
+	atx.Sig = signer.Sign(bts)
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	return vatx

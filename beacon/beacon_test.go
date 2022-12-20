@@ -73,38 +73,42 @@ type testProtocolDriver struct {
 	mSync  *smocks.MockSyncStateProvider
 }
 
-func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
-	return newTestDriver(t, UnitTestConfig(), newPublisher(t))
+func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
+	return newTestDriver(tb, UnitTestConfig(), newPublisher(tb))
 }
 
-func newTestDriver(t *testing.T, cfg Config, p pubsub.Publisher) *testProtocolDriver {
-	ctrl := gomock.NewController(t)
+func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolDriver {
+	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
 		mClock: mocks.NewMocklayerClock(ctrl),
 		mSync:  smocks.NewMockSyncStateProvider(ctrl),
 	}
-	edSgn := signing.NewEdSigner()
-	extractor := signing.NewPubKeyExtractor()
+	edSgn, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(tb, err)
 	edPubkey := edSgn.PublicKey()
 
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
-	lg := logtest.New(t).WithName(minerID.ShortString())
+	lg := logtest.New(tb).WithName(minerID.ShortString())
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	vrfSigner, err := edSgn.VRFSigner(cdb)
-	require.NoError(t, err)
+	vrfSigner, err := edSgn.VRFSigner(
+		signing.WithVRFNonceFromDB(cdb),
+	)
+	require.NoError(tb, err)
 
 	tpd.cdb = cdb
 	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
-		withWeakCoin(coinValueMock(t, true)),
+		withWeakCoin(coinValueMock(tb, true)),
 	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
 	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tpd
 }
 
-func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
+func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
 		types.Address{},
@@ -114,15 +118,17 @@ func createATX(t *testing.T, db *datastore.CachedDB, lid types.LayerID, sig *sig
 		nil,
 	)
 
-	require.NoError(t, activation.SignAtx(sig, atx))
+	require.NoError(tb, activation.SignAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx, time.Now().Add(-1*time.Second)))
+	require.NoError(tb, err)
+	require.NoError(tb, atxs.Add(db, vAtx, time.Now().Add(-1*time.Second)))
 }
 
-func createRandomATXs(t *testing.T, db *datastore.CachedDB, lid types.LayerID, num int) {
+func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
 	for i := 0; i < num; i++ {
-		createATX(t, db, lid, signing.NewEdSigner(), 1)
+		signing, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		createATX(tb, db, lid, signing, 1)
 	}
 }
 
@@ -184,7 +190,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	for _, node := range testNodes {
 		wg.Add(1)
 		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.TODO(), types.EpochID(2)))
+			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
 			wg.Done()
 		}(node)
 	}
@@ -202,9 +208,9 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 func TestBeaconNotSynced(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
-	require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), types.EpochID(0)), errGenesis)
-	require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), types.EpochID(1)), errGenesis)
-	require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), types.EpochID(2)), errNodeNotSynced)
+	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), errNodeNotSynced)
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
@@ -226,7 +232,7 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 		})
 		tpd.ReportBeaconFromBallot(eid, &b, types.RandomBeacon(), fixed.New64(1))
-		require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), eid), errNodeNotSynced)
+		require.ErrorIs(t, tpd.onNewEpoch(context.Background(), eid), errNodeNotSynced)
 	}
 	require.Len(t, tpd.beacons, numEpochsToKeep)
 	require.Len(t, tpd.ballotsBeacons, numEpochsToKeep)
@@ -235,11 +241,11 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), types.EpochID(0)), errGenesis)
-	require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), types.EpochID(1)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
 	lid := types.NewLayerID(types.GetLayersPerEpoch()*2 - 1)
 	createRandomATXs(t, tpd.cdb, lid, numATXs)
-	require.ErrorIs(t, tpd.onNewEpoch(context.TODO(), types.EpochID(2)), sql.ErrNotFound)
+	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), sql.ErrNotFound)
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.NoError(t, err)
@@ -257,7 +263,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mClock.EXPECT().Subscribe().Times(1)
 	tpd.mClock.EXPECT().GetCurrentLayer().Return(gLayer).Times(1)
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
-	tpd.Start(context.TODO())
+	tpd.Start(context.Background())
 
 	epoch3Beacon := types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 	epoch := types.EpochID(3)
@@ -272,7 +278,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
 		tpd.mClock.EXPECT().GetCurrentLayer().Return(layer).AnyTimes()
 		if layer.FirstInEpoch() {
-			require.NoError(t, tpd.onNewEpoch(context.TODO(), layer.GetEpoch()))
+			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
 		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
@@ -853,7 +859,10 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			checker := createProposalChecker(logger, cfg, tc.w)
 			numEligible := 0
 			for i := 0; i < tc.w; i++ {
-				vrfSigner := signing.NewEdSigner().VRFSigner()
+				signer, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
+				require.NoError(t, err)
 				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, logtest.New(t))
 				if checker.IsProposalEligible(proposal) {
 					numEligible++
@@ -897,8 +906,10 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	r := require.New(t)
 
-	edSgn := signing.NewEdSigner()
-	vrfSigner := edSgn.VRFSigner()
+	edSgn, err := signing.NewEdSigner()
+	r.NoError(err)
+	vrfSigner, err := edSgn.VRFSigner()
+	r.NoError(err)
 
 	tt := []struct {
 		name   string
@@ -922,7 +933,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.TODO(), vrfSigner, tc.epoch, logtest.New(t))
+			result := buildSignedProposal(context.Background(), vrfSigner, tc.epoch, logtest.New(t))
 			r.Equal(string(tc.result), string(result))
 		})
 	}
@@ -931,8 +942,10 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 func TestBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
-	signer := signing.NewEdSigner()
-	extractor := signing.NewPubKeyExtractor()
+	signer, err := signing.NewEdSigner()
+	r.NoError(err)
+	extractor, err := signing.NewPubKeyExtractor()
+	r.NoError(err)
 
 	message := []byte{1, 2, 3, 4}
 

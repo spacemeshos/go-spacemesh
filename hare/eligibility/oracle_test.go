@@ -33,8 +33,6 @@ const (
 	epochOffset       uint32 = 3
 )
 
-var sig = signing.NewEdSigner()
-
 type testOracle struct {
 	*Oracle
 	mBeacon   *smocks.MockBeaconGetter
@@ -60,6 +58,8 @@ func defaultOracle(t testing.TB) *testOracle {
 
 func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, beacon types.Beacon, numMiners int) {
 	tb.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(lid, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -70,7 +70,7 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-			b.Signature = sig.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(b.SignedBytes())
 			require.NoError(tb, b.Initialize())
 			require.NoError(tb, ballots.Add(cdb, b))
 		}
@@ -148,6 +148,9 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
 
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
@@ -160,7 +163,7 @@ func TestCalcEligibility_EmptyActiveSet(t *testing.T) {
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-		b.Signature = sig.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
@@ -352,8 +355,12 @@ func Test_VrfSignVerify(t *testing.T) {
 	// eligibility of the proof depends on the identity
 	rng := rand.New(rand.NewSource(2))
 
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
+
 	o := defaultOracle(t)
-	o.vrfSigner = signing.NewEdSignerFromRand(rng).VRFSigner()
+	o.vrfSigner, err = signer.VRFSigner()
+	require.NoError(t, err)
 	nid := types.BytesToNodeID(o.vrfSigner.PublicKey().Bytes())
 
 	layer := types.NewLayerID(50)
@@ -371,7 +378,7 @@ func Test_VrfSignVerify(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-			b.Signature = sig.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
@@ -432,8 +439,10 @@ func Test_Proof(t *testing.T) {
 	layer := types.NewLayerID(2)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
-	signer := signing.NewEdSigner()
-	vrfSigner := signer.VRFSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	vrfSigner, err := signer.VRFSigner()
+	require.NoError(t, err)
 
 	o.vrfSigner = vrfSigner
 	sig, err := o.Proof(context.Background(), layer, 3)
@@ -447,6 +456,9 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
 
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 
@@ -458,7 +470,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		b.AtxID = atx
 		b.RefBallot = types.EmptyBallotID
 		b.EpochData = &types.EpochData{ActiveSet: activeSet, Beacon: beacon}
-		b.Signature = sig.Sign(b.SignedBytes())
+		b.Signature = signer.Sign(b.SignedBytes())
 		require.NoError(t, b.Initialize())
 		require.NoError(t, ballots.Add(o.cdb, b))
 	}
@@ -624,6 +636,10 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 	o := defaultOracle(t)
 	layer := types.NewLayerID(50)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 	numMiners := 5
@@ -641,7 +657,7 @@ func TestActives_HareActiveSetDifferentBeacon(t *testing.T) {
 			} else {
 				b.EpochData = &types.EpochData{ActiveSet: atxIDs, Beacon: beacon}
 			}
-			b.Signature = sig.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}
@@ -658,6 +674,10 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 	layer := types.NewLayerID(100)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.NotEqual(t, start, end)
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
 	numMiners := 5
@@ -673,7 +693,7 @@ func TestActives_HareActiveSetMultipleLayers(t *testing.T) {
 			b.AtxID = atx
 			b.RefBallot = types.EmptyBallotID
 			b.EpochData = &types.EpochData{ActiveSet: atxIDs}
-			b.Signature = sig.Sign(b.SignedBytes())
+			b.Signature = signer.Sign(b.SignedBytes())
 			require.NoError(t, b.Initialize())
 			require.NoError(t, ballots.Add(o.cdb, b))
 		}

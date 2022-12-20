@@ -90,11 +90,11 @@ var (
 	poetRef     = []byte("66666")
 	nipost      = newNIPostWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	signer      = NewMockSigner()
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
-	signer1     = signing.NewEdSigner()
-	signer2     = signing.NewEdSigner()
+	signer      *signing.EdSigner
+	signer1     *signing.EdSigner
+	signer2     *signing.EdSigner
 	globalTx    = NewTx(0, addr1, signer1)
 	globalTx2   = NewTx(1, addr2, signer2)
 	ballot1     = genLayerBallot(types.LayerID{})
@@ -113,7 +113,7 @@ var (
 			globalTx.Principal: uint64(accountCounter),
 		},
 		poolByAddress: make(map[types.Address]types.TransactionID),
-		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
+		poolByTxId:    make(map[types.TransactionID]*types.Transaction),
 	}
 	stateRoot = types.HexToHash32("11111")
 )
@@ -121,7 +121,7 @@ var (
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
 	b := types.RandomBallot()
 	b.LayerIndex = layerID
-	signer := signing.NewEdSigner()
+	signer, _ := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.SignedBytes())
 	b.Initialize()
 	return b
@@ -174,6 +174,16 @@ func TestMain(m *testing.M) {
 	globalAtx2, err = atx2.Verify(0, 1)
 	if err != nil {
 		log.Println("failed to verify atx:", err)
+		os.Exit(1)
+	}
+	signer1, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
+	signer2, err = signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
 
@@ -274,11 +284,11 @@ type ConStateAPIMock struct {
 	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
 	poolByAddress map[types.Address]types.TransactionID
-	poolByTxid    map[types.TransactionID]*types.Transaction
+	poolByTxId    map[types.TransactionID]*types.Transaction
 }
 
 func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
-	t.poolByTxid[id] = tx
+	t.poolByTxId[id] = tx
 	t.poolByAddress[tx.Principal] = id
 	events.ReportNewTx(types.LayerID{}, tx)
 }
@@ -313,7 +323,7 @@ func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.Mes
 	if ok {
 		return &types.MeshTransaction{Transaction: *tx, State: types.APPLIED}, nil
 	}
-	tx, ok = t.poolByTxid[id]
+	tx, ok = t.poolByTxId[id]
 	if ok {
 		return &types.MeshTransaction{Transaction: *tx, State: types.MEMPOOL}, nil
 	}
@@ -333,10 +343,10 @@ func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, accou
 	return txs, nil
 }
 
-func (t *ConStateAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
-	for _, txid := range txids {
+func (t *ConStateAPIMock) GetMeshTransactions(txIds []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	for _, txId := range txIds {
 		for _, tx := range t.returnTx {
-			if tx.ID == txid {
+			if tx.ID == txId {
 				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
@@ -383,19 +393,6 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 		PubLayerID:     pubLayerID,
 		PositioningATX: posAtxID,
 	}
-}
-
-func NewMockSigner() *MockSigning {
-	return &MockSigning{signing.NewEdSigner()}
-}
-
-// TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
-type MockSigning struct {
-	*signing.EdSigner
-}
-
-func (ms *MockSigning) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.PublicKey().Bytes())
 }
 
 // PostAPIMock is a mock for Post API.

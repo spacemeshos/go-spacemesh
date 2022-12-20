@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -22,14 +23,15 @@ func TestProposal_Initialize(t *testing.T) {
 			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
-	assert.NoError(t, p.Initialize())
-	assert.NotEqual(t, types.EmptyProposalID, p.ID())
+	require.NoError(t, p.Initialize())
+	require.NotEqual(t, types.EmptyProposalID, p.ID())
 
-	err := p.Initialize()
-	assert.EqualError(t, err, "proposal already initialized")
+	err = p.Initialize()
+	require.EqualError(t, err, "proposal already initialized")
 }
 
 func TestProposal_Initialize_BadSignature(t *testing.T) {
@@ -39,11 +41,12 @@ func TestProposal_Initialize_BadSignature(t *testing.T) {
 			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())[1:]
-	err := p.Initialize()
-	assert.EqualError(t, err, "proposal extract nodeId: ed25519: bad signature format")
+	err = p.Initialize()
+	require.EqualError(t, err, "proposal extract nodeId: ed25519: bad signature format")
 }
 
 func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
@@ -53,11 +56,14 @@ func TestProposal_Initialize_InconsistentBallot(t *testing.T) {
 			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
 		},
 	}
-	p.Ballot.Signature = signing.NewEdSigner().Sign(p.Ballot.SignedBytes())
-	p.Signature = signing.NewEdSigner().Sign(p.Bytes())
-	err := p.Initialize()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "inconsistent smesher in proposal")
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	p.Ballot.Signature = signer1.Sign(p.Ballot.SignedBytes())
+	p.Signature = signer2.Sign(p.Bytes())
+	err = p.Initialize()
+	require.ErrorContains(t, err, "inconsistent smesher in proposal")
 }
 
 func FuzzProposalConsistency(f *testing.F) {

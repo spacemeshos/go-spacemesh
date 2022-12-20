@@ -156,7 +156,7 @@ func WithVRFNonce(nonce types.VRFPostIndex) VRFSignerOptionFunc {
 }
 
 // WithVRFNonceFromDB sets nonce for VRFSigner from database.
-func WithVRFNonceFromDB(cdb datastore.CachedDB) VRFSignerOptionFunc {
+func WithVRFNonceFromDB(cdb *datastore.CachedDB) VRFSignerOptionFunc {
 	return func(opt *vrfSignerOption) error {
 		atxId, err := atxs.GetFirstIDByNodeID(cdb, opt.nodeId)
 		if err != nil {

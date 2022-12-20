@@ -538,7 +538,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			t.Log("harness torn down")
 		}
 	})
-	edSgn := signing.NewEdSigner()
+	edSgn, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	h, err := p2p.Upgrade(mesh.Hosts()[0], cfg.Genesis.GenesisID())
 	require.NoError(t, err)
 	app, err := initSingleInstance(logger, *cfg, 0, cfg.Genesis.GenesisTime,
@@ -671,7 +672,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	cfg.DataDirParent = t.TempDir()
 	app.Config = &cfg
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	r.NoError(err)
 	address := wallet.Address(signer.PublicKey().Bytes())
 
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -1037,11 +1039,14 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
-	vrfSigner := edSgn.VRFSigner()
+	vrfSigner, err := edSgn.VRFSigner()
+	if err != nil {
+		return nil, err
+	}
 
 	nodeID := types.BytesToNodeID(pub.Bytes())
 
-	err := smApp.initServices(context.Background(), nodeID, storePath, edSgn,
+	err = smApp.initServices(context.Background(), nodeID, storePath, edSgn,
 		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err

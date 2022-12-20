@@ -353,9 +353,12 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		sig = msg.Signature
 		return nil
 	}).AnyTimes()
-	r := rand.New(rand.NewSource(999))
 
-	signer := signing.NewEdSignerFromRand(r).VRFSigner()
+	rng := rand.New(rand.NewSource(999))
+	signer, err := signing.NewEdSigner(
+		signing.WithKeyFromRand(rng),
+	)
+	require.NoError(t, err)
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
 	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
@@ -376,7 +379,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		epochStart, epochEnd types.EpochID = 2, 6
 		start, end           types.RoundID = 0, 9
 		allowances                         = weakcoin.UnitAllowances{}
-		r                                  = rand.New(rand.NewSource(999))
+		rng                                = rand.New(rand.NewSource(999))
 	)
 
 	for i := range instances {
@@ -392,7 +395,11 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 				return nil
 			}).AnyTimes()
-		signer := signing.NewEdSignerFromRand(r).VRFSigner()
+
+		signer, err := signing.NewEdSigner(
+			signing.WithKeyFromRand(rng),
+		)
+		require.NoError(t, err)
 		allowances[string(signer.PublicKey().Bytes())] = 1
 		instances[i] = weakcoin.New(
 			broadcaster,

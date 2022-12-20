@@ -41,7 +41,8 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
 	db := sql.InMemory()
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
 	mo := hmocks.NewMockRolacle(ctrl)
@@ -72,9 +73,10 @@ func generateBlock(t *testing.T, db *sql.Database) *types.Block {
 	return block
 }
 
-func genCertifyMsg(t *testing.T, lid types.LayerID, bid types.BlockID, cnt uint16) (types.NodeID, *types.CertifyMessage) {
-	t.Helper()
-	signer := signing.NewEdSigner()
+func genCertifyMsg(tb testing.TB, lid types.LayerID, bid types.BlockID, cnt uint16) (types.NodeID, *types.CertifyMessage) {
+	tb.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	msg := &types.CertifyMessage{
 		CertifyContent: types.CertifyContent{
 			LayerID:        lid,

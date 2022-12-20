@@ -523,9 +523,13 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	app.keyExtractor = signing.NewPubKeyExtractor(
+	app.keyExtractor, err = signing.NewPubKeyExtractor(
 		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
+	if err != nil {
+		return fmt.Errorf("failed to create key extractor: %w", err)
+	}
+
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
@@ -947,9 +951,13 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner(signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
-		err := os.MkdirAll(filepath.Dir(filename), 0o700)
+		edSgn, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
 		if err != nil {
+			return nil, fmt.Errorf("failed to create identity: %w", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
 		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
@@ -960,7 +968,10 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSignerFromKey(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	edSgn, err := signing.NewEdSigner(
+		signing.WithPrivateKey(data),
+		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
@@ -1045,7 +1056,10 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner := app.edSgn.VRFSigner()
+	vrfSigner, err := app.edSgn.VRFSigner()
+	if err != nil {
+		return fmt.Errorf("could not create vrf signer: %w", err)
+	}
 
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 

@@ -80,12 +80,14 @@ func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, n
 	return tx
 }
 
-func createTransactions(t testing.TB, numOfTxs int) []types.TransactionID {
-	t.Helper()
+func createTransactions(tb testing.TB, numOfTxs int) []types.TransactionID {
+	tb.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
 		addr := types.GenerateAddress([]byte("1"))
-		tx := genTx(t, signing.NewEdSigner(), addr, 1, 10, 100)
+		signer, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		tx := genTx(tb, signer, addr, 1, 10, 100)
 		txIDs = append(txIDs, tx.ID)
 	}
 	return txIDs
@@ -97,12 +99,13 @@ func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATX
 	})
 }
 
-func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error)) ([]*signing.EdSigner, []*types.ActivationTx) {
-	t.Helper()
+func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error)) ([]*signing.EdSigner, []*types.ActivationTx) {
+	tb.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
 	for i := 0; i < numATXs; i++ {
-		signer := signing.NewEdSigner()
+		signer, err := signing.NewEdSigner()
+		require.NoError(tb, err)
 		signers = append(signers, signer)
 		address := types.GenerateAddress(signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(
@@ -113,11 +116,11 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 			nil,
 			nil,
 		)
-		require.NoError(t, activation.SignAtx(signer, atx))
+		require.NoError(tb, activation.SignAtx(signer, atx))
 		vAtx, err := onAtx(atx)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
-		require.NoError(t, atxs.Add(cdb, vAtx, time.Now()))
+		require.NoError(tb, atxs.Add(cdb, vAtx, time.Now()))
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
