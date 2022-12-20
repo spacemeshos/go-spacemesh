@@ -35,10 +35,15 @@ type testOracle struct {
 
 func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *signing.VRFSigner) {
 	tb.Helper()
-	edSigner := signing.NewEdSigner()
+
+	edSigner, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+	vrfSigner, err := edSigner.VRFSigner()
+	require.NoError(tb, err)
+
 	edPubkey := edSigner.PublicKey()
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
-	return nodeID, edSigner, edSigner.VRFSigner()
+	return nodeID, edSigner, vrfSigner
 }
 
 func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publishLayer types.LayerID, nodeID types.NodeID) *types.VerifiedActivationTx {

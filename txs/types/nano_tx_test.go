@@ -50,7 +50,9 @@ func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID, opt
 }
 
 func TestNewNanoTX(t *testing.T) {
-	mtx := createMeshTX(t, signing.NewEdSigner(), types.NewLayerID(13))
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	mtx := createMeshTX(t, sig, types.NewLayerID(13))
 	ntx := NewNanoTX(mtx)
 	require.Equal(t, mtx.ID, ntx.ID)
 	require.Equal(t, mtx.Principal, ntx.Principal)
@@ -65,7 +67,9 @@ func TestNewNanoTX(t *testing.T) {
 }
 
 func TestUpdateMaybe(t *testing.T) {
-	mtx := createMeshTX(t, signing.NewEdSigner(), types.LayerID{})
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	mtx := createMeshTX(t, sig, types.LayerID{})
 	ntx := NewNanoTX(mtx)
 	lid := types.NewLayerID(23)
 	bid := types.RandomBlockID()
@@ -87,21 +91,25 @@ func TestUpdateMaybe(t *testing.T) {
 }
 
 func TestBetter_PanicOnInvalidArguments(t *testing.T) {
-	signer := signing.NewEdSigner()
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	received := time.Now()
-	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
+	ntx0 := NewNanoTX(createMeshTX(t, signer1, types.LayerID{}, WithReceived(received)))
 	received = received.Add(time.Nanosecond)
-	ntx1 := NewNanoTX(createMeshTX(t, signing.NewEdSigner(), types.LayerID{}, WithReceived(received)))
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	ntx1 := NewNanoTX(createMeshTX(t, signer2, types.LayerID{}, WithReceived(received)))
 	require.Panics(t, func() { ntx0.Better(ntx1, nil) })
 
 	received = received.Add(time.Nanosecond)
-	ntx2 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
+	ntx2 := NewNanoTX(createMeshTX(t, signer1, types.LayerID{}, WithReceived(received)))
 	ntx2.Nonce.Counter = ntx0.Nonce.Counter + 1
 	require.Panics(t, func() { ntx0.Better(ntx2, nil) })
 }
 
 func TestBetter(t *testing.T) {
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	received := time.Now()
 	ntx0 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received)))
 	ntx1 := NewNanoTX(createMeshTX(t, signer, types.LayerID{}, WithReceived(received.Add(time.Nanosecond))))

@@ -157,7 +157,8 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 			unwrap(p)
 		}
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
@@ -180,10 +181,12 @@ func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {
 	return signAndInit(t, b)
 }
 
-func signAndInit(t *testing.T, b *types.Ballot) *types.Ballot {
-	t.Helper()
-	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())
-	require.NoError(t, b.Initialize())
+func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
+	tb.Helper()
+	sig, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+	b.Signature = sig.Sign(b.SignedBytes())
+	require.NoError(tb, b.Initialize())
 	return b
 }
 

@@ -2,32 +2,41 @@ package signing
 
 import (
 	"github.com/spacemeshos/ed25519"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// VerifierOptionFunc to modify verifier.
-type VerifierOptionFunc func(*PubKeyExtractor)
+type edExtractorOption struct {
+	prefix []byte
+}
 
-// WithVerifierPrefix ...
-func WithVerifierPrefix(prefix []byte) VerifierOptionFunc {
-	return func(verifier *PubKeyExtractor) {
-		verifier.prefix = prefix
+// ExtractorOptionFunc to modify verifier.
+type ExtractorOptionFunc func(*edExtractorOption) error
+
+// WithExtractorPrefix sets the prefix used by PubKeyExtractor. This usually is the Network ID.
+func WithExtractorPrefix(prefix []byte) ExtractorOptionFunc {
+	return func(opts *edExtractorOption) error {
+		opts.prefix = prefix
+		return nil
 	}
 }
 
-// PubKeyExtractor is a verifier for ED purposes.
+// PubKeyExtractor extracts public keys from signatures.
 type PubKeyExtractor struct {
 	prefix []byte
 }
 
-// NewPubKeyExtractor returns a new EDVerifier.
-func NewPubKeyExtractor(opts ...VerifierOptionFunc) *PubKeyExtractor {
-	extractor := PubKeyExtractor{}
+// NewPubKeyExtractor returns a new PubKeyExtractor.
+func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
+	cfg := &edExtractorOption{}
 	for _, opt := range opts {
-		opt(&extractor)
+		if err := opt(cfg); err != nil {
+			return nil, err
+		}
 	}
-	return &extractor
+	extractor := &PubKeyExtractor{
+		prefix: cfg.prefix,
+	}
+	return extractor, nil
 }
 
 // Extract public key from signature.

@@ -135,12 +135,13 @@ func checkProjection(t *testing.T, c *cache, addr types.Address, nonce, balance 
 	require.Equal(t, balance, pBalance)
 }
 
-func createState(t *testing.T, numAccounts int) map[types.Address]*testAcct {
-	t.Helper()
+func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
+	tb.Helper()
 	const minBalance = 1_000_000
 	accounts := make(map[types.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
-		signer := signing.NewEdSigner()
+		signer, err := signing.NewEdSigner()
+		require.NoError(tb, err)
 		principal := types.GenerateAddress(signer.PublicKey().Bytes())
 		bal := uint64(rand.Int63n(100_000_000))
 		if bal < minBalance {
@@ -166,15 +167,16 @@ func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*
 	}, accounts
 }
 
-func createSingleAccountTestCache(t *testing.T) (*testCache, *testAcct) {
-	t.Helper()
-	signer := signing.NewEdSigner()
+func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
+	tb.Helper()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	ta := &testAcct{signer: signer, principal: principal, nonce: uint64(rand.Int63n(1000)), balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
 	db := sql.InMemory()
 	return &testCache{
-		cache: newCache(getStateFunc(states), logtest.New(t)),
+		cache: newCache(getStateFunc(states), logtest.New(tb)),
 		db:    db,
 	}, ta
 }
@@ -1280,7 +1282,8 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	}
 
 	// create a new account that's not in cache
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	skippedNotInCache := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.NoError(t, transactions.Add(tc.db, skippedNotInCache, time.Now()))
 	allSkipped = append(allSkipped, *skippedNotInCache)

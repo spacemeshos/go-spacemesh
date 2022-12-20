@@ -86,14 +86,19 @@ func newTestDriver(t *testing.T, cfg Config, p pubsub.Publisher) *testProtocolDr
 	edSgn := signing.NewEdSigner()
 	extractor := signing.NewPubKeyExtractor()
 	edPubkey := edSgn.PublicKey()
-	vrfSigner := edSgn.VRFSigner()
+
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	lg := logtest.New(t).WithName(minerID.ShortString())
-	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	vrfSigner, err := edSgn.VRFSigner(cdb)
+	require.NoError(t, err)
+
+	tpd.cdb = cdb
 	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
-		withWeakCoin(coinValueMock(t, true)))
+		withWeakCoin(coinValueMock(t, true)),
+	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
 	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tpd

@@ -8,6 +8,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	types "github.com/spacemeshos/go-spacemesh/common/types"
+	sql "github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // MockSigner is a mock of Signer interface.
@@ -148,4 +150,57 @@ func (m *MockVerifyExtractor) Extract(msg, sig []byte) (*PublicKey, error) {
 func (mr *MockVerifyExtractorMockRecorder) Extract(msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Extract", reflect.TypeOf((*MockVerifyExtractor)(nil).Extract), msg, sig)
+}
+
+// MockVRFDatabase is a mock of VRFDatabase interface.
+type MockVRFDatabase struct {
+	ctrl     *gomock.Controller
+	recorder *MockVRFDatabaseMockRecorder
+}
+
+// MockVRFDatabaseMockRecorder is the mock recorder for MockVRFDatabase.
+type MockVRFDatabaseMockRecorder struct {
+	mock *MockVRFDatabase
+}
+
+// NewMockVRFDatabase creates a new mock instance.
+func NewMockVRFDatabase(ctrl *gomock.Controller) *MockVRFDatabase {
+	mock := &MockVRFDatabase{ctrl: ctrl}
+	mock.recorder = &MockVRFDatabaseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockVRFDatabase) EXPECT() *MockVRFDatabaseMockRecorder {
+	return m.recorder
+}
+
+// Exec mocks base method.
+func (m *MockVRFDatabase) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockVRFDatabaseMockRecorder) Exec(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockVRFDatabase)(nil).Exec), arg0, arg1, arg2)
+}
+
+// GetAtxHeader mocks base method.
+func (m *MockVRFDatabase) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAtxHeader", id)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAtxHeader indicates an expected call of GetAtxHeader.
+func (mr *MockVRFDatabaseMockRecorder) GetAtxHeader(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockVRFDatabase)(nil).GetAtxHeader), id)
 }

@@ -975,7 +975,8 @@ func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
 		log.String("proposal", hex.EncodeToString(p)),
-		log.String("signature", string(signature)))
+		log.String("signature", hex.EncodeToString(signature)),
+	)
 
 	return signature
 }

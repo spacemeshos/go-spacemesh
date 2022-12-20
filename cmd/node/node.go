@@ -524,7 +524,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	app.keyExtractor = signing.NewPubKeyExtractor(
-		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 

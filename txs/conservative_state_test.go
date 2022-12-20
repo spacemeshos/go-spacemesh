@@ -38,14 +38,14 @@ const (
 	nonce            = uint64(1234)
 )
 
-func newTx(t *testing.T, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	t.Helper()
+func newTx(tb testing.TB, nonce uint64, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+	tb.Helper()
 	dest := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
-	return newTxWthRecipient(t, dest, nonce, amount, fee, signer)
+	return newTxWthRecipient(tb, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(t *testing.T, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner, opts ...sdk.Opt) *types.Transaction {
-	t.Helper()
+func newTxWthRecipient(tb testing.TB, dest types.Address, nonce uint64, amount, fee uint64, signer *signing.EdSigner, opts ...sdk.Opt) *types.Transaction {
+	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		types.Nonce{Counter: nonce},
 		sdk.WithGasPrice(fee),
@@ -73,7 +73,9 @@ func (t *testConState) handler() *TxHandler {
 	return NewTxHandler(t, t.logger)
 }
 
-func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+func genLayerProposal(tb testing.TB, layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+	tb.Helper()
+
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
@@ -89,7 +91,8 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 			TxIDs: txs,
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	p.Initialize()
@@ -120,24 +123,25 @@ func createConservativeState(t *testing.T) *testConState {
 	return createTestState(t, math.MaxUint64)
 }
 
-func addBatch(t *testing.T, tcs *testConState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
-	t.Helper()
+func addBatch(tb testing.TB, tcs *testConState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
+	tb.Helper()
 	ids := make([]types.TransactionID, 0, numTXs)
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer, err := signing.NewEdSigner()
+		require.NoError(tb, err)
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
-		tx := newTx(t, nonce+5, defaultAmount, defaultFee, signer)
-		require.NoError(t, tcs.AddToCache(context.TODO(), tx))
+		tx := newTx(tb, nonce+5, defaultAmount, defaultFee, signer)
+		require.NoError(tb, tcs.AddToCache(context.TODO(), tx))
 		ids = append(ids, tx.ID)
 		txs = append(txs, tx)
 	}
 	return ids, txs
 }
 
-func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
+func createProposalsDupTXs(tb testing.TB, lid types.LayerID, hash types.Hash32, step, numPer, numProposals int, tids []types.TransactionID) []*types.Proposal {
 	total := len(tids)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for offset := 0; offset < total; offset += step {
@@ -145,7 +149,7 @@ func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, n
 		if end >= total {
 			end = total
 		}
-		p := genLayerProposal(lid, tids[offset:end])
+		p := genLayerProposal(tb, lid, tids[offset:end])
 		p.MeshHash = hash
 		proposals = append(proposals, p)
 	}
@@ -183,7 +187,7 @@ func TestSelectBlockTXs(t *testing.T) {
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(t, lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
 	require.Len(t, got, totalNumTXs)
@@ -220,7 +224,7 @@ func TestSelectBlockTXs_AllNodesMissingMeshHash(t *testing.T) {
 	numPerProposal := 30
 	step := totalNumTXs / numProposals
 	lid := types.NewLayerID(1333)
-	proposals := createProposalsDupTXs(lid, types.EmptyLayerHash, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(t, lid, types.EmptyLayerHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
 	require.Len(t, got, totalNumTXs)
@@ -247,7 +251,7 @@ func TestSelectBlockTXs_PrunedByGasLimit(t *testing.T) {
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(t, lid, meshHash, step, numPerProposal, numProposals, tids)
 	got, err := tcs.SelectBlockTXs(lid, proposals)
 	require.NoError(t, err)
 	require.Len(t, got, expSize)
@@ -267,7 +271,7 @@ func TestSelectBlockTXs_NoOptimisticFiltering(t *testing.T) {
 	meshHash := types.RandomHash()
 	lid := types.NewLayerID(1333)
 	require.NoError(t, layers.SetHashes(tcs.db, lid.Sub(1), types.RandomHash(), meshHash))
-	proposals := createProposalsDupTXs(lid, meshHash, step, numPerProposal, numProposals, tids)
+	proposals := createProposalsDupTXs(t, lid, meshHash, step, numPerProposal, numProposals, tids)
 	// change proposal's mesh hash
 	for _, p := range proposals {
 		p.MeshHash = types.RandomHash()
@@ -287,7 +291,7 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := genLayerProposal(lid, nil)
+		p := genLayerProposal(t, lid, nil)
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
@@ -304,7 +308,7 @@ func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := genLayerProposal(lid, nil)
+		p := genLayerProposal(t, lid, nil)
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
@@ -319,7 +323,8 @@ func TestSelectProposalTXs(t *testing.T) {
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: 1}, nil).Times(1)
@@ -350,7 +355,8 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 	gasLimit := defaultGas * uint64(expSize)
 	tcs := createTestState(t, gasLimit)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
@@ -375,7 +381,8 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 	bid := types.BlockID{100}
 	expected := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 		tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{}, nil).Times(1)
@@ -398,7 +405,8 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 
 func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	numTXs := numTXsInProposal * 2
 	numInBlock := numTXsInProposal
@@ -430,9 +438,11 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 		numInDBs      = numInProposal
 	)
 	tcs := createConservativeState(t)
-	signer1 := signing.NewEdSigner()
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
-	signer2 := signing.NewEdSigner()
+	signer2, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
@@ -480,7 +490,8 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 
 func TestGetProjection(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -497,7 +508,8 @@ func TestGetProjection(t *testing.T) {
 
 func TestAddToCache(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -544,7 +556,8 @@ func TestAddToCache_NonceGap(t *testing.T) {
 
 func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -557,7 +570,8 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 
 func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(uint64(math.MaxUint64), nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -573,7 +587,8 @@ func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 
 func TestGetMeshTransaction(t *testing.T) {
 	tcs := createConservativeState(t)
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -601,7 +616,8 @@ func Test_ApplyLayer_UpdateHeader(t *testing.T) {
 	tcs := createConservativeState(t)
 	lid := types.NewLayerID(1)
 
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(types.Nonce{Counter: nonce}, nil).Times(1)
@@ -816,7 +832,11 @@ func TestConsistentHandling(t *testing.T) {
 	signers := make([]*signing.EdSigner, 30)
 	nonces := make([]uint64, len(signers))
 	for i := range signers {
-		signers[i] = signing.NewEdSignerFromRand(rng)
+		signer, err := signing.NewEdSigner(
+			signing.WithKeyFromRand(rng),
+		)
+		require.NoError(t, err)
+		signers[i] = signer
 	}
 	for _, instance := range instances {
 		instance.mvm.EXPECT().GetBalance(gomock.Any()).Return(defaultBalance, nil).AnyTimes()
