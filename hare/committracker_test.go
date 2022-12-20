@@ -72,7 +72,7 @@ func TestCommitTracker_BuildCertificate(t *testing.T) {
 	require.NoError(t, err)
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	
+
 	s := NewSetFromValues(value1)
 	tracker := newCommitTracker(2, 2, s)
 	assert.Nil(t, tracker.BuildCertificate())

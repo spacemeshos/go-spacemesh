@@ -132,7 +132,7 @@ func TestCheckEligibility_FailedToGetRefBallot(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	blts := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})

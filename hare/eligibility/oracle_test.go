@@ -359,7 +359,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	o := defaultOracle(t)
-	o.vrfSigner, err = signer.VRFSigner()
+	o.vrfSigner, err = signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 	nid := types.BytesToNodeID(o.vrfSigner.PublicKey().Bytes())
 

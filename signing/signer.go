@@ -132,9 +132,13 @@ func (es *EdSigner) VRFSigner(opts ...VRFSignerOptionFunc) (*VRFSigner, error) {
 		}
 	}
 
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
 	return &VRFSigner{
 		privateKey: es.priv,
-		nodeId:     cfg.nodeId,
+		nodeID:     cfg.nodeId,
 		nonce:      cfg.nonce,
 	}, nil
 }
@@ -142,6 +146,13 @@ func (es *EdSigner) VRFSigner(opts ...VRFSignerOptionFunc) (*VRFSigner, error) {
 type vrfSignerOption struct {
 	nonce  *types.VRFPostIndex
 	nodeId types.NodeID
+}
+
+func (opt *vrfSignerOption) validate() error {
+	if opt.nonce == nil {
+		return errors.New("nonce is not set")
+	}
+	return nil
 }
 
 // VRFSignerOptionFunc allows to set settings when initializing VRFSigner.

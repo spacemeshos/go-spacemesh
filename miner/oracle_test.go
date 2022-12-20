@@ -38,7 +38,7 @@ func generateNodeIDAndSigner(tb testing.TB) (types.NodeID, *signing.EdSigner, *s
 
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	vrfSigner, err := edSigner.VRFSigner()
+	vrfSigner, err := edSigner.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(tb, err)
 
 	edPubkey := edSigner.PublicKey()

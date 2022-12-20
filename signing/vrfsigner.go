@@ -14,7 +14,7 @@ type VRFSigner struct {
 	privateKey []byte
 	nonce      *types.VRFPostIndex
 
-	nodeId types.NodeID
+	nodeID types.NodeID
 }
 
 // Sign signs a message for VRF purposes.
@@ -26,7 +26,7 @@ func (s VRFSigner) Sign(msg []byte) []byte {
 
 // PublicKey of the signer.
 func (s VRFSigner) PublicKey() *PublicKey {
-	return NewPublicKey(s.nodeId.Bytes())
+	return NewPublicKey(s.nodeID.Bytes())
 }
 
 // LittleEndian indicates whether byte order in a signature is little-endian.

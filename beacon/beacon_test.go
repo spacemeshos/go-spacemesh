@@ -93,7 +93,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithVRFNonceFromDB(cdb),
+		signing.WithVRFNonce(1),
 	)
 	require.NoError(tb, err)
 
@@ -908,7 +908,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	r.NoError(err)
-	vrfSigner, err := edSgn.VRFSigner()
+	vrfSigner, err := edSgn.VRFSigner(signing.WithVRFNonce(1))
 	r.NoError(err)
 
 	tt := []struct {

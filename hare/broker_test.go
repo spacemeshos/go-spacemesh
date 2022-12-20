@@ -457,7 +457,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	require.NoError(t, broker.Start(context.Background()))
 	inbox, _ := broker.Register(context.Background(), instanceID1)
-	
+
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	m := BuildPreRoundMsg(signer, NewSetFromValues(value1), nil).Message
