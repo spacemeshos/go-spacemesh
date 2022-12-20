@@ -192,7 +192,6 @@ func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
 		NIPostChallenge: vatx.NIPostChallenge,
 		Coinbase:        vatx.Coinbase,
 		NumUnits:        vatx.NumUnits,
-		VRFNonce:        vatx.VRFNonce,
 
 		ID:     vatx.ID(),
 		NodeID: vatx.NodeID(),

@@ -10,9 +10,6 @@ type ActivationTxHeader struct {
 	// current epoch; a unit represents a configurable amount of data for PoST
 	NumUnits uint32
 
-	// VRFNonce is the nonce found during PoST initialization
-	VRFNonce *VRFPostIndex
-
 	ID     ATXID  // the ID of the ATX
 	NodeID NodeID // the id of the Node that created the ATX (public key)
 

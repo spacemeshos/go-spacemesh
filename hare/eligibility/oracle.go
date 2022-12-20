@@ -59,9 +59,6 @@ type cache interface {
 	Get(key any) (value any, ok bool)
 }
 
-// a function to verify the message with the signature and its public key.
-type verifierFunc = func(pub, msg, sig []byte) bool
-
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
