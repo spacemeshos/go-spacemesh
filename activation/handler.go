@@ -191,6 +191,7 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 	if atx.InitialPost == nil {
 		return fmt.Errorf("no prevATX declared, but initial Post is not included")
 	}
+
 	if err := validateInitialNIPostChallenge(&atx.NIPostChallenge, h.cdb, h.goldenATXID, atx.InitialPost.Indices); err != nil {
 		return err
 	}
@@ -202,6 +203,14 @@ func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationT
 
 	if err := h.nipostValidator.ValidatePost(atx.NodeID(), *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid initial Post: %w", err)
+	}
+
+	if atx.VRFNonce == nil {
+		return fmt.Errorf("no prevATX declared, but VRFNonce is missing")
+	}
+
+	if err := h.nipostValidator.ValidateVRFNonce(atx.NodeID(), *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
+		return fmt.Errorf("invalid VRFNonce: %w", err)
 	}
 
 	return nil

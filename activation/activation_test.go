@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -18,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -106,16 +109,21 @@ func (ms *TestSigner) NodeID() types.NodeID {
 }
 
 type NIPostBuilderMock struct {
-	poetRef         []byte
-	buildNIPostFunc func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error)
-	SleepTime       int
+	poetRef   []byte
+	SleepTime int
+
+	mu              sync.Mutex
+	buildNIPostFunc func(challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error)
 }
 
-func (np NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
+func (np *NIPostBuilderMock) updatePoETProvers([]PoetProvingServiceClient) {}
 
-func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, _ time.Time) (*types.NIPost, time.Duration, error) {
+func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, time.Duration, error) {
+	np.mu.Lock()
+	defer np.mu.Unlock()
+
 	if np.buildNIPostFunc != nil {
-		return np.buildNIPostFunc(challenge, commitmentAtx)
+		return np.buildNIPostFunc(challenge)
 	}
 	hash, err := challenge.Hash()
 	if err != nil {
@@ -162,8 +170,8 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID t
 	}
 }
 
-func newAtx(t testing.TB, challenge types.NIPostChallenge, sig *TestSigner, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
+func newAtx(t testing.TB, challenge types.NIPostChallenge, sig signer, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
+	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil, nil)
 	require.NoError(t, SignAtx(sig, atx))
 	require.NoError(t, atx.CalcAndSetID())
 	require.NoError(t, atx.CalcAndSetNodeID())
@@ -172,7 +180,7 @@ func newAtx(t testing.TB, challenge types.NIPostChallenge, sig *TestSigner, nipo
 
 func newActivationTx(
 	t testing.TB,
-	sig *TestSigner,
+	sig signer,
 	sequence uint64,
 	prevATX types.ATXID,
 	positioningATX types.ATXID,
@@ -191,6 +199,7 @@ func newActivationTx(
 }
 
 type LayerClockMock struct {
+	mu           sync.Mutex
 	currentLayer types.LayerID
 }
 
@@ -199,6 +208,8 @@ func (l *LayerClockMock) LayerToTime(types.LayerID) time.Time {
 }
 
 func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.currentLayer
 }
 
@@ -253,11 +264,13 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.InitialPost)
 		r.Nil(atx.InitialPostIndices)
+		r.Nil(atx.VRFNonce)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(*types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.InitialPost)
 		r.NotNil(atx.InitialPostIndices)
+		r.NotNil(atx.VRFNonce)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
 	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)
@@ -267,16 +280,29 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.VerifiedActivat
 func publishAtx(t *testing.T, b *Builder, clockEpoch types.EpochID, buildNIPostLayerDuration uint32) (published, builtNIPost bool, err error) {
 	t.Helper()
 	net.lastTransmission = nil
-	nipostBuilderMock.buildNIPostFunc = func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
+
+	nipostBuilderMock.mu.Lock()
+	nipostBuilderMock.buildNIPostFunc = func(challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
 		builtNIPost = true
+		layerClockMock.mu.Lock()
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNIPostLayerDuration)
+		layerClockMock.mu.Unlock()
 		hash, err := challenge.Hash()
 		require.NoError(t, err)
 		return newNIPostWithChallenge(hash, poetBytes), 0, nil
 	}
+	nipostBuilderMock.mu.Unlock()
+
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = clockEpoch.FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
+
 	err = b.PublishActivationTx(context.Background())
+
+	nipostBuilderMock.mu.Lock()
 	nipostBuilderMock.buildNIPostFunc = nil
+	nipostBuilderMock.mu.Unlock()
+
 	return net.lastTransmission != nil, builtNIPost, err
 }
 
@@ -416,38 +442,6 @@ func TestBuilder_StartSmeshingTwiceError(t *testing.T) {
 	require.ErrorContains(t, builder.StartSmeshing(coinbase, PostSetupOpts{}), "already started")
 }
 
-func TestBuilder_StartSmeshingAfterError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	cdb := newCachedDB(t)
-	atxHdlr := newAtxHandler(t, cdb)
-
-	postSetupMock := NewMockpostSetupProvider(ctrl)
-	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Times(1).Return(nil, errors.New("couldn't start session"))
-	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
-
-	net.atxHdlr = atxHdlr
-	cfg := Config{
-		CoinbaseAccount: coinbase,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
-	}
-
-	mockSyncer := NewMocksyncer(ctrl)
-	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
-
-	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock, postSetupMock,
-		layerClockMock, mockSyncer, logtest.New(t).WithName("atxBuilder"))
-	b.initialPost = initialPost
-
-	coinbase := types.Address{1, 1, 1}
-	require.ErrorContains(t, b.StartSmeshing(coinbase, PostSetupOpts{}), "couldn't start session")
-	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
-}
-
 func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		cdb := newCachedDB(t)
@@ -458,8 +452,6 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			GoldenATXID:     goldenATXID,
 			LayersPerEpoch:  layersPerEpoch,
 		}
-		sessionChan := make(chan struct{})
-		close(sessionChan)
 
 		ctrl := gomock.NewController(t)
 		mockSyncer := NewMocksyncer(ctrl)
@@ -467,10 +459,10 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			ch := make(chan struct{})
 			close(ch)
 			return ch
-		})
+		}).AnyTimes()
 
 		builder := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilderMock,
-			&postSetupProviderMock{sessionChan: sessionChan},
+			&postSetupProviderMock{},
 			layerClockMock, mockSyncer, logtest.New(t).WithName("atxBuilder"))
 		builder.initialPost = initialPost
 		return builder
@@ -481,7 +473,6 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
 			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
-			require.Truef(t, builder.Smeshing(), "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
 			require.Eventually(t, func() bool { return !builder.Smeshing() }, 100*time.Millisecond, time.Millisecond, "failed on execution %d", i)
 		}
@@ -492,7 +483,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		// It cannot check `builder.Smeshing()` as Start/Stop is happening from many goroutines simultaneously.
 		// Both Start and Stop can fail as it is not known if builder is smeshing or not.
 		builder := getBuilder(t)
-		eg, _ := errgroup.WithContext(context.Background())
+		var eg errgroup.Group
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
 				for i := 0; i < 100; i++ {
@@ -514,14 +505,15 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 	require.ErrorContains(t, builder.StopSmeshing(true), "not started")
 }
 
-func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
+func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cdb := newCachedDB(t)
 	atxHdlr := newAtxHandler(t, cdb)
 
 	postSetupMock := NewMockpostSetupProvider(ctrl)
-	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any()).Return(make(chan struct{}), nil)
-	postSetupMock.EXPECT().StopSession(gomock.Any()).Return(errors.New("couldn't stop session"))
+	postSetupMock.EXPECT().StartSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	postSetupMock.EXPECT().GenerateProof(gomock.Any()).Return(nil, nil, nil).AnyTimes()
+	postSetupMock.EXPECT().Reset().Return(errors.New("couldn't delete files"))
 
 	net.atxHdlr = atxHdlr
 	cfg := Config{
@@ -544,7 +536,7 @@ func TestBuilder_StopSmeshing_doesNotStopOnPoSTError(t *testing.T) {
 	coinbase := types.Address{1, 1, 1}
 	require.NoError(t, b.StartSmeshing(coinbase, PostSetupOpts{}))
 	require.Error(t, b.StopSmeshing(true))
-	require.True(t, b.Smeshing())
+	require.False(t, b.Smeshing())
 }
 
 func TestBuilder_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
@@ -797,51 +789,238 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r := require.New(t)
 
-	// setup
-	cdb := newCachedDB(t)
-	atxHdlr := newAtxHandler(t, cdb)
-	b := newBuilder(t, cdb, atxHdlr)
-	lid := types.NewLayerID(1)
-	challenge := newChallenge(1, prevAtxID, prevAtxID, lid.Add(layersPerEpoch), nil)
-	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	// Arrange
+	log := logtest.New(t)
+	ctrl := gomock.NewController(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
+
+	signer := signing.NewEdSigner()
+	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+
+	otherSigner := signing.NewEdSigner()
+
+	initialPost := &types.Post{
+		Nonce:   0,
+		Indices: make([]byte, 10),
+	}
+
+	currentLayer := postGenesisEpochLayer.Add(layersPerEpoch).Add(4)
+	prevAtxLayer := postGenesisEpochLayer.Add(layersPerEpoch)
+	posAtxLayer := postGenesisEpochLayer
+
+	challenge := newChallenge(1, prevAtxID, prevAtxID, posAtxLayer, nil)
+	posAtx := newAtx(t, challenge, otherSigner, nipost, 2, coinbase)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	r.NoError(err)
-	require.NoError(t, atxHdlr.StoreAtx(context.Background(), vPosAtx))
+	r.NoError(atxs.Add(cdb, vPosAtx, time.Now()))
 
-	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), lid, nil)
+	challenge = newChallenge(0, *types.EmptyATXID, posAtx.ID(), prevAtxLayer, nil)
 	challenge.InitialPostIndices = initialPost.Indices
-	prevAtx := newAtx(t, challenge, sig, nipost, 2, coinbase)
+	prevAtx := newAtx(t, challenge, signer, nipost, 2, coinbase)
 	prevAtx.InitialPost = initialPost
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	r.NoError(err)
-	require.NoError(t, atxHdlr.StoreAtx(context.Background(), vPrevAtx))
+	r.NoError(atxs.Add(cdb, vPrevAtx, time.Now()))
 
-	// create and publish ATX
-	published, _, err := publishAtx(t, b, postGenesisEpoch, layersPerEpoch)
-	r.NoError(err)
-	r.True(published)
-	assertLastAtx(r, vPosAtx, vPrevAtx, layersPerEpoch)
+	builderCfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	atxHdlr := NewMockatxHandler(ctrl)
+	net := mocks.NewMockPublisher(ctrl)
+	nipostBuilderMock := NewMocknipostBuilder(ctrl)
+	postSetupProviderMock := NewMockpostSetupProvider(ctrl)
+	layerClockMock := NewMocklayerClock(ctrl)
+	syncerMock := NewMocksyncer(ctrl)
+
+	b := NewBuilder(builderCfg, nodeId, signer, cdb, atxHdlr, net, nipostBuilderMock, postSetupProviderMock, layerClockMock, syncerMock, log.WithName("atxBuilder"))
+	b.initialPost = initialPost
+	b.initialPostMeta = &types.PostMetadata{}
+	b.commitmentAtx = &goldenATXID
+
+	// Act
+	syncerMock.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).AnyTimes()
+
+	layerClockMock.EXPECT().GetCurrentLayer().Return(currentLayer).AnyTimes()
+	layerClockMock.EXPECT().LayerToTime(gomock.Any()).Return(time.Time{}).AnyTimes()
+	layerClockMock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).Times(1)
+
+	layerClockMock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) chan struct{} {
+		ch := make(chan struct{})
+		return ch
+	}).Times(1)
+
+	postSetupProviderMock.EXPECT().LastOpts().DoAndReturn(func() *PostSetupOpts {
+		postSetupOpts := DefaultPostSetupOpts()
+		postSetupOpts.DataDir = t.TempDir()
+		postSetupOpts.NumUnits = postCfg.MinNumUnits
+		postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
+		return &postSetupOpts
+	}).AnyTimes()
+
+	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, int, error) {
+			hash, err := challenge.Hash()
+			r.NoError(err)
+			currentLayer = currentLayer.Add(5)
+			return newNIPostWithChallenge(hash, poetBytes), 0, nil
+		})
+
+	atxChan := make(chan struct{})
+	atxHdlr.EXPECT().AwaitAtx(gomock.Any()).Return(atxChan)
+	atxHdlr.EXPECT().GetPosAtxID().Return(vPosAtx.ID(), nil)
+	atxHdlr.EXPECT().UnsubscribeAtx(gomock.Any())
+
+	net.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
+		atx, err := types.BytesToAtx(msg)
+		r.NoError(err)
+		r.NoError(atx.CalcAndSetID())
+		r.NoError(atx.CalcAndSetNodeID())
+		r.Equal(nodeId, atx.NodeID())
+
+		vAtx, err := atx.Verify(0, 1)
+		r.NoError(err)
+
+		r.NoError(atxs.Add(cdb, vAtx, time.Now()))
+
+		r.Equal(prevAtx.Sequence+1, atx.Sequence)
+		r.Equal(prevAtx.ID(), atx.PrevATXID)
+		r.Nil(atx.InitialPost)
+		r.Nil(atx.InitialPostIndices)
+
+		r.Equal(posAtx.ID(), atx.PositioningATX)
+		r.Equal(posAtxLayer.Add(layersPerEpoch), atx.PubLayerID)
+		r.Equal(poetRef, atx.GetPoetProofRef())
+
+		close(atxChan)
+		return nil
+	})
+
+	r.NoError(b.PublishActivationTx(context.Background()))
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r := require.New(t)
 
-	// setup
-	cdb := newCachedDB(t)
-	atxHdlr := newAtxHandler(t, cdb)
-	b := newBuilder(t, cdb, atxHdlr)
+	// Arrange
+	log := logtest.New(t)
+	ctrl := gomock.NewController(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
-	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer.Sub(layersPerEpoch), nil)
-	posAtx := newAtx(t, challenge, otherSig, nipost, 2, coinbase)
+	signer := signing.NewEdSigner()
+	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+
+	otherSigner := signing.NewEdSigner()
+
+	currentLayer := postGenesisEpochLayer.Add(3)
+	posAtxLayer := postGenesisEpochLayer.Sub(layersPerEpoch)
+
+	challenge := newChallenge(1, prevAtxID, prevAtxID, posAtxLayer, nil)
+	posAtx := newAtx(t, challenge, otherSigner, nipost, 2, coinbase)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	r.NoError(err)
-	require.NoError(t, atxHdlr.StoreAtx(context.Background(), vPosAtx))
+	r.NoError(atxs.Add(cdb, vPosAtx, time.Now()))
 
-	// create and publish ATX based on the best available posAtx, as long as the node is synced
-	published, _, err := publishAtx(t, b, postGenesisEpoch, layersPerEpoch)
-	r.NoError(err)
-	r.True(published)
-	assertLastAtx(r, vPosAtx, nil, layersPerEpoch)
+	builderCfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	atxHdlr := NewMockatxHandler(ctrl)
+	net := mocks.NewMockPublisher(ctrl)
+	nipostBuilderMock := NewMocknipostBuilder(ctrl)
+	postSetupProviderMock := NewMockpostSetupProvider(ctrl)
+	layerClockMock := NewMocklayerClock(ctrl)
+	syncerMock := NewMocksyncer(ctrl)
+
+	b := NewBuilder(builderCfg, nodeId, signer, cdb, atxHdlr, net, nipostBuilderMock, postSetupProviderMock, layerClockMock, syncerMock, log.WithName("atxBuilder"))
+	b.initialPost = &types.Post{
+		Nonce:   0,
+		Indices: make([]byte, 10),
+	}
+	b.initialPostMeta = &types.PostMetadata{}
+	b.commitmentAtx = &goldenATXID
+
+	// Act & Assert
+	syncerMock.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).AnyTimes()
+
+	layerClockMock.EXPECT().GetCurrentLayer().Return(currentLayer).AnyTimes()
+	layerClockMock.EXPECT().LayerToTime(gomock.Any()).Return(time.Time{}).AnyTimes()
+	layerClockMock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).Times(1)
+
+	layerClockMock.EXPECT().AwaitLayer(gomock.Not(vPosAtx.PublishEpoch().FirstLayer().Add(layersPerEpoch))).DoAndReturn(func(types.LayerID) chan struct{} {
+		ch := make(chan struct{})
+		return ch
+	}).Times(1)
+
+	postSetupProviderMock.EXPECT().LastOpts().DoAndReturn(func() *PostSetupOpts {
+		postSetupOpts := DefaultPostSetupOpts()
+		postSetupOpts.DataDir = t.TempDir()
+		postSetupOpts.NumUnits = postCfg.MinNumUnits
+		postSetupOpts.ComputeProviderID = int(initialization.CPUProviderID())
+		return &postSetupOpts
+	}).AnyTimes()
+
+	postSetupProviderMock.EXPECT().VRFNonce().Times(1)
+
+	nipostBuilderMock.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, challenge *types.PoetChallenge, _ time.Time) (*types.NIPost, int, error) {
+			hash, err := challenge.Hash()
+			r.NoError(err)
+			currentLayer = currentLayer.Add(layersPerEpoch)
+			return newNIPostWithChallenge(hash, poetBytes), 0, nil
+		})
+
+	atxChan := make(chan struct{})
+	atxHdlr.EXPECT().AwaitAtx(gomock.Any()).Return(atxChan)
+	atxHdlr.EXPECT().GetPosAtxID().Return(vPosAtx.ID(), nil)
+	atxHdlr.EXPECT().UnsubscribeAtx(gomock.Any())
+
+	net.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
+		atx, err := types.BytesToAtx(msg)
+		r.NoError(err)
+		r.NoError(atx.CalcAndSetID())
+		r.NoError(atx.CalcAndSetNodeID())
+		r.Equal(nodeId, atx.NodeID())
+
+		vAtx, err := atx.Verify(0, 1)
+		r.NoError(err)
+
+		r.NoError(atxs.Add(cdb, vAtx, time.Now()))
+
+		r.Zero(atx.Sequence)
+		r.Equal(*types.EmptyATXID, atx.PrevATXID)
+		r.NotNil(atx.InitialPost)
+		r.NotNil(atx.InitialPostIndices)
+
+		r.Equal(posAtx.ID(), atx.PositioningATX)
+		r.Equal(posAtxLayer.Add(layersPerEpoch), atx.PubLayerID)
+		r.Equal(poetRef, atx.GetPoetProofRef())
+
+		close(atxChan)
+		return nil
+	})
+
+	r.NoError(b.PublishActivationTx(context.Background()))
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
@@ -895,9 +1074,10 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	nipostBuilder := NewMocknipostBuilder(ctrl)
-	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, *types.PoetChallenge, types.ATXID, time.Time) (*types.NIPost, time.Duration, error) {
-		return nil, 0, fmt.Errorf("NIPost builder error")
-	})
+	nipostBuilder.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *types.PoetChallenge, time.Time) (*types.NIPost, time.Duration, error) {
+			return nil, 0, fmt.Errorf("NIPost builder error")
+		})
 
 	mockSyncer := NewMocksyncer(ctrl)
 	mockSyncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() chan struct{} {
@@ -907,7 +1087,6 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	}).AnyTimes()
 
 	b := NewBuilder(cfg, sig.NodeID(), sig, cdb, atxHdlr, net, nipostBuilder, &postSetupProviderMock{}, layerClockMock, mockSyncer, logtest.New(t).WithName("atxBuilder"))
-
 	b.initialPost = initialPost
 
 	challenge := newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer, nil)
@@ -1015,6 +1194,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	net := &NetMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
+
 	sig := NewTestSigner()
 	cdb := newCachedDB(t)
 	ctrl := gomock.NewController(t)
@@ -1060,7 +1240,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	challengeHash, err := challenge.Hash()
 	assert.NoError(t, err)
 	npst2 := newNIPostWithChallenge(challengeHash, poetRef)
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
 	err = b.PublishActivationTx(context.Background())
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 
@@ -1086,7 +1268,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b.commitmentAtx = &goldenATXID
 	err = b.loadChallenge()
 	assert.NoError(t, err)
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
 	err = b.PublishActivationTx(context.Background())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
@@ -1134,8 +1318,10 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	net.lastTransmission = nil
 	tries := 0
 	builderConfirmation := make(chan struct{})
+
 	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
-	nipostBuilder.buildNIPostFunc = func(challenge *types.PoetChallenge, commitmentAtx types.ATXID) (*types.NIPost, time.Duration, error) {
+	nipostBuilder.mu.Lock()
+	nipostBuilder.buildNIPostFunc = func(challenge *types.PoetChallenge) (*types.NIPost, time.Duration, error) {
 		tries++
 		if tries == expectedTries {
 			close(builderConfirmation)
@@ -1146,7 +1332,12 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		r.NoError(err)
 		return newNIPostWithChallenge(hash, poetBytes), 0, nil
 	}
+	nipostBuilder.mu.Unlock()
+
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	runnerExit := make(chan struct{})
 	go func() {

@@ -22,6 +22,7 @@ type poetValidatorPersister interface {
 type nipostValidator interface {
 	Validate(nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error)
 	ValidatePost(nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error
+	ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
 }
 
 type layerClock interface {
@@ -32,7 +33,7 @@ type layerClock interface {
 
 type nipostBuilder interface {
 	updatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
+	BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error)
 }
 
 type atxHandler interface {
@@ -58,10 +59,10 @@ type postSetupProvider interface {
 	Status() *PostSetupStatus
 	ComputeProviders() []PostSetupComputeProvider
 	Benchmark(p PostSetupComputeProvider) (int, error)
-	StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error)
-	StopSession(deleteFiles bool) error
-	GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error)
-	LastError() error
+	StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error
+	Reset() error
+	GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error)
+	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts
 	Config() PostConfig
 }

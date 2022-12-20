@@ -759,11 +759,9 @@ func (app *App) startServices(ctx context.Context) error {
 		if err != nil {
 			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 		}
-		go func() {
-			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
-				log.Panic("failed to start smeshing: %v", err)
-			}
-		}()
+		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+			log.Panic("failed to start smeshing: %v", err)
+		}
 	} else {
 		log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
