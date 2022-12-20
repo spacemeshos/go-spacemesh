@@ -731,7 +731,7 @@ func (proc *consensusProcess) processCommitMsg(ctx context.Context, msg *Msg) {
 
 func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 	if proc.notifyTracker == nil {
-		proc.WithContext(ctx).With().Error("notify tracker is nil")
+		proc.WithContext(ctx).Error("notify tracker is nil")
 		return
 	}
 
