@@ -1236,7 +1236,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	challengeHash, err := challenge.Hash()
 	assert.NoError(t, err)
 	npst2 := newNIPostWithChallenge(challengeHash, poetRef)
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
 	err = b.PublishActivationTx(context.Background())
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 
@@ -1262,7 +1264,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	b.commitmentAtx = &goldenATXID
 	err = b.loadChallenge()
 	assert.NoError(t, err)
+	layerClockMock.mu.Lock()
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
+	layerClockMock.mu.Unlock()
 	err = b.PublishActivationTx(context.Background())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
