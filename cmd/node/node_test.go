@@ -1039,7 +1039,9 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
-	vrfSigner, err := edSgn.VRFSigner()
+	vrfSigner, err := edSgn.VRFSigner(
+		signing.WithVRFNonce(1),
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -409,7 +409,11 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
-	o.vrfVerifier = signing.VRFVerifier{}
+	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
+
+	o.vrfSigner, err = signer2.VRFSigner(signing.WithVRFNonce(1))
+	require.NoError(t, err)
 
 	proof, err := o.Proof(context.Background(), layer, 1)
 	require.NoError(t, err)
@@ -441,7 +445,7 @@ func Test_Proof(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	o.vrfSigner = vrfSigner

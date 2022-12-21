@@ -204,7 +204,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner1, err := signer1.VRFSigner()
+	vrfSigner1, err := signer1.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
@@ -221,7 +221,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 
 	signer2, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner2, err := signer2.VRFSigner()
+	vrfSigner2, err := signer2.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
@@ -254,7 +254,7 @@ func Test_HandleProposal_Shutdown(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
@@ -276,7 +276,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
@@ -308,7 +308,7 @@ func Test_handleProposal_Corrupted(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := []byte("guaranteed to be  malformed")
@@ -327,7 +327,7 @@ func Test_handleProposal_EpochTooOld(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch-1, false)
@@ -352,7 +352,7 @@ func Test_handleProposal_NextEpoch(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
@@ -388,7 +388,7 @@ func Test_handleProposal_NextEpochTooEarly(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, nextEpoch, false)
@@ -418,7 +418,7 @@ func Test_handleProposal_EpochTooFarAhead(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch+2, false)
@@ -441,7 +441,7 @@ func Test_handleProposal_BadSignature(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch, true)
@@ -466,7 +466,7 @@ func Test_handleProposal_AlreadyProposed(t *testing.T) {
 	rng := rand.New(rand.NewSource(101))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg1 := createProposal(t, signer, vrfSigner, epoch, false)
@@ -508,7 +508,7 @@ func Test_handleProposal_ProposalNotEligible(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
@@ -532,7 +532,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
+	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
 	require.NoError(t, err)
 
 	msg := createProposal(t, signer, vrfSigner, epoch, false)

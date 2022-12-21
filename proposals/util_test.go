@@ -25,10 +25,8 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
-	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, vrfSigner, genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	rb := blts[0]
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, ballots.Add(cdb, rb))
@@ -65,10 +63,8 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
-	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, vrfSigner, genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	b := blts[1]
 	b.RefBallot = types.EmptyBallotID
@@ -84,10 +80,8 @@ func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
-	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, vrfSigner, genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, blts[1], layerAvgSize, layersPerEpoch)
@@ -102,10 +96,8 @@ func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
-	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, vrfSigner, genActiveSet(), beacon)
+	blts := createBallots(t, signer, genActiveSet(), beacon)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	got, err := ComputeWeightPerEligibility(cdb, blts[0], layerAvgSize, layersPerEpoch)
 	require.ErrorIs(t, err, sql.ErrNotFound)
