@@ -39,7 +39,7 @@ func NewPubKeyExtractor(opts ...ExtractorOptionFunc) (*PubKeyExtractor, error) {
 	return extractor, nil
 }
 
-// Extract public key from signature.
+// Extract public key from a signature.
 func (e PubKeyExtractor) Extract(m, sig []byte) (*PublicKey, error) {
 	msg := make([]byte, len(m)+len(e.prefix))
 	copy(msg, e.prefix)

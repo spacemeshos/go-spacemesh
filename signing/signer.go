@@ -92,10 +92,10 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 
 // Sign signs the provided message.
 func (es *EdSigner) Sign(m []byte) []byte {
-	if es.prefix != nil {
-		m = append(es.prefix, m...)
-	}
-	return ed25519.Sign2(es.priv, m)
+	msg := make([]byte, len(m)+len(es.prefix))
+	copy(msg, es.prefix)
+	copy(msg[len(es.prefix):], m)
+	return ed25519.Sign2(es.priv, msg)
 }
 
 // NodeID returns the node ID of the signer.

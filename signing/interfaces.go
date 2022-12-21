@@ -1,8 +1,6 @@
 package signing
 
-import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-)
+import "github.com/spacemeshos/go-spacemesh/common/types"
 
 //go:generate mockgen -package=signing -destination=./mocks.go -source=./interfaces.go
 
