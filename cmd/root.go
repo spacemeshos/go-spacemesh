@@ -208,8 +208,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.DataDir, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
 		cfg.SMESHING.Opts.NumUnits, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
-		cfg.SMESHING.Opts.NumFiles, "")
+	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
+		cfg.SMESHING.Opts.MaxFileSize, "")
 	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
 		cfg.SMESHING.Opts.ComputeProviderID, "")
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",

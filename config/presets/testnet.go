@@ -59,7 +59,6 @@ func testnet() config.Config {
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
-	conf.SMESHING.Opts.NumFiles = 1
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
