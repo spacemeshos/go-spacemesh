@@ -19,7 +19,7 @@ type Config struct {
 	WeakCoinRoundDuration    time.Duration `mapstructure:"beacon-weak-coin-round-duration"`    // Weak coin round duration
 	Theta                    *big.Rat      `mapstructure:"beacon-theta"`                       // Ratio of votes for reaching consensus
 	VotesLimit               uint32        `mapstructure:"beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
-	BeaconSyncNumBallots     uint32        `mapstructure:"beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
+	BeaconSyncWeightUnits    int           `mapstructure:"beacon-sync-weight-units"`           // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
 }
 
 // DefaultConfig returns the default configuration for the beacon.
@@ -34,8 +34,8 @@ func DefaultConfig() Config {
 		VotingRoundDuration:      30 * time.Minute,
 		WeakCoinRoundDuration:    1 * time.Minute,
 		Theta:                    big.NewRat(1, 4),
-		VotesLimit:               100,  // TODO: around 100, find the calculation in the forum
-		BeaconSyncNumBallots:     1600, // should be 2 clusters of 800 ballots
+		VotesLimit:               100, // TODO: around 100, find the calculation in the forum
+		BeaconSyncWeightUnits:    800, // at least 1 cluster of 800 weight units
 	}
 }
 
@@ -52,7 +52,7 @@ func UnitTestConfig() Config {
 		WeakCoinRoundDuration:    20 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
-		BeaconSyncNumBallots:     2,
+		BeaconSyncWeightUnits:    2,
 	}
 }
 
@@ -69,6 +69,6 @@ func NodeSimUnitTestConfig() Config {
 		WeakCoinRoundDuration:    200 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
-		BeaconSyncNumBallots:     10,
+		BeaconSyncWeightUnits:    10,
 	}
 }
