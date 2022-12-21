@@ -298,7 +298,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Push go-spacemesh build to docker hub
-        run: make dockerpush
+        run: BUILD_ARGS=-race make dockerpush
 
       - name: Get branch and commit hash
         id: vars

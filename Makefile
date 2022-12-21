@@ -10,6 +10,8 @@ COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
+BUILD_ARGS ?=
+
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
 
@@ -84,7 +86,7 @@ gen-p2p-identity:
 hare p2p: get-libs
 	cd $@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-libs
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
+	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(BUILD_ARGS) .
 harness: get-libs
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: hare p2p harness go-spacemesh gen-p2p-identity
@@ -172,7 +174,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
+	DOCKER_BUILDKIT=1 docker build --build-arg BUILD_ARGS=$(BUILD_ARGS) -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only

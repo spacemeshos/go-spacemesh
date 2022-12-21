@@ -55,7 +55,8 @@ RUN go mod download
 COPY . .
 
 # And compile the project
-RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
+ARG BUILD_ARGS
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build BUILD_ARGS=${BUILD_ARGS} make build
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make harness
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
 
