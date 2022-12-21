@@ -990,7 +990,7 @@ func TestSmesherService(t *testing.T) {
 		opts := &pb.PostSetupOpts{}
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = 1
-		opts.NumFiles = 1
+		opts.MaxFileSize = 1024
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
 

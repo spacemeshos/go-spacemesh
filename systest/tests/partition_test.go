@@ -169,7 +169,8 @@ func TestPartition_30_70(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 30, 2)
+	// TODO: re-assess the number of epoch required for healing.
+	testPartition(t, tctx, cl, 30, 4)
 }
 
 func TestPartition_50_50(t *testing.T) {
@@ -178,5 +179,6 @@ func TestPartition_50_50(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("destructive"))
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
-	testPartition(t, tctx, cl, 50, 3)
+	// TODO: re-assess the number of epoch required for healing.
+	testPartition(t, tctx, cl, 50, 5)
 }
