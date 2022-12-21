@@ -9,9 +9,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type edSignerOption struct {
@@ -121,10 +119,8 @@ func (es *EdSigner) LittleEndian() bool {
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
-func (es *EdSigner) VRFSigner(opts ...VRFSignerOptionFunc) (*VRFSigner, error) {
-	cfg := &vrfSignerOption{
-		nodeId: es.NodeID(),
-	}
+func (es *EdSigner) VRFSigner(opts ...VRFOptionFunc) (*VRFSigner, error) {
+	cfg := &vrfOption{}
 
 	for _, opt := range opts {
 		if err := opt(cfg); err != nil {
@@ -138,46 +134,7 @@ func (es *EdSigner) VRFSigner(opts ...VRFSignerOptionFunc) (*VRFSigner, error) {
 
 	return &VRFSigner{
 		privateKey: es.priv,
-		nodeID:     cfg.nodeId,
-		nonce:      cfg.nonce,
+		nodeID:     es.NodeID(),
+		fetcher:    cfg.getFetcher(),
 	}, nil
-}
-
-type vrfSignerOption struct {
-	nonce  *types.VRFPostIndex
-	nodeId types.NodeID
-}
-
-func (opt *vrfSignerOption) validate() error {
-	if opt.nonce == nil {
-		return errors.New("nonce is not set")
-	}
-	return nil
-}
-
-// VRFSignerOptionFunc allows to set settings when initializing VRFSigner.
-type VRFSignerOptionFunc func(*vrfSignerOption) error
-
-// WithVRFNonce sets nonce for VRFSigner.
-func WithVRFNonce(nonce types.VRFPostIndex) VRFSignerOptionFunc {
-	return func(opt *vrfSignerOption) error {
-		opt.nonce = &nonce
-		return nil
-	}
-}
-
-// WithVRFNonceFromDB sets nonce for VRFSigner from database.
-func WithVRFNonceFromDB(cdb *datastore.CachedDB) VRFSignerOptionFunc {
-	return func(opt *vrfSignerOption) error {
-		atxId, err := atxs.GetFirstIDByNodeID(cdb, opt.nodeId)
-		if err != nil {
-			return fmt.Errorf("failed to get initial atx for smesher %s: %w", opt.nodeId.String(), err)
-		}
-		atx, err := cdb.GetAtxHeader(atxId)
-		if err != nil {
-			return fmt.Errorf("failed to get initial atx for smesher %s: %w", opt.nodeId.String(), err)
-		}
-		opt.nonce = atx.VRFNonce
-		return nil
-	}
 }

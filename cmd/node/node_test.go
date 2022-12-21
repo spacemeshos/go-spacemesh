@@ -1038,17 +1038,14 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.host = host
 	smApp.edSgn = edSgn
 
-	pub := edSgn.PublicKey()
 	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithVRFNonce(1),
+		signing.WithNonceForNode(1, edSgn.NodeID()),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	nodeID := types.BytesToNodeID(pub.Bytes())
-
-	err = smApp.initServices(context.Background(), nodeID, storePath, edSgn,
+	err = smApp.initServices(context.Background(), edSgn.NodeID(), storePath, edSgn,
 		uint32(smApp.Config.LayerAvgSize), []activation.PoetProvingServiceClient{poetClient}, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err

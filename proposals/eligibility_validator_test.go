@@ -75,6 +75,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(tb)
 	lg := logtest.New(tb)
+
 	return &testValidator{
 		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg),
 		mockSet:   ms,
@@ -89,13 +90,14 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibilityProof{}
 	order := make([]types.LayerID, 0, eligibleSlots)
 
-	vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
+	vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
 	require.NoError(tb, err)
 
 	for counter := uint32(0); counter < eligibleSlots; counter++ {
 		message, err := SerializeVRFMessage(beacon, epoch, counter)
 		require.NoError(tb, err)
-		vrfSig := vrfSigner.Sign(message)
+		vrfSig, err := vrfSigner.Sign(message)
+		require.NoError(tb, err)
 		eligibleLayer := CalcEligibleLayer(epoch, layersPerEpoch, vrfSig)
 		if _, exist := eligibilityProofs[eligibleLayer]; !exist {
 			order = append(order, eligibleLayer)

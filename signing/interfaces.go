@@ -13,17 +13,11 @@ type Signer interface {
 	LittleEndian() bool
 }
 
-// Verifier is a common interface for signature verification.
-type Verifier interface {
-	Verify(pub *PublicKey, msg, sig []byte) bool
-}
-
-// VerifyExtractor is a common interface for signature verification with support of public key extraction.
-type VerifyExtractor interface {
+// KeyExtractor is a common interface for signature verification with support of public key extraction.
+type KeyExtractor interface {
 	Extract(msg, sig []byte) (*PublicKey, error)
 }
 
-// VRFNonceProvider is the interface used by the VRFSigner to retrieve ATX headers (for the nonces).
-type VRFNonceProvider interface {
-	VRFNonceForNode(types.NodeID) (types.VRFPostIndex, error)
+type nonceFetcher interface {
+	NonceForNode(types.NodeID) (types.VRFPostIndex, error)
 }

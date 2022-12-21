@@ -576,7 +576,12 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerifier{}, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(cdb))
+	if err != nil {
+		return fmt.Errorf("failed to create vrf verifier: %w", err)
+	}
+
+	hOracle := eligibility.New(beaconProtocol, cdb, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,

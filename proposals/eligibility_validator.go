@@ -34,7 +34,7 @@ type Validator struct {
 	mesh           meshProvider
 	beacons        system.BeaconCollector
 	logger         log.Log
-	vrfVerifier    signing.VRFVerifier
+	vrfVerifier    *signing.VRFVerifier
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
@@ -48,8 +48,7 @@ func NewEligibilityValidator(
 		mesh:           m,
 		beacons:        bc,
 		logger:         lg,
-
-		vrfVerifier: signing.VRFVerifier{},
+		vrfVerifier:    vrfVerifier,
 	}
 }
 
@@ -126,7 +125,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		vrfSig := proof.Sig
 
 		beaconStr := beacon.ShortString()
-		if !v.vrfVerifier.Verify(signing.NewPublicKey(atx.NodeID.Bytes()), message, vrfSig) {
+		if !v.vrfVerifier.Verify(atx.NodeID, message, vrfSig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 		}

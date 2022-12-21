@@ -9,7 +9,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	sql "github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // MockSigner is a mock of Signer interface.
@@ -77,68 +76,31 @@ func (mr *MockSignerMockRecorder) Sign(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockSigner)(nil).Sign), arg0)
 }
 
-// MockVerifier is a mock of Verifier interface.
-type MockVerifier struct {
+// MockKeyExtractor is a mock of KeyExtractor interface.
+type MockKeyExtractor struct {
 	ctrl     *gomock.Controller
-	recorder *MockVerifierMockRecorder
+	recorder *MockKeyExtractorMockRecorder
 }
 
-// MockVerifierMockRecorder is the mock recorder for MockVerifier.
-type MockVerifierMockRecorder struct {
-	mock *MockVerifier
+// MockKeyExtractorMockRecorder is the mock recorder for MockKeyExtractor.
+type MockKeyExtractorMockRecorder struct {
+	mock *MockKeyExtractor
 }
 
-// NewMockVerifier creates a new mock instance.
-func NewMockVerifier(ctrl *gomock.Controller) *MockVerifier {
-	mock := &MockVerifier{ctrl: ctrl}
-	mock.recorder = &MockVerifierMockRecorder{mock}
+// NewMockKeyExtractor creates a new mock instance.
+func NewMockKeyExtractor(ctrl *gomock.Controller) *MockKeyExtractor {
+	mock := &MockKeyExtractor{ctrl: ctrl}
+	mock.recorder = &MockKeyExtractorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockVerifier) EXPECT() *MockVerifierMockRecorder {
-	return m.recorder
-}
-
-// Verify mocks base method.
-func (m *MockVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", pub, msg, sig)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Verify indicates an expected call of Verify.
-func (mr *MockVerifierMockRecorder) Verify(pub, msg, sig interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockVerifier)(nil).Verify), pub, msg, sig)
-}
-
-// MockVerifyExtractor is a mock of VerifyExtractor interface.
-type MockVerifyExtractor struct {
-	ctrl     *gomock.Controller
-	recorder *MockVerifyExtractorMockRecorder
-}
-
-// MockVerifyExtractorMockRecorder is the mock recorder for MockVerifyExtractor.
-type MockVerifyExtractorMockRecorder struct {
-	mock *MockVerifyExtractor
-}
-
-// NewMockVerifyExtractor creates a new mock instance.
-func NewMockVerifyExtractor(ctrl *gomock.Controller) *MockVerifyExtractor {
-	mock := &MockVerifyExtractor{ctrl: ctrl}
-	mock.recorder = &MockVerifyExtractorMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockVerifyExtractor) EXPECT() *MockVerifyExtractorMockRecorder {
+func (m *MockKeyExtractor) EXPECT() *MockKeyExtractorMockRecorder {
 	return m.recorder
 }
 
 // Extract mocks base method.
-func (m *MockVerifyExtractor) Extract(msg, sig []byte) (*PublicKey, error) {
+func (m *MockKeyExtractor) Extract(msg, sig []byte) (*PublicKey, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Extract", msg, sig)
 	ret0, _ := ret[0].(*PublicKey)
@@ -147,60 +109,45 @@ func (m *MockVerifyExtractor) Extract(msg, sig []byte) (*PublicKey, error) {
 }
 
 // Extract indicates an expected call of Extract.
-func (mr *MockVerifyExtractorMockRecorder) Extract(msg, sig interface{}) *gomock.Call {
+func (mr *MockKeyExtractorMockRecorder) Extract(msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Extract", reflect.TypeOf((*MockVerifyExtractor)(nil).Extract), msg, sig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Extract", reflect.TypeOf((*MockKeyExtractor)(nil).Extract), msg, sig)
 }
 
-// MockVRFDatabase is a mock of VRFDatabase interface.
-type MockVRFDatabase struct {
+// MocknonceFetcher is a mock of nonceFetcher interface.
+type MocknonceFetcher struct {
 	ctrl     *gomock.Controller
-	recorder *MockVRFDatabaseMockRecorder
+	recorder *MocknonceFetcherMockRecorder
 }
 
-// MockVRFDatabaseMockRecorder is the mock recorder for MockVRFDatabase.
-type MockVRFDatabaseMockRecorder struct {
-	mock *MockVRFDatabase
+// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
+type MocknonceFetcherMockRecorder struct {
+	mock *MocknonceFetcher
 }
 
-// NewMockVRFDatabase creates a new mock instance.
-func NewMockVRFDatabase(ctrl *gomock.Controller) *MockVRFDatabase {
-	mock := &MockVRFDatabase{ctrl: ctrl}
-	mock.recorder = &MockVRFDatabaseMockRecorder{mock}
+// NewMocknonceFetcher creates a new mock instance.
+func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
+	mock := &MocknonceFetcher{ctrl: ctrl}
+	mock.recorder = &MocknonceFetcherMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockVRFDatabase) EXPECT() *MockVRFDatabaseMockRecorder {
+func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
 	return m.recorder
 }
 
-// Exec mocks base method.
-func (m *MockVRFDatabase) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (int, error) {
+// NonceForNode mocks base method.
+func (m *MocknonceFetcher) NonceForNode(arg0 types.NodeID) (types.VRFPostIndex, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
-	ret0, _ := ret[0].(int)
+	ret := m.ctrl.Call(m, "NonceForNode", arg0)
+	ret0, _ := ret[0].(types.VRFPostIndex)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Exec indicates an expected call of Exec.
-func (mr *MockVRFDatabaseMockRecorder) Exec(arg0, arg1, arg2 interface{}) *gomock.Call {
+// NonceForNode indicates an expected call of NonceForNode.
+func (mr *MocknonceFetcherMockRecorder) NonceForNode(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockVRFDatabase)(nil).Exec), arg0, arg1, arg2)
-}
-
-// GetAtxHeader mocks base method.
-func (m *MockVRFDatabase) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", id)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockVRFDatabaseMockRecorder) GetAtxHeader(id interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockVRFDatabase)(nil).GetAtxHeader), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NonceForNode", reflect.TypeOf((*MocknonceFetcher)(nil).NonceForNode), arg0)
 }

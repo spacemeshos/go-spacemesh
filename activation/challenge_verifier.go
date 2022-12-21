@@ -43,13 +43,13 @@ type ChallengeVerifier interface {
 
 type challengeVerifier struct {
 	atxDB             atxProvider
-	signatureVerifier signing.VerifyExtractor
+	signatureVerifier signing.KeyExtractor
 	cfg               PostConfig
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 }
 
-func NewChallengeVerifier(cdb atxProvider, signatureVerifier signing.VerifyExtractor, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
+func NewChallengeVerifier(cdb atxProvider, signatureVerifier signing.KeyExtractor, cfg PostConfig, goldenATX types.ATXID, layersPerEpoch uint32) ChallengeVerifier {
 	return &challengeVerifier{
 		atxDB:             cdb,
 		signatureVerifier: signatureVerifier,

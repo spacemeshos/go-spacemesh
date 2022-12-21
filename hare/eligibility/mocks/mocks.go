@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Mockcache is a mock of cache interface.
@@ -60,4 +61,41 @@ func (m *Mockcache) Get(key any) (any, bool) {
 func (mr *MockcacheMockRecorder) Get(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcache)(nil).Get), key)
+}
+
+// MockVRFVerifier is a mock of VRFVerifier interface.
+type MockVRFVerifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockVRFVerifierMockRecorder
+}
+
+// MockVRFVerifierMockRecorder is the mock recorder for MockVRFVerifier.
+type MockVRFVerifierMockRecorder struct {
+	mock *MockVRFVerifier
+}
+
+// NewMockVRFVerifier creates a new mock instance.
+func NewMockVRFVerifier(ctrl *gomock.Controller) *MockVRFVerifier {
+	mock := &MockVRFVerifier{ctrl: ctrl}
+	mock.recorder = &MockVRFVerifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockVRFVerifier) EXPECT() *MockVRFVerifierMockRecorder {
+	return m.recorder
+}
+
+// Verify mocks base method.
+func (m *MockVRFVerifier) Verify(nodeID types.NodeID, msg, sig []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Verify", nodeID, msg, sig)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockVRFVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockVRFVerifier)(nil).Verify), nodeID, msg, sig)
 }

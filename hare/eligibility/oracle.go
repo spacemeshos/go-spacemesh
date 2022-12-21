@@ -59,13 +59,17 @@ type cache interface {
 	Get(key any) (value any, ok bool)
 }
 
+type VRFVerifier interface {
+	Verify(nodeID types.NodeID, msg, sig []byte) bool
+}
+
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
-	vrfVerifier    signing.Verifier
+	vrfVerifier    VRFVerifier
 	layersPerEpoch uint32
 	vrfMsgCache    cache
 	activesCache   cache
@@ -109,7 +113,7 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
-	vrfVerifier signing.Verifier,
+	vrfVerifier VRFVerifier,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
@@ -259,7 +263,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier.Verify(signing.NewPublicKey(id.Bytes()), msg, vrfSig) {
+	if !o.vrfVerifier.Verify(id, msg, vrfSig) {
 		logger.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)
@@ -400,7 +404,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 		return nil, err
 	}
 
-	return o.vrfSigner.Sign(msg), nil
+	return o.vrfSigner.Sign(msg)
 }
 
 // Returns a map of all active node IDs in the specified layer id.
