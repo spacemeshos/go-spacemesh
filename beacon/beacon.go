@@ -969,9 +969,13 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types.EpochID, logger log.Log) []byte {
+func buildSignedProposal(ctx context.Context, signer *signing.VRFSigner, epoch types.EpochID, logger log.Log) []byte {
 	p := buildProposal(epoch, logger)
-	signature := signer.Sign(p)
+	signature, err := signer.Sign(p)
+	if err != nil {
+		logger.With().Panic("failed to sign proposal", log.Err(err))
+		panic(err)
+	}
 	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
 		log.String("proposal", hex.EncodeToString(p)),

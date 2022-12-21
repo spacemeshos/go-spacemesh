@@ -359,9 +359,11 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		signing.WithKeyFromRand(rng),
 	)
 	require.NoError(t, err)
+	vrfSig, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+	require.NoError(t, err)
 
 	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
+	instance := weakcoin.New(broadcaster, vrfSig, weakcoin.WithThreshold([]byte{0xff}))
 	instance.StartEpoch(context.Background(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
@@ -376,7 +378,6 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 
 	var (
 		instances                          = make([]*weakcoin.WeakCoin, 10)
-		verifier                           = signing.VRFVerifier{}
 		epochStart, epochEnd types.EpochID = 2, 6
 		start, end           types.RoundID = 0, 9
 		allowances                         = weakcoin.UnitAllowances{}
@@ -400,13 +401,18 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		signer, err := signing.NewEdSigner(
 			signing.WithKeyFromRand(rng),
 		)
+		vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
 		require.NoError(t, err)
+
+		vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceForNode(1, signer.NodeID()))
+		require.NoError(t, err)
+
 		allowances[string(signer.PublicKey().Bytes())] = 1
 		instances[i] = weakcoin.New(
 			broadcaster,
-			signer,
+			vrfSigner,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
-			weakcoin.WithVerifier(verifier),
+			weakcoin.WithVerifier(vrfVerifier),
 		)
 	}
 

@@ -93,7 +93,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithVRFNonce(1),
+		signing.WithNonceForNode(1, edSgn.NodeID()),
 	)
 	require.NoError(tb, err)
 
@@ -861,7 +861,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			for i := 0; i < tc.w; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				vrfSigner, err := signer.VRFSigner(signing.WithVRFNonce(1))
+				vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
 				require.NoError(t, err)
 				proposal := buildSignedProposal(context.Background(), vrfSigner, 3, logtest.New(t))
 				if checker.IsProposalEligible(proposal) {
@@ -908,8 +908,13 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	r.NoError(err)
-	vrfSigner, err := edSgn.VRFSigner(signing.WithVRFNonce(1))
+	vrfSigner, err := edSgn.VRFSigner(signing.WithNonceForNode(1, edSgn.NodeID()))
 	r.NoError(err)
+
+	sign := func(hex string) []byte {
+		sig, _ := vrfSigner.Sign(util.Hex2Bytes(hex))
+		return sig
+	}
 
 	tt := []struct {
 		name   string
@@ -919,12 +924,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("08425004")),
+			result: sign("08425004"),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("08425008")),
+			result: sign("08425008"),
 		},
 	}
 

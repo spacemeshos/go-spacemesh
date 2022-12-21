@@ -77,7 +77,7 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 }
 
 // WithVerifier changes the verifier of the weakcoin messages.
-func WithVerifier(v signing.Verifier) OptionFunc {
+func WithVerifier(v *signing.VRFVerifier) OptionFunc {
 	return func(wc *WeakCoin) {
 		wc.verifier = v
 	}
@@ -86,7 +86,7 @@ func WithVerifier(v signing.Verifier) OptionFunc {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	signer signing.Signer,
+	signer *signing.VRFSigner,
 	opts ...OptionFunc,
 ) *WeakCoin {
 	wc := &WeakCoin{
@@ -95,7 +95,7 @@ func New(
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
-		verifier:  signing.VRFVerifier{},
+		verifier:  signing.NewVRFVerifier(),
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -109,8 +109,8 @@ func New(
 type WeakCoin struct {
 	logger    log.Log
 	config    config
-	verifier  signing.Verifier
-	signer    signing.Signer
+	verifier  *signing.VRFVerifier
+	signer    *signing.VRFSigner
 	publisher pubsub.Publisher
 
 	mu                         sync.RWMutex
@@ -193,7 +193,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
+	if !wc.verifier.Verify(types.BytesToNodeID(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
@@ -216,7 +216,10 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 	var smallest []byte
 	for unit := uint64(0); unit < allowed; unit++ {
 		proposal := wc.encodeProposal(epoch, round, unit)
-		signature := wc.signer.Sign(proposal)
+		signature, err := wc.signer.Sign(proposal)
+		if err != nil {
+			panic(err)
+		}
 		if wc.aboveThreshold(signature) {
 			continue
 		}
