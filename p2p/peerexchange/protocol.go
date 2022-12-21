@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"go.uber.org/atomic"
 
@@ -38,7 +38,7 @@ func DefaultPeerExchangeConfig() PeerExchangeConfig {
 }
 
 type peerExchange struct {
-	listen *atomic.Uint32
+	advertise atomic.Pointer[ma.Multiaddr]
 
 	h      host.Host
 	book   *addressbook.AddrBook
@@ -47,16 +47,16 @@ type peerExchange struct {
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *addressbook.AddrBook, listen uint16, log log.Log, config PeerExchangeConfig) *peerExchange {
-	ga := &peerExchange{
+func newPeerExchange(h host.Host, rt *addressbook.AddrBook, advertise ma.Multiaddr, log log.Log, config PeerExchangeConfig) *peerExchange {
+	pe := &peerExchange{
 		h:      h,
 		book:   rt,
 		logger: log,
-		listen: atomic.NewUint32(uint32(listen)),
 		config: config,
 	}
-	h.SetStreamHandler(protocolName, ga.handler)
-	return ga
+	pe.UpdateAdvertisedAddress(advertise)
+	h.SetStreamHandler(protocolName, pe.handler)
+	return pe
 }
 
 func (p *peerExchange) handler(stream network.Stream) {
@@ -65,34 +65,44 @@ func (p *peerExchange) handler(stream network.Stream) {
 	logger := p.logger.WithFields(log.String("protocol", protocolName),
 		log.String("from", stream.Conn().RemotePeer().Pretty())).With()
 
-	port, _, err := codec.DecodeCompact16(stream)
+	buf, _, err := codec.DecodeByteSlice(stream)
 	if err != nil {
-		logger.Warning("failed to decode request into address", log.Err(err))
+		logger.Debug("failed to read advertised address", log.Err(err))
 		return
 	}
-	logger.Debug("got request", log.Uint16("listen-port", port))
-	if port != 0 {
+	addr, err := ma.NewMultiaddrBytes(buf)
+	if err != nil {
+		logger.Debug("failed to cast bytes to multiaddr", log.Err(err))
+		return
+	}
+	logger.Debug("got request from address", log.Stringer("address", addr))
+	if len(addr.Protocols()) == 1 {
+		// in some setups we rely on a behavior that peer can learn routable address
+		// of the other node, even if that node is not aware of its own routable address
 		ip, err := manet.ToIP(stream.Conn().RemoteMultiaddr())
 		if err != nil {
-			logger.Warning("failed to recover ip from the connection", log.Err(err))
+			logger.Debug("failed to recover ip from the connection", log.Err(err))
 			return
 		}
-		ma, err := manet.FromNetAddr(&net.TCPAddr{
-			IP:   ip,
-			Port: int(port),
-		})
+		ipcomp, err := manet.FromIP(ip)
 		if err != nil {
-			logger.Error("failed to parse netaddr", log.Err(err))
+			logger.Error("failed to create multiaddr from ip", log.Stringer("ip", ip))
 			return
 		}
-		raw := fmt.Sprintf("%s/p2p/%s", ma, stream.Conn().RemotePeer())
-		info, err := addressbook.ParseAddrInfo(raw)
-		if err != nil {
-			logger.Error("failed to parse created address", log.String("address", raw), log.Err(err))
-			return
-		}
-		p.book.AddAddress(info, info)
+		addr = ipcomp.Encapsulate(addr)
 	}
+	id, err := ma.NewComponent("p2p", stream.Conn().RemotePeer().String())
+	if err != nil {
+		logger.Error("failed to create p2p component", log.Err(err))
+		return
+	}
+	addr = addr.Encapsulate(id)
+	info, err := addressbook.ParseAddrInfo(addr.String())
+	if err != nil {
+		logger.Debug("failed to parse address", log.Stringer("address", addr), log.Err(err))
+		return
+	}
+	p.book.AddAddress(info, info)
 
 	results := p.book.GetKnownAddressesCache()
 	response := make([]string, 0, len(results))
@@ -116,7 +126,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 		err = wr.Flush()
 	}
 	if err != nil {
-		logger.Warning("failed to write response", log.Err(err))
+		logger.Debug("failed to write response", log.Err(err))
 		return
 	}
 	logger.Debug("response is sent",
@@ -124,14 +134,14 @@ func (p *peerExchange) handler(stream network.Stream) {
 		log.Duration("time_to_make", time.Since(t)))
 }
 
-// UpdateExternalPort updates port that is used for advertisement.
-func (p *peerExchange) UpdateExternalPort(port uint16) {
-	p.listen.Store(uint32(port))
+// UpdateAdvertisedAddress updates advertised address.
+func (p *peerExchange) UpdateAdvertisedAddress(address ma.Multiaddr) {
+	p.advertise.Store(&address)
 }
 
-// ExternalPort returns currently configured external port.
-func (p *peerExchange) ExternalPort() uint16 {
-	return uint16(p.listen.Load())
+// AdvertisedAddress returns advertised address.
+func (p *peerExchange) AdvertisedAddress() ma.Multiaddr {
+	return *p.advertise.Load()
 }
 
 // Request addresses from a remote node, it will block and return the results returned from the node.
@@ -139,7 +149,8 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook
 	logger := p.logger.WithContext(ctx).WithFields(
 		log.String("type", "getaddresses"),
 		log.String("to", pid.String())).With()
-	logger.Debug("sending request")
+	advertise := p.AdvertisedAddress()
+	logger.Debug("sending request", log.Stringer("advertised address", advertise))
 
 	stream, err := p.h.NewStream(network.WithNoDial(ctx, "existing"), pid, protocolName)
 	if err != nil {
@@ -149,7 +160,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addressbook
 
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err := codec.EncodeCompact16(stream, p.ExternalPort()); err != nil {
+	if _, err := codec.EncodeByteSlice(stream, advertise.Bytes()); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 
