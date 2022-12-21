@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	fixed "github.com/spacemeshos/fixed"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -35,7 +36,7 @@ func (m *MockBeaconCollector) EXPECT() *MockBeaconCollectorMockRecorder {
 }
 
 // ReportBeaconFromBallot mocks base method.
-func (m *MockBeaconCollector) ReportBeaconFromBallot(arg0 types.EpochID, arg1 types.BallotID, arg2 types.Beacon, arg3 uint64) {
+func (m *MockBeaconCollector) ReportBeaconFromBallot(arg0 types.EpochID, arg1 *types.Ballot, arg2 types.Beacon, arg3 fixed.Fixed) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "ReportBeaconFromBallot", arg0, arg1, arg2, arg3)
 }

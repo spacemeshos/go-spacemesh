@@ -313,11 +313,21 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 		}
 		ctx := req.ctx
 		args := req.args
-		if ctx.PrincipalAccount.Balance < ctx.ParseOutput.FixedGas*ctx.ParseOutput.GasPrice {
-			logger.With().Warning("ineffective transaction. fixed gas not covered",
+
+		if header.GasPrice == 0 {
+			logger.With().Warning("ineffective transaction. zero gas price",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
-				log.Uint64("fixed gas", ctx.ParseOutput.FixedGas),
+			)
+			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+			invalidTxCount.Inc()
+			continue
+		}
+		if intrinsic := core.ComputeIntrinsicGasCost(ctx.ParseOutput.BaseGas, tx.GetRaw().Raw, v.cfg.StorageCostFactor); ctx.PrincipalAccount.Balance < intrinsic {
+			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
+				log.Object("header", header),
+				log.Object("account", &ctx.PrincipalAccount),
+				log.Uint64("intrinsic gas", intrinsic),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -544,7 +554,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.Method = method
-	ctx.Header.MaxGas = core.ComputeGasCost(output.FixedGas, raw, cfg.StorageCostFactor)
+	ctx.Header.MaxGas = core.ComputeGasCost(output.BaseGas, output.FixedGas, raw, cfg.StorageCostFactor)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 

@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -25,7 +25,7 @@ func TestComputeThreshold(t *testing.T) {
 		processed, last, target types.LayerID
 		epochs                  map[types.EpochID]*epochInfo
 
-		expectedGlobal util.Weight
+		expectedGlobal weight
 	}{
 		{
 			desc:      "sanity",
@@ -33,9 +33,9 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(length),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 45},
+				2: {weight: fixed.From(45)},
 			},
-			expectedGlobal: util.WeightFromUint64(15),
+			expectedGlobal: fixed.New(15),
 		},
 		{
 			desc:      "shorter than epoch",
@@ -43,9 +43,9 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(length / 2),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 45},
+				2: {weight: fixed.From(45)},
 			},
-			expectedGlobal: util.WeightFromFloat64(7.5),
+			expectedGlobal: fixed.From(7.5),
 		},
 		{
 			desc:      "multi epoch",
@@ -53,11 +53,11 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(length * 3),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
-				3: {weight: 40},
-				4: {weight: 40},
+				2: {weight: fixed.From(40)},
+				3: {weight: fixed.From(40)},
+				4: {weight: fixed.From(40)},
 			},
-			expectedGlobal: util.WeightFromUint64(40),
+			expectedGlobal: fixed.New(40),
 		},
 		{
 			desc:      "not full epoch",
@@ -65,9 +65,9 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(length - 1),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 40},
+				2: {weight: fixed.From(40)},
 			},
-			expectedGlobal: util.WeightFromUint64(10),
+			expectedGlobal: fixed.New(10),
 		},
 		{
 			desc:      "multiple not full epochs",
@@ -75,10 +75,10 @@ func TestComputeThreshold(t *testing.T) {
 			last:      genesis.Add(length*2 - 2),
 			target:    genesis.Add(1),
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 60},
-				3: {weight: 60},
+				2: {weight: fixed.From(60)},
+				3: {weight: fixed.From(60)},
 			},
-			expectedGlobal: util.WeightFromUint64(25),
+			expectedGlobal: fixed.New(25),
 		},
 		{
 			desc: "window size",
@@ -88,9 +88,9 @@ func TestComputeThreshold(t *testing.T) {
 			last:   genesis.Add(length),
 			target: genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 45},
+				2: {weight: fixed.From(45)},
 			},
-			expectedGlobal: util.WeightFromFloat64(7.5),
+			expectedGlobal: fixed.From(7.5),
 		},
 		{
 			desc: "window size is ignored if processed is past window",
@@ -101,9 +101,9 @@ func TestComputeThreshold(t *testing.T) {
 			processed: genesis.Add(length - 1),
 			target:    genesis,
 			epochs: map[types.EpochID]*epochInfo{
-				2: {weight: 45},
+				2: {weight: fixed.From(45)},
 			},
-			expectedGlobal: util.WeightFromFloat64(11.25),
+			expectedGlobal: fixed.From(11.25),
 		},
 	} {
 		tc := tc

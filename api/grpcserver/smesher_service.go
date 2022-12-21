@@ -62,14 +62,14 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumUnits` must be provided")
 	}
 
-	if in.Opts.NumFiles == 0 {
-		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
+	if in.Opts.MaxFileSize == 0 {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.MaxFileSize` must be provided")
 	}
 
 	opts := activation.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          in.Opts.NumUnits,
-		NumFiles:          in.Opts.NumFiles,
+		MaxFileSize:       in.Opts.MaxFileSize,
 		ComputeProviderID: int(in.Opts.ComputeProviderId),
 		Throttle:          in.Opts.Throttle,
 	}
@@ -246,15 +246,11 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.
 	pbStatus.NumLabelsWritten = status.NumLabelsWritten
 
-	if status.LastError != nil {
-		pbStatus.ErrorMessage = status.LastError.Error()
-	}
-
 	if status.LastOpts != nil {
 		pbStatus.Opts = &pb.PostSetupOpts{
 			DataDir:           status.LastOpts.DataDir,
-			NumUnits:          uint32(status.LastOpts.NumUnits),
-			NumFiles:          uint32(status.LastOpts.NumFiles),
+			NumUnits:          status.LastOpts.NumUnits,
+			MaxFileSize:       status.LastOpts.MaxFileSize,
 			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
 			Throttle:          status.LastOpts.Throttle,
 		}

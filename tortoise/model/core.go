@@ -136,7 +136,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PubLayerID: ev.LayerID,
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil)
+		atx := types.NewActivationTx(nipost, addr, nil, c.units, nil, nil)
 		if err := activation.SignAtx(c.signer, atx); err != nil {
 			panic(err)
 		}

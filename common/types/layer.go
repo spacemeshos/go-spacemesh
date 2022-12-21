@@ -2,11 +2,11 @@
 package types
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"sync/atomic"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -147,14 +147,10 @@ func BytesToNodeID(buf []byte) (id NodeID) {
 // NodeID contains a miner's public key.
 type NodeID [32]byte
 
-func (id NodeID) hex() string {
-	return util.Bytes2Hex(id[:])
-}
-
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.hex()
+	return hex.EncodeToString(id.Bytes())
 }
 
 // Bytes returns the byte representation of the Edwards public key.

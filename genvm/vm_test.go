@@ -93,11 +93,11 @@ func (a *singlesigAccount) spawnArgs() scale.Encodable {
 }
 
 func (a *singlesigAccount) spendGas() int {
-	return wallet.TotalGasSpend
+	return wallet.BaseGas + wallet.FixedGasSpend
 }
 
 func (a *singlesigAccount) spawnGas() int {
-	return wallet.TotalGasSpawn
+	return wallet.BaseGas + wallet.FixedGasSpawn
 }
 
 type multisigAccount struct {
@@ -163,11 +163,11 @@ func (a *multisigAccount) spawnArgs() scale.Encodable {
 func (a *multisigAccount) spendGas() int {
 	switch a.template {
 	case multisig.TemplateAddress1:
-		return multisig.TotalGasSpend1
+		return multisig.BaseGas1 + multisig.FixedGasSpend1
 	case multisig.TemplateAddress2:
-		return multisig.TotalGasSpend2
+		return multisig.BaseGas2 + multisig.FixedGasSpend2
 	case multisig.TemplateAddress3:
-		return multisig.TotalGasSpend3
+		return multisig.BaseGas3 + multisig.FixedGasSpend3
 	}
 	panic("unknown template")
 }
@@ -175,11 +175,11 @@ func (a *multisigAccount) spendGas() int {
 func (a *multisigAccount) spawnGas() int {
 	switch a.template {
 	case multisig.TemplateAddress1:
-		return multisig.TotalGasSpawn1
+		return multisig.BaseGas1 + multisig.FixedGasSpawn1
 	case multisig.TemplateAddress2:
-		return multisig.TotalGasSpawn2
+		return multisig.BaseGas2 + multisig.FixedGasSpawn2
 	case multisig.TemplateAddress3:
-		return multisig.TotalGasSpawn3
+		return multisig.BaseGas3 + multisig.FixedGasSpawn3
 	}
 	panic("unknown template")
 }
@@ -200,11 +200,11 @@ func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64
 func (a *vestingAccount) spendGas() int {
 	switch a.template {
 	case vesting.TemplateAddress1:
-		return vesting.TotalGasSpend1
+		return vesting.BaseGas1 + vesting.FixedGasSpend1
 	case vesting.TemplateAddress2:
-		return vesting.TotalGasSpend2
+		return vesting.BaseGas2 + vesting.FixedGasSpend2
 	case vesting.TemplateAddress3:
-		return vesting.TotalGasSpend3
+		return vesting.BaseGas3 + vesting.FixedGasSpend3
 	}
 	panic("unknown template")
 }
@@ -212,11 +212,11 @@ func (a *vestingAccount) spendGas() int {
 func (a *vestingAccount) spawnGas() int {
 	switch a.template {
 	case vesting.TemplateAddress1:
-		return vesting.TotalGasSpawn1
+		return vesting.BaseGas1 + vesting.FixedGasSpawn1
 	case vesting.TemplateAddress2:
-		return vesting.TotalGasSpawn2
+		return vesting.BaseGas2 + vesting.FixedGasSpawn2
 	case vesting.TemplateAddress3:
-		return vesting.TotalGasSpawn3
+		return vesting.BaseGas3 + vesting.FixedGasSpawn3
 	}
 	panic("unknown template")
 }
@@ -224,11 +224,11 @@ func (a *vestingAccount) spawnGas() int {
 func (a *vestingAccount) drainGas() int {
 	switch a.template {
 	case vesting.TemplateAddress1:
-		return vesting.TotalGasDrainVault1
+		return vesting.FixedGasDrainVault1
 	case vesting.TemplateAddress2:
-		return vesting.TotalGasDrainVault2
+		return vesting.FixedGasDrainVault2
 	case vesting.TemplateAddress3:
-		return vesting.TotalGasDrainVault3
+		return vesting.FixedGasDrainVault3
 	}
 	panic("unknown template")
 }
@@ -1359,6 +1359,20 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						11: same{},
 					},
 					ineffective: []int{0},
+				},
+			},
+		},
+		{
+			desc: "inefective zero gas price",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTxWithOpts{0, []sdk.Opt{sdk.WithGasPrice(0)}},
+					},
+					ineffective: []int{0},
+					expected: map[int]change{
+						0: same{},
+					},
 				},
 			},
 		},

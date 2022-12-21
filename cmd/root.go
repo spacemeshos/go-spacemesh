@@ -154,7 +154,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Beacon Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&cfg.Beacon.Kappa, "beacon-kappa",
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.Kappa, "beacon-kappa",
 		cfg.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
 	cmd.PersistentFlags().Var((*types.RatVar)(cfg.Beacon.Q), "beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
@@ -174,8 +174,8 @@ func AddCommands(cmd *cobra.Command) {
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.VotesLimit, "beacon-votes-limit",
 		cfg.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
-	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
-		cfg.Beacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.BeaconSyncWeightUnits, "beacon-sync-weight-units",
+		cfg.Beacon.BeaconSyncWeightUnits, "Numbers of weight units to wait before determining beacon values from them.")
 
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Hdist, "tortoise-hdist",
@@ -208,8 +208,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.DataDir, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
 		cfg.SMESHING.Opts.NumUnits, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
-		cfg.SMESHING.Opts.NumFiles, "")
+	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
+		cfg.SMESHING.Opts.MaxFileSize, "")
 	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
 		cfg.SMESHING.Opts.ComputeProviderID, "")
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",

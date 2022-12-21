@@ -59,7 +59,6 @@ func testnet() config.Config {
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ComputeProviderID = 1
-	conf.SMESHING.Opts.NumFiles = 1
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
@@ -67,7 +66,7 @@ func testnet() config.Config {
 	conf.Beacon.GracePeriodDuration = 10 * time.Second
 	conf.Beacon.ProposalDuration = 30 * time.Second
 	conf.Beacon.RoundsNumber = 6
-	conf.Beacon.BeaconSyncNumBallots = 30
+	conf.Beacon.BeaconSyncWeightUnits = 30
 	conf.Beacon.VotesLimit = 100
 	conf.Beacon.VotingRoundDuration = 50 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second

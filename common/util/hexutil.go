@@ -245,11 +245,6 @@ func Hex2Bytes(str string) []byte {
 	return h
 }
 
-// Bytes2Hex returns the hexadecimal encoding of d.
-func Bytes2Hex(d []byte) string {
-	return hex.EncodeToString(d)
-}
-
 // FromHex returns the bytes represented by the hexadecimal string s.
 // Parameter s may be prefixed with "0x".
 func FromHex(s string) []byte {

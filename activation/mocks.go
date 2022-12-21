@@ -165,6 +165,20 @@ func (mr *MocknipostValidatorMockRecorder) ValidatePost(nodeId, atxId, Post, Pos
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatePost", reflect.TypeOf((*MocknipostValidator)(nil).ValidatePost), nodeId, atxId, Post, PostMetadata, numUnits)
 }
 
+// ValidateVRFNonce mocks base method.
+func (m *MocknipostValidator) ValidateVRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateVRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidateVRFNonce indicates an expected call of ValidateVRFNonce.
+func (mr *MocknipostValidatorMockRecorder) ValidateVRFNonce(nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateVRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).ValidateVRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+}
+
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
@@ -254,9 +268,9 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, commitmentAtx types.ATXID, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.PoetChallenge, poetProofDeadline time.Time) (*types.NIPost, time.Duration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge, commitmentAtx, poetProofDeadline)
+	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge, poetProofDeadline)
 	ret0, _ := ret[0].(*types.NIPost)
 	ret1, _ := ret[1].(time.Duration)
 	ret2, _ := ret[2].(error)
@@ -264,9 +278,9 @@ func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.Po
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.
-func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge, commitmentAtx, poetProofDeadline interface{}) *gomock.Call {
+func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge, poetProofDeadline interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge, commitmentAtx, poetProofDeadline)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge, poetProofDeadline)
 }
 
 // updatePoETProvers mocks base method.
@@ -524,9 +538,9 @@ func (mr *MockpostSetupProviderMockRecorder) Config() *gomock.Call {
 }
 
 // GenerateProof mocks base method.
-func (m *MockpostSetupProvider) GenerateProof(challenge []byte, commitmentAtx types.ATXID) (*types.Post, *types.PostMetadata, error) {
+func (m *MockpostSetupProvider) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateProof", challenge, commitmentAtx)
+	ret := m.ctrl.Call(m, "GenerateProof", challenge)
 	ret0, _ := ret[0].(*types.Post)
 	ret1, _ := ret[1].(*types.PostMetadata)
 	ret2, _ := ret[2].(error)
@@ -534,23 +548,9 @@ func (m *MockpostSetupProvider) GenerateProof(challenge []byte, commitmentAtx ty
 }
 
 // GenerateProof indicates an expected call of GenerateProof.
-func (mr *MockpostSetupProviderMockRecorder) GenerateProof(challenge, commitmentAtx interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) GenerateProof(challenge interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), challenge, commitmentAtx)
-}
-
-// LastError mocks base method.
-func (m *MockpostSetupProvider) LastError() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LastError")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// LastError indicates an expected call of LastError.
-func (mr *MockpostSetupProviderMockRecorder) LastError() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastError", reflect.TypeOf((*MockpostSetupProvider)(nil).LastError))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateProof", reflect.TypeOf((*MockpostSetupProvider)(nil).GenerateProof), challenge)
 }
 
 // LastOpts mocks base method.
@@ -567,19 +567,32 @@ func (mr *MockpostSetupProviderMockRecorder) LastOpts() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastOpts", reflect.TypeOf((*MockpostSetupProvider)(nil).LastOpts))
 }
 
-// StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(opts PostSetupOpts, commitmentAtx types.ATXID) (chan struct{}, error) {
+// Reset mocks base method.
+func (m *MockpostSetupProvider) Reset() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", opts, commitmentAtx)
-	ret0, _ := ret[0].(chan struct{})
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Reset")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Reset indicates an expected call of Reset.
+func (mr *MockpostSetupProviderMockRecorder) Reset() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockpostSetupProvider)(nil).Reset))
+}
+
+// StartSession mocks base method.
+func (m *MockpostSetupProvider) StartSession(context context.Context, opts PostSetupOpts, commitmentAtx types.ATXID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartSession", context, opts, commitmentAtx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(opts, commitmentAtx interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context, opts, commitmentAtx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), opts, commitmentAtx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, opts, commitmentAtx)
 }
 
 // Status mocks base method.
@@ -596,16 +609,17 @@ func (mr *MockpostSetupProviderMockRecorder) Status() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
 }
 
-// StopSession mocks base method.
-func (m *MockpostSetupProvider) StopSession(deleteFiles bool) error {
+// VRFNonce mocks base method.
+func (m *MockpostSetupProvider) VRFNonce() (*types.VRFPostIndex, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StopSession", deleteFiles)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "VRFNonce")
+	ret0, _ := ret[0].(*types.VRFPostIndex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// StopSession indicates an expected call of StopSession.
-func (mr *MockpostSetupProviderMockRecorder) StopSession(deleteFiles interface{}) *gomock.Call {
+// VRFNonce indicates an expected call of VRFNonce.
+func (mr *MockpostSetupProviderMockRecorder) VRFNonce() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StopSession), deleteFiles)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MockpostSetupProvider)(nil).VRFNonce))
 }
