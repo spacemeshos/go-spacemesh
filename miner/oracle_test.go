@@ -149,7 +149,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 		for _, proof := range proofs {
 			b := genBallotWithEligibility(t, o.edSigner, layer, info.atxID, proof, info.activeSet, info.beacon)
-			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b.ID(), info.beacon, uint64(defaultAtxWeight)).Times(1)
+			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			assert.True(t, eligible, "should be eligible at layer %d, but isn't", layer)

@@ -24,7 +24,12 @@ func ExtractNodeIDFromSig(msg, sig []byte) (NodeID, error) {
 }
 
 // NodeID contains a miner's public key.
-type NodeID [32]byte
+type NodeID Hash32
+
+const (
+	// ATXIDSize in bytes.
+	NodeIDSize = Hash32Length
+)
 
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
@@ -44,3 +49,6 @@ func (id NodeID) ShortString() string {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id NodeID) Field() log.Field { return log.Stringer("node_id", id) }
+
+// EmptyNodeID is a canonical empty NodeID.
+var EmptyNodeID = &NodeID{}

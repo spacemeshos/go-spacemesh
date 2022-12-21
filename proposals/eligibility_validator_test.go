@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -368,9 +369,10 @@ func TestCheckEligibility(t *testing.T) {
 	for _, b := range blts {
 		hdr, err := tv.cdb.GetAtxHeader(b.AtxID)
 		require.NoError(t, err)
-		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, hdr.GetWeight()).Times(1)
-		eligible, err := tv.CheckEligibility(context.Background(), b)
+		weightPer := fixed.DivUint64(hdr.GetWeight(), uint64(eligibleSlots))
+		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b, beacon, weightPer).Times(1)
+		got, err := tv.CheckEligibility(context.Background(), b)
 		require.NoError(t, err)
-		require.True(t, eligible)
+		require.True(t, got)
 	}
 }
