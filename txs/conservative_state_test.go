@@ -298,7 +298,7 @@ func TestSelectProposalTXs(t *testing.T) {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-		tcs.mvm.EXPECT().GetNonce(addr).Return(1, nil).Times(1)
+		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(1), nil).Times(1)
 		tx1 := newTx(t, 4, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx1))
 		// all the TXs with nonce 1 are pending in database
@@ -329,7 +329,7 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-		tcs.mvm.EXPECT().GetNonce(addr).Return(0, nil).Times(1)
+		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx1))
 		// all the TXs with nonce 0 are pending in database
@@ -354,7 +354,7 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
 		tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-		tcs.mvm.EXPECT().GetNonce(addr).Return(0, nil).Times(1)
+		tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 		tx1 := newTx(t, 0, defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx1))
 		// all the TXs with nonce 0 are pending in database
@@ -381,7 +381,7 @@ func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultBalance, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr).Return(0, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr).Return(uint64(0), nil).Times(1)
 	for i := 0; i < numInBlock; i++ {
 		tx := newTx(t, uint64(i), defaultAmount, defaultFee, signer)
 		require.NoError(t, tcs.AddToCache(context.TODO(), tx))
@@ -413,9 +413,9 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 	lid := types.NewLayerID(97)
 	bid := types.BlockID{100}
 	tcs.mvm.EXPECT().GetBalance(addr1).Return(defaultBalance*100, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr1).Return(0, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr1).Return(uint64(0), nil).Times(1)
 	tcs.mvm.EXPECT().GetBalance(addr2).Return(defaultBalance*100, nil).Times(1)
-	tcs.mvm.EXPECT().GetNonce(addr2).Return(0, nil).Times(1)
+	tcs.mvm.EXPECT().GetNonce(addr2).Return(uint64(0), nil).Times(1)
 	allTXs := make(map[types.TransactionID]*types.Transaction)
 	for i := 0; i < numInDBs; i++ {
 		tx := newTx(t, uint64(i), defaultAmount, defaultFee, signer1)
@@ -796,7 +796,7 @@ func TestConsistentHandling(t *testing.T) {
 	}
 	for _, instance := range instances {
 		instance.mvm.EXPECT().GetBalance(gomock.Any()).Return(defaultBalance, nil).AnyTimes()
-		instance.mvm.EXPECT().GetNonce(gomock.Any()).Return(0, nil).AnyTimes()
+		instance.mvm.EXPECT().GetNonce(gomock.Any()).Return(uint64(0), nil).AnyTimes()
 	}
 	for lid := 1; lid < 10; lid++ {
 		txs := make([]*types.Transaction, 100)
