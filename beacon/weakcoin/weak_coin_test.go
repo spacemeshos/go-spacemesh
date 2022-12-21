@@ -42,13 +42,6 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *signing.M
 	return signer
 }
 
-func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *signing.MockVerifier {
-	tb.Helper()
-	verifier := signing.NewMockVerifier(ctrl)
-	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	return verifier
-}
-
 func TestWeakCoin(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -59,9 +52,10 @@ func TestWeakCoin(t *testing.T) {
 		oneLSB          = []byte{0b0001}
 		zeroLSB         = []byte{0b0110}
 		higherThreshold = []byte{0xff}
-
-		verifier = sigVerifier(t, ctrl)
 	)
+
+	verifier, err := signing.NewVRFVerifier()
+	require.NoError(t, err)
 
 	tcs := []struct {
 		desc         string

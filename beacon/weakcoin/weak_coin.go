@@ -89,13 +89,14 @@ func New(
 	signer *signing.VRFSigner,
 	opts ...OptionFunc,
 ) *WeakCoin {
+	verifier, _ := signing.NewVRFVerifier()
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
 		config:    defaultConfig(),
 		signer:    signer,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
-		verifier:  signing.NewVRFVerifier(),
+		verifier:  verifier,
 	}
 	for _, opt := range opts {
 		opt(wc)
