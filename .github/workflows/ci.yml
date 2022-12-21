@@ -317,7 +317,7 @@ jobs:
           go-version: ${{ env.go-version }}
 
       - name: Run tests I
-        timeout-minutes: 70
+        timeout-minutes: 55
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
@@ -330,7 +330,7 @@ jobs:
         run: make -C systest run test_name=.
 
       - name: Run tests II
-        timeout-minutes: 45
+        timeout-minutes: 30
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: destructive
