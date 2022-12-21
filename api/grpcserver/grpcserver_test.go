@@ -83,8 +83,8 @@ var (
 
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	addr1       = wallet.Address(signer1.PublicKey().Bytes())
-	addr2       = wallet.Address(signer2.PublicKey().Bytes())
+	addr1       types.Address
+	addr2       types.Address
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
@@ -92,30 +92,17 @@ var (
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
-	signer      *signing.EdSigner
 	signer1     *signing.EdSigner
 	signer2     *signing.EdSigner
-	globalTx    = NewTx(0, addr1, signer1)
-	globalTx2   = NewTx(1, addr2, signer2)
+	globalTx    *types.Transaction
+	globalTx2   *types.Transaction
 	ballot1     = genLayerBallot(types.LayerID{})
 	block1      = genLayerBlock(types.LayerID{}, nil)
 	block2      = genLayerBlock(types.LayerID{}, nil)
 	block3      = genLayerBlock(types.LayerID{}, nil)
 	meshAPI     = &MeshAPIMock{}
-	conStateAPI = &ConStateAPIMock{
-		returnTx:     make(map[types.TransactionID]*types.Transaction),
-		layerApplied: make(map[types.TransactionID]*types.LayerID),
-		balances: map[types.Address]*big.Int{
-			addr1: big.NewInt(int64(accountBalance)),
-			addr2: big.NewInt(int64(accountBalance)),
-		},
-		nonces: map[types.Address]uint64{
-			globalTx.Principal: uint64(accountCounter),
-		},
-		poolByAddress: make(map[types.Address]types.TransactionID),
-		poolByTxId:    make(map[types.TransactionID]*types.Transaction),
-	}
-	stateRoot = types.HexToHash32("11111")
+	conStateAPI *ConStateAPIMock
+	stateRoot   = types.HexToHash32("11111")
 )
 
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
@@ -154,28 +141,7 @@ func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
-	if err := activation.SignAtx(signer, atx); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
 	var err error
-	globalAtx, err = atx.Verify(0, 1)
-	if err != nil {
-		log.Println("failed to verify atx:", err)
-		os.Exit(1)
-	}
-
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
-	if err := activation.SignAtx(signer, atx2); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx2, err = atx2.Verify(0, 1)
-	if err != nil {
-		log.Println("failed to verify atx:", err)
-		os.Exit(1)
-	}
 	signer1, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
@@ -187,13 +153,57 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
+	if err := activation.SignAtx(signer1, atx); err != nil {
+		log.Println("failed to sign atx:", err)
+		os.Exit(1)
+	}
+	globalAtx, err = atx.Verify(0, 1)
+	if err != nil {
+		log.Println("failed to verify atx:", err)
+		os.Exit(1)
+	}
+
+	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil, nil)
+	if err := activation.SignAtx(signer1, atx2); err != nil {
+		log.Println("failed to sign atx:", err)
+		os.Exit(1)
+	}
+	globalAtx2, err = atx2.Verify(0, 1)
+	if err != nil {
+		log.Println("failed to verify atx:", err)
+		os.Exit(1)
+	}
+
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
 	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
+
+	addr1 = wallet.Address(signer1.PublicKey().Bytes())
+	addr2 = wallet.Address(signer2.PublicKey().Bytes())
+
+	globalTx = NewTx(0, addr1, signer1)
+	globalTx2 = NewTx(1, addr2, signer2)
+
 	block1.TxIDs = []types.TransactionID{globalTx.ID, globalTx2.ID}
-	conStateAPI.returnTx[globalTx.ID] = globalTx
-	conStateAPI.returnTx[globalTx2.ID] = globalTx2
+	conStateAPI = &ConStateAPIMock{
+		returnTx: map[types.TransactionID]*types.Transaction{
+			globalTx.ID:  globalTx,
+			globalTx2.ID: globalTx2,
+		},
+		layerApplied: make(map[types.TransactionID]*types.LayerID),
+		balances: map[types.Address]*big.Int{
+			addr1: big.NewInt(int64(accountBalance)),
+			addr2: big.NewInt(int64(accountBalance)),
+		},
+		nonces: map[types.Address]uint64{
+			globalTx.Principal: uint64(accountCounter),
+		},
+		poolByAddress: make(map[types.Address]types.TransactionID),
+		poolByTxId:    make(map[types.TransactionID]*types.Transaction),
+	}
+
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	res := m.Run()
@@ -459,7 +469,7 @@ func (*SmeshingAPIMock) StopSmeshing(bool) error {
 }
 
 func (*SmeshingAPIMock) SmesherID() types.NodeID {
-	return signer.NodeID()
+	return signer1.NodeID()
 }
 
 func (*SmeshingAPIMock) Coinbase() types.Address {
@@ -1030,7 +1040,7 @@ func TestSmesherService(t *testing.T) {
 		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
-		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
+		nodeAddr := types.GenerateAddress(signer1.NodeID().Bytes())
 		resAddr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
 		require.Equal(t, nodeAddr.String(), resAddr.String())
