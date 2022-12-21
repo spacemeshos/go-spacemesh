@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,10 +53,10 @@ func NewEligibilityValidator(
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
 func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) (bool, error) {
 	var (
-		weight, totalWeight uint64
-		err                 error
-		refBallot           = ballot
-		epoch               = ballot.LayerIndex.GetEpoch()
+		atxWeight, totalWeight uint64
+		err                    error
+		refBallot              = ballot
+		epoch                  = ballot.LayerIndex.GetEpoch()
 	)
 
 	if ballot.RefBallot != types.EmptyBallotID {
@@ -89,9 +91,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if err != nil {
 		return false, fmt.Errorf("get ballot ATX header %v: %w", ballot.AtxID, err)
 	}
-	weight = atx.GetWeight()
+	atxWeight = atx.GetWeight()
 
-	numEligibleSlots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return false, err
 	}
@@ -140,7 +142,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		beacon,
 	)
 
-	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, weight)
+	weightPer := fixed.DivUint64(atxWeight, uint64(numEligibleSlots))
+	v.beacons.ReportBeaconFromBallot(epoch, ballot, beacon, weightPer)
 	return true, nil
 }
 
