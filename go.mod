@@ -27,7 +27,7 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.39.0
-	github.com/pyroscope-io/pyroscope v0.35.1
+	github.com/pyroscope-io/pyroscope v0.36.0
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.5.6-0.20221216121744-e454328b0cc4
 	github.com/spacemeshos/economics v0.0.0-20220930194415-799d50b0431d

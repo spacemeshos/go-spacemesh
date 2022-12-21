@@ -344,7 +344,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 			types.Nonce{},
 			sdk.WithGasPrice(0),
 		))
-		tx.MaxGas = wallet.TotalGasSpawn
 	} else {
 		tx.RawTx = types.NewRawTx(
 			wallet.Spend(signer.PrivateKey(), recipient, 1,
@@ -353,7 +352,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 			),
 		)
 		tx.MaxSpend = 1
-		tx.MaxGas = wallet.TotalGasSpend
 	}
 	return &tx
 }
