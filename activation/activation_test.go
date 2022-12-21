@@ -42,13 +42,13 @@ func TestMain(m *testing.M) {
 	var err error
 	sig, err = signing.NewEdSigner()
 	if err != nil {
-		fmt.Println("failed to create signer", err)
+		log.Println("failed to create signer", err)
 		os.Exit(1)
 	}
 
 	otherSig, err = signing.NewEdSigner()
 	if err != nil {
-		fmt.Println("failed to create signer", err)
+		log.Println("failed to create signer", err)
 		os.Exit(1)
 	}
 
