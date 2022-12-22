@@ -13,6 +13,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
+// nonceFetcher is an abstraction for VRFSigner and VRFVerifier to fetch a nonce for a given node.
+type nonceFetcher interface {
+	NonceForNode(types.NodeID) (types.VRFPostIndex, error)
+}
+
 // VRFSigner is a signer for VRF purposes.
 type VRFSigner struct {
 	privateKey []byte

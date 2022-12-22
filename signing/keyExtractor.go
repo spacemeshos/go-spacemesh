@@ -2,6 +2,7 @@ package signing
 
 import (
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -51,6 +52,7 @@ func (e PubKeyExtractor) Extract(m, sig []byte) (*PublicKey, error) {
 	return &PublicKey{PublicKey: pub}, nil
 }
 
+// ExtractNodeID from a signature.
 func (e PubKeyExtractor) ExtractNodeID(m, sig []byte) (types.NodeID, error) {
 	msg := make([]byte, len(m)+len(e.prefix))
 	copy(msg, e.prefix)

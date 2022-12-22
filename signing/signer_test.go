@@ -38,7 +38,7 @@ func TestEdSigner_ValidKeyEncoding(t *testing.T) {
 	require.Equal(t, []byte(ed.priv[32:]), []byte(ed.PublicKey().Bytes()))
 }
 
-func TestEdSigner_ToBytes(t *testing.T) {
+func TestEdSigner_WithPrivateKey(t *testing.T) {
 	ed, err := NewEdSigner()
 	require.NoError(t, err)
 

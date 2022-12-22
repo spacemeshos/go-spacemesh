@@ -19,6 +19,10 @@ func TestPubKeyExtractor_WithPrefix(t *testing.T) {
 		pub, err := extractor.Extract(msg, sig)
 		require.NoError(t, err)
 		require.Equal(t, pub.Bytes(), signer.PublicKey().Bytes())
+
+		nodeId, err := extractor.ExtractNodeID(msg, sig)
+		require.NoError(t, err)
+		require.Equal(t, nodeId, signer.NodeID())
 	})
 
 	t.Run("prefix mismatch", func(t *testing.T) {
@@ -33,12 +37,13 @@ func TestPubKeyExtractor_WithPrefix(t *testing.T) {
 		pub, err := extractor.Extract(msg, sig)
 		require.NoError(t, err)
 		require.NotEqual(t, pub.Bytes(), signer.PublicKey().Bytes())
+
+		nodeId, err := extractor.ExtractNodeID(msg, sig)
+		require.NoError(t, err)
+		require.NotEqual(t, nodeId, signer.NodeID())
 	})
 }
 
-// TODO(mafa): this fails after a very short fuzzing period.
-// This seems to be caused when the prefix is the same as the start of the message.
-// E.g. msg is 0x7fe805 and prefix is 0x7fe8.
 func Fuzz_PubKeyExtractor(f *testing.F) {
 	f.Fuzz(func(t *testing.T, msg []byte, prefix []byte) {
 		signer, err := NewEdSigner(WithPrefix(prefix))

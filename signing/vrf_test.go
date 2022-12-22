@@ -80,3 +80,51 @@ func Test_VRFSignAndVerify(t *testing.T) {
 	ok := vrfVerify.Verify(signer.NodeID(), message, signature)
 	require.True(t, ok, "failed to verify VRF signature")
 }
+
+func Test_VRFSigner_NodeIDAndPublicKey(t *testing.T) {
+	// Arrange
+	signer, err := NewEdSigner()
+	require.NoError(t, err, "failed to create EdSigner")
+
+	// Act
+	vrfSig, err := signer.VRFSigner(WithNonceForNode(1, signer.NodeID()))
+	require.NoError(t, err, "failed to create VRF signer")
+
+	// Assert
+	require.Equal(t, signer.NodeID(), vrfSig.NodeID(), "VRF signer node ID does not match Ed signer node ID")
+	require.Equal(t, signer.PublicKey(), vrfSig.PublicKey(), "VRF signer public key does not match Ed signer public key")
+	require.Equal(t, types.BytesToNodeID(signer.PublicKey().Bytes()), vrfSig.NodeID(), "VRF signer node ID does not match Ed signer node ID")
+}
+
+func Test_VRFSigner_Validate(t *testing.T) {
+	// Arrange
+	signer, err := NewEdSigner()
+	require.NoError(t, err, "failed to create EdSigner")
+
+	// Act & Assert
+	vrfSig, err := signer.VRFSigner()
+	require.Nil(t, vrfSig, "VRF signer should be nil")
+	require.EqualError(t, err, "no source for VRF nonces provided")
+}
+
+func Test_VRFSigner_WithNonceForNode(t *testing.T) {
+	// Arrange
+	signer, err := NewEdSigner()
+	require.NoError(t, err, "failed to create EdSigner")
+	vrfSig, err := signer.VRFSigner(WithNonceForNode(1, signer.NodeID()))
+	require.NoError(t, err, "failed to create VRF signer")
+	vrfVerify1, err := NewVRFVerifier(WithNonceForNode(1, signer.NodeID()))
+	require.NoError(t, err, "failed to create VRF verifier")
+	vrfVerify2, err := NewVRFVerifier(WithNonceForNode(2, signer.NodeID()))
+	require.NoError(t, err, "failed to create VRF verifier")
+
+	// Act & Assert
+	sig, err := vrfSig.Sign([]byte("hello world"))
+	require.NoError(t, err, "failed to sign message")
+
+	ok := vrfVerify1.Verify(signer.NodeID(), []byte("hello world"), sig)
+	require.True(t, ok, "failed to verify VRF signature")
+
+	ok = vrfVerify2.Verify(signer.NodeID(), []byte("hello world"), sig)
+	require.False(t, ok, "VRF signature should not be verified")
+}
