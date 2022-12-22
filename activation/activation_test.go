@@ -311,7 +311,7 @@ func addPrevAtx(t *testing.T, db sql.Executor, epoch types.EpochID) *types.Verif
 	return addAtx(t, db, sig, atx)
 }
 
-func addAtx(t *testing.T, db sql.Executor, sig *signing.EdSigner, atx *types.ActivationTx) *types.VerifiedActivationTx {
+func addAtx(t *testing.T, db sql.Executor, sig signer, atx *types.ActivationTx) *types.VerifiedActivationTx {
 	require.NoError(t, SignAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

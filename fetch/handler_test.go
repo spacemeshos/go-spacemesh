@@ -51,7 +51,7 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 	for i := 0; i < num; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
-		
+
 		b := types.RandomBallot()
 		b.LayerIndex = lid
 		b.Signature = signer.Sign(b.SignedBytes())
