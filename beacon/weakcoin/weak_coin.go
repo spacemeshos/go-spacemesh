@@ -211,7 +211,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) ([
 		proposal := wc.encodeProposal(epoch, round, unit)
 		signature, err := wc.signer.Sign(proposal)
 		if err != nil {
-			panic(err)
+			wc.logger.With().Panic("failed to sign proposal", log.Err(err))
 		}
 		if wc.aboveThreshold(signature) {
 			continue
@@ -309,7 +309,7 @@ func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 }
 
 func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint64) []byte {
-	proposal := bytes.Buffer{}
+	var proposal bytes.Buffer
 	proposal.WriteString(wc.config.VRFPrefix)
 	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
 		wc.logger.With().Panic("can't write epoch to a buffer", log.Err(err))

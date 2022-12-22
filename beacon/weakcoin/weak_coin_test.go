@@ -42,7 +42,7 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *weakcoin.
 	return signer
 }
 
-func staticVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifier {
+func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *weakcoin.MockvrfVerifier {
 	tb.Helper()
 	verifier := weakcoin.NewMockvrfVerifier(ctrl)
 	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
@@ -183,7 +183,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				staticVerifier(t, ctrl),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -205,7 +205,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				staticVerifier(t, ctrl),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -227,7 +227,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				staticVerifier(t, ctrl),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -252,7 +252,7 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				staticVerifier(t, ctrl),
+				sigVerifier(t, ctrl),
 				weakcoin.WithThreshold([]byte{0xfe}),
 			)
 
@@ -280,7 +280,7 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
 			staticSigner(t, ctrl, []byte{1}),
-			staticVerifier(t, ctrl),
+			sigVerifier(t, ctrl),
 		)
 		epoch types.EpochID = 10
 		round types.RoundID = 2
@@ -310,7 +310,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
 		staticSigner(t, ctrl, oneLSB),
-		staticVerifier(t, ctrl),
+		sigVerifier(t, ctrl),
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -347,7 +347,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	)
 	broadcaster := mocks.NewMockPublisher(ctrl)
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
-		msg := weakcoin.Message{}
+		var msg weakcoin.Message
 		require.NoError(t, codec.Decode(data, &msg))
 		sig = msg.Signature
 		return nil
@@ -370,7 +370,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	require.NoError(t, instance.StartRound(context.Background(), round))
 
 	require.Equal(t,
-		"110b3a848728d3c83ba99804e825f56763d190a3a8f13382bf4e31eaabedbfe9a6f20e7dcd4ce5dcecd325b3cf29529415c9c0692abeb3c0f3600f852444f723018863c0fc541b5644dcafb0c0b4c10b",
+		"ecd32bdc383063c5f2c08015141b72daaec8ba43aa4a69b8acb8d1829229dbffc802516d1b12230883fae1e67e0471674be525105a7c6176b0bae80b5c302c9cb9fda9255d3cf9df3a2d384dbf721c09",
 		hex.EncodeToString(sig),
 	)
 }
@@ -380,6 +380,9 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 
 	var (
 		instances                          = make([]*weakcoin.WeakCoin, 10)
+		broadcasters                       = make([]*mocks.MockPublisher, 10)
+		vrfSigners                         = make([]*signing.VRFSigner, 10)
+		verifierOpts                       = make([]signing.VRFOptionFunc, 10)
 		epochStart, epochEnd types.EpochID = 2, 6
 		start, end           types.RoundID = 0, 9
 		allowances                         = weakcoin.UnitAllowances{}
@@ -399,21 +402,25 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 				return nil
 			}).AnyTimes()
+		broadcasters[i] = broadcaster
 
-		signer, err := signing.NewEdSigner(
-			signing.WithKeyFromRand(rng),
-		)
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 		require.NoError(t, err)
-		vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(1, signer.NodeID()))
+		vrfSigner, err := signer.VRFSigner(signing.WithNonceForNode(types.VRFPostIndex(i), signer.NodeID()))
 		require.NoError(t, err)
 
-		vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceForNode(1, signer.NodeID()))
-		require.NoError(t, err)
+		vrfSigners[i] = vrfSigner
+		verifierOpts[i] = signing.WithNonceForNode(types.VRFPostIndex(i), signer.NodeID())
 
 		allowances[string(signer.PublicKey().Bytes())] = 1
+	}
+
+	vrfVerifier, err := signing.NewVRFVerifier(verifierOpts...)
+	require.NoError(t, err)
+	for i := range instances {
 		instances[i] = weakcoin.New(
-			broadcaster,
-			vrfSigner,
+			broadcasters[i],
+			vrfSigners[i],
 			vrfVerifier,
 			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
