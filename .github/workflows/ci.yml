@@ -268,7 +268,7 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency: cloud-limits
+    concurrency: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - uses: actions/checkout@v3
 
