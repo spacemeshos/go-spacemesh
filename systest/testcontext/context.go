@@ -17,7 +17,6 @@ import (
 	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -314,8 +313,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		Image:             imageFlag.Get(p),
 		PoetImage:         poetImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
-		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar(),
+		Log:               newLogger(t, logLevel, zap.AddCaller()).Sugar(),
 	}
+
 	cctx.Storage.Class = class
 	cctx.Storage.Size = size
 	err = updateContext(cctx)
