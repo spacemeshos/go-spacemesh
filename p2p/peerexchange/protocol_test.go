@@ -2,11 +2,13 @@ package peerexchange
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,11 +27,19 @@ func routablePort(h host.Host) (uint16, error) {
 
 const dnsNode = "/dns4/bootnode.spacemesh.io/tcp/5003/p2p/12D3KooWGQrF3pHrR1W7P6nh8gypYxtFS93SnmvtN6qpyeSo7T2u"
 
-func buildPeer(t *testing.T, l log.Log, h host.Host, config PeerExchangeConfig) *peerExchange {
-	book := addressbook.NewAddrBook(addressbook.DefaultAddressBookConfigWithDataDir(""), l)
+func buildPeer(tb testing.TB, l log.Log, h host.Host, config PeerExchangeConfig) *peerExchange {
+	tb.Helper()
 	port, err := routablePort(h)
-	require.NoError(t, err)
-	return newPeerExchange(h, book, port, l, config)
+	require.NoError(tb, err)
+	addr, err := ma.NewComponent("tcp", strconv.Itoa(int(port)))
+	require.NoError(tb, err)
+	return buildPeerWithAddress(tb, l, h, addr, config)
+}
+
+func buildPeerWithAddress(tb testing.TB, l log.Log, h host.Host, addr ma.Multiaddr, config PeerExchangeConfig) *peerExchange {
+	tb.Helper()
+	book := addressbook.NewAddrBook(addressbook.DefaultAddressBookConfigWithDataDir(""), l)
+	return newPeerExchange(h, book, addr, l, config)
 }
 
 func contains[T any](array []T, object T) bool {
@@ -77,6 +87,25 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 			require.True(t, checkDNSAddress(proto2.book.GetAddresses(), dnsNode))
 		}
 	}
+}
+
+func TestDiscovery_AdvertiseDNS(t *testing.T) {
+	logger := logtest.New(t)
+	mesh, err := mocknet.FullMeshConnected(2)
+	require.NoError(t, err)
+
+	addr := ma.StringCast("/dns4/bootnode.spacemesh.io/tcp/5003")
+
+	sender := buildPeerWithAddress(t, logger, mesh.Hosts()[0], addr, DefaultPeerExchangeConfig())
+	receiver := buildPeer(t, logger, mesh.Hosts()[1], DefaultPeerExchangeConfig())
+
+	_, err = sender.Request(context.Background(), receiver.h.ID())
+	require.NoError(t, err)
+
+	id, err := ma.NewComponent("p2p", sender.h.ID().String())
+	require.NoError(t, err)
+	added := receiver.book.Lookup(sender.h.ID()).Addr().Decapsulate(id)
+	require.True(t, addr.Equal(added))
 }
 
 // Test if peer exchange protocol handler properly

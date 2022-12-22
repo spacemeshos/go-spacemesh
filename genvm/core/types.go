@@ -10,7 +10,7 @@ const (
 	// MethodSpawn ...
 	MethodSpawn = 0
 	// MethodSpend ...
-	MethodSpend = 1
+	MethodSpend = 16
 )
 
 type (

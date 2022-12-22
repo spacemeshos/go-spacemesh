@@ -87,6 +87,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.TargetOutbound, "target outbound connections")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
+	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
+		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 
 	/** ======================== TIME Flags ========================== **/
 
