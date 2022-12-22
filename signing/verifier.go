@@ -47,8 +47,5 @@ func (e PubKeyExtractor) ExtractNodeID(m, sig []byte) (types.NodeID, error) {
 	copy(msg, e.prefix)
 	copy(msg[len(e.prefix):], m)
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
-	if err != nil {
-		return *types.EmptyNodeID, err
-	}
-	return types.BytesToNodeID(pub), nil
+	return types.BytesToNodeID(pub), err
 }

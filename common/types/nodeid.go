@@ -54,4 +54,4 @@ func (id NodeID) ShortString() string {
 func (id NodeID) Field() log.Field { return log.Stringer("node_id", id) }
 
 // EmptyNodeID is a canonical empty NodeID.
-var EmptyNodeID = &NodeID{}
+var EmptyNodeID NodeID
