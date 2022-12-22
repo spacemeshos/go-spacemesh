@@ -36,7 +36,7 @@ const (
 type testOracle struct {
 	*Oracle
 	mBeacon   *smocks.MockBeaconGetter
-	mVerifier *mocks.MockVRFVerifier
+	mVerifier *mocks.MockvrfVerifier
 }
 
 func defaultOracle(t testing.TB) *testOracle {
@@ -46,7 +46,7 @@ func defaultOracle(t testing.TB) *testOracle {
 
 	ctrl := gomock.NewController(t)
 	mb := smocks.NewMockBeaconGetter(ctrl)
-	verifier := mocks.NewMockVRFVerifier(ctrl)
+	verifier := mocks.NewMockvrfVerifier(ctrl)
 
 	to := &testOracle{
 		Oracle:    New(mb, cdb, verifier, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}, lg),
@@ -409,10 +409,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(o.cdb, vAtx2, time.Now()))
 
-	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
-	require.NoError(t, err)
-
-	o.vrfSigner, err = signer2.VRFSigner(signing.WithNonceForNode(1, signer2.NodeID()))
+	o.vrfVerifier, err = signing.NewVRFVerifier(signing.WithNonceForNode(1, signer.NodeID()))
 	require.NoError(t, err)
 
 	proof, err := o.Proof(context.Background(), layer, 1)
