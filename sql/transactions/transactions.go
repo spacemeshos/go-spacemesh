@@ -14,8 +14,8 @@ import (
 // Add transaction to the database or update the header if it wasn't set originally.
 func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 	var (
-		header []byte
 		err    error
+		header []byte
 	)
 	if tx.TxHeader != nil {
 		header, err = codec.Encode(tx.TxHeader)
