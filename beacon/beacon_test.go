@@ -97,8 +97,11 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	)
 	require.NoError(tb, err)
 
+	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceForNode(1, edSgn.NodeID()))
+	require.NoError(tb, err)
+
 	tpd.cdb = cdb
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, vrfVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),

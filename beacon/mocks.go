@@ -14,6 +14,7 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 	timesync "github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -230,4 +231,69 @@ func (m *MocklayerClock) Unsubscribe(arg0 timesync.LayerTimer) {
 func (mr *MocklayerClockMockRecorder) Unsubscribe(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*MocklayerClock)(nil).Unsubscribe), arg0)
+}
+
+// Mocksigner is a mock of signer interface.
+type Mocksigner struct {
+	ctrl     *gomock.Controller
+	recorder *MocksignerMockRecorder
+}
+
+// MocksignerMockRecorder is the mock recorder for Mocksigner.
+type MocksignerMockRecorder struct {
+	mock *Mocksigner
+}
+
+// NewMocksigner creates a new mock instance.
+func NewMocksigner(ctrl *gomock.Controller) *Mocksigner {
+	mock := &Mocksigner{ctrl: ctrl}
+	mock.recorder = &MocksignerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocksigner) EXPECT() *MocksignerMockRecorder {
+	return m.recorder
+}
+
+// NodeID mocks base method.
+func (m *Mocksigner) NodeID() types.NodeID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NodeID")
+	ret0, _ := ret[0].(types.NodeID)
+	return ret0
+}
+
+// NodeID indicates an expected call of NodeID.
+func (mr *MocksignerMockRecorder) NodeID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*Mocksigner)(nil).NodeID))
+}
+
+// PublicKey mocks base method.
+func (m *Mocksigner) PublicKey() *signing.PublicKey {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublicKey")
+	ret0, _ := ret[0].(*signing.PublicKey)
+	return ret0
+}
+
+// PublicKey indicates an expected call of PublicKey.
+func (mr *MocksignerMockRecorder) PublicKey() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*Mocksigner)(nil).PublicKey))
+}
+
+// Sign mocks base method.
+func (m *Mocksigner) Sign(msg []byte) []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Sign", msg)
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Sign indicates an expected call of Sign.
+func (mr *MocksignerMockRecorder) Sign(msg interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*Mocksigner)(nil).Sign), msg)
 }

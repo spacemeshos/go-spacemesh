@@ -33,6 +33,11 @@ func (s VRFSigner) Sign(msg []byte) ([]byte, error) {
 	return ecvrf.Prove(ed25519.PrivateKey(s.privateKey), append(buf, msg...)), nil
 }
 
+// NodeID of the signer.
+func (s VRFSigner) NodeID() types.NodeID {
+	return s.nodeID
+}
+
 // PublicKey of the signer.
 func (s VRFSigner) PublicKey() *PublicKey {
 	return NewPublicKey(s.nodeID.Bytes())

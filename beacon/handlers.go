@@ -269,7 +269,7 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 		logger.With().Panic("failed to serialize first voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.sigVerifier.Extract(messageBytes, m.Signature)
+	minerPK, err := pd.pubKeyExtractor.Extract(messageBytes, m.Signature)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", types.FirstRound, m.Signature, err)
 	}
@@ -400,7 +400,7 @@ func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingV
 		pd.logger.With().Panic("failed to serialize voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.sigVerifier.Extract(messageBytes, m.Signature)
+	minerPK, err := pd.pubKeyExtractor.Extract(messageBytes, m.Signature)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", round, m.Signature, err)
 	}

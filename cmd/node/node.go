@@ -532,7 +532,12 @@ func (app *App) initServices(ctx context.Context,
 
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
+	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(cdb))
+	if err != nil {
+		return fmt.Errorf("failed to create vrf verifier: %w", err)
+	}
+
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -575,11 +580,6 @@ func (app *App) initServices(ctx context.Context,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
-
-	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(cdb))
-	if err != nil {
-		return fmt.Errorf("failed to create vrf verifier: %w", err)
-	}
 
 	hOracle := eligibility.New(beaconProtocol, cdb, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1

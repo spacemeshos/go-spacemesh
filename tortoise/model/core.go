@@ -61,7 +61,7 @@ type core struct {
 
 	// generated on setup
 	units  uint32
-	signer signing.Signer
+	signer signer
 
 	// set in the first layer of each epoch
 	refBallot     *types.BallotID

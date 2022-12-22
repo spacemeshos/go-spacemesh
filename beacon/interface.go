@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -31,4 +32,10 @@ type layerClock interface {
 	Unsubscribe(timesync.LayerTimer)
 	LayerToTime(types.LayerID) time.Time
 	GetCurrentLayer() types.LayerID
+}
+
+type signer interface {
+	Sign(msg []byte) []byte
+	PublicKey() *signing.PublicKey
+	NodeID() types.NodeID
 }

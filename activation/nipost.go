@@ -59,7 +59,7 @@ type NIPostBuilder struct {
 	poetDB            poetDbAPI
 	state             *types.NIPostBuilderState
 	log               log.Log
-	signer            signing.Signer
+	signer            *signing.EdSigner
 }
 
 type poetDbAPI interface {
@@ -76,7 +76,7 @@ func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	db *sql.Database,
 	log log.Log,
-	signer signing.Signer,
+	signer *signing.EdSigner,
 ) *NIPostBuilder {
 	return &NIPostBuilder{
 		minerID:           minerID.Bytes(),

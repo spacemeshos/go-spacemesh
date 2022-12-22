@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func defaultConfig() config {
@@ -76,20 +75,13 @@ func WithNextRoundBufferSize(size int) OptionFunc {
 	}
 }
 
-// WithVerifier changes the verifier of the weakcoin messages.
-func WithVerifier(v *signing.VRFVerifier) OptionFunc {
-	return func(wc *WeakCoin) {
-		wc.verifier = v
-	}
-}
-
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	signer *signing.VRFSigner,
+	signer vrfSigner,
+	verifier vrfVerifier,
 	opts ...OptionFunc,
 ) *WeakCoin {
-	verifier, _ := signing.NewVRFVerifier()
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
 		config:    defaultConfig(),
@@ -110,8 +102,8 @@ func New(
 type WeakCoin struct {
 	logger    log.Log
 	config    config
-	verifier  *signing.VRFVerifier
-	signer    *signing.VRFSigner
+	verifier  vrfVerifier
+	signer    vrfSigner
 	publisher pubsub.Publisher
 
 	mu                         sync.RWMutex

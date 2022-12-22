@@ -39,7 +39,7 @@ type Validator struct {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log,
+	avgLayerSize, layersPerEpoch uint32, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier *signing.VRFVerifier,
 ) *Validator {
 	return &Validator{
 		avgLayerSize:   avgLayerSize,

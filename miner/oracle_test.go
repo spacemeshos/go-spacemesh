@@ -139,7 +139,10 @@ func TestMinerOracle(t *testing.T) {
 func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersPerEpoch uint32) {
 	o := createTestOracle(t, layerSize, layersPerEpoch)
 	mbc := smocks.NewMockBeaconCollector(gomock.NewController(t))
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"))
+	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(o.cdb))
+	require.NoError(t, err)
+
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch

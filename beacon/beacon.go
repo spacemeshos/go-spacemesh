@@ -89,26 +89,28 @@ func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
-	sigVerifier *signing.PubKeyExtractor,
+	pubKeyExtractor *signing.PubKeyExtractor,
 	vrfSigner *signing.VRFSigner,
+	vrfVerifier *signing.VRFVerifier,
 	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		ctx:            context.Background(),
-		logger:         log.NewNop(),
-		config:         DefaultConfig(),
-		nodeID:         nodeID,
-		publisher:      publisher,
-		edSigner:       edSigner,
-		sigVerifier:    sigVerifier,
-		vrfSigner:      vrfSigner,
-		cdb:            cdb,
-		clock:          clock,
-		beacons:        make(map[types.EpochID]types.Beacon),
-		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
-		states:         make(map[types.EpochID]*state),
+		ctx:             context.Background(),
+		logger:          log.NewNop(),
+		config:          DefaultConfig(),
+		nodeID:          nodeID,
+		publisher:       publisher,
+		edSigner:        edSigner,
+		pubKeyExtractor: pubKeyExtractor,
+		vrfSigner:       vrfSigner,
+		vrfVerifier:     vrfVerifier,
+		cdb:             cdb,
+		clock:           clock,
+		beacons:         make(map[types.EpochID]types.Beacon),
+		ballotsBeacons:  make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+		states:          make(map[types.EpochID]*state),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -117,7 +119,7 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner,
+		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
 		)
@@ -136,16 +138,16 @@ type ProtocolDriver struct {
 	cancel     context.CancelFunc
 	startOnce  sync.Once
 
-	config      Config
-	nodeID      types.NodeID
-	sync        system.SyncStateProvider
-	publisher   pubsub.Publisher
-	edSigner    *signing.EdSigner
-	sigVerifier *signing.PubKeyExtractor
-	vrfSigner   *signing.VRFSigner
-	vrfVerifier signing.VRFVerifier
-	weakCoin    coin
-	theta       *big.Float
+	config          Config
+	nodeID          types.NodeID
+	sync            system.SyncStateProvider
+	publisher       pubsub.Publisher
+	edSigner        *signing.EdSigner
+	pubKeyExtractor *signing.PubKeyExtractor
+	vrfSigner       *signing.VRFSigner
+	vrfVerifier     *signing.VRFVerifier
+	weakCoin        coin
+	theta           *big.Float
 
 	clock       layerClock
 	layerTicker chan types.LayerID

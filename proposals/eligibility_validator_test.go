@@ -76,8 +76,11 @@ func createTestValidator(tb testing.TB) *testValidator {
 	ms := fullMockSet(tb)
 	lg := logtest.New(tb)
 
+	vrfVerifier, err := signing.NewVRFVerifier()
+	require.NoError(tb, err)
+
 	return &testValidator{
-		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg),
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, vrfVerifier),
 		mockSet:   ms,
 	}
 }
