@@ -113,6 +113,7 @@ func Upgrade(h host.Host, genesisID types.Hash20, opts ...Opt) (*Host, error) {
 		CheckTimeout:         cfg.CheckTimeout,
 		CheckInterval:        cfg.CheckInterval,
 		CheckPeersUsedBefore: cfg.CheckPeersUsedBefore,
+		AdvertiseAddress:     cfg.AdvertiseAddress,
 		PeerExchange:         cfg.peerExchange,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)

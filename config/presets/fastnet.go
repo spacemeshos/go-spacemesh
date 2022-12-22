@@ -72,7 +72,7 @@ func fastnet() config.Config {
 	conf.Beacon.VotingRoundDuration = 2 * time.Second
 	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second
 	conf.Beacon.RoundsNumber = 4
-	conf.Beacon.BeaconSyncNumBallots = 30
+	conf.Beacon.BeaconSyncWeightUnits = 20
 	conf.Beacon.VotesLimit = 100
 
 	return conf

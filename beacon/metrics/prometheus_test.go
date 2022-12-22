@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -13,23 +14,23 @@ func TestBeaconMetrics(t *testing.T) {
 	epoch := types.EpochID(10)
 	observed := []*BeaconStats{
 		{
-			Epoch:  epoch,
-			Beacon: "canadian",
-			Count:  uint64(123),
-			Weight: uint64(32100),
+			Epoch:      epoch,
+			Beacon:     "canadian",
+			Weight:     fixed.New64(32100),
+			WeightUnit: 123,
 		},
 		{
-			Epoch:  epoch,
-			Beacon: "rashers",
-			Count:  uint64(321),
-			Weight: uint64(12300),
+			Epoch:      epoch,
+			Beacon:     "rashers",
+			Weight:     fixed.New64(12300),
+			WeightUnit: 321,
 		},
 	}
 	calculated := &BeaconStats{
-		Epoch:  epoch + 1,
-		Beacon: "speck",
-		Count:  uint64(1),
-		Weight: uint64(45678),
+		Epoch:      epoch + 1,
+		Beacon:     "speck",
+		Weight:     fixed.New64(45678),
+		WeightUnit: 1,
 	}
 
 	bmc := NewBeaconMetricsCollector(func() ([]*BeaconStats, *BeaconStats) {
@@ -39,7 +40,7 @@ func TestBeaconMetrics(t *testing.T) {
 	deviceExpected := `
 # HELP spacemesh_beacons_beacon_calculated_weight Weight of the beacon calculated by the node for each epoch
 # TYPE spacemesh_beacons_beacon_calculated_weight counter
-spacemesh_beacons_beacon_calculated_weight{beacon="speck",epoch="11"} 45678
+spacemesh_beacons_beacon_calculated_weight{beacon="speck",epoch="11"} 0
 # HELP spacemesh_beacons_beacon_observed_total Number of beacons collected from blocks for each epoch and value
 # TYPE spacemesh_beacons_beacon_observed_total counter
 spacemesh_beacons_beacon_observed_total{beacon="canadian",epoch="10"} 123

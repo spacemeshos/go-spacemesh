@@ -87,6 +87,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.TargetOutbound, "target outbound connections")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
+	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
+		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 
 	/** ======================== TIME Flags ========================== **/
 
@@ -174,8 +176,8 @@ func AddCommands(cmd *cobra.Command) {
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.VotesLimit, "beacon-votes-limit",
 		cfg.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
-	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
-		cfg.Beacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
+	cmd.PersistentFlags().IntVar(&cfg.Beacon.BeaconSyncWeightUnits, "beacon-sync-weight-units",
+		cfg.Beacon.BeaconSyncWeightUnits, "Numbers of weight units to wait before determining beacon values from them.")
 
 	/**======================== Tortoise Flags ========================== **/
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.Hdist, "tortoise-hdist",
