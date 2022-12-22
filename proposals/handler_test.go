@@ -37,11 +37,12 @@ func genGoldenATXID() types.ATXID {
 }
 
 type mockSet struct {
-	mf  *smocks.MockFetcher
-	mbc *smocks.MockBeaconCollector
-	mm  *mocks.MockmeshProvider
-	mv  *mocks.MockeligibilityValidator
-	md  *mocks.MockballotDecoder
+	mf   *smocks.MockFetcher
+	mbc  *smocks.MockBeaconCollector
+	mm   *mocks.MockmeshProvider
+	mv   *mocks.MockeligibilityValidator
+	md   *mocks.MockballotDecoder
+	mvrf *mocks.MockvrfVerifier
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -58,11 +59,12 @@ type testHandler struct {
 func fullMockSet(tb testing.TB) *mockSet {
 	ctrl := gomock.NewController(tb)
 	return &mockSet{
-		mf:  smocks.NewMockFetcher(ctrl),
-		mbc: smocks.NewMockBeaconCollector(ctrl),
-		mm:  mocks.NewMockmeshProvider(ctrl),
-		mv:  mocks.NewMockeligibilityValidator(ctrl),
-		md:  mocks.NewMockballotDecoder(ctrl),
+		mf:   smocks.NewMockFetcher(ctrl),
+		mbc:  smocks.NewMockBeaconCollector(ctrl),
+		mm:   mocks.NewMockmeshProvider(ctrl),
+		mv:   mocks.NewMockeligibilityValidator(ctrl),
+		md:   mocks.NewMockballotDecoder(ctrl),
+		mvrf: mocks.NewMockvrfVerifier(ctrl),
 	}
 }
 
