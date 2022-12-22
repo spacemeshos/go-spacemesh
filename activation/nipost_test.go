@@ -424,12 +424,12 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 	challengeHash, err := challenge.Hash()
 	req.NoError(err)
 
-	go func() error {
+	var wg errgroup.Group
+	wg.Go(func() error {
 		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, deadline)
-		assert.NoError(t, err)
 		resultChan <- nipost
-		return nil
-	}()
+		return err
+	})
 
 	// Act
 	// Store proofMsg only from poet1
@@ -448,6 +448,7 @@ func TestNIPostBuilder_ManyPoETs_DeadlineReached(t *testing.T) {
 
 	// Verify
 	result := <-resultChan
+	req.NoError(wg.Wait())
 	req.Equal(challengeHash, result.Challenge)
 	proof, err := poetDb.GetProof(result.PostMetadata.Challenge)
 	req.NoError(err)
@@ -474,12 +475,12 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	resultChan := make(chan *types.NIPost)
 	deadline := time.Now().Add(time.Millisecond * 10)
 
-	go func() error {
+	var eg errgroup.Group
+	eg.Go(func() error {
 		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge, deadline)
-		req.NoError(err)
 		resultChan <- nipost
-		return nil
-	}()
+		return err
+	})
 
 	// Act
 	// Store proofs from both poets
@@ -507,6 +508,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	// Verify
 	result := <-resultChan
+	req.NoError(eg.Wait())
 	req.Equal(challengeHash, result.Challenge)
 	proof, err := poetDb.GetProof(result.PostMetadata.Challenge)
 	req.NoError(err)
