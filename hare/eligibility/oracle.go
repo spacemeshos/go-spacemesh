@@ -59,7 +59,7 @@ type cache interface {
 	Get(key any) (value any, ok bool)
 }
 
-type VRFVerifier interface {
+type vrfVerifier interface {
 	Verify(nodeID types.NodeID, msg, sig []byte) bool
 }
 
@@ -69,7 +69,7 @@ type Oracle struct {
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
-	vrfVerifier    VRFVerifier
+	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
 	vrfMsgCache    cache
 	activesCache   cache
@@ -113,7 +113,7 @@ func safeLayerRange(targetLayer types.LayerID, safetyParam, layersPerEpoch, epoc
 func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
-	vrfVerifier VRFVerifier,
+	vrfVerifier vrfVerifier,
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
