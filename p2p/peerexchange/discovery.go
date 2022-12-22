@@ -29,6 +29,7 @@ const (
 type Config struct {
 	Bootnodes            []string
 	DataDir              string
+	AdvertiseAddress     string             // Address to advertise to a peers.
 	CheckInterval        time.Duration      // Interval to check for dead|alive peers in the book.
 	CheckTimeout         time.Duration      // Timeout to connect while node check for dead|alive peers in the book.
 	CheckPeersNumber     int                // Number of peers to check for dead|alive peers in the book.
@@ -75,32 +76,59 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		}
 		bootnodes = append(bootnodes, info)
 	}
+
+	var advertise ma.Multiaddr
+	if len(config.AdvertiseAddress) > 0 {
+		var err error
+		advertise, err = ma.NewMultiaddr(config.AdvertiseAddress)
+		if err != nil {
+			return nil, fmt.Errorf("address to advertise (%s) is invalid: %w", config.AdvertiseAddress, err)
+		}
+		for _, proto := range advertise.Protocols() {
+			if proto.Code == ma.P_P2P {
+				return nil, fmt.Errorf("address to advertise (%s) includes p2p identity", advertise.String())
+			}
+		}
+	} else {
+		var err error
+		advertise, err = ma.NewComponent("tcp", strconv.Itoa(int(portFromHost(logger, h))))
+		if err != nil {
+			return nil, fmt.Errorf("create tcp multiaddr %w", err)
+		}
+	}
 	best, err := bestHostAddress(h)
 	if err != nil {
 		return nil, err
 	}
 	d.book.AddAddresses(bootnodes, best)
 
-	protocol := newPeerExchange(h, d.book, portFromHost(logger, h), logger, config.PeerExchange)
+	protocol := newPeerExchange(h, d.book, advertise, logger, config.PeerExchange)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
 	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to eventbus: %w", err)
 	}
-	d.eg.Go(func() error {
-		defer sub.Close()
-		for {
-			select {
-			case <-sub.Out():
-				port := portFromHost(logger, h)
-				if port != 0 {
-					protocol.UpdateExternalPort(port)
+	if len(config.AdvertiseAddress) == 0 {
+		d.eg.Go(func() error {
+			defer sub.Close()
+			for {
+				select {
+				case <-sub.Out():
+					port := portFromHost(logger, h)
+					if port != 0 {
+						advertise, err := ma.NewComponent("tcp", strconv.Itoa(int(portFromHost(logger, h))))
+						if err != nil {
+							logger.With().Error("failed to create tcp multiaddr", log.Err(err))
+						} else {
+							protocol.UpdateAdvertisedAddress(advertise)
+						}
+					}
+				case <-ctx.Done():
+					return ctx.Err()
 				}
-			case <-ctx.Done():
-				return ctx.Err()
 			}
-		}
-	})
+		})
+	}
 	d.eg.Go(func() error {
 		d.CheckBook(ctx)
 		return ctx.Err()
@@ -119,9 +147,9 @@ func (d *Discovery) Bootstrap(ctx context.Context) error {
 	return d.crawl.Bootstrap(ctx)
 }
 
-// ExternalPort returns currently configured external port.
-func (d *Discovery) ExternalPort() uint16 {
-	return d.crawl.disc.ExternalPort()
+// AdvertisedAddress returns advertised address.
+func (d *Discovery) AdvertisedAddress() ma.Multiaddr {
+	return d.crawl.disc.AdvertisedAddress()
 }
 
 var errNotFound = errors.New("not found")
