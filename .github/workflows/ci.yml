@@ -325,7 +325,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
-          level: debug
+          level: info
           clusters: 4
         run: make -C systest run test_name=.
 
@@ -338,7 +338,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m
-          level: debug
+          level: info
           clusters: 4
         run: make -C systest run test_name=.
 
