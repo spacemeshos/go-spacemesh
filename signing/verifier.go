@@ -1,6 +1,10 @@
 package signing
 
-import "github.com/spacemeshos/ed25519"
+import (
+	"github.com/spacemeshos/ed25519"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 // VerifierOptionFunc to modify verifier.
 type VerifierOptionFunc func(*PubKeyExtractor)
@@ -27,13 +31,24 @@ func NewPubKeyExtractor(opts ...VerifierOptionFunc) *PubKeyExtractor {
 }
 
 // Extract public key from signature.
-func (e PubKeyExtractor) Extract(msg, sig []byte) (*PublicKey, error) {
-	if e.prefix != nil {
-		msg = append(e.prefix, msg...)
-	}
+func (e PubKeyExtractor) Extract(m, sig []byte) (*PublicKey, error) {
+	msg := make([]byte, len(m)+len(e.prefix))
+	copy(msg, e.prefix)
+	copy(msg[len(e.prefix):], m)
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
 		return nil, err
 	}
 	return &PublicKey{PublicKey: pub}, nil
+}
+
+func (e PubKeyExtractor) ExtractNodeID(m, sig []byte) (types.NodeID, error) {
+	msg := make([]byte, len(m)+len(e.prefix))
+	copy(msg, e.prefix)
+	copy(msg[len(e.prefix):], m)
+	pub, err := ed25519.ExtractPublicKey(msg, sig)
+	if err != nil {
+		return *types.EmptyNodeID, err
+	}
+	return types.BytesToNodeID(pub), nil
 }

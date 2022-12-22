@@ -15,7 +15,10 @@ func BytesToNodeID(buf []byte) (id NodeID) {
 }
 
 // ExtractNodeIDFromSig extracts the NodeID from a signature.
-func ExtractNodeIDFromSig(msg, sig []byte) (NodeID, error) {
+//
+// TODO(mafa): this is a hack because the common/types package is not able to import the signing package.
+// The proper fix for this would be to move code that calls this function out of the common/types package.
+var ExtractNodeIDFromSig = func(msg, sig []byte) (NodeID, error) {
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
 		return NodeID{}, err

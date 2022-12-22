@@ -523,7 +523,10 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	app.keyExtractor = signing.NewPubKeyExtractor()
+	app.keyExtractor = signing.NewPubKeyExtractor(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
+	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
 	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
