@@ -59,7 +59,7 @@ func RandomNodeID() NodeID {
 	b := make([]byte, NodeIDSize)
 	_, err := rand.Read(b)
 	if err != nil {
-		return *EmptyNodeID
+		return EmptyNodeID
 	}
 	return NodeID(CalcHash32(b))
 }
