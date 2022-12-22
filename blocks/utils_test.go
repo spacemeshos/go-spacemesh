@@ -72,4 +72,17 @@ func Test_getBlockTXs(t *testing.T) {
 	got2, err = getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, gasLimit)
 	require.NoError(t, err)
 	require.Equal(t, got, got2)
+
+	// all txs are applied
+	for _, mtx := range mtxs {
+		mtx.LayerID = types.NewLayerID(11)
+	}
+	got, err = getBlockTXs(logtest.New(t), &proposalMetadata{mtxs: mtxs}, blockSeed, 0)
+	require.NoError(t, err)
+	require.Empty(t, got)
+
+	// empty block
+	got, err = getBlockTXs(logtest.New(t), &proposalMetadata{}, blockSeed, 0)
+	require.NoError(t, err)
+	require.Empty(t, got)
 }

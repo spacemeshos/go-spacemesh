@@ -289,7 +289,7 @@ func (msh *Mesh) processValidityUpdates(ctx context.Context, logger log.Log, new
 		revertTo := minChanged.Sub(1)
 		logger := logger.WithFields(log.Stringer("revert_to", revertTo))
 		logger.Info("reverting state")
-		if err := msh.revertState(ctx, revertTo); err != nil {
+		if err := msh.revertState(ctx, logger, revertTo); err != nil {
 			return fmt.Errorf("revert state to %v: %w", revertTo, err)
 		}
 		msh.setLatestLayerInState(revertTo)
@@ -331,16 +331,24 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	defer msh.mu.Unlock()
 
 	logger.Info("processing layer")
+	var err error
+	defer func() {
+		if err != nil {
+			logger.With().Error("failed to process layer", log.Err(err))
+		} else {
+			logger.Info("successfully processed layer")
+		}
+	}()
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
-	if err := msh.setProcessedLayer(logger, layerID); err != nil {
+	if err = msh.setProcessedLayer(logger, layerID); err != nil {
 		return err
 	}
 
 	newVerified, updated := msh.trtl.Updates()
 	logger = logger.WithFields(log.Stringer("verified", newVerified))
-	if err := msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
+	if err = msh.processValidityUpdates(ctx, logger, newVerified, updated); err != nil {
 		return err
 	}
 
@@ -352,7 +360,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	if !to.Before(from) {
-		if err := msh.pushLayersToState(ctx, logger, from, to, newVerified); err != nil {
+		if err = msh.pushLayersToState(ctx, logger, from, to, newVerified); err != nil {
 			return err
 		}
 	}
@@ -530,13 +538,14 @@ func (msh *Mesh) persistState(ctx context.Context, logger log.Log, lid types.Lay
 // revertState reverts the conservative state / vm and updates mesh's internal state.
 // ideally everything happens here should be atomic.
 // see https://github.com/spacemeshos/go-spacemesh/issues/3333
-func (msh *Mesh) revertState(ctx context.Context, revertTo types.LayerID) error {
+func (msh *Mesh) revertState(ctx context.Context, logger log.Log, revertTo types.LayerID) error {
 	if err := msh.executor.Revert(ctx, revertTo); err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
 	if err := layers.UnsetAppliedFrom(msh.cdb, revertTo.Add(1)); err != nil {
 		return fmt.Errorf("unset applied layer %v: %w", revertTo.Add(1), err)
 	}
+	logger.Info("successfully reverted state")
 	return nil
 }
 

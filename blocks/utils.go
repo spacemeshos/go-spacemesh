@@ -54,7 +54,7 @@ func getProposalMetadata(
 		md = &proposalMetadata{
 			lid:       lid,
 			proposals: proposals,
-			mtxs:      make([]*types.MeshTransaction, 0, len(proposals)*cfg.NumTXsPerProposal),
+			mtxs:      []*types.MeshTransaction{},
 		}
 		seen       = make(map[types.TransactionID]struct{})
 		meshHashes = make(map[types.Hash32]*meshState)
@@ -130,6 +130,10 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte, gasLim
 		return nil, fmt.Errorf("build txs for block: %w", err)
 	}
 	byAddrAndNonce := txCache.GetMempool(logger)
+	if len(byAddrAndNonce) == 0 {
+		logger.With().Warning("no feasible txs for block")
+		return nil, nil
+	}
 	candidates := make([]*txs.NanoTX, 0, len(pmd.mtxs))
 	byTid := make(map[types.TransactionID]*txs.NanoTX)
 	for _, acctTXs := range byAddrAndNonce {
@@ -138,11 +142,6 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte, gasLim
 			byTid[ntx.ID] = ntx
 		}
 	}
-	if len(candidates) == 0 {
-		logger.With().Warning("no feasible txs for block")
-		return nil, nil
-	}
-
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID.Compare(candidates[j].ID) })
 	// initialize a Mersenne Twister with the block seed and use it as a source of randomness for
 	// a Fisher-Yates shuffle of the sorted transaction IDs.
@@ -157,9 +156,6 @@ func getBlockTXs(logger log.Log, pmd *proposalMetadata, blockSeed []byte, gasLim
 }
 
 func prune(logger log.Log, tids []types.TransactionID, byTid map[types.TransactionID]*txs.NanoTX, gasLimit uint64) []types.TransactionID {
-	if len(tids) == 0 {
-		return nil
-	}
 	var (
 		gasRemaining = gasLimit
 		idx          int

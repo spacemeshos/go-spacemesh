@@ -46,7 +46,6 @@ type Config struct {
 	LayersPerEpoch     uint32
 	GenBlockInterval   time.Duration
 	BlockGasLimit      uint64
-	NumTXsPerProposal  int
 	OptFilterThreshold int
 }
 
@@ -56,7 +55,6 @@ func defaultConfig() Config {
 		LayersPerEpoch:     3,
 		GenBlockInterval:   time.Second,
 		BlockGasLimit:      math.MaxUint64,
-		NumTXsPerProposal:  100,
 		OptFilterThreshold: 90,
 	}
 }
@@ -210,11 +208,13 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 			return err
 		}
 
-		block, executed, err = g.generateBlock(ctx, out.Layer, props)
+		block, executed, err = g.generateBlock(ctx, logger, out.Layer, props)
 		if err != nil {
+			logger.With().Error("failed to generate block", log.Err(err))
 			failGenCnt.Inc()
 			return err
 		} else if err = g.msh.AddBlockWithTXs(ctx, block); err != nil {
+			logger.With().Error("failed to add block", log.Err(err))
 			failErrCnt.Inc()
 			return err
 		} else {
@@ -240,15 +240,13 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) error {
 	return nil
 }
 
-// generateBlock combined the transactions in the proposals and put them in a stable order.
+// generateBlock combines the transactions in the proposals and put them in a stable order.
 // if optimistic filtering is ON, it also executes the transactions in situ.
 // else, prune the transactions up to block gas limit allows.
-func (g *Generator) generateBlock(ctx context.Context, lid types.LayerID, proposals []*types.Proposal) (*types.Block, bool, error) {
-	logger := g.logger.WithContext(ctx).WithName("block").WithFields(lid)
+func (g *Generator) generateBlock(ctx context.Context, logger log.Log, lid types.LayerID, proposals []*types.Proposal) (*types.Block, bool, error) {
 	md, err := getProposalMetadata(logger, g.cdb, g.cfg, lid, proposals)
 	if err != nil {
-		logger.With().Error("failed to collect proposal metadata", log.Err(err))
-		return nil, false, err
+		return nil, false, fmt.Errorf("collect proposal metadata: %w", err)
 	}
 	if md.optFilter {
 		return g.genBlockOptimistic(ctx, logger, md)
@@ -271,6 +269,7 @@ func (g *Generator) generateBlock(ctx context.Context, lid types.LayerID, propos
 		},
 	}
 	b.Initialize()
+	logger.With().Info("block generated", log.Inline(b))
 	return b, false, nil
 }
 
@@ -291,5 +290,6 @@ func (g *Generator) genBlockOptimistic(ctx context.Context, logger log.Log, md *
 	if err != nil {
 		return nil, false, fmt.Errorf("execute in situ: %w", err)
 	}
+	logger.With().Info("block generated and executed", log.Inline(block))
 	return block, true, nil
 }

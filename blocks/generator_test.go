@@ -34,8 +34,9 @@ import (
 )
 
 const (
-	numUnit    = 12
-	defaultGas = 100
+	numUnit        = 12
+	defaultGas     = 100
+	baseTickHeight = 3
 )
 
 func testConfig() Config {
@@ -44,7 +45,6 @@ func testConfig() Config {
 		LayersPerEpoch:     3,
 		GenBlockInterval:   10 * time.Millisecond,
 		BlockGasLimit:      math.MaxUint64,
-		NumTXsPerProposal:  100,
 		OptFilterThreshold: 90,
 	}
 }
@@ -112,7 +112,7 @@ func createAndSaveTxs(tb testing.TB, numOfTxs int, db sql.Executor) []types.Tran
 
 func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
 	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-		return atx.Verify(1, 1)
+		return atx.Verify(baseTickHeight, 1)
 	})
 }
 
@@ -312,7 +312,7 @@ func Test_processHareOutput(t *testing.T) {
 
 			var block *types.Block
 			if tc.optimistic {
-				tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).DoAndReturn(
+				tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
 						require.Len(t, tids, len(txIDs))
 						block = &types.Block{
@@ -399,7 +399,7 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 
 	t.Run("execute failed", func(t *testing.T) {
 		require.NoError(t, layers.SetHashes(tg.cdb, layerID.Sub(1), types.RandomHash(), meshHash))
-		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).DoAndReturn(
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
 				require.Len(t, tids, len(txIDs))
 				return nil, errUnknown
@@ -409,13 +409,13 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
 	t.Run("failed to add block", func(t *testing.T) {
-		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).Return(block, nil)
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(errUnknown)
 		require.ErrorIs(t, tg.processHareOutput(hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}), errUnknown)
 	})
 
 	t.Run("failure to register cert ignored", func(t *testing.T) {
-		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).Return(block, nil)
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(nil)
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).Return(errUnknown)
 		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).Return(nil)
@@ -424,7 +424,7 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 	})
 
 	t.Run("failure to certify ignored", func(t *testing.T) {
-		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).Return(block, nil)
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(nil)
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).Return(nil)
 		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).Return(errUnknown)
@@ -433,7 +433,7 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 	})
 
 	t.Run("mesh failed to process", func(t *testing.T) {
-		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).Return(block, nil)
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil)
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, block.ID()).Return(nil)
 		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, block.ID()).Return(nil)
@@ -442,7 +442,7 @@ func Test_processHareOutput_corner_cases(t *testing.T) {
 	})
 
 	t.Run("all good", func(t *testing.T) {
-		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(1), gomock.Any(), gomock.Any()).Return(block, nil)
+		tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
 		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil)
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, block.ID()).Return(nil)
 		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, block.ID()).Return(nil)
@@ -466,7 +466,7 @@ func Test_generateBlock_UnequalHeight(t *testing.T) {
 	})
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.cdb, layerID, types.Hash32{}, signers, activeSet, nil)
-	block, executed, err := tg.generateBlock(context.Background(), layerID, pList)
+	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, pList)
 	require.NoError(t, err)
 	require.False(t, executed)
 	require.Equal(t, max, block.TickHeight)
@@ -489,7 +489,7 @@ func Test_generateBlock_bad_state(t *testing.T) {
 
 	t.Run("tx missing", func(t *testing.T) {
 		p := createProposal(t, epochData, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{types.RandomTransactionID()}, 1)
-		block, executed, err := tg.generateBlock(context.Background(), layerID, []*types.Proposal{p})
+		block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, []*types.Proposal{p})
 		require.ErrorIs(t, err, errProposalTxMissing)
 		require.False(t, executed)
 		require.Nil(t, block)
@@ -501,7 +501,7 @@ func Test_generateBlock_bad_state(t *testing.T) {
 		}
 		require.NoError(t, transactions.Add(tg.cdb, &tx, time.Now()))
 		p := createProposal(t, epochData, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{tx.ID}, 1)
-		block, executed, err := tg.generateBlock(context.Background(), layerID, []*types.Proposal{p})
+		block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, []*types.Proposal{p})
 		require.ErrorIs(t, err, errProposalTxHdrMissing)
 		require.False(t, executed)
 		require.Nil(t, block)
@@ -523,7 +523,7 @@ func Test_generateBlock_EmptyProposals(t *testing.T) {
 		p := createProposal(t, epochData, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
 		plist = append(plist, p)
 	}
-	block, executed, err := tg.generateBlock(context.Background(), lid, plist)
+	block, executed, err := tg.generateBlock(context.Background(), tg.logger, lid, plist)
 	require.NoError(t, err)
 	require.False(t, executed)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -547,7 +547,7 @@ func Test_generateBlock_StableBlockID(t *testing.T) {
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
 	plist := createProposals(t, tg.cdb, layerID, types.Hash32{}, signers, activeSet, txIDs)
-	block, executed, err := tg.generateBlock(context.Background(), layerID, plist)
+	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.NoError(t, err)
 	require.False(t, executed)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -558,7 +558,7 @@ func Test_generateBlock_StableBlockID(t *testing.T) {
 	ordered := plist[numProposals/2 : numProposals]
 	ordered = append(ordered, plist[0:numProposals/2]...)
 	require.NotEqual(t, plist, ordered)
-	block2, executed, err := tg.generateBlock(context.Background(), layerID, ordered)
+	block2, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, ordered)
 	require.NoError(t, err)
 	require.False(t, executed)
 	require.Equal(t, block, block2)
@@ -581,7 +581,7 @@ func Test_generateBlock_SameCoinbase(t *testing.T) {
 	proposal1 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1)
 	proposal2 := createProposal(t, epochData, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
 	plist := []*types.Proposal{proposal1, proposal2}
-	block, executed, err := tg.generateBlock(context.Background(), layerID, plist)
+	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.NoError(t, err)
 	require.False(t, executed)
 	require.NotEqual(t, types.EmptyBlockID, block.ID())
@@ -608,7 +608,7 @@ func Test_generateBlock_EmptyATXID(t *testing.T) {
 	// set the last proposal ID to be empty
 	types.SortProposals(plist)
 	plist[numProposals-1].AtxID = *types.EmptyATXID
-	block, executed, err := tg.generateBlock(context.Background(), layerID, plist)
+	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.ErrorIs(t, err, errInvalidATXID)
 	require.False(t, executed)
 	require.Nil(t, block)
@@ -630,7 +630,7 @@ func Test_generateBlock_MultipleEligibilities(t *testing.T) {
 		createProposal(t, epochData, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
 	}
 
-	block, executed, err := tg.generateBlock(context.Background(), layerID, plist)
+	block, executed, err := tg.generateBlock(context.Background(), tg.logger, layerID, plist)
 	require.NoError(t, err)
 	require.False(t, executed)
 	require.Len(t, block.Rewards, len(plist))
