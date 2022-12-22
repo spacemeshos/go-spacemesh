@@ -582,15 +582,17 @@ func Test_CertifyIfEligible(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := []byte("not a fraud")
+
+	extractor, err := signing.NewPubKeyExtractor()
+	require.NoError(t, err)
+
 	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
 	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(defaultCnt, nil)
-
-	extractor := signing.NewPubKeyExtractor()
-
 	tc.mPub.EXPECT().Publish(gomock.Any(), pubsub.BlockCertify, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
+
 			nodeId, err := extractor.ExtractNodeID(msg.Bytes(), msg.Signature)
 			require.NoError(t, err)
 			require.Equal(t, tc.nodeID, nodeId)

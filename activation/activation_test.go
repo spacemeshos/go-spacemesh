@@ -1182,7 +1182,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
 
-	extractor := signing.NewPubKeyExtractor()
+	extractor, err := signing.NewPubKeyExtractor()
+	assert.NoError(t, err)
 
 	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Sig)
 	assert.NoError(t, err)
