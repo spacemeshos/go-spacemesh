@@ -364,18 +364,17 @@ func (c *Certifier) handleRawCertifyMsg(ctx context.Context, data []byte) error 
 
 func validate(ctx context.Context, logger log.Log, oracle hare.Rolacle, committeeSize int, msg types.CertifyMessage) error {
 	// extract public key from signature
-	pubkey, err := signing.ExtractPublicKey(msg.Bytes(), msg.Signature)
+	nodeId, err := types.ExtractNodeIDFromSig(msg.Bytes(), msg.Signature)
 	if err != nil {
 		return fmt.Errorf("%w: cert msg extract key: %v", errMalformedData, err.Error())
 	}
-	nid := types.BytesToNodeID(pubkey)
-	valid, err := oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, committeeSize, nid, msg.Proof, msg.EligibilityCnt)
+	valid, err := oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, committeeSize, nodeId, msg.Proof, msg.EligibilityCnt)
 	if err != nil {
 		logger.With().Warning("failed to validate cert msg", log.Err(err))
 		return err
 	}
 	if !valid {
-		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", nid))
+		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", nodeId))
 		return errInvalidCertMsg
 	}
 	return nil

@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"testing"
@@ -7,21 +7,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestBallotIDUnaffectedByVotes(t *testing.T) {
-	inner := InnerBallot{
-		LayerIndex: NewLayerID(1),
+	inner := types.InnerBallot{
+		LayerIndex: types.NewLayerID(1),
 	}
-	ballot1 := Ballot{
+	ballot1 := types.Ballot{
 		InnerBallot: inner,
 	}
-	ballot2 := Ballot{
+	ballot2 := types.Ballot{
 		InnerBallot: inner,
 	}
-	ballot1.Votes.Support = []Vote{{ID: BlockID{1}}}
-	ballot1.Votes.Support = []Vote{{ID: BlockID{2}}}
+	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{1}}}
+	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
 	signer := signing.NewEdSigner()
 	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
 	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
@@ -33,42 +34,42 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 }
 
 func TestBallot_IDSize(t *testing.T) {
-	var id BallotID
-	assert.Len(t, id.Bytes(), BallotIDSize)
+	var id types.BallotID
+	assert.Len(t, id.Bytes(), types.BallotIDSize)
 }
 
 func TestBallot_Initialize(t *testing.T) {
-	b := Ballot{
-		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			RefBallot:  RandomBallotID(),
-			LayerIndex: NewLayerID(10),
+	b := types.Ballot{
+		InnerBallot: types.InnerBallot{
+			AtxID:      types.RandomATXID(),
+			RefBallot:  types.RandomBallotID(),
+			LayerIndex: types.NewLayerID(10),
 		},
-		Votes: Votes{
-			Base:    RandomBallotID(),
-			Against: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
+		Votes: types.Votes{
+			Base:    types.RandomBallotID(),
+			Against: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
 		},
 	}
 	signer := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.SignedBytes())
 	assert.NoError(t, b.Initialize())
-	assert.NotEqual(t, EmptyBallotID, b.ID())
-	assert.Equal(t, signer.PublicKey(), b.SmesherID())
+	assert.NotEqual(t, types.EmptyBallotID, b.ID())
+	assert.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
 
 	err := b.Initialize()
 	assert.EqualError(t, err, "ballot already initialized")
 }
 
 func TestBallot_Initialize_BadSignature(t *testing.T) {
-	b := Ballot{
-		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			RefBallot:  RandomBallotID(),
-			LayerIndex: NewLayerID(10),
+	b := types.Ballot{
+		InnerBallot: types.InnerBallot{
+			AtxID:      types.RandomATXID(),
+			RefBallot:  types.RandomBallotID(),
+			LayerIndex: types.NewLayerID(10),
 		},
-		Votes: Votes{
-			Base:    RandomBallotID(),
-			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
+		Votes: types.Votes{
+			Base:    types.RandomBallotID(),
+			Support: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
 		},
 	}
 	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())[1:]
@@ -77,49 +78,45 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 }
 
 func FuzzBallotConsistency(f *testing.F) {
-	tester.FuzzConsistency[Ballot](f)
+	tester.FuzzConsistency[types.Ballot](f)
 }
 
 func FuzzBallotSafety(f *testing.F) {
-	tester.FuzzSafety[Ballot](f)
+	tester.FuzzSafety[types.Ballot](f)
 }
 
 func FuzzInnerBallotConsistency(f *testing.F) {
-	tester.FuzzConsistency[InnerBallot](f)
+	tester.FuzzConsistency[types.InnerBallot](f)
 }
 
 func FuzzInnerBallotSafety(f *testing.F) {
-	tester.FuzzSafety[InnerBallot](f)
+	tester.FuzzSafety[types.InnerBallot](f)
 }
 
 func FuzzVotesConsistency(f *testing.F) {
-	tester.FuzzConsistency[Votes](f)
+	tester.FuzzConsistency[types.Votes](f)
 }
 
 func FuzzVotesSafety(f *testing.F) {
-	tester.FuzzSafety[Votes](f)
+	tester.FuzzSafety[types.Votes](f)
 }
 
 func FuzzEpochDataConsistency(f *testing.F) {
-	tester.FuzzConsistency[EpochData](f)
+	tester.FuzzConsistency[types.EpochData](f)
 }
 
 func FuzzEpochDataSafety(f *testing.F) {
-	tester.FuzzSafety[EpochData](f)
+	tester.FuzzSafety[types.EpochData](f)
 }
 
 func FuzzVotingEligibilityProofConsistency(f *testing.F) {
-	tester.FuzzConsistency[VotingEligibilityProof](f)
+	tester.FuzzConsistency[types.VotingEligibilityProof](f)
 }
 
 func FuzzVotingEligibilityProofSafety(f *testing.F) {
-	tester.FuzzSafety[VotingEligibilityProof](f)
+	tester.FuzzSafety[types.VotingEligibilityProof](f)
 }
 
 func TestBallotEncoding(t *testing.T) {
-	t.Run("layer is first", func(t *testing.T) {
-		ballot := Ballot{}
-		lid := layerTester(t, &ballot)
-		require.Equal(t, ballot.LayerIndex, lid)
-	})
+	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.LayerIndex })
 }

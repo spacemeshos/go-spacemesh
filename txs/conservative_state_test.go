@@ -73,6 +73,29 @@ func (t *testConState) handler() *TxHandler {
 	return NewTxHandler(t, t.logger)
 }
 
+func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.Proposal {
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					AtxID:      types.RandomATXID(),
+					LayerIndex: layerID,
+					EpochData: &types.EpochData{
+						ActiveSet: types.RandomActiveSet(10),
+						Beacon:    types.RandomBeacon(),
+					},
+				},
+			},
+			TxIDs: txs,
+		},
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
+	p.Signature = signer.Sign(p.Bytes())
+	p.Initialize()
+	return p
+}
+
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
 	mvm := mocks.NewMockvmState(ctrl)
@@ -122,7 +145,7 @@ func createProposalsDupTXs(lid types.LayerID, hash types.Hash32, step, numPer, n
 		if end >= total {
 			end = total
 		}
-		p := types.GenLayerProposal(lid, tids[offset:end])
+		p := genLayerProposal(lid, tids[offset:end])
 		p.MeshHash = hash
 		proposals = append(proposals, p)
 	}
@@ -264,7 +287,7 @@ func TestSelectBlockTXs_NodeHasDifferentMesh(t *testing.T) {
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := types.GenLayerProposal(lid, nil)
+		p := genLayerProposal(lid, nil)
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}
@@ -281,7 +304,7 @@ func TestSelectBlockTXs_OwnNodeMissingMeshHash(t *testing.T) {
 	lid := types.NewLayerID(1333)
 	proposals := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := types.GenLayerProposal(lid, nil)
+		p := genLayerProposal(lid, nil)
 		p.MeshHash = meshHash
 		proposals = append(proposals, p)
 	}

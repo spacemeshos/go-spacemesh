@@ -1,6 +1,6 @@
 package signing
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go Signer,Verifier,VerifyExtractor
+//go:generate mockgen -package=signing -destination=./mocks.go -source=./interfaces.go
 
 // Signer is a common interface for signature generation.
 type Signer interface {
