@@ -183,7 +183,7 @@ type Service interface {
 	Close()
 }
 
-// TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
+// TickProvider is an interface to a global system clock that releases ticks on each layer.
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timesync.LayerTimer)
@@ -297,6 +297,7 @@ type App struct {
 	atxBuilder       *activation.Builder
 	atxHandler       *activation.Handler
 	edSgn            *signing.EdSigner
+	keyExtractor     *signing.PubKeyExtractor
 	beaconProtocol   *beacon.ProtocolDriver
 	log              log.Log
 	svm              *vm.VM
@@ -353,8 +354,6 @@ func (app *App) Initialize() (err error) {
 			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
 		}
 	}
-	signing.DefaultVerifier = signing.NewEDVerifier(
-		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
@@ -522,7 +521,12 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, vrfSigner, cdb, clock,
+	app.keyExtractor = signing.NewPubKeyExtractor(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
+	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
+
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -566,7 +570,7 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerifier{}, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
@@ -800,7 +804,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
-		verifier := activation.NewChallengeVerifier(&app.atxDB, signing.DefaultVerifier, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
+		verifier := activation.NewChallengeVerifier(&app.atxDB, app.keyExtractor, app.Config.POST, types.ATXID(app.Config.Genesis.GenesisID().ToHash32()), app.Config.LayersPerEpoch)
 		registerService(grpcserver.NewGatewayService(verifier))
 	}
 	if apiConf.StartGlobalStateService {
@@ -937,12 +941,12 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner(signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
+		edSgn := signing.NewEdSigner(signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
 		err := os.MkdirAll(filepath.Dir(filename), 0o700)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
-		err = os.WriteFile(filename, edSgn.ToBuffer(), 0o600)
+		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
@@ -950,7 +954,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSignerFromBuffer(data, signing.WithSignerPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	edSgn, err := signing.NewEdSignerFromKey(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}

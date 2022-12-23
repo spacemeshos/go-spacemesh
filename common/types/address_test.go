@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func init() {
@@ -102,7 +101,7 @@ func TestAddress_SetBytes(t *testing.T) {
 func TestAddress_GenerateAddress(t *testing.T) {
 	t.Parallel()
 	t.Run("generate from public key", func(t *testing.T) {
-		srcAddr := types.GenerateAddress(generatePublicKey(t))
+		srcAddr := types.GenerateAddress(RandomBytes(32))
 		newAddr, err := types.StringToAddress(srcAddr.String())
 		require.NoError(t, err)
 		checkAddressesEqual(t, srcAddr, newAddr)
@@ -128,13 +127,6 @@ func checkAddressesEqual(t *testing.T, addrA, addrB types.Address) {
 	require.Equal(t, addrA.Bytes(), addrB.Bytes())
 	require.Equal(t, addrA.String(), addrB.String())
 	require.Equal(t, addrA.IsEmpty(), addrB.IsEmpty())
-}
-
-func generatePublicKey(t *testing.T) []byte {
-	buff := signing.NewEdSigner().ToBuffer()
-	acc1Signer, err := signing.NewEdSignerFromBuffer(buff)
-	require.NoError(t, err)
-	return acc1Signer.PublicKey().Bytes()
 }
 
 // RandomBytes generates random data in bytes for testing.

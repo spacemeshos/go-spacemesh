@@ -97,7 +97,7 @@ func (m *Msg) String() string {
 func (m *Msg) Bytes() []byte {
 	buf, err := codec.Encode(&m.Message)
 	if err != nil {
-		log.Panic("could not marshal innermsg before send")
+		log.Panic("could not marshal inner msg before send")
 	}
 	return buf
 }
@@ -109,7 +109,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
-	pubKey, err := signing.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
+	nodeId, err := types.ExtractNodeIDFromSig(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
 		logger.With().Error("newmsg construction failed: could not extract public key",
 			log.Err(err),
@@ -118,12 +118,10 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	}
 
 	// query if identity is active
-	pub := signing.NewPublicKey(pubKey)
-	nid := types.BytesToNodeID(pub.Bytes())
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nid, hareMsg.InnerMsg.InstanceID)
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, nodeId, hareMsg.InnerMsg.InstanceID)
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
-			log.String("sender_id", pub.ShortString()),
+			log.String("sender_id", nodeId.ShortString()),
 			log.Err(err),
 			hareMsg.InnerMsg.InstanceID,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
@@ -133,13 +131,13 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg Message, querier stateQ
 	// check query result
 	if !res {
 		logger.With().Error("identity is not active",
-			log.String("sender_id", pub.ShortString()),
+			log.String("sender_id", nodeId.ShortString()),
 			hareMsg.InnerMsg.InstanceID,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
-	msg := &Msg{Message: hareMsg, PubKey: pub}
+	msg := &Msg{Message: hareMsg, PubKey: signing.NewPublicKey(nodeId.Bytes())}
 
 	// add reqID from context
 	if reqID, ok := log.ExtractRequestID(ctx); ok {

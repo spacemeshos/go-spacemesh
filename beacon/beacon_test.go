@@ -57,7 +57,6 @@ func coinValueMock(tb testing.TB, value bool) coin {
 func newPublisher(tb testing.TB) pubsub.Publisher {
 	tb.Helper()
 	ctrl := gomock.NewController(tb)
-	defer ctrl.Finish()
 
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().
@@ -85,12 +84,13 @@ func newTestDriver(t *testing.T, cfg Config, p pubsub.Publisher) *testProtocolDr
 		mSync:  smocks.NewMockSyncStateProvider(ctrl),
 	}
 	edSgn := signing.NewEdSigner()
+	extractor := signing.NewPubKeyExtractor()
 	edPubkey := edSgn.PublicKey()
 	vrfSigner := edSgn.VRFSigner()
 	minerID := types.BytesToNodeID(edPubkey.Bytes())
 	lg := logtest.New(t).WithName(minerID.ShortString())
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, vrfSigner, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(t, true)))
@@ -216,7 +216,7 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 	start := types.EpochID(2)
 	end := start + numEpochsToKeep + 10
 	for eid := start; eid <= end; eid++ {
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 			LayerIndex:        start.FirstLayer(),
 			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 		})
@@ -270,12 +270,12 @@ func TestBeaconWithMetrics(t *testing.T) {
 			require.NoError(t, tpd.onNewEpoch(context.TODO(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 			LayerIndex:        thisEpoch.FirstLayer(),
 			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 		})
 		tpd.recordBeacon(thisEpoch, &b, beacon1, fixed.New64(1))
-		b = types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+		b = types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 			LayerIndex:        thisEpoch.FirstLayer(),
 			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 		})
@@ -410,7 +410,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
-		b := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+		b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 			LayerIndex:        e.FirstLayer(),
 			EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 		})
@@ -425,7 +425,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch = epoch + numEpochsToKeep
 	err := pd.setBeacon(epoch, types.RandomBeacon())
 	require.NoError(t, err)
-	b := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+	b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 		LayerIndex:        epoch.FirstLayer(),
 		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 	})
@@ -515,7 +515,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			epoch := types.EpochID(3)
 			for beacon, weights := range tc.beaconBallots {
 				for _, w := range weights {
-					b := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+					b := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 						LayerIndex:        epoch.FirstLayer(),
 						EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 					})
@@ -545,7 +545,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 		LayerIndex:        epoch.FirstLayer(),
 		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 	})
@@ -556,7 +556,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
 
-	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 		LayerIndex:        epoch.FirstLayer(),
 		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 	})
@@ -586,12 +586,12 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+	b1 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 		LayerIndex:        epoch.FirstLayer(),
 		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 	})
 	pd.ReportBeaconFromBallot(epoch, &b1, beaconFromBallots, fixed.New64(1))
-	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, nil, types.InnerBallot{
+	b2 := types.NewExistingBallot(types.RandomBallotID(), nil, types.EmptyNodeID, types.InnerBallot{
 		LayerIndex:        epoch.FirstLayer(),
 		EligibilityProofs: []types.VotingEligibilityProof{{J: 1}},
 	})
@@ -927,29 +927,15 @@ func TestBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
 	signer := signing.NewEdSigner()
-	verifier := signing.NewEDVerifier()
+	extractor := signing.NewPubKeyExtractor()
 
 	message := []byte{1, 2, 3, 4}
 
 	signature := signer.Sign(message)
-	extractedPK, err := verifier.Extract(message, signature)
+	extractedPK, err := extractor.Extract(message, signature)
 	r.NoError(err)
 
 	r.Equal(signer.PublicKey().String(), extractedPK.String())
-}
-
-func TestBeacon_signAndVerifyVRF(t *testing.T) {
-	r := require.New(t)
-
-	signer := signing.NewEdSigner().VRFSigner()
-
-	verifier := signing.VRFVerifier{}
-
-	message := []byte{1, 2, 3, 4}
-
-	signature := signer.Sign(message)
-	ok := verifier.Verify(signer.PublicKey(), message, signature)
-	r.True(ok)
 }
 
 func TestBeacon_calcBeacon(t *testing.T) {

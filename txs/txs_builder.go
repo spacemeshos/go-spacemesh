@@ -161,9 +161,9 @@ func orderTXs(logger log.Log, pmd *proposalMetadata, realState stateFunc, blockS
 			mtx.LayerID = mempoolLayer // for cache.GetMempool
 			principal := mtx.Principal
 			if _, ok := minNonceByAddr[principal]; !ok {
-				minNonceByAddr[principal] = mtx.Nonce.Counter
-			} else if minNonceByAddr[principal] > mtx.Nonce.Counter {
-				minNonceByAddr[principal] = mtx.Nonce.Counter
+				minNonceByAddr[principal] = mtx.Nonce
+			} else if minNonceByAddr[principal] > mtx.Nonce {
+				minNonceByAddr[principal] = mtx.Nonce
 			}
 		}
 		stateF = func(addr types.Address) (uint64, uint64) {
@@ -255,9 +255,9 @@ func shuffleWithNonceOrder(
 		toAdd := byAddrAndNonce[p][0]
 		result = append(result, toAdd.ID)
 		if _, ok := packed[p]; !ok {
-			packed[p] = []uint64{toAdd.Nonce.Counter, toAdd.Nonce.Counter}
+			packed[p] = []uint64{toAdd.Nonce, toAdd.Nonce}
 		} else {
-			packed[p][1] = toAdd.Nonce.Counter
+			packed[p][1] = toAdd.Nonce
 		}
 		if len(byAddrAndNonce[p]) == 1 {
 			delete(byAddrAndNonce, p)

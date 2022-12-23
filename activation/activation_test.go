@@ -78,13 +78,6 @@ func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := atx.CalcAndSetID(); err != nil {
-		return err
-	}
-	if err := atx.CalcAndSetNodeID(); err != nil {
-		return err
-	}
-
 	if atxDb, ok := n.atxHdlr.(*Handler); ok {
 		vAtx, err := atx.Verify(0, 1)
 		if err != nil {
@@ -102,10 +95,6 @@ func NewTestSigner() *TestSigner {
 // TODO(mafa): replace this mock with the generated mock from "github.com/spacemeshos/go-spacemesh/signing/mocks".
 type TestSigner struct {
 	*signing.EdSigner
-}
-
-func (ms *TestSigner) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.PublicKey().Bytes())
 }
 
 type NIPostBuilderMock struct {
@@ -795,7 +784,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
 	signer := signing.NewEdSigner()
-	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeId := signer.NodeID()
 
 	otherSigner := signing.NewEdSigner()
 
@@ -884,12 +873,10 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	net.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
-		r.NoError(atx.CalcAndSetID())
-		r.NoError(atx.CalcAndSetNodeID())
-		r.Equal(nodeId, atx.NodeID())
 
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
+		r.Equal(nodeId, vAtx.NodeID())
 
 		r.NoError(atxs.Add(cdb, vAtx, time.Now()))
 
@@ -918,7 +905,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.WithName("db"))
 
 	signer := signing.NewEdSigner()
-	nodeId := types.BytesToNodeID(signer.PublicKey().Bytes())
+	nodeId := signer.NodeID()
 
 	otherSigner := signing.NewEdSigner()
 
@@ -998,12 +985,10 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	net.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
 		atx, err := types.BytesToAtx(msg)
 		r.NoError(err)
-		r.NoError(atx.CalcAndSetID())
-		r.NoError(atx.CalcAndSetNodeID())
-		r.Equal(nodeId, atx.NodeID())
 
 		vAtx, err := atx.Verify(0, 1)
 		r.NoError(err)
+		r.Equal(nodeId, vAtx.NodeID())
 
 		r.NoError(atxs.Add(cdb, vAtx, time.Now()))
 
@@ -1184,9 +1169,11 @@ func TestBuilder_SignAtx(t *testing.T) {
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)
 
-	pubkey, err := signing.ExtractPublicKey(atxBytes, atx.Sig)
+	extractor := signing.NewPubKeyExtractor()
+
+	nodeId, err := extractor.ExtractNodeID(atxBytes, atx.Sig)
 	assert.NoError(t, err)
-	assert.Equal(t, sig.NodeID().Bytes(), []byte(pubkey))
+	assert.Equal(t, sig.NodeID(), nodeId)
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {
