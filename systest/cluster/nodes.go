@@ -405,13 +405,13 @@ func deployNode(ctx *testcontext.Context, name string, labels map[string]string,
 							WithRequests(
 								apiv1.ResourceList{
 									apiv1.ResourceCPU:    resource.MustParse("0.5"),
-									apiv1.ResourceMemory: resource.MustParse("200Mi"),
+									apiv1.ResourceMemory: resource.MustParse("500Mi"),
 								},
 							).
 							WithLimits(
 								apiv1.ResourceList{
-									apiv1.ResourceCPU:    resource.MustParse("2"),
-									apiv1.ResourceMemory: resource.MustParse("1Gi"),
+									apiv1.ResourceCPU:    resource.MustParse("0.5"),
+									apiv1.ResourceMemory: resource.MustParse("500Mi"),
 								},
 							),
 						).
