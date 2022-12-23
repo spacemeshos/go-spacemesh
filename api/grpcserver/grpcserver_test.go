@@ -102,8 +102,15 @@ var (
 	block2      = genLayerBlock(types.LayerID{}, nil)
 	block3      = genLayerBlock(types.LayerID{}, nil)
 	meshAPI     = &MeshAPIMock{}
-	conStateAPI *ConStateAPIMock
-	stateRoot   = types.HexToHash32("11111")
+	conStateAPI = &ConStateAPIMock{
+		returnTx:      make(map[types.TransactionID]*types.Transaction),
+		layerApplied:  make(map[types.TransactionID]*types.LayerID),
+		balances:      make(map[types.Address]*big.Int),
+		nonces:        make(map[types.Address]uint64),
+		poolByAddress: make(map[types.Address]types.TransactionID),
+		poolByTxId:    make(map[types.TransactionID]*types.Transaction),
+	}
+	stateRoot = types.HexToHash32("11111")
 )
 
 func genLayerBallot(layerID types.LayerID) *types.Ballot {
@@ -159,6 +166,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	addr1 = wallet.Address(signer1.PublicKey().Bytes())
+	addr2 = wallet.Address(signer2.PublicKey().Bytes())
+
 	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil, nil)
 	if err := activation.SignAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
@@ -186,29 +196,15 @@ func TestMain(m *testing.M) {
 	ballot1.AtxID = globalAtx.ID()
 	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 
-	addr1 = wallet.Address(signer1.PublicKey().Bytes())
-	addr2 = wallet.Address(signer2.PublicKey().Bytes())
-
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)
 
 	block1.TxIDs = []types.TransactionID{globalTx.ID, globalTx2.ID}
-	conStateAPI = &ConStateAPIMock{
-		returnTx: map[types.TransactionID]*types.Transaction{
-			globalTx.ID:  globalTx,
-			globalTx2.ID: globalTx2,
-		},
-		layerApplied: make(map[types.TransactionID]*types.LayerID),
-		balances: map[types.Address]*big.Int{
-			addr1: big.NewInt(int64(accountBalance)),
-			addr2: big.NewInt(int64(accountBalance)),
-		},
-		nonces: map[types.Address]uint64{
-			globalTx.Principal: uint64(accountCounter),
-		},
-		poolByAddress: make(map[types.Address]types.TransactionID),
-		poolByTxId:    make(map[types.TransactionID]*types.Transaction),
-	}
+	conStateAPI.returnTx[globalTx.ID] = globalTx
+	conStateAPI.returnTx[globalTx2.ID] = globalTx2
+	conStateAPI.balances[addr1] = big.NewInt(int64(accountBalance))
+	conStateAPI.balances[addr2] = big.NewInt(int64(accountBalance))
+	conStateAPI.nonces[globalTx.Principal] = uint64(accountCounter)
 
 	types.SetLayersPerEpoch(layersPerEpoch)
 
