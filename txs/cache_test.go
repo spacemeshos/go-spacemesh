@@ -739,7 +739,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	require.NoError(t, tc.cache.ApplyLayer(context.TODO(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 	checkNoTX(t, tc.cache, mtx0.ID)
 	checkTX(t, tc.cache, mtx1.ID, types.LayerID{}, types.EmptyBlockID)
-	checkProjection(t, tc.cache, ta.principal, mtx1.Nonce.Counter+1, 0)
+	checkProjection(t, tc.cache, ta.principal, mtx1.Nonce+1, 0)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx1}}
 	checkMempool(t, tc.cache, expectedMempool)
 	require.True(t, tc.MoreInDB(ta.principal))
@@ -753,7 +753,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	require.NoError(t, tc.cache.ApplyLayer(context.TODO(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
 	checkTX(t, tc.cache, mtx0.ID, types.LayerID{}, types.EmptyBlockID)
 	checkTX(t, tc.cache, mtx1.ID, types.LayerID{}, types.EmptyBlockID)
-	checkProjection(t, tc.cache, ta.principal, mtx1.Nonce.Counter+1, 0)
+	checkProjection(t, tc.cache, ta.principal, mtx1.Nonce+1, 0)
 	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: {mtx0, mtx1}}
 	checkMempool(t, tc.cache, expectedMempool)
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -1204,7 +1204,7 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 	appliedMTXs := make([]*types.MeshTransaction, 0, len(mtxsByAccount)*2)
 	allPendingMTXs := make([]*types.MeshTransaction, 0, len(mtxsByAccount)*10)
 	for principal, mtxs := range mtxsByAccount {
-		lastNonce := mtxs[0].Nonce.Counter
+		lastNonce := mtxs[0].Nonce
 		newBalance := accounts[principal].balance
 		newBalance -= mtxs[0].Spending()
 		applied := makeResults(lid, bid, mtxs[0].Transaction)
@@ -1213,7 +1213,7 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 		if len(mtxs) >= 2 {
 			applied = append(applied, makeResults(lid, bid, mtxs[1].Transaction)...)
 			appliedMTXs = append(appliedMTXs, mtxs[1])
-			lastNonce = mtxs[1].Nonce.Counter
+			lastNonce = mtxs[1].Nonce
 			newBalance -= mtxs[1].Spending()
 			allPendingMTXs = append(allPendingMTXs, mtxs[2:]...)
 		}
@@ -1259,7 +1259,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	allPendingMTXs := make([]*types.MeshTransaction, 0, len(mtxsByAccount)*10)
 	count := 0
 	for principal, mtxs := range mtxsByAccount {
-		lastNonce := mtxs[0].Nonce.Counter
+		lastNonce := mtxs[0].Nonce
 		newBalance := accounts[principal].balance - mtxs[0].Spending()
 
 		count++
@@ -1267,7 +1267,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 			addrs = append(addrs, principal)
 			allSkipped = append(allSkipped, mtxs[0].Transaction)
 			// effectively make all pending txs invalid
-			accounts[principal].nonce = mtxs[0].Nonce.Counter + uint64(len(mtxs))
+			accounts[principal].nonce = mtxs[0].Nonce + uint64(len(mtxs))
 		} else {
 			applied := makeResults(lid, bid, mtxs[0].Transaction)
 			allApplied = append(allApplied, applied...)
