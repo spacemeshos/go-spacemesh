@@ -1061,7 +1061,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner, err := app.edSgn.VRFSigner()
+	vrfSigner, err := app.edSgn.VRFSigner(signing.WithNonceFromDB(&app.atxDB))
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
 	}
