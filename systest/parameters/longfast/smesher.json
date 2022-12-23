@@ -6,7 +6,7 @@
     },
     "poet": {
         "phase-shift": "10m",
-        "cycle-gap": "10s",
+        "cycle-gap": "1m",
         "grace-period": "5s"
     },
     "tortoise": {
