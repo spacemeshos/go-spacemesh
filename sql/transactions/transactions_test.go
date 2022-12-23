@@ -62,8 +62,10 @@ func TestAddGetHas(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
-	signer1 := signing.NewEdSignerFromRand(rng)
-	signer2 := signing.NewEdSignerFromRand(rng)
+	signer1, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	txs := []*types.Transaction{
 		createTX(t, signer1, types.Address{1}, 1, 191, 1),
 		createTX(t, signer2, types.Address{2}, 1, 191, 1),
@@ -87,7 +89,7 @@ func TestAddGetHas(t *testing.T) {
 	}
 
 	tid := types.RandomTransactionID()
-	_, err := transactions.Get(db, tid)
+	_, err = transactions.Get(db, tid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	has, err := transactions.Has(db, tid)
@@ -132,7 +134,8 @@ func TestAddToProposal(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	require.NoError(t, transactions.Add(db, tx, time.Now()))
 
@@ -155,7 +158,8 @@ func TestAddToBlock(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	require.NoError(t, transactions.Add(db, tx, time.Now()))
 
@@ -179,7 +183,8 @@ func TestApply_AlreadyApplied(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(1001))
 	lid := types.NewLayerID(10)
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 	require.NoError(t, transactions.Add(db, tx, time.Now()))
 
@@ -215,7 +220,8 @@ func TestApplyAndUndoLayers(t *testing.T) {
 	numLayers := uint32(5)
 	applied := make([]types.TransactionID, 0, numLayers)
 	for lid := firstLayer; lid.Before(firstLayer.Add(numLayers)); lid = lid.Add(1) {
-		signer := signing.NewEdSignerFromRand(rng)
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+		require.NoError(t, err)
 		tx := createTX(t, signer, types.Address{1}, uint64(lid.Value), 191, 2)
 		require.NoError(t, transactions.Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
@@ -254,7 +260,8 @@ func TestGetBlob(t *testing.T) {
 	numTXs := 5
 	txs := make([]*types.Transaction, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSignerFromRand(rng)
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+		require.NoError(t, err)
 		tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 		require.NoError(t, transactions.Add(db, tx, time.Now()))
 		txs = append(txs, tx)
@@ -270,8 +277,10 @@ func TestGetByAddress(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
-	signer1 := signing.NewEdSignerFromRand(rng)
-	signer2 := signing.NewEdSignerFromRand(rng)
+	signer1, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
+	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	signer2Address := types.GenerateAddress(signer2.PublicKey().Bytes())
 	lid := types.NewLayerID(10)
 	txs := []*types.Transaction{
@@ -304,7 +313,8 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 	db := sql.InMemory()
 
 	rng := rand.New(rand.NewSource(1001))
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	numTXs := 13
 	// use math.MaxInt64+1 to validate nonce sqlite comparison in GetAcctPendingFromNonce
 	nonce := uint64(math.MaxInt64 + 1)
@@ -320,7 +330,8 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 
 	// create tx for different accounts
 	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSignerFromRand(rng)
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+		require.NoError(t, err)
 		tx := createTX(t, signer, types.Address{1}, 1, 191, 1)
 		require.NoError(t, transactions.Add(db, tx, received))
 	}
@@ -336,7 +347,8 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 func TestAppliedLayer(t *testing.T) {
 	db := sql.InMemory()
 	rng := rand.New(rand.NewSource(1001))
-	signer := signing.NewEdSignerFromRand(rng)
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+	require.NoError(t, err)
 	txs := []*types.Transaction{
 		createTX(t, signer, types.Address{1}, 1, 191, 1),
 		createTX(t, signer, types.Address{1}, 2, 191, 1),

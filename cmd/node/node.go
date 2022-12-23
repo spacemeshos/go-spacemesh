@@ -523,12 +523,21 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	app.keyExtractor = signing.NewPubKeyExtractor(
-		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	app.keyExtractor, err = signing.NewPubKeyExtractor(
+		signing.WithExtractorPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
+	if err != nil {
+		return fmt.Errorf("failed to create key extractor: %w", err)
+	}
+
 	types.ExtractNodeIDFromSig = app.keyExtractor.ExtractNodeID
 
-	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, cdb, clock,
+	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceFromDB(cdb))
+	if err != nil {
+		return fmt.Errorf("failed to create vrf verifier: %w", err)
+	}
+
+	beaconProtocol := beacon.New(nodeID, app.host, sgn, app.keyExtractor, vrfSigner, vrfVerifier, cdb, clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
@@ -572,7 +581,7 @@ func (app *App) initServices(ctx context.Context,
 
 	txHandler := txs.NewTxHandler(app.conState, app.addLogger(TxHandlerLogger, lg))
 
-	hOracle := eligibility.New(beaconProtocol, cdb, signing.VRFVerifier{}, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	hOracle := eligibility.New(beaconProtocol, cdb, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	app.certifier = blocks.NewCertifier(sqlDB, hOracle, nodeID, sgn, app.host, clock, beaconProtocol, trtl,
@@ -947,9 +956,13 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 		log.Info("Identity file not found. Creating new identity...")
 
-		edSgn := signing.NewEdSigner(signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
-		err := os.MkdirAll(filepath.Dir(filename), 0o700)
+		edSgn, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
 		if err != nil {
+			return nil, fmt.Errorf("failed to create identity: %w", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
 		err = os.WriteFile(filename, edSgn.PrivateKey(), 0o600)
@@ -960,7 +973,10 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
-	edSgn, err := signing.NewEdSignerFromKey(data, signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()))
+	edSgn, err := signing.NewEdSigner(
+		signing.WithPrivateKey(data),
+		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
@@ -1045,7 +1061,10 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	edPubkey := app.edSgn.PublicKey()
-	vrfSigner := app.edSgn.VRFSigner()
+	vrfSigner, err := app.edSgn.VRFSigner(signing.WithNonceFromDB(&app.atxDB))
+	if err != nil {
+		return fmt.Errorf("could not create vrf signer: %w", err)
+	}
 
 	nodeID := types.BytesToNodeID(edPubkey.Bytes())
 

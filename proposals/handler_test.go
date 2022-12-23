@@ -37,11 +37,12 @@ func genGoldenATXID() types.ATXID {
 }
 
 type mockSet struct {
-	mf  *smocks.MockFetcher
-	mbc *smocks.MockBeaconCollector
-	mm  *mocks.MockmeshProvider
-	mv  *mocks.MockeligibilityValidator
-	md  *mocks.MockballotDecoder
+	mf   *smocks.MockFetcher
+	mbc  *smocks.MockBeaconCollector
+	mm   *mocks.MockmeshProvider
+	mv   *mocks.MockeligibilityValidator
+	md   *mocks.MockballotDecoder
+	mvrf *mocks.MockvrfVerifier
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -58,11 +59,12 @@ type testHandler struct {
 func fullMockSet(tb testing.TB) *mockSet {
 	ctrl := gomock.NewController(tb)
 	return &mockSet{
-		mf:  smocks.NewMockFetcher(ctrl),
-		mbc: smocks.NewMockBeaconCollector(ctrl),
-		mm:  mocks.NewMockmeshProvider(ctrl),
-		mv:  mocks.NewMockeligibilityValidator(ctrl),
-		md:  mocks.NewMockballotDecoder(ctrl),
+		mf:   smocks.NewMockFetcher(ctrl),
+		mbc:  smocks.NewMockBeaconCollector(ctrl),
+		mm:   mocks.NewMockmeshProvider(ctrl),
+		mv:   mocks.NewMockeligibilityValidator(ctrl),
+		md:   mocks.NewMockballotDecoder(ctrl),
+		mvrf: mocks.NewMockvrfVerifier(ctrl),
 	}
 }
 
@@ -157,7 +159,8 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 			unwrap(p)
 		}
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
@@ -180,10 +183,12 @@ func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {
 	return signAndInit(t, b)
 }
 
-func signAndInit(t *testing.T, b *types.Ballot) *types.Ballot {
-	t.Helper()
-	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())
-	require.NoError(t, b.Initialize())
+func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
+	tb.Helper()
+	sig, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+	b.Signature = sig.Sign(b.SignedBytes())
+	require.NoError(tb, b.Initialize())
 	return b
 }
 

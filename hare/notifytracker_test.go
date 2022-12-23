@@ -26,26 +26,33 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	verifier := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	assert.NoError(t, err)
 
 	tracker := newNotifyTracker(lowDefaultSize)
-	exist := tracker.OnNotify(BuildNotifyMsg(verifier, s))
+	exist := tracker.OnNotify(BuildNotifyMsg(signer, s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	assert.False(t, exist)
-	exist = tracker.OnNotify(BuildNotifyMsg(verifier, s))
+	exist = tracker.OnNotify(BuildNotifyMsg(signer, s))
 	assert.True(t, exist)
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	s.Add(value3)
-	tracker.OnNotify(BuildNotifyMsg(verifier, s))
+	tracker.OnNotify(BuildNotifyMsg(signer, s))
 	assert.Equal(t, 0, tracker.NotificationsCount(s))
 }
 
 func TestNotifyTracker_NotificationsCount(t *testing.T) {
+	signer1, err := signing.NewEdSigner()
+	assert.NoError(t, err)
+
+	signer2, err := signing.NewEdSigner()
+	assert.NoError(t, err)
+
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	tracker := newNotifyTracker(lowDefaultSize)
-	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner(), s))
+	tracker.OnNotify(BuildNotifyMsg(signer1, s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
-	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner(), s))
+	tracker.OnNotify(BuildNotifyMsg(signer2, s))
 	assert.Equal(t, 2, tracker.NotificationsCount(s))
 }

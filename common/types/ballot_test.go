@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-scale/tester"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -23,7 +22,8 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 	}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{1}}}
 	ballot1.Votes.Support = []types.Vote{{ID: types.BlockID{2}}}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	ballot1.Signature = signer.Sign(ballot1.SignedBytes())
 	ballot2.Signature = signer.Sign(ballot2.SignedBytes())
 	ballot1.Initialize()
@@ -35,7 +35,7 @@ func TestBallotIDUnaffectedByVotes(t *testing.T) {
 
 func TestBallot_IDSize(t *testing.T) {
 	var id types.BallotID
-	assert.Len(t, id.Bytes(), types.BallotIDSize)
+	require.Len(t, id.Bytes(), types.BallotIDSize)
 }
 
 func TestBallot_Initialize(t *testing.T) {
@@ -50,14 +50,15 @@ func TestBallot_Initialize(t *testing.T) {
 			Against: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
 		},
 	}
-	signer := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	b.Signature = signer.Sign(b.SignedBytes())
-	assert.NoError(t, b.Initialize())
-	assert.NotEqual(t, types.EmptyBallotID, b.ID())
-	assert.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
+	require.NoError(t, b.Initialize())
+	require.NotEqual(t, types.EmptyBallotID, b.ID())
+	require.Equal(t, signer.PublicKey().Bytes(), b.SmesherID().Bytes())
 
-	err := b.Initialize()
-	assert.EqualError(t, err, "ballot already initialized")
+	err = b.Initialize()
+	require.EqualError(t, err, "ballot already initialized")
 }
 
 func TestBallot_Initialize_BadSignature(t *testing.T) {
@@ -72,9 +73,11 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 			Support: []types.Vote{{ID: types.RandomBlockID()}, {ID: types.RandomBlockID()}},
 		},
 	}
-	b.Signature = signing.NewEdSigner().Sign(b.SignedBytes())[1:]
-	err := b.Initialize()
-	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	b.Signature = signer.Sign(b.SignedBytes())[1:]
+	err = b.Initialize()
+	require.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }
 
 func FuzzBallotConsistency(f *testing.F) {
