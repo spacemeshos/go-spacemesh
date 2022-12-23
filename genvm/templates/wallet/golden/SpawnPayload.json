@@ -1,10 +1,7 @@
 {
   "Object": {
-    "Nonce": {
-      "Counter": 1543,
-      "Bitfield": 0
-    },
+    "Nonce": 1543,
     "GasPrice": 256
   },
-  "Hex": "1d18000104"
+  "Hex": "1d180104"
 }

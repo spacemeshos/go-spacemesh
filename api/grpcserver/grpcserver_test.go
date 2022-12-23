@@ -42,7 +42,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -375,7 +374,7 @@ func (t *ConStateAPIMock) GetBalance(addr types.Address) (uint64, error) {
 }
 
 func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
-	return types.Nonce{Counter: t.nonces[addr]}, nil
+	return t.nonces[addr], nil
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -383,13 +382,13 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
 	if nonce == 0 {
 		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
-			types.Nonce{},
+			0,
 			sdk.WithGasPrice(0),
 		))
 	} else {
 		tx.RawTx = types.NewRawTx(
 			wallet.Spend(signer.PrivateKey(), recipient, 1,
-				types.Nonce{Counter: nonce},
+				nonce,
 				sdk.WithGasPrice(0),
 			),
 		)
@@ -2035,7 +2034,7 @@ func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.GasPrice, tx.GasPrice)
 	require.Equal(t, globalTx.MaxGas, tx.MaxGas)
 	require.Equal(t, globalTx.MaxSpend, tx.MaxSpend)
-	require.Equal(t, globalTx.Nonce.Counter, tx.Nonce.Counter)
+	require.Equal(t, globalTx.Nonce, tx.Nonce.Counter)
 }
 
 func checkLayer(t *testing.T, l *pb.Layer) {
@@ -2088,7 +2087,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, globalTx.GasPrice, resTx.GasPrice)
 	require.Equal(t, globalTx.MaxGas, resTx.MaxGas)
 	require.Equal(t, globalTx.MaxSpend, resTx.MaxSpend)
-	require.Equal(t, globalTx.Nonce.Counter, resTx.Nonce.Counter)
+	require.Equal(t, globalTx.Nonce, resTx.Nonce.Counter)
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
@@ -2839,7 +2838,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	spawns := []types.Transaction{}
 	for _, pk := range keys {
 		spawns = append(spawns, types.Transaction{
-			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, core.Nonce{})),
+			RawTx: types.NewRawTx(wallet.SelfSpawn(pk, 0)),
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
@@ -2876,7 +2875,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	for _, pk := range keys {
 		spends = append(spends, types.Transaction{
 			RawTx: types.NewRawTx(wallet.Spend(
-				pk, types.Address{1}, amount, types.Nonce{Counter: 1},
+				pk, types.Address{1}, amount, 1,
 			)),
 		})
 	}

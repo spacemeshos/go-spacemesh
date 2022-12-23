@@ -22,9 +22,10 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 
 	var raw []byte
 	if nonce == 0 {
-		raw = wallet.SelfSpawn(principal.PrivateKey(), types.Nonce{}, sdk.WithGasPrice(fee))
+		raw = wallet.SelfSpawn(principal.PrivateKey(), 0, sdk.WithGasPrice(fee))
 	} else {
-		raw = wallet.Spend(principal.PrivateKey(), dest, amount, types.Nonce{Counter: nonce}, sdk.WithGasPrice(fee))
+		raw = wallet.Spend(principal.PrivateKey(), dest, amount,
+			nonce, sdk.WithGasPrice(fee))
 	}
 
 	parsed := types.Transaction{
@@ -34,7 +35,7 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 	// this is a fake principal for the purposes of testing.
 	addr := types.GenerateAddress(principal.PublicKey().Bytes())
 	copy(parsed.Principal[:], addr.Bytes())
-	parsed.Nonce = types.Nonce{Counter: nonce}
+	parsed.Nonce = nonce
 	parsed.GasPrice = fee
 	return &parsed
 }
@@ -384,15 +385,15 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 	txs := []types.Transaction{
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{1}},
-			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 0}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: 0},
 		},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{2}},
-			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: types.Nonce{Counter: 1}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: 1},
 		},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{3}},
-			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: types.Nonce{Counter: 0}},
+			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: 0},
 		},
 	}
 	db := sql.InMemory()
@@ -425,15 +426,15 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 	more := []types.Transaction{
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{4}},
-			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: types.Nonce{Counter: 0}},
+			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: 0},
 		},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{5}},
-			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: types.Nonce{Counter: 1}},
+			TxHeader: &types.TxHeader{Principal: principals[2], Nonce: 1},
 		},
 		{
 			RawTx:    types.RawTx{ID: types.TransactionID{6}},
-			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: types.Nonce{Counter: 1}},
+			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: 1},
 		},
 	}
 	for _, tx := range more {
