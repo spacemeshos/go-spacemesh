@@ -88,10 +88,10 @@ func withWeakCoin(wc coin) Opt {
 func New(
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
-	edSigner *signing.EdSigner,
-	pubKeyExtractor *signing.PubKeyExtractor,
-	vrfSigner *signing.VRFSigner,
-	vrfVerifier *signing.VRFVerifier,
+	edSigner signer,
+	pubKeyExtractor pubKeyExtractor,
+	vrfSigner vrfSigner,
+	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
 	clock layerClock,
 	opts ...Opt,
@@ -142,10 +142,10 @@ type ProtocolDriver struct {
 	nodeID          types.NodeID
 	sync            system.SyncStateProvider
 	publisher       pubsub.Publisher
-	edSigner        *signing.EdSigner
-	pubKeyExtractor *signing.PubKeyExtractor
-	vrfSigner       *signing.VRFSigner
-	vrfVerifier     *signing.VRFVerifier
+	edSigner        signer
+	pubKeyExtractor pubKeyExtractor
+	vrfSigner       vrfSigner
+	vrfVerifier     vrfVerifier
 	weakCoin        coin
 	theta           *big.Float
 
@@ -971,7 +971,7 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, signer *signing.VRFSigner, epoch types.EpochID, logger log.Log) []byte {
+func buildSignedProposal(ctx context.Context, signer vrfSigner, epoch types.EpochID, logger log.Log) []byte {
 	p := buildProposal(epoch, logger)
 	signature, err := signer.Sign(p)
 	if err != nil {

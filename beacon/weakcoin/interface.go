@@ -2,7 +2,7 @@ package weakcoin
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate mockgen -package=weakcoin -destination=./mocks.go -source=./interface.go
@@ -10,7 +10,6 @@ import (
 type vrfSigner interface {
 	Sign(msg []byte) ([]byte, error)
 	PublicKey() *signing.PublicKey
-	NodeID() types.NodeID
 	LittleEndian() bool
 }
 

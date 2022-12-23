@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-//go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type coin interface {
 	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)
@@ -38,4 +38,18 @@ type signer interface {
 	Sign(msg []byte) []byte
 	PublicKey() *signing.PublicKey
 	NodeID() types.NodeID
+}
+
+type pubKeyExtractor interface {
+	Extract([]byte, []byte) (*signing.PublicKey, error)
+}
+
+type vrfSigner interface {
+	Sign(msg []byte) ([]byte, error)
+	PublicKey() *signing.PublicKey
+	LittleEndian() bool
+}
+
+type vrfVerifier interface {
+	Verify(nodeID types.NodeID, msg, sig []byte) bool
 }

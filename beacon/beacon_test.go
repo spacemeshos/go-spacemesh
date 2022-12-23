@@ -87,20 +87,13 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	require.NoError(tb, err)
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
-	edPubkey := edSgn.PublicKey()
+	vrfSigner := mocks.NewMockvrfSigner(ctrl)
+	vrfVerifier := mocks.NewMockvrfVerifier(ctrl)
 
-	minerID := types.BytesToNodeID(edPubkey.Bytes())
+	minerID := types.RandomNodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	vrfSigner, err := edSgn.VRFSigner(
-		signing.WithNonceForNode(1, edSgn.NodeID()),
-	)
-	require.NoError(tb, err)
 
-	vrfVerifier, err := signing.NewVRFVerifier(signing.WithNonceForNode(1, edSgn.NodeID()))
-	require.NoError(tb, err)
-
-	tpd.cdb = cdb
+	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, vrfVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -111,7 +104,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	return tpd
 }
 
-func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32) {
+func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig signer, numUnits uint32) {
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PubLayerID: lid},
 		types.Address{},
