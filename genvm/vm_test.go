@@ -1556,7 +1556,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.selfSpawn(1),
 			header: &core.Header{
 				Principal:       tt.accounts[1].getAddress(),
-				Method:          0,
+				Method:          core.MethodSpawn,
 				TemplateAddress: template,
 				GasPrice:        1,
 				MaxGas:          uint64(tt.estimateSpawnGas(1)),
@@ -1572,7 +1572,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spend(0, 1, 100),
 			header: &core.Header{
 				Principal:       tt.accounts[0].getAddress(),
-				Method:          1,
+				Method:          core.MethodSpend,
 				TemplateAddress: template,
 				GasPrice:        1,
 				Nonce:           1,

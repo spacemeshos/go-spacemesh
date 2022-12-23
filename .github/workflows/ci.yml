@@ -268,7 +268,7 @@ jobs:
       - filter-changes
       - dockerpush
     timeout-minutes: 90
-    concurrency: cloud-limits
+    concurrency: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - uses: actions/checkout@v3
 
@@ -325,7 +325,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 50
           bootstrap: 10m
-          level: debug
+          level: info
           clusters: 2
         run: make -C systest run test_name=.
 
@@ -338,7 +338,7 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 10m
-          level: debug
+          level: info
           clusters: 2
         run: make -C systest run test_name=.
 

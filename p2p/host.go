@@ -46,13 +46,14 @@ type Config struct {
 	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
 
-	DisableNatPort bool     `mapstructure:"disable-natport"`
-	Flood          bool     `mapstructure:"flood"`
-	Listen         string   `mapstructure:"listen"`
-	Bootnodes      []string `mapstructure:"bootnodes"`
-	TargetOutbound int      `mapstructure:"target-outbound"`
-	LowPeers       int      `mapstructure:"low-peers"`
-	HighPeers      int      `mapstructure:"high-peers"`
+	DisableNatPort   bool     `mapstructure:"disable-natport"`
+	Flood            bool     `mapstructure:"flood"`
+	Listen           string   `mapstructure:"listen"`
+	Bootnodes        []string `mapstructure:"bootnodes"`
+	TargetOutbound   int      `mapstructure:"target-outbound"`
+	LowPeers         int      `mapstructure:"low-peers"`
+	HighPeers        int      `mapstructure:"high-peers"`
+	AdvertiseAddress string   `mapstructure:"advertise-address"`
 
 	// Discovery book check section.
 	CheckInterval        time.Duration

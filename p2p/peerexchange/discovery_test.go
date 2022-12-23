@@ -123,13 +123,14 @@ func TestDiscovery_PrefereRoutablePort(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(discovery.Stop)
 
-	external := uint16(1010)
+	port := uint16(1010)
+	advertised := ma.StringCast(fmt.Sprintf("/tcp/%d", port))
 	returned = append(returned, multiaddrFromString(
-		t, fmt.Sprintf("/ip4/110.0.0.0/tcp/%d", external),
+		t, fmt.Sprintf("/ip4/110.0.0.0/tcp/%d", port),
 	))
 
 	emitter.Emit(event.EvtLocalAddressesUpdated{})
 	require.Eventually(t, func() bool {
-		return discovery.ExternalPort() == external
+		return discovery.AdvertisedAddress().Equal(advertised)
 	}, 100*time.Millisecond, 10*time.Millisecond)
 }

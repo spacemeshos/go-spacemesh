@@ -112,8 +112,6 @@ func createModifiedATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID
 			nil,
 		)
 		require.NoError(t, activation.SignAtx(signer, atx))
-		require.NoError(t, atx.CalcAndSetID())
-		require.NoError(t, atx.CalcAndSetNodeID())
 		vAtx, err := onAtx(atx)
 		require.NoError(t, err)
 
