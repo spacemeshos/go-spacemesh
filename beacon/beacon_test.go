@@ -68,9 +68,12 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 
 type testProtocolDriver struct {
 	*ProtocolDriver
-	cdb    *datastore.CachedDB
-	mClock *mocks.MocklayerClock
-	mSync  *smocks.MockSyncStateProvider
+	ctrl      *gomock.Controller
+	cdb       *datastore.CachedDB
+	mClock    *mocks.MocklayerClock
+	mSync     *smocks.MockSyncStateProvider
+	mSigner   *mocks.MockvrfSigner
+	mVerifier *mocks.MockvrfVerifier
 }
 
 func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
@@ -80,21 +83,24 @@ func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
 func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolDriver {
 	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
-		mClock: mocks.NewMocklayerClock(ctrl),
-		mSync:  smocks.NewMockSyncStateProvider(ctrl),
+		ctrl:      ctrl,
+		mClock:    mocks.NewMocklayerClock(ctrl),
+		mSync:     smocks.NewMockSyncStateProvider(ctrl),
+		mSigner:   mocks.NewMockvrfSigner(ctrl),
+		mVerifier: mocks.NewMockvrfVerifier(ctrl),
 	}
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	extractor, err := signing.NewPubKeyExtractor()
 	require.NoError(tb, err)
-	vrfSigner := mocks.NewMockvrfSigner(ctrl)
-	vrfVerifier := mocks.NewMockvrfVerifier(ctrl)
-
-	minerID := types.RandomNodeID()
+	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
+	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return([]byte{}, nil)
+	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
+
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, vrfSigner, vrfVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, extractor, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
