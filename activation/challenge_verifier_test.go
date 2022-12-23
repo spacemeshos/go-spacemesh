@@ -59,8 +59,8 @@ func createInitialChallenge(post types.Post, meta types.PostMetadata, numUnits u
 func Test_SignatureVerification(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
+	extractor := signing.NewPubKeyExtractor()
 
-	sigVerifier := signing.NewPubKeyExtractor()
 	ctrl := gomock.NewController(t)
 	atxProvider := activation.NewMockatxProvider(ctrl)
 	validator := activation.NewMocknipostValidator(ctrl)
@@ -79,7 +79,7 @@ func Test_SignatureVerification(t *testing.T) {
 	challengeBytes, err := codec.Encode(&challenge)
 	req.NoError(err)
 
-	verifier := activation.NewChallengeVerifier(atxProvider, sigVerifier, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
+	verifier := activation.NewChallengeVerifier(atxProvider, extractor, validator, activation.DefaultPostConfig(), goldenATXID, layersPerEpoch)
 	_, err = verifier.Verify(context.Background(), challengeBytes, types.RandomBytes(32))
 	req.ErrorIs(err, activation.ErrSignatureInvalid)
 }

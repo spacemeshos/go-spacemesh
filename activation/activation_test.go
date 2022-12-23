@@ -97,10 +97,6 @@ type TestSigner struct {
 	*signing.EdSigner
 }
 
-func (ms *TestSigner) NodeID() types.NodeID {
-	return types.BytesToNodeID(ms.PublicKey().Bytes())
-}
-
 type NIPostBuilderMock struct {
 	poetRef   []byte
 	SleepTime int
