@@ -42,6 +42,7 @@ func NewHTTPPoetHarness(disableBroadcast bool, opts ...HTTPPoetOpt) (*HTTPPoetHa
 		return nil, fmt.Errorf("default integration config: %w", err)
 	}
 
+	cfg.DisableBroadcast = disableBroadcast
 	cfg.Reset = true
 	cfg.Genesis = time.Now().Add(5 * time.Second)
 	cfg.EpochDuration = 4 * time.Second
