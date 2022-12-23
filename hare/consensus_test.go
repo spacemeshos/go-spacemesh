@@ -138,7 +138,7 @@ func (test *ConsensusTest) Create(N int, create func()) {
 
 func startProcs(procs []*consensusProcess) {
 	for _, proc := range procs {
-		proc.Start(context.TODO())
+		proc.Start(context.Background())
 	}
 }
 
@@ -152,7 +152,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-	broker.Start(context.TODO())
+	broker.Start(context.Background())
 	network.Register(pubsub.HareProtocol, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	signer, err := signing.NewEdSigner()
@@ -161,7 +161,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	proc := newConsensusProcess(cfg, layer, initialSet, oracle, broker.mockStateQ, 10, signer,
 		signer.NodeID(), network, output, truer{},
 		newRoundClockFromCfg(logtest.New(tb), cfg), logtest.New(tb).WithName(signer.PublicKey().ShortString()))
-	c, _ := broker.Register(context.TODO(), proc.ID())
+	c, _ := broker.Register(context.Background(), proc.ID())
 	proc.SetInbox(c)
 
 	return proc, broker.Broker

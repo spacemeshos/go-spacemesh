@@ -92,6 +92,7 @@ var (
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
+	signer      *signing.EdSigner
 	signer1     *signing.EdSigner
 	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
@@ -141,7 +142,8 @@ func TestMain(m *testing.M) {
 	// run on a random port
 	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
 
-	signer, err := signing.NewEdSigner()
+	var err error
+	signer, err = signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
@@ -473,7 +475,7 @@ func (*SmeshingAPIMock) StopSmeshing(bool) error {
 }
 
 func (*SmeshingAPIMock) SmesherID() types.NodeID {
-	return signer1.NodeID()
+	return signer.NodeID()
 }
 
 func (*SmeshingAPIMock) Coinbase() types.Address {
@@ -1044,7 +1046,7 @@ func TestSmesherService(t *testing.T) {
 		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
-		nodeAddr := types.GenerateAddress(signer1.NodeID().Bytes())
+		nodeAddr := types.GenerateAddress(signer.NodeID().Bytes())
 		resAddr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
 		require.Equal(t, nodeAddr.String(), resAddr.String())
@@ -1121,7 +1123,7 @@ func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, types.Hash20{}, layerDurationSec, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, grpcService)
-	defer shutDown()
+	t.Cleanup(func() { shutDown() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
