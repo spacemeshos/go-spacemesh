@@ -295,7 +295,7 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,
-		wallet.SelfSpawn(cluster.Private(account), types.Nonce{}, sdk.WithGenesisID(cluster.GenesisID())),
+		wallet.SelfSpawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID())),
 		client)
 	return err
 }
@@ -306,7 +306,7 @@ func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, rec
 	_, err := submitTransaction(ctx,
 		wallet.Spend(
 			cluster.Private(account), receiver, amount,
-			types.Nonce{Counter: nonce},
+			nonce,
 			sdk.WithGenesisID(cluster.GenesisID()),
 		),
 		client)

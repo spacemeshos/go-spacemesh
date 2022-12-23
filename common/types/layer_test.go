@@ -1,13 +1,33 @@
 package types
 
 import (
+	"bytes"
 	"math"
 	"testing"
 
+	fuzz "github.com/google/gofuzz"
+	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 )
+
+func CheckLayerFirstEncoding[T any, H scale.TypePtr[T]](t *testing.T, getLayerID func(object T) LayerID) {
+	t.Run("layer is first", func(t *testing.T) {
+		var object T
+		f := fuzz.NewWithSeed(1001)
+		f.Fuzz(&object)
+
+		buf := bytes.NewBuffer(nil)
+		enc := scale.NewEncoder(buf)
+		_, err := H(&object).EncodeScale(enc)
+		require.NoError(t, err)
+
+		var lid LayerID
+		require.NoError(t, codec.Decode(buf.Bytes(), &lid))
+		require.Equal(t, getLayerID(object), lid)
+	})
+}
 
 func TestLayerIDWraparound(t *testing.T) {
 	var (

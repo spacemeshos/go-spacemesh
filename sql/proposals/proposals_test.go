@@ -13,12 +13,11 @@ import (
 
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
-	pub := []byte{1, 1}
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub,
-		types.InnerBallot{})
+	pub := types.BytesToNodeID([]byte{1, 1})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub))
+	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
@@ -35,12 +34,11 @@ func TestAdd(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	pub := []byte{1, 1}
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub,
-		types.InnerBallot{})
+	pub := types.BytesToNodeID([]byte{1, 1})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub))
+	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
@@ -61,12 +59,11 @@ func TestHas(t *testing.T) {
 func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
-	pub := []byte{1, 1}
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub,
-		types.InnerBallot{})
+	pub := types.BytesToNodeID([]byte{1, 1})
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub, types.InnerBallot{})
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, pub))
+	require.NoError(t, identities.SetMalicious(db, pub.Bytes()))
 	ballot.SetMalicious()
 
 	proposal := &types.Proposal{

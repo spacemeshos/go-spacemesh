@@ -1,4 +1,4 @@
-package atxs
+package atxs_test
 
 import (
 	"os"
@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 const layersPerEpoch = 5
@@ -25,50 +26,50 @@ func TestMain(m *testing.M) {
 func TestGetATXByID(t *testing.T) {
 	db := sql.InMemory()
 
-	atxs := make([]*types.VerifiedActivationTx, 0)
+	atxList := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig := signing.NewEdSigner()
 		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
 		require.NoError(t, err)
-		atxs = append(atxs, atx)
+		atxList = append(atxList, atx)
 	}
 
-	for _, atx := range atxs {
-		require.NoError(t, Add(db, atx, time.Now()))
+	for _, atx := range atxList {
+		require.NoError(t, atxs.Add(db, atx, time.Now()))
 	}
 
-	for _, want := range atxs {
-		got, err := Get(db, want.ID())
+	for _, want := range atxList {
+		got, err := atxs.Get(db, want.ID())
 		require.NoError(t, err)
 		require.Equal(t, want, got)
 	}
 
-	_, err := Get(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err := atxs.Get(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestHasID(t *testing.T) {
 	db := sql.InMemory()
 
-	atxs := make([]*types.VerifiedActivationTx, 0)
+	atxList := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig := signing.NewEdSigner()
 		atx, err := newAtx(sig, types.NewLayerID(uint32(i)))
 		require.NoError(t, err)
-		atxs = append(atxs, atx)
+		atxList = append(atxList, atx)
 	}
 
-	for _, atx := range atxs {
-		require.NoError(t, Add(db, atx, time.Now()))
+	for _, atx := range atxList {
+		require.NoError(t, atxs.Add(db, atx, time.Now()))
 	}
 
-	for _, atx := range atxs {
-		has, err := Has(db, atx.ID())
+	for _, atx := range atxList {
+		has, err := atxs.Has(db, atx.ID())
 		require.NoError(t, err)
 		require.True(t, has)
 	}
 
-	has, err := Has(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	has, err := atxs.Has(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.NoError(t, err)
 	require.False(t, has)
 }
@@ -81,13 +82,13 @@ func TestGetTimestampByID(t *testing.T) {
 	require.NoError(t, err)
 
 	ts := time.Now()
-	require.NoError(t, Add(db, atx, ts))
+	require.NoError(t, atxs.Add(db, atx, ts))
 
-	timestamp, err := GetTimestamp(db, atx.ID())
+	timestamp, err := atxs.GetTimestamp(db, atx.ID())
 	require.NoError(t, err)
 	require.EqualValues(t, ts.UnixNano(), timestamp.UnixNano())
 
-	_, err = GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err = atxs.GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -119,20 +120,20 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	require.NoError(t, atx4.CalcAndSetID())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx, time.Now()))
 	}
 
 	// Act & Assert
 
-	id1, err := GetFirstIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	id1, err := atxs.GetFirstIDByNodeID(db, sig1.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx1.ID(), id1)
 
-	id2, err := GetFirstIDByNodeID(db, types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	id2, err := atxs.GetFirstIDByNodeID(db, sig2.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx3.ID(), id2)
 
-	_, err = GetLastIDByNodeID(db, types.BytesToNodeID(sig.PublicKey().Bytes()))
+	_, err = atxs.GetLastIDByNodeID(db, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -165,21 +166,21 @@ func TestGetLastIDByNodeID(t *testing.T) {
 
 	now := time.Now()
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx, now))
+		require.NoError(t, atxs.Add(db, atx, now))
 		now = now.Add(time.Nanosecond)
 	}
 
 	// Act & Assert
 
-	id1, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	id1, err := atxs.GetLastIDByNodeID(db, sig1.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx2.ID(), id1)
 
-	id2, err := GetLastIDByNodeID(db, types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	id2, err := atxs.GetLastIDByNodeID(db, sig2.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx4.ID(), id2)
 
-	_, err = GetLastIDByNodeID(db, types.BytesToNodeID(sig.PublicKey().Bytes()))
+	_, err = atxs.GetLastIDByNodeID(db, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -203,28 +204,28 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx, time.Now()))
 	}
 
-	l1n1, err := GetIDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	l1n1, err := atxs.GetIDByEpochAndNodeID(db, l1.GetEpoch(), sig1.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx1.ID(), l1n1)
 
-	_, err = GetIDByEpochAndNodeID(db, l1.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	_, err = atxs.GetIDByEpochAndNodeID(db, l1.GetEpoch(), sig2.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	l2n1, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	l2n1, err := atxs.GetIDByEpochAndNodeID(db, l2.GetEpoch(), sig1.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx2.ID(), l2n1)
 
-	l2n2, err := GetIDByEpochAndNodeID(db, l2.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	l2n2, err := atxs.GetIDByEpochAndNodeID(db, l2.GetEpoch(), sig2.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx3.ID(), l2n2)
 
-	_, err = GetIDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig1.PublicKey().Bytes()))
+	_, err = atxs.GetIDByEpochAndNodeID(db, l3.GetEpoch(), sig1.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	l3n2, err := GetIDByEpochAndNodeID(db, l3.GetEpoch(), types.BytesToNodeID(sig2.PublicKey().Bytes()))
+	l3n2, err := atxs.GetIDByEpochAndNodeID(db, l3.GetEpoch(), sig2.NodeID())
 	require.NoError(t, err)
 	require.EqualValues(t, atx4.ID(), l3n2)
 }
@@ -249,19 +250,19 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx, time.Now()))
+		require.NoError(t, atxs.Add(db, atx, time.Now()))
 	}
 
-	ids1, err := GetIDsByEpoch(db, l1.GetEpoch())
+	ids1, err := atxs.GetIDsByEpoch(db, l1.GetEpoch())
 	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
 
-	ids2, err := GetIDsByEpoch(db, l2.GetEpoch())
+	ids2, err := atxs.GetIDsByEpoch(db, l2.GetEpoch())
 	require.NoError(t, err)
 	require.Contains(t, ids2, atx2.ID())
 	require.Contains(t, ids2, atx3.ID())
 
-	ids3, err := GetIDsByEpoch(db, l3.GetEpoch())
+	ids3, err := atxs.GetIDsByEpoch(db, l3.GetEpoch())
 	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
@@ -273,8 +274,8 @@ func TestGetBlob(t *testing.T) {
 	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
 	require.NoError(t, err)
 
-	require.NoError(t, Add(db, atx, time.Now()))
-	buf, err := GetBlob(db, atx.ID().Bytes())
+	require.NoError(t, atxs.Add(db, atx, time.Now()))
+	buf, err := atxs.GetBlob(db, atx.ID().Bytes())
 	require.NoError(t, err)
 	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
@@ -285,17 +286,17 @@ func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
-	_, err := Get(db, nonExistingATXID)
+	_, err := atxs.Get(db, nonExistingATXID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	sig := signing.NewEdSigner()
 	atx, err := newAtx(sig, types.NewLayerID(uint32(1)))
 	require.NoError(t, err)
 
-	require.NoError(t, Add(db, atx, time.Now()))
-	require.ErrorIs(t, Add(db, atx, time.Now()), sql.ErrObjectExists)
+	require.NoError(t, atxs.Add(db, atx, time.Now()))
+	require.ErrorIs(t, atxs.Add(db, atx, time.Now()), sql.ErrObjectExists)
 
-	got, err := Get(db, atx.ID())
+	got, err := atxs.Get(db, atx.ID())
 	require.NoError(t, err)
 	require.Equal(t, atx, got)
 }
@@ -371,10 +372,10 @@ func TestPositioningID(t *testing.T) {
 				vAtx, err := full.Verify(atx.base, atx.count)
 				require.NoError(t, err)
 
-				require.NoError(t, Add(db, vAtx, time.Time{}))
+				require.NoError(t, atxs.Add(db, vAtx, time.Time{}))
 				ids = append(ids, full.ID())
 			}
-			rst, err := GetAtxIDWithMaxHeight(db)
+			rst, err := atxs.GetAtxIDWithMaxHeight(db)
 			if len(tc.atxs) == 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {

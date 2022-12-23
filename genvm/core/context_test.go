@@ -70,7 +70,7 @@ func TestApply(t *testing.T) {
 		ss := core.NewStagedCache(core.DBLoader{sql.InMemory()})
 		ctx := core.Context{Loader: ss}
 		ctx.PrincipalAccount.Address = core.Address{1}
-		ctx.Header.Nonce = core.Nonce{Counter: 10}
+		ctx.Header.Nonce = 10
 
 		err := ctx.Apply(ss)
 		require.NoError(t, err)
@@ -88,7 +88,7 @@ func TestApply(t *testing.T) {
 		ctx.Header.MaxGas = 10
 
 		ctx.PrincipalAccount.Address = core.Address{1}
-		ctx.Header.Nonce = core.Nonce{Counter: 10}
+		ctx.Header.Nonce = 10
 
 		require.NoError(t, ctx.Consume(5))
 		require.ErrorIs(t, ctx.Consume(100), core.ErrMaxGas)
@@ -109,7 +109,6 @@ func TestApply(t *testing.T) {
 		}
 
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 
 		updater := mocks.NewMockAccountUpdater(ctrl)
 		actual := []core.Address{}
@@ -155,7 +154,6 @@ func TestRelay(t *testing.T) {
 		for _, receiver1 := range []core.Address{{'a', 'n', 'y'}, principal} {
 			t.Run(string(receiver1[:3]), func(t *testing.T) {
 				ctrl := gomock.NewController(t)
-				defer ctrl.Finish()
 
 				encoded := []byte("test")
 

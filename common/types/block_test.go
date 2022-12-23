@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"math/big"
@@ -9,20 +9,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestBlock_IDSize(t *testing.T) {
-	var id BlockID
-	assert.Len(t, id.Bytes(), BlockIDSize)
+	var id types.BlockID
+	assert.Len(t, id.Bytes(), types.BlockIDSize)
 }
 
 func Test_CertifyMessage(t *testing.T) {
-	msg := CertifyMessage{
-		CertifyContent: CertifyContent{
-			LayerID:        NewLayerID(11),
-			BlockID:        RandomBlockID(),
+	msg := types.CertifyMessage{
+		CertifyContent: types.CertifyContent{
+			LayerID:        types.NewLayerID(11),
+			BlockID:        types.RandomBlockID(),
 			EligibilityCnt: 2,
 			Proof:          []byte("not a fraud"),
 		},
@@ -32,64 +33,64 @@ func Test_CertifyMessage(t *testing.T) {
 	data, err := codec.Encode(&msg)
 	require.NoError(t, err)
 
-	var decoded CertifyMessage
+	var decoded types.CertifyMessage
 	require.NoError(t, codec.Decode(data, &decoded))
 	require.Equal(t, msg, decoded)
-	pubKey, err := signing.ExtractPublicKey(decoded.Bytes(), decoded.Signature)
+	nodeId, err := types.ExtractNodeIDFromSig(decoded.Bytes(), decoded.Signature)
 	require.NoError(t, err)
-	require.Equal(t, signer.PublicKey().Bytes(), []byte(pubKey))
+	require.Equal(t, signer.PublicKey().Bytes(), nodeId.Bytes())
 }
 
 func Test_BlockIDsToHashes(t *testing.T) {
-	blockIDs := []BlockID{RandomBlockID(), RandomBlockID()}
-	expectedHashes := make([]Hash32, 0, len(blockIDs))
+	blockIDs := []types.BlockID{types.RandomBlockID(), types.RandomBlockID()}
+	expectedHashes := make([]types.Hash32, 0, len(blockIDs))
 
 	for _, id := range blockIDs {
 		expectedHashes = append(expectedHashes, id.AsHash32())
 	}
 
-	actualHashes := BlockIDsToHashes(blockIDs)
+	actualHashes := types.BlockIDsToHashes(blockIDs)
 	require.Equal(t, expectedHashes, actualHashes)
 }
 
 func Test_NewExistingBlock(t *testing.T) {
-	expectedNewExistingBlock := &Block{blockID: BlockID{1, 1}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}}
+	expectedNewExistingBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)})
 
-	actualNewExistingBlock := NewExistingBlock(
-		BlockID{1, 1},
-		InnerBlock{LayerIndex: NewLayerID(1)},
+	actualNewExistingBlock := types.NewExistingBlock(
+		types.BlockID{1, 1},
+		types.InnerBlock{LayerIndex: types.NewLayerID(1)},
 	)
 
 	require.Equal(t, expectedNewExistingBlock, actualNewExistingBlock)
 }
 
 func Test_BlockInitialize(t *testing.T) {
-	testBlock := Block{blockID: BlockID{1, 1}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}}
+	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)})
 
-	expectedBlockID := BlockID(CalcHash32(testBlock.Bytes()).ToHash20())
+	expectedBlockID := types.BlockID(types.CalcHash32(testBlock.Bytes()).ToHash20())
 	// Initialize the block for compute actual Block ID
 	testBlock.Initialize()
-	actualBlockID := testBlock.blockID
+	actualBlockID := testBlock.ID()
 
 	require.Equal(t, expectedBlockID, actualBlockID)
 	require.Equal(t, expectedBlockID, testBlock.ID())
 }
 
 func Test_BlockBytes(t *testing.T) {
-	testBlock := Block{blockID: BlockID{1, 1}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}}
+	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)})
 
 	expectedBytes, err := codec.Encode(&testBlock.InnerBlock)
 	require.NoError(t, err)
 	actualBytes := testBlock.Bytes()
 	require.Equal(t, expectedBytes, actualBytes)
 
-	expectedBytes = testBlock.blockID.AsHash32().Bytes()
-	actualBytes = testBlock.blockID.Bytes()
+	expectedBytes = testBlock.ID().AsHash32().Bytes()
+	actualBytes = testBlock.ID().Bytes()
 	require.Equal(t, expectedBytes, actualBytes)
 }
 
 func Test_BlockFieldString(t *testing.T) {
-	testBlockID := BlockID{1, 1}
+	testBlockID := types.BlockID{1, 1}
 
 	expectedField := log.String("block_id", testBlockID.String())
 	actualField := testBlockID.Field()
@@ -101,9 +102,9 @@ func Test_BlockFieldString(t *testing.T) {
 }
 
 func Test_BlockIDCompare(t *testing.T) {
-	testBlockID_1 := BlockID{1, 1}
-	testBlockID_2 := BlockID{2, 2}
-	testBlockID_3 := BlockID{3, 3}
+	testBlockID_1 := types.BlockID{1, 1}
+	testBlockID_2 := types.BlockID{2, 2}
+	testBlockID_3 := types.BlockID{3, 3}
 
 	require.Equal(t, false, testBlockID_2.Compare(testBlockID_2))
 	require.Equal(t, false, testBlockID_2.Compare(testBlockID_1))
@@ -111,85 +112,81 @@ func Test_BlockIDCompare(t *testing.T) {
 }
 
 func Test_SortBlockIDs(t *testing.T) {
-	testBlockIDs := []BlockID{{3, 3}, {2, 2}, {1, 1}}
-	expectedBlockIDs := []BlockID{{1, 1}, {2, 2}, {3, 3}}
-	actualBlockIDs := SortBlockIDs(testBlockIDs)
+	testBlockIDs := []types.BlockID{{3, 3}, {2, 2}, {1, 1}}
+	expectedBlockIDs := []types.BlockID{{1, 1}, {2, 2}, {3, 3}}
+	actualBlockIDs := types.SortBlockIDs(testBlockIDs)
 
 	require.Equal(t, expectedBlockIDs, actualBlockIDs)
 }
 
 func TestToBlockIDs(t *testing.T) {
-	testBlocks := []*Block{
-		{blockID: BlockID{1, 1}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
-		{blockID: BlockID{2, 2}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
-		{blockID: BlockID{3, 3}, InnerBlock: InnerBlock{LayerIndex: NewLayerID(1)}},
+	testBlocks := []*types.Block{
+		types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.NewLayerID(1)}),
+		types.NewExistingBlock(types.BlockID{2, 2}, types.InnerBlock{LayerIndex: types.NewLayerID(1)}),
+		types.NewExistingBlock(types.BlockID{3, 3}, types.InnerBlock{LayerIndex: types.NewLayerID(1)}),
 	}
 
-	expectedBlockIDs := []BlockID{{1, 1}, {2, 2}, {3, 3}}
-	actualBlockIDs := ToBlockIDs(testBlocks)
+	expectedBlockIDs := []types.BlockID{{1, 1}, {2, 2}, {3, 3}}
+	actualBlockIDs := types.ToBlockIDs(testBlocks)
 
 	require.Equal(t, expectedBlockIDs, actualBlockIDs)
 }
 
 func TestRewardCodec(t *testing.T) {
 	weight := big.NewRat(1234, 7)
-	r := &AnyReward{
-		Coinbase: GenerateAddress(RandomBytes(AddressLength)),
-		Weight:   RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
+	r := &types.AnyReward{
+		Coinbase: types.GenerateAddress(RandomBytes(types.AddressLength)),
+		Weight:   types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()},
 	}
 
 	data, err := codec.Encode(r)
 	require.NoError(t, err)
 
-	var got AnyReward
+	var got types.AnyReward
 	require.NoError(t, codec.Decode(data, &got))
 	require.Equal(t, r, &got)
 }
 
 func FuzzAnyRewardConsistency(f *testing.F) {
-	tester.FuzzConsistency[AnyReward](f)
+	tester.FuzzConsistency[types.AnyReward](f)
 }
 
 func FuzzAnyRewardSafety(f *testing.F) {
-	tester.FuzzSafety[AnyReward](f)
+	tester.FuzzSafety[types.AnyReward](f)
 }
 
 func FuzzBlockIDConsistency(f *testing.F) {
-	tester.FuzzConsistency[BlockID](f)
+	tester.FuzzConsistency[types.BlockID](f)
 }
 
 func FuzzBlockIDSafety(f *testing.F) {
-	tester.FuzzSafety[BlockID](f)
+	tester.FuzzSafety[types.BlockID](f)
 }
 
 func FuzzRatNumConsistency(f *testing.F) {
-	tester.FuzzConsistency[RatNum](f)
+	tester.FuzzConsistency[types.RatNum](f)
 }
 
 func FuzzRatNumSafety(f *testing.F) {
-	tester.FuzzSafety[RatNum](f)
+	tester.FuzzSafety[types.RatNum](f)
 }
 
 func FuzzBlockConsistency(f *testing.F) {
-	tester.FuzzConsistency[Block](f)
+	tester.FuzzConsistency[types.Block](f)
 }
 
 func FuzzBlockSafety(f *testing.F) {
-	tester.FuzzSafety[Block](f)
+	tester.FuzzSafety[types.Block](f)
 }
 
 func FuzzInnerBlockConsistency(f *testing.F) {
-	tester.FuzzConsistency[InnerBlock](f)
+	tester.FuzzConsistency[types.InnerBlock](f)
 }
 
 func FuzzInnerBlockSafety(f *testing.F) {
-	tester.FuzzSafety[InnerBlock](f)
+	tester.FuzzSafety[types.InnerBlock](f)
 }
 
 func TestBlockEncoding(t *testing.T) {
-	t.Run("layer is first", func(t *testing.T) {
-		block := Block{}
-		lid := layerTester(t, &block)
-		require.Equal(t, block.LayerIndex, lid)
-	})
+	types.CheckLayerFirstEncoding(t, func(object types.Block) types.LayerID { return object.LayerIndex })
 }

@@ -2,8 +2,6 @@ package types
 
 import (
 	"math/rand"
-
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // RandomBytes generates random data in bytes for testing.
@@ -104,50 +102,4 @@ func RandomBallot() *Ballot {
 			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},
 		},
 	}
-}
-
-// GenLayerBallot generates a Ballot with random content for testing.
-func GenLayerBallot(layerID LayerID) *Ballot {
-	b := RandomBallot()
-	b.LayerIndex = layerID
-	signer := signing.NewEdSigner()
-	b.Signature = signer.Sign(b.SignedBytes())
-	b.Initialize()
-	return b
-}
-
-// GenLayerBlock returns a Block in the given layer with the given data.
-func GenLayerBlock(layerID LayerID, txs []TransactionID) *Block {
-	b := &Block{
-		InnerBlock: InnerBlock{
-			LayerIndex: layerID,
-			TxIDs:      txs,
-		},
-	}
-	b.Initialize()
-	return b
-}
-
-// GenLayerProposal returns a Proposal in the given layer with the given data.
-func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
-	p := &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: Ballot{
-				InnerBallot: InnerBallot{
-					AtxID:      RandomATXID(),
-					LayerIndex: layerID,
-					EpochData: &EpochData{
-						ActiveSet: RandomActiveSet(10),
-						Beacon:    RandomBeacon(),
-					},
-				},
-			},
-			TxIDs: txs,
-		},
-	}
-	signer := signing.NewEdSigner()
-	p.Ballot.Signature = signer.Sign(p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(p.Bytes())
-	p.Initialize()
-	return p
 }

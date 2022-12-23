@@ -101,7 +101,7 @@ func noopPubSub(tb testing.TB) pubsub.PublishSubsciber {
 }
 
 func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
-	p := types.GenLayerProposal(lyrID, nil)
+	p := genLayerProposal(lyrID, nil)
 	p.Ballot.RefBallot = types.EmptyBallotID
 	p.Ballot.EpochData = &types.EpochData{
 		Beacon: beacon,
@@ -130,7 +130,6 @@ func TestMain(m *testing.M) {
 
 func TestHare_New(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	logger := logtest.New(t).WithName(t.Name())
 	h := New(sql.InMemory(), cfg, "", noopPubSub(t), signing.NewEdSigner(), types.NodeID{}, make(chan LayerOutput, 1),
@@ -140,9 +139,6 @@ func TestHare_New(t *testing.T) {
 }
 
 func TestHare_Start(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	h := createTestHare(t, sql.InMemory(), config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
 	assert.NoError(t, h.Start(context.TODO()))
 	h.Close()
